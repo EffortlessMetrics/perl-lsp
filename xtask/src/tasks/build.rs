@@ -16,20 +16,20 @@ pub fn run(
             .template("{spinner:.green} {wide_msg}")
             .unwrap(),
     );
-    
+
     // Determine build profile
     let profile = if release { "release" } else { "debug" };
     spinner.set_message(format!("Building tree-sitter-perl ({})", profile));
-    
+
     // Build command
     let mut args = vec!["build"];
     if release {
         args.push("--release");
     }
-    
+
     // Store strings that need to live long enough
     let mut feature_strings = Vec::new();
-    
+
     // Add features
     if let Some(features) = features {
         if !features.is_empty() {
@@ -52,18 +52,21 @@ pub fn run(
             args.push("rust-scanner,c-scanner");
         }
     }
-    
+
     // Execute build
     let status = cmd("cargo", &args)
         .run()
         .context("Failed to build project")?;
-    
+
     if status.status.success() {
         spinner.finish_with_message(format!("✅ Built tree-sitter-perl ({})", profile));
     } else {
         spinner.finish_with_message("❌ Build failed");
-        return Err(color_eyre::eyre::eyre!("Build failed with status: {}", status.status));
+        return Err(color_eyre::eyre::eyre!(
+            "Build failed with status: {}",
+            status.status
+        ));
     }
-    
+
     Ok(())
-} 
+}

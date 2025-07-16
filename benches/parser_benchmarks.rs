@@ -1,11 +1,11 @@
 //! Parser performance benchmarks
-//! 
+//!
 //! This module contains benchmarks to measure the overall parsing
 //! performance of the tree-sitter Perl parser.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use tree_sitter_perl::{parse, language};
 use tree_sitter::Parser;
+use tree_sitter_perl::{language, parse};
 
 fn bench_parser_creation(c: &mut Criterion) {
     c.bench_function("parser_creation", |b| {
@@ -92,12 +92,12 @@ sub baz {
 fn bench_incremental_parsing(c: &mut Criterion) {
     let mut parser = Parser::new();
     parser.set_language(language()).unwrap();
-    
+
     let initial_code = "my $var = 42;";
     let tree = parser.parse(initial_code, None).unwrap();
-    
+
     let modified_code = "my $var = 42; print 'Hello';";
-    
+
     c.bench_function("incremental_parsing", |b| {
         b.iter(|| {
             black_box(parser.parse(modified_code, Some(&tree)).unwrap());
@@ -149,7 +149,7 @@ my $mixed = "ASCII + 日本語 + emoji 🎉";
 
 fn bench_large_file_parsing(c: &mut Criterion) {
     let large_code = generate_large_perl_file(5000);
-    
+
     c.bench_function("large_file_parsing", |b| {
         b.iter(|| {
             black_box(parse(&large_code).unwrap());
@@ -158,10 +158,15 @@ fn bench_large_file_parsing(c: &mut Criterion) {
 }
 
 fn bench_memory_usage(c: &mut Criterion) {
-    let test_cases = (0..100).map(|i| {
-        format!("my $var{} = {}; print \"Variable {} = $var{}\";", i, i, i, i)
-    }).collect::<Vec<_>>();
-    
+    let test_cases = (0..100)
+        .map(|i| {
+            format!(
+                "my $var{} = {}; print \"Variable {} = $var{}\";",
+                i, i, i, i
+            )
+        })
+        .collect::<Vec<_>>();
+
     c.bench_function("memory_usage", |b| {
         b.iter(|| {
             for code in &test_cases {
@@ -173,19 +178,19 @@ fn bench_memory_usage(c: &mut Criterion) {
 
 fn generate_large_perl_file(size: usize) -> String {
     let mut code = String::new();
-    
+
     // Add package declaration
     code.push_str("package LargeFile;\n");
     code.push_str("use strict;\n");
     code.push_str("use warnings;\n\n");
-    
+
     // Add variables
     for i in 0..size {
         code.push_str(&format!("my $var{} = {};\n", i, i));
     }
-    
+
     code.push_str("\n");
-    
+
     // Add functions
     for i in 0..(size / 10) {
         code.push_str(&format!("sub func{} {{\n", i));
@@ -193,7 +198,7 @@ fn generate_large_perl_file(size: usize) -> String {
         code.push_str(&format!("    return $param + {};\n", i));
         code.push_str("}\n\n");
     }
-    
+
     // Add main logic
     code.push_str("sub main {\n");
     for i in 0..(size / 20) {
@@ -202,9 +207,9 @@ fn generate_large_perl_file(size: usize) -> String {
         code.push_str(&format!("    print \"Result: $result\";\n"));
     }
     code.push_str("}\n\n");
-    
+
     code.push_str("main();\n");
-    
+
     code
 }
 
@@ -219,4 +224,4 @@ criterion_group!(
     bench_large_file_parsing,
     bench_memory_usage,
 );
-criterion_main!(benches); 
+criterion_main!(benches);
