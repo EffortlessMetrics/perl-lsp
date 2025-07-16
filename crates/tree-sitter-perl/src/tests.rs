@@ -4,8 +4,9 @@
 // It is designed to mirror the C-based test suite and ensure 100% input/output fidelity.
 
 #[cfg(test)]
-mod integration_tests {
-    use crate::{language, parse};
+mod tests {
+    use super::*;
+    use crate::scanner::PerlScanner;
     use tree_sitter::Parser;
 
     #[test]
@@ -234,6 +235,7 @@ mod scanner_tests {
 #[cfg(test)]
 mod unicode_tests {
     use crate::unicode::UnicodeUtils;
+    use crate::scanner::PerlScanner;
 
     #[test]
     fn test_unicode_normalization() {

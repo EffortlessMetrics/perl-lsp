@@ -109,8 +109,8 @@ impl RustScanner {
         while let Some(ch) = self.lookahead {
             if ch == '=' {
                 // Check for =cut
-                let mut temp_pos = self.position;
-                let mut temp_input = self.input.clone();
+                let temp_pos = self.position;
+                let temp_input = self.input.clone();
                 if temp_pos + 3 < temp_input.len() {
                     let cut_bytes = &temp_input[temp_pos..temp_pos + 4];
                     if let Ok(cut_str) = std::str::from_utf8(cut_bytes) {
@@ -205,8 +205,8 @@ impl RustScanner {
         while let Some(ch) = self.lookahead {
             if ch == '\n' {
                 // Check if next line starts with delimiter
-                let mut temp_pos = self.position;
-                let mut temp_input = self.input.clone();
+                let temp_pos = self.position;
+                let temp_input = self.input.clone();
                 if temp_pos + delimiter.len() < temp_input.len() {
                     let delim_bytes = &temp_input[temp_pos..temp_pos + delimiter.len()];
                     if let Ok(delim_str) = std::str::from_utf8(delim_bytes) {
@@ -232,6 +232,7 @@ impl RustScanner {
     }
 
     /// Scan a regex pattern
+    #[allow(dead_code)]
     fn scan_regex(&mut self) -> ParseResult<TokenType> {
         self.state.in_regex = true;
 
