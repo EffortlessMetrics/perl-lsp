@@ -59,6 +59,25 @@ impl RustScanner {
         char::from_u32(self.input[self.position] as u32)
     }
 
+    /// Peek at the next character without advancing
+    fn peek_next_char(&self) -> ParseResult<char> {
+        if self.position + 1 >= self.input.len() {
+            return Err(ParseError::ParseFailed);
+        }
+        
+        let next_byte = self.input[self.position + 1];
+        if next_byte & 0xC0 == 0x80 {
+            // Continuation byte, not a valid UTF-8 start
+            return Err(ParseError::ParseFailed);
+        }
+        
+        let next_slice = &self.input[self.position + 1..];
+        let next_str = std::str::from_utf8(next_slice)
+            .map_err(|_| ParseError::ParseFailed)?;
+        
+        next_str.chars().next().ok_or(ParseError::ParseFailed)
+    }
+
     /// Advance the scanner by one character
     fn advance(&mut self) {
         if let Some(ch) = self.lookahead {
@@ -97,40 +116,162 @@ impl RustScanner {
         Ok(TokenType::Comment)
     }
 
-    /// Scan POD (Plain Old Documentation)
+    /// Scan a regex pattern
     #[allow(dead_code)]
-    fn scan_pod(&mut self) -> ParseResult<TokenType> {
-        self.state.in_pod = true;
-
-        // Skip the = character
+    fn scan_regex(&mut self) -> ParseResult<TokenType> {
+        self.state.in_regex = true;
+        
+        // Skip the opening delimiter
+        let delimiter = self.peek_char()?;
         self.advance();
-
-        // Consume until =cut or EOF
-        while let Some(ch) = self.lookahead {
-            if ch == '=' {
-                // Check for =cut
-                let temp_pos = self.position;
-                let temp_input = self.input.clone();
-                if temp_pos + 3 < temp_input.len() {
-                    let cut_bytes = &temp_input[temp_pos..temp_pos + 4];
-                    if let Ok(cut_str) = std::str::from_utf8(cut_bytes) {
-                        if cut_str == "=cut" {
-                            // Skip =cut
-                            for _ in 0..4 {
-                                self.advance();
-                            }
-                            self.state.in_pod = false;
-                            return Ok(TokenType::Pod);
+        
+        // Track if we're in character class
+        let mut in_char_class = false;
+        let mut escaped = false;
+        
+        while !self.is_eof() {
+            let ch = self.peek_char()?;
+            
+            if escaped {
+                escaped = false;
+                self.advance();
+                continue;
+            }
+            
+            match ch {
+                '\\' => {
+                    escaped = true;
+                    self.advance();
+                }
+                '[' => {
+                    if !in_char_class {
+                        in_char_class = true;
+                    }
+                    self.advance();
+                }
+                ']' => {
+                    if in_char_class {
+                        in_char_class = false;
+                    }
+                    self.advance();
+                }
+                '/' | 'm' | 's' | 'y' | 'tr' => {
+                    // Check for closing delimiter
+                    if !in_char_class && !escaped {
+                        // Look ahead to see if this is the closing delimiter
+                        let next_ch = self.peek_next_char()?;
+                        if next_ch == delimiter {
+                            self.advance(); // consume the delimiter
+                            self.state.in_regex = false;
+                            return Ok(TokenType::Regex);
                         }
                     }
+                    self.advance();
                 }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
+        
+        // If we reach EOF without finding closing delimiter, it's an error
+        self.state.in_regex = false;
+        Err(ParseError::ParseFailed)
+    }
+
+    /// Scan a heredoc pattern
+    fn scan_heredoc(&mut self) -> ParseResult<TokenType> {
+        self.state.in_heredoc = true;
+        
+        // Look for << or <<~ followed by delimiter
+        let first_ch = self.peek_char()?;
+        if first_ch != '<' {
+            return Err(ParseError::ParseFailed);
+        }
+        self.advance();
+        
+        let second_ch = self.peek_char()?;
+        if second_ch != '<' {
+            return Err(ParseError::ParseFailed);
+        }
+        self.advance();
+        
+        // Check for indented heredoc (~)
+        let third_ch = self.peek_char()?;
+        let is_indented = third_ch == '~';
+        if is_indented {
+            self.advance();
+        }
+        
+        // Read delimiter
+        let mut delimiter = String::new();
+        while !self.is_eof() {
+            let ch = self.peek_char()?;
+            if ch.is_whitespace() || ch == ';' {
+                break;
+            }
+            delimiter.push(ch);
+            self.advance();
+        }
+        
+        if delimiter.is_empty() {
+            return Err(ParseError::ParseFailed);
+        }
+        
+        self.state.heredoc_delimiter = Some(delimiter);
+        
+        // Skip to end of line
+        while !self.is_eof() {
+            let ch = self.peek_char()?;
+            if ch == '\n' {
+                self.advance();
+                break;
             }
             self.advance();
         }
+        
+        Ok(TokenType::HereDocument)
+    }
 
-        // Unterminated POD
-        self.state.in_pod = false;
-        Err(ParseError::unterminated_string(self.state.position()))
+    /// Scan POD (Plain Old Documentation)
+    fn scan_pod(&mut self) -> ParseResult<TokenType> {
+        self.state.in_pod = true;
+        
+        // Look for =pod, =head1, =head2, etc.
+        let first_ch = self.peek_char()?;
+        if first_ch != '=' {
+            return Err(ParseError::ParseFailed);
+        }
+        self.advance();
+        
+        // Read POD command
+        let mut command = String::new();
+        while !self.is_eof() {
+            let ch = self.peek_char()?;
+            if ch.is_whitespace() || ch == '\n' {
+                break;
+            }
+            command.push(ch);
+            self.advance();
+        }
+        
+        // Skip to end of line
+        while !self.is_eof() {
+            let ch = self.peek_char()?;
+            if ch == '\n' {
+                self.advance();
+                break;
+            }
+            self.advance();
+        }
+        
+        // Check for =cut to end POD
+        if command == "cut" {
+            self.state.in_pod = false;
+            return Ok(TokenType::Pod);
+        }
+        
+        Ok(TokenType::Pod)
     }
 
     /// Scan a string literal
@@ -166,145 +307,6 @@ impl RustScanner {
         self.state.in_string = false;
         self.state.string_delimiter = None;
         Err(ParseError::unterminated_string(self.state.position()))
-    }
-
-    /// Scan a here document
-    #[allow(dead_code)]
-    fn scan_heredoc(&mut self) -> ParseResult<TokenType> {
-        self.state.in_heredoc = true;
-
-        // Skip the <<
-        self.advance();
-        self.advance();
-
-        // Skip whitespace
-        self.skip_whitespace();
-
-        // Read delimiter
-        let mut delimiter = String::new();
-        while let Some(ch) = self.lookahead {
-            if ch == '\n' || UnicodeUtils::is_unicode_whitespace(ch) {
-                break;
-            }
-            delimiter.push(ch);
-            self.advance();
-        }
-
-        self.state.heredoc_delimiter = Some(delimiter.clone());
-
-        // Skip to newline
-        while let Some(ch) = self.lookahead {
-            if ch == '\n' {
-                self.advance();
-                break;
-            }
-            self.advance();
-        }
-
-        // Consume content until delimiter
-        while let Some(ch) = self.lookahead {
-            if ch == '\n' {
-                // Check if next line starts with delimiter
-                let temp_pos = self.position;
-                let temp_input = self.input.clone();
-                if temp_pos + delimiter.len() < temp_input.len() {
-                    let delim_bytes = &temp_input[temp_pos..temp_pos + delimiter.len()];
-                    if let Ok(delim_str) = std::str::from_utf8(delim_bytes) {
-                        if delim_str == delimiter {
-                            // Skip delimiter
-                            for _ in 0..delimiter.len() {
-                                self.advance();
-                            }
-                            self.state.in_heredoc = false;
-                            self.state.heredoc_delimiter = None;
-                            return Ok(TokenType::HereDocument);
-                        }
-                    }
-                }
-            }
-            self.advance();
-        }
-
-        // Unterminated heredoc
-        self.state.in_heredoc = false;
-        self.state.heredoc_delimiter = None;
-        Err(ParseError::unterminated_string(self.state.position()))
-    }
-
-    /// Scan a regex pattern
-    #[allow(dead_code)]
-    fn scan_regex(&mut self) -> ParseResult<TokenType> {
-        self.state.in_regex = true;
-
-        // Skip the opening delimiter
-        let delimiter = self.lookahead.unwrap_or('/');
-        self.advance();
-
-        while let Some(ch) = self.lookahead {
-            if ch == delimiter {
-                self.advance();
-                self.state.in_regex = false;
-                return Ok(TokenType::Regex);
-            } else if ch == '\\' {
-                self.advance();
-                // Skip the escaped character
-                if let Some(_) = self.lookahead {
-                    self.advance();
-                }
-            } else {
-                self.advance();
-            }
-        }
-
-        // Unterminated regex
-        self.state.in_regex = false;
-        Err(ParseError::unterminated_string(self.state.position()))
-    }
-
-    /// Scan a variable
-    fn scan_variable(&mut self) -> ParseResult<TokenType> {
-        // Skip the $ character
-        self.advance();
-
-        if let Some(ch) = self.lookahead {
-            match ch {
-                '@' => {
-                    self.advance();
-                    Ok(TokenType::ArrayVariable)
-                }
-                '%' => {
-                    self.advance();
-                    Ok(TokenType::HashVariable)
-                }
-                '$' => {
-                    self.advance();
-                    Ok(TokenType::ScalarVariable)
-                }
-                '&' => {
-                    self.advance();
-                    Ok(TokenType::Variable)
-                }
-                '*' => {
-                    self.advance();
-                    Ok(TokenType::Variable)
-                }
-                _ => {
-                    // Scan identifier part
-                    if UnicodeUtils::is_identifier_start(ch) || ch.is_ascii_digit() {
-                        while let Some(next_ch) = self.lookahead {
-                            if UnicodeUtils::is_identifier_continue(next_ch) {
-                                self.advance();
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    Ok(TokenType::Variable)
-                }
-            }
-        } else {
-            Ok(TokenType::Variable)
-        }
     }
 
     /// Scan an identifier or keyword
@@ -806,139 +808,122 @@ impl RustScanner {
             }
         }
     }
+
+    /// Scan a variable
+    fn scan_variable(&mut self) -> ParseResult<TokenType> {
+        // Skip the $ character
+        self.advance();
+
+        if let Some(ch) = self.lookahead {
+            match ch {
+                '@' => {
+                    self.advance();
+                    Ok(TokenType::ArrayVariable)
+                }
+                '%' => {
+                    self.advance();
+                    Ok(TokenType::HashVariable)
+                }
+                '$' => {
+                    self.advance();
+                    Ok(TokenType::ScalarVariable)
+                }
+                '&' => {
+                    self.advance();
+                    Ok(TokenType::Variable)
+                }
+                '*' => {
+                    self.advance();
+                    Ok(TokenType::Variable)
+                }
+                _ => {
+                    // Scan identifier part
+                    if UnicodeUtils::is_identifier_start(ch) || ch.is_ascii_digit() {
+                        while let Some(next_ch) = self.lookahead {
+                            if UnicodeUtils::is_identifier_continue(next_ch) {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(TokenType::Variable)
+                }
+            }
+        } else {
+            Ok(TokenType::Variable)
+        }
+    }
 }
 
 impl PerlScanner for RustScanner {
     fn scan(&mut self, input: &[u8]) -> ParseResult<Option<u16>> {
-        // Set input if provided
-        if !input.is_empty() {
-            self.set_input(input);
-        }
+        self.input = input.to_vec();
+        self.position = 0;
+        self.lookahead = self.peek_char().ok();
 
         // Skip whitespace
         self.skip_whitespace();
 
-        // Check for EOF
-        if self.lookahead.is_none() {
+        if self.is_eof() {
             return Ok(None);
         }
 
-        // Scan next token
-        let token_type = self.scan_operator()?;
-
-        // Convert token type to u16 (tree-sitter token ID)
-        let token_id = match token_type {
-            TokenType::Package => 1,
-            TokenType::Use => 2,
-            TokenType::Require => 3,
-            TokenType::Sub => 4,
-            TokenType::My => 5,
-            TokenType::Our => 6,
-            TokenType::Local => 7,
-            TokenType::Return => 8,
-            TokenType::If => 9,
-            TokenType::Unless => 10,
-            TokenType::Elsif => 11,
-            TokenType::Else => 12,
-            TokenType::While => 13,
-            TokenType::Until => 14,
-            TokenType::For => 15,
-            TokenType::Foreach => 16,
-            TokenType::Do => 17,
-            TokenType::Last => 18,
-            TokenType::Next => 19,
-            TokenType::Redo => 20,
-            TokenType::Goto => 21,
-            TokenType::Die => 22,
-            TokenType::Warn => 23,
-            TokenType::Print => 24,
-            TokenType::Say => 25,
-            TokenType::Defined => 26,
-            TokenType::Undef => 27,
-            TokenType::Identifier => 28,
-            TokenType::Variable => 29,
-            TokenType::ArrayVariable => 30,
-            TokenType::HashVariable => 31,
-            TokenType::ScalarVariable => 32,
-            TokenType::Integer => 33,
-            TokenType::Float => 34,
-            TokenType::String => 35,
-            TokenType::SingleQuotedString => 36,
-            TokenType::DoubleQuotedString => 37,
-            TokenType::HereDocument => 38,
-            TokenType::Regex => 39,
-            TokenType::Comment => 40,
-            TokenType::Pod => 41,
-            TokenType::Plus => 42,
-            TokenType::Minus => 43,
-            TokenType::Multiply => 44,
-            TokenType::Divide => 45,
-            TokenType::Modulo => 46,
-            TokenType::Power => 47,
-            TokenType::Assign => 48,
-            TokenType::Equal => 49,
-            TokenType::NotEqual => 50,
-            TokenType::LessThan => 51,
-            TokenType::GreaterThan => 52,
-            TokenType::LessEqual => 53,
-            TokenType::GreaterEqual => 54,
-            TokenType::LogicalAnd => 55,
-            TokenType::LogicalOr => 56,
-            TokenType::LogicalNot => 57,
-            TokenType::BitwiseAnd => 58,
-            TokenType::BitwiseOr => 59,
-            TokenType::BitwiseXor => 60,
-            TokenType::BitwiseNot => 61,
-            TokenType::LeftShift => 62,
-            TokenType::RightShift => 63,
-            TokenType::Increment => 64,
-            TokenType::Decrement => 65,
-            TokenType::PlusAssign => 66,
-            TokenType::MinusAssign => 67,
-            TokenType::MultiplyAssign => 68,
-            TokenType::DivideAssign => 69,
-            TokenType::ModuloAssign => 70,
-            TokenType::PowerAssign => 71,
-            TokenType::StringEqual => 72,
-            TokenType::StringNotEqual => 73,
-            TokenType::StringLessThan => 74,
-            TokenType::StringGreaterThan => 75,
-            TokenType::StringLessEqual => 76,
-            TokenType::StringGreaterEqual => 77,
-            TokenType::Range => 78,
-            TokenType::RangeExclusive => 79,
-            TokenType::Comma => 80,
-            TokenType::FatComma => 81,
-            TokenType::Arrow => 82,
-            TokenType::DoubleArrow => 83,
-            TokenType::Question => 84,
-            TokenType::Colon => 85,
-            TokenType::Semicolon => 86,
-            TokenType::Dot => 87,
-            TokenType::DoubleDot => 88,
-            TokenType::TripleDot => 89,
-            TokenType::LeftParenthesis => 90,
-            TokenType::RightParenthesis => 91,
-            TokenType::LeftBracket => 92,
-            TokenType::RightBracket => 93,
-            TokenType::LeftBrace => 94,
-            TokenType::RightBrace => 95,
-            TokenType::LeftAngle => 96,
-            TokenType::RightAngle => 97,
-            TokenType::Whitespace => 98,
-            TokenType::Newline => 99,
-            TokenType::Tab => 100,
-            TokenType::CarriageReturn => 101,
-            TokenType::FormFeed => 102,
-            TokenType::VerticalTab => 103,
-            TokenType::Eof => 104,
-            TokenType::Error => 105,
-            TokenType::Unknown => 106,
-            // Add more mappings as needed
-            _ => 106, // Unknown
+        let token_type = match self.lookahead {
+            Some(ch) => match ch {
+                '#' => {
+                    // Comment
+                    self.scan_comment()?
+                }
+                '=' => {
+                    // POD or assignment
+                    if self.peek_next_char().map_or(false, |next| next.is_ascii_alphabetic()) {
+                        self.scan_pod()?
+                    } else {
+                        self.scan_operator()?
+                    }
+                }
+                '<' => {
+                    // Heredoc or comparison
+                    if self.peek_next_char().map_or(false, |next| next == '<') {
+                        self.scan_heredoc()?
+                    } else {
+                        self.scan_operator()?
+                    }
+                }
+                '/' | 'm' | 's' | 'y' | 't' => {
+                    // Regex or division
+                    if self.state.in_regex || self.is_regex_context() {
+                        self.scan_regex()?
+                    } else {
+                        self.scan_operator()?
+                    }
+                }
+                '$' | '@' | '%' | '&' | '*' => {
+                    // Variable
+                    self.scan_variable()?
+                }
+                '\'' | '"' => {
+                    // String literal
+                    self.scan_string(ch)?
+                }
+                '0'..='9' => {
+                    // Number literal
+                    self.scan_number()?
+                }
+                'a'..='z' | 'A'..='Z' | '_' => {
+                    // Identifier or keyword
+                    self.scan_identifier()?
+                }
+                _ => {
+                    // Operator or other
+                    self.scan_operator()?
+                }
+            },
+            None => TokenType::Eof,
         };
 
-        Ok(Some(token_id))
+        Ok(Some(token_type as u16))
     }
 
     fn serialize(&self, buffer: &mut Vec<u8>) -> ParseResult<()> {
@@ -962,6 +947,13 @@ impl PerlScanner for RustScanner {
 
     fn position(&self) -> (usize, usize) {
         self.state.position()
+    }
+
+    /// Check if we're in a context where a regex is expected
+    fn is_regex_context(&self) -> bool {
+        // This is a simplified check - in a real implementation,
+        // we'd need to track more context about the parsing state
+        false
     }
 }
 

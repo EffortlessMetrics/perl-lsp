@@ -2,7 +2,7 @@
 // @ts-check
 
 const primitives = require('./lib/primitives.js')
-const unicode_ranges = require('./lib/unicode_ranges')
+const unicode_ranges = require('./lib/unicode_ranges.js')
 
 /* perl.y's precedence list */
 const TERMPREC = {
