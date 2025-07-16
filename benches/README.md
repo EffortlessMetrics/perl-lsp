@@ -157,6 +157,85 @@ memory_gc_impact
 3. **Cache Optimization**: Better cache locality
 4. **JIT Compilation**: Runtime optimization of hot paths
 
+## 🔬 Benchmark Design & Architecture
+
+### Design Goals
+
+1. **Accurate Comparison**: Fair C vs Rust implementation comparison
+2. **Comprehensive Coverage**: All critical performance aspects
+3. **Statistical Validity**: Proper statistical analysis
+4. **Regression Detection**: Automated performance monitoring
+5. **CI Integration**: Performance gates for continuous integration
+
+### Architecture Components
+
+#### **Criterion Benchmarks** (Current)
+- Rust-native performance measurement
+- Statistical analysis with confidence intervals
+- Automated result storage and visualization
+- Regression detection capabilities
+
+#### **C Implementation Benchmarks** (Planned)
+- Node.js-based C parser benchmarking
+- Fair comparison methodology
+- Same test cases as Rust benchmarks
+- Statistical significance testing
+
+#### **Comparison Engine** (Planned)
+- Statistical comparison of C vs Rust results
+- Performance improvement calculation
+- Confidence interval analysis
+- Regression detection algorithms
+
+#### **Performance Gates** (Planned)
+- Automated regression detection
+- CI/CD integration
+- Performance trend analysis
+- Alert system for performance regressions
+
+### Implementation Roadmap
+
+#### **Phase 1: Basic Criterion Integration** ✅ **Complete**
+- Criterion benchmark setup
+- Basic performance measurement
+- Xtask integration
+- Result storage and visualization
+
+#### **Phase 2: C Implementation Benchmarking** 🔄 **Planned**
+- Node.js C parser benchmarking
+- Fair comparison methodology
+- Statistical analysis framework
+- Performance comparison engine
+
+#### **Phase 3: Advanced Features** 🔄 **Planned**
+- Memory usage measurement
+- Scalability analysis
+- Automated regression detection
+- Performance gates for CI/CD
+- Historical performance tracking
+
+### C vs Rust Comparison Methodology
+
+#### **Test Case Design**
+- Identical input data for both implementations
+- Representative Perl code samples
+- Various input sizes and complexity levels
+- Edge cases and error conditions
+
+#### **Measurement Methodology**
+- Statistical significance testing
+- Confidence interval calculation
+- Outlier detection and removal
+- Multiple measurement runs
+- Environment consistency
+
+#### **Fair Comparison Requirements**
+- Same hardware and environment
+- Same input data and test cases
+- Proper warm-up and measurement phases
+- Statistical validation of results
+- Transparent methodology documentation
+
 ## 📈 Regression Detection
 
 ### Automated Regression Testing
