@@ -350,7 +350,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path = if path.exists() { path } else { PathBuf::from("test/corpus") };
+    let corpus_path = if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/corpus") };
     
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
