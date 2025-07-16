@@ -9,10 +9,15 @@
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
-#[cfg(feature = "c-scanner")]
-use tree_sitter_perl::scanner::{CScanner, PerlScanner};
+// Import the trait once
+use tree_sitter_perl::scanner::PerlScanner;
+
+// Import implementation-specific types based on feature flags
 #[cfg(feature = "rust-scanner")]
-use tree_sitter_perl::scanner::{PerlScanner, RustScanner};
+use tree_sitter_perl::scanner::RustScanner;
+
+#[cfg(feature = "c-scanner")]
+use tree_sitter_perl::scanner::CScanner;
 
 // Common test cases for both scanners
 const TEST_CASES: &[&str] = &[
@@ -202,11 +207,11 @@ fn bench_scanner_memory_usage(c: &mut Criterion) {
 fn create_scanner() -> Box<dyn PerlScanner> {
     #[cfg(feature = "rust-scanner")]
     {
-        Box::new(RustScanner::new())
+        return Box::new(RustScanner::new());
     }
     #[cfg(feature = "c-scanner")]
     {
-        Box::new(CScanner::new())
+        return Box::new(CScanner::new());
     }
     #[cfg(not(any(feature = "rust-scanner", feature = "c-scanner")))]
     {
