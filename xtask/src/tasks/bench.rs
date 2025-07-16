@@ -15,10 +15,12 @@ pub fn run(name: Option<String>, _save: bool) -> Result<()> {
     spinner.set_message("Running benchmarks");
     
     let mut args = vec!["bench"];
+    let mut name_strings = Vec::new();
+    
     if let Some(name) = name {
-        let name_str = name;
+        name_strings.push(name);
         args.push("--bench");
-        args.push(&name_str);
+        args.push(name_strings.last().unwrap());
     }
     
     let status = cmd("cargo", &args)
