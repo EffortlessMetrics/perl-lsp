@@ -995,9 +995,8 @@ mod tests {
     #[test]
     fn test_identifier_scanning() {
         let mut scanner = RustScanner::new();
-        scanner.set_input(b"my_variable");
         
-        let result = scanner.scan(b"");
+        let result = scanner.scan(b"my_variable");
         assert!(result.is_ok());
         let token = result.unwrap();
         assert!(token.is_some());

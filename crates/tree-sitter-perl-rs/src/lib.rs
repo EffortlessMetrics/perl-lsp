@@ -37,9 +37,14 @@ mod tests;
 
 use tree_sitter::{Language, Parser};
 
+// External C functions from the generated parser
+unsafe extern "C" {
+    fn tree_sitter_perl() -> *const tree_sitter::ffi::TSLanguage;
+}
+
 /// Get the tree-sitter language for Perl
 pub fn language() -> Language {
-    unsafe { tree_sitter_perl() }
+    unsafe { Language::from_raw(tree_sitter_perl()) }
 }
 
 /// Create a new parser instance
@@ -70,11 +75,6 @@ pub fn parse_with_tree(
         .ok_or(error::ParseError::ParseFailed)
 }
 
-// External C functions from the generated parser
-unsafe extern "C" {
-    fn tree_sitter_perl() -> Language;
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -82,8 +82,8 @@ mod test {
     #[test]
     fn test_language_loading() {
         let lang = language();
-        // Language is valid if we can create it
-        assert!(std::ptr::addr_of!(lang) != std::ptr::null());
+        // Language is valid if we can get its version
+        assert!(lang.version() > 0);
     }
 
     #[test]
@@ -99,7 +99,8 @@ mod test {
 
     #[test]
     fn test_parser_creation() {
-        let parser = parser();
+        let mut parser = Parser::new();
+        parser.set_language(&language()).unwrap();
         // Test that parser has a language set
         assert!(parser.language().is_some());
     }
