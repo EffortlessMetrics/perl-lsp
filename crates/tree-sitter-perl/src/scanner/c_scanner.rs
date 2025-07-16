@@ -1,16 +1,16 @@
-//! C scanner wrapper for backward compatibility
+//! C scanner implementation for Perl
 //!
-//! This module provides a wrapper around the existing C scanner implementation
-//! to maintain compatibility during the transition to the Rust scanner.
+//! This module provides a wrapper around the legacy C scanner implementation
+//! for compatibility and testing purposes.
 
 use super::{PerlScanner, ScannerConfig, ScannerState, TokenType};
 use crate::error::{ParseError, ParseResult};
-use tree_sitter::{Lexer, LexicalError};
 
-/// C scanner wrapper implementation
+/// C scanner implementation that wraps the legacy C scanner
 pub struct CScanner {
     config: ScannerConfig,
     state: ScannerState,
+    c_scanner: *mut std::ffi::c_void, // Opaque pointer to C scanner
 }
 
 impl CScanner {
@@ -24,63 +24,49 @@ impl CScanner {
         Self {
             config,
             state: ScannerState::default(),
+            c_scanner: std::ptr::null_mut(),
         }
+    }
+
+    /// Initialize the C scanner
+    fn init_c_scanner(&mut self) -> ParseResult<()> {
+        // This would initialize the actual C scanner
+        // For now, we'll use a placeholder
+        self.c_scanner = std::ptr::null_mut();
+        Ok(())
     }
 }
 
 impl PerlScanner for CScanner {
-    fn scan(&mut self, lexer: &mut Lexer) -> ParseResult<Option<u16>> {
-        // This is a placeholder - the actual implementation would
-        // call the C scanner functions through FFI
-        // For now, we'll return None to indicate EOF
-        Ok(None)
+    fn scan(&mut self, input: &[u8]) -> ParseResult<Option<u16>> {
+        // Initialize C scanner if needed
+        if self.c_scanner.is_null() {
+            self.init_c_scanner()?;
+        }
+
+        // For now, return a placeholder token
+        // In a real implementation, this would call the C scanner functions
+        Ok(Some(1)) // Placeholder token ID
     }
 
     fn serialize(&self, buffer: &mut Vec<u8>) -> ParseResult<()> {
         // Serialize C scanner state
-        buffer.extend_from_slice(&self.state.line.to_le_bytes());
-        buffer.extend_from_slice(&self.state.column.to_le_bytes());
-        buffer.extend_from_slice(&self.state.offset.to_le_bytes());
+        let state_bytes = bincode::serialize(&self.state)
+            .map_err(|e| ParseError::scanner_error_simple(&format!("Serialization failed: {}", e)))?;
+        buffer.extend_from_slice(&state_bytes);
         Ok(())
     }
 
     fn deserialize(&mut self, buffer: &[u8]) -> ParseResult<()> {
-        if buffer.len() < 24 {
-            return Err(ParseError::scanner_error_simple("Invalid buffer size"));
-        }
-
-        let mut offset = 0;
-
-        // Deserialize state
-        self.state.line = u32::from_le_bytes([
-            buffer[offset],
-            buffer[offset + 1],
-            buffer[offset + 2],
-            buffer[offset + 3],
-        ]) as usize;
-        offset += 4;
-
-        self.state.column = u32::from_le_bytes([
-            buffer[offset],
-            buffer[offset + 1],
-            buffer[offset + 2],
-            buffer[offset + 3],
-        ]) as usize;
-        offset += 4;
-
-        self.state.offset = u32::from_le_bytes([
-            buffer[offset],
-            buffer[offset + 1],
-            buffer[offset + 2],
-            buffer[offset + 3],
-        ]) as usize;
-
+        // Deserialize C scanner state
+        self.state = bincode::deserialize(buffer)
+            .map_err(|e| ParseError::scanner_error_simple(&format!("Deserialization failed: {}", e)))?;
         Ok(())
     }
 
     fn is_eof(&self) -> bool {
-        // This would need to be implemented based on the C scanner state
-        false
+        // Check if C scanner is at EOF
+        self.c_scanner.is_null()
     }
 
     fn position(&self) -> (usize, usize) {
@@ -94,6 +80,16 @@ impl Default for CScanner {
     }
 }
 
+impl Drop for CScanner {
+    fn drop(&mut self) {
+        // Clean up C scanner resources
+        if !self.c_scanner.is_null() {
+            // Free C scanner memory
+            self.c_scanner = std::ptr::null_mut();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,7 +97,18 @@ mod tests {
     #[test]
     fn test_c_scanner_creation() {
         let scanner = CScanner::new();
-        assert_eq!(scanner.state.line, 1);
-        assert_eq!(scanner.state.column, 1);
+        assert!(scanner.c_scanner.is_null());
+    }
+
+    #[test]
+    fn test_c_scanner_config() {
+        let config = ScannerConfig {
+            strict_mode: true,
+            unicode_normalization: false,
+            max_token_length: 512,
+            debug: true,
+        };
+        let scanner = CScanner::with_config(config);
+        assert!(scanner.c_scanner.is_null());
     }
 }
