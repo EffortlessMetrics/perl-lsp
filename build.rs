@@ -40,7 +40,8 @@ fn build_c_parser() {
         .flag_if_supported("-std=c99")
         .flag_if_supported("-Wno-unused-parameter")
         .flag_if_supported("-Wno-unused-variable")
-        .flag_if_supported("-Wno-unused-function");
+        .flag_if_supported("-Wno-unused-function")
+        .flag_if_supported("-Wno-empty-body");
 
     build.compile("tree-sitter-perl-parser");
 }
@@ -61,7 +62,8 @@ fn build_c_scanner() {
         .flag_if_supported("-std=c99")
         .flag_if_supported("-Wno-unused-parameter")
         .flag_if_supported("-Wno-unused-variable")
-        .flag_if_supported("-Wno-unused-function");
+        .flag_if_supported("-Wno-unused-function")
+        .flag_if_supported("-Wno-empty-body");
 
     build.compile("tree-sitter-perl-scanner");
 }
