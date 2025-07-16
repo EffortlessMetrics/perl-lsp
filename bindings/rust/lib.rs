@@ -42,11 +42,50 @@ pub const NODE_TYPES: &'static str = include_str!("../../src/node-types.json");
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_can_load_grammar() {
         let mut parser = tree_sitter::Parser::new();
         parser
             .set_language(&super::language())
             .expect("Error loading perl language");
+    }
+}
+
+// Include comprehensive test suite
+#[cfg(test)]
+mod test_harness;
+#[cfg(test)]
+mod simple_test;
+#[cfg(test)]
+mod integration_corpus;
+#[cfg(test)]
+mod integration_highlight;
+
+#[cfg(test)]
+mod comprehensive_tests {
+    use super::*;
+    use crate::test_harness::parse_perl_code;
+
+    #[test]
+    fn test_basic_parsing_works() {
+        let code = "print 'Hello, World!';";
+        let result = parse_perl_code(code);
+        assert!(result.is_ok(), "Failed to parse basic Perl code: {:?}", result);
+    }
+
+    #[test]
+    fn test_empty_string_parses() {
+        let code = "";
+        let result = parse_perl_code(code);
+        assert!(result.is_ok(), "Failed to parse empty string: {:?}", result);
+    }
+
+    #[test]
+    fn test_variable_declaration_parses() {
+        let code = "my $var = 42;";
+        let result = parse_perl_code(code);
+        assert!(result.is_ok(), "Failed to parse variable declaration: {:?}", result);
     }
 }
