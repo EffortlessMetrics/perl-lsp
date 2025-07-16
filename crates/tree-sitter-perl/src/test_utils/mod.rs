@@ -14,7 +14,7 @@ impl TestUtils {
     pub fn parse_perl_code(code: &str) -> ParseResult<Tree> {
         let mut parser = Parser::new();
         parser
-            .set_language(crate::language())
+            .set_language(&crate::language())
             .expect("Failed to set language");
         parser
             .parse(code, None)

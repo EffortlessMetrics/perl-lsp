@@ -7,31 +7,67 @@ use serde::{Serialize, Deserialize};
 pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Errors that can occur during parsing
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParseError {
     /// Parsing failed for an unknown reason
     #[error("Parsing failed")]
     ParseFailed,
-
-    /// Invalid UTF-8 in source code
+    
+    /// Invalid UTF-8 sequence encountered
     #[error("Invalid UTF-8: {0}")]
     InvalidUtf8(String),
-
+    
     /// Scanner error occurred
     #[error("Scanner error: {0}")]
     ScannerError(String),
-
-    /// Grammar error occurred
-    #[error("Grammar error: {0}")]
-    GrammarError(String),
-
-    /// Language loading failed
-    #[error("Failed to load language")]
-    LanguageLoadFailed,
-
-    /// Parser creation failed
-    #[error("Failed to create parser")]
-    ParserCreationFailed,
+    
+    /// Invalid token encountered
+    #[error("Invalid token: {0}")]
+    InvalidToken(String),
+    
+    /// Unexpected end of file
+    #[error("Unexpected end of file")]
+    UnexpectedEof,
+    
+    /// Unterminated string literal
+    #[error("Unterminated string literal")]
+    UnterminatedString,
+    
+    /// Unterminated regex pattern
+    #[error("Unterminated regex pattern")]
+    UnterminatedRegex,
+    
+    /// Unterminated heredoc
+    #[error("Unterminated heredoc")]
+    UnterminatedHeredoc,
+    
+    /// Invalid escape sequence
+    #[error("Invalid escape sequence: {0}")]
+    InvalidEscape(String),
+    
+    /// Invalid Unicode sequence
+    #[error("Invalid Unicode sequence: {0}")]
+    InvalidUnicode(String),
+    
+    /// Invalid number literal
+    #[error("Invalid number literal: {0}")]
+    InvalidNumber(String),
+    
+    /// Invalid identifier
+    #[error("Invalid identifier: {0}")]
+    InvalidIdentifier(String),
+    
+    /// Invalid scanner state
+    #[error("Invalid scanner state: {0}")]
+    InvalidState(String),
+    
+    /// I/O error
+    #[error("I/O error: {0}")]
+    IoError(String),
+    
+    /// Other error
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
 /// Errors that can occur during scanning
