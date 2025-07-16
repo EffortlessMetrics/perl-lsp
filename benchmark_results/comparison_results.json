@@ -3,9 +3,9 @@
     "performance_ratio": 1.0,
     "rust_faster": false,
     "success_rate": {
-      "c": 0,
+      "c": 13,
       "rust": 0,
-      "total": 0
+      "total": 14
     },
     "time_difference_percent": 0.0
   },
@@ -14,27 +14,382 @@
       "implementation": "c",
       "summary": {
         "avg_memory_per_test": 0.0,
-        "avg_time_per_test": 0.0,
-        "successful_tests": 0,
+        "avg_time_per_test": 167.36642857142857,
+        "parse_error_count": 1,
+        "parse_success_count": 13,
         "total_memory": 0.0,
-        "total_test_cases": 0,
-        "total_time": 0.0
+        "total_test_cases": 14,
+        "total_time": 2343.13
       },
-      "test_cases": {}
+      "test_cases": {
+        "test/corpus/autoquote": {
+          "avg_memory": 0.0,
+          "avg_time": 128.47,
+          "file_size": 9716,
+          "iterations": 100,
+          "max_time": 299.0,
+          "median_time": 118.0,
+          "min_time": 112.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/expressions": {
+          "avg_memory": 0.0,
+          "avg_time": 165.0,
+          "file_size": 13788,
+          "iterations": 100,
+          "max_time": 339.0,
+          "median_time": 159.5,
+          "min_time": 154.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/functions": {
+          "avg_memory": 0.0,
+          "avg_time": 135.08,
+          "file_size": 10596,
+          "iterations": 100,
+          "max_time": 278.0,
+          "median_time": 126.0,
+          "min_time": 120.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/heredocs": {
+          "avg_memory": 0.0,
+          "avg_time": 68.05,
+          "file_size": 4634,
+          "iterations": 100,
+          "max_time": 129.0,
+          "median_time": 66.0,
+          "min_time": 62.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/interpolation": {
+          "avg_memory": 0.0,
+          "avg_time": 124.59,
+          "file_size": 9844,
+          "iterations": 100,
+          "max_time": 232.0,
+          "median_time": 118.0,
+          "min_time": 114.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/literals": {
+          "avg_memory": 0.0,
+          "avg_time": 100.63,
+          "file_size": 7993,
+          "iterations": 100,
+          "max_time": 125.0,
+          "median_time": 99.0,
+          "min_time": 95.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/map-grep": {
+          "avg_memory": 0.0,
+          "avg_time": 105.06,
+          "file_size": 8126,
+          "iterations": 100,
+          "max_time": 165.0,
+          "median_time": 101.0,
+          "min_time": 95.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/operators": {
+          "avg_memory": 0.0,
+          "avg_time": 174.44,
+          "file_size": 14310,
+          "iterations": 100,
+          "max_time": 324.0,
+          "median_time": 163.0,
+          "min_time": 158.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/pod": {
+          "avg_memory": 0.0,
+          "avg_time": 706.94,
+          "file_size": 1436,
+          "iterations": 100,
+          "max_time": 3817.0,
+          "median_time": 648.0,
+          "min_time": 622.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/regexp": {
+          "avg_memory": 0.0,
+          "avg_time": 74.32,
+          "file_size": 4855,
+          "iterations": 100,
+          "max_time": 150.0,
+          "median_time": 69.0,
+          "min_time": 65.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/simple": {
+          "avg_memory": 0.0,
+          "avg_time": 73.85,
+          "file_size": 5058,
+          "iterations": 100,
+          "max_time": 162.0,
+          "median_time": 70.0,
+          "min_time": 67.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/statements": {
+          "avg_memory": 0.0,
+          "avg_time": 210.0,
+          "file_size": 17427,
+          "iterations": 100,
+          "max_time": 379.0,
+          "median_time": 198.0,
+          "min_time": 192.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/subroutines": {
+          "avg_memory": 0.0,
+          "avg_time": 140.03,
+          "file_size": 10643,
+          "iterations": 100,
+          "max_time": 608.0,
+          "median_time": 127.0,
+          "min_time": 121.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        },
+        "test/corpus/variables": {
+          "avg_memory": 0.0,
+          "avg_time": 136.67,
+          "file_size": 10442,
+          "iterations": 100,
+          "max_time": 251.0,
+          "median_time": 126.0,
+          "min_time": 119.0,
+          "parse_error": false,
+          "parse_success": true,
+          "successful_iterations": 100
+        }
+      }
     },
     "rust": {
       "implementation": "rust",
       "summary": {
         "avg_memory_per_test": 0.0,
-        "avg_time_per_test": 0.0,
-        "successful_tests": 0,
+        "avg_time_per_test": 8963.825714285715,
+        "parse_error_count": 14,
+        "parse_success_count": 0,
         "total_memory": 0.0,
-        "total_test_cases": 0,
-        "total_time": 0.0
+        "total_test_cases": 14,
+        "total_time": 125493.56000000001
       },
-      "test_cases": {}
+      "test_cases": {
+        "test/corpus/autoquote": {
+          "avg_memory": 0.0,
+          "avg_time": 8733.97,
+          "file_size": 9716,
+          "iterations": 100,
+          "max_time": 10310.0,
+          "median_time": 8673.0,
+          "min_time": 8460.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/expressions": {
+          "avg_memory": 0.0,
+          "avg_time": 11080.99,
+          "file_size": 13788,
+          "iterations": 100,
+          "max_time": 11915.0,
+          "median_time": 11058.0,
+          "min_time": 10639.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/functions": {
+          "avg_memory": 0.0,
+          "avg_time": 10286.87,
+          "file_size": 10596,
+          "iterations": 100,
+          "max_time": 14233.0,
+          "median_time": 10149.5,
+          "min_time": 9884.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/heredocs": {
+          "avg_memory": 0.0,
+          "avg_time": 6287.98,
+          "file_size": 4634,
+          "iterations": 100,
+          "max_time": 7359.0,
+          "median_time": 6235.0,
+          "min_time": 6040.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/interpolation": {
+          "avg_memory": 0.0,
+          "avg_time": 8989.85,
+          "file_size": 9844,
+          "iterations": 100,
+          "max_time": 11077.0,
+          "median_time": 8937.0,
+          "min_time": 8665.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/literals": {
+          "avg_memory": 0.0,
+          "avg_time": 7738.16,
+          "file_size": 7993,
+          "iterations": 100,
+          "max_time": 11108.0,
+          "median_time": 7651.5,
+          "min_time": 7401.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/map-grep": {
+          "avg_memory": 0.0,
+          "avg_time": 8102.78,
+          "file_size": 8126,
+          "iterations": 100,
+          "max_time": 19398.0,
+          "median_time": 7924.5,
+          "min_time": 7729.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/operators": {
+          "avg_memory": 0.0,
+          "avg_time": 13398.4,
+          "file_size": 14310,
+          "iterations": 100,
+          "max_time": 14930.0,
+          "median_time": 13348.5,
+          "min_time": 12877.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/pod": {
+          "avg_memory": 0.0,
+          "avg_time": 1181.95,
+          "file_size": 1436,
+          "iterations": 100,
+          "max_time": 1372.0,
+          "median_time": 1162.5,
+          "min_time": 1106.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/regexp": {
+          "avg_memory": 0.0,
+          "avg_time": 5671.15,
+          "file_size": 4855,
+          "iterations": 100,
+          "max_time": 6862.0,
+          "median_time": 5647.0,
+          "min_time": 5503.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/simple": {
+          "avg_memory": 0.0,
+          "avg_time": 4798.41,
+          "file_size": 5058,
+          "iterations": 100,
+          "max_time": 6104.0,
+          "median_time": 4765.5,
+          "min_time": 4600.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/statements": {
+          "avg_memory": 0.0,
+          "avg_time": 18860.72,
+          "file_size": 17427,
+          "iterations": 100,
+          "max_time": 24752.0,
+          "median_time": 18621.5,
+          "min_time": 18040.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/subroutines": {
+          "avg_memory": 0.0,
+          "avg_time": 11512.64,
+          "file_size": 10643,
+          "iterations": 100,
+          "max_time": 15674.0,
+          "median_time": 11430.0,
+          "min_time": 10961.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        },
+        "test/corpus/variables": {
+          "avg_memory": 0.0,
+          "avg_time": 8849.69,
+          "file_size": 10442,
+          "iterations": 100,
+          "max_time": 10184.0,
+          "median_time": 8803.0,
+          "min_time": 8564.0,
+          "parse_error": true,
+          "parse_success": false,
+          "successful_iterations": 100
+        }
+      }
     }
   },
-  "test_cases": [],
-  "timestamp": "2025-07-16T22:37:10.092379685+00:00"
+  "test_cases": [
+    "test/corpus/subroutines",
+    "test/corpus/pod",
+    "test/corpus/operators",
+    "test/corpus/statements",
+    "test/corpus/regexp",
+    "test/corpus/autoquote",
+    "test/corpus/simple",
+    "test/corpus/map-grep",
+    "test/corpus/heredocs",
+    "test/corpus/interpolation",
+    "test/corpus/variables",
+    "test/corpus/expressions",
+    "test/corpus/literals",
+    "test/corpus/functions"
+  ],
+  "timestamp": "2025-07-16T23:54:31.828072824+00:00"
 }
