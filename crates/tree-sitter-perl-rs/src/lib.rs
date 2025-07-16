@@ -46,7 +46,7 @@ pub fn language() -> Language {
 pub fn parser() -> Parser {
     let mut parser = Parser::new();
     parser
-        .set_language(&language())
+        .set_language(language())
         .expect("Failed to set language");
     parser
 }
@@ -71,7 +71,7 @@ pub fn parse_with_tree(
 }
 
 // External C functions from the generated parser
-extern "C" {
+unsafe extern "C" {
     fn tree_sitter_perl() -> Language;
 }
 

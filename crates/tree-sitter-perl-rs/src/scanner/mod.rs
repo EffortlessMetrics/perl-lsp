@@ -34,6 +34,9 @@ pub trait PerlScanner {
 
     /// Get the current position in the input
     fn position(&self) -> (usize, usize);
+
+    /// Check if we're in a regex context
+    fn is_regex_context(&self) -> bool;
 }
 
 /// Scanner configuration options
