@@ -72,6 +72,8 @@ mod property_scanner;
 mod performance;
 #[cfg(test)]
 mod real_world_corpus;
+#[cfg(test)]
+mod error_snapshots;
 
 #[cfg(test)]
 mod comprehensive_tests {
