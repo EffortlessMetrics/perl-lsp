@@ -192,7 +192,8 @@ fn run_single_test(
 ) -> Result<Option<serde_json::Value>> {
     let mut times = Vec::new();
     let mut memories = Vec::new();
-    let mut success = false;
+    let mut parse_success = false;
+    let mut parse_error = false;
 
     for _ in 0..iterations {
         let (ok, elapsed) = match impl_type {
@@ -203,16 +204,13 @@ fn run_single_test(
         times.push(elapsed);
         memories.push(0.0); // TODO: Add memory measurement
         if ok {
-            success = true;
+            parse_success = true;
         } else {
-            break;
+            parse_error = true;
         }
     }
 
-    if !success {
-        return Ok(None);
-    }
-
+    // Always record the result, even if parse_error is true
     // Calculate statistics
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let avg_time = times.iter().sum::<f64>() / times.len() as f64;
@@ -234,7 +232,9 @@ fn run_single_test(
         "max_time": max_time,
         "median_time": median_time,
         "avg_memory": 0.0, // TODO: Add memory measurement
-        "file_size": file_size
+        "file_size": file_size,
+        "parse_success": parse_success,
+        "parse_error": parse_error
     })))
 }
 
