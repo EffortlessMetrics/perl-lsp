@@ -13,7 +13,7 @@ use std::{
 };
 use serde_json::{json, Value};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BenchmarkResult {
     pub name: String,
     pub implementation: String,
@@ -22,7 +22,7 @@ pub struct BenchmarkResult {
     pub iterations: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BenchmarkComparison {
     pub name: String,
     pub rust_result: BenchmarkResult,
@@ -112,6 +112,7 @@ fn run_rust_parser_benchmarks() -> Result<Vec<BenchmarkResult>> {
     let mut results = Vec::new();
     
     // Define test cases for parser benchmarks
+    let large_file_content = generate_large_perl_file(500);
     let test_cases = vec![
         ("complex_class", r#"
 package MyClass;
@@ -134,7 +135,7 @@ my $über = "cool";
 my $naïve = "simple";
 sub 関数 { return "関数です"; }
 "#),
-        ("large_file", &generate_large_perl_file(500)),
+        ("large_file", &large_file_content),
     ];
     
     for (name, code) in test_cases {
@@ -149,6 +150,7 @@ fn run_c_node_benchmarks(name_filter: Option<&str>) -> Result<Vec<BenchmarkResul
     let mut results = Vec::new();
     
     // Define test cases for C benchmarks (same as Rust for fair comparison)
+    let large_file_content = generate_large_perl_file(500);
     let test_cases = vec![
         ("simple_variable", "my $var = 42;"),
         ("simple_print", "print 'Hello, World!';"),
@@ -176,7 +178,7 @@ my $über = "cool";
 my $naïve = "simple";
 sub 関数 { return "関数です"; }
 "#),
-        ("large_file", &generate_large_perl_file(500)),
+        ("large_file", &large_file_content),
     ];
     
     for (name, code) in test_cases {

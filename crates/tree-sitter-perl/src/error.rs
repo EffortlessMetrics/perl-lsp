@@ -93,4 +93,26 @@ impl From<std::str::Utf8Error> for ParseError {
     fn from(err: std::str::Utf8Error) -> Self {
         ParseError::InvalidUtf8(err.to_string())
     }
+}
+
+impl ParseError {
+    /// Create an unterminated string error
+    pub fn unterminated_string(position: (usize, usize)) -> Self {
+        ParseError::ScannerError(format!("Unterminated string at line {}, column {}", position.0, position.1))
+    }
+
+    /// Create an invalid token error
+    pub fn invalid_token(token: String, position: (usize, usize)) -> Self {
+        ParseError::ScannerError(format!("Invalid token '{}' at line {}, column {}", token, position.0, position.1))
+    }
+
+    /// Create a Unicode error
+    pub fn unicode_error(message: &str) -> Self {
+        ParseError::ScannerError(format!("Unicode error: {}", message))
+    }
+
+    /// Create a simple scanner error
+    pub fn scanner_error_simple(message: &str) -> Self {
+        ParseError::ScannerError(message.to_string())
+    }
 } 
