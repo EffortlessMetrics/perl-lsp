@@ -73,6 +73,37 @@ enum Commands {
         /// Save benchmark results
         #[arg(long)]
         save: bool,
+
+        /// Output file for results
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run C vs Rust benchmark comparison
+    Compare {
+        /// Run only C implementation benchmarks
+        #[arg(long)]
+        c_only: bool,
+
+        /// Run only Rust implementation benchmarks
+        #[arg(long)]
+        rust_only: bool,
+
+        /// Validate existing results only
+        #[arg(long)]
+        validate_only: bool,
+
+        /// Output directory for results
+        #[arg(long, default_value = "benchmark_results")]
+        output_dir: PathBuf,
+
+        /// Check performance gates
+        #[arg(long)]
+        check_gates: bool,
+
+        /// Generate detailed report
+        #[arg(long)]
+        report: bool,
     },
 
     /// Generate documentation
@@ -193,7 +224,15 @@ fn main() -> Result<()> {
             verbose,
             coverage,
         } => test::run(release, suite, features, verbose, coverage),
-        Commands::Bench { name, save } => bench::run(name, save),
+        Commands::Bench { name, save, output } => bench::run(name, save, output),
+        Commands::Compare {
+            c_only,
+            rust_only,
+            validate_only,
+            output_dir,
+            check_gates,
+            report,
+        } => compare::run(c_only, rust_only, validate_only, output_dir, check_gates, report),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
