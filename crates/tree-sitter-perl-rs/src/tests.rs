@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{language, parse, parser};
     use crate::scanner::PerlScanner;
     use tree_sitter::Parser;
 
@@ -316,6 +316,7 @@ mod unicode_tests {
 mod property_tests {
     use proptest::prelude::*;
     use crate::{parse, scanner::RustScanner};
+    use crate::scanner::PerlScanner;
 
     proptest! {
         #[test]
@@ -373,6 +374,7 @@ mod error_tests {
 #[cfg(test)]
 mod performance_tests {
     use crate::{parse, scanner::RustScanner};
+    use crate::scanner::PerlScanner;
     use std::time::Instant;
 
     #[test]
@@ -416,7 +418,7 @@ mod performance_tests {
 
 #[cfg(test)]
 mod corpus_tests {
-    use super::*;
+    use crate::{parse};
     use crate::scanner::PerlScanner;
     use std::path::PathBuf;
     use std::fs;
@@ -649,7 +651,7 @@ mod corpus_tests {
 
 #[cfg(test)]
 mod highlight_tests {
-    use super::*;
+    use crate::{parse};
     use crate::scanner::PerlScanner;
     use std::path::PathBuf;
     use std::fs;
