@@ -3,7 +3,7 @@
 //! This module provides a wrapper around the legacy C scanner implementation
 //! for compatibility and testing purposes.
 
-use super::{PerlScanner, ScannerConfig, ScannerState, TokenType};
+use super::{PerlScanner, ScannerConfig, ScannerState};
 use crate::error::{ParseError, ParseResult};
 
 /// C scanner implementation that wraps the legacy C scanner
