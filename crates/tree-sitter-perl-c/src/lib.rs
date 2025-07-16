@@ -3,6 +3,9 @@
 //! This crate provides the legacy C implementation of the tree-sitter Perl parser
 //! for comparison and benchmarking purposes.
 
+// Include the generated bindings
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
 use tree_sitter::{Language, Parser};
 use std::path::Path;
 
@@ -14,7 +17,7 @@ pub fn language() -> Language {
 /// Create a new parser with C scanner
 pub fn create_parser() -> Parser {
     let mut parser = Parser::new();
-    parser.set_language(language()).unwrap();
+    parser.set_language(&language()).unwrap();
     parser
 }
 
