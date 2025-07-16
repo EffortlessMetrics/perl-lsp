@@ -9,10 +9,12 @@ use std::collections::HashMap;
 
 /// Rust-native scanner implementation
 pub struct RustScanner {
+    #[allow(dead_code)]
     config: ScannerConfig,
     state: ScannerState,
     // Add some Rust-specific optimizations
     keyword_cache: HashMap<&'static str, TokenType>,
+    #[allow(dead_code)]
     identifier_cache: HashMap<String, bool>,
 }
 

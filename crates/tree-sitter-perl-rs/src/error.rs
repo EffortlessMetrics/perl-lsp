@@ -1,6 +1,5 @@
 //! Error types for tree-sitter Perl parser
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Error types for tree-sitter Perl parser
@@ -134,7 +133,7 @@ impl ParseError {
     }
 
     /// Create an error for Unicode-related issues
-    pub fn unicode_error(message: &str) -> Self {
+    pub fn unicode_error(_message: &str) -> Self {
         ParseError::InvalidUnicode
     }
 
