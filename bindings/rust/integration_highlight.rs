@@ -2,7 +2,7 @@
 mod integration_highlight {
     use std::fs;
     use std::path::Path;
-    use crate::test_harness::{parse_perl_code, test_corpus_file_parses};
+    use crate::test_harness::parse_perl_code;
 
     #[test]
     fn test_parse_all_highlight_files() {

@@ -96,10 +96,10 @@ mod integration_corpus {
             
             for test_case in test_cases {
                 match parse_perl_code(&test_case.input) {
-                    Ok(tree) => {
+                    Ok(_tree) => {
                         // Validate no errors
                         assert!(
-                            validate_tree_no_errors(&tree).is_ok(),
+                            validate_tree_no_errors(&_tree).is_ok(),
                             "Test '{}' in {:?} has parse errors",
                             test_case.name,
                             path
@@ -110,7 +110,7 @@ mod integration_corpus {
                             // Note: S-expression comparison is strict and may need adjustment
                             // For now, we just ensure the tree is valid
                             assert!(
-                                tree.root_node().kind() != "ERROR",
+                                _tree.root_node().kind() != "ERROR",
                                 "Test '{}' in {:?} failed to parse",
                                 test_case.name,
                                 path
@@ -163,7 +163,7 @@ mod integration_corpus {
 
         for (i, code) in invalid_codes.iter().enumerate() {
             match parse_perl_code(code) {
-                Ok(tree) => {
+                Ok(_tree) => {
                     // Invalid code should produce a tree (possibly with error nodes)
                     // but should not panic
                     println!("✓ Invalid code {} parsed without panic", i);

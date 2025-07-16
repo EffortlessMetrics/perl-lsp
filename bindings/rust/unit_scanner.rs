@@ -355,8 +355,8 @@ This is an unterminated quoted heredoc.
             "my $var = 1;\nmy $var2 = 2;",        // Line feed
             "my $var = 1;\rmy $var2 = 2;",        // Carriage return
             "my $var = 1;\r\nmy $var2 = 2;",      // CRLF
-            "my $var = 1;\fmy $var2 = 2;",        // Form feed
-            "my $var = 1;\vmy $var2 = 2;",        // Vertical tab
+            "my $var = 1;\x0Cmy $var2 = 2;",        // Form feed
+            "my $var = 1;\x0Bmy $var2 = 2;",        // Vertical tab
             "my $var = 1; my $var2 = 2;",         // Space
             "my $var = 1;  my $var2 = 2;",        // Multiple spaces
             "my $var = 1;\t \nmy $var2 = 2;",     // Mixed whitespace

@@ -11,7 +11,7 @@ mod property_scanner {
             "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta",
             "theta", "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron",
             "pi", "rho", "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega"
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating random Perl variable names
@@ -21,7 +21,7 @@ mod property_scanner {
             "$alpha", "$beta", "$gamma", "$delta", "$epsilon", "$zeta",
             "@array", "@list", "@items", "@values", "@data",
             "%hash", "%dict", "%map", "%table", "%config"
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating random numbers
@@ -32,7 +32,7 @@ mod property_scanner {
             "0x0", "0x1", "0xFF", "0x100", "0xFFFF",
             "0b0", "0b1", "0b1010", "0b11111111",
             "0o0", "0o1", "0o77", "0o100", "0o777"
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating random string literals
@@ -48,8 +48,8 @@ mod property_scanner {
             r#""With\ttab""#,
             r#""With\r\ncrlf""#,
             r#""With $interpolation""#,
-            r#"'No $interpolation'",
-        ])
+            r#"'No $interpolation'"#,
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating random operators
@@ -64,7 +64,7 @@ mod property_scanner {
             "=", "+=", "-=", "*=", "/=", "%=",
             "++", "--",
             "?", ":", "..", "...",
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating simple Perl expressions
@@ -81,7 +81,7 @@ mod property_scanner {
             "undef",
             "true",
             "false",
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Strategy for generating simple Perl statements
@@ -97,7 +97,7 @@ mod property_scanner {
             "while ($x) { $x--; }",
             "for my $i (1..10) { print $i; }",
             "sub foo { return 1; }",
-        ])
+        ]).prop_map(|s| s.to_string())
     }
 
     // Property test: All valid Perl expressions should parse without panicking
