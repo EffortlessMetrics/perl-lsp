@@ -117,6 +117,14 @@ enum Commands {
         /// Run with specific scanner
         #[arg(long, value_enum)]
         scanner: Option<ScannerType>,
+
+        /// Run diagnostic analysis on first failing test
+        #[arg(long)]
+        diagnose: bool,
+
+        /// Test current parser behavior with simple expressions
+        #[arg(long)]
+        test: bool,
     },
 
     /// Run highlight tests
@@ -189,7 +197,7 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
-        Commands::Corpus { path, scanner } => corpus::run(path, scanner),
+        Commands::Corpus { path, scanner, diagnose, test } => corpus::run(path, scanner, diagnose, test),
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
         Commands::Bindings { output } => bindings::run(output),

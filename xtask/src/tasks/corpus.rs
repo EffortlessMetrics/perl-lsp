@@ -162,7 +162,184 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
     }
 }
 
-pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
+/// Diagnostic function to analyze differences between expected and actual S-expressions
+fn diagnose_parse_differences(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<()> {
+    println!("\n🔍 DIAGNOSTIC: {}", test_case.name);
+    println!("Input Perl code:");
+    println!("```perl");
+    println!("{}", test_case.source.trim());
+    println!("```");
+    
+    // Parse with current parser
+    let tree = match scanner {
+        Some(ScannerType::C) => {
+            // TODO: Implement C scanner parsing when available
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        Some(ScannerType::Rust) => {
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        Some(ScannerType::Both) => {
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        None => {
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+    };
+    
+    let actual = normalize_sexp(&tree.root_node().to_sexp());
+    let expected = normalize_sexp(test_case.expected.trim());
+    
+    println!("\n📊 COMPARISON:");
+    println!("Expected S-expression:");
+    println!("{}", expected);
+    println!("\nActual S-expression:");
+    println!("{}", actual);
+    
+    // Analyze structural differences
+    println!("\n🔍 STRUCTURAL ANALYSIS:");
+    
+    // Count nodes in each
+    let expected_nodes = count_nodes(&expected);
+    let actual_nodes = count_nodes(&actual);
+    
+    println!("Expected nodes: {}", expected_nodes);
+    println!("Actual nodes: {}", actual_nodes);
+    
+    // Find missing nodes
+    let missing_nodes = find_missing_nodes(&expected, &actual);
+    if !missing_nodes.is_empty() {
+        println!("❌ Missing nodes in actual output:");
+        for node in missing_nodes {
+            println!("  - {}", node);
+        }
+    }
+    
+    // Find extra nodes
+    let extra_nodes = find_extra_nodes(&expected, &actual);
+    if !extra_nodes.is_empty() {
+        println!("➕ Extra nodes in actual output:");
+        for node in extra_nodes {
+            println!("  - {}", node);
+        }
+    }
+    
+    // Check for structural differences
+    if actual == expected {
+        println!("✅ Parse trees match exactly");
+    } else {
+        println!("❌ Parse trees differ structurally");
+    }
+    
+    Ok(())
+}
+
+/// Count the number of nodes in an S-expression
+fn count_nodes(sexp: &str) -> usize {
+    sexp.chars().filter(|&c| c == '(').count()
+}
+
+/// Find nodes that are in expected but not in actual
+fn find_missing_nodes(expected: &str, actual: &str) -> Vec<String> {
+    let expected_nodes = extract_node_types(expected);
+    let actual_nodes = extract_node_types(actual);
+    
+    expected_nodes
+        .iter()
+        .filter(|node| !actual_nodes.contains(node))
+        .cloned()
+        .collect()
+}
+
+/// Find nodes that are in actual but not in expected
+fn find_extra_nodes(expected: &str, actual: &str) -> Vec<String> {
+    let expected_nodes = extract_node_types(expected);
+    let actual_nodes = extract_node_types(actual);
+    
+    actual_nodes
+        .iter()
+        .filter(|node| !expected_nodes.contains(node))
+        .cloned()
+        .collect()
+}
+
+/// Extract node types from S-expression
+fn extract_node_types(sexp: &str) -> Vec<String> {
+    let mut nodes = Vec::new();
+    let mut current = String::new();
+    let mut in_paren = false;
+    
+    for ch in sexp.chars() {
+        match ch {
+            '(' => {
+                in_paren = true;
+                current.clear();
+            }
+            ')' => {
+                if in_paren && !current.trim().is_empty() {
+                    nodes.push(current.trim().to_string());
+                }
+                in_paren = false;
+            }
+            ' ' | '\n' | '\t' => {
+                if in_paren && !current.trim().is_empty() {
+                    nodes.push(current.trim().to_string());
+                    current.clear();
+                }
+            }
+            _ => {
+                if in_paren {
+                    current.push(ch);
+                }
+            }
+        }
+    }
+    
+    nodes
+}
+
+/// Test function to verify current parser behavior
+fn test_current_parser() -> Result<()> {
+    println!("\n🧪 TESTING CURRENT PARSER BEHAVIOR:");
+    
+    let test_cases = vec![
+        "1 + 1",
+        "2 * 3", 
+        "!3",
+        "true",
+        "# comment",
+        // Add the exact failing test cases
+        "1 + 1;",
+        "# split across\n# multiple lines",
+        "",
+        "1 ",
+        "1 + 2 __END__ this is ignored too",
+        "!3;",
+        "true;",
+    ];
+    
+    for source in test_cases {
+        println!("\nInput: '{}'", source);
+        match tree_sitter_perl::parse(source) {
+            Ok(tree) => {
+                let sexp = normalize_sexp(&tree.root_node().to_sexp());
+                println!("Output: {}", sexp);
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bool) -> Result<()> {
+    // If test mode is requested, run the current parser test
+    if test {
+        return test_current_parser();
+    }
+
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -181,6 +358,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
     }
 
     let mut results = CorpusTestResults::new();
+    let mut diagnostic_run = false;
     
     // Process each corpus file
     for entry in WalkDir::new(&corpus_path)
@@ -203,6 +381,14 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
                         }
                         Ok(false) => {
                             results.add_failed(format!("{}: {}", file_name, test_case.name));
+                            
+                            // Run diagnostic on first failing test if requested
+                            if diagnose && !diagnostic_run {
+                                if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
+                                    println!("Diagnostic error: {}", e);
+                                }
+                                diagnostic_run = true;
+                            }
                         }
                         Err(e) => {
                             results.add_failed(format!("{}: {} - Error: {}", file_name, test_case.name, e));
