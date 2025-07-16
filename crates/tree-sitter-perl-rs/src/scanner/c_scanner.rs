@@ -74,6 +74,10 @@ impl PerlScanner for CScanner {
     fn position(&self) -> (usize, usize) {
         self.state.position()
     }
+
+    fn is_regex_context(&self) -> bool {
+        self.state.in_regex
+    }
 }
 
 impl Default for CScanner {
