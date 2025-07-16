@@ -230,6 +230,7 @@ static void lexerstate_finish_heredoc(LexerState *state) {
       DEBUG("> advance U+%04X = \\n\n", lexer->lookahead);                    \
     } else {                                                                  \
       DEBUG("> advance U+%04X = '%c'\n", lexer->lookahead, lexer->lookahead); \
+      /* no-op to silence -Wempty-body */                                      \
     }                                                                         \
     lexer->advance(lexer, false);                                             \
     c = lexer->lookahead;                                                     \
