@@ -15,10 +15,10 @@ use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
-use std::io::Write;
 
 pub fn run(
     c_only: bool,
@@ -115,7 +115,7 @@ pub fn run_scanner_comparison(output_dir: &std::path::Path) -> Result<()> {
     spinner.set_message("Running Rust scanner benchmarks...");
     let rust_results = run_scanner_benchmarks("rust-scanner")?;
 
-    // Run C scanner benchmarks  
+    // Run C scanner benchmarks
     spinner.set_message("Running C scanner benchmarks...");
     let c_results = run_scanner_benchmarks("c-scanner")?;
 
@@ -216,9 +216,12 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     let output = Command::new("cargo")
         .args([
             "bench",
-            "--bench", "scanner_benchmarks",
-            "--features", feature,
-            "--message-format", "json",
+            "--bench",
+            "scanner_benchmarks",
+            "--features",
+            feature,
+            "--message-format",
+            "json",
         ])
         .output()?;
 
@@ -233,19 +236,15 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     // Parse JSON output and extract timing data
     let output_str = String::from_utf8_lossy(&output.stdout);
     let mut results = serde_json::Map::new();
-    
+
     for line in output_str.lines() {
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(event) = data.get("event") {
                 if event == "bench" {
-                    if let (Some(name), Some(measurements)) = (
-                        data.get("name"),
-                        data.get("measurements")
-                    ) {
-                        results.insert(
-                            name.as_str().unwrap().to_string(),
-                            measurements.clone()
-                        );
+                    if let (Some(name), Some(measurements)) =
+                        (data.get("name"), data.get("measurements"))
+                    {
+                        results.insert(name.as_str().unwrap().to_string(), measurements.clone());
                     }
                 }
             }
@@ -299,18 +298,31 @@ fn generate_scanner_comparison_report(
     let mut report = std::fs::File::create(&report_path)?;
 
     writeln!(report, "# Scanner Performance Comparison Report\n")?;
-    writeln!(report, "Generated: {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"))?;
+    writeln!(
+        report,
+        "Generated: {}\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    )?;
 
     // Summary table
     writeln!(report, "## Summary\n")?;
-    writeln!(report, "| Benchmark | Rust Scanner | C Scanner | Difference |")?;
-    writeln!(report, "|-----------|--------------|-----------|------------|")?;
+    writeln!(
+        report,
+        "| Benchmark | Rust Scanner | C Scanner | Difference |"
+    )?;
+    writeln!(
+        report,
+        "|-----------|--------------|-----------|------------|"
+    )?;
 
     let benchmarks = [
         ("scanner_basic/case_0", "Basic Variable Assignment"),
         ("scanner_basic/case_1", "Print Statement"),
         ("scanner_basic/case_2", "Function Definition"),
-        ("scanner_large_file/large_perl_file", "Large File Processing"),
+        (
+            "scanner_large_file/large_perl_file",
+            "Large File Processing",
+        ),
         ("scanner_throughput/100_bytes", "100 Byte Input"),
         ("scanner_throughput/1000_bytes", "1KB Input"),
         ("scanner_throughput/10000_bytes", "10KB Input"),
@@ -320,40 +332,68 @@ fn generate_scanner_comparison_report(
     for (bench_name, description) in benchmarks {
         if let (Some(rust_time), Some(c_time)) = (
             extract_median_time(rust_results, bench_name),
-            extract_median_time(c_results, bench_name)
+            extract_median_time(c_results, bench_name),
         ) {
             let diff_ns = rust_time - c_time;
             let diff_percent = (diff_ns / c_time) * 100.0;
             let faster = if diff_ns < 0.0 { "Rust" } else { "C" };
-            
+
             writeln!(
                 report,
                 "| {} | {:.2}ns | {:.2}ns | {:.1}% ({}) |",
-                description, rust_time, c_time, diff_percent.abs(), faster
+                description,
+                rust_time,
+                c_time,
+                diff_percent.abs(),
+                faster
             )?;
         }
     }
 
     // Detailed analysis
     writeln!(report, "\n## Detailed Analysis\n")?;
-    
+
     // Performance analysis
     writeln!(report, "### Performance Analysis\n")?;
-    writeln!(report, "- **Rust Scanner**: Native Rust implementation with zero-cost abstractions")?;
-    writeln!(report, "- **C Scanner**: Legacy C implementation with FFI overhead")?;
-    writeln!(report, "- **Measurement**: Median time across multiple runs\n")?;
+    writeln!(
+        report,
+        "- **Rust Scanner**: Native Rust implementation with zero-cost abstractions"
+    )?;
+    writeln!(
+        report,
+        "- **C Scanner**: Legacy C implementation with FFI overhead"
+    )?;
+    writeln!(
+        report,
+        "- **Measurement**: Median time across multiple runs\n"
+    )?;
 
     // Memory analysis
     writeln!(report, "### Memory Analysis\n")?;
-    writeln!(report, "- **Rust Scanner**: Better memory safety, potential for optimizations")?;
-    writeln!(report, "- **C Scanner**: Manual memory management, potential for memory leaks\n")?;
+    writeln!(
+        report,
+        "- **Rust Scanner**: Better memory safety, potential for optimizations"
+    )?;
+    writeln!(
+        report,
+        "- **C Scanner**: Manual memory management, potential for memory leaks\n"
+    )?;
 
     // Recommendations
     writeln!(report, "### Recommendations\n")?;
-    writeln!(report, "1. **Use Rust Scanner** for new projects (better safety, maintainability)")?;
-    writeln!(report, "2. **Consider C Scanner** only for legacy compatibility")?;
+    writeln!(
+        report,
+        "1. **Use Rust Scanner** for new projects (better safety, maintainability)"
+    )?;
+    writeln!(
+        report,
+        "2. **Consider C Scanner** only for legacy compatibility"
+    )?;
     writeln!(report, "3. **Monitor performance** in production workloads")?;
-    writeln!(report, "4. **Profile specific use cases** to determine optimal choice\n")?;
+    writeln!(
+        report,
+        "4. **Profile specific use cases** to determine optimal choice\n"
+    )?;
 
     // Raw data
     writeln!(report, "## Raw Data\n")?;
@@ -361,13 +401,16 @@ fn generate_scanner_comparison_report(
     writeln!(report, "```json")?;
     writeln!(report, "{}", serde_json::to_string_pretty(rust_results)?)?;
     writeln!(report, "```\n")?;
-    
+
     writeln!(report, "### C Scanner Results\n")?;
     writeln!(report, "```json")?;
     writeln!(report, "{}", serde_json::to_string_pretty(c_results)?)?;
     writeln!(report, "```")?;
 
-    println!("Scanner comparison report written to: {}", report_path.display());
+    println!(
+        "Scanner comparison report written to: {}",
+        report_path.display()
+    );
     Ok(())
 }
 
