@@ -75,11 +75,19 @@ fn find_tree_sitter_runtime() -> Option<PathBuf> {
         "tree-sitter/lib",
         "../tree-sitter/lib",
         "../../tree-sitter/lib",
-        env::var("TREE_SITTER_RUNTIME_DIR").ok(),
     ];
     
-    for path in possible_paths.iter().flatten() {
+    // Check static paths first
+    for path in possible_paths.iter() {
         let runtime_dir = PathBuf::from(path);
+        if runtime_dir.join("src/lib.c").exists() {
+            return Some(runtime_dir);
+        }
+    }
+    
+    // Check environment variable
+    if let Ok(runtime_dir) = env::var("TREE_SITTER_RUNTIME_DIR") {
+        let runtime_dir = PathBuf::from(runtime_dir);
         if runtime_dir.join("src/lib.c").exists() {
             return Some(runtime_dir);
         }
