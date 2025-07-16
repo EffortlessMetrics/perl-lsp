@@ -3,13 +3,33 @@
 //! This binary is used by xtask to benchmark the Rust parser implementation.
 
 use std::env;
+use std::fs;
+use std::time::Instant;
 use tree_sitter_perl::parse;
 
 fn main() {
-    let test_code = env::var("TEST_CODE").expect("TEST_CODE environment variable not set");
-
-    // Parse the test code multiple times to get accurate timing
-    for _ in 0..100 {
-        let _tree = parse(&test_code).expect("Failed to parse test code");
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: bench_parser <file>");
+        std::process::exit(1);
+    }
+    let file_path = &args[1];
+    let code = fs::read_to_string(file_path).expect("Failed to read file");
+    let start = Instant::now();
+    let result = parse(&code);
+    let duration = start.elapsed().as_micros();
+    match result {
+        Ok(tree) => {
+            let has_error = tree.root_node().has_error();
+            println!("status=success error={} duration_us={}", has_error, duration);
+            if has_error {
+                std::process::exit(2);
+            }
+        }
+        Err(e) => {
+            println!("status=failure error=true duration_us={}", duration);
+            eprintln!("Parse error: {}", e);
+            std::process::exit(1);
+        }
     }
 }
