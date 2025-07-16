@@ -8,15 +8,18 @@ use std::fs;
 use walkdir::WalkDir;
 
 /// Highlight expectation from test file comments
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Fields retained for future test expansion and compatibility with new test harness
 struct HighlightExpectation {
-    line: usize,
-    column: usize,
+    // Remove unused fields if not referenced in new logic
+    // line: usize,
+    // column: usize,
     expected_scope: String,
 }
 
 /// Highlight test case containing source code and expected highlights
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields retained for future test expansion and compatibility with new test harness
 struct HighlightTestCase {
     name: String,
     source: String,
@@ -153,8 +156,6 @@ fn parse_highlight_expectation(line: &str, line_num: usize) -> Option<HighlightE
     }
     
     Some(HighlightExpectation {
-        line: line_num,
-        column,
         expected_scope,
     })
 }
