@@ -89,6 +89,10 @@ enum Commands {
         #[arg(long)]
         rust_only: bool,
 
+        /// Run scanner comparison only
+        #[arg(long)]
+        scanner_only: bool,
+
         /// Validate existing results only
         #[arg(long)]
         validate_only: bool,
@@ -228,6 +232,7 @@ fn main() -> Result<()> {
         Commands::Compare {
             c_only,
             rust_only,
+            scanner_only,
             validate_only,
             output_dir,
             check_gates,
@@ -235,6 +240,7 @@ fn main() -> Result<()> {
         } => compare::run(
             c_only,
             rust_only,
+            scanner_only,
             validate_only,
             output_dir,
             check_gates,
