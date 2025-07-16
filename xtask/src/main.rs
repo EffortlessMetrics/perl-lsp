@@ -197,7 +197,12 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
-        Commands::Corpus { path, scanner, diagnose, test } => corpus::run(path, scanner, diagnose, test),
+        Commands::Corpus {
+            path,
+            scanner,
+            diagnose,
+            test,
+        } => corpus::run(path, scanner, diagnose, test),
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
         Commands::Bindings { output } => bindings::run(output),

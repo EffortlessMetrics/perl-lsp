@@ -1,7 +1,7 @@
 //! Error types for tree-sitter Perl parser
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use serde::{Serialize, Deserialize};
 
 /// Result type for parsing operations
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -12,59 +12,59 @@ pub enum ParseError {
     /// Parsing failed for an unknown reason
     #[error("Parsing failed")]
     ParseFailed,
-    
+
     /// Invalid UTF-8 sequence encountered
     #[error("Invalid UTF-8: {0}")]
     InvalidUtf8(String),
-    
+
     /// Scanner error occurred
     #[error("Scanner error: {0}")]
     ScannerError(String),
-    
+
     /// Invalid token encountered
     #[error("Invalid token: {0}")]
     InvalidToken(String),
-    
+
     /// Unexpected end of file
     #[error("Unexpected end of file")]
     UnexpectedEof,
-    
+
     /// Unterminated string literal
     #[error("Unterminated string literal")]
     UnterminatedString,
-    
+
     /// Unterminated regex pattern
     #[error("Unterminated regex pattern")]
     UnterminatedRegex,
-    
+
     /// Unterminated heredoc
     #[error("Unterminated heredoc")]
     UnterminatedHeredoc,
-    
+
     /// Invalid escape sequence
     #[error("Invalid escape sequence: {0}")]
     InvalidEscape(String),
-    
+
     /// Invalid Unicode sequence
     #[error("Invalid Unicode sequence: {0}")]
     InvalidUnicode(String),
-    
+
     /// Invalid number literal
     #[error("Invalid number literal: {0}")]
     InvalidNumber(String),
-    
+
     /// Invalid identifier
     #[error("Invalid identifier: {0}")]
     InvalidIdentifier(String),
-    
+
     /// Invalid scanner state
     #[error("Invalid scanner state: {0}")]
     InvalidState(String),
-    
+
     /// I/O error
     #[error("I/O error: {0}")]
     IoError(String),
-    
+
     /// Other error
     #[error("Other error: {0}")]
     Other(String),
@@ -135,12 +135,18 @@ impl From<std::str::Utf8Error> for ParseError {
 impl ParseError {
     /// Create an unterminated string error
     pub fn unterminated_string(position: (usize, usize)) -> Self {
-        ParseError::ScannerError(format!("Unterminated string at line {}, column {}", position.0, position.1))
+        ParseError::ScannerError(format!(
+            "Unterminated string at line {}, column {}",
+            position.0, position.1
+        ))
     }
 
     /// Create an invalid token error
     pub fn invalid_token(token: String, position: (usize, usize)) -> Self {
-        ParseError::ScannerError(format!("Invalid token '{}' at line {}, column {}", token, position.0, position.1))
+        ParseError::ScannerError(format!(
+            "Invalid token '{}' at line {}, column {}",
+            token, position.0, position.1
+        ))
     }
 
     /// Create a Unicode error
@@ -152,4 +158,4 @@ impl ParseError {
     pub fn scanner_error_simple(message: &str) -> Self {
         ParseError::ScannerError(message.to_string())
     }
-} 
+}

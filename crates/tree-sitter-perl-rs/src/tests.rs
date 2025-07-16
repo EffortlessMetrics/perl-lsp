@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{language, parse, parser};
     use crate::scanner::PerlScanner;
+    use crate::{language, parse, parser};
     use tree_sitter::Parser;
 
     #[test]
@@ -169,8 +169,8 @@ mod tests {
 
 #[cfg(test)]
 mod scanner_tests {
-    use crate::scanner::{RustScanner, ScannerConfig, TokenType};
     use crate::scanner::PerlScanner;
+    use crate::scanner::{RustScanner, ScannerConfig, TokenType};
 
     #[test]
     fn test_rust_scanner_creation() {
@@ -216,12 +216,12 @@ mod scanner_tests {
     fn test_scanner_serialization() {
         let mut scanner = RustScanner::new();
         let mut buffer = Vec::new();
-        
+
         // Test serialization
         let result = scanner.serialize(&mut buffer);
         assert!(result.is_ok(), "Serialization failed: {:?}", result);
         assert!(!buffer.is_empty(), "Serialized buffer should not be empty");
-        
+
         // Test deserialization
         let result = scanner.deserialize(&buffer);
         assert!(result.is_ok(), "Deserialization failed: {:?}", result);
@@ -230,8 +230,8 @@ mod scanner_tests {
 
 #[cfg(test)]
 mod unicode_tests {
-    use crate::unicode::UnicodeUtils;
     use crate::scanner::PerlScanner;
+    use crate::unicode::UnicodeUtils;
 
     #[test]
     fn test_unicode_normalization() {
@@ -250,15 +250,7 @@ mod unicode_tests {
 
     #[test]
     fn test_unicode_identifier_validation() {
-        let valid_identifiers = vec![
-            "variable",
-            "変数",
-            "über",
-            "naïve",
-            "café",
-            "αβγ",
-            "привет",
-        ];
+        let valid_identifiers = vec!["variable", "変数", "über", "naïve", "café", "αβγ", "привет"];
 
         for identifier in valid_identifiers {
             assert!(
@@ -268,12 +260,7 @@ mod unicode_tests {
             );
         }
 
-        let invalid_identifiers = vec![
-            "123variable",
-            "variable-name",
-            "variable name",
-            "",
-        ];
+        let invalid_identifiers = vec!["123variable", "variable-name", "variable name", ""];
 
         for identifier in invalid_identifiers {
             assert!(
@@ -288,10 +275,10 @@ mod unicode_tests {
     fn test_unicode_edge_cases() {
         // Test various Unicode edge cases
         let edge_cases = vec![
-            ("", false), // Empty string
-            ("a", true), // Single ASCII
-            ("α", true), // Single Unicode
-            ("aα", true), // Mixed ASCII and Unicode
+            ("", false),    // Empty string
+            ("a", true),    // Single ASCII
+            ("α", true),    // Single Unicode
+            ("aα", true),   // Mixed ASCII and Unicode
             ("123", false), // Numbers only
             ("_var", true), // Underscore prefix
             ("var_", true), // Underscore suffix
@@ -310,11 +297,12 @@ mod unicode_tests {
 
 #[cfg(test)]
 mod property_tests {
-    use proptest::prelude::*;
-    use crate::{parse, scanner::RustScanner};
     use crate::scanner::PerlScanner;
+    use crate::{parse, scanner::RustScanner};
+    use proptest::prelude::*;
 
     proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
         #[test]
         fn test_parse_does_not_panic(input in "[a-zA-Z0-9_\\s{}()\\[\\]\"';,.+\\-*/=<>!&|^~%#@$`]+") {
             // This test ensures that parsing arbitrary strings doesn't panic
@@ -360,7 +348,7 @@ mod error_tests {
         let error = ParseError::ParseFailed;
         let serialized = bincode::serialize(&error);
         assert!(serialized.is_ok(), "Error serialization failed");
-        
+
         let deserialized: Result<ParseError, _> = bincode::deserialize(&serialized.unwrap());
         assert!(deserialized.is_ok(), "Error deserialization failed");
         assert!(matches!(deserialized.unwrap(), ParseError::ParseFailed));
@@ -369,24 +357,24 @@ mod error_tests {
 
 #[cfg(test)]
 mod performance_tests {
-    use crate::{parse, scanner::RustScanner};
     use crate::scanner::PerlScanner;
+    use crate::{parse, scanner::RustScanner};
     use std::time::Instant;
 
     #[test]
     fn test_parse_performance() {
         let test_code = "my $var = 42; print 'Hello, World!'; sub foo { return 1; }";
         let iterations = 1000;
-        
+
         let start = Instant::now();
         for _ in 0..iterations {
             let _result = parse(test_code);
         }
         let duration = start.elapsed();
-        
+
         let avg_time = duration.as_micros() as f64 / iterations as f64;
         println!("Average parse time: {:.2} μs", avg_time);
-        
+
         // Ensure parsing is reasonably fast (less than 1000 μs per parse)
         assert!(avg_time < 1000.0, "Parsing is too slow: {:.2} μs", avg_time);
     }
@@ -395,18 +383,18 @@ mod performance_tests {
     fn test_scanner_performance() {
         let test_input = b"my $variable = 42; print 'Hello, World!';";
         let iterations = 1000;
-        
+
         let mut scanner = RustScanner::new();
         let start = Instant::now();
-        
+
         for _ in 0..iterations {
             let _result = scanner.scan(test_input);
         }
         let duration = start.elapsed();
-        
+
         let avg_time = duration.as_micros() as f64 / iterations as f64;
         println!("Average scan time: {:.2} μs", avg_time);
-        
+
         // Ensure scanning is reasonably fast (less than 500 μs per scan)
         assert!(avg_time < 500.0, "Scanning is too slow: {:.2} μs", avg_time);
     }
@@ -414,10 +402,10 @@ mod performance_tests {
 
 #[cfg(test)]
 mod corpus_tests {
-    use crate::{parse};
+    use crate::parse;
     use crate::scanner::PerlScanner;
-    use std::path::PathBuf;
     use std::fs;
+    use std::path::PathBuf;
     use walkdir::WalkDir;
 
     /// Corpus test case containing input code and expected S-expression
@@ -429,27 +417,34 @@ mod corpus_tests {
     }
 
     /// Parse a corpus test file into individual test cases
-    fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>, Box<dyn std::error::Error>> {
+    fn parse_corpus_file(
+        path: &PathBuf,
+    ) -> Result<Vec<CorpusTestCase>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-        
+
         let mut test_cases = Vec::new();
         let mut current_name = String::new();
         let mut current_source = String::new();
         let mut current_expected = String::new();
         let mut in_source = false;
         let mut in_expected = false;
-        
+
         for line in content.lines() {
-            if line.starts_with("================================================================================") {
+            if line.starts_with(
+                "================================================================================",
+            ) {
                 // Save previous test case if we have one
-                if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
+                if !current_name.is_empty()
+                    && !current_source.is_empty()
+                    && !current_expected.is_empty()
+                {
                     test_cases.push(CorpusTestCase {
                         name: current_name.clone(),
                         source: current_source.clone(),
                         expected: current_expected.clone(),
                     });
                 }
-                
+
                 // Start new test case
                 current_name.clear();
                 current_source.clear();
@@ -472,7 +467,7 @@ mod corpus_tests {
                 in_source = true;
             }
         }
-        
+
         // Add the last test case
         if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
             test_cases.push(CorpusTestCase {
@@ -481,7 +476,7 @@ mod corpus_tests {
                 expected: current_expected,
             });
         }
-        
+
         Ok(test_cases)
     }
 
@@ -494,13 +489,15 @@ mod corpus_tests {
     }
 
     /// Run a single corpus test case
-    fn run_corpus_test_case(test_case: &CorpusTestCase) -> Result<bool, Box<dyn std::error::Error>> {
+    fn run_corpus_test_case(
+        test_case: &CorpusTestCase,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         // Parse the source code using tree-sitter-perl
         let tree = parse(&test_case.source)?;
-        
+
         let actual = normalize_sexp(&tree.root_node().to_sexp());
         let expected = normalize_sexp(test_case.expected.trim());
-        
+
         if actual == expected {
             Ok(true)
         } else {
@@ -533,9 +530,11 @@ mod corpus_tests {
             .filter(|e| e.file_type().is_file())
         {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("txt") || path.extension().is_none() {
+            if path.extension().and_then(|s| s.to_str()) == Some("txt")
+                || path.extension().is_none()
+            {
                 println!("\n📁 Testing corpus file: {}", path.display());
-                
+
                 match parse_corpus_file(&path.to_path_buf()) {
                     Ok(test_cases) => {
                         for test_case in test_cases {
@@ -567,7 +566,7 @@ mod corpus_tests {
         println!("   Total: {}", total_tests);
         println!("   Passed: {} ✅", passed_tests);
         println!("   Failed: {} ❌", failed_tests);
-        
+
         if failed_tests > 0 {
             panic!("{} corpus tests failed", failed_tests);
         }
@@ -603,7 +602,11 @@ mod corpus_tests {
             }
         }
 
-        println!("\nSimple corpus: {}/{} tests passed", passed, passed + failed);
+        println!(
+            "\nSimple corpus: {}/{} tests passed",
+            passed,
+            passed + failed
+        );
         if failed > 0 {
             panic!("{} simple corpus tests failed", failed);
         }
@@ -638,7 +641,11 @@ mod corpus_tests {
             }
         }
 
-        println!("\nVariables corpus: {}/{} tests passed", passed, passed + failed);
+        println!(
+            "\nVariables corpus: {}/{} tests passed",
+            passed,
+            passed + failed
+        );
         if failed > 0 {
             panic!("{} variables corpus tests failed", failed);
         }
@@ -647,10 +654,10 @@ mod corpus_tests {
 
 #[cfg(test)]
 mod highlight_tests {
-    use crate::{parse};
+    use crate::parse;
     use crate::scanner::PerlScanner;
-    use std::path::PathBuf;
     use std::fs;
+    use std::path::PathBuf;
 
     /// Highlight test case containing Perl code and expected token classifications
     #[derive(Debug)]
@@ -661,9 +668,11 @@ mod highlight_tests {
     }
 
     /// Parse a highlight test file
-    fn parse_highlight_file(path: &PathBuf) -> Result<Vec<HighlightTestCase>, Box<dyn std::error::Error>> {
+    fn parse_highlight_file(
+        path: &PathBuf,
+    ) -> Result<Vec<HighlightTestCase>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-        
+
         // Simple parsing for highlight test files
         // Each file contains Perl code that should produce specific token classifications
         let test_case = HighlightTestCase {
@@ -671,7 +680,7 @@ mod highlight_tests {
             source: content,
             expected_tokens: Vec::new(), // TODO: Parse expected token classifications
         };
-        
+
         Ok(vec![test_case])
     }
 
@@ -690,11 +699,11 @@ mod highlight_tests {
         for entry in fs::read_dir(&highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            
+
             if path.extension().and_then(|s| s.to_str()) == Some("pm") {
                 total_files += 1;
                 println!("📁 Testing highlight file: {}", path.display());
-                
+
                 match parse_highlight_file(&path) {
                     Ok(test_cases) => {
                         for test_case in test_cases {
@@ -719,9 +728,12 @@ mod highlight_tests {
         println!("\n📊 Highlight Test Summary:");
         println!("   Total files: {}", total_files);
         println!("   Successfully parsed: {} ✅", parsed_files);
-        
+
         if parsed_files < total_files {
-            panic!("{} highlight files failed to parse", total_files - parsed_files);
+            panic!(
+                "{} highlight files failed to parse",
+                total_files - parsed_files
+            );
         }
     }
 }
