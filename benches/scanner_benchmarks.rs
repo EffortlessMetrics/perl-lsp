@@ -9,42 +9,30 @@
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
-// Import the appropriate scanner based on feature flags
-#[cfg(feature = "rust-scanner")]
-use tree_sitter_perl::scanner::{PerlScanner, RustScanner, ScannerConfig};
-
 #[cfg(feature = "c-scanner")]
-use tree_sitter_perl::scanner::{PerlScanner, CScanner, ScannerConfig};
+use tree_sitter_perl::scanner::{CScanner, PerlScanner};
+#[cfg(feature = "rust-scanner")]
+use tree_sitter_perl::scanner::{PerlScanner, RustScanner};
 
 // Common test cases for both scanners
 const TEST_CASES: &[&str] = &[
-    // Basic Perl constructs
     "my $var = 42;",
     "print 'Hello, World!';",
     "sub foo { return 1; }",
-    
-    // Variables and assignments
     "my ($a, $b, $c) = (1, 2, 3);",
     "$hash{key} = 'value';",
     "@array = qw(one two three);",
-    
-    // Control structures
     "if ($condition) { do_something(); }",
     "for my $item (@list) { process($item); }",
     "while (<>) { chomp; print; }",
-    
-    // String operations
     "my $str = \"Hello $name\";",
     "my $regex = qr/\\d+/;",
     "my $heredoc = <<'EOF'; content EOF",
-    
-    // Complex expressions
     "my $result = $a + $b * $c / $d;",
     "my $bool = defined($var) && length($var) > 0;",
     "my @filtered = grep { $_ > 10 } @numbers;",
 ];
 
-// Large test case for stress testing
 const LARGE_TEST_CASE: &str = r#"
 package MyApp::Controller;
 
@@ -159,107 +147,75 @@ sub _validate_scalar {
 
 fn bench_scanner_basic(c: &mut Criterion) {
     let mut group = c.benchmark_group("scanner_basic");
-    
-    // Test each individual case
     for (i, test_case) in TEST_CASES.iter().enumerate() {
         group.bench_function(&format!("case_{}", i), |b| {
             b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_case.as_bytes());
-                let mut tokens = Vec::new();
-                
-                scanner.scan(input, &mut tokens).unwrap();
-                black_box(tokens)
+                scanner.scan(input).unwrap();
             });
         });
     }
-    
     group.finish();
 }
 
 fn bench_scanner_large_file(c: &mut Criterion) {
     let mut group = c.benchmark_group("scanner_large_file");
-    
     group.bench_function("large_perl_file", |b| {
         b.iter(|| {
             let mut scanner = create_scanner();
             let input = black_box(LARGE_TEST_CASE.as_bytes());
-            let mut tokens = Vec::new();
-            
-            scanner.scan(input, &mut tokens).unwrap();
-            black_box(tokens)
+            scanner.scan(input).unwrap();
         });
     });
-    
     group.finish();
 }
 
 fn bench_scanner_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("scanner_throughput");
-    
-    // Test with different input sizes
     let sizes = [100, 1000, 10000];
-    
     for size in sizes {
         let test_input = generate_test_input(size);
-        
         group.bench_function(&format!("{}_bytes", size), |b| {
             b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_input.as_bytes());
-                let mut tokens = Vec::new();
-                
-                scanner.scan(input, &mut tokens).unwrap();
-                black_box(tokens)
+                scanner.scan(input).unwrap();
             });
         });
     }
-    
     group.finish();
 }
 
 fn bench_scanner_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("scanner_memory");
-    
     group.bench_function("token_generation", |b| {
         b.iter(|| {
             let mut scanner = create_scanner();
             let input = black_box(LARGE_TEST_CASE.as_bytes());
-            let mut tokens = Vec::with_capacity(1000); // Pre-allocate
-            
-            scanner.scan(input, &mut tokens).unwrap();
-            black_box(tokens.len())
+            scanner.scan(input).unwrap();
         });
     });
-    
     group.finish();
 }
 
-// Helper function to create the appropriate scanner
 fn create_scanner() -> Box<dyn PerlScanner> {
-    let config = ScannerConfig::default();
-    
     #[cfg(feature = "rust-scanner")]
     {
-        Box::new(RustScanner::new(config))
+        Box::new(RustScanner::new())
     }
-    
     #[cfg(feature = "c-scanner")]
     {
-        Box::new(CScanner::new(config))
+        Box::new(CScanner::new())
     }
-    
     #[cfg(not(any(feature = "rust-scanner", feature = "c-scanner")))]
     {
         compile_error!("Must specify either rust-scanner or c-scanner feature");
     }
 }
 
-// Helper function to generate test input of specified size
 fn generate_test_input(size: usize) -> String {
     let mut input = String::with_capacity(size);
-    
-    // Generate a mix of Perl constructs
     let constructs = [
         "my $var = 42;",
         "print 'test';",
@@ -268,24 +224,19 @@ fn generate_test_input(size: usize) -> String {
         "$hash{key} = 'value';",
         "@array = (1, 2, 3);",
     ];
-    
     let mut current_size = 0;
     let mut construct_index = 0;
-    
     while current_size < size {
         let construct = constructs[construct_index % constructs.len()];
         input.push_str(construct);
         input.push('\n');
-        
         current_size += construct.len() + 1;
         construct_index += 1;
     }
-    
     input.truncate(size);
     input
 }
 
-// Configure criterion groups
 criterion_group!(
     benches,
     bench_scanner_basic,
@@ -293,5 +244,4 @@ criterion_group!(
     bench_scanner_throughput,
     bench_scanner_memory_usage,
 );
-
 criterion_main!(benches);
