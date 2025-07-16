@@ -224,12 +224,13 @@ static void lexerstate_finish_heredoc(LexerState *state) {
 
 #define ADVANCE_C                                                             \
   do {                                                                        \
-    if (lexer->lookahead == '\r')                                             \
+    if (lexer->lookahead == '\r') {                                           \
       DEBUG("> advance U+%04X = \\r\n", lexer->lookahead);                    \
-    else if (lexer->lookahead == '\n')                                        \
+    } else if (lexer->lookahead == '\n') {                                    \
       DEBUG("> advance U+%04X = \\n\n", lexer->lookahead);                    \
-    else                                                                      \
+    } else {                                                                  \
       DEBUG("> advance U+%04X = '%c'\n", lexer->lookahead, lexer->lookahead); \
+    }                                                                         \
     lexer->advance(lexer, false);                                             \
     c = lexer->lookahead;                                                     \
   } while (0)
@@ -251,10 +252,11 @@ static void skip_whitespace(TSLexer *lexer) {
   while (1) {
     int32_t c = lexer->lookahead;
     if (!c) return;
-    if (is_tsp_whitespace(c)) lexer->advance(lexer, true);
-    /* continue */
-    else
+    if (is_tsp_whitespace(c)) {
+      lexer->advance(lexer, true);
+    } else {
       return;
+    }
   }
 }
 
@@ -266,22 +268,25 @@ static void skip_ws_to_eol(TSLexer *lexer) {
       lexer->advance(lexer, true);
       // return after eating the newline
       if (c == '\n') return;
-    } else
+    } else {
       return;
+    }
   }
 }
 
 static void _skip_chars(TSLexer *lexer, int maxlen, const char *allow) {
   int32_t c = lexer->lookahead;
 
-  while (maxlen)
-    if (!c)
+  while (maxlen) {
+    if (!c) {
       return;
-    else if (tsp_strchr(allow, c)) {
+    } else if (tsp_strchr(allow, c)) {
       ADVANCE_C;
       if (maxlen > 0) maxlen--;
-    } else
+    } else {
       break;
+    }
+  }
 }
 #define skip_hexdigits(lexer, maxlen) _skip_chars(lexer, maxlen, "0123456789ABCDEFabcdef")
 #define skip_digits(lexer, maxlen) _skip_chars(lexer, maxlen, "0123456789")

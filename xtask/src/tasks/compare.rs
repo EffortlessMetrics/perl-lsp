@@ -14,8 +14,8 @@
 use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 pub fn run(
@@ -42,7 +42,13 @@ pub fn run(
     let report_file = output_dir.join("benchmark_report.md");
 
     if validate_only {
-        return validate_results(&c_results, &rust_results, &comparison_results, check_gates, &spinner);
+        return validate_results(
+            &c_results,
+            &rust_results,
+            &comparison_results,
+            check_gates,
+            &spinner,
+        );
     }
 
     // Run benchmarks based on flags
@@ -59,7 +65,13 @@ pub fn run(
     // Generate comparison if both implementations were run
     if !c_only && !rust_only {
         spinner.set_message("Generating comparison results");
-        generate_comparison(&c_results, &rust_results, &comparison_results, &report_file, &spinner)?;
+        generate_comparison(
+            &c_results,
+            &rust_results,
+            &comparison_results,
+            &report_file,
+            &spinner,
+        )?;
     }
 
     // Check performance gates if requested
@@ -114,8 +126,11 @@ fn run_rust_benchmarks(output_path: &PathBuf, _spinner: &ProgressBar) -> Result<
         }
     });
 
-    fs::write(output_path, serde_json::to_string_pretty(&placeholder_results)?)
-        .context("Failed to save Rust benchmark results")?;
+    fs::write(
+        output_path,
+        serde_json::to_string_pretty(&placeholder_results)?,
+    )
+    .context("Failed to save Rust benchmark results")?;
 
     Ok(())
 }
@@ -155,8 +170,11 @@ fn run_c_benchmarks(output_path: &PathBuf, _spinner: &ProgressBar) -> Result<()>
         }
     });
 
-    fs::write(output_path, serde_json::to_string_pretty(&placeholder_results)?)
-        .context("Failed to save C benchmark results")?;
+    fs::write(
+        output_path,
+        serde_json::to_string_pretty(&placeholder_results)?,
+    )
+    .context("Failed to save C benchmark results")?;
 
     Ok(())
 }
@@ -223,7 +241,11 @@ fn validate_results(
     }
 
     // Validate JSON files
-    for (name, path) in [("C results", c_results), ("Rust results", rust_results), ("Comparison results", comparison_results)] {
+    for (name, path) in [
+        ("C results", c_results),
+        ("Rust results", rust_results),
+        ("Comparison results", comparison_results),
+    ] {
         let content = fs::read_to_string(path).context(format!("Failed to read {}", name))?;
         serde_json::from_str::<serde_json::Value>(&content)
             .context(format!("Invalid JSON in {}", name))?;
@@ -240,14 +262,15 @@ fn validate_results(
 
 fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) -> Result<()> {
     // Read comparison results
-    let content = fs::read_to_string(comparison_results)
-        .context("Failed to read comparison results")?;
-    
-    let comparison: serde_json::Value = serde_json::from_str(&content)
-        .context("Failed to parse comparison results")?;
+    let content =
+        fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
+
+    let comparison: serde_json::Value =
+        serde_json::from_str(&content).context("Failed to parse comparison results")?;
 
     // Extract test results
-    let tests = comparison.get("tests")
+    let tests = comparison
+        .get("tests")
         .and_then(|t| t.as_array())
         .ok_or_else(|| color_eyre::eyre::eyre!("Invalid comparison results format"))?;
 
@@ -255,7 +278,11 @@ fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) 
     let mut improvements = 0;
 
     for test in tests {
-        if let Some(status) = test.get("comparison").and_then(|c| c.get("status")).and_then(|s| s.as_str()) {
+        if let Some(status) = test
+            .get("comparison")
+            .and_then(|c| c.get("status"))
+            .and_then(|s| s.as_str())
+        {
             match status {
                 "regression" => regressions += 1,
                 "improvement" => improvements += 1,
@@ -265,82 +292,115 @@ fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) 
     }
 
     if regressions > 0 {
-        spinner.finish_with_message(format!("⚠️  Found {} performance regression(s)", regressions));
-        return Err(color_eyre::eyre::eyre!("Performance gates failed: {} regressions detected", regressions));
+        spinner.finish_with_message(format!(
+            "⚠️  Found {} performance regression(s)",
+            regressions
+        ));
+        return Err(color_eyre::eyre::eyre!(
+            "Performance gates failed: {} regressions detected",
+            regressions
+        ));
     } else {
-        spinner.finish_with_message(format!("✅ Performance gates passed ({} improvements)", improvements));
+        spinner.finish_with_message(format!(
+            "✅ Performance gates passed ({} improvements)",
+            improvements
+        ));
     }
 
     Ok(())
 }
 
-fn generate_detailed_report(comparison_results: &PathBuf, output_dir: &PathBuf, spinner: &ProgressBar) -> Result<()> {
+fn generate_detailed_report(
+    comparison_results: &PathBuf,
+    output_dir: &PathBuf,
+    spinner: &ProgressBar,
+) -> Result<()> {
     // Read comparison results
-    let content = fs::read_to_string(comparison_results)
-        .context("Failed to read comparison results")?;
-    
-    let comparison: serde_json::Value = serde_json::from_str(&content)
-        .context("Failed to parse comparison results")?;
+    let content =
+        fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
+
+    let comparison: serde_json::Value =
+        serde_json::from_str(&content).context("Failed to parse comparison results")?;
 
     // Generate detailed markdown report
     let report_content = generate_markdown_report(&comparison);
     let detailed_report_path = output_dir.join("detailed_report.md");
-    
-    fs::write(&detailed_report_path, report_content)
-        .context("Failed to write detailed report")?;
 
-    spinner.finish_with_message(format!("✅ Detailed report generated: {}", detailed_report_path.display()));
+    fs::write(&detailed_report_path, report_content).context("Failed to write detailed report")?;
+
+    spinner.finish_with_message(format!(
+        "✅ Detailed report generated: {}",
+        detailed_report_path.display()
+    ));
 
     Ok(())
 }
 
 fn generate_markdown_report(comparison: &serde_json::Value) -> String {
     let mut report = String::new();
-    
+
     report.push_str("# Tree-sitter Perl Detailed Benchmark Report\n\n");
-    
+
     if let Some(metadata) = comparison.get("metadata") {
         if let Some(generated_at) = metadata.get("generated_at").and_then(|v| v.as_str()) {
             report.push_str(&format!("**Generated**: {}\n\n", generated_at));
         }
-        
+
         if let Some(total_tests) = metadata.get("total_tests").and_then(|v| v.as_number()) {
             report.push_str(&format!("**Total Tests**: {}\n", total_tests));
         }
-        
-        if let Some(regressions) = metadata.get("tests_with_regression").and_then(|v| v.as_number()) {
+
+        if let Some(regressions) = metadata
+            .get("tests_with_regression")
+            .and_then(|v| v.as_number())
+        {
             report.push_str(&format!("**Regressions**: {}\n", regressions));
         }
-        
-        if let Some(improvements) = metadata.get("tests_with_improvement").and_then(|v| v.as_number()) {
+
+        if let Some(improvements) = metadata
+            .get("tests_with_improvement")
+            .and_then(|v| v.as_number())
+        {
             report.push_str(&format!("**Improvements**: {}\n", improvements));
         }
     }
-    
+
     report.push_str("\n## Test Results\n\n");
     report.push_str("| Test | C (ms) | Rust (ms) | Difference | Status |\n");
     report.push_str("|------|--------|-----------|------------|---------|\n");
-    
+
     if let Some(tests) = comparison.get("tests").and_then(|t| t.as_array()) {
         for test in tests {
             if let (Some(name), Some(c_impl), Some(rust_impl), Some(comparison_data)) = (
                 test.get("name").and_then(|n| n.as_str()),
                 test.get("c_implementation"),
                 test.get("rust_implementation"),
-                test.get("comparison")
+                test.get("comparison"),
             ) {
-                let c_time = c_impl.get("duration_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let rust_time = rust_impl.get("duration_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let diff_percent = comparison_data.get("time_difference_percent").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let status = comparison_data.get("status").and_then(|s| s.as_str()).unwrap_or("unknown");
-                
+                let c_time = c_impl
+                    .get("duration_ms")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let rust_time = rust_impl
+                    .get("duration_ms")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let diff_percent = comparison_data
+                    .get("time_difference_percent")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let status = comparison_data
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("unknown");
+
                 let status_emoji = match status {
                     "regression" => "🔴",
                     "improvement" => "🟢",
                     "within_tolerance" => "🟡",
-                    _ => "⚪"
+                    _ => "⚪",
                 };
-                
+
                 report.push_str(&format!(
                     "| {} | {:.3} | {:.3} | {:+.2}% | {} {} |\n",
                     name, c_time, rust_time, diff_percent, status_emoji, status
@@ -348,7 +408,7 @@ fn generate_markdown_report(comparison: &serde_json::Value) -> String {
             }
         }
     }
-    
+
     report
 }
 
@@ -356,14 +416,14 @@ fn display_summary(output_dir: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
     println!("\n📊 Benchmark Summary");
     println!("==================");
     println!("Results saved to: {}", output_dir.display());
-    
+
     let files = [
         ("C Implementation", "c_implementation.json"),
         ("Rust Implementation", "rust_implementation.json"),
         ("Comparison Results", "comparison_results.json"),
         ("Benchmark Report", "benchmark_report.md"),
     ];
-    
+
     for (name, filename) in files {
         let path = output_dir.join(filename);
         if path.exists() {
@@ -372,7 +432,7 @@ fn display_summary(output_dir: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
             println!("  ❌ {} (missing)", name);
         }
     }
-    
+
     // Try to display key metrics if comparison results exist
     let comparison_path = output_dir.join("comparison_results.json");
     if comparison_path.exists() {
@@ -381,10 +441,15 @@ fn display_summary(output_dir: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
                 if let Some(summary) = comparison.get("summary") {
                     println!("\n📈 Key Metrics:");
                     if let Some(overall) = summary.get("overall_performance") {
-                        if let Some(mean_diff) = overall.get("mean_time_difference_percent").and_then(|v| v.as_f64()) {
+                        if let Some(mean_diff) = overall
+                            .get("mean_time_difference_percent")
+                            .and_then(|v| v.as_f64())
+                        {
                             println!("  Mean Time Difference: {:.2}%", mean_diff);
                         }
-                        if let Some(mean_speedup) = overall.get("mean_speedup_factor").and_then(|v| v.as_f64()) {
+                        if let Some(mean_speedup) =
+                            overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
+                        {
                             println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
                         }
                     }
@@ -392,6 +457,6 @@ fn display_summary(output_dir: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
-} 
+}
