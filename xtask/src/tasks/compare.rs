@@ -190,33 +190,22 @@ fn run_single_test(
     test_case: &str,
     iterations: usize,
 ) -> Result<Option<serde_json::Value>> {
-    let test_content = std::fs::read_to_string(test_case)?;
-    
     let mut times = Vec::new();
     let mut memories = Vec::new();
     let mut success = false;
 
     for _ in 0..iterations {
-        let start = Instant::now();
-        
-        let result = match impl_type {
-            "c" => test_c_implementation(&test_content),
-            "rust" => test_rust_implementation(&test_content),
+        let (ok, elapsed) = match impl_type {
+            "c" => test_c_implementation(test_case)?,
+            "rust" => test_rust_implementation(test_case)?,
             _ => return Err(color_eyre::eyre::eyre!("Unknown implementation type")),
         };
-
-        let elapsed = start.elapsed().as_micros() as f64;
-        
-        match result {
-            Ok(_) => {
-                times.push(elapsed);
-                memories.push(0.0); // TODO: Add memory measurement
-                success = true;
-            }
-            Err(e) => {
-                eprintln!("    ⚠️  Test failed: {}", e);
-                break;
-            }
+        times.push(elapsed);
+        memories.push(0.0); // TODO: Add memory measurement
+        if ok {
+            success = true;
+        } else {
+            break;
         }
     }
 
@@ -235,7 +224,9 @@ fn run_single_test(
         times[times.len() / 2]
     };
 
-    Ok(Some(json!({
+    let file_size = std::fs::metadata(test_case).map(|m| m.len()).unwrap_or(0);
+
+    Ok(Some(serde_json::json!({
         "iterations": iterations,
         "successful_iterations": times.len(),
         "avg_time": avg_time,
@@ -243,60 +234,60 @@ fn run_single_test(
         "max_time": max_time,
         "median_time": median_time,
         "avg_memory": 0.0, // TODO: Add memory measurement
-        "file_size": test_content.len()
+        "file_size": file_size
     })))
 }
 
-fn test_c_implementation(content: &str) -> Result<()> {
-    // Change to C implementation directory
-    let c_dir = PathBuf::from("tree-sitter-perl");
-    
-    // Create a temporary test file
-    let temp_file = std::env::temp_dir().join("test_perl_c.tmp");
-    std::fs::write(&temp_file, content)?;
-
-    // Run the C implementation test
-    let output = Command::new("cargo")
-        .current_dir(&c_dir)
-        .args(["test", "--lib", "--", "--nocapture"])
-        .stdin(Stdio::piped())
+fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
+    let output = std::process::Command::new("target/debug/bench_parser_c")
+        .arg(file_path)
         .output()?;
-
-    // Clean up
-    let _ = std::fs::remove_file(temp_file);
-
-    if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("C implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut has_error = false;
+    let mut duration = 0.0;
+    for line in stdout.lines() {
+        if line.starts_with("status=") {
+            let parts: Vec<_> = line.split_whitespace().collect();
+            for part in parts {
+                if part.starts_with("error=") {
+                    has_error = part[6..].parse::<bool>().unwrap_or(false);
+                }
+                if part.starts_with("duration_us=") {
+                    duration = part[12..].parse::<f64>().unwrap_or(0.0);
+                }
+            }
+        }
     }
-
-    Ok(())
+    if !output.status.success() {
+        return Err(color_eyre::eyre::eyre!("C implementation failed: {}", stdout));
+    }
+    Ok((!has_error, duration))
 }
 
-fn test_rust_implementation(content: &str) -> Result<()> {
-    // Change to Rust implementation directory
-    let rust_dir = PathBuf::from("crates/tree-sitter-perl-rs");
-    
-    // Create a temporary test file
-    let temp_file = std::env::temp_dir().join("test_perl_rust.tmp");
-    std::fs::write(&temp_file, content)?;
-
-    // Run the Rust implementation test
-    let output = Command::new("cargo")
-        .current_dir(&rust_dir)
-        .args(["test", "--lib", "--", "--nocapture"])
-        .stdin(Stdio::piped())
+fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
+    let output = std::process::Command::new("target/debug/bench_parser")
+        .arg(file_path)
         .output()?;
-
-    // Clean up
-    let _ = std::fs::remove_file(temp_file);
-
-    if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("Rust implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut has_error = false;
+    let mut duration = 0.0;
+    for line in stdout.lines() {
+        if line.starts_with("status=") {
+            let parts: Vec<_> = line.split_whitespace().collect();
+            for part in parts {
+                if part.starts_with("error=") {
+                    has_error = part[6..].parse::<bool>().unwrap_or(false);
+                }
+                if part.starts_with("duration_us=") {
+                    duration = part[12..].parse::<f64>().unwrap_or(0.0);
+                }
+            }
+        }
     }
-
-    Ok(())
+    if !output.status.success() {
+        return Err(color_eyre::eyre::eyre!("Rust implementation failed: {}", stdout));
+    }
+    Ok((!has_error, duration))
 }
 
 fn generate_comparison_report(
