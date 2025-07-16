@@ -1,117 +1,113 @@
-# tree-sitter-perl-better
+# tree-sitter-perl
 
-This is Yet Another perl tree-sitter module.
+Tree-sitter Perl grammar with Rust-native scanner implementation.
 
-## Getting Started Developing
+## Project Structure
 
-To get started, install the dependencies for this repo. The only thing you'll need
-installed is node v20 or above (we use more advanced regex features for the unicode
-support).
+This repository contains both the legacy C implementation and a new Rust implementation:
+
+- `/crates/tree-sitter-perl` - **Rust implementation** (primary development focus)
+- `/c` - Legacy C implementation and bindings
+- `/xtask` - Build automation and development tools
+
+## Rust Implementation
+
+The Rust implementation provides:
+- High-performance Rust-native scanner
+- Comprehensive test suite with corpus validation
+- Property-based testing and benchmarks
+- Modern error handling and Unicode support
+
+### Getting Started with Rust Implementation
 
 ```bash
+# Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Build and test
+cargo xtask test
+cargo xtask corpus
+cargo xtask bench
+```
+
+### Development Commands
+
+```bash
+# Run all tests
+cargo xtask test
+
+# Run corpus tests with diagnostics
+cargo xtask corpus --diagnose
+
+# Run benchmarks
+cargo xtask bench
+
+# Check code quality
+cargo xtask check --all
+
+# Format code
+cargo xtask fmt
+```
+
+## Legacy C Implementation
+
+The legacy C implementation is preserved in the `/c` directory for compatibility with existing bindings and tools.
+
+### Getting Started with Legacy C Implementation
+
+```bash
+cd c
+
+# Install dependencies
 npm run dev-install
-```
 
-That should get you set up with tree-sitter's cli locally. (npm install won't work b/c it
-needs the library to be generated to build the bindings so we can use this repo for node
-bindings).
-
-
-### Generating the Bindings
-
-In this project, the generated C source code (stored in the `src` directory) is
-.gitignored. In order to generate it, run
-
-```bash
+# Generate bindings
 npx tree-sitter generate
-```
 
-You'll need to do this after any changes to the grammar.
-
-### Running the tests
-
-Tests are stored in the `/test/corpus` directory, as txt files. A little reference on the
-syntax can be found [here](https://tree-sitter.github.io/tree-sitter/creating-parsers#command-test).
-
-You can run the tests with
-
-```bash
+# Run tests
 npx tree-sitter test
 ```
 
-See the help output (`-h`) for that command for some more details on using the test
-runner.
-
 ## Contributing
 
-If you'd like to contribute, Pull Requests are welcome! The plan is to build the grammar
-from the bottom up, from simple statements with solid code coverage, eventually building
-up to full, complex syntax.
+We welcome contributions to both implementations! The Rust implementation is the primary focus for new development.
 
-You can see a reference of the grammar's DSL [here](https://tree-sitter.github.io/tree-sitter/creating-parsers#the-grammar-dsl). It's fairly straigthforward, and makes for pleasant reading. It is stored in `grammar.js` at the root of this repo.
+### Rust Development
 
-For subtle points in the grammar implementation, PLEASE leave comments. The extra bytes
-spent on the comments in dev will go a long way in the big picture.
+- All Rust code is in `/crates/tree-sitter-perl`
+- Use `cargo xtask` for all development tasks
+- Follow Rust best practices and error handling patterns
+- Add comprehensive tests for new features
 
-### Supporting Scripts
+### Legacy C Development
 
-We have a perl script which generates the correct ranges for both the C + JS sides of the
-parser. The dependencies are in the `cpanfile` in the root directory. Not necessary unless
-you are working on unicode identifiers.
+- Legacy C code is in `/c` directory
+- Follow existing C patterns and conventions
+- Ensure compatibility with existing bindings
 
-## Using these bindings
+## Using the Bindings
 
 ### Neovim
 
-A version of this parser is now part of the nvim-treesitter plugin! Hurrah!
-
-If you'd like to use a version that has not yet made it into nvim-treesitter, you can install these bindings in neovim by using the following snippet.
 ```lua
 local parser_config = require "nvim-treesitter.parsers".get_parser_configs()
 parser_config.perl = {
   install_info = {
     url = 'https://github.com/tree-sitter-perl/tree-sitter-perl',
     revision = 'release',
-    files = { "src/parser.c", "src/scanner.c" },
+    files = { "c/parser.c", "c/scanner.c" },
   }
 }
 ```
 
-Then you just `:TSInstall perl`. You'll need to copy the queries in the `queries`
-directory of this repo into a `queries/perl` directory somewhere in your `rtp`
-(`runtimepath`).
-
-See `:h 'rtp'` for more information. Additionally `:echo &rtp` to see your
-current `runtimepath`.
-
 ### Emacs
 
-As of [Emacs](https://www.gnu.org/software/emacs/) version 29.1, if you have
-the tree-sitter library installed, the configure script will automatically
-include it in the build.
-
-Once this is done, you can install the Perl bindings
-by executing two Emacs lisp forms:
-
-```Emacs Lisp
+```elisp
 (setq treesit-language-source-alist
   '((perl . ("https://github.com/tree-sitter-perl/tree-sitter-perl" "release"))))
 (treesit-install-language-grammar 'perl)
 ```
 
-Alternatively, you can run the command interactively:
-```
-M-x treesit-install-language-grammar <RET>
-```
-Then answer the prompts accordingly.  Enter `perl` for the language, the
-repository URL is `https://github.com/tree-sitter-perl/tree-sitter-perl`
-and the branch is `release`.
+## License
 
-An Emacs major mode which makes use of these binding ... is yet to be
-written.
-
-
-### In General
-
-You can get the built files off of the `release` branch in this repo. If you have specific
-instructions for a particular editor, PRs are welcome.
+MIT License - see LICENSE file for details.
