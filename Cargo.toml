@@ -2,8 +2,10 @@
 resolver = "2"
 members = [
     "crates/tree-sitter-perl-rs",
+    "crates/tree-sitter-perl-c",
     "xtask",
 ]
 
 [workspace.dependencies]
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["rust-scanner"] }
+tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
