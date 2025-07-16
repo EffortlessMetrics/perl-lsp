@@ -38,7 +38,7 @@ impl CScanner {
 }
 
 impl PerlScanner for CScanner {
-    fn scan(&mut self, input: &[u8]) -> ParseResult<Option<u16>> {
+    fn scan(&mut self, _input: &[u8]) -> ParseResult<Option<u16>> {
         // Initialize C scanner if needed
         if self.c_scanner.is_null() {
             self.init_c_scanner()?;
