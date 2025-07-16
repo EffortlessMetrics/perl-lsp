@@ -42,7 +42,7 @@ pub const NODE_TYPES: &'static str = include_str!("../../src/node-types.json");
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
     fn test_can_load_grammar() {
@@ -73,7 +73,7 @@ mod performance;
 
 #[cfg(test)]
 mod comprehensive_tests {
-    use super::*;
+    // use super::*;
     use crate::test_harness::parse_perl_code;
 
     #[test]
