@@ -5,7 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 use crate::types::ScannerType;
 
-pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
+pub fn run(_path: PathBuf, _scanner: Option<ScannerType>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
