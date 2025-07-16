@@ -3,8 +3,8 @@
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 use walkdir::WalkDir;
 
 /// Corpus test case containing input code and expected S-expression
@@ -50,7 +50,7 @@ impl CorpusTestResults {
         println!("   Total: {}", self.total);
         println!("   Passed: {} ✅", self.passed);
         println!("   Failed: {} ❌", self.failed);
-        
+
         if !self.errors.is_empty() {
             println!("\n❌ Failed Tests:");
             for error in &self.errors {
@@ -64,25 +64,30 @@ impl CorpusTestResults {
 fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read corpus file: {}", path.display()))?;
-    
+
     let mut test_cases = Vec::new();
     let mut current_name = String::new();
     let mut current_source = String::new();
     let mut current_expected = String::new();
     let mut in_source = false;
     let mut in_expected = false;
-    
+
     for line in content.lines() {
-        if line.starts_with("================================================================================") {
+        if line.starts_with(
+            "================================================================================",
+        ) {
             // Save previous test case if we have one
-            if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
+            if !current_name.is_empty()
+                && !current_source.is_empty()
+                && !current_expected.is_empty()
+            {
                 test_cases.push(CorpusTestCase {
                     name: current_name.clone(),
                     source: current_source.clone(),
                     expected: current_expected.clone(),
                 });
             }
-            
+
             // Start new test case
             current_name.clear();
             current_source.clear();
@@ -105,7 +110,7 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
             in_source = true;
         }
     }
-    
+
     // Add the last test case
     if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
         test_cases.push(CorpusTestCase {
@@ -114,7 +119,7 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
             expected: current_expected,
         });
     }
-    
+
     Ok(test_cases)
 }
 
@@ -135,21 +140,17 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             // For now, use the default (Rust scanner)
             tree_sitter_perl::parse(&test_case.source)?
         }
-        Some(ScannerType::Rust) => {
-            tree_sitter_perl::parse(&test_case.source)?
-        }
+        Some(ScannerType::Rust) => tree_sitter_perl::parse(&test_case.source)?,
         Some(ScannerType::Both) => {
             // TODO: Test both scanners and compare results
             tree_sitter_perl::parse(&test_case.source)?
         }
-        None => {
-            tree_sitter_perl::parse(&test_case.source)?
-        }
+        None => tree_sitter_perl::parse(&test_case.source)?,
     };
-    
+
     let actual = normalize_sexp(&tree.root_node().to_sexp());
     let expected = normalize_sexp(test_case.expected.trim());
-    
+
     if actual == expected {
         Ok(true)
     } else {
@@ -163,49 +164,46 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
 }
 
 /// Diagnostic function to analyze differences between expected and actual S-expressions
-fn diagnose_parse_differences(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<()> {
+fn diagnose_parse_differences(
+    test_case: &CorpusTestCase,
+    scanner: &Option<ScannerType>,
+) -> Result<()> {
     println!("\n🔍 DIAGNOSTIC: {}", test_case.name);
     println!("Input Perl code:");
     println!("```perl");
     println!("{}", test_case.source.trim());
     println!("```");
-    
+
     // Parse with current parser
     let tree = match scanner {
         Some(ScannerType::C) => {
             // TODO: Implement C scanner parsing when available
             tree_sitter_perl::parse(&test_case.source)?
         }
-        Some(ScannerType::Rust) => {
-            tree_sitter_perl::parse(&test_case.source)?
-        }
-        Some(ScannerType::Both) => {
-            tree_sitter_perl::parse(&test_case.source)?
-        }
-        None => {
-            tree_sitter_perl::parse(&test_case.source)?
-        }
+        Some(ScannerType::Rust) => tree_sitter_perl::parse(&test_case.source)?,
+        Some(ScannerType::Both) => tree_sitter_perl::parse(&test_case.source)?,
+        None => tree_sitter_perl::parse(&test_case.source)?,
     };
-    
+
     let actual = normalize_sexp(&tree.root_node().to_sexp());
     let expected = normalize_sexp(test_case.expected.trim());
-    
+
     println!("\n📊 COMPARISON:");
     println!("Expected S-expression:");
     println!("{}", expected);
     println!("\nActual S-expression:");
     println!("{}", actual);
-    
+
     // Analyze structural differences
     println!("\n🔍 STRUCTURAL ANALYSIS:");
-    
+
     // Count nodes in each
     let expected_nodes = count_nodes(&expected);
     let actual_nodes = count_nodes(&actual);
-    
+
     println!("Expected nodes: {}", expected_nodes);
     println!("Actual nodes: {}", actual_nodes);
-    
+
     // Find missing nodes
     let missing_nodes = find_missing_nodes(&expected, &actual);
     if !missing_nodes.is_empty() {
@@ -214,7 +212,7 @@ fn diagnose_parse_differences(test_case: &CorpusTestCase, scanner: &Option<Scann
             println!("  - {}", node);
         }
     }
-    
+
     // Find extra nodes
     let extra_nodes = find_extra_nodes(&expected, &actual);
     if !extra_nodes.is_empty() {
@@ -223,14 +221,14 @@ fn diagnose_parse_differences(test_case: &CorpusTestCase, scanner: &Option<Scann
             println!("  - {}", node);
         }
     }
-    
+
     // Check for structural differences
     if actual == expected {
         println!("✅ Parse trees match exactly");
     } else {
         println!("❌ Parse trees differ structurally");
     }
-    
+
     Ok(())
 }
 
@@ -243,7 +241,7 @@ fn count_nodes(sexp: &str) -> usize {
 fn find_missing_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
-    
+
     expected_nodes
         .iter()
         .filter(|node| !actual_nodes.contains(node))
@@ -255,7 +253,7 @@ fn find_missing_nodes(expected: &str, actual: &str) -> Vec<String> {
 fn find_extra_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
-    
+
     actual_nodes
         .iter()
         .filter(|node| !expected_nodes.contains(node))
@@ -268,7 +266,7 @@ fn extract_node_types(sexp: &str) -> Vec<String> {
     let mut nodes = Vec::new();
     let mut current = String::new();
     let mut in_paren = false;
-    
+
     for ch in sexp.chars() {
         match ch {
             '(' => {
@@ -294,17 +292,17 @@ fn extract_node_types(sexp: &str) -> Vec<String> {
             }
         }
     }
-    
+
     nodes
 }
 
 /// Test function to verify current parser behavior
 fn test_current_parser() -> Result<()> {
     println!("\n🧪 TESTING CURRENT PARSER BEHAVIOR:");
-    
+
     let test_cases = vec![
         "1 + 1",
-        "2 * 3", 
+        "2 * 3",
         "!3",
         "true",
         "# comment",
@@ -317,7 +315,7 @@ fn test_current_parser() -> Result<()> {
         "!3;",
         "true;",
     ];
-    
+
     for source in test_cases {
         println!("\nInput: '{}'", source);
         match tree_sitter_perl::parse(source) {
@@ -330,7 +328,7 @@ fn test_current_parser() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -350,16 +348,23 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path = if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/corpus") };
-    
+    let corpus_path = if path.exists() {
+        path
+    } else {
+        PathBuf::from("crates/tree-sitter-perl/test/corpus")
+    };
+
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
-        return Err(color_eyre::eyre::eyre!("Corpus directory not found: {}", corpus_path.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "Corpus directory not found: {}",
+            corpus_path.display()
+        ));
     }
 
     let mut results = CorpusTestResults::new();
     let mut diagnostic_run = false;
-    
+
     // Process each corpus file
     for entry in WalkDir::new(&corpus_path)
         .max_depth(1)
@@ -369,9 +374,9 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     {
         let file_path = entry.path();
         let file_name = file_path.file_name().unwrap().to_string_lossy();
-        
+
         spinner.set_message(format!("Processing {}", file_name));
-        
+
         match parse_corpus_file(&file_path.to_path_buf()) {
             Ok(test_cases) => {
                 for test_case in test_cases {
@@ -381,7 +386,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
                         }
                         Ok(false) => {
                             results.add_failed(format!("{}: {}", file_name, test_case.name));
-                            
+
                             // Run diagnostic on first failing test if requested
                             if diagnose && !diagnostic_run {
                                 if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
@@ -391,7 +396,10 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
                             }
                         }
                         Err(e) => {
-                            results.add_failed(format!("{}: {} - Error: {}", file_name, test_case.name, e));
+                            results.add_failed(format!(
+                                "{}: {} - Error: {}",
+                                file_name, test_case.name, e
+                            ));
                         }
                     }
                 }
@@ -403,14 +411,16 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     }
 
     spinner.finish_with_message("✅ Corpus tests completed");
-    
+
     // Print summary
     results.print_summary();
-    
+
     if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
+        Err(color_eyre::eyre::eyre!(
+            "{} corpus tests failed",
+            results.failed
+        ))
     } else {
         Ok(())
     }
 }
- 

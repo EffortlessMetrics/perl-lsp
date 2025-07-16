@@ -30,7 +30,11 @@ pub fn run(all: bool) -> Result<()> {
         spinner.set_message("Cleaning all artifacts");
 
         // Remove generated files
-        let generated_files = ["crates/tree-sitter-perl/src/bindings.rs", "target", "Cargo.lock"];
+        let generated_files = [
+            "crates/tree-sitter-perl/src/bindings.rs",
+            "target",
+            "Cargo.lock",
+        ];
 
         for file in &generated_files {
             if fs::metadata(file).is_ok() {
@@ -47,4 +51,3 @@ pub fn run(all: bool) -> Result<()> {
     spinner.finish_with_message("✅ Clean completed");
     Ok(())
 }
- 

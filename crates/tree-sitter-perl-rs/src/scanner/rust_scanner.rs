@@ -64,17 +64,16 @@ impl RustScanner {
         if self.position + 1 >= self.input.len() {
             return Err(ParseError::ParseFailed);
         }
-        
+
         let next_byte = self.input[self.position + 1];
         if next_byte & 0xC0 == 0x80 {
             // Continuation byte, not a valid UTF-8 start
             return Err(ParseError::ParseFailed);
         }
-        
+
         let next_slice = &self.input[self.position + 1..];
-        let next_str = std::str::from_utf8(next_slice)
-            .map_err(|_| ParseError::ParseFailed)?;
-        
+        let next_str = std::str::from_utf8(next_slice).map_err(|_| ParseError::ParseFailed)?;
+
         next_str.chars().next().ok_or(ParseError::ParseFailed)
     }
 
@@ -120,24 +119,24 @@ impl RustScanner {
     #[allow(dead_code)]
     fn scan_regex(&mut self) -> ParseResult<TokenType> {
         self.state.in_regex = true;
-        
+
         // Skip the opening delimiter
         let delimiter = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         self.advance();
-        
+
         // Track if we're in character class
         let mut in_char_class = false;
         let mut escaped = false;
-        
+
         while !self.is_eof() {
             let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
-            
+
             if escaped {
                 escaped = false;
                 self.advance();
                 continue;
             }
-            
+
             match ch {
                 '\\' => {
                     escaped = true;
@@ -176,7 +175,7 @@ impl RustScanner {
                             // This is a transliteration operator, not a regex
                             self.advance(); // consume 't'
                             self.advance(); // consume 'r'
-                            // Continue scanning for the transliteration pattern
+                        // Continue scanning for the transliteration pattern
                         } else if next_ch == delimiter {
                             // This is a regex with 't' as delimiter
                             self.advance(); // consume the delimiter
@@ -191,7 +190,7 @@ impl RustScanner {
                 }
             }
         }
-        
+
         // If we reach EOF without finding closing delimiter, it's an error
         self.state.in_regex = false;
         Err(ParseError::ParseFailed)
@@ -200,27 +199,27 @@ impl RustScanner {
     /// Scan a heredoc pattern
     fn scan_heredoc(&mut self) -> ParseResult<TokenType> {
         self.state.in_heredoc = true;
-        
+
         // Look for << or <<~ followed by delimiter
         let first_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if first_ch != '<' {
             return Err(ParseError::ParseFailed);
         }
         self.advance();
-        
+
         let second_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if second_ch != '<' {
             return Err(ParseError::ParseFailed);
         }
         self.advance();
-        
+
         // Check for indented heredoc (~)
         let third_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         let is_indented = third_ch == '~';
         if is_indented {
             self.advance();
         }
-        
+
         // Read delimiter
         let mut delimiter = String::new();
         while !self.is_eof() {
@@ -231,13 +230,13 @@ impl RustScanner {
             delimiter.push(ch);
             self.advance();
         }
-        
+
         if delimiter.is_empty() {
             return Err(ParseError::ParseFailed);
         }
-        
+
         self.state.heredoc_delimiter = Some(delimiter);
-        
+
         // Skip to end of line
         while !self.is_eof() {
             let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
@@ -247,21 +246,21 @@ impl RustScanner {
             }
             self.advance();
         }
-        
+
         Ok(TokenType::HereDocument)
     }
 
     /// Scan POD (Plain Old Documentation)
     fn scan_pod(&mut self) -> ParseResult<TokenType> {
         self.state.in_pod = true;
-        
+
         // Look for =pod, =head1, =head2, etc.
         let first_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if first_ch != '=' {
             return Err(ParseError::ParseFailed);
         }
         self.advance();
-        
+
         // Read POD command
         let mut command = String::new();
         while !self.is_eof() {
@@ -272,7 +271,7 @@ impl RustScanner {
             command.push(ch);
             self.advance();
         }
-        
+
         // Skip to end of line
         while !self.is_eof() {
             let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
@@ -282,13 +281,13 @@ impl RustScanner {
             }
             self.advance();
         }
-        
+
         // Check for =cut to end POD
         if command == "cut" {
             self.state.in_pod = false;
             return Ok(TokenType::Pod);
         }
-        
+
         Ok(TokenType::Pod)
     }
 
@@ -548,16 +547,16 @@ impl RustScanner {
     /// Scan operators and punctuation
     fn scan_operator(&mut self) -> ParseResult<TokenType> {
         let ch = self.lookahead.unwrap_or('\0');
-        
+
         match ch {
             '+' => {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::PlusAssign)
                     } else if next == '+' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::Increment)
                     } else {
                         Ok(TokenType::Plus)
@@ -570,10 +569,10 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::MinusAssign)
                     } else if next == '-' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::Decrement)
                     } else {
                         Ok(TokenType::Minus)
@@ -586,7 +585,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::MultiplyAssign)
                     } else if next == '*' {
                         self.advance();
@@ -602,7 +601,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::DivideAssign)
                     } else {
                         Ok(TokenType::Divide)
@@ -615,7 +614,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::ModuloAssign)
                     } else {
                         Ok(TokenType::Modulo)
@@ -634,7 +633,7 @@ impl RustScanner {
                         self.advance();
                         Ok(TokenType::StringEqual)
                     } else if next == '>' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::DoubleArrow)
                     } else {
                         Ok(TokenType::Assign)
@@ -647,7 +646,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::NotEqual)
                     } else {
                         Ok(TokenType::LogicalNot)
@@ -666,7 +665,7 @@ impl RustScanner {
                         self.advance();
                         Ok(TokenType::LeftShift)
                     } else if next == '>' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::NotEqual)
                     } else {
                         Ok(TokenType::LessThan)
@@ -679,10 +678,10 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::GreaterEqual)
                     } else if next == '>' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::RightShift)
                     } else {
                         Ok(TokenType::GreaterThan)
@@ -695,7 +694,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '&' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::LogicalAnd)
                     } else {
                         Ok(TokenType::BitwiseAnd)
@@ -708,7 +707,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '|' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::LogicalOr)
                     } else {
                         Ok(TokenType::BitwiseOr)
@@ -721,7 +720,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '^' {
-                    self.advance();
+                        self.advance();
                         Ok(TokenType::LogicalOr) // xor operator
                     } else {
                         Ok(TokenType::BitwiseXor)
@@ -751,7 +750,7 @@ impl RustScanner {
                 Ok(TokenType::Comma)
             }
             '.' => {
-                    self.advance();
+                self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '.' {
                         self.advance();
@@ -796,31 +795,19 @@ impl RustScanner {
                 self.advance();
                 Ok(TokenType::RightBrace)
             }
-            '$' => {
-                self.scan_variable()
-            }
-            '#' => {
-                self.scan_comment()
-            }
-            '\'' => {
-                self.scan_string('\'')
-            }
-            '"' => {
-                self.scan_string('"')
-            }
-            '`' => {
-                self.scan_string('`')
-            }
-            '0'..='9' => {
-                self.scan_number()
-            }
+            '$' => self.scan_variable(),
+            '#' => self.scan_comment(),
+            '\'' => self.scan_string('\''),
+            '"' => self.scan_string('"'),
+            '`' => self.scan_string('`'),
+            '0'..='9' => self.scan_number(),
             _ => {
                 if UnicodeUtils::is_identifier_start(ch) {
                     self.scan_identifier()
                 } else {
                     Err(ParseError::invalid_token(
-                    ch.to_string(),
-                    self.state.position(),
+                        ch.to_string(),
+                        self.state.position(),
                     ))
                 }
             }
@@ -895,7 +882,10 @@ impl PerlScanner for RustScanner {
                 }
                 '=' => {
                     // POD or assignment
-                    if self.peek_next_char().map_or(false, |next| next.is_ascii_alphabetic()) {
+                    if self
+                        .peek_next_char()
+                        .map_or(false, |next| next.is_ascii_alphabetic())
+                    {
                         self.scan_pod()?
                     } else {
                         self.scan_operator()?
@@ -946,16 +936,18 @@ impl PerlScanner for RustScanner {
 
     fn serialize(&self, buffer: &mut Vec<u8>) -> ParseResult<()> {
         // Serialize scanner state
-        let state_bytes = bincode::serialize(&self.state)
-            .map_err(|e| ParseError::scanner_error_simple(&format!("Serialization failed: {}", e)))?;
+        let state_bytes = bincode::serialize(&self.state).map_err(|e| {
+            ParseError::scanner_error_simple(&format!("Serialization failed: {}", e))
+        })?;
         buffer.extend_from_slice(&state_bytes);
         Ok(())
     }
 
     fn deserialize(&mut self, buffer: &[u8]) -> ParseResult<()> {
         // Deserialize scanner state
-        self.state = bincode::deserialize(buffer)
-            .map_err(|e| ParseError::scanner_error_simple(&format!("Deserialization failed: {}", e)))?;
+        self.state = bincode::deserialize(buffer).map_err(|e| {
+            ParseError::scanner_error_simple(&format!("Deserialization failed: {}", e))
+        })?;
         Ok(())
     }
 
@@ -995,7 +987,7 @@ mod tests {
     #[test]
     fn test_identifier_scanning() {
         let mut scanner = RustScanner::new();
-        
+
         let result = scanner.scan(b"my_variable");
         assert!(result.is_ok());
         let token = result.unwrap();
