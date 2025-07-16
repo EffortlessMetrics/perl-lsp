@@ -1,12 +1,13 @@
 //! Error types for tree-sitter Perl parser
 
 use thiserror::Error;
+use serde::{Serialize, Deserialize};
 
 /// Result type for parsing operations
 pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Errors that can occur during parsing
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParseError {
     /// Parsing failed for an unknown reason
     #[error("Parsing failed")]

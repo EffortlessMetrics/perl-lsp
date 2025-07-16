@@ -373,6 +373,12 @@ pub enum TokenType {
     // Other
     Eof,
     Unknown,
+
+    // Compatibility aliases for test suite
+    StringLiteral = 1000, // Alias for String
+    NumberLiteral = 1001, // Alias for Integer
+    Operator = 1002,      // Alias for Plus
+    Keyword = 1003,       // Alias for My
 }
 
 impl TokenType {
@@ -603,6 +609,8 @@ impl TokenType {
         }
     }
 }
+
+pub use crate::unicode::UnicodeUtils;
 
 #[cfg(test)]
 mod tests {

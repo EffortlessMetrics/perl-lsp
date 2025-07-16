@@ -6,6 +6,7 @@ use crate::unicode::UnicodeUtils;
 
 /// Rust-native Perl scanner implementation
 pub struct RustScanner {
+    #[allow(dead_code)]
     config: ScannerConfig,
     state: ScannerState,
     input: Vec<u8>,
@@ -50,6 +51,7 @@ impl RustScanner {
     }
 
     /// Peek at the next character without consuming it
+    #[allow(dead_code)]
     fn peek_char(&self) -> Option<char> {
         if self.position >= self.input.len() {
             return None;
@@ -96,6 +98,7 @@ impl RustScanner {
     }
 
     /// Scan POD (Plain Old Documentation)
+    #[allow(dead_code)]
     fn scan_pod(&mut self) -> ParseResult<TokenType> {
         self.state.in_pod = true;
 
@@ -166,6 +169,7 @@ impl RustScanner {
     }
 
     /// Scan a here document
+    #[allow(dead_code)]
     fn scan_heredoc(&mut self) -> ParseResult<TokenType> {
         self.state.in_heredoc = true;
 
