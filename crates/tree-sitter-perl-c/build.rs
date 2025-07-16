@@ -10,7 +10,6 @@ fn main() {
         .file("../../tree-sitter-perl/src/scanner.c")
         .file("../../tree-sitter-perl/src/parser.c")
         .include("../../tree-sitter-perl/src")
-        .include("../../tree-sitter-perl/lib/src")
         .flag_if_supported("-std=c99")
         .flag_if_supported("-Wno-unused-parameter")
         .flag_if_supported("-Wno-unused-variable")
@@ -21,7 +20,6 @@ fn main() {
     let bindings = bindgen::Builder::default()
         .header("../../tree-sitter-perl/src/tree_sitter/parser.h")
         .clang_arg("-I../../tree-sitter-perl/src")
-        .clang_arg("-I../../tree-sitter-perl/lib/src")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
