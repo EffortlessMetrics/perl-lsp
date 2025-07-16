@@ -10,10 +10,8 @@ fn main() {
     // Always build the C parser (required for tree-sitter)
     build_c_parser();
     
-    // Build C scanner if c-scanner feature is enabled
-    if cfg!(feature = "c-scanner") {
-        build_c_scanner();
-    }
+    // Always build C scanner (required for external scanner functions)
+    build_c_scanner();
     
     // Generate bindings for the C parser
     generate_bindings();
@@ -52,7 +50,6 @@ fn build_c_scanner() {
     
     // Add scanner source files
     build.file("src/scanner.c");
-    build.file("src/tsp_unicode.c");
     
     // Add tree-sitter runtime
     if let Some(tree_sitter_dir) = find_tree_sitter_runtime() {
