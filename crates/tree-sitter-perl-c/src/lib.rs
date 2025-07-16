@@ -19,15 +19,18 @@ pub fn create_parser() -> Parser {
 }
 
 /// Parse Perl code using the C scanner
-pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, tree_sitter::ParseError> {
+pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let mut parser = create_parser();
-    parser.parse(code, None)
+    match parser.parse(code, None) {
+        Some(tree) => Ok(tree),
+        None => Err("Failed to parse code".into()),
+    }
 }
 
 /// Parse a Perl file using the C scanner
 pub fn parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let code = std::fs::read_to_string(path)?;
-    Ok(parse_perl_code(&code)?)
+    parse_perl_code(&code)
 }
 
 /// Get the scanner configuration for the C implementation
