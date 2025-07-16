@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod real_world_corpus {
     use super::super::test_harness::{parse_perl_code, validate_tree_no_errors, capture_error_snapshot};
-    use std::path::Path;
 
     /// Test parsing of real-world Perl code samples
     /// These are common patterns and constructs found in actual Perl codebases
@@ -316,7 +315,7 @@ my $mixed = "ASCII + 日本語 + emoji 🎉";
                 i, result
             );
             
-            let tree = result.unwrap();
+            let _tree = result.unwrap();
             // For performance samples, we just check it doesn't panic
             // Error nodes might be acceptable for very complex constructs
             println!("Performance sample {} parsed successfully", i);
