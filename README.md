@@ -90,6 +90,9 @@ cargo xtask test
 # Run performance benchmarks
 cargo xtask bench
 
+# Run C vs Rust comparison (when both implementations are available)
+./scripts/run_comparison_benchmarks.sh
+
 # Run corpus compatibility tests
 cargo xtask corpus
 
@@ -270,6 +273,20 @@ cargo xtask highlight          # Run highlight tests
 cargo xtask fmt                # Format code
 cargo xtask check --all        # Run all checks
 ```
+
+### Benchmarking
+
+The project includes comprehensive benchmarking to ensure performance parity with the original C implementation:
+
+- **Design Documentation**: [BENCHMARK_DESIGN.md](BENCHMARK_DESIGN.md)
+- **Results**: [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md)
+- **Comparison Reports**: `benchmark_results/`
+
+The benchmarking system provides:
+- Statistical analysis with 95% confidence intervals
+- Performance regression detection
+- Automated comparison between C and Rust implementations
+- Performance gates for CI/CD integration
 
 ---
 
