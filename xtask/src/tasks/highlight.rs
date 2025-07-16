@@ -182,7 +182,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
     spinner.set_message("Running highlight tests");
 
     // Find all highlight test files
-    let highlight_path = if path.exists() { path } else { PathBuf::from("test/highlight") };
+    let highlight_path = if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/highlight") };
     
     if !highlight_path.exists() {
         spinner.finish_with_message("❌ Highlight directory not found");

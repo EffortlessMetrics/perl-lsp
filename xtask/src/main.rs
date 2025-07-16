@@ -111,7 +111,7 @@ enum Commands {
     /// Run corpus tests
     Corpus {
         /// Path to corpus directory
-        #[arg(long, default_value = "corpus")]
+        #[arg(long, default_value = "c/test/corpus")]
         path: PathBuf,
 
         /// Run with specific scanner
@@ -129,8 +129,8 @@ enum Commands {
 
     /// Run highlight tests
     Highlight {
-        /// Path to highlight tests
-        #[arg(long, default_value = "test/highlight")]
+        /// Path to highlight test directory
+        #[arg(long, default_value = "c/test/highlight")]
         path: PathBuf,
 
         /// Run with specific scanner
@@ -148,7 +148,7 @@ enum Commands {
     /// Generate bindings
     Bindings {
         /// Output directory for bindings
-        #[arg(long, default_value = "src/bindings")]
+        #[arg(long, default_value = "crates/tree-sitter-perl/src/bindings")]
         output: PathBuf,
     },
 
