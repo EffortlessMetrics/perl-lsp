@@ -4,27 +4,86 @@
 //! the Rust-native scanner against the C scanner implementation.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use tree_sitter_perl::parse;
 
-fn bench_rust_scanner_basic(c: &mut Criterion) {
-    let test_cases = vec![
-        "my $var = 42;",
-        "print 'Hello, World!';",
-        "sub foo { return 1; }",
-        "if ($x) { $y = 1; }",
-        "for my $i (1..10) { print $i; }",
-    ];
+// Test different scanner implementations
+#[cfg(feature = "rust-scanner")]
+use tree_sitter_perl::scanner::{PerlScanner, RustScanner, ScannerConfig};
 
-    c.bench_function("rust_scanner_basic", |b| {
-        b.iter(|| {
-            for code in &test_cases {
-                black_box(parse(code).unwrap());
-            }
+#[cfg(feature = "c-scanner")]
+use tree_sitter_perl::scanner::{PerlScanner, CScanner, ScannerConfig};
+
+fn bench_rust_scanner_direct(c: &mut Criterion) {
+    #[cfg(feature = "rust-scanner")]
+    {
+        let test_cases = vec![
+            "my $var = 42;",
+            "print 'Hello, World!';",
+            "sub foo { return 1; }",
+            "if ($x) { $y = 1; }",
+            "for my $i (1..10) { print $i; }",
+        ];
+
+        c.bench_function("rust_scanner_direct", |b| {
+            b.iter(|| {
+                let mut scanner = RustScanner::new();
+                for code in &test_cases {
+                    let bytes = code.as_bytes();
+                    let mut pos = 0;
+                    while pos < bytes.len() {
+                        match scanner.scan(&bytes[pos..]) {
+                            Ok(Some(_token)) => {
+                                // Simulate advancing position
+                                pos += 1;
+                            }
+                            Ok(None) => break,
+                            Err(_) => break,
+                        }
+                    }
+                    black_box(scanner);
+                }
+            });
         });
-    });
+    }
 }
 
-fn bench_c_scanner_basic(c: &mut Criterion) {
+fn bench_c_scanner_direct(c: &mut Criterion) {
+    #[cfg(feature = "c-scanner")]
+    {
+        let test_cases = vec![
+            "my $var = 42;",
+            "print 'Hello, World!';",
+            "sub foo { return 1; }",
+            "if ($x) { $y = 1; }",
+            "for my $i (1..10) { print $i; }",
+        ];
+
+        c.bench_function("c_scanner_direct", |b| {
+            b.iter(|| {
+                let mut scanner = CScanner::new();
+                for code in &test_cases {
+                    let bytes = code.as_bytes();
+                    let mut pos = 0;
+                    while pos < bytes.len() {
+                        match scanner.scan(&bytes[pos..]) {
+                            Ok(Some(_token)) => {
+                                // Simulate advancing position
+                                pos += 1;
+                            }
+                            Ok(None) => break,
+                            Err(_) => break,
+                        }
+                    }
+                    black_box(scanner);
+                }
+            });
+        });
+    }
+}
+
+// Legacy benchmarks that use the parse function (for comparison)
+fn bench_parse_function(c: &mut Criterion) {
+    use tree_sitter_perl::parse;
+    
     let test_cases = vec![
         "my $var = 42;",
         "print 'Hello, World!';",
@@ -33,7 +92,7 @@ fn bench_c_scanner_basic(c: &mut Criterion) {
         "for my $i (1..10) { print $i; }",
     ];
 
-    c.bench_function("c_scanner_basic", |b| {
+    c.bench_function("parse_function", |b| {
         b.iter(|| {
             for code in &test_cases {
                 black_box(parse(code).unwrap());
@@ -43,9 +102,10 @@ fn bench_c_scanner_basic(c: &mut Criterion) {
 }
 
 fn bench_large_file(c: &mut Criterion) {
+    use tree_sitter_perl::parse;
     let large_code = generate_large_perl_file(1000);
 
-    c.bench_function("rust_scanner_large_file", |b| {
+    c.bench_function("large_file_parsing", |b| {
         b.iter(|| {
             black_box(parse(&large_code).unwrap());
         });
@@ -53,9 +113,10 @@ fn bench_large_file(c: &mut Criterion) {
 }
 
 fn bench_unicode_heavy(c: &mut Criterion) {
+    use tree_sitter_perl::parse;
     let unicode_code = generate_unicode_perl_file();
 
-    c.bench_function("rust_scanner_unicode", |b| {
+    c.bench_function("unicode_parsing", |b| {
         b.iter(|| {
             black_box(parse(&unicode_code).unwrap());
         });
@@ -63,9 +124,10 @@ fn bench_unicode_heavy(c: &mut Criterion) {
 }
 
 fn bench_string_heavy(c: &mut Criterion) {
+    use tree_sitter_perl::parse;
     let string_code = generate_string_heavy_perl_file();
 
-    c.bench_function("rust_scanner_strings", |b| {
+    c.bench_function("string_heavy_parsing", |b| {
         b.iter(|| {
             black_box(parse(&string_code).unwrap());
         });
@@ -73,9 +135,10 @@ fn bench_string_heavy(c: &mut Criterion) {
 }
 
 fn bench_regex_heavy(c: &mut Criterion) {
+    use tree_sitter_perl::parse;
     let regex_code = generate_regex_heavy_perl_file();
 
-    c.bench_function("rust_scanner_regex", |b| {
+    c.bench_function("regex_heavy_parsing", |b| {
         b.iter(|| {
             black_box(parse(&regex_code).unwrap());
         });
@@ -191,11 +254,12 @@ my $transliteration = $text =~ tr/a-z/A-Z/;
 
 criterion_group!(
     benches,
-    bench_rust_scanner_basic,
-    bench_c_scanner_basic,
+    bench_parse_function,
     bench_large_file,
     bench_unicode_heavy,
     bench_string_heavy,
     bench_regex_heavy,
+    bench_rust_scanner_direct,
+    bench_c_scanner_direct,
 );
 criterion_main!(benches);
