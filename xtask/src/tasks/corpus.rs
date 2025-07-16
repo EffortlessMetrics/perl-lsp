@@ -119,15 +119,39 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 }
 
 /// Run a single corpus test case
-fn run_corpus_test_case(_test_case: &CorpusTestCase, _scanner: &Option<ScannerType>) -> Result<bool> {
-    // For now, just verify we can parse the test case structure
-    // TODO: Implement actual parsing with tree-sitter-perl
-    // The real implementation would:
-    // 1. Use tree-sitter-perl::parse(&test_case.source)
-    // 2. Get the S-expression with tree.root_node().to_sexp()
-    // 3. Compare with test_case.expected.trim()
+fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
+    // Parse the source code using tree-sitter-perl
+    let tree = match scanner {
+        Some(ScannerType::C) => {
+            // TODO: Implement C scanner parsing when C scanner is available
+            // For now, use the default (Rust scanner)
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        Some(ScannerType::Rust) => {
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        Some(ScannerType::Both) => {
+            // TODO: Test both scanners and compare results
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+        None => {
+            tree_sitter_perl::parse(&test_case.source)?
+        }
+    };
     
-    Ok(true)
+    let actual = tree.root_node().to_sexp();
+    let expected = test_case.expected.trim();
+    
+    if actual == expected {
+        Ok(true)
+    } else {
+        println!("\n❌ Test failed: {}", test_case.name);
+        println!("Expected:");
+        println!("{}", expected);
+        println!("Actual:");
+        println!("{}", actual);
+        Ok(false)
+    }
 }
 
 pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
