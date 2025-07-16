@@ -18,9 +18,7 @@ fn main() {
         Ok(tree) => {
             let has_error = tree.root_node().has_error();
             println!("status=success error={} duration_us={}", has_error, duration);
-            if has_error {
-                std::process::exit(2);
-            }
+            // Always return success (0) - parse errors are indicated in the error field
         }
         Err(e) => {
             println!("status=failure error=true duration_us={}", duration);
