@@ -5,6 +5,7 @@ pub mod bindings;
 pub mod build;
 pub mod check;
 pub mod clean;
+pub mod compare;
 pub mod corpus;
 pub mod dev;
 pub mod doc;

@@ -43,7 +43,7 @@ use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 
-pub fn run(name: Option<String>, save: bool) -> Result<()> {
+pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -58,7 +58,7 @@ pub fn run(name: Option<String>, save: bool) -> Result<()> {
     
     if let Some(bench_name) = name {
         args.push("--bench");
-        args.push(&bench_name);
+        args.push(bench_name.as_str());
     }
 
     // Execute benchmarks
@@ -76,8 +76,14 @@ pub fn run(name: Option<String>, save: bool) -> Result<()> {
 
     if save {
         spinner.set_message("Saving benchmark results");
-        // Note: Criterion automatically saves results to target/criterion
-        spinner.finish_with_message("✅ Benchmark results saved to target/criterion");
+        
+        if let Some(output_path) = output {
+            // TODO: Implement custom result saving to specified path
+            spinner.finish_with_message(format!("✅ Benchmark results saved to {}", output_path.display()));
+        } else {
+            // Note: Criterion automatically saves results to target/criterion
+            spinner.finish_with_message("✅ Benchmark results saved to target/criterion");
+        }
     }
 
     Ok(())

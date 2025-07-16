@@ -91,7 +91,20 @@ cargo xtask test
 cargo xtask bench
 
 # Run C vs Rust comparison (when both implementations are available)
-./scripts/run_comparison_benchmarks.sh
+cargo xtask compare
+
+# Run only specific implementations
+cargo xtask compare --rust-only
+cargo xtask compare --c-only
+
+# Validate existing results
+cargo xtask compare --validate-only
+
+# Check performance gates
+cargo xtask compare --check-gates
+
+# Generate detailed report
+cargo xtask compare --report
 
 # Run corpus compatibility tests
 cargo xtask corpus
@@ -268,6 +281,7 @@ match parser.parse(source, None) {
 cargo xtask build              # Build the crate
 cargo xtask test               # Run all tests
 cargo xtask bench              # Run performance benchmarks
+cargo xtask compare            # C vs Rust benchmark comparison
 cargo xtask corpus             # Run corpus tests
 cargo xtask highlight          # Run highlight tests
 cargo xtask fmt                # Format code
