@@ -4,6 +4,7 @@
 // It is designed to mirror the C-based test suite and ensure 100% input/output fidelity.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
 
     use crate::{language, parse};

@@ -3,7 +3,7 @@
 //! This binary is used by xtask to benchmark the Rust parser implementation.
 
 use std::env;
-use tree_sitter_perl::{language, parse};
+use tree_sitter_perl::parse;
 
 fn main() {
     let test_code = env::var("TEST_CODE").expect("TEST_CODE environment variable not set");

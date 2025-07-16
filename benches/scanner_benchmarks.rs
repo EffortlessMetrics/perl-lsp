@@ -3,7 +3,7 @@
 //! This module contains benchmarks to compare the performance of
 //! the Rust-native scanner against the C scanner implementation.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tree_sitter_perl::parse;
 
 fn bench_rust_scanner_basic(c: &mut Criterion) {
