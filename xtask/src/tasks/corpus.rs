@@ -118,6 +118,14 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     Ok(test_cases)
 }
 
+fn normalize_sexp(s: &str) -> String {
+    s.lines()
+        .map(|line| line.trim_end())
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Run a single corpus test case
 fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
     // Parse the source code using tree-sitter-perl
@@ -139,8 +147,8 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
         }
     };
     
-    let actual = tree.root_node().to_sexp();
-    let expected = test_case.expected.trim();
+    let actual = normalize_sexp(&tree.root_node().to_sexp());
+    let expected = normalize_sexp(test_case.expected.trim());
     
     if actual == expected {
         Ok(true)
