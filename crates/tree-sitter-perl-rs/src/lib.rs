@@ -46,7 +46,7 @@ pub fn language() -> Language {
 pub fn parser() -> Parser {
     let mut parser = Parser::new();
     parser
-        .set_language(language())
+        .set_language(&language())
         .expect("Failed to set language");
     parser
 }

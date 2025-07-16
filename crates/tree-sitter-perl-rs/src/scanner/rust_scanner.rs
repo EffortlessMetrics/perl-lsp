@@ -155,12 +155,30 @@ impl RustScanner {
                     }
                     self.advance();
                 }
-                '/' | 'm' | 's' | 'y' | "tr" => {
+                '/' | 'm' | 's' | 'y' => {
                     // Check for closing delimiter
                     if !in_char_class && !escaped {
                         // Look ahead to see if this is the closing delimiter
                         let next_ch = self.peek_next_char()?;
                         if next_ch == delimiter {
+                            self.advance(); // consume the delimiter
+                            self.state.in_regex = false;
+                            return Ok(TokenType::Regex);
+                        }
+                    }
+                    self.advance();
+                }
+                't' => {
+                    // Check for 'tr' transliteration
+                    if !in_char_class && !escaped {
+                        let next_ch = self.peek_next_char()?;
+                        if next_ch == 'r' {
+                            // This is a transliteration operator, not a regex
+                            self.advance(); // consume 't'
+                            self.advance(); // consume 'r'
+                            // Continue scanning for the transliteration pattern
+                        } else if next_ch == delimiter {
+                            // This is a regex with 't' as delimiter
                             self.advance(); // consume the delimiter
                             self.state.in_regex = false;
                             return Ok(TokenType::Regex);
