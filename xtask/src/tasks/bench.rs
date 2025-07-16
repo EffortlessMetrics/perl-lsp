@@ -8,10 +8,9 @@ use duct::cmd;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::{
     collections::HashMap,
-    path::PathBuf,
     time::{Duration, Instant},
 };
-use serde_json::{json, Value};
+use serde_json::json;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BenchmarkResult {
