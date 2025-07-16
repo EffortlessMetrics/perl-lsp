@@ -15,6 +15,7 @@
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -122,7 +123,7 @@ pub fn run_scanner_comparison(output_dir: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn get_corpus_files() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+fn get_corpus_files() -> Result<Vec<String>> {
     let corpus_dir = PathBuf::from("tree-sitter-perl/test/corpus");
     if !corpus_dir.exists() {
         return Err("Corpus directory not found".into());
@@ -145,7 +146,7 @@ fn test_implementation(
     test_cases: &[String],
     iterations: usize,
     spinner: &ProgressBar,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> Result<serde_json::Value> {
     let mut results = json!({
         "implementation": impl_type,
         "test_cases": {},
@@ -187,7 +188,7 @@ fn run_single_test(
     impl_type: &str,
     test_case: &str,
     iterations: usize,
-) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error>> {
+) -> Result<Option<serde_json::Value>> {
     let test_content = std::fs::read_to_string(test_case)?;
     
     let mut times = Vec::new();
@@ -245,7 +246,7 @@ fn run_single_test(
     })))
 }
 
-fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn test_c_implementation(content: &str) -> Result<()> {
     // Change to C implementation directory
     let c_dir = PathBuf::from("tree-sitter-perl");
     
@@ -257,7 +258,7 @@ fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>
     let output = Command::new("cargo")
         .current_dir(&c_dir)
         .args(["test", "--lib", "--", "--nocapture"])
-        .stdin(Stdio::from_file(std::fs::File::open(&temp_file)?))
+        .stdin(Stdio::piped())
         .output()?;
 
     // Clean up
@@ -271,7 +272,7 @@ fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn test_rust_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn test_rust_implementation(content: &str) -> Result<()> {
     // Change to Rust implementation directory
     let rust_dir = PathBuf::from("crates/tree-sitter-perl-rs");
     
@@ -283,7 +284,7 @@ fn test_rust_implementation(content: &str) -> Result<(), Box<dyn std::error::Err
     let output = Command::new("cargo")
         .current_dir(&rust_dir)
         .args(["test", "--lib", "--", "--nocapture"])
-        .stdin(Stdio::from_file(std::fs::File::open(&temp_file)?))
+        .stdin(Stdio::piped())
         .output()?;
 
     // Clean up
@@ -301,7 +302,7 @@ fn generate_comparison_report(
     c_results: &serde_json::Value,
     rust_results: &serde_json::Value,
     test_cases: &[String],
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> Result<serde_json::Value> {
     let mut report = json!({
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "test_cases": test_cases,
@@ -339,7 +340,7 @@ fn generate_comparison_report(
     Ok(report)
 }
 
-fn generate_markdown_report(report: &serde_json::Value) -> Result<String, Box<dyn std::error::Error>> {
+fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     let timestamp = report["timestamp"].as_str().unwrap_or("Unknown");
     let comparison = &report["comparison"];
     let c_results = &report["implementations"]["c"];
@@ -423,90 +424,37 @@ fn print_summary(report: &serde_json::Value) {
         rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32);
 }
 
-fn run_rust_benchmarks(output_path: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
-    // Run Rust benchmarks using criterion
-    let status = cmd!("cargo", "bench")
-        .run()
-        .context("Failed to run Rust benchmarks")?;
-
-    if !status.status.success() {
-        return Err(color_eyre::eyre::eyre!("Rust benchmarks failed"));
+fn validate_existing_results(
+    output_dir: &PathBuf,
+    check_gates: bool,
+    spinner: &ProgressBar,
+) -> Result<()> {
+    let comparison_results = output_dir.join("comparison_results.json");
+    
+    if !comparison_results.exists() {
+        return Err(color_eyre::eyre::eyre!("Comparison results not found"));
     }
 
-    // TODO: Extract criterion results and save to output_path
-    // For now, create a placeholder result file
-    let placeholder_results = serde_json::json!({
-        "metadata": {
-            "implementation": "rust",
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "version": env!("CARGO_PKG_VERSION")
-        },
-        "tests": {
-            "simple_variable": {
-                "mean_duration_ns": 123456,
-                "std_dev_ns": 1234,
-                "iterations": 100
-            },
-            "function_call": {
-                "mean_duration_ns": 234567,
-                "std_dev_ns": 2345,
-                "iterations": 100
-            }
-        }
-    });
+    spinner.set_message("Validating existing results...");
 
-    fs::write(
-        output_path,
-        serde_json::to_string_pretty(&placeholder_results)?,
-    )
-    .context("Failed to save Rust benchmark results")?;
+    // Load and validate results
+    let comparison_data: serde_json::Value = serde_json::from_str(&fs::read_to_string(&comparison_results)?)?;
+
+    // Basic validation
+    if !comparison_data.get("implementations").is_some() {
+        return Err(color_eyre::eyre::eyre!("Invalid comparison results format"));
+    }
+
+    spinner.set_message("✅ Results validation passed");
+
+    if check_gates {
+        check_performance_gates(&comparison_data, spinner)?;
+    }
 
     Ok(())
 }
 
-fn run_c_benchmarks(output_path: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
-    // Check if C implementation exists
-    if !PathBuf::from("src/parser.c").exists() {
-        return Err(color_eyre::eyre::eyre!(
-            "C implementation not found. Please ensure the C implementation is available."
-        ));
-    }
 
-    // TODO: Implement C benchmark running
-    // This would typically involve:
-    // 1. Building the C implementation
-    // 2. Running Node.js benchmarks against it
-    // 3. Collecting and saving results
-
-    // For now, create a placeholder result file
-    let placeholder_results = serde_json::json!({
-        "metadata": {
-            "implementation": "c",
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "version": "legacy"
-        },
-        "tests": {
-            "simple_variable": {
-                "mean_duration_ns": 100000,
-                "std_dev_ns": 1000,
-                "iterations": 100
-            },
-            "function_call": {
-                "mean_duration_ns": 200000,
-                "std_dev_ns": 2000,
-                "iterations": 100
-            }
-        }
-    });
-
-    fs::write(
-        output_path,
-        serde_json::to_string_pretty(&placeholder_results)?,
-    )
-    .context("Failed to save C benchmark results")?;
-
-    Ok(())
-}
 
 fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     let output = Command::new("cargo")
@@ -758,19 +706,15 @@ fn validate_results(
     spinner.finish_with_message("✅ All results validated");
 
     if check_gates {
-        check_performance_gates(comparison_results, spinner)?;
+        check_performance_gates(&comparison_data, spinner)?;
     }
 
     Ok(())
 }
 
-fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) -> Result<()> {
-    // Read comparison results
-    let content =
-        fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
-
-    let comparison: serde_json::Value =
-        serde_json::from_str(&content).context("Failed to parse comparison results")?;
+fn check_performance_gates(comparison_results: &serde_json::Value, spinner: &ProgressBar) -> Result<()> {
+    // comparison_results is already a serde_json::Value
+    let comparison = comparison_results;
 
     // Extract test results
     let tests = comparison
@@ -814,107 +758,9 @@ fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) 
     Ok(())
 }
 
-fn generate_detailed_report(
-    comparison_results: &std::path::Path,
-    output_dir: &std::path::Path,
-    spinner: &ProgressBar,
-) -> Result<()> {
-    // Read comparison results
-    let content =
-        fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
 
-    let comparison: serde_json::Value =
-        serde_json::from_str(&content).context("Failed to parse comparison results")?;
 
-    // Generate detailed markdown report
-    let report_content = generate_markdown_report(&comparison);
-    let detailed_report_path = output_dir.join("detailed_report.md");
 
-    fs::write(&detailed_report_path, report_content).context("Failed to write detailed report")?;
-
-    spinner.finish_with_message(format!(
-        "✅ Detailed report generated: {}",
-        detailed_report_path.display()
-    ));
-
-    Ok(())
-}
-
-fn generate_markdown_report(comparison: &serde_json::Value) -> String {
-    let mut report = String::new();
-
-    report.push_str("# Tree-sitter Perl Detailed Benchmark Report\n\n");
-
-    if let Some(metadata) = comparison.get("metadata") {
-        if let Some(generated_at) = metadata.get("generated_at").and_then(|v| v.as_str()) {
-            report.push_str(&format!("**Generated**: {}\n\n", generated_at));
-        }
-
-        if let Some(total_tests) = metadata.get("total_tests").and_then(|v| v.as_number()) {
-            report.push_str(&format!("**Total Tests**: {}\n", total_tests));
-        }
-
-        if let Some(regressions) = metadata
-            .get("tests_with_regression")
-            .and_then(|v| v.as_number())
-        {
-            report.push_str(&format!("**Regressions**: {}\n", regressions));
-        }
-
-        if let Some(improvements) = metadata
-            .get("tests_with_improvement")
-            .and_then(|v| v.as_number())
-        {
-            report.push_str(&format!("**Improvements**: {}\n", improvements));
-        }
-    }
-
-    report.push_str("\n## Test Results\n\n");
-    report.push_str("| Test | C (ms) | Rust (ms) | Difference | Status |\n");
-    report.push_str("|------|--------|-----------|------------|---------|\n");
-
-    if let Some(tests) = comparison.get("tests").and_then(|t| t.as_array()) {
-        for test in tests {
-            if let (Some(name), Some(c_impl), Some(rust_impl), Some(comparison_data)) = (
-                test.get("name").and_then(|n| n.as_str()),
-                test.get("c_implementation"),
-                test.get("rust_implementation"),
-                test.get("comparison"),
-            ) {
-                let c_time = c_impl
-                    .get("duration_ms")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let rust_time = rust_impl
-                    .get("duration_ms")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let diff_percent = comparison_data
-                    .get("time_difference_percent")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let status = comparison_data
-                    .get("status")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("unknown");
-
-                let status_emoji = match status {
-                    "regression" => "🔴",
-                    "improvement" => "🟢",
-                    "within_tolerance" => "🟡",
-                    _ => "⚪",
-                };
-
-                report.push_str(&format!(
-                    "| {} | {:.3} | {:.3} | {:+.2}% | {} {} |\n",
-                    name, c_time, rust_time, diff_percent, status_emoji, status
-                ));
-            }
-        }
-    }
-
-    report
-}
 
 fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Result<()> {
     println!("\n📊 Benchmark Summary");
