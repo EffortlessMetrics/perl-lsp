@@ -1,6 +1,6 @@
 # Tree-sitter Perl Implementation Comparison
 
-**Generated:** 2025-07-16T21:50:31.833348667+00:00
+**Generated:** 2025-07-16T22:37:10.092379685+00:00
 
 ## Summary
 
