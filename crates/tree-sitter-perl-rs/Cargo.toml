@@ -43,6 +43,18 @@ path = "../../benches/scanner_benchmarks.rs"
 harness = false
 
 [[bench]]
+name = "scanner_benchmarks_rust"
+path = "../../benches/scanner_benchmarks.rs"
+harness = false
+required-features = ["rust-scanner"]
+
+[[bench]]
+name = "scanner_benchmarks_c"
+path = "../../benches/scanner_benchmarks.rs"
+harness = false
+required-features = ["c-scanner"]
+
+[[bench]]
 name = "parser_benchmarks"
 path = "../../benches/parser_benchmarks.rs"
 harness = false
