@@ -606,6 +606,12 @@ impl TokenType {
             TokenType::RightAngle => ">",
             TokenType::Eof => "eof",
             TokenType::Unknown => "unknown",
+            
+            // Compatibility aliases for test suite
+            TokenType::StringLiteral => "string_literal",
+            TokenType::NumberLiteral => "number_literal",
+            TokenType::Operator => "operator",
+            TokenType::Keyword => "keyword",
         }
     }
 }

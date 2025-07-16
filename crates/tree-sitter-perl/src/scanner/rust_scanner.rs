@@ -775,10 +775,6 @@ impl RustScanner {
                 self.advance();
                 Ok(TokenType::RightBrace)
             }
-            '=' => {
-                self.advance();
-                Ok(TokenType::Assign)
-            }
             '$' => {
                 self.scan_variable()
             }
@@ -793,9 +789,6 @@ impl RustScanner {
             }
             '`' => {
                 self.scan_string('`')
-            }
-            '/' => {
-                self.scan_regex()
             }
             '0'..='9' => {
                 self.scan_number()
