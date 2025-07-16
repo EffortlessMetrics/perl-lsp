@@ -4,8 +4,7 @@
 //! the Rust-native scanner against the C scanner implementation.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use tree_sitter::Parser;
-use tree_sitter_perl::{language, parse};
+use tree_sitter_perl::parse;
 
 fn bench_rust_scanner_basic(c: &mut Criterion) {
     let test_cases = vec![

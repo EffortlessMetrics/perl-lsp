@@ -37,6 +37,16 @@ name = "bench_parser"
 path = "src/bin/bench_parser.rs"
 required-features = ["test-utils"]
 
+[[bench]]
+name = "scanner_benchmarks"
+path = "../../benches/scanner_benchmarks.rs"
+harness = false
+
+[[bench]]
+name = "parser_benchmarks"
+path = "../../benches/parser_benchmarks.rs"
+harness = false
+
 [build-dependencies]
 cc = "1.0"
 bindgen = "0.69" 

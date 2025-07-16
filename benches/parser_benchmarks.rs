@@ -11,7 +11,7 @@ fn bench_parser_creation(c: &mut Criterion) {
     c.bench_function("parser_creation", |b| {
         b.iter(|| {
             let mut parser = Parser::new();
-            parser.set_language(language()).unwrap();
+            parser.set_language(&language()).unwrap();
             black_box(parser);
         });
     });
@@ -91,7 +91,7 @@ sub baz {
 
 fn bench_incremental_parsing(c: &mut Criterion) {
     let mut parser = Parser::new();
-    parser.set_language(language()).unwrap();
+    parser.set_language(&language()).unwrap();
 
     let initial_code = "my $var = 42;";
     let tree = parser.parse(initial_code, None).unwrap();
