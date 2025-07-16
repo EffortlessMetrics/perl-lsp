@@ -3,72 +3,44 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Result type for parsing operations
-pub type ParseResult<T> = Result<T, ParseError>;
-
-/// Errors that can occur during parsing
-#[derive(Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Error types for tree-sitter Perl parser
+#[derive(Error, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ParseError {
-    /// Parsing failed for an unknown reason
-    #[error("Parsing failed")]
+    /// Failed to parse the input
+    #[error("Failed to parse input")]
     ParseFailed,
-
-    /// Invalid UTF-8 sequence encountered
-    #[error("Invalid UTF-8: {0}")]
-    InvalidUtf8(String),
-
-    /// Scanner error occurred
-    #[error("Scanner error: {0}")]
-    ScannerError(String),
-
+    
+    /// Failed to serialize scanner state
+    #[error("Failed to serialize scanner state")]
+    SerializationFailed,
+    
+    /// Failed to deserialize scanner state
+    #[error("Failed to deserialize scanner state")]
+    DeserializationFailed,
+    
     /// Invalid token encountered
     #[error("Invalid token: {0}")]
     InvalidToken(String),
-
-    /// Unexpected end of file
-    #[error("Unexpected end of file")]
+    
+    /// Unexpected end of input
+    #[error("Unexpected end of input")]
     UnexpectedEof,
-
-    /// Unterminated string literal
-    #[error("Unterminated string literal")]
-    UnterminatedString,
-
-    /// Unterminated regex pattern
-    #[error("Unterminated regex pattern")]
-    UnterminatedRegex,
-
-    /// Unterminated heredoc
-    #[error("Unterminated heredoc")]
-    UnterminatedHeredoc,
-
-    /// Invalid escape sequence
-    #[error("Invalid escape sequence: {0}")]
-    InvalidEscape(String),
-
+    
     /// Invalid Unicode sequence
-    #[error("Invalid Unicode sequence: {0}")]
-    InvalidUnicode(String),
-
-    /// Invalid number literal
-    #[error("Invalid number literal: {0}")]
-    InvalidNumber(String),
-
-    /// Invalid identifier
-    #[error("Invalid identifier: {0}")]
-    InvalidIdentifier(String),
-
-    /// Invalid scanner state
-    #[error("Invalid scanner state: {0}")]
-    InvalidState(String),
-
-    /// I/O error
-    #[error("I/O error: {0}")]
-    IoError(String),
-
-    /// Other error
-    #[error("Other error: {0}")]
-    Other(String),
+    #[error("Invalid Unicode sequence")]
+    InvalidUnicode,
+    
+    /// Invalid UTF-8 sequence encountered
+    #[error("Invalid UTF-8: {0}")]
+    InvalidUtf8(String),
+    
+    /// Scanner error occurred
+    #[error("Scanner error: {0}")]
+    ScannerError(String),
 }
+
+/// Result type for parsing operations
+pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Errors that can occur during scanning
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -132,26 +104,38 @@ impl From<std::str::Utf8Error> for ParseError {
     }
 }
 
+impl From<std::string::FromUtf8Error> for ParseError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        ParseError::InvalidUtf8(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for ParseError {
+    fn from(err: std::io::Error) -> Self {
+        ParseError::ScannerError(format!("I/O error: {}", err))
+    }
+}
+
 impl ParseError {
-    /// Create an unterminated string error
+    /// Create an error for unterminated string literals
     pub fn unterminated_string(position: (usize, usize)) -> Self {
         ParseError::ScannerError(format!(
-            "Unterminated string at line {}, column {}",
+            "Unterminated string literal at line {}, column {}",
             position.0, position.1
         ))
     }
 
-    /// Create an invalid token error
+    /// Create an error for invalid tokens
     pub fn invalid_token(token: String, position: (usize, usize)) -> Self {
-        ParseError::ScannerError(format!(
+        ParseError::InvalidToken(format!(
             "Invalid token '{}' at line {}, column {}",
             token, position.0, position.1
         ))
     }
 
-    /// Create a Unicode error
+    /// Create an error for Unicode-related issues
     pub fn unicode_error(message: &str) -> Self {
-        ParseError::ScannerError(format!("Unicode error: {}", message))
+        ParseError::InvalidUnicode
     }
 
     /// Create a simple scanner error
