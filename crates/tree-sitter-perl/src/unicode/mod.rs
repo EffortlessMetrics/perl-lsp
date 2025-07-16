@@ -41,6 +41,11 @@ impl UnicodeUtils {
         Ok(normalized)
     }
 
+    /// Normalize an identifier using NFC normalization
+    pub fn normalize_identifier(input: &str) -> String {
+        input.nfc().collect::<String>()
+    }
+
     /// Check if a character is a valid Perl identifier start
     pub fn is_identifier_start(ch: char) -> bool {
         is_xid_start(ch) || ch == '_'
@@ -59,6 +64,17 @@ impl UnicodeUtils {
                 .ok_or_else(|| ParseError::unicode_error("Invalid surrogate pair"))
         } else {
             Err(ParseError::unicode_error("Invalid surrogate pair"))
+        }
+    }
+
+    /// Check if a string is a valid Perl identifier
+    pub fn is_valid_identifier(input: &str) -> bool {
+        let mut chars = input.chars();
+        match chars.next() {
+            Some(first) if Self::is_identifier_start(first) => {
+                chars.all(Self::is_identifier_continue)
+            }
+            _ => false,
         }
     }
 

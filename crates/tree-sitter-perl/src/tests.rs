@@ -169,6 +169,7 @@ mod integration_tests {
 #[cfg(test)]
 mod scanner_tests {
     use crate::scanner::{RustScanner, ScannerConfig, TokenType};
+    use crate::scanner::PerlScanner;
 
     #[test]
     fn test_rust_scanner_creation() {

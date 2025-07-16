@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod unit_scanner {
     use crate::scanner::{RustScanner, ScannerConfig, ScannerState, TokenType};
+    use crate::scanner::PerlScanner;
 
     #[test]
     fn test_scanner_initialization() {

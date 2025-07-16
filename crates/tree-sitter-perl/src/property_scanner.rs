@@ -2,6 +2,7 @@
 mod property_scanner {
     use proptest::prelude::*;
     use crate::scanner::{RustScanner, ScannerConfig, TokenType};
+    use crate::scanner::PerlScanner;
     use crate::unicode::UnicodeUtils;
 
     proptest! {
