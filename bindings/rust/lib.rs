@@ -70,6 +70,8 @@ mod unit_scanner;
 mod property_scanner;
 #[cfg(test)]
 mod performance;
+#[cfg(test)]
+mod real_world_corpus;
 
 #[cfg(test)]
 mod comprehensive_tests {

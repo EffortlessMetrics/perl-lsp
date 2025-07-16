@@ -104,6 +104,50 @@ pub fn compare_sexp(tree: &Tree, expected_sexp: &str) -> Result<(), String> {
     }
 }
 
+/// Enhanced S-expression comparison with unified diff output
+pub fn compare_sexp_with_diff(tree: &Tree, expected_sexp: &str) -> Result<(), String> {
+    let actual_sexp = tree_to_sexp(tree);
+    
+    if actual_sexp.trim() == expected_sexp.trim() {
+        Ok(())
+    } else {
+        // Generate a unified diff for better debugging
+        let diff = generate_unified_diff(&expected_sexp, &actual_sexp, "expected", "actual");
+        Err(format!("S-expression mismatch:\n{}", diff))
+    }
+}
+
+/// Generate a unified diff between two strings
+fn generate_unified_diff(expected: &str, actual: &str, expected_label: &str, actual_label: &str) -> String {
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let actual_lines: Vec<&str> = actual.lines().collect();
+    
+    let mut diff = String::new();
+    diff.push_str(&format!("--- {}\n", expected_label));
+    diff.push_str(&format!("+++ {}\n", actual_label));
+    
+    // Simple line-by-line diff
+    let max_lines = std::cmp::max(expected_lines.len(), actual_lines.len());
+    
+    for i in 0..max_lines {
+        let expected_line = expected_lines.get(i).unwrap_or(&"");
+        let actual_line = actual_lines.get(i).unwrap_or(&"");
+        
+        if expected_line == actual_line {
+            diff.push_str(&format!(" {}\n", expected_line));
+        } else {
+            if !expected_line.is_empty() {
+                diff.push_str(&format!("-{}\n", expected_line));
+            }
+            if !actual_line.is_empty() {
+                diff.push_str(&format!("+{}\n", actual_line));
+            }
+        }
+    }
+    
+    diff
+}
+
 /// Parse corpus file and extract test cases with expected output
 pub fn parse_corpus_test_cases(file_path: &Path) -> Result<Vec<CorpusTestCase>, String> {
     let content = std::fs::read_to_string(file_path)
@@ -207,7 +251,7 @@ pub fn test_corpus_file_with_sexp(file_path: &Path) -> Result<(), String> {
                 if tree.root_node().kind() == "ERROR" {
                     failures.push(format!("Test '{}': Parse failed", test_case.name));
                 } else if !test_case.expected_sexp.trim().is_empty() {
-                    match compare_sexp(&tree, &test_case.expected_sexp) {
+                    match compare_sexp_with_diff(&tree, &test_case.expected_sexp) {
                         Ok(()) => (), // Success
                         Err(e) => failures.push(format!("Test '{}': {}", test_case.name, e)),
                     }
@@ -261,6 +305,68 @@ pub fn test_round_trip(code: &str) -> Result<(), String> {
     validate_tree_no_errors(&tree1)?;
     
     Ok(())
+}
+
+/// Error node snapshot for validation
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorSnapshot {
+    pub count: usize,
+    pub positions: Vec<(usize, usize)>, // (row, column)
+    pub kinds: Vec<String>,
+}
+
+/// Capture error node snapshot from a tree
+pub fn capture_error_snapshot(tree: &Tree) -> ErrorSnapshot {
+    let mut errors = Vec::new();
+    collect_errors_detailed(&tree.root_node(), &mut errors);
+    
+    ErrorSnapshot {
+        count: errors.len(),
+        positions: errors.iter().map(|e| e.position).collect(),
+        kinds: errors.iter().map(|e| e.kind.clone()).collect(),
+    }
+}
+
+/// Detailed error information
+#[derive(Debug)]
+struct DetailedError {
+    position: (usize, usize),
+    kind: String,
+    message: String,
+}
+
+/// Collect detailed error information from a tree
+fn collect_errors_detailed(node: &Node, errors: &mut Vec<DetailedError>) {
+    if node.kind() == "ERROR" {
+        let start = node.start_position();
+        let end = node.end_position();
+        errors.push(DetailedError {
+            position: (start.row as usize, start.column as usize),
+            kind: node.kind().to_string(),
+            message: format!("ERROR at {}:{} to {}:{}", 
+                           start.row, start.column, end.row, end.column),
+        });
+    }
+    
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            collect_errors_detailed(&child, errors);
+        }
+    }
+}
+
+/// Validate error snapshot against expected
+pub fn validate_error_snapshot(tree: &Tree, expected: &ErrorSnapshot) -> Result<(), String> {
+    let actual = capture_error_snapshot(tree);
+    
+    if actual == *expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "Error snapshot mismatch:\nExpected: {:?}\nActual:   {:?}",
+            expected, actual
+        ))
+    }
 }
 
 #[cfg(test)]
