@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::scanner::PerlScanner;
-    use crate::{language, parse, parser};
+
+    use crate::{language, parse};
     use tree_sitter::Parser;
 
     #[test]
@@ -18,7 +18,7 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
-        let test_cases = vec![
+        let test_cases = [
             "my $var = 42;",
             "print 'Hello, World!';",
             "sub foo { return 1; }",
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_variable_declarations() {
-        let test_cases = vec![
+        let test_cases = [
             "my $scalar = 42;",
             "my @array = (1, 2, 3);",
             "my %hash = (key => 'value');",
@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_function_calls() {
-        let test_cases = vec![
+        let test_cases = [
             "print 'Hello';",
             "say 'World';",
             "die 'Error message';",
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_control_structures() {
-        let test_cases = vec![
+        let test_cases = [
             "if ($condition) { $action = 1; }",
             "unless ($condition) { $action = 0; }",
             "while ($condition) { $action++; }",
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_string_literals() {
-        let test_cases = vec![
+        let test_cases = [
             "my $str1 = 'Single quoted';",
             "my $str2 = \"Double quoted\";",
             "my $str3 = qq{Interpolated};",
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_comments() {
-        let test_cases = vec![
+        let test_cases = [
             "# This is a comment\nmy $var = 1;",
             "my $var = 1; # Inline comment",
             "=pod\nThis is POD\n=cut\nmy $var = 1;",
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_unicode_support() {
-        let test_cases = vec![
+        let test_cases = [
             "my $変数 = '値';",
             "my $über = 'cool';",
             "my $naïve = 'simple';",
@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn test_error_handling() {
         // These should parse but may contain error nodes
-        let error_cases = vec![
+        let error_cases = [
             "my $str = \"Unterminated string;",
             "if ($condition { $action = 1; }",
             "my $var = 1 +;",
@@ -158,7 +158,7 @@ mod tests {
             .set_language(&language())
             .expect("Failed to set language");
 
-        let test_cases = vec!["my $var1 = 1;", "my $var2 = 2;", "my $var3 = 3;"];
+        let test_cases = ["my $var1 = 1;", "my $var2 = 2;", "my $var3 = 3;"];
 
         for (i, code) in test_cases.iter().enumerate() {
             let tree = parser.parse(code, None);
@@ -230,7 +230,7 @@ mod scanner_tests {
 
 #[cfg(test)]
 mod unicode_tests {
-    use crate::scanner::PerlScanner;
+
     use crate::unicode::UnicodeUtils;
 
     #[test]
@@ -403,7 +403,7 @@ mod performance_tests {
 #[cfg(test)]
 mod corpus_tests {
     use crate::parse;
-    use crate::scanner::PerlScanner;
+
     use std::fs;
     use std::path::PathBuf;
     use walkdir::WalkDir;
@@ -655,7 +655,7 @@ mod corpus_tests {
 #[cfg(test)]
 mod highlight_tests {
     use crate::parse;
-    use crate::scanner::PerlScanner;
+
     use std::fs;
     use std::path::PathBuf;
 

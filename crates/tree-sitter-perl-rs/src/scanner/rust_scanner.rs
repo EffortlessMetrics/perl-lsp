@@ -312,7 +312,7 @@ impl RustScanner {
             } else if ch == '\\' {
                 self.advance();
                 // Skip the escaped character
-                if let Some(_) = self.lookahead {
+                if self.lookahead.is_some() {
                     self.advance();
                 }
             } else {
@@ -884,7 +884,7 @@ impl PerlScanner for RustScanner {
                     // POD or assignment
                     if self
                         .peek_next_char()
-                        .map_or(false, |next| next.is_ascii_alphabetic())
+                        .is_ok_and(|next| next.is_ascii_alphabetic())
                     {
                         self.scan_pod()?
                     } else {
@@ -893,7 +893,7 @@ impl PerlScanner for RustScanner {
                 }
                 '<' => {
                     // Heredoc or comparison
-                    if self.peek_next_char().map_or(false, |next| next == '<') {
+                    if self.peek_next_char() == Ok('<') {
                         self.scan_heredoc()?
                     } else {
                         self.scan_operator()?

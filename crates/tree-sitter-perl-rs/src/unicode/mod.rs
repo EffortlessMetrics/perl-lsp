@@ -58,7 +58,7 @@ impl UnicodeUtils {
 
     /// Validate Unicode surrogate pairs
     pub fn validate_surrogate_pair(high: u16, low: u16) -> ParseResult<char> {
-        if high >= 0xD800 && high <= 0xDBFF && low >= 0xDC00 && low <= 0xDFFF {
+        if (0xD800..=0xDBFF).contains(&high) && (0xDC00..=0xDFFF).contains(&low) {
             let code_point = ((high as u32 - 0xD800) << 10) + (low as u32 - 0xDC00) + 0x10000;
             char::from_u32(code_point)
                 .ok_or_else(|| ParseError::unicode_error("Invalid surrogate pair"))
