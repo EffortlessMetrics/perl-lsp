@@ -1,7 +1,7 @@
 [package]
 name = "tree-sitter-perl"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 description = "Tree-sitter Perl grammar with Rust-native scanner"
 license = "MIT"
 repository = "https://github.com/tree-sitter/tree-sitter-perl"
