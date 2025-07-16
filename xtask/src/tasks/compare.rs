@@ -57,12 +57,12 @@ pub fn run(
     let mut c_results = None;
     let mut rust_results = None;
 
-    if !c_only {
+    if c_only || (!c_only && !rust_only) {
         spinner.set_message("Testing C implementation...");
         c_results = Some(test_implementation("c", &test_cases, 100, &spinner)?);
     }
 
-    if !rust_only {
+    if rust_only || (!c_only && !rust_only) {
         spinner.set_message("Testing Rust implementation...");
         rust_results = Some(test_implementation("rust", &test_cases, 100, &spinner)?);
     }
@@ -239,7 +239,7 @@ fn run_single_test(
 }
 
 fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
-    let output = std::process::Command::new("target/debug/bench_parser_c")
+    let output = std::process::Command::new("./target/debug/bench_parser_c")
         .arg(file_path)
         .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -261,11 +261,12 @@ fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
     if !output.status.success() {
         return Err(color_eyre::eyre::eyre!("C implementation failed: {}", stdout));
     }
+    // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
 }
 
 fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
-    let output = std::process::Command::new("target/debug/bench_parser")
+    let output = std::process::Command::new("./target/debug/bench_parser")
         .arg(file_path)
         .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -287,6 +288,7 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
     if !output.status.success() {
         return Err(color_eyre::eyre::eyre!("Rust implementation failed: {}", stdout));
     }
+    // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
 }
 
