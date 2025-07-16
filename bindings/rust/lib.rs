@@ -62,6 +62,14 @@ mod simple_test;
 mod integration_corpus;
 #[cfg(test)]
 mod integration_highlight;
+#[cfg(test)]
+mod unit_unicode;
+#[cfg(test)]
+mod unit_scanner;
+#[cfg(test)]
+mod property_scanner;
+#[cfg(test)]
+mod performance;
 
 #[cfg(test)]
 mod comprehensive_tests {
