@@ -156,30 +156,54 @@ fn test_implementation(
 
     let mut total_time = 0.0;
     let mut total_memory = 0.0;
-    let mut success_count = 0;
+    let mut parse_success_count = 0;
+    let mut parse_error_count = 0;
 
     for (i, test_case) in test_cases.iter().enumerate() {
         spinner.set_message(format!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case));
 
         let test_result = run_single_test(impl_type, test_case, iterations)?;
-        
-        if let Some(result) = &test_result {
+
+        // Always record a result for every test case
+        let result_to_record = if let Some(result) = &test_result {
             total_time += result["avg_time"].as_f64().unwrap_or(0.0);
             total_memory += result["avg_memory"].as_f64().unwrap_or(0.0);
-            success_count += 1;
-        }
+            if result["parse_success"].as_bool().unwrap_or(false) {
+                parse_success_count += 1;
+            }
+            if result["parse_error"].as_bool().unwrap_or(false) {
+                parse_error_count += 1;
+            }
+            result.clone()
+        } else {
+            // If run_single_test returned None, create a default error result
+            parse_error_count += 1;
+            json!({
+                "iterations": iterations,
+                "successful_iterations": 0,
+                "avg_time": 0.0,
+                "min_time": 0.0,
+                "max_time": 0.0,
+                "median_time": 0.0,
+                "avg_memory": 0.0,
+                "file_size": 0,
+                "parse_success": false,
+                "parse_error": true
+            })
+        };
 
-        results["test_cases"][test_case] = test_result.unwrap_or(json!(null));
+        results["test_cases"][test_case] = result_to_record;
     }
 
     // Calculate summary statistics
     results["summary"] = json!({
         "total_test_cases": test_cases.len(),
-        "successful_tests": success_count,
+        "parse_success_count": parse_success_count,
+        "parse_error_count": parse_error_count,
         "total_time": total_time,
         "total_memory": total_memory,
-        "avg_time_per_test": if success_count > 0 { total_time / success_count as f64 } else { 0.0 },
-        "avg_memory_per_test": if success_count > 0 { total_memory / success_count as f64 } else { 0.0 }
+        "avg_time_per_test": if test_cases.len() > 0 { total_time / test_cases.len() as f64 } else { 0.0 },
+        "avg_memory_per_test": if test_cases.len() > 0 { total_memory / test_cases.len() as f64 } else { 0.0 }
     });
 
     Ok(results)
@@ -258,6 +282,8 @@ fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
             }
         }
     }
+    // Only return an error if the binary itself failed (non-zero exit code)
+    // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
         return Err(color_eyre::eyre::eyre!("C implementation failed: {}", stdout));
     }
@@ -285,6 +311,8 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
             }
         }
     }
+    // Only return an error if the binary itself failed (non-zero exit code)
+    // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
         return Err(color_eyre::eyre::eyre!("Rust implementation failed: {}", stdout));
     }
@@ -325,8 +353,8 @@ fn generate_comparison_report(
         "rust_faster": time_diff < 0.0,
         "performance_ratio": if c_avg_time > 0.0 { rust_avg_time / c_avg_time } else { 1.0 },
         "success_rate": {
-            "c": c_summary["successful_tests"].as_u64().unwrap_or(0),
-            "rust": rust_summary["successful_tests"].as_u64().unwrap_or(0),
+            "c": c_summary["parse_success_count"].as_u64().unwrap_or(0),
+            "rust": rust_summary["parse_success_count"].as_u64().unwrap_or(0),
             "total": test_cases.len()
         }
     });
