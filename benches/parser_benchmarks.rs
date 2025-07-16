@@ -3,7 +3,7 @@
 //! This module contains benchmarks to measure the overall parsing
 //! performance of the tree-sitter Perl parser.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tree_sitter::Parser;
 use tree_sitter_perl::{language, parse};
 
@@ -189,12 +189,15 @@ fn generate_large_perl_file(size: usize) -> String {
         code.push_str(&format!("my $var{} = {};\n", i, i));
     }
 
-    code.push_str("\n");
+    code.push('\n');
 
     // Add functions
     for i in 0..(size / 10) {
         code.push_str(&format!("sub func{} {{\n", i));
-        code.push_str(&format!("    my ($param) = @_;\n"));
+        code.push_str(
+            "    my ($param) = @_;
+",
+        );
         code.push_str(&format!("    return $param + {};\n", i));
         code.push_str("}\n\n");
     }
@@ -204,7 +207,7 @@ fn generate_large_perl_file(size: usize) -> String {
     for i in 0..(size / 20) {
         code.push_str(&format!("    print \"Processing variable {}\";\n", i));
         code.push_str(&format!("    my $result = func{}($var{});\n", i, i));
-        code.push_str(&format!("    print \"Result: $result\";\n"));
+        code.push_str("    print \"Result: $result\";\n");
     }
     code.push_str("}\n\n");
 

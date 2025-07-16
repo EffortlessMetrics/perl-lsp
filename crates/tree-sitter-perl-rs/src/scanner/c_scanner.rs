@@ -8,6 +8,7 @@ use crate::error::{ParseError, ParseResult};
 
 /// C scanner implementation that wraps the legacy C scanner
 pub struct CScanner {
+    #[allow(dead_code)]
     config: ScannerConfig,
     state: ScannerState,
     c_scanner: *mut std::ffi::c_void, // Opaque pointer to C scanner

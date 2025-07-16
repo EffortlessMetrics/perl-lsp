@@ -311,8 +311,8 @@ fn check_performance_gates(comparison_results: &PathBuf, spinner: &ProgressBar) 
 }
 
 fn generate_detailed_report(
-    comparison_results: &PathBuf,
-    output_dir: &PathBuf,
+    comparison_results: &std::path::Path,
+    output_dir: &std::path::Path,
     spinner: &ProgressBar,
 ) -> Result<()> {
     // Read comparison results
@@ -412,7 +412,7 @@ fn generate_markdown_report(comparison: &serde_json::Value) -> String {
     report
 }
 
-fn display_summary(output_dir: &PathBuf, _spinner: &ProgressBar) -> Result<()> {
+fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Result<()> {
     println!("\n📊 Benchmark Summary");
     println!("==================");
     println!("Results saved to: {}", output_dir.display());
