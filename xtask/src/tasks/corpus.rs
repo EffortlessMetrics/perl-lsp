@@ -413,3 +413,4 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
         Ok(())
     }
 }
+ 

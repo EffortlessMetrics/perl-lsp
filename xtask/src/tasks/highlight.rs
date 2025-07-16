@@ -238,3 +238,4 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
         Ok(())
     }
 }
+ 
