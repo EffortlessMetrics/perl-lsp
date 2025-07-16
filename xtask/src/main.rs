@@ -122,7 +122,7 @@ enum Commands {
     /// Run highlight tests
     Highlight {
         /// Path to highlight tests
-        #[arg(long, default_value = "queries")]
+        #[arg(long, default_value = "test/highlight")]
         path: PathBuf,
 
         /// Run with specific scanner
