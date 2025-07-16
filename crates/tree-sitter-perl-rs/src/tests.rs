@@ -413,3 +413,317 @@ mod performance_tests {
         assert!(avg_time < 500.0, "Scanning is too slow: {:.2} μs", avg_time);
     }
 }
+
+#[cfg(test)]
+mod corpus_tests {
+    use super::*;
+    use crate::scanner::PerlScanner;
+    use std::path::PathBuf;
+    use std::fs;
+    use walkdir::WalkDir;
+
+    /// Corpus test case containing input code and expected S-expression
+    #[derive(Debug)]
+    struct CorpusTestCase {
+        name: String,
+        source: String,
+        expected: String,
+    }
+
+    /// Parse a corpus test file into individual test cases
+    fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>, Box<dyn std::error::Error>> {
+        let content = fs::read_to_string(path)?;
+        
+        let mut test_cases = Vec::new();
+        let mut current_name = String::new();
+        let mut current_source = String::new();
+        let mut current_expected = String::new();
+        let mut in_source = false;
+        let mut in_expected = false;
+        
+        for line in content.lines() {
+            if line.starts_with("================================================================================") {
+                // Save previous test case if we have one
+                if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
+                    test_cases.push(CorpusTestCase {
+                        name: current_name.clone(),
+                        source: current_source.clone(),
+                        expected: current_expected.clone(),
+                    });
+                }
+                
+                // Start new test case
+                current_name.clear();
+                current_source.clear();
+                current_expected.clear();
+                in_source = false;
+                in_expected = false;
+            } else if line.starts_with("----") {
+                // Transition from source to expected
+                in_source = false;
+                in_expected = true;
+            } else if in_source {
+                current_source.push_str(line);
+                current_source.push('\n');
+            } else if in_expected {
+                current_expected.push_str(line);
+                current_expected.push('\n');
+            } else if !line.trim().is_empty() && !line.starts_with("=") {
+                // This is the test case name
+                current_name = line.trim().to_string();
+                in_source = true;
+            }
+        }
+        
+        // Add the last test case
+        if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
+            test_cases.push(CorpusTestCase {
+                name: current_name,
+                source: current_source,
+                expected: current_expected,
+            });
+        }
+        
+        Ok(test_cases)
+    }
+
+    fn normalize_sexp(s: &str) -> String {
+        s.lines()
+            .map(|line| line.trim_end())
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Run a single corpus test case
+    fn run_corpus_test_case(test_case: &CorpusTestCase) -> Result<bool, Box<dyn std::error::Error>> {
+        // Parse the source code using tree-sitter-perl
+        let tree = parse(&test_case.source)?;
+        
+        let actual = normalize_sexp(&tree.root_node().to_sexp());
+        let expected = normalize_sexp(test_case.expected.trim());
+        
+        if actual == expected {
+            Ok(true)
+        } else {
+            println!("\n❌ Test failed: {}", test_case.name);
+            println!("Expected:");
+            println!("{}", expected);
+            println!("Actual:");
+            println!("{}", actual);
+            Ok(false)
+        }
+    }
+
+    /// Test all corpus files in the legacy test directory
+    #[test]
+    fn test_all_corpus_files() {
+        let corpus_dir = PathBuf::from("tree-sitter-perl/test/corpus");
+        if !corpus_dir.exists() {
+            println!("⚠️  Corpus directory not found, skipping corpus tests");
+            return;
+        }
+
+        let mut total_tests = 0;
+        let mut passed_tests = 0;
+        let mut failed_tests = 0;
+
+        // Walk through all corpus files
+        for entry in WalkDir::new(&corpus_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("txt") || path.extension().is_none() {
+                println!("\n📁 Testing corpus file: {}", path.display());
+                
+                match parse_corpus_file(&path.to_path_buf()) {
+                    Ok(test_cases) => {
+                        for test_case in test_cases {
+                            total_tests += 1;
+                            match run_corpus_test_case(&test_case) {
+                                Ok(true) => {
+                                    passed_tests += 1;
+                                    print!("✅");
+                                }
+                                Ok(false) => {
+                                    failed_tests += 1;
+                                    print!("❌");
+                                }
+                                Err(e) => {
+                                    failed_tests += 1;
+                                    println!("❌ Error in test '{}': {}", test_case.name, e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to parse corpus file {}: {}", path.display(), e);
+                    }
+                }
+            }
+        }
+
+        println!("\n\n📊 Corpus Test Summary:");
+        println!("   Total: {}", total_tests);
+        println!("   Passed: {} ✅", passed_tests);
+        println!("   Failed: {} ❌", failed_tests);
+        
+        if failed_tests > 0 {
+            panic!("{} corpus tests failed", failed_tests);
+        }
+    }
+
+    /// Test individual corpus files for focused debugging
+    #[test]
+    fn test_simple_corpus() {
+        let path = PathBuf::from("tree-sitter-perl/test/corpus/simple");
+        if !path.exists() {
+            println!("⚠️  Simple corpus file not found, skipping test");
+            return;
+        }
+
+        let test_cases = parse_corpus_file(&path).expect("Failed to parse simple corpus");
+        let mut passed = 0;
+        let mut failed = 0;
+
+        for test_case in test_cases {
+            match run_corpus_test_case(&test_case) {
+                Ok(true) => {
+                    passed += 1;
+                    println!("✅ {}", test_case.name);
+                }
+                Ok(false) => {
+                    failed += 1;
+                    println!("❌ {}", test_case.name);
+                }
+                Err(e) => {
+                    failed += 1;
+                    println!("❌ Error in '{}': {}", test_case.name, e);
+                }
+            }
+        }
+
+        println!("\nSimple corpus: {}/{} tests passed", passed, passed + failed);
+        if failed > 0 {
+            panic!("{} simple corpus tests failed", failed);
+        }
+    }
+
+    #[test]
+    fn test_variables_corpus() {
+        let path = PathBuf::from("tree-sitter-perl/test/corpus/variables");
+        if !path.exists() {
+            println!("⚠️  Variables corpus file not found, skipping test");
+            return;
+        }
+
+        let test_cases = parse_corpus_file(&path).expect("Failed to parse variables corpus");
+        let mut passed = 0;
+        let mut failed = 0;
+
+        for test_case in test_cases {
+            match run_corpus_test_case(&test_case) {
+                Ok(true) => {
+                    passed += 1;
+                    println!("✅ {}", test_case.name);
+                }
+                Ok(false) => {
+                    failed += 1;
+                    println!("❌ {}", test_case.name);
+                }
+                Err(e) => {
+                    failed += 1;
+                    println!("❌ Error in '{}': {}", test_case.name, e);
+                }
+            }
+        }
+
+        println!("\nVariables corpus: {}/{} tests passed", passed, passed + failed);
+        if failed > 0 {
+            panic!("{} variables corpus tests failed", failed);
+        }
+    }
+}
+
+#[cfg(test)]
+mod highlight_tests {
+    use super::*;
+    use crate::scanner::PerlScanner;
+    use std::path::PathBuf;
+    use std::fs;
+
+    /// Highlight test case containing Perl code and expected token classifications
+    #[derive(Debug)]
+    struct HighlightTestCase {
+        name: String,
+        source: String,
+        expected_tokens: Vec<String>,
+    }
+
+    /// Parse a highlight test file
+    fn parse_highlight_file(path: &PathBuf) -> Result<Vec<HighlightTestCase>, Box<dyn std::error::Error>> {
+        let content = fs::read_to_string(path)?;
+        
+        // Simple parsing for highlight test files
+        // Each file contains Perl code that should produce specific token classifications
+        let test_case = HighlightTestCase {
+            name: path.file_name().unwrap().to_string_lossy().to_string(),
+            source: content,
+            expected_tokens: Vec::new(), // TODO: Parse expected token classifications
+        };
+        
+        Ok(vec![test_case])
+    }
+
+    /// Test that highlight files can be parsed without errors
+    #[test]
+    fn test_highlight_files_parse() {
+        let highlight_dir = PathBuf::from("tree-sitter-perl/test/highlight");
+        if !highlight_dir.exists() {
+            println!("⚠️  Highlight directory not found, skipping highlight tests");
+            return;
+        }
+
+        let mut total_files = 0;
+        let mut parsed_files = 0;
+
+        for entry in fs::read_dir(&highlight_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            
+            if path.extension().and_then(|s| s.to_str()) == Some("pm") {
+                total_files += 1;
+                println!("📁 Testing highlight file: {}", path.display());
+                
+                match parse_highlight_file(&path) {
+                    Ok(test_cases) => {
+                        for test_case in test_cases {
+                            match parse(&test_case.source) {
+                                Ok(_tree) => {
+                                    parsed_files += 1;
+                                    println!("✅ {}", test_case.name);
+                                }
+                                Err(e) => {
+                                    println!("❌ Failed to parse '{}': {}", test_case.name, e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to read highlight file {}: {}", path.display(), e);
+                    }
+                }
+            }
+        }
+
+        println!("\n📊 Highlight Test Summary:");
+        println!("   Total files: {}", total_files);
+        println!("   Successfully parsed: {} ✅", parsed_files);
+        
+        if parsed_files < total_files {
+            panic!("{} highlight files failed to parse", total_files - parsed_files);
+        }
+    }
+}
