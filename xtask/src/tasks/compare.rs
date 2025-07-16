@@ -124,7 +124,7 @@ pub fn run_scanner_comparison(output_dir: &std::path::Path) -> Result<()> {
 }
 
 fn get_corpus_files() -> Result<Vec<String>> {
-    let corpus_dir = PathBuf::from("tree-sitter-perl/test/corpus");
+    let corpus_dir = PathBuf::from("test/corpus");
     if !corpus_dir.exists() {
         return Err(color_eyre::eyre::eyre!("Corpus directory not found"));
     }
@@ -133,7 +133,8 @@ fn get_corpus_files() -> Result<Vec<String>> {
     for entry in std::fs::read_dir(corpus_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "txt") {
+        // Accept files with .txt extension or no extension
+        if path.is_file() && (path.extension().map_or(true, |ext| ext == "txt")) {
             files.push(path.to_string_lossy().to_string());
         }
     }

@@ -20,6 +20,8 @@ fn main() {
     // Generate bindings
     let bindings = bindgen::Builder::default()
         .header("../../tree-sitter-perl/src/tree_sitter/parser.h")
+        .clang_arg("-I../../tree-sitter-perl/src")
+        .clang_arg("-I../../tree-sitter-perl/lib/src")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
