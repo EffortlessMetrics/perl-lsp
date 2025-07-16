@@ -11,15 +11,15 @@ pub fn run(_output: PathBuf) -> Result<()> {
             .template("{spinner:.green} {wide_msg}")
             .unwrap(),
     );
-    
+
     spinner.set_message("Generating bindings");
-    
+
     // TODO: Implement bindings generation
     // This would typically involve:
     // 1. Running bindgen on C headers
     // 2. Processing the generated Rust code
     // 3. Writing to the output directory
-    
+
     spinner.finish_with_message("✅ Bindings generated (placeholder)");
     Ok(())
-} 
+}

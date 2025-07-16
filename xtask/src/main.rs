@@ -1,5 +1,5 @@
 //! Xtask automation for tree-sitter-perl
-//! 
+//!
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
@@ -27,139 +27,139 @@ enum Commands {
         /// Build in release mode
         #[arg(long)]
         release: bool,
-        
+
         /// Build with specific features
         #[arg(long, value_delimiter = ',')]
         features: Option<Vec<String>>,
-        
+
         /// Build only the C scanner
         #[arg(long)]
         c_scanner: bool,
-        
+
         /// Build only the Rust scanner
         #[arg(long)]
         rust_scanner: bool,
     },
-    
+
     /// Run tests with various configurations
     Test {
         /// Run tests in release mode
         #[arg(long)]
         release: bool,
-        
+
         /// Run specific test suite
         #[arg(long, value_enum)]
         suite: Option<TestSuite>,
-        
+
         /// Run tests with specific features
         #[arg(long, value_delimiter = ',')]
         features: Option<Vec<String>>,
-        
+
         /// Run tests with verbose output
         #[arg(long)]
         verbose: bool,
-        
+
         /// Run tests with coverage
         #[arg(long)]
         coverage: bool,
     },
-    
+
     /// Run benchmarks
     Bench {
         /// Run specific benchmark
         #[arg(long)]
         name: Option<String>,
-        
+
         /// Save benchmark results
         #[arg(long)]
         save: bool,
     },
-    
+
     /// Generate documentation
     Doc {
         /// Open docs in browser
         #[arg(long)]
         open: bool,
-        
+
         /// Build docs for all features
         #[arg(long)]
         all_features: bool,
     },
-    
+
     /// Run code quality checks
     Check {
         /// Run clippy
         #[arg(long)]
         clippy: bool,
-        
+
         /// Run formatting check
         #[arg(long)]
         fmt: bool,
-        
+
         /// Run all checks
         #[arg(long)]
         all: bool,
     },
-    
+
     /// Format code
     Fmt {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
     },
-    
+
     /// Run corpus tests
     Corpus {
         /// Path to corpus directory
         #[arg(long, default_value = "corpus")]
         path: PathBuf,
-        
+
         /// Run with specific scanner
         #[arg(long, value_enum)]
         scanner: Option<ScannerType>,
     },
-    
+
     /// Run highlight tests
     Highlight {
         /// Path to highlight tests
         #[arg(long, default_value = "queries")]
         path: PathBuf,
-        
+
         /// Run with specific scanner
         #[arg(long, value_enum)]
         scanner: Option<ScannerType>,
     },
-    
+
     /// Clean build artifacts
     Clean {
         /// Clean all artifacts including target
         #[arg(long)]
         all: bool,
     },
-    
+
     /// Generate bindings
     Bindings {
         /// Output directory for bindings
         #[arg(long, default_value = "src/bindings")]
         output: PathBuf,
     },
-    
+
     /// Run development server
     Dev {
         /// Watch for changes
         #[arg(long)]
         watch: bool,
-        
+
         /// Port for development server
         #[arg(long, default_value = "8080")]
         port: u16,
     },
-    
+
     /// Prepare release
     Release {
         /// Version to release
         version: String,
-        
+
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
@@ -168,45 +168,32 @@ enum Commands {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    
+
     let cli = Cli::parse();
-    
+
     match cli.command {
-        Commands::Build { release, features, c_scanner, rust_scanner } => {
-            build::run(release, features, c_scanner, rust_scanner)
-        }
-        Commands::Test { release, suite, features, verbose, coverage } => {
-            test::run(release, suite, features, verbose, coverage)
-        }
-        Commands::Bench { name, save } => {
-            bench::run(name, save)
-        }
-        Commands::Doc { open, all_features } => {
-            doc::run(open, all_features)
-        }
-        Commands::Check { clippy, fmt, all } => {
-            check::run(clippy, fmt, all)
-        }
-        Commands::Fmt { check } => {
-            fmt::run(check)
-        }
-        Commands::Corpus { path, scanner } => {
-            corpus::run(path, scanner)
-        }
-        Commands::Highlight { path, scanner } => {
-            highlight::run(path, scanner)
-        }
-        Commands::Clean { all } => {
-            clean::run(all)
-        }
-        Commands::Bindings { output } => {
-            bindings::run(output)
-        }
-        Commands::Dev { watch, port } => {
-            dev::run(watch, port)
-        }
-        Commands::Release { version, yes } => {
-            release::run(version, yes)
-        }
+        Commands::Build {
+            release,
+            features,
+            c_scanner,
+            rust_scanner,
+        } => build::run(release, features, c_scanner, rust_scanner),
+        Commands::Test {
+            release,
+            suite,
+            features,
+            verbose,
+            coverage,
+        } => test::run(release, suite, features, verbose, coverage),
+        Commands::Bench { name, save } => bench::run(name, save),
+        Commands::Doc { open, all_features } => doc::run(open, all_features),
+        Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
+        Commands::Fmt { check } => fmt::run(check),
+        Commands::Corpus { path, scanner } => corpus::run(path, scanner),
+        Commands::Highlight { path, scanner } => highlight::run(path, scanner),
+        Commands::Clean { all } => clean::run(all),
+        Commands::Bindings { output } => bindings::run(output),
+        Commands::Dev { watch, port } => dev::run(watch, port),
+        Commands::Release { version, yes } => release::run(version, yes),
     }
 }

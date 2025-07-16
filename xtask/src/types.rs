@@ -14,4 +14,4 @@ pub enum ScannerType {
     C,
     Rust,
     Both,
-} 
+}

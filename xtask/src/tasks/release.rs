@@ -10,16 +10,16 @@ pub fn run(version: String, _yes: bool) -> Result<()> {
             .template("{spinner:.green} {wide_msg}")
             .unwrap(),
     );
-    
+
     spinner.set_message(format!("Preparing release v{}", version));
-    
+
     // TODO: Implement release preparation
     // This would typically involve:
     // 1. Version bumping
     // 2. Changelog generation
     // 3. Tag creation
     // 4. Publishing to crates.io
-    
+
     spinner.finish_with_message(format!("✅ Release v{} prepared (placeholder)", version));
     Ok(())
-} 
+}
