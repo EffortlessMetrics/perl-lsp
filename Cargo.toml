@@ -1,46 +1,33 @@
-[package]
-name = "tree-sitter-perl"
-description = "Perl grammar for tree-sitter with Rust-native scanner"
-version = "0.0.1"
-license = "MIT"
-readme = "README.md"
-keywords = ["incremental", "parsing", "tree-sitter", "perl", "scanner"]
-categories = ["parsing", "text-editors"]
-repository = "https://github.com/tree-sitter/tree-sitter-perl"
-edition = "2021"
-autoexamples = false
-
-build = "build.rs"
-include = [
-    "src/**/*",
-    "grammar.js", 
-    "queries/**/*",
-    "lib/**/*",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE"
+[workspace]
+members = [
+    ".",
+    "xtask",
 ]
 
-[lib]
-name = "tree_sitter_perl"
-path = "src/lib.rs"
+[package]
+name = "tree-sitter-perl"
+version = "0.0.1"
+edition = "2021"
+description = "Tree-sitter Perl grammar with Rust-native scanner"
+license = "MIT"
+repository = "https://github.com/tree-sitter/tree-sitter-perl"
+keywords = ["tree-sitter", "perl", "parser", "grammar", "scanner"]
+categories = ["parsing", "development-tools"]
 
 [dependencies]
 tree-sitter = "0.25.8"
-tree-sitter-language = "0.1.0"
-unicode-ident = "1.0"
-unicode-normalization = "0.1"
 thiserror = "1.0"
-
-[build-dependencies]
-cc = "1.0.87"
-bindgen = "0.69"
+unicode-normalization = "0.1"
+unicode-ident = "1.0"
+nom = "7.1"
+libloading = "0.8"
 
 [dev-dependencies]
-proptest = "1.4.0"
-criterion = "0.5.1"
-pretty_assertions = "1.4"
 test-case = "3.3"
+pretty_assertions = "1.4"
+diff = "0.1"
+proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [features]
 default = ["rust-scanner"]
@@ -48,10 +35,6 @@ rust-scanner = []
 c-scanner = []
 test-utils = []
 
-[[bench]]
-name = "scanner_benchmarks"
-harness = false
-
-[[bench]]
-name = "parser_benchmarks" 
-harness = false
+[build-dependencies]
+cc = "1.0"
+bindgen = "0.69"
