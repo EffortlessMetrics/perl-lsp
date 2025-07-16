@@ -12,6 +12,10 @@ categories = ["parsing", "development-tools"]
 name = "test_simple"
 path = "test_simple.rs"
 
+[[bin]]
+name = "bench_parser"
+path = "src/bin/bench_parser.rs"
+
 [dependencies]
 tree-sitter = "0.25.8"
 thiserror = "1.0"
