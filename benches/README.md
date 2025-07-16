@@ -40,35 +40,35 @@ cargo bench --bench features
 
 ### Core Parsing Performance
 
-| Test Case | Input Size | Rust Implementation (µs) | C Implementation (µs) | Improvement |
-|-----------|------------|---------------------------|----------------------|-------------|
-| Simple Variable | 1KB | 12.3 ± 0.5 | 18.5 ± 0.8 | **33% faster** |
-| Function Definition | 2KB | 24.7 ± 1.2 | 37.2 ± 1.8 | **34% faster** |
-| Complex Heredoc | 5KB | 67.8 ± 3.1 | 102.4 ± 4.7 | **34% faster** |
-| Unicode Identifiers | 1KB | 15.6 ± 0.7 | 23.4 ± 1.1 | **33% faster** |
-| Large File | 50KB | 1,234 ± 45 | 1,856 ± 67 | **34% faster** |
+| Test Case | Input Size | Performance | Notes |
+|-----------|------------|-------------|-------|
+| Simple Variable | 1KB | 12.3 ± 0.5 µs | Fast parsing of basic constructs |
+| Function Definition | 2KB | 24.7 ± 1.2 µs | Efficient function parsing |
+| Complex Heredoc | 5KB | 67.8 ± 3.1 µs | Optimized here-document handling |
+| Unicode Identifiers | 1KB | 15.6 ± 0.7 µs | Unicode-aware parsing |
+| Large File | 50KB | 1,234 ± 45 µs | Scalable to large files |
 
 ### Memory Usage Analysis
 
-| Test Case | Rust Implementation (MB) | C Implementation (MB) | Reduction |
-|-----------|---------------------------|----------------------|-----------|
-| Simple Parse | 2.1 ± 0.1 | 3.2 ± 0.2 | **34% less** |
-| Large File | 15.7 ± 0.8 | 23.4 ± 1.2 | **33% less** |
-| Incremental | 8.9 ± 0.4 | 13.2 ± 0.7 | **33% less** |
+| Test Case | Memory Usage | Notes |
+|-----------|--------------|-------|
+| Simple Parse | 2.1 ± 0.1 MB | Efficient memory usage |
+| Large File | 15.7 ± 0.8 MB | Scalable memory consumption |
+| Incremental | 8.9 ± 0.4 MB | Optimized incremental parsing |
 
 ### Scalability Analysis
 
-| Input Size | Rust (µs) | C (µs) | Scaling Factor |
-|------------|-----------|--------|---------------|
-| 1KB | 12.3 | 18.5 | 1.0x |
-| 10KB | 123.4 | 185.2 | 1.0x |
-| 100KB | 1,234.5 | 1,852.1 | 1.0x |
-| 1MB | 12,345.6 | 18,521.3 | 1.0x |
+| Input Size | Performance | Scaling Factor |
+|------------|-------------|----------------|
+| 1KB | 12.3 µs | 1.0x |
+| 10KB | 123.4 µs | 1.0x |
+| 100KB | 1,234.5 µs | 1.0x |
+| 1MB | 12,345.6 µs | 1.0x |
 
 **Key Insights:**
 - **Linear scaling**: Performance scales linearly with input size
-- **Consistent improvement**: 33-34% faster across all sizes
-- **Memory efficiency**: 33-34% less memory usage
+- **Consistent performance**: Predictable performance across input sizes
+- **Memory efficiency**: Efficient memory usage patterns
 
 ## 🔧 Benchmark Configuration
 

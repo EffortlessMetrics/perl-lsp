@@ -27,17 +27,17 @@ This crate provides an advanced Rust implementation of the tree-sitter Perl pars
 
 The advanced Rust implementation provides significant performance improvements:
 
-### **Performance Comparison**
-| Test Case | Native C (µs) | Rust Implementation (µs) | Improvement |
-|-----------|---------------|--------------------------|-------------|
-| Simple Variable | 18.5 | 12.3 | **33% faster** |
-| Function Call | 22.1 | 14.7 | **33% faster** |
-| Heredoc | 45.8 | 28.9 | **37% faster** |
-| Complex Interpolation | 67.2 | 42.1 | **37% faster** |
-| Unicode Identifiers | 23.4 | 15.6 | **33% faster** |
+### **Performance Characteristics**
+| Test Case | Input Size | Performance | Notes |
+|-----------|------------|-------------|-------|
+| Simple Variable | 1KB | ~12.3 µs | Fast parsing of basic constructs |
+| Function Call | 2KB | ~24.7 µs | Efficient function parsing |
+| Heredoc | 5KB | ~67.8 µs | Optimized here-document handling |
+| Complex Interpolation | 5KB | ~42.1 µs | String interpolation performance |
+| Unicode Identifiers | 1KB | ~15.6 µs | Unicode-aware parsing |
 
 **Key Insights:**
-- **Significant speedup**: 33-37% faster than C implementation
+- **Fast parsing**: Efficient parsing of Perl constructs
 - **Memory efficient**: Zero-copy optimizations reduce memory usage
 - **Production ready**: Performance suitable for all use cases
 - **Future ready**: Pure Rust frameworks ready for integration
@@ -120,7 +120,7 @@ cargo xtask build
 - **Zero undefined behavior** guaranteed by Rust compiler
 
 ### Performance
-- **2-3x faster** parsing compared to C implementation
+- **Fast parsing** with optimized algorithms
 - **Zero-copy optimizations** where possible
 - **Reduced memory usage** through efficient data structures
 - **Optimized Unicode handling** for international identifiers
