@@ -120,7 +120,7 @@ fn parse_highlight_file(path: &PathBuf) -> Result<Vec<HighlightTestCase>> {
 }
 
 /// Parse a highlight expectation from a comment line
-fn parse_highlight_expectation(line: &str, line_num: usize) -> Option<HighlightExpectation> {
+fn parse_highlight_expectation(line: &str, _line_num: usize) -> Option<HighlightExpectation> {
     // Parse patterns like:
     // # ^ keyword.operator
     // # <- variable.hash
@@ -133,16 +133,16 @@ fn parse_highlight_expectation(line: &str, line_num: usize) -> Option<HighlightE
     }
 
     // Find the position marker (^ or <-)
-    let column;
+    let _column;
     let mut expected_scope;
 
     if let Some(pos) = line.find("<-") {
         // Format: # <- scope
-        column = 1; // Default to first column for <- format
+        _column = 1; // Default to first column for <- format
         expected_scope = line[pos + 2..].trim().to_string();
     } else if let Some(pos) = line.find('^') {
         // Format: # ^ scope or #        ^^^^^^^^^ scope
-        column = pos + 1; // +1 because we're counting from 1
+        _column = pos + 1; // +1 because we're counting from 1
         expected_scope = line[pos + 1..].trim().to_string();
 
         // Remove any repeated ^ characters
@@ -206,7 +206,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "pm"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "pm"))
     {
         let file_path = entry.path();
         let file_name = file_path.file_name().unwrap().to_string_lossy();

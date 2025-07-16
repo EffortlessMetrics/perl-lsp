@@ -83,7 +83,7 @@ mod test {
     fn test_language_loading() {
         let lang = language();
         // Language is valid if we can get its version
-        assert!(lang.version() > 0);
+        assert!(lang.abi_version() > 0);
     }
 
     #[test]

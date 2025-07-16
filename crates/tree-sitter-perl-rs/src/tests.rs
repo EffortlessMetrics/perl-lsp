@@ -13,7 +13,7 @@ mod tests {
     fn test_language_loading() {
         let lang = language();
         // Language is valid if we can get its version
-        assert!(lang.version() > 0);
+        assert!(lang.abi_version() > 0);
     }
 
     #[test]
@@ -664,6 +664,7 @@ mod highlight_tests {
     struct HighlightTestCase {
         name: String,
         source: String,
+        #[allow(dead_code)]
         expected_tokens: Vec<String>,
     }
 
