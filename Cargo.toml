@@ -1,28 +1,57 @@
 [package]
 name = "tree-sitter-perl"
-description = "Perl grammar for tree-sitter"
+description = "Perl grammar for tree-sitter with Rust-native scanner"
 version = "0.0.1"
 license = "MIT"
 readme = "README.md"
-keywords = ["incremental", "parsing", "tree-sitter", "perl"]
+keywords = ["incremental", "parsing", "tree-sitter", "perl", "scanner"]
 categories = ["parsing", "text-editors"]
 repository = "https://github.com/tree-sitter/tree-sitter-perl"
 edition = "2021"
 autoexamples = false
 
-build = "bindings/rust/build.rs"
-include = ["bindings/rust/*", "grammar.js", "queries/*", "src/*", "lib/*"]
+build = "build.rs"
+include = [
+    "src/**/*",
+    "grammar.js", 
+    "queries/**/*",
+    "lib/**/*",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE"
+]
 
 [lib]
-path = "bindings/rust/lib.rs"
+name = "tree_sitter_perl"
+path = "src/lib.rs"
 
 [dependencies]
 tree-sitter = "0.25.8"
 tree-sitter-language = "0.1.0"
+unicode-ident = "1.0"
+unicode-normalization = "0.1"
+thiserror = "1.0"
 
 [build-dependencies]
 cc = "1.0.87"
+bindgen = "0.69"
 
 [dev-dependencies]
 proptest = "1.4.0"
 criterion = "0.5.1"
+pretty_assertions = "1.4"
+test-case = "3.3"
+
+[features]
+default = ["rust-scanner"]
+rust-scanner = []
+c-scanner = []
+test-utils = []
+
+[[bench]]
+name = "scanner_benchmarks"
+harness = false
+
+[[bench]]
+name = "parser_benchmarks" 
+harness = false
