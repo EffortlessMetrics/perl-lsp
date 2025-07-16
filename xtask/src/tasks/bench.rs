@@ -40,17 +40,26 @@ pub fn run(name: Option<String>, save: bool) -> Result<()> {
             .unwrap(),
     );
 
-    main_spinner.set_message("Setting up benchmark environment");
+    main_spinner.set_message("Running comprehensive benchmarks");
 
-    // Ensure both implementations are built
-    build_implementations(&multi_progress)?;
-
-    // Run comprehensive benchmarks
-    let all_results = run_comprehensive_benchmarks(&multi_progress, name.as_deref())?;
+    // Run Rust benchmarks using criterion
+    let rust_spinner = multi_progress.add(ProgressBar::new_spinner());
+    rust_spinner.set_message("Running Rust benchmarks");
+    
+    let rust_results = run_rust_criterion_benchmarks(name.as_deref())?;
+    rust_spinner.finish_with_message("✅ Rust benchmarks completed");
+    
+    // Run C benchmarks using Node.js
+    let c_spinner = multi_progress.add(ProgressBar::new_spinner());
+    c_spinner.set_message("Running C benchmarks");
+    
+    let c_results = run_c_node_benchmarks(name.as_deref())?;
+    c_spinner.finish_with_message("✅ C benchmarks completed");
 
     main_spinner.finish_with_message("✅ All benchmarks completed");
 
     // Generate comparison report
+    let all_results = [rust_results, c_results].concat();
     let comparisons = generate_comparisons(&all_results);
     display_results(&comparisons);
 
@@ -61,59 +70,7 @@ pub fn run(name: Option<String>, save: bool) -> Result<()> {
     Ok(())
 }
 
-fn build_implementations(multi_progress: &MultiProgress) -> Result<()> {
-    let rust_spinner = multi_progress.add(ProgressBar::new_spinner());
-    rust_spinner.set_message("Building Rust implementation");
-    
-    let status = cmd("cargo", &["build", "--release", "--package", "tree-sitter-perl"])
-        .dir("crates/tree-sitter-perl")
-        .run()
-        .context("Failed to build Rust implementation")?;
-
-    if !status.status.success() {
-        return Err(color_eyre::eyre::eyre!("Rust build failed"));
-    }
-    rust_spinner.finish_with_message("✅ Rust implementation built");
-
-    let c_spinner = multi_progress.add(ProgressBar::new_spinner());
-    c_spinner.set_message("Building C implementation");
-    
-    let status = cmd("make", &["clean", "release"])
-        .dir("tree-sitter-perl")
-        .run()
-        .context("Failed to build C implementation")?;
-
-    if !status.status.success() {
-        return Err(color_eyre::eyre::eyre!("C build failed"));
-    }
-    c_spinner.finish_with_message("✅ C implementation built");
-
-    Ok(())
-}
-
-fn run_comprehensive_benchmarks(multi_progress: &MultiProgress, name_filter: Option<&str>) -> Result<Vec<BenchmarkResult>> {
-    let mut all_results = Vec::new();
-    
-    // Run Rust benchmarks using criterion
-    let rust_spinner = multi_progress.add(ProgressBar::new_spinner());
-    rust_spinner.set_message("Running Rust benchmarks");
-    
-    let rust_results = run_rust_benchmarks(name_filter)?;
-    all_results.extend(rust_results);
-    rust_spinner.finish_with_message("✅ Rust benchmarks completed");
-    
-    // Run C benchmarks using Node.js
-    let c_spinner = multi_progress.add(ProgressBar::new_spinner());
-    c_spinner.set_message("Running C benchmarks");
-    
-    let c_results = run_c_benchmarks(name_filter)?;
-    all_results.extend(c_results);
-    c_spinner.finish_with_message("✅ C benchmarks completed");
-    
-    Ok(all_results)
-}
-
-fn run_rust_benchmarks(name_filter: Option<&str>) -> Result<Vec<BenchmarkResult>> {
+fn run_rust_criterion_benchmarks(name_filter: Option<&str>) -> Result<Vec<BenchmarkResult>> {
     let mut results = Vec::new();
     
     // Run scanner benchmarks
@@ -144,7 +101,7 @@ fn run_rust_scanner_benchmarks() -> Result<Vec<BenchmarkResult>> {
     ];
     
     for (name, code) in test_cases {
-        let result = benchmark_rust_implementation(name, code, 1000)?;
+        let result = benchmark_rust_implementation(name, code, 100)?;
         results.push(result);
     }
     
@@ -177,18 +134,18 @@ my $über = "cool";
 my $naïve = "simple";
 sub 関数 { return "関数です"; }
 "#),
-        ("large_file", &generate_large_perl_file(1000)),
+        ("large_file", &generate_large_perl_file(500)),
     ];
     
     for (name, code) in test_cases {
-        let result = benchmark_rust_implementation(name, code, 100)?;
+        let result = benchmark_rust_implementation(name, code, 50)?;
         results.push(result);
     }
     
     Ok(results)
 }
 
-fn run_c_benchmarks(name_filter: Option<&str>) -> Result<Vec<BenchmarkResult>> {
+fn run_c_node_benchmarks(name_filter: Option<&str>) -> Result<Vec<BenchmarkResult>> {
     let mut results = Vec::new();
     
     // Define test cases for C benchmarks (same as Rust for fair comparison)
@@ -219,7 +176,7 @@ my $über = "cool";
 my $naïve = "simple";
 sub 関数 { return "関数です"; }
 "#),
-        ("large_file", &generate_large_perl_file(1000)),
+        ("large_file", &generate_large_perl_file(500)),
     ];
     
     for (name, code) in test_cases {
@@ -229,7 +186,7 @@ sub 関数 { return "関数です"; }
             }
         }
         
-        let result = benchmark_c_implementation(name, code, 100)?;
+        let result = benchmark_c_implementation(name, code, 50)?;
         results.push(result);
     }
     
@@ -239,17 +196,13 @@ sub 関数 { return "関数です"; }
 fn benchmark_rust_implementation(name: &str, code: &str, iterations: u64) -> Result<BenchmarkResult> {
     let start = Instant::now();
     
-    // Run the benchmark using the Rust implementation
+    // Use the Rust implementation directly through the library
+    use tree_sitter_perl::parse;
+    
     for _ in 0..iterations {
-        let status = cmd("cargo", &["run", "--release", "--bin", "bench_parser"])
-            .dir("crates/tree-sitter-perl")
-            .env("TEST_CODE", code)
-            .run()
-            .context("Failed to run Rust benchmark")?;
-            
-        if !status.status.success() {
-            return Err(color_eyre::eyre::eyre!("Rust benchmark failed for {}", name));
-        }
+        let _tree = parse(code).map_err(|e| {
+            color_eyre::eyre::eyre!("Rust parse failed for {}: {:?}", name, e)
+        })?;
     }
     
     let duration = start.elapsed();
@@ -266,7 +219,7 @@ fn benchmark_rust_implementation(name: &str, code: &str, iterations: u64) -> Res
 fn benchmark_c_implementation(name: &str, code: &str, iterations: u64) -> Result<BenchmarkResult> {
     let start = Instant::now();
     
-    // Run the benchmark using the C implementation
+    // Run the benchmark using the C implementation via Node.js
     for _ in 0..iterations {
         let status = cmd("node", &["test/benchmark.js"])
             .dir("tree-sitter-perl")
@@ -359,6 +312,11 @@ fn generate_comparisons(results: &[BenchmarkResult]) -> Vec<BenchmarkComparison>
 }
 
 fn display_results(comparisons: &[BenchmarkComparison]) {
+    if comparisons.is_empty() {
+        println!("⚠️  No benchmark comparisons available");
+        return;
+    }
+    
     println!("\n📊 Benchmark Results\n");
     println!("{:<30} {:<15} {:<15} {:<15} {:<15}", "Test", "Rust (ms)", "C (ms)", "Speedup", "Winner");
     println!("{:-<90}", "");
