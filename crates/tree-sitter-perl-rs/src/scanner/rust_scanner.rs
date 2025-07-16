@@ -122,7 +122,7 @@ impl RustScanner {
         self.state.in_regex = true;
         
         // Skip the opening delimiter
-        let delimiter = self.peek_char()?;
+        let delimiter = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         self.advance();
         
         // Track if we're in character class
@@ -130,7 +130,7 @@ impl RustScanner {
         let mut escaped = false;
         
         while !self.is_eof() {
-            let ch = self.peek_char()?;
+            let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
             
             if escaped {
                 escaped = false;
@@ -155,7 +155,7 @@ impl RustScanner {
                     }
                     self.advance();
                 }
-                '/' | 'm' | 's' | 'y' | 'tr' => {
+                '/' | 'm' | 's' | 'y' | "tr" => {
                     // Check for closing delimiter
                     if !in_char_class && !escaped {
                         // Look ahead to see if this is the closing delimiter
@@ -184,20 +184,20 @@ impl RustScanner {
         self.state.in_heredoc = true;
         
         // Look for << or <<~ followed by delimiter
-        let first_ch = self.peek_char()?;
+        let first_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if first_ch != '<' {
             return Err(ParseError::ParseFailed);
         }
         self.advance();
         
-        let second_ch = self.peek_char()?;
+        let second_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if second_ch != '<' {
             return Err(ParseError::ParseFailed);
         }
         self.advance();
         
         // Check for indented heredoc (~)
-        let third_ch = self.peek_char()?;
+        let third_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         let is_indented = third_ch == '~';
         if is_indented {
             self.advance();
@@ -206,7 +206,7 @@ impl RustScanner {
         // Read delimiter
         let mut delimiter = String::new();
         while !self.is_eof() {
-            let ch = self.peek_char()?;
+            let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
             if ch.is_whitespace() || ch == ';' {
                 break;
             }
@@ -222,7 +222,7 @@ impl RustScanner {
         
         // Skip to end of line
         while !self.is_eof() {
-            let ch = self.peek_char()?;
+            let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
             if ch == '\n' {
                 self.advance();
                 break;
@@ -238,7 +238,7 @@ impl RustScanner {
         self.state.in_pod = true;
         
         // Look for =pod, =head1, =head2, etc.
-        let first_ch = self.peek_char()?;
+        let first_ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
         if first_ch != '=' {
             return Err(ParseError::ParseFailed);
         }
@@ -247,7 +247,7 @@ impl RustScanner {
         // Read POD command
         let mut command = String::new();
         while !self.is_eof() {
-            let ch = self.peek_char()?;
+            let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
             if ch.is_whitespace() || ch == '\n' {
                 break;
             }
@@ -257,7 +257,7 @@ impl RustScanner {
         
         // Skip to end of line
         while !self.is_eof() {
-            let ch = self.peek_char()?;
+            let ch = self.peek_char().ok_or(ParseError::UnexpectedEof)?;
             if ch == '\n' {
                 self.advance();
                 break;
@@ -860,7 +860,7 @@ impl PerlScanner for RustScanner {
     fn scan(&mut self, input: &[u8]) -> ParseResult<Option<u16>> {
         self.input = input.to_vec();
         self.position = 0;
-        self.lookahead = self.peek_char().ok();
+        self.lookahead = self.peek_char();
 
         // Skip whitespace
         self.skip_whitespace();
