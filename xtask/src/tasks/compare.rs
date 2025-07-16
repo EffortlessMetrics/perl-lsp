@@ -126,7 +126,7 @@ pub fn run_scanner_comparison(output_dir: &std::path::Path) -> Result<()> {
 fn get_corpus_files() -> Result<Vec<String>> {
     let corpus_dir = PathBuf::from("tree-sitter-perl/test/corpus");
     if !corpus_dir.exists() {
-        return Err("Corpus directory not found".into());
+        return Err(color_eyre::eyre::eyre!("Corpus directory not found"));
     }
 
     let mut files = Vec::new();
@@ -158,7 +158,7 @@ fn test_implementation(
     let mut success_count = 0;
 
     for (i, test_case) in test_cases.iter().enumerate() {
-        spinner.set_message(&format!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case));
+        spinner.set_message(format!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case));
 
         let test_result = run_single_test(impl_type, test_case, iterations)?;
         
@@ -201,7 +201,7 @@ fn run_single_test(
         let result = match impl_type {
             "c" => test_c_implementation(&test_content),
             "rust" => test_rust_implementation(&test_content),
-            _ => return Err("Unknown implementation type".into()),
+            _ => return Err(color_eyre::eyre::eyre!("Unknown implementation type")),
         };
 
         let elapsed = start.elapsed().as_micros() as f64;
@@ -265,8 +265,8 @@ fn test_c_implementation(content: &str) -> Result<()> {
     let _ = std::fs::remove_file(temp_file);
 
     if !output.status.success() {
-        return Err(format!("C implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)).into());
+        return Err(color_eyre::eyre::eyre!("C implementation test failed: {}", 
+            String::from_utf8_lossy(&output.stderr)));
     }
 
     Ok(())
@@ -291,8 +291,8 @@ fn test_rust_implementation(content: &str) -> Result<()> {
     let _ = std::fs::remove_file(temp_file);
 
     if !output.status.success() {
-        return Err(format!("Rust implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)).into());
+        return Err(color_eyre::eyre::eyre!("Rust implementation test failed: {}", 
+            String::from_utf8_lossy(&output.stderr)));
     }
 
     Ok(())
@@ -706,6 +706,8 @@ fn validate_results(
     spinner.finish_with_message("✅ All results validated");
 
     if check_gates {
+        let content = fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
+        let comparison_data: serde_json::Value = serde_json::from_str(&content)?;
         check_performance_gates(&comparison_data, spinner)?;
     }
 
