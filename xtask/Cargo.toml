@@ -15,3 +15,4 @@ toml = "0.8"
 anyhow = "1.0"
 indicatif = "0.17"
 console = "0.15"
+tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }
