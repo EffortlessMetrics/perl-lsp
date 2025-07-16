@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Tree-sitter parser for the Perl programming language, implementing both a traditional C-based parser and a modern Rust implementation. The project is in active migration from C to Rust.
+This is a Tree-sitter parser for the Perl programming language. The active implementation is in `/crates/tree-sitter-perl-rs/` (Rust), while `/tree-sitter-perl/` contains legacy code used only for testing purposes. The project is finishing the transition to the new Rust implementation.
 
 ## Key Commands
 
@@ -51,7 +51,7 @@ cargo xtask check --clippy
 
 ### Parser Generation
 ```bash
-# In tree-sitter-perl directory
+# Generate parser from grammar (if needed for testing)
 cd tree-sitter-perl
 npx tree-sitter generate
 ```
@@ -59,8 +59,8 @@ npx tree-sitter generate
 ## Architecture Overview
 
 ### Project Structure
-- **`/crates/tree-sitter-perl-rs/`**: Main Rust parser implementation (primary focus)
-- **`/tree-sitter-perl/`**: Legacy C implementation and tree-sitter files
+- **`/crates/tree-sitter-perl-rs/`**: The active Rust parser implementation - ALL new development happens here
+- **`/tree-sitter-perl/`**: Legacy testing directory containing corpus tests and the original grammar.js
 - **`/xtask/`**: Build automation tooling
 
 ### Key Components
@@ -71,8 +71,8 @@ npx tree-sitter generate
    - Controlled by feature flags: `rust-scanner` (default) vs `c-scanner`
 
 2. **Parser Generation Flow**
-   - `grammar.js` defines Perl syntax rules
-   - Tree-sitter generates `parser.c`
+   - `grammar.js` (in legacy directory) defines Perl syntax rules
+   - Tree-sitter generates `parser.c` for testing
    - External scanner handles complex lexical analysis (heredocs, quotes, interpolation)
 
 3. **Scanner Architecture**
@@ -91,25 +91,22 @@ npx tree-sitter generate
    - Proper handling of combining marks and whitespace
 
 ### Testing Strategy
-- **Corpus Tests** (`test/corpus/`): Main integration tests using tree-sitter format
+- **Corpus Tests** (`tree-sitter-perl/test/corpus/`): Main integration tests using tree-sitter format from legacy directory
 - **Unit Tests**: Component-level testing in Rust
 - **Property Tests**: Edge case testing with `proptest`
 - **Benchmarks**: Performance testing with `criterion`
 
 ## Development Guidelines
 
-1. **Primary Development Focus**: Work in `/crates/tree-sitter-perl-rs/` for new features
-2. **Scanner Development**: When modifying scanner behavior, update both C and Rust implementations if C scanner support is still active
-3. **Testing**: Always add corpus tests for new grammar features in `tree-sitter-perl/test/corpus/`
+1. **Development Location**: ALL new development happens in `/crates/tree-sitter-perl-rs/`
+2. **Scanner Development**: Focus on the Rust scanner implementation; C scanner is being phased out
+3. **Testing**: Corpus tests are located in the legacy `tree-sitter-perl/test/corpus/` directory
 4. **Feature Flags**: Use conditional compilation for scanner-specific code
 5. **Error Handling**: Use the project's error types and maintain detailed error messages
 
-## Migration Status
+## Current Status
 
-The project is migrating from C to Rust:
-- Phase 1: Dual scanner support (current)
-- Phase 2: Performance optimization
-- Phase 3: Rust scanner as default
-- Phase 4: C scanner removal
-
-Currently, both scanners are maintained, with Rust scanner as the default.
+The project is finishing the transition to a pure Rust implementation:
+- The Rust scanner in `/crates/tree-sitter-perl-rs/` is the active implementation
+- The `/tree-sitter-perl/` directory is maintained only for its test corpus
+- Focus is on completing and optimizing the Rust implementation
