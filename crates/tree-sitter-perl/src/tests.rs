@@ -168,7 +168,7 @@ mod integration_tests {
 
 #[cfg(test)]
 mod scanner_tests {
-    use crate::scanner::{RustScanner, ScannerConfig};
+    use crate::scanner::{RustScanner, ScannerConfig, TokenType};
 
     #[test]
     fn test_rust_scanner_creation() {
@@ -200,6 +200,142 @@ mod scanner_tests {
         assert_eq!(config.max_token_length, 1048576);
         assert!(!config.debug);
     }
+
+    #[test]
+    fn test_token_types() {
+        // Test that all token types are properly defined
+        assert_eq!(TokenType::Identifier as u16, 0);
+        assert_eq!(TokenType::StringLiteral as u16, 1);
+        assert_eq!(TokenType::NumberLiteral as u16, 2);
+        assert_eq!(TokenType::Operator as u16, 3);
+        assert_eq!(TokenType::Keyword as u16, 4);
+        assert_eq!(TokenType::Comment as u16, 5);
+        assert_eq!(TokenType::Whitespace as u16, 6);
+        assert_eq!(TokenType::Error as u16, 7);
+    }
+
+    #[test]
+    fn test_scanner_serialization() {
+        let mut scanner = RustScanner::new();
+        let mut buffer = Vec::new();
+        
+        // Test serialization
+        let result = scanner.serialize(&mut buffer);
+        assert!(result.is_ok(), "Serialization failed: {:?}", result);
+        assert!(!buffer.is_empty(), "Serialized buffer should not be empty");
+        
+        // Test deserialization
+        let result = scanner.deserialize(&buffer);
+        assert!(result.is_ok(), "Deserialization failed: {:?}", result);
+    }
+}
+
+#[cfg(test)]
+mod unicode_tests {
+    use crate::unicode::UnicodeUtils;
+
+    #[test]
+    fn test_unicode_normalization() {
+        let test_cases = vec![
+            ("café", "café"),
+            ("naïve", "naïve"),
+            ("über", "über"),
+            ("変数", "変数"),
+        ];
+
+        for (input, expected) in test_cases {
+            let normalized = UnicodeUtils::normalize_identifier(input);
+            assert_eq!(normalized, expected);
+        }
+    }
+
+    #[test]
+    fn test_unicode_identifier_validation() {
+        let valid_identifiers = vec![
+            "variable",
+            "変数",
+            "über",
+            "naïve",
+            "café",
+            "αβγ",
+            "привет",
+        ];
+
+        for identifier in valid_identifiers {
+            assert!(
+                UnicodeUtils::is_valid_identifier(identifier),
+                "Identifier '{}' should be valid",
+                identifier
+            );
+        }
+
+        let invalid_identifiers = vec![
+            "123variable",
+            "variable-name",
+            "variable name",
+            "",
+        ];
+
+        for identifier in invalid_identifiers {
+            assert!(
+                !UnicodeUtils::is_valid_identifier(identifier),
+                "Identifier '{}' should be invalid",
+                identifier
+            );
+        }
+    }
+
+    #[test]
+    fn test_unicode_edge_cases() {
+        // Test various Unicode edge cases
+        let edge_cases = vec![
+            ("", false), // Empty string
+            ("a", true), // Single ASCII
+            ("α", true), // Single Unicode
+            ("aα", true), // Mixed ASCII and Unicode
+            ("123", false), // Numbers only
+            ("_var", true), // Underscore prefix
+            ("var_", true), // Underscore suffix
+        ];
+
+        for (input, expected) in edge_cases {
+            let result = UnicodeUtils::is_valid_identifier(input);
+            assert_eq!(
+                result, expected,
+                "Identifier '{}' validation failed: expected {}, got {}",
+                input, expected, result
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use proptest::prelude::*;
+    use crate::{parse, scanner::RustScanner};
+
+    proptest! {
+        #[test]
+        fn test_parse_does_not_panic(input in "[a-zA-Z0-9_\\s\\{\\}\\(\\)\\[\\]\\\"\\'\\;\\,\\.\\+\\-\\*\\/\\=\\<\\>\\!\\&\\|\\^\\~\\%\\#\\@\\$\\`\\{\\}]+") {
+            // This test ensures that parsing arbitrary strings doesn't panic
+            let _result = parse(&input);
+        }
+
+        #[test]
+        fn test_scanner_handles_arbitrary_input(input in "[\\x00-\\xff]+") {
+            // Test that scanner can handle arbitrary byte sequences
+            let mut scanner = RustScanner::new();
+            let _result = scanner.scan(input.as_bytes());
+        }
+
+        #[test]
+        fn test_unicode_identifiers_roundtrip(identifier in "[a-zA-Z_][a-zA-Z0-9_]*") {
+            // Test that valid identifiers can be parsed and reconstructed
+            let code = format!("my ${} = 1;", identifier);
+            let result = parse(&code);
+            assert!(result.is_ok(), "Failed to parse identifier: {}", identifier);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -217,5 +353,60 @@ mod error_tests {
         let error = ParseError::ParseFailed;
         let display = format!("{:?}", error);
         assert!(!display.is_empty());
+    }
+
+    #[test]
+    fn test_error_serialization() {
+        let error = ParseError::ParseFailed;
+        let serialized = bincode::serialize(&error);
+        assert!(serialized.is_ok(), "Error serialization failed");
+        
+        let deserialized: Result<ParseError, _> = bincode::deserialize(&serialized.unwrap());
+        assert!(deserialized.is_ok(), "Error deserialization failed");
+        assert!(matches!(deserialized.unwrap(), ParseError::ParseFailed));
+    }
+}
+
+#[cfg(test)]
+mod performance_tests {
+    use crate::{parse, scanner::RustScanner};
+    use std::time::Instant;
+
+    #[test]
+    fn test_parse_performance() {
+        let test_code = "my $var = 42; print 'Hello, World!'; sub foo { return 1; }";
+        let iterations = 1000;
+        
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _result = parse(test_code);
+        }
+        let duration = start.elapsed();
+        
+        let avg_time = duration.as_micros() as f64 / iterations as f64;
+        println!("Average parse time: {:.2} μs", avg_time);
+        
+        // Ensure parsing is reasonably fast (less than 1000 μs per parse)
+        assert!(avg_time < 1000.0, "Parsing is too slow: {:.2} μs", avg_time);
+    }
+
+    #[test]
+    fn test_scanner_performance() {
+        let test_input = b"my $variable = 42; print 'Hello, World!';";
+        let iterations = 1000;
+        
+        let mut scanner = RustScanner::new();
+        let start = Instant::now();
+        
+        for _ in 0..iterations {
+            let _result = scanner.scan(test_input);
+        }
+        let duration = start.elapsed();
+        
+        let avg_time = duration.as_micros() as f64 / iterations as f64;
+        println!("Average scan time: {:.2} μs", avg_time);
+        
+        // Ensure scanning is reasonably fast (less than 500 μs per scan)
+        assert!(avg_time < 500.0, "Scanning is too slow: {:.2} μs", avg_time);
     }
 }
