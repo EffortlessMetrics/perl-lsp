@@ -47,3 +47,4 @@ pub fn run(all: bool) -> Result<()> {
     spinner.finish_with_message("✅ Clean completed");
     Ok(())
 }
+ 

@@ -369,3 +369,4 @@ fn save_results(results: &[BenchmarkResult], comparisons: &[BenchmarkComparison]
     
     Ok(())
 }
+ 

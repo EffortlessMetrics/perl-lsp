@@ -529,10 +529,10 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::PlusAssign)
                     } else if next == '+' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::Increment)
                     } else {
                         Ok(TokenType::Plus)
@@ -545,10 +545,10 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::MinusAssign)
                     } else if next == '-' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::Decrement)
                     } else {
                         Ok(TokenType::Minus)
@@ -561,7 +561,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::MultiplyAssign)
                     } else if next == '*' {
                         self.advance();
@@ -577,7 +577,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::DivideAssign)
                     } else {
                         Ok(TokenType::Divide)
@@ -590,7 +590,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::ModuloAssign)
                     } else {
                         Ok(TokenType::Modulo)
@@ -609,7 +609,7 @@ impl RustScanner {
                         self.advance();
                         Ok(TokenType::StringEqual)
                     } else if next == '>' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::DoubleArrow)
                     } else {
                         Ok(TokenType::Assign)
@@ -622,7 +622,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::NotEqual)
                     } else {
                         Ok(TokenType::LogicalNot)
@@ -641,7 +641,7 @@ impl RustScanner {
                         self.advance();
                         Ok(TokenType::LeftShift)
                     } else if next == '>' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::NotEqual)
                     } else {
                         Ok(TokenType::LessThan)
@@ -654,10 +654,10 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '=' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::GreaterEqual)
                     } else if next == '>' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::RightShift)
                     } else {
                         Ok(TokenType::GreaterThan)
@@ -670,7 +670,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '&' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::LogicalAnd)
                     } else {
                         Ok(TokenType::BitwiseAnd)
@@ -683,7 +683,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '|' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::LogicalOr)
                     } else {
                         Ok(TokenType::BitwiseOr)
@@ -696,7 +696,7 @@ impl RustScanner {
                 self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '^' {
-                        self.advance();
+                    self.advance();
                         Ok(TokenType::LogicalOr) // xor operator
                     } else {
                         Ok(TokenType::BitwiseXor)
@@ -726,7 +726,7 @@ impl RustScanner {
                 Ok(TokenType::Comma)
             }
             '.' => {
-                self.advance();
+                    self.advance();
                 if let Some(next) = self.lookahead {
                     if next == '.' {
                         self.advance();
@@ -801,8 +801,8 @@ impl RustScanner {
                     self.scan_identifier()
                 } else {
                     Err(ParseError::invalid_token(
-                        ch.to_string(),
-                        self.state.position(),
+                    ch.to_string(),
+                    self.state.position(),
                     ))
                 }
             }
@@ -827,7 +827,7 @@ impl PerlScanner for RustScanner {
 
         // Scan next token
         let token_type = self.scan_operator()?;
-        
+
         // Convert token type to u16 (tree-sitter token ID)
         let token_id = match token_type {
             TokenType::Package => 1,
