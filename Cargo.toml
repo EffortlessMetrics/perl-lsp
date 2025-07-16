@@ -4,6 +4,9 @@ members = [
     "xtask",
 ]
 
+[workspace.dependencies]
+tree-sitter-perl = { path = ".", features = ["rust-scanner"] }
+
 [package]
 name = "tree-sitter-perl"
 version = "0.0.1"
