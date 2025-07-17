@@ -8,15 +8,15 @@ use pest::Parser;
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone)]
-struct HeredocMarker {
-    marker: String,
-    indented: bool,
-    quoted: HeredocQuoteType,
-    position: usize,
+pub struct HeredocMarker {
+    pub marker: String,
+    pub indented: bool,
+    pub quoted: HeredocQuoteType,
+    pub position: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum HeredocQuoteType {
+pub enum HeredocQuoteType {
     None,
     Single,
     Double,
@@ -117,7 +117,7 @@ impl StatefulPerlParser {
     }
 
     /// Extract heredoc declaration information from a line
-    fn extract_heredoc_declaration(&self, line: &str) -> Option<HeredocMarker> {
+    pub fn extract_heredoc_declaration(&self, line: &str) -> Option<HeredocMarker> {
         // Simple regex-like pattern matching for heredoc declarations
         // This is a simplified version - a full implementation would be more robust
         
@@ -184,7 +184,7 @@ impl StatefulPerlParser {
     }
 
     /// Check if a line is a heredoc terminator
-    fn is_heredoc_terminator(&self, line: &str, heredoc: &HeredocMarker) -> bool {
+    pub fn is_heredoc_terminator(&self, line: &str, heredoc: &HeredocMarker) -> bool {
         let trimmed = if heredoc.indented {
             line.trim_start()
         } else {

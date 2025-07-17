@@ -153,7 +153,7 @@ assignment_expression = {
 }
 
 assignment_operator = {
-    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
     | "&&=" | "||=" | "//="
 }
 
@@ -169,8 +169,10 @@ equality_expression = {
 }
 
 relational_expression = {
-    shift_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ shift_expression)*
+    bitwise_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ bitwise_expression)*
 }
+
+bitwise_expression = { shift_expression ~ (("&" | "|" | "^") ~ shift_expression)* }
 
 shift_expression = { range_expression ~ (("<<" | ">>") ~ range_expression)* }
 
@@ -209,7 +211,7 @@ postfix_operator = {
 
 array_access = { "[" ~ expression ~ "]" }
 hash_access = { "{" ~ expression ~ "}" }
-method_call = { "->" ~ identifier ~ function_args? }
+method_call = { "->" ~ (identifier ~ function_args? | function_args) }
 function_call = { function_args }
 function_args = { "(" ~ arg_list? ~ ")" }
 arg_list = { expression ~ ("," ~ expression)* }
@@ -244,10 +246,10 @@ reference = {
     | glob_reference
 }
 
-scalar_reference = @{ "\\" ~ scalar_variable }
-array_reference = @{ "\\" ~ array_variable }
-hash_reference = @{ "\\" ~ hash_variable }
-subroutine_reference = @{ "\\" ~ "&" ~ identifier }
+scalar_reference = @{ "\\" ~ (scalar_variable | ("${" ~ expression ~ "}")) }
+array_reference = @{ "\\" ~ (array_variable | ("@{" ~ expression ~ "}")) }
+hash_reference = @{ "\\" ~ (hash_variable | ("%{" ~ expression ~ "}")) }
+subroutine_reference = @{ "\\" ~ "&" ~ qualified_name }
 glob_reference = @{ "\\" ~ "*" ~ identifier }
 
 // Anonymous references
@@ -331,8 +333,12 @@ qx_string_content = @{ (!delimiter ~ ANY)* }
 escape_sequence = @{ "\\" ~ ANY }
 interpolation = { 
     complex_scalar_interpolation 
-    | complex_array_interpolation 
-    | scalar_variable 
+    | complex_array_interpolation
+    | array_dereference_interpolation
+    | hash_dereference_interpolation
+    | scalar_variable
+    | array_variable
+    | hash_variable
     | array_element 
     | hash_element_access 
 }
@@ -340,6 +346,8 @@ interpolation = {
 // Complex interpolation forms
 complex_scalar_interpolation = { "${" ~ expression ~ "}" }
 complex_array_interpolation = { "@{[" ~ list_elements? ~ "]}" }
+array_dereference_interpolation = { "@{" ~ expression ~ "}" }
+hash_dereference_interpolation = { "%{" ~ expression ~ "}" }
 
 // Variables
 variable = {
@@ -396,7 +404,15 @@ regex = {
 }
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
-qr_regex = { "qr" ~ regex_delimiter ~ qr_regex_pattern ~ regex_delimiter ~ regex_flags? }
+qr_regex = { 
+    "qr" ~ ("/" ~ qr_slash_pattern ~ "/" | 
+            "!" ~ qr_exclaim_pattern ~ "!" |
+            "#" ~ qr_hash_pattern ~ "#" |
+            regex_delimiter ~ qr_regex_pattern ~ regex_delimiter) ~ regex_flags? 
+}
+qr_slash_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
+qr_exclaim_pattern = @{ (!"!" ~ (regex_escape | regex_group | ANY))* }
+qr_hash_pattern = @{ (!"#" ~ (regex_escape | regex_group | ANY))* }
 match_regex_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
 qr_regex_pattern = @{ (!regex_delimiter ~ (regex_escape | regex_group | ANY))* }
 
