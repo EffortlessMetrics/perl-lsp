@@ -507,12 +507,16 @@ impl PureRustPerlParser {
     }
 
     pub fn to_sexp(&self, node: &AstNode) -> String {
+        Self::node_to_sexp(node)
+    }
+
+    fn node_to_sexp(node: &AstNode) -> String {
         match node {
             AstNode::Program(children) => {
                 // Remove nested source_file in S-expression output
                 let mut flat_children = vec![];
                 for c in children {
-                    let sexp = self.to_sexp(c);
+                    let sexp = Self::node_to_sexp(c);
                     if sexp.starts_with("(source_file ") {
                         let inner = sexp.trim_start_matches("(source_file ").trim_end_matches(")");
                         flat_children.push(inner.to_string());
@@ -527,28 +531,28 @@ impl PureRustPerlParser {
                 }
             }
             AstNode::Statement(expr) => {
-                self.to_sexp(expr)
+                Self::node_to_sexp(expr)
             }
             AstNode::Block(statements) => {
-                let stmt_sexps: Vec<String> = statements.iter().map(|s| self.to_sexp(s)).collect();
+                let stmt_sexps: Vec<String> = statements.iter().map(Self::node_to_sexp).collect();
                 format!("(block {})", stmt_sexps.join(" "))
             }
             AstNode::VariableDeclaration { scope, variables, initializer } => {
-                let var_sexps: Vec<String> = variables.iter().map(|v| self.to_sexp(v)).collect();
-                let init_sexp = initializer.as_ref().map(|i| self.to_sexp(i)).unwrap_or_default();
+                let var_sexps: Vec<String> = variables.iter().map(Self::node_to_sexp).collect();
+                let init_sexp = initializer.as_ref().map(|i| Self::node_to_sexp(i)).unwrap_or_default();
                 format!("(variable_declaration ({}) {} {})", scope, var_sexps.join(" "), init_sexp)
             }
             AstNode::SubDeclaration { name, body, .. } => {
-                format!("(subroutine (identifier {}) {})", name, self.to_sexp(body))
+                format!("(subroutine (identifier {}) {})", name, Self::node_to_sexp(body))
             }
             AstNode::IfStatement { condition, then_block, .. } => {
-                format!("(if_statement {} {})", self.to_sexp(condition), self.to_sexp(then_block))
+                format!("(if_statement {} {})", Self::node_to_sexp(condition), Self::node_to_sexp(then_block))
             }
             AstNode::Assignment { target, op, value } => {
-                format!("(assignment {} ({}) {})", self.to_sexp(target), op, self.to_sexp(value))
+                format!("(assignment {} ({}) {})", Self::node_to_sexp(target), op, Self::node_to_sexp(value))
             }
             AstNode::BinaryOp { op, left, right } => {
-                format!("(binary_expression {} ({}) {})", self.to_sexp(left), op, self.to_sexp(right))
+                format!("(binary_expression {} ({}) {})", Self::node_to_sexp(left), op, Self::node_to_sexp(right))
             }
             AstNode::ScalarVariable(name) => {
                 format!("(scalar_variable {})", name)
@@ -572,21 +576,21 @@ impl PureRustPerlParser {
                 format!("(comment {})", content)
             }
             AstNode::List(items) => {
-                let item_sexps: Vec<String> = items.iter().map(|i| self.to_sexp(i)).collect();
+                let item_sexps: Vec<String> = items.iter().map(Self::node_to_sexp).collect();
                 item_sexps.join(" ")
             }
             AstNode::ForStatement { init, condition, update, block, .. } => {
                 let mut parts = vec![];
-                if let Some(i) = init { parts.push(format!("(init {})", self.to_sexp(i))); }
-                if let Some(c) = condition { parts.push(format!("(condition {})", self.to_sexp(c))); }
-                if let Some(u) = update { parts.push(format!("(update {})", self.to_sexp(u))); }
-                parts.push(format!("(body {})", self.to_sexp(block)));
+                if let Some(i) = init { parts.push(format!("(init {})", Self::node_to_sexp(i))); }
+                if let Some(c) = condition { parts.push(format!("(condition {})", Self::node_to_sexp(c))); }
+                if let Some(u) = update { parts.push(format!("(update {})", Self::node_to_sexp(u))); }
+                parts.push(format!("(body {})", Self::node_to_sexp(block)));
                 format!("(for_statement {})", parts.join(" "))
             }
             AstNode::PackageDeclaration { name, version, block } => {
                 let mut parts = vec![format!("(name {})", name)];
                 if let Some(v) = version { parts.push(format!("(version {})", v)); }
-                if let Some(b) = block { parts.push(format!("(body {})", self.to_sexp(b))); }
+                if let Some(b) = block { parts.push(format!("(body {})", Self::node_to_sexp(b))); }
                 format!("(package_declaration {})", parts.join(" "))
             }
             AstNode::Regex { pattern, flags } => {
@@ -643,7 +647,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
+                panic!("Parse should succeed");
             }
         }
     }
@@ -660,7 +664,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
+                panic!("Parse should succeed");
             }
         }
     }
@@ -677,7 +681,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
+                panic!("Parse should succeed");
             }
         }
     }
@@ -695,7 +699,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
+                panic!("Parse should succeed");
             }
         }
     }
@@ -713,7 +717,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
+                panic!("Parse should succeed");
             }
         }
     }

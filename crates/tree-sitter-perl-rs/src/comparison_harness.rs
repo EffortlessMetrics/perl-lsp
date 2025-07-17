@@ -27,6 +27,12 @@ pub struct ComparisonHarness {
     pure_rust_parser: PureRustPerlParser,
 }
 
+impl Default for ComparisonHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComparisonHarness {
     pub fn new() -> Self {
         #[cfg(not(feature = "pure-rust"))]

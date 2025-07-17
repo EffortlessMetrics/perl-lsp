@@ -14,6 +14,7 @@ mod tests {
     }
 
     // Helper function to check parse failure
+    #[allow(dead_code)]
     fn parse_fails(input: &str) {
         let mut parser = PureRustPerlParser::new();
         assert!(parser.parse(input).is_err(), "Expected parse to fail for: {}", input);
@@ -21,7 +22,7 @@ mod tests {
 
     // Helper to check S-expression output contains pattern
     fn check_sexp_contains(input: &str, expected_pattern: &str) {
-        let mut parser = PureRustPerlParser::new();
+        let parser = PureRustPerlParser::new();
         let ast = parse_successfully(input);
         let sexp = parser.to_sexp(&ast);
         assert!(

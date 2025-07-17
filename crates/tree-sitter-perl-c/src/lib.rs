@@ -3,6 +3,13 @@
 //! This crate provides the legacy C implementation of the tree-sitter Perl parser
 //! for comparison and benchmarking purposes.
 
+// Suppress warnings from bindgen-generated code
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(improper_ctypes)]
+#![allow(dead_code)]
+
 // Include the generated bindings
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
