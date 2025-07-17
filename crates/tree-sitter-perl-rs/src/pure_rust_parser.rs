@@ -381,9 +381,23 @@ impl PureRustPerlParser {
             }
             Rule::regex => {
                 let mut inner = pair.into_inner();
-                let pattern = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                Ok(Some(AstNode::Regex { pattern, flags }))
+                if let Some(first) = inner.next() {
+                    match first.as_rule() {
+                        Rule::match_regex => {
+                            let mut match_inner = first.into_inner();
+                            let pattern = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                            let flags = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                            Ok(Some(AstNode::Regex { pattern, flags }))
+                        }
+                        _ => {
+                            let pattern = first.as_str().to_string();
+                            let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                            Ok(Some(AstNode::Regex { pattern, flags }))
+                        }
+                    }
+                } else {
+                    Ok(Some(AstNode::Regex { pattern: String::new(), flags: String::new() }))
+                }
             }
             Rule::for_statement => {
                 let mut inner = pair.into_inner();
