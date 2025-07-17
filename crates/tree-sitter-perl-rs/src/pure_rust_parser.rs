@@ -375,6 +375,64 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
             }
             Rule::semicolon | Rule::WHITESPACE => Ok(None),
+            Rule::for_statement => {
+                let mut inner = pair.into_inner();
+                let label = None; // TODO: handle label if present
+                inner.next(); // skip "for"
+                let mut init = None;
+                let mut condition = None;
+                let mut update = None;
+                let mut block = None;
+                if let Some(p) = inner.next() { // (
+                    if p.as_rule() == Rule::for_init {
+                        init = self.build_node(p)?.map(Box::new);
+                    }
+                }
+                if let Some(p) = inner.next() { // ;
+                    if p.as_rule() == Rule::expression {
+                        condition = self.build_node(p)?.map(Box::new);
+                    }
+                }
+                if let Some(p) = inner.next() { // ;
+                    if p.as_rule() == Rule::expression {
+                        update = self.build_node(p)?.map(Box::new);
+                    }
+                }
+                if let Some(p) = inner.next() { // )
+                    // skip
+                }
+                if let Some(p) = inner.next() { // block
+                    block = self.build_node(p)?.map(Box::new);
+                }
+                Ok(Some(AstNode::ForStatement {
+                    label,
+                    init,
+                    condition,
+                    update,
+                    block: block.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
+                }))
+            }
+            Rule::package_declaration => {
+                let mut inner = pair.into_inner();
+                inner.next(); // skip "package"
+                let name = inner.next().unwrap().as_str().to_string();
+                let mut version = None;
+                let mut block = None;
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::version => version = Some(p.as_str().to_string()),
+                        Rule::block => block = self.build_node(p)?.map(Box::new),
+                        _ => {}
+                    }
+                }
+                Ok(Some(AstNode::PackageDeclaration { name, version, block }))
+            }
+            Rule::regex => {
+                let mut inner = pair.into_inner();
+                let pattern = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                Ok(Some(AstNode::Regex { pattern, flags }))
+            }
             _ => {
                 // For unhandled rules, try to process inner pairs
                 let inner: Vec<_> = pair.into_inner().collect();
@@ -434,7 +492,7 @@ impl PureRustPerlParser {
                 format!("(variable_declaration ({}) {} {})", scope, var_sexps.join(" "), init_sexp)
             }
             AstNode::SubDeclaration { name, body, .. } => {
-                format!("(sub_declaration (identifier {}) {})", name, self.to_sexp(body))
+                format!("(subroutine (identifier {}) {})", name, self.to_sexp(body))
             }
             AstNode::IfStatement { condition, then_block, .. } => {
                 format!("(if_statement {} {})", self.to_sexp(condition), self.to_sexp(then_block))
@@ -469,6 +527,23 @@ impl PureRustPerlParser {
             AstNode::List(items) => {
                 let item_sexps: Vec<String> = items.iter().map(|i| self.to_sexp(i)).collect();
                 item_sexps.join(" ")
+            }
+            AstNode::ForStatement { init, condition, update, block, .. } => {
+                let mut parts = vec![];
+                if let Some(i) = init { parts.push(format!("(init {})", self.to_sexp(i))); }
+                if let Some(c) = condition { parts.push(format!("(condition {})", self.to_sexp(c))); }
+                if let Some(u) = update { parts.push(format!("(update {})", self.to_sexp(u))); }
+                parts.push(format!("(body {})", self.to_sexp(block)));
+                format!("(for_statement {})", parts.join(" "))
+            }
+            AstNode::PackageDeclaration { name, version, block } => {
+                let mut parts = vec![format!("(name {})", name)];
+                if let Some(v) = version { parts.push(format!("(version {})", v)); }
+                if let Some(b) = block { parts.push(format!("(body {})", self.to_sexp(b))); }
+                format!("(package_declaration {})", parts.join(" "))
+            }
+            AstNode::Regex { pattern, flags } => {
+                format!("(regex {} {})", pattern, flags)
             }
             _ => format!("(unhandled_node {:?})", node),
         }
