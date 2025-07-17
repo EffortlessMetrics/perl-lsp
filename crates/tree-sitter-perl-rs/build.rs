@@ -12,7 +12,7 @@ fn main() {
 
     // Conditionally build scanner based on features
     if cfg!(feature = "c-scanner") {
-        build_c_scanner();
+    build_c_scanner();
     } else {
         // Default to rust-scanner
         build_rust_scanner_stub();

@@ -271,7 +271,7 @@ impl RustScanner {
             }
         }
         Ok(Some(TokenType::Identifier))
-    }
+            }
 
     fn scan_operator(&mut self, _input: &[u8]) -> ParseResult<Option<TokenType>> {
         Ok(Some(TokenType::Plus)) // Simplified

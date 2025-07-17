@@ -28,11 +28,11 @@ pub enum ParseError {
     /// Invalid Unicode sequence
     #[error("Invalid Unicode sequence")]
     InvalidUnicode,
-    
+
     /// Invalid UTF-8 sequence encountered
     #[error("Invalid UTF-8: {0}")]
     InvalidUtf8(String),
-    
+
     /// Scanner error occurred
     #[error("Scanner error: {0}")]
     ScannerError(String),
