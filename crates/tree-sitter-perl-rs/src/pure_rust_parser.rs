@@ -114,6 +114,13 @@ pub enum AstNode {
     ScalarVariable(String),
     ArrayVariable(String),
     HashVariable(String),
+    
+    // References
+    ScalarReference(String),
+    ArrayReference(String),
+    HashReference(String),
+    SubroutineReference(String),
+    GlobReference(String),
     ArrayElement {
         array: String,
         index: Box<AstNode>,
@@ -523,12 +530,18 @@ impl PureRustPerlParser {
                             let delimiter_inner = p.into_inner().next();
                             if let Some(d) = delimiter_inner {
                                 match d.as_rule() {
-                                    Rule::single_quoted_string => {
+                                    Rule::heredoc_single_quoted => {
                                         quoted = true;
                                         marker = d.as_str().trim_matches('\'').to_string();
                                     }
-                                    Rule::double_quoted_string => {
+                                    Rule::heredoc_double_quoted => {
                                         marker = d.as_str().trim_matches('"').to_string();
+                                    }
+                                    Rule::heredoc_backtick => {
+                                        marker = d.as_str().trim_matches('`').to_string();
+                                    }
+                                    Rule::heredoc_escaped => {
+                                        marker = d.as_str().trim_start_matches('\\').to_string();
                                     }
                                     Rule::bare_heredoc_delimiter => {
                                         marker = d.as_str().to_string();
@@ -791,6 +804,46 @@ impl PureRustPerlParser {
                     Ok(left.map(|l| *l))
                 }
             }
+            Rule::interpolation => {
+                // Handle interpolation within strings
+                let inner = pair.into_inner().next().unwrap();
+                self.build_node(inner)
+            }
+            Rule::complex_scalar_interpolation => {
+                // ${expr} form
+                let inner = pair.into_inner().next().unwrap();
+                self.build_node(inner)
+            }
+            Rule::complex_array_interpolation => {
+                // @{[expr]} form  
+                let inner = pair.into_inner().next().unwrap();
+                self.build_node(inner)
+            }
+            Rule::reference => {
+                // Handle variable references
+                let inner = pair.into_inner().next().unwrap();
+                self.build_node(inner)
+            }
+            Rule::scalar_reference => {
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::ScalarReference(inner.as_str().to_string())))
+            }
+            Rule::array_reference => {
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::ArrayReference(inner.as_str().to_string())))
+            }
+            Rule::hash_reference => {
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::HashReference(inner.as_str().to_string())))
+            }
+            Rule::subroutine_reference => {
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::SubroutineReference(inner.as_str().to_string())))
+            }
+            Rule::glob_reference => {
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::GlobReference(inner.as_str().to_string())))
+            }
             _ => {
                 // For unhandled rules, try to process inner pairs
                 let inner: Vec<_> = pair.into_inner().collect();
@@ -887,6 +940,21 @@ impl PureRustPerlParser {
             }
             AstNode::HashVariable(name) => {
                 format!("(hash_variable {})", name)
+            }
+            AstNode::ScalarReference(name) => {
+                format!("(scalar_reference {})", name)
+            }
+            AstNode::ArrayReference(name) => {
+                format!("(array_reference {})", name)
+            }
+            AstNode::HashReference(name) => {
+                format!("(hash_reference {})", name)
+            }
+            AstNode::SubroutineReference(name) => {
+                format!("(subroutine_reference {})", name)
+            }
+            AstNode::GlobReference(name) => {
+                format!("(glob_reference {})", name)
             }
             AstNode::Number(value) => {
                 format!("(number {})", value)
