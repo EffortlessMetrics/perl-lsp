@@ -243,7 +243,7 @@ mod property_tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
         #[test]
-        fn test_parse_does_not_panic(input in "[a-zA-Z0-9_\\s{}()\\[\\]\"';,.+\\-*/=<>!&|^~%#@$`]+") {
+        fn test_parse_does_not_panic(input in r#"[a-zA-Z0-9_\s{}()\[\]"';,.+\-*/=<>!&|^~%#@$`]+"#) {
             // This test ensures that parsing arbitrary strings doesn't panic
             let _result = parse(&input);
         }

@@ -64,12 +64,12 @@ mod tests {
         // Single quoted strings
         parse_successfully("'hello'");
         parse_successfully("'hello world'");
-        parse_successfully("'don\\'t'");
+        parse_successfully(r#"'don\'t'"#);
         
         // Double quoted strings
         parse_successfully("\"hello\"");
         parse_successfully("\"hello world\"");
-        parse_successfully("\"hello\\nworld\"");
+        parse_successfully(r#""hello\nworld""#);
         
         // q-style strings
         parse_successfully("q{hello}");
@@ -346,7 +346,7 @@ mod tests {
         // Basic match
         parse_successfully("/pattern/");
         parse_successfully("/hello/");
-        parse_successfully("/\\d+/");
+        parse_successfully(r#"/\d+/"#);
         
         // With flags
         parse_successfully("/pattern/i");
