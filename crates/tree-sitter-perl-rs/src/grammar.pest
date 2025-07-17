@@ -185,7 +185,8 @@ multiplicative_expression = {
 }
 
 unary_expression = {
-    ("!" | "-" | "+" | "~" | "\\" | "not")+ ~ unary_expression
+    ("!" | "-" | "+" | "~" | "not")+ ~ unary_expression
+    | reference
     | postfix_expression
 }
 
@@ -213,6 +214,7 @@ decrement = { "--" }
 
 primary_expression = {
     literal
+    | reference
     | variable
     | array_ref
     | hash_ref
@@ -228,6 +230,21 @@ primary_expression = {
     | readline
     | qw_list
 }
+
+// References to variables
+reference = {
+    scalar_reference
+    | array_reference
+    | hash_reference
+    | subroutine_reference
+    | glob_reference
+}
+
+scalar_reference = @{ "\\" ~ scalar_variable }
+array_reference = @{ "\\" ~ array_variable }
+hash_reference = @{ "\\" ~ hash_variable }
+subroutine_reference = @{ "\\" ~ "&" ~ identifier }
+glob_reference = @{ "\\" ~ "*" ~ identifier }
 
 // Anonymous references
 array_ref = { "[" ~ list_elements? ~ "]" }
@@ -274,7 +291,12 @@ single_quoted_string = @{ "'" ~ single_string_content ~ "'" }
 single_string_content = @{ (!"'" ~ (escape_sequence | ANY))* }
 
 double_quoted_string = { "\"" ~ double_string_content ~ "\"" }
-double_string_content = @{ (!"\"" ~ ANY)* }
+double_string_content = { double_string_part* }
+double_string_part = {
+    interpolation
+    | double_string_chars
+}
+double_string_chars = @{ (!( "\"" | "$" | "@" ) ~ ANY)+ | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{" ) | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{" ) }
 
 backtick_string = @{ "`" ~ backtick_content ~ "`" }
 backtick_content = @{ (!"`" ~ ANY)* }
@@ -303,7 +325,17 @@ qq_string_content = @{ (!delimiter ~ ANY)* }
 qx_string_content = @{ (!delimiter ~ ANY)* }
 
 escape_sequence = @{ "\\" ~ ANY }
-interpolation = { scalar_variable | array_element | hash_element_access }
+interpolation = { 
+    complex_scalar_interpolation 
+    | complex_array_interpolation 
+    | scalar_variable 
+    | array_element 
+    | hash_element_access 
+}
+
+// Complex interpolation forms
+complex_scalar_interpolation = { "${" ~ expression ~ "}" }
+complex_array_interpolation = { "@{[" ~ expression ~ "]}" }
 
 // Variables
 variable = {
