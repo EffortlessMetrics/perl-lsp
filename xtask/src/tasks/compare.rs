@@ -339,11 +339,10 @@ fn generate_comparison_report(
     let c_summary = &c_results["summary"];
     let rust_summary = &rust_results["summary"];
 
-    let c_avg_time = c_summary["avg_time"].as_f64().unwrap_or(0.0);
-    let rust_avg_time = rust_summary["avg_time"].as_f64().unwrap_or(0.0);
-
-    let time_diff = if c_avg_time > 0.0 {
-        ((rust_avg_time - c_avg_time) / c_avg_time) * 100.0
+    let c_total_time = c_summary["total_time"].as_f64().unwrap_or(0.0);
+    let rust_total_time = rust_summary["total_time"].as_f64().unwrap_or(0.0);
+    let time_diff = if c_total_time > 0.0 {
+        ((rust_total_time - c_total_time) / c_total_time) * 100.0
     } else {
         0.0
     };
@@ -351,7 +350,7 @@ fn generate_comparison_report(
     report["comparison"] = json!({
         "time_difference_percent": time_diff,
         "rust_faster": time_diff < 0.0,
-        "performance_ratio": if c_avg_time > 0.0 { rust_avg_time / c_avg_time } else { 1.0 },
+        "performance_ratio": if c_total_time > 0.0 { rust_total_time / c_total_time } else { 1.0 },
         "success_rate": {
             "c": c_summary["parse_success_count"].as_u64().unwrap_or(0),
             "rust": rust_summary["parse_success_count"].as_u64().unwrap_or(0),
