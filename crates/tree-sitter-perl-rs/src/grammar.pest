@@ -329,9 +329,11 @@ identifier = @{
 reserved_word = { 
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
     "while" | "until" | "for" | "foreach" | "return" | "last" | "next" | "redo" |
-    "package" | "use" | "require" | "do" | "eval" | "BEGIN" | "END" | "CHECK" | 
-    "INIT" | "UNITCHECK" | "goto" | "qw" | "qq" | "qx" | "qr" | "q"
+    "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q"
 }
+
+// Special identifiers that are only reserved in specific contexts
+goto_target = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 qualified_name = { identifier ~ ("::" ~ identifier)* }
 label = @{ identifier ~ ":" }
 bareword = { identifier }
@@ -406,7 +408,7 @@ unitcheck_block = { "UNITCHECK" ~ block }
 // do/eval/goto
 do_block = { "do" ~ (block | expression) ~ semicolon? }
 eval_statement = { "eval" ~ (block | expression) ~ semicolon? }
-goto_statement = { "goto" ~ (identifier | expression) ~ semicolon? }
+goto_statement = { "goto" ~ (goto_target | expression) ~ semicolon? }
 
 // POD
 pod_section = @{ 

@@ -477,7 +477,17 @@ impl PureRustPerlParser {
             }
             Rule::goto_statement => {
                 let inner = pair.into_inner().next().unwrap();
-                let target = inner.as_str().to_string();
+                let target = match inner.as_rule() {
+                    Rule::goto_target => inner.as_str().to_string(),
+                    _ => {
+                        // For expressions, we need to evaluate them
+                        if let Some(expr) = self.build_node(inner)? {
+                            format!("{:?}", expr) // Simple representation for now
+                        } else {
+                            String::new()
+                        }
+                    }
+                };
                 Ok(Some(AstNode::GotoStatement { target }))
             }
             Rule::pod_section => {
