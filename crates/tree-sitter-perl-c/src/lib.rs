@@ -69,6 +69,6 @@ mod tests {
 }
 
 // External C function declarations
-extern "C" {
+unsafe extern "C" {
     fn tree_sitter_perl() -> Language;
 } 
