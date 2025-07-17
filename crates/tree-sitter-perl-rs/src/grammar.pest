@@ -8,23 +8,23 @@ program = { SOI ~ statements? ~ EOI }
 statements = { statement+ }
 
 statement = { 
-    expression_statement 
-    | declaration_statement
-    | block_statement
+    sub_declaration
+    | package_declaration
+    | use_statement
+    | require_statement
     | if_statement
     | unless_statement
     | while_statement
     | until_statement
     | for_statement
     | foreach_statement
-    | sub_declaration
-    | package_declaration
-    | use_statement
-    | require_statement
     | return_statement
     | last_statement
     | next_statement
     | redo_statement
+    | declaration_statement
+    | expression_statement 
+    | block_statement
     | comment
     | empty_statement
     | standalone_expression
@@ -287,8 +287,10 @@ special_var_name = @{
     | ":" | ";" | "<" | "=" | ">" | "?" | "@" | "[" | "\\" | "]" | "^" | "_" | "`" | "{" | "|" | "}" | "~"
 }
 
-// Identifiers
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+// Identifiers - must not be a complete keyword
+identifier = @{ 
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
+}
 qualified_name = { identifier ~ ("::" ~ identifier)* }
 label = @{ identifier ~ ":" }
 bareword = { identifier }

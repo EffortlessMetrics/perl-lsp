@@ -34,11 +34,7 @@ fn main() {
         .write_to_file(out_dir.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    // Post-process the bindings for Rust 2024 compatibility
-    let bindings_path = out_dir.join("bindings.rs");
-    let content = std::fs::read_to_string(&bindings_path).expect("Could not read bindings.rs");
-    let content = content.replace("extern \"C\" {", "unsafe extern \"C\" {");
-    std::fs::write(&bindings_path, content).expect("Could not write modified bindings.rs");
+    // No need to post-process - bindgen 0.72 already handles Rust 2024 unsafe extern blocks
 
     // Tell cargo to look for shared libraries in the specified directory
     println!("cargo:rustc-link-search=native={}", out_dir.display());
