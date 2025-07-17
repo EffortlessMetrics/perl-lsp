@@ -4,6 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
 [![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: APACHE 2.0](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/APACHE2.0)
 
 > **Advanced Rust implementation of tree-sitter-perl with pure Rust frameworks and comprehensive testing**
 
@@ -401,7 +402,7 @@ parser_config.perl = {
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details. or apache 2
 
 ---
 
