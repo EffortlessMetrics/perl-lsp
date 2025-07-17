@@ -126,6 +126,7 @@ pub enum AstNode {
     Regex {
         pattern: String,
         flags: String,
+        named_groups: Vec<String>,
     },
     Substitution {
         pattern: String,
@@ -178,11 +179,14 @@ pub enum AstNode {
     QrRegex {
         pattern: String,
         flags: String,
+        named_groups: Vec<String>,
     },
     
     // Here documents
     Heredoc {
         marker: String,
+        indented: bool,
+        quoted: bool,
         content: String,
     },
     
@@ -217,10 +221,94 @@ impl PureRustPerlParser {
     }
 
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
-        let pairs = PerlParser::parse(Rule::program, source)?;
-        self.build_ast(pairs)
+        match PerlParser::parse(Rule::program, source) {
+            Ok(pairs) => self.build_ast(pairs),
+            Err(e) => {
+                // Attempt partial parsing by trying to parse individual statements
+                self.parse_with_recovery(source, e)
+            }
+        }
+    }
+    
+    fn parse_with_recovery(&mut self, source: &str, original_error: pest::error::Error<Rule>) -> Result<AstNode, Box<dyn std::error::Error>> {
+        let mut statements = Vec::new();
+        let lines: Vec<&str> = source.lines().collect();
+        let mut current_block = String::new();
+        let mut brace_count = 0;
+        
+        for line in lines {
+            current_block.push_str(line);
+            current_block.push('\n');
+            
+            // Count braces to handle multi-line statements
+            brace_count += line.chars().filter(|&c| c == '{').count() as i32;
+            brace_count -= line.chars().filter(|&c| c == '}').count() as i32;
+            
+            // Try to parse when we have balanced braces or at semicolons
+            if (brace_count == 0 && (line.trim().ends_with(';') || line.trim().ends_with('}'))) 
+                || line.trim().is_empty() {
+                
+                let trimmed = current_block.trim();
+                if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                    // Try to parse as a complete statement with semicolon
+                    let with_semi = if !trimmed.ends_with(';') && !trimmed.ends_with('}') {
+                        format!("{};", trimmed)
+                    } else {
+                        trimmed.to_string()
+                    };
+                    
+                    if let Ok(pairs) = PerlParser::parse(Rule::statements, &with_semi) {
+                        for pair in pairs {
+                            for inner_pair in pair.into_inner() {
+                                if let Some(node) = self.build_node(inner_pair).unwrap_or(None) {
+                                    statements.push(node);
+                                }
+                            }
+                        }
+                        current_block.clear();
+                    } else {
+                        // If that fails, skip and continue
+                        current_block.clear();
+                    }
+                } else if trimmed.starts_with('#') {
+                    // Handle comments
+                    statements.push(AstNode::Comment(trimmed.to_string()));
+                    current_block.clear();
+                }
+            }
+        }
+        
+        if statements.is_empty() {
+            Err(Box::new(original_error))
+        } else {
+            Ok(AstNode::Program(statements))
+        }
     }
 
+    fn extract_named_groups(&self, pattern: &str) -> Vec<String> {
+        let mut groups = Vec::new();
+        let chars: Vec<char> = pattern.chars().collect();
+        let mut i = 0;
+        
+        while i < chars.len() {
+            if i + 3 < chars.len() && &chars[i..i+3] == &['(', '?', '<'] {
+                // Found start of named group
+                i += 3;
+                let mut name = String::new();
+                while i < chars.len() && chars[i] != '>' {
+                    name.push(chars[i]);
+                    i += 1;
+                }
+                if !name.is_empty() {
+                    groups.push(name);
+                }
+            }
+            i += 1;
+        }
+        
+        groups
+    }
+    
     fn build_ast(&mut self, pairs: Pairs<Rule>) -> Result<AstNode, Box<dyn std::error::Error>> {
         let mut nodes = Vec::new();
         for pair in pairs {
@@ -412,6 +500,52 @@ impl PureRustPerlParser {
                 let inner = pair.into_inner().next().unwrap();
                 Ok(Some(AstNode::QqString(inner.as_str().to_string())))
             }
+            Rule::heredoc => {
+                let mut inner = pair.into_inner();
+                let mut indented = false;
+                let mut marker = String::new();
+                let mut quoted = false;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::heredoc_indented => {
+                            indented = true;
+                        }
+                        Rule::heredoc_delimiter => {
+                            let delimiter_str = p.as_str();
+                            let delimiter_inner = p.into_inner().next();
+                            if let Some(d) = delimiter_inner {
+                                match d.as_rule() {
+                                    Rule::single_quoted_string => {
+                                        quoted = true;
+                                        marker = d.as_str().trim_matches('\'').to_string();
+                                    }
+                                    Rule::double_quoted_string => {
+                                        marker = d.as_str().trim_matches('"').to_string();
+                                    }
+                                    Rule::bare_heredoc_delimiter => {
+                                        marker = d.as_str().to_string();
+                                    }
+                                    _ => {}
+                                }
+                            } else {
+                                marker = delimiter_str.to_string();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                // Note: In a real implementation, we would need to collect the heredoc content
+                // from subsequent lines until we find the marker. For now, we just create
+                // a placeholder.
+                Ok(Some(AstNode::Heredoc {
+                    marker,
+                    indented,
+                    quoted,
+                    content: String::new(), // This would be filled by a stateful parser
+                }))
+            }
             Rule::list => {
                 let mut elements = Vec::new();
                 for inner in pair.into_inner() {
@@ -526,16 +660,21 @@ impl PureRustPerlParser {
                             let mut match_inner = first.into_inner();
                             let pattern = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
                             let flags = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                            Ok(Some(AstNode::Regex { pattern, flags }))
+                            
+                            // Extract named groups from pattern
+                            let named_groups = self.extract_named_groups(&pattern);
+                            
+                            Ok(Some(AstNode::Regex { pattern, flags, named_groups }))
                         }
                         _ => {
                             let pattern = first.as_str().to_string();
                             let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                            Ok(Some(AstNode::Regex { pattern, flags }))
+                            let named_groups = self.extract_named_groups(&pattern);
+                            Ok(Some(AstNode::Regex { pattern, flags, named_groups }))
                         }
                     }
                 } else {
-                    Ok(Some(AstNode::Regex { pattern: String::new(), flags: String::new() }))
+                    Ok(Some(AstNode::Regex { pattern: String::new(), flags: String::new(), named_groups: Vec::new() }))
                 }
             }
             Rule::for_statement => {
@@ -746,8 +885,13 @@ impl PureRustPerlParser {
                 if let Some(b) = block { parts.push(format!("(body {})", Self::node_to_sexp(b))); }
                 format!("(package_declaration {})", parts.join(" "))
             }
-            AstNode::Regex { pattern, flags } => {
-                format!("(regex {} {})", pattern, flags)
+            AstNode::Regex { pattern, flags, named_groups } => {
+                let groups_str = if !named_groups.is_empty() {
+                    format!(" (named_groups {})", named_groups.join(" "))
+                } else {
+                    String::new()
+                };
+                format!("(regex {} {}{})", pattern, flags, groups_str)
             }
             AstNode::BeginBlock(block) => {
                 format!("(begin_block {})", Self::node_to_sexp(block))
@@ -782,6 +926,13 @@ impl PureRustPerlParser {
             }
             AstNode::LabeledBlock { label, block } => {
                 format!("(labeled_block {} {})", label, Self::node_to_sexp(block))
+            }
+            AstNode::Heredoc { marker, indented, quoted, content } => {
+                let flags = format!("{}{}",
+                    if *indented { "~" } else { "" },
+                    if *quoted { "'" } else { "" }
+                );
+                format!("(heredoc {} {} \"{}\")", marker, flags, content.escape_default())
             }
             AstNode::Pod(content) => {
                 format!("(pod {})", content)

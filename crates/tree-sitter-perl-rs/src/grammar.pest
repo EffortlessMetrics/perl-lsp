@@ -348,14 +348,30 @@ regex = {
 }
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
-qr_regex = { "qr" ~ delimiter ~ regex_pattern ~ delimiter ~ regex_flags? }
-match_regex_pattern = @{ (!"/" ~ ANY)* }
-regex_pattern = @{ (!delimiter ~ ANY)* }
-regex_flags = @{ ASCII_ALPHA* }
+qr_regex = { "qr" ~ regex_delimiter ~ qr_regex_pattern ~ regex_delimiter ~ regex_flags? }
+match_regex_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
+qr_regex_pattern = @{ (!regex_delimiter ~ (regex_escape | regex_group | ANY))* }
+
+// Regex components
+regex_escape = { "\\" ~ ANY }
+regex_group = {
+    "(?<" ~ identifier ~ ">" ~ regex_group_content ~ ")" |  // Named capture
+    "(?:" ~ regex_group_content ~ ")" |                     // Non-capturing
+    "(?=" ~ regex_group_content ~ ")" |                     // Positive lookahead
+    "(?!" ~ regex_group_content ~ ")" |                     // Negative lookahead
+    "(?<=" ~ regex_group_content ~ ")" |                    // Positive lookbehind
+    "(?<!" ~ regex_group_content ~ ")" |                    // Negative lookbehind
+    "(" ~ regex_group_content ~ ")"                         // Capturing group
+}
+regex_group_content = @{ (!(")" | "(") ~ (regex_escape | ANY))* }
+
+regex_delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
+regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p" | "c" | "e" | "r")* }
 
 substitution = {
-    "s" ~ delimiter ~ regex_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
+    "s" ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
 }
+sub_pattern = @{ (!delimiter ~ (regex_escape | regex_group | ANY))* }
 
 replacement = @{ (!delimiter ~ ANY)* }
 
@@ -368,8 +384,19 @@ replace_list = @{ (!delimiter ~ ANY)* }
 trans_flags = @{ ASCII_ALPHA* }
 
 // Other constructs
-heredoc = { "<<" ~ heredoc_marker }
-heredoc_marker = @{ identifier | string }
+// Heredoc - Note: Full heredoc parsing requires stateful handling
+// This rule captures the heredoc declaration, actual content is handled by the scanner
+heredoc = { 
+    "<<" ~ heredoc_indented? ~ heredoc_delimiter
+}
+heredoc_indented = { "~" }
+heredoc_delimiter = {
+    single_quoted_string |
+    double_quoted_string |
+    backtick_string |
+    bare_heredoc_delimiter
+}
+bare_heredoc_delimiter = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
 glob = { "<" ~ glob_pattern ~ ">" }
 glob_pattern = @{ (!">'" ~ ANY)* }

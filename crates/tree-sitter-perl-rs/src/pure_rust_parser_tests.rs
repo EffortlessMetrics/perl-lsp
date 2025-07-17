@@ -513,4 +513,57 @@ mod tests {
         check_sexp_contains("goto LABEL", "goto_statement");
         check_sexp_contains("goto LABEL", "LABEL");
     }
+
+    #[test]
+    fn test_advanced_regex() {
+        // Regex with modifiers
+        parse_successfully("/pattern/i");
+        parse_successfully("/pattern/gims");
+        parse_successfully("/pattern/x");
+        
+        // Regex with captures
+        parse_successfully("/(\\w+)\\s+(\\w+)/");
+        
+        // Named captures
+        parse_successfully("/(?<first>\\w+)\\s+(?<last>\\w+)/");
+        
+        // Non-capturing groups
+        parse_successfully("/(?:foo|bar)baz/");
+        
+        // Lookahead/lookbehind
+        parse_successfully("/foo(?=bar)/");
+        parse_successfully("/(?<=foo)bar/");
+        
+        // qr// regex
+        parse_successfully("qr/pattern/i");
+        parse_successfully("qr{pattern}gims");
+        
+        // S-expression check
+        check_sexp_contains("/pattern/i", "(regex pattern i)");
+        check_sexp_contains("/(?<name>\\w+)/", "named_groups");
+        check_sexp_contains("/(?<name>\\w+)/", "name");
+    }
+
+    #[test]
+    fn test_heredoc() {
+        // Basic heredoc
+        parse_successfully("<<EOF");
+        parse_successfully("<<'EOF'");
+        parse_successfully("<<\"EOF\"");
+        
+        // Indented heredoc
+        parse_successfully("<<~EOF");
+        parse_successfully("<<~'EOF'");
+        parse_successfully("<<~\"INDENT\"");
+        
+        // Heredoc in assignments
+        parse_successfully("my $text = <<EOF");
+        parse_successfully("$var = <<'END'");
+        
+        // S-expression check
+        check_sexp_contains("<<EOF", "heredoc");
+        check_sexp_contains("<<EOF", "EOF");
+        check_sexp_contains("<<~'END'", "heredoc");
+        check_sexp_contains("<<~'END'", "~'");
+    }
 }
