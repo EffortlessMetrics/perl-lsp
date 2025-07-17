@@ -167,7 +167,7 @@ equality_expression = {
 }
 
 relational_expression = {
-    shift_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge") ~ shift_expression)*
+    shift_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ shift_expression)*
 }
 
 shift_expression = { additive_expression ~ (("<<" | ">>") ~ additive_expression)* }
@@ -261,11 +261,11 @@ string = {
 single_quoted_string = @{ "'" ~ single_string_content ~ "'" }
 single_string_content = @{ (!"'" ~ (escape_sequence | ANY))* }
 
-double_quoted_string = @{ "\"" ~ double_string_content ~ "\"" }
-double_string_content = @{ (!"\"" ~ (escape_sequence | interpolation | ANY))* }
+double_quoted_string = { "\"" ~ double_string_content ~ "\"" }
+double_string_content = @{ (!"\"" ~ ANY)* }
 
 backtick_string = @{ "`" ~ backtick_content ~ "`" }
-backtick_content = @{ (!"`" ~ (escape_sequence | interpolation | ANY))* }
+backtick_content = @{ (!"`" ~ ANY)* }
 
 q_string = { "q" ~ delimiter ~ q_string_content ~ delimiter }
 qq_string = { 
@@ -277,18 +277,18 @@ qq_string = {
         (qq_delimiter ~ qq_delimited_content ~ qq_delimiter)
     )
 }
-qq_paren_content = @{ (!")" ~ (escape_sequence | interpolation | ANY))* }
-qq_bracket_content = @{ (!"]" ~ (escape_sequence | interpolation | ANY))* }
-qq_brace_content = @{ (!"}" ~ (escape_sequence | interpolation | ANY))* }
-qq_angle_content = @{ (!">" ~ (escape_sequence | interpolation | ANY))* }
+qq_paren_content = @{ (!")" ~ ANY)* }
+qq_bracket_content = @{ (!"]" ~ ANY)* }
+qq_brace_content = @{ (!"}" ~ ANY)* }
+qq_angle_content = @{ (!">" ~ ANY)* }
 qq_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
-qq_delimited_content = @{ (!qq_delimiter ~ (escape_sequence | interpolation | ANY))* }
+qq_delimited_content = @{ (!qq_delimiter ~ ANY)* }
 qx_string = { "qx" ~ delimiter ~ qx_string_content ~ delimiter }
 
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 q_string_content = @{ (!delimiter ~ ANY)* }
-qq_string_content = @{ (!delimiter ~ (escape_sequence | interpolation | ANY))* }
-qx_string_content = @{ (!delimiter ~ (escape_sequence | interpolation | ANY))* }
+qq_string_content = @{ (!delimiter ~ ANY)* }
+qx_string_content = @{ (!delimiter ~ ANY)* }
 
 escape_sequence = @{ "\\" ~ ANY }
 interpolation = { scalar_variable | array_element | hash_element }
