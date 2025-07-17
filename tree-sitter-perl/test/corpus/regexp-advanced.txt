@@ -1,0 +1,299 @@
+==========================================
+Character classes
+==========================================
+
+/[a-z]/;
+/[A-Z0-9]/;
+/[^0-9]/;
+/[\w\d]/;
+/[[:alpha:]]/;
+/[[:digit:][:space:]]/;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Unicode properties
+==========================================
+
+/\p{Letter}/;
+/\P{Number}/;
+/\p{Lowercase_Letter}/;
+/\p{Script=Latin}/;
+/\p{Block=Basic_Latin}/;
+/\x{263A}/;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Named captures
+==========================================
+
+/(?<name>\w+)/;
+/(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/;
+/(?'name'\w+)/;
+$+{name};
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (hash_access_variable
+    (hash_access_index
+      (bareword))))
+
+==========================================
+Non-capturing groups
+==========================================
+
+/(?:abc)+/;
+/(?:foo|bar)/;
+/(?i:case)/;
+/(?-i:CASE)/;
+/(?x: \s+ # whitespace )/x;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)
+      (regex_flags))))
+
+==========================================
+Lookahead and lookbehind
+==========================================
+
+/foo(?=bar)/;
+/foo(?!bar)/;
+/(?<=foo)bar/;
+/(?<!foo)bar/;
+/\w+(?=\s*=)/;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Recursive patterns
+==========================================
+
+/\((?:[^()]|(?R))*\)/;
+/(?<paren>\((?:[^()]|(?&paren))*\))/;
+/(foo(bar)?)+(?1)/;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Conditional patterns
+==========================================
+
+/(?(1)yes|no)/;
+/(?(?=\d)\d+|\w+)/;
+/(foo)?(?(1)bar|baz)/;
+/(?<name>a)?(?(name)b|c)/;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Extended regex with comments
+==========================================
+
+/
+  \A          # start of string
+  (\d{4})     # year
+  -           # separator
+  (\d{2})     # month
+  -           # separator
+  (\d{2})     # day
+  \z          # end of string
+/x;
+
+qr{
+  (?<word>    # start named group
+    \w+       # word characters
+  )           # end group
+  \s*         # optional whitespace
+  =           # equals
+}x;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)
+      (regex_flags)))
+  (quoted_regex
+    (regex_pattern)
+    (regex_flags)))
+
+==========================================
+Complex regex flags
+==========================================
+
+/foo/gimsx;
+/bar/aadlupimsx;
+s/foo/bar/gexr;
+m/test/gc;
+qr/pattern/msixpodual;
+
+---
+
+(source_file
+  (regex_match_expression
+    (regex
+      (regex_pattern)
+      (regex_flags)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)
+      (regex_flags)))
+  (regex_substitution_expression
+    (regex
+      (regex_pattern)
+      (string_content)
+      (regex_flags)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)
+      (regex_flags)))
+  (quoted_regex
+    (regex_pattern)
+    (regex_flags)))
+
+==========================================
+Special regex variables
+==========================================
+
+$&;
+$`;
+$';
+$+;
+$^N;
+$-[0];
+$+[0];
+@-;
+@+;
+%+;
+%-;
+
+---
+
+(source_file
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (array_access_variable
+    (special_array_variable)
+    (array_access_index
+      (integer)))
+  (array_access_variable
+    (special_array_variable)
+    (array_access_index
+      (integer)))
+  (special_array_variable)
+  (special_array_variable)
+  (special_hash_variable)
+  (special_hash_variable))

@@ -1,0 +1,400 @@
+==========================================
+Format variables
+==========================================
+
+$~ = 'MYFORMAT';
+$^ = 'MYFORMAT_TOP';
+$= = 60;
+$- = 10;
+$% = 1;
+
+---
+
+(source_file
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (integer))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (integer))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (integer)))
+
+==========================================
+IO variables
+==========================================
+
+$| = 1;
+$/ = "\n";
+$\ = undef;
+$, = ", ";
+$" = " ";
+$; = "\034";
+$: = " \n-";
+
+---
+
+(source_file
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (integer))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (func0op_call_expression
+      (identifier)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content))))
+
+==========================================
+Process and system variables
+==========================================
+
+$$;
+$<;
+$>;
+$(;
+$);
+$0 = "my-program";
+$^O;
+$^V;
+$^X;
+$^T;
+
+---
+
+(source_file
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable))
+
+==========================================
+Error variables
+==========================================
+
+$@;
+$!;
+$^E;
+$?;
+$CHILD_ERROR;
+if ($!) {
+    print "Error: $!\n";
+}
+eval { die "test" };
+print $@ if $@;
+
+---
+
+(source_file
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (scalar_variable)
+  (if_statement
+    (condition
+      (special_scalar_variable))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)
+          (interpolation
+            (special_scalar_variable))))))
+  (func1op_call_expression
+    (identifier)
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)))))
+  (postfix_expression
+    (func1op_call_expression
+      (identifier)
+      (special_scalar_variable))
+    (postfix_operator)
+    (special_scalar_variable)))
+
+==========================================
+Signal handling
+==========================================
+
+$SIG{INT} = \&handler;
+$SIG{TERM} = 'IGNORE';
+$SIG{CHLD} = 'DEFAULT';
+$SIG{__DIE__} = sub { print "Died: @_\n" };
+$SIG{__WARN__} = sub { print "Warning: @_\n" };
+
+---
+
+(source_file
+  (assignment_expression
+    (hash_access_variable
+      (special_hash_variable)
+      (hash_access_index
+        (bareword)))
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (function_variable)))
+  (assignment_expression
+    (hash_access_variable
+      (special_hash_variable)
+      (hash_access_index
+        (bareword)))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (hash_access_variable
+      (special_hash_variable)
+      (hash_access_index
+        (bareword)))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (hash_access_variable
+      (special_hash_variable)
+      (hash_access_index
+        (bareword)))
+    (assignment_operator)
+    (anonymous_sub_expression
+      (block
+        (func1op_call_expression
+          (identifier)
+          (string_literal
+            (string_content)
+            (interpolation
+              (special_array_variable)))))))
+  (assignment_expression
+    (hash_access_variable
+      (special_hash_variable)
+      (hash_access_index
+        (bareword)))
+    (assignment_operator)
+    (anonymous_sub_expression
+      (block
+        (func1op_call_expression
+          (identifier)
+          (string_literal
+            (string_content)
+            (interpolation
+              (special_array_variable))))))))
+
+==========================================
+Special arrays and hashes
+==========================================
+
+@_;
+@ARGV;
+@INC;
+@ISA;
+%ENV;
+%INC;
+%SIG;
+%!;
+@+ = ();
+@- = ();
+%+ = ();
+%- = ();
+
+---
+
+(source_file
+  (special_array_variable)
+  (array_variable)
+  (array_variable)
+  (array_variable)
+  (hash_variable)
+  (hash_variable)
+  (special_hash_variable)
+  (special_hash_variable)
+  (assignment_expression
+    (special_array_variable)
+    (assignment_operator)
+    (list_expression))
+  (assignment_expression
+    (special_array_variable)
+    (assignment_operator)
+    (list_expression))
+  (assignment_expression
+    (special_hash_variable)
+    (assignment_operator)
+    (list_expression))
+  (assignment_expression
+    (special_hash_variable)
+    (assignment_operator)
+    (list_expression)))
+
+==========================================
+Special filehandles
+==========================================
+
+print STDOUT "output\n";
+print STDERR "error\n";
+$line = <STDIN>;
+open(DATA, "<", \*DATA);
+while (<DATA>) {
+    print;
+}
+__DATA__
+data content here
+
+---
+
+(source_file
+  (func1op_call_expression
+    (identifier)
+    (typeglob_variable)
+    (string_literal
+      (string_content)))
+  (func1op_call_expression
+    (identifier)
+    (typeglob_variable)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (readline_expression
+      (typeglob_variable)))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword)
+      (comma)
+      (string_literal
+        (string_content))
+      (comma)
+      (reference_expression
+        (reference_operator)
+        (typeglob_variable))))
+  (while_statement
+    (condition
+      (readline_expression))
+    (block
+      (func0op_call_expression
+        (identifier))))
+  (data_section))
+
+==========================================
+Perl version variables
+==========================================
+
+$];
+$^V;
+$^PERL_VERSION;
+${^GLOBAL_PHASE};
+${^TAINT};
+${^UNICODE};
+${^UTF8LOCALE};
+${^WARNING_BITS};
+${^OPEN};
+${^ENCODING};
+
+---
+
+(source_file
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable))
+
+==========================================
+Miscellaneous special variables
+==========================================
+
+$.;
+$_;
+$a;
+$b;
+$^A;
+$^C;
+$^D;
+$^F;
+$^H;
+$^I;
+$^L;
+$^M;
+$^N;
+$^P;
+$^R;
+$^S;
+$^W;
+
+---
+
+(source_file
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (scalar_variable)
+  (scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable)
+  (special_scalar_variable))

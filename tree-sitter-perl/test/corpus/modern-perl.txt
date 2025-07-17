@@ -1,0 +1,698 @@
+==========================================
+Subroutine signatures (5.20+)
+==========================================
+
+use feature 'signatures';
+
+sub add ($x, $y) {
+    return $x + $y;
+}
+
+sub greet ($name = "World") {
+    print "Hello, $name!\n";
+}
+
+sub process ($first, @rest) {
+    print "First: $first\n";
+    print "Rest: @rest\n";
+}
+
+sub optional ($x, $y = 10, $z = 20) {
+    return $x + $y + $z;
+}
+
+sub slurpy ($x, $y, @args) {
+    return scalar @args;
+}
+
+sub hash_params ($x, %opts) {
+    return $opts{verbose} ? "verbose" : "quiet";
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (scalar_variable)))
+    (block
+      (return_expression
+        (binary_expression
+          (scalar_variable)
+          (binary_operator)
+          (scalar_variable)))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable)
+        (assignment_operator)
+        (string_literal
+          (string_content))))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)
+          (interpolation
+            (scalar_variable))))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (array_variable)))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)
+          (interpolation
+            (scalar_variable))))
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)
+          (interpolation
+            (array_variable))))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (scalar_variable)
+        (assignment_operator)
+        (integer))
+      (comma)
+      (signature_parameter
+        (scalar_variable)
+        (assignment_operator)
+        (integer)))
+    (block
+      (return_expression
+        (binary_expression
+          (binary_expression
+            (scalar_variable)
+            (binary_operator)
+            (scalar_variable))
+          (binary_operator)
+          (scalar_variable)))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (array_variable)))
+    (block
+      (return_expression
+        (func1op_call_expression
+          (identifier)
+          (array_variable)))))
+  (subroutine_declaration_statement
+    (identifier)
+    (subroutine_signature
+      (signature_parameter
+        (scalar_variable))
+      (comma)
+      (signature_parameter
+        (hash_variable)))
+    (block
+      (return_expression
+        (ternary_expression
+          (hash_access_variable
+            (hash_variable)
+            (hash_access_index
+              (bareword)))
+          (ternary_operator)
+          (string_literal
+            (string_content))
+          (ternary_operator)
+          (string_literal
+            (string_content)))))))
+
+==========================================
+Given/when statements (5.10+)
+==========================================
+
+use feature 'switch';
+
+given ($value) {
+    when (1) { say "one" }
+    when (2) { say "two" }
+    when ([3,4,5]) { say "three to five" }
+    when (/^\d+$/) { say "number" }
+    when ($_ > 10) { say "big" }
+    default { say "something else" }
+}
+
+given ($x) {
+    when ("foo") { continue }
+    when ("bar") { break }
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (given_statement
+    (scalar_variable)
+    (block
+      (when_statement
+        (integer)
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))
+      (when_statement
+        (integer)
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))
+      (when_statement
+        (anonymous_array_expression
+          (integer)
+          (comma)
+          (integer)
+          (comma)
+          (integer))
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))
+      (when_statement
+        (regex_match_expression
+          (regex
+            (regex_pattern)))
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))
+      (when_statement
+        (binary_expression
+          (special_scalar_variable)
+          (binary_operator)
+          (integer))
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))
+      (default_statement
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (string_literal
+                (string_content))))))))
+  (given_statement
+    (scalar_variable)
+    (block
+      (when_statement
+        (string_literal
+          (string_content))
+        (block
+          (continue_expression)))
+      (when_statement
+        (string_literal
+          (string_content))
+        (block
+          (break_expression))))))
+
+==========================================
+Smart matching (5.10+)
+==========================================
+
+use feature 'switch';
+
+if ($x ~~ $y) { }
+if ($x ~~ @array) { }
+if ($x ~~ %hash) { }
+if ($x ~~ /regex/) { }
+if ($x ~~ [1,2,3]) { }
+if ($x ~~ {a => 1}) { }
+if ($x ~~ \&code) { }
+
+when ($x ~~ $y) { }
+$result = $a ~~ $b;
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (scalar_variable)))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (array_variable)))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (hash_variable)))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (regex_match_expression
+          (regex
+            (regex_pattern)))))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (anonymous_array_expression
+          (integer)
+          (comma)
+          (integer)
+          (comma)
+          (integer))))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (anonymous_hash_expression
+          (hash_pair
+            (bareword)
+            (fat_arrow_operator)
+            (integer)))))
+    (block))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (reference_expression
+          (reference_operator)
+          (function_variable))))
+    (block))
+  (when_statement
+    (binary_expression
+      (scalar_variable)
+      (binary_operator)
+      (scalar_variable))
+    (block))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (binary_expression
+      (scalar_variable)
+      (binary_operator)
+      (scalar_variable))))
+
+==========================================
+State variables (5.10+)
+==========================================
+
+use feature 'state';
+
+sub counter {
+    state $count = 0;
+    return ++$count;
+}
+
+sub persistent {
+    state @array;
+    state %hash = (initialized => 1);
+    push @array, shift;
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (identifier)
+    (block
+      (assignment_expression
+        (variable_declaration
+          (variable_declaration_type)
+          (scalar_variable))
+        (assignment_operator)
+        (integer))
+      (return_expression
+        (prefix_expression
+          (prefix_operator)
+          (scalar_variable)))))
+  (subroutine_declaration_statement
+    (identifier)
+    (block
+      (variable_declaration
+        (variable_declaration_type)
+        (array_variable))
+      (assignment_expression
+        (variable_declaration
+          (variable_declaration_type)
+          (hash_variable))
+        (assignment_operator)
+        (list_expression
+          (hash_pair
+            (bareword)
+            (fat_arrow_operator)
+            (integer))))
+      (func1op_call_expression
+        (identifier)
+        (array_variable)
+        (comma)
+        (func0op_call_expression
+          (identifier))))))
+
+==========================================
+Lexical subroutines (5.18+)
+==========================================
+
+use feature 'lexical_subs';
+
+my sub private_func {
+    return "private";
+}
+
+our sub public_func {
+    return "public";
+}
+
+state sub persistent_func {
+    state $counter = 0;
+    return ++$counter;
+}
+
+{
+    my sub block_scoped {
+        return "only in block";
+    }
+    block_scoped();
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (variable_declaration_type)
+    (identifier)
+    (block
+      (return_expression
+        (string_literal
+          (string_content)))))
+  (subroutine_declaration_statement
+    (variable_declaration_type)
+    (identifier)
+    (block
+      (return_expression
+        (string_literal
+          (string_content)))))
+  (subroutine_declaration_statement
+    (variable_declaration_type)
+    (identifier)
+    (block
+      (assignment_expression
+        (variable_declaration
+          (variable_declaration_type)
+          (scalar_variable))
+        (assignment_operator)
+        (integer))
+      (return_expression
+        (prefix_expression
+          (prefix_operator)
+          (scalar_variable)))))
+  (block
+    (subroutine_declaration_statement
+      (variable_declaration_type)
+      (identifier)
+      (block
+        (return_expression
+          (string_literal
+            (string_content)))))
+    (function_call_expression
+      (identifier)
+      (arguments))))
+
+==========================================
+isa operator (5.32+)
+==========================================
+
+use feature 'isa';
+
+if ($obj isa Some::Class) {
+    $obj->method();
+}
+
+$is_array = $ref isa ARRAY;
+$is_object = $thing isa My::Object;
+
+unless ($var isa HASH) {
+    die "Not a hash ref";
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (if_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (qualified_name)))
+    (block
+      (method_call_expression
+        (scalar_variable)
+        (arrow_operator)
+        (identifier)
+        (arguments))))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (binary_expression
+      (scalar_variable)
+      (binary_operator)
+      (bareword)))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (binary_expression
+      (scalar_variable)
+      (binary_operator)
+      (qualified_name)))
+  (unless_statement
+    (condition
+      (binary_expression
+        (scalar_variable)
+        (binary_operator)
+        (bareword)))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content))))))
+
+==========================================
+Postfix dereferencing (5.20+)
+==========================================
+
+use feature 'postderef';
+
+$aref->@*;
+$aref->@[0..5];
+$href->%*;
+$href->%{qw(key1 key2)};
+$cref->&*;
+$gref->**;
+$aref->$#*;
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_dereference))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_array_slice
+      (range_expression
+        (integer)
+        (range_operator)
+        (integer))))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_dereference))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_hash_slice
+      (qw_string_list
+        (qw_element)
+        (qw_element))))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_dereference))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_dereference))
+  (postfix_dereference_expression
+    (scalar_variable)
+    (arrow_operator)
+    (postfix_dereference)))
+
+==========================================
+Unicode boundaries (5.14+)
+==========================================
+
+use feature 'unicode_strings';
+
+/\b{wb}/;
+/\b{sb}/;
+/\b{lb}/;
+/\B{wb}/;
+
+---
+
+(source_file
+  (use_statement
+    (identifier)
+    (arguments
+      (string_literal
+        (string_content))))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern)))
+  (regex_match_expression
+    (regex
+      (regex_pattern))))
+
+==========================================
+Package blocks (5.14+)
+==========================================
+
+package Foo {
+    sub new { bless {}, shift }
+}
+
+package Bar 1.23 {
+    use parent 'Foo';
+    sub method { }
+}
+
+package Baz v1.2.3 {
+    our $VERSION = '1.2.3';
+}
+
+---
+
+(source_file
+  (package_statement
+    (identifier)
+    (block
+      (subroutine_declaration_statement
+        (identifier)
+        (block
+          (function_call_expression
+            (identifier)
+            (arguments
+              (anonymous_hash_expression)
+              (comma)
+              (func0op_call_expression
+                (identifier))))))))
+  (package_statement
+    (identifier)
+    (version)
+    (block
+      (use_statement
+        (identifier)
+        (arguments
+          (string_literal
+            (string_content))))
+      (subroutine_declaration_statement
+        (identifier)
+        (block))))
+  (package_statement
+    (identifier)
+    (version)
+    (block
+      (assignment_expression
+        (variable_declaration
+          (variable_declaration_type)
+          (scalar_variable))
+        (assignment_operator)
+        (string_literal
+          (string_content))))))

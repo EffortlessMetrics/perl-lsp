@@ -1,0 +1,357 @@
+==========================================
+Basic typeglob assignment
+==========================================
+
+*foo = *bar;
+*NEW = *OLD;
+*alias = \&subroutine;
+
+---
+
+(source_file
+  (assignment_expression
+    (typeglob_variable)
+    (assignment_operator)
+    (typeglob_variable))
+  (assignment_expression
+    (typeglob_variable)
+    (assignment_operator)
+    (typeglob_variable))
+  (assignment_expression
+    (typeglob_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (function_variable))))
+
+==========================================
+Typeglob slots
+==========================================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{PACKAGE};
+
+---
+
+(source_file
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword)))
+  (hash_access_expression
+    (typeglob_variable)
+    (hash_access_index
+      (bareword))))
+
+==========================================
+Typeglob references
+==========================================
+
+$ref = \*STDOUT;
+$fh = \*STDERR;
+$globref = \*{$package . "::function"};
+$coderef = \&{*foo{CODE}};
+
+---
+
+(source_file
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (typeglob_variable)))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (typeglob_variable)))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (dereference_expression
+        (cast_expression
+          (sigil)
+          (block
+            (binary_expression
+              (scalar_variable)
+              (binary_operator)
+              (string_literal
+                (string_content))))))))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (dereference_expression
+        (cast_expression
+          (sigil)
+          (block
+            (hash_access_expression
+              (typeglob_variable)
+              (hash_access_index
+                (bareword)))))))))
+
+==========================================
+Symbol table manipulation
+==========================================
+
+${"main::var"} = 42;
+@{"Foo::array"} = (1, 2, 3);
+%{"Bar::hash"} = (key => 'value');
+&{"Package::function"}();
+*{"Dynamic::glob"} = \$scalar;
+
+---
+
+(source_file
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)))))
+    (assignment_operator)
+    (integer))
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)))))
+    (assignment_operator)
+    (list_expression
+      (integer)
+      (comma)
+      (integer)
+      (comma)
+      (integer)))
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)))))
+    (assignment_operator)
+    (list_expression
+      (hash_pair
+        (bareword)
+        (fat_arrow_operator)
+        (string_literal
+          (string_content)))))
+  (function_call_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)))))
+    (arguments))
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)))))
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (scalar_variable))))
+
+==========================================
+Local typeglobs
+==========================================
+
+local *FH;
+local *STDOUT;
+{
+    local *FILE = *STDIN;
+    print FILE "test\n";
+}
+
+---
+
+(source_file
+  (local_expression
+    (typeglob_variable))
+  (local_expression
+    (typeglob_variable))
+  (block
+    (assignment_expression
+      (local_expression
+        (typeglob_variable))
+      (assignment_operator)
+      (typeglob_variable))
+    (func1op_call_expression
+      (identifier)
+      (typeglob_variable)
+      (string_literal
+        (string_content)))))
+
+==========================================
+Filehandle typeglobs
+==========================================
+
+open(FH, "<", "file.txt");
+*STDOUT = *FH;
+select(FH);
+print FH "output\n";
+close(FH);
+
+---
+
+(source_file
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword)
+      (comma)
+      (string_literal
+        (string_content))
+      (comma)
+      (string_literal
+        (string_content))))
+  (assignment_expression
+    (typeglob_variable)
+    (assignment_operator)
+    (typeglob_variable))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword)))
+  (func1op_call_expression
+    (identifier)
+    (bareword)
+    (string_literal
+      (string_content)))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword))))
+
+==========================================
+Anonymous typeglobs
+==========================================
+
+$fh = \*{geniosym()};
+$glob = \*{""};
+*{$fh} = \$scalar;
+
+---
+
+(source_file
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (dereference_expression
+        (cast_expression
+          (sigil)
+          (block
+            (function_call_expression
+              (identifier)
+              (arguments)))))))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (dereference_expression
+        (cast_expression
+          (sigil)
+          (block
+            (string_literal
+              (string_content)))))))
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (scalar_variable))))
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (scalar_variable))))
+
+==========================================
+Package qualified typeglobs
+==========================================
+
+*Some::Package::foo = \&handler;
+*::foo = *main::foo;
+*Other:: = *Another::;
+*{"Some::Deep::Package::$name"} = \$value;
+
+---
+
+(source_file
+  (assignment_expression
+    (typeglob_variable
+      (qualified_name))
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (function_variable)))
+  (assignment_expression
+    (typeglob_variable
+      (qualified_name))
+    (assignment_operator)
+    (typeglob_variable
+      (qualified_name)))
+  (assignment_expression
+    (typeglob_variable
+      (qualified_name))
+    (assignment_operator)
+    (typeglob_variable
+      (qualified_name)))
+  (assignment_expression
+    (dereference_expression
+      (cast_expression
+        (sigil)
+        (block
+          (string_literal
+            (string_content)
+            (interpolation
+              (scalar_variable))))))
+    (assignment_operator)
+    (reference_expression
+      (reference_operator)
+      (scalar_variable))))
