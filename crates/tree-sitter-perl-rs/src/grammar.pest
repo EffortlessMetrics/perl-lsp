@@ -1,0 +1,333 @@
+// Perl Grammar for Pest Parser
+// Complete implementation covering most Perl syntax
+
+// Main entry point
+program = { SOI ~ statements? ~ EOI }
+
+// Statements
+statements = { statement+ }
+
+statement = { 
+    expression_statement 
+    | declaration_statement
+    | block_statement
+    | if_statement
+    | unless_statement
+    | while_statement
+    | until_statement
+    | for_statement
+    | foreach_statement
+    | sub_declaration
+    | package_declaration
+    | use_statement
+    | require_statement
+    | return_statement
+    | last_statement
+    | next_statement
+    | redo_statement
+    | comment
+}
+
+expression_statement = { expression ~ semicolon? }
+declaration_statement = { declaration ~ semicolon? }
+block_statement = { block }
+return_statement = { "return" ~ expression? ~ semicolon? }
+last_statement = { "last" ~ label? ~ semicolon? }
+next_statement = { "next" ~ label? ~ semicolon? }
+redo_statement = { "redo" ~ label? ~ semicolon? }
+
+// Declarations
+declaration = {
+    variable_declaration
+    | constant_declaration
+}
+
+variable_declaration = { 
+    ("my" | "our" | "local" | "state") ~ variable_list ~ ("=" ~ expression)?
+}
+
+constant_declaration = {
+    "use" ~ "constant" ~ identifier ~ "=>" ~ expression
+}
+
+variable_list = { variable ~ ("," ~ variable)* }
+
+// Control Flow
+if_statement = {
+    "if" ~ "(" ~ expression ~ ")" ~ block ~ elsif_clause* ~ else_clause?
+}
+
+elsif_clause = { "elsif" ~ "(" ~ expression ~ ")" ~ block }
+else_clause = { "else" ~ block }
+
+unless_statement = {
+    "unless" ~ "(" ~ expression ~ ")" ~ block ~ else_clause?
+}
+
+while_statement = {
+    label? ~ "while" ~ "(" ~ expression ~ ")" ~ block
+}
+
+until_statement = {
+    label? ~ "until" ~ "(" ~ expression ~ ")" ~ block
+}
+
+for_statement = {
+    label? ~ "for" ~ "(" ~ for_init? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block
+}
+
+foreach_statement = {
+    label? ~ "foreach" ~ variable? ~ "(" ~ expression ~ ")" ~ block
+}
+
+for_init = { declaration | expression }
+
+// Subroutines
+sub_declaration = {
+    "sub" ~ identifier ~ prototype? ~ attributes? ~ block
+}
+
+prototype = { "(" ~ prototype_args? ~ ")" }
+prototype_args = { prototype_arg ~ ("," ~ prototype_arg)* }
+prototype_arg = { "$" | "@" | "%" | "&" | "\\" ~ ("$" | "@" | "%" | "&") | "*" | ";" }
+sigil = { "$" | "@" | "%" | "&" }
+
+attributes = { ":" ~ attribute_list }
+attribute_list = { attribute ~ (":" ~ attribute)* }
+attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
+attribute_args = { (!(")" | ",") ~ ANY)+ }
+
+// Packages and Modules
+package_declaration = {
+    "package" ~ qualified_name ~ version? ~ block?
+}
+
+use_statement = {
+    "use" ~ (module_name | version) ~ import_list? ~ semicolon?
+}
+
+require_statement = {
+    "require" ~ (module_name | expression) ~ semicolon?
+}
+
+module_name = { qualified_name }
+import_list = { "(" ~ import_items? ~ ")" | import_items }
+import_items = { import_item ~ ("," ~ import_item)* }
+import_item = { identifier | string }
+
+// Expressions
+expression = { assignment_expression | ternary_expression }
+
+assignment_expression = {
+    unary_expression ~ assignment_operator ~ expression
+}
+
+assignment_operator = {
+    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+    | "&&=" | "||=" | "//="
+}
+
+ternary_expression = {
+    logical_or_expression ~ ("?" ~ expression ~ ":" ~ expression)?
+}
+
+logical_or_expression = { logical_and_expression ~ (("||" | "or") ~ logical_and_expression)* }
+logical_and_expression = { equality_expression ~ (("&&" | "and") ~ equality_expression)* }
+
+equality_expression = {
+    relational_expression ~ (("==" | "!=" | "eq" | "ne" | "<=>" | "cmp") ~ relational_expression)*
+}
+
+relational_expression = {
+    shift_expression ~ (("<" | ">" | "<=" | ">=" | "lt" | "gt" | "le" | "ge") ~ shift_expression)*
+}
+
+shift_expression = { additive_expression ~ (("<<" | ">>") ~ additive_expression)* }
+
+additive_expression = {
+    multiplicative_expression ~ (("+" | "-" | ".") ~ multiplicative_expression)*
+}
+
+multiplicative_expression = {
+    unary_expression ~ (("*" | "/" | "%" | "x") ~ unary_expression)*
+}
+
+unary_expression = {
+    ("!" | "-" | "+" | "~" | "\\" | "not")+ ~ unary_expression
+    | postfix_expression
+}
+
+postfix_expression = {
+    primary_expression ~ postfix_operator*
+}
+
+postfix_operator = {
+    array_access
+    | hash_access
+    | method_call
+    | function_call
+    | increment
+    | decrement
+}
+
+array_access = { "[" ~ expression ~ "]" }
+hash_access = { "{" ~ expression ~ "}" }
+method_call = { "->" ~ identifier ~ function_args? }
+function_call = { function_args }
+function_args = { "(" ~ arg_list? ~ ")" }
+arg_list = { expression ~ ("," ~ expression)* }
+increment = { "++" }
+decrement = { "--" }
+
+primary_expression = {
+    literal
+    | variable
+    | "(" ~ expression ~ ")"
+    | block
+    | anonymous_sub
+    | regex
+    | substitution
+    | transliteration
+    | heredoc
+    | glob
+    | readline
+    | qw_list
+}
+
+// Literals
+literal = {
+    number
+    | string
+    | bareword
+}
+
+number = @{
+    hex_number
+    | oct_number
+    | bin_number
+    | float_number
+    | int_number
+}
+
+hex_number = @{ "0x" ~ ASCII_HEX_DIGIT+ }
+oct_number = @{ "0" ~ ASCII_OCT_DIGIT+ }
+bin_number = @{ "0b" ~ ("0" | "1")+ }
+float_number = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)? }
+int_number = @{ ASCII_DIGIT+ }
+
+string = {
+    single_quoted_string
+    | double_quoted_string
+    | backtick_string
+    | q_string
+    | qq_string
+    | qx_string
+}
+
+single_quoted_string = @{ "'" ~ single_string_content ~ "'" }
+single_string_content = @{ (!"'" ~ (escape_sequence | ANY))* }
+
+double_quoted_string = @{ "\"" ~ double_string_content ~ "\"" }
+double_string_content = @{ (!"\"" ~ (escape_sequence | interpolation | ANY))* }
+
+backtick_string = @{ "`" ~ backtick_content ~ "`" }
+backtick_content = @{ (!"`" ~ (escape_sequence | interpolation | ANY))* }
+
+q_string = { "q" ~ delimiter ~ q_string_content ~ delimiter }
+qq_string = { "qq" ~ delimiter ~ qq_string_content ~ delimiter }
+qx_string = { "qx" ~ delimiter ~ qx_string_content ~ delimiter }
+
+delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
+q_string_content = @{ (!delimiter ~ ANY)* }
+qq_string_content = @{ (!delimiter ~ (escape_sequence | interpolation | ANY))* }
+qx_string_content = @{ (!delimiter ~ (escape_sequence | interpolation | ANY))* }
+
+escape_sequence = @{ "\\" ~ ANY }
+interpolation = { scalar_variable | array_element | hash_element }
+
+// Variables
+variable = {
+    scalar_variable
+    | array_variable
+    | hash_variable
+    | array_element
+    | hash_element
+    | special_variable
+}
+
+scalar_variable = @{ "$" ~ variable_name }
+array_variable = @{ "@" ~ variable_name }
+hash_variable = @{ "%" ~ variable_name }
+array_element = { "$" ~ variable_name ~ "[" ~ expression ~ "]" }
+hash_element = { "$" ~ variable_name ~ "{" ~ expression ~ "}" }
+
+variable_name = @{
+    identifier
+    | package_variable
+    | special_var_name
+}
+
+package_variable = @{ qualified_name ~ "::" ~ identifier }
+special_variable = @{ "$" ~ special_var_name }
+special_var_name = @{ 
+    ASCII_DIGIT+ 
+    | "!" | "\"" | "#" | "$" | "%" | "&" | "'" | "(" | ")" | "*" | "+" | "," | "-" | "." | "/" 
+    | ":" | ";" | "<" | "=" | ">" | "?" | "@" | "[" | "\\" | "]" | "^" | "_" | "`" | "{" | "|" | "}" | "~"
+}
+
+// Identifiers
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+qualified_name = @{ identifier ~ ("::" ~ identifier)* }
+label = @{ identifier ~ ":" }
+bareword = @{ identifier }
+
+// Regular Expressions
+regex = {
+    match_regex
+    | qr_regex
+}
+
+match_regex = { "/" ~ regex_pattern ~ "/" ~ regex_flags? }
+qr_regex = { "qr" ~ delimiter ~ regex_pattern ~ delimiter ~ regex_flags? }
+regex_pattern = @{ (!delimiter ~ ANY)* }
+regex_flags = @{ ASCII_ALPHA* }
+
+substitution = {
+    "s" ~ delimiter ~ regex_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
+}
+
+replacement = @{ (!delimiter ~ ANY)* }
+
+transliteration = {
+    ("tr" | "y") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?
+}
+
+search_list = @{ (!delimiter ~ ANY)* }
+replace_list = @{ (!delimiter ~ ANY)* }
+trans_flags = @{ ASCII_ALPHA* }
+
+// Other constructs
+heredoc = { "<<" ~ heredoc_marker }
+heredoc_marker = @{ identifier | string }
+
+glob = { "<" ~ glob_pattern ~ ">" }
+glob_pattern = @{ (!">'" ~ ANY)* }
+
+readline = { "<" ~ filehandle? ~ ">" }
+filehandle = { identifier | scalar_variable }
+
+qw_list = { "qw" ~ delimiter ~ qw_items ~ delimiter }
+qw_items = @{ (!delimiter ~ ANY)* }
+
+anonymous_sub = { "sub" ~ prototype? ~ attributes? ~ block }
+
+block = { "{" ~ statements? ~ "}" }
+
+version = @{ "v" ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)* }
+
+semicolon = { ";" }
+
+// Comments and whitespace
+comment = @{ "#" ~ (!NEWLINE ~ ANY)* }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
