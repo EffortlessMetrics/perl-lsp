@@ -181,7 +181,11 @@ additive_expression = {
 }
 
 multiplicative_expression = {
-    unary_expression ~ (("*" | "/" | "%" | "x") ~ unary_expression)*
+    exponential_expression ~ (("*" | "/" | "%" | "x") ~ exponential_expression)*
+}
+
+exponential_expression = {
+    unary_expression ~ ("**" ~ unary_expression)*
 }
 
 unary_expression = {
@@ -335,7 +339,7 @@ interpolation = {
 
 // Complex interpolation forms
 complex_scalar_interpolation = { "${" ~ expression ~ "}" }
-complex_array_interpolation = { "@{[" ~ expression ~ "]}" }
+complex_array_interpolation = { "@{[" ~ list_elements? ~ "]}" }
 
 // Variables
 variable = {
