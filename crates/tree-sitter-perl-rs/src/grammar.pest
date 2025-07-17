@@ -12,12 +12,20 @@ statement = {
     | package_declaration
     | use_statement
     | require_statement
+    | begin_block
+    | end_block
+    | check_block
+    | init_block
+    | unitcheck_block
     | if_statement
     | unless_statement
     | while_statement
     | until_statement
     | for_statement
     | foreach_statement
+    | do_block
+    | eval_statement
+    | goto_statement
     | return_statement
     | last_statement
     | next_statement
@@ -26,6 +34,9 @@ statement = {
     | expression_statement 
     | block_statement
     | comment
+    | pod_section
+    | data_section
+    | end_section
     | empty_statement
     | standalone_expression
     | regex
@@ -289,7 +300,15 @@ special_var_name = @{
 
 // Identifiers - must not be a complete keyword
 identifier = @{ 
-    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
+    !(reserved_word ~ !ASCII_ALPHANUMERIC) ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
+}
+
+// Reserved words that should not be identifiers
+reserved_word = { 
+    "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
+    "while" | "until" | "for" | "foreach" | "return" | "last" | "next" | "redo" |
+    "package" | "use" | "require" | "do" | "eval" | "BEGIN" | "END" | "CHECK" | 
+    "INIT" | "UNITCHECK" | "goto" | "qw" | "qq" | "qx" | "qr" | "q"
 }
 qualified_name = { identifier ~ ("::" ~ identifier)* }
 label = @{ identifier ~ ":" }
@@ -331,8 +350,21 @@ glob_pattern = @{ (!">'" ~ ANY)* }
 readline = { "<" ~ filehandle? ~ ">" }
 filehandle = { identifier | scalar_variable }
 
-qw_list = { "qw" ~ delimiter ~ qw_items ~ delimiter }
-qw_items = @{ (!delimiter ~ ANY)* }
+qw_list = { 
+    "qw" ~ (
+        ("(" ~ qw_paren_items ~ ")") |
+        ("[" ~ qw_bracket_items ~ "]") |
+        ("{" ~ qw_brace_items ~ "}") |
+        ("<" ~ qw_angle_items ~ ">") |
+        (qw_delimiter ~ qw_delimited_items ~ qw_delimiter)
+    )
+}
+qw_paren_items = @{ (!")" ~ ANY)* }
+qw_bracket_items = @{ (!"]" ~ ANY)* }
+qw_brace_items = @{ (!"}" ~ ANY)* }
+qw_angle_items = @{ (!">" ~ ANY)* }
+qw_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
+qw_delimited_items = @{ (!qw_delimiter ~ ANY)* }
 
 anonymous_sub = { "sub" ~ prototype? ~ attributes? ~ block }
 
@@ -341,6 +373,31 @@ block = { "{" ~ statements? ~ "}" }
 version = @{ "v" ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)* }
 
 semicolon = { ";" }
+
+// BEGIN/END blocks
+begin_block = { "BEGIN" ~ block }
+end_block = { "END" ~ block }
+check_block = { "CHECK" ~ block }
+init_block = { "INIT" ~ block }
+unitcheck_block = { "UNITCHECK" ~ block }
+
+// do/eval/goto
+do_block = { "do" ~ (block | expression) ~ semicolon? }
+eval_statement = { "eval" ~ (block | expression) ~ semicolon? }
+goto_statement = { "goto" ~ (label | expression) ~ semicolon? }
+
+// POD
+pod_section = @{ 
+    "=" ~ ASCII_ALPHA+ ~ (!("=cut") ~ ANY)* ~ "=cut"
+}
+
+// DATA/END sections
+data_section = @{
+    "__DATA__" ~ ANY*
+}
+end_section = @{
+    "__END__" ~ ANY*
+}
 
 // Comments and whitespace
 comment = @{ "#" ~ (!NEWLINE ~ ANY)* }
