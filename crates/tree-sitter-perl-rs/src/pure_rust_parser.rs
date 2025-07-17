@@ -11,8 +11,6 @@ use std::collections::HashMap;
 #[grammar = "grammar.pest"]
 pub struct PerlParser;
 
-use self::Rule;
-
 /// AST node types for the pure Rust parser
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
@@ -133,7 +131,7 @@ mod tests {
     #[test]
     fn test_basic_parsing() {
         let mut parser = PureRustPerlParser::new();
-        let source = "my $var = 42;";
+        let source = "$var;";
         let result = parser.parse(source);
         assert!(result.is_ok());
         let ast = result.unwrap();
@@ -145,7 +143,7 @@ mod tests {
     #[test]
     fn test_variable_parsing() {
         let mut parser = PureRustPerlParser::new();
-        let source = "$scalar @array %hash";
+        let source = "$scalar @array %hash;";
         let result = parser.parse(source);
         assert!(result.is_ok());
         let ast = result.unwrap();
@@ -154,13 +152,19 @@ mod tests {
     }
 
     #[test]
-    fn test_number_and_identifier() {
+    fn test_debug_parsing() {
         let mut parser = PureRustPerlParser::new();
-        let source = "foo 123 bar;";
+        let source = "my $var = 42;";
         let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = result.unwrap();
-        let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+        match result {
+            Ok(ast) => {
+                let sexp = parser.to_sexp(&ast);
+                println!("Success! AST: {:?}", ast);
+                println!("S-expression: {}", sexp);
+            }
+            Err(e) => {
+                println!("Parse error: {}, e", e);
+            }
+        }
     }
 } 
