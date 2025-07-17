@@ -415,7 +415,12 @@ impl PureRustPerlParser {
             Rule::package_declaration => {
                 let mut inner = pair.into_inner();
                 inner.next(); // skip "package"
-                let name = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                // Accept qualified_name as identifier
+                let name = if let Some(name_pair) = inner.next() {
+                    name_pair.as_str().to_string()
+                } else {
+                    String::new()
+                };
                 let mut version = None;
                 let mut block = None;
                 for p in inner {
@@ -427,7 +432,7 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
             }
-            Rule::match_regex => {
+            Rule::regex | Rule::match_regex => {
                 let mut inner = pair.into_inner();
                 let pattern = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
                 let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
@@ -436,14 +441,14 @@ impl PureRustPerlParser {
             Rule::relational_expression => {
                 let mut inner = pair.into_inner();
                 let left = if let Some(first) = inner.next() {
-                    Box::new(self.build_node(first)?.unwrap_or(AstNode::Identifier(pair.as_str().to_string())))
+                    Box::new(self.build_node(first)?.unwrap_or(AstNode::Identifier(String::new())))
                 } else {
                     return Ok(None);
                 };
                 if let Some(op_pair) = inner.next() {
                     let op = op_pair.as_str().to_string();
                     let right = if let Some(second) = inner.next() {
-                        Box::new(self.build_node(second)?.unwrap_or(AstNode::Identifier(pair.as_str().to_string())))
+                        Box::new(self.build_node(second)?.unwrap_or(AstNode::Identifier(String::new())))
                     } else {
                         return Ok(Some(*left));
                     };
@@ -495,11 +500,21 @@ impl PureRustPerlParser {
     pub fn to_sexp(&self, node: &AstNode) -> String {
         match node {
             AstNode::Program(children) => {
-                let child_sexps: Vec<String> = children.iter().map(|c| self.to_sexp(c)).collect();
-                if child_sexps.is_empty() {
+                // Remove nested source_file in S-expression output
+                let mut flat_children = vec![];
+                for c in children {
+                    let sexp = self.to_sexp(c);
+                    if sexp.starts_with("(source_file ") {
+                        let inner = sexp.trim_start_matches("(source_file ").trim_end_matches(")");
+                        flat_children.push(inner.to_string());
+                    } else {
+                        flat_children.push(sexp);
+                    }
+                }
+                if flat_children.is_empty() {
                     "(source_file)".to_string()
                 } else {
-                    format!("(source_file {})", child_sexps.join(" "))
+                    format!("(source_file {})", flat_children.join(" "))
                 }
             }
             AstNode::Statement(expr) => {
