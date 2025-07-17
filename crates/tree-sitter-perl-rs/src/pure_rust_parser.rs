@@ -5,7 +5,6 @@
 
 use pest::{iterators::{Pair, Pairs}, Parser};
 use pest_derive::Parser;
-use std::collections::HashMap;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -163,15 +162,11 @@ pub enum AstNode {
 }
 
 /// Pure Rust Perl parser implementation
-pub struct PureRustPerlParser {
-    symbol_table: HashMap<String, String>,
-}
+pub struct PureRustPerlParser;
 
 impl PureRustPerlParser {
     pub fn new() -> Self {
-        Self {
-            symbol_table: HashMap::new(),
-        }
+        Self
     }
 
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
