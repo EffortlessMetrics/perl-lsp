@@ -1,34 +1,34 @@
 # Tree-sitter Perl Implementation Comparison
 
-**Generated:** 2025-07-16T23:54:31.828072824+00:00
+**Generated:** 2025-07-17T01:02:55.990201772+00:00
 
 ## Summary
 
-- **Performance:** Rust implementation is 0.0% slower than C implementation
-- **Success Rate:** C: 13/14 (92%), Rust: 0/14 (0%)
+- **Performance:** Rust implementation is 0.5% slower than C implementation
+- **Success Rate:** C: 13/14 (92%), Rust: 13/14 (92%)
 
 ## Detailed Results
 
 | Metric | C Implementation | Rust Implementation | Difference |
 |--------|------------------|---------------------|------------|
-| Avg Time (μs) | 0.00 | 0.00 | 0.0% |
-| Total Time (μs) | 2343.13 | 125493.56 | 5255.8% |
+| Avg Time (μs) | 0.00 | 0.00 | 0.5% |
+| Total Time (μs) | 2356.18 | 2368.26 | 0.5% |
 
 ## Test Case Results
 
 | Test Case | C Time (μs) | Rust Time (μs) | Difference |
 |-----------|-------------|----------------|------------|
-| test/corpus/subroutines | 140.03 | 11512.64 | 8121.6% |
-| test/corpus/pod | 706.94 | 1181.95 | 67.2% |
-| test/corpus/operators | 174.44 | 13398.40 | 7580.8% |
-| test/corpus/statements | 210.00 | 18860.72 | 8881.3% |
-| test/corpus/regexp | 74.32 | 5671.15 | 7530.7% |
-| test/corpus/autoquote | 128.47 | 8733.97 | 6698.5% |
-| test/corpus/simple | 73.85 | 4798.41 | 6397.5% |
-| test/corpus/map-grep | 105.06 | 8102.78 | 7612.5% |
-| test/corpus/heredocs | 68.05 | 6287.98 | 9140.2% |
-| test/corpus/interpolation | 124.59 | 8989.85 | 7115.5% |
-| test/corpus/variables | 136.67 | 8849.69 | 6375.2% |
-| test/corpus/expressions | 165.00 | 11080.99 | 6615.8% |
-| test/corpus/literals | 100.63 | 7738.16 | 7589.7% |
-| test/corpus/functions | 135.08 | 10286.87 | 7515.4% |
+| test/corpus/subroutines | 135.81 | 135.05 | -0.6% |
+| test/corpus/pod | 714.96 | 711.69 | -0.5% |
+| test/corpus/operators | 178.99 | 176.45 | -1.4% |
+| test/corpus/statements | 208.06 | 211.11 | 1.5% |
+| test/corpus/regexp | 70.93 | 75.42 | 6.3% |
+| test/corpus/autoquote | 123.26 | 122.80 | -0.4% |
+| test/corpus/simple | 76.98 | 75.13 | -2.4% |
+| test/corpus/map-grep | 110.52 | 110.28 | -0.2% |
+| test/corpus/heredocs | 68.84 | 71.21 | 3.4% |
+| test/corpus/interpolation | 123.98 | 125.01 | 0.8% |
+| test/corpus/variables | 132.51 | 139.11 | 5.0% |
+| test/corpus/expressions | 172.88 | 175.40 | 1.5% |
+| test/corpus/literals | 104.86 | 106.36 | 1.4% |
+| test/corpus/functions | 133.60 | 133.24 | -0.3% |

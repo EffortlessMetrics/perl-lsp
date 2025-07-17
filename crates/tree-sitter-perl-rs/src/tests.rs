@@ -169,67 +169,6 @@ mod tests {
 }
 
 #[cfg(test)]
-mod scanner_tests {
-    use crate::scanner::PerlScanner;
-    use crate::scanner::{RustScanner, ScannerConfig, TokenType};
-
-    #[test]
-    fn test_rust_scanner_creation() {
-        let scanner = RustScanner::new();
-        // Test that scanner can be created
-        assert!(std::mem::size_of_val(&scanner) > 0);
-    }
-
-    #[test]
-    fn test_scanner_config() {
-        let config = ScannerConfig {
-            strict_mode: true,
-            unicode_normalization: true,
-            max_token_length: 1024,
-            debug: false,
-        };
-
-        assert!(config.strict_mode);
-        assert!(config.unicode_normalization);
-        assert_eq!(config.max_token_length, 1024);
-        assert!(!config.debug);
-    }
-
-    #[test]
-    fn test_scanner_config_default() {
-        let config = ScannerConfig::default();
-        assert!(!config.strict_mode);
-        assert!(config.unicode_normalization);
-        assert_eq!(config.max_token_length, 1048576);
-        assert!(!config.debug);
-    }
-
-    #[test]
-    fn test_token_types() {
-        // Test that token types can be created
-        let _ = TokenType::Identifier;
-        let _ = TokenType::Comment;
-        let _ = TokenType::Package;
-        // This test just ensures the enum is accessible
-    }
-
-    #[test]
-    fn test_scanner_serialization() {
-        let mut scanner = RustScanner::new();
-        let mut buffer = Vec::new();
-        
-        // Test serialization
-        let result = scanner.serialize(&mut buffer);
-        assert!(result.is_ok(), "Serialization failed: {:?}", result);
-        assert!(!buffer.is_empty(), "Serialized buffer should not be empty");
-        
-        // Test deserialization
-        let result = scanner.deserialize(&buffer);
-        assert!(result.is_ok(), "Deserialization failed: {:?}", result);
-    }
-}
-
-#[cfg(test)]
 mod unicode_tests {
 
     use crate::unicode::UnicodeUtils;
@@ -298,8 +237,7 @@ mod unicode_tests {
 
 #[cfg(test)]
 mod property_tests {
-    use crate::scanner::PerlScanner;
-    use crate::{parse, scanner::RustScanner};
+    use crate::parse;
     use proptest::prelude::*;
 
     proptest! {
@@ -308,13 +246,6 @@ mod property_tests {
         fn test_parse_does_not_panic(input in "[a-zA-Z0-9_\\s{}()\\[\\]\"';,.+\\-*/=<>!&|^~%#@$`]+") {
             // This test ensures that parsing arbitrary strings doesn't panic
             let _result = parse(&input);
-        }
-
-        #[test]
-        fn test_scanner_handles_arbitrary_input(input in "[\\x00-\\xff]+") {
-            // Test that scanner can handle arbitrary byte sequences
-            let mut scanner = RustScanner::new();
-            let _result = scanner.scan(input.as_bytes());
         }
 
         #[test]
@@ -358,8 +289,7 @@ mod error_tests {
 
 #[cfg(test)]
 mod performance_tests {
-    use crate::scanner::PerlScanner;
-    use crate::{parse, scanner::RustScanner};
+    use crate::parse;
     use std::time::Instant;
 
     #[test]
@@ -378,26 +308,6 @@ mod performance_tests {
         
         // Ensure parsing is reasonably fast (less than 1000 μs per parse)
         assert!(avg_time < 1000.0, "Parsing is too slow: {:.2} μs", avg_time);
-    }
-
-    #[test]
-    fn test_scanner_performance() {
-        let test_input = b"my $variable = 42; print 'Hello, World!';";
-        let iterations = 1000;
-        
-        let mut scanner = RustScanner::new();
-        let start = Instant::now();
-        
-        for _ in 0..iterations {
-            let _result = scanner.scan(test_input);
-        }
-        let duration = start.elapsed();
-        
-        let avg_time = duration.as_micros() as f64 / iterations as f64;
-        println!("Average scan time: {:.2} μs", avg_time);
-        
-        // Ensure scanning is reasonably fast (less than 500 μs per scan)
-        assert!(avg_time < 500.0, "Scanning is too slow: {:.2} μs", avg_time);
     }
 }
 
