@@ -170,6 +170,8 @@ fn generate_bindings() {
         .header("src/parser.c")
         .header("src/scanner.c")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // For Rust 2024 compatibility: generate safe extern blocks
+        .wrap_unsafe_ops(true)
         .generate()
         .expect("Unable to generate bindings");
 

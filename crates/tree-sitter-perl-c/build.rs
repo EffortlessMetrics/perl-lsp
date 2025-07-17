@@ -23,6 +23,8 @@ fn main() {
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate_inline_functions(true)
         .size_t_is_usize(true)
+        // For Rust 2024 compatibility: generate safe extern blocks
+        .wrap_unsafe_ops(true)
         .generate()
         .expect("Unable to generate bindings");
 
