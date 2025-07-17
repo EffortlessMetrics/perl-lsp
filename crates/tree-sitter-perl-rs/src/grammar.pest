@@ -325,7 +325,7 @@ special_var_name = @{
 
 // Identifiers - must not be a complete keyword
 identifier = @{ 
-    !(reserved_word ~ !ASCII_ALPHANUMERIC) ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
+    !(reserved_word ~ !(ASCII_ALPHANUMERIC | "_")) ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
 }
 
 // Reserved words that should not be identifiers
