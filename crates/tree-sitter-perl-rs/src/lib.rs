@@ -29,6 +29,9 @@ pub mod error;
 pub mod scanner;
 pub mod unicode;
 
+#[cfg(feature = "pure-rust")]
+pub mod pure_rust_parser;
+
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
@@ -105,3 +108,6 @@ mod test {
         assert!(parser.language().is_some());
     }
 }
+
+#[cfg(feature = "pure-rust")]
+pub use pure_rust_parser::{PureRustPerlParser, AstNode};
