@@ -84,6 +84,9 @@ pub fn parse_with_tree(
         .ok_or(error::ParseError::ParseFailed)
 }
 
+#[cfg(feature = "pure-rust")]
+pub use pure_rust_parser::{PureRustPerlParser, AstNode};
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -114,6 +117,3 @@ mod test {
         assert!(parser.language().is_some());
     }
 }
-
-#[cfg(feature = "pure-rust")]
-pub use pure_rust_parser::{PureRustPerlParser, AstNode};
