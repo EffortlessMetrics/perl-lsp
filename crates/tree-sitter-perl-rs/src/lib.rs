@@ -41,6 +41,9 @@ mod fuzz_tests;
 #[cfg(feature = "pure-rust")]
 pub mod stateful_parser;
 
+#[cfg(feature = "pure-rust")]
+pub mod enhanced_parser;
+
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 
@@ -92,6 +95,9 @@ pub fn parse_with_tree(
 
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::{PureRustPerlParser, AstNode};
+
+#[cfg(feature = "pure-rust")]
+pub use enhanced_parser::EnhancedPerlParser;
 
 #[cfg(test)]
 mod test {
