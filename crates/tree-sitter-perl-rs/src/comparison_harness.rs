@@ -7,9 +7,10 @@ use std::time::Instant;
 use std::collections::HashMap;
 
 #[cfg(feature = "pure-rust")]
-use crate::pure_rust_parser::{PureRustPerlParser, AstNode};
+use crate::pure_rust_parser::PureRustPerlParser;
 
-use tree_sitter::{Parser, Tree, Node};
+#[cfg(not(feature = "pure-rust"))]
+use tree_sitter::{Parser, Node};
 
 pub struct ParseResult {
     pub parser_type: String,
@@ -77,6 +78,7 @@ impl ComparisonHarness {
         
         #[cfg(feature = "pure-rust")]
         {
+            let _ = source; // Avoid unused variable warning
             ParseResult {
                 parser_type: "tree-sitter".to_string(),
                 success: false,

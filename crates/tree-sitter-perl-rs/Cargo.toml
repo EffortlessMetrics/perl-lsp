@@ -40,6 +40,11 @@ name = "bench_parser"
 path = "src/bin/bench_parser.rs"
 required-features = ["test-utils"]
 
+[[bin]]
+name = "compare_parsers"
+path = "src/bin/compare_parsers.rs"
+required-features = ["test-utils"]
+
 [[bench]]
 name = "scanner_benchmarks"
 path = "../../benches/scanner_benchmarks.rs"
