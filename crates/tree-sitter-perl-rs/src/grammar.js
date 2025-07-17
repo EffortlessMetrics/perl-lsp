@@ -1267,8 +1267,7 @@ module.exports = grammar({
 
     bareword: $ => prec.dynamic(1, $._bareword),
     // _bareword is at the very end b/c the lexer prefers tokens defined earlier in the grammar
-    //_bareword: $ => choice($._identifier, unicode_ranges.bareword),
-    _bareword: $ => choice($._identifier, /((::)|([a-zA-Z_]\w*))+/),
+    _bareword: $ => choice($._identifier, unicode_ranges.bareword),
     ...primitives,
   }
 })
