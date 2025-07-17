@@ -21,6 +21,8 @@ fn main() {
         .header("../../tree-sitter-perl/src/tree_sitter/parser.h")
         .clang_arg("-I../../tree-sitter-perl/src")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate_inline_functions(true)
+        .size_t_is_usize(true)
         .generate()
         .expect("Unable to generate bindings");
 
