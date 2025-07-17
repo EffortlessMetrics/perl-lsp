@@ -217,12 +217,12 @@ mod scanner_tests {
     fn test_scanner_serialization() {
         let mut scanner = RustScanner::new();
         let mut buffer = Vec::new();
-
+        
         // Test serialization
         let result = scanner.serialize(&mut buffer);
         assert!(result.is_ok(), "Serialization failed: {:?}", result);
         assert!(!buffer.is_empty(), "Serialized buffer should not be empty");
-
+        
         // Test deserialization
         let result = scanner.deserialize(&buffer);
         assert!(result.is_ok(), "Deserialization failed: {:?}", result);
@@ -349,7 +349,7 @@ mod error_tests {
         let error = ParseError::ParseFailed;
         let serialized = bincode::serialize(&error);
         assert!(serialized.is_ok(), "Error serialization failed");
-
+        
         let deserialized: Result<ParseError, _> = bincode::deserialize(&serialized.unwrap());
         assert!(deserialized.is_ok(), "Error deserialization failed");
         assert!(matches!(deserialized.unwrap(), ParseError::ParseFailed));
@@ -366,16 +366,16 @@ mod performance_tests {
     fn test_parse_performance() {
         let test_code = "my $var = 42; print 'Hello, World!'; sub foo { return 1; }";
         let iterations = 1000;
-
+        
         let start = Instant::now();
         for _ in 0..iterations {
             let _result = parse(test_code);
         }
         let duration = start.elapsed();
-
+        
         let avg_time = duration.as_micros() as f64 / iterations as f64;
         println!("Average parse time: {:.2} μs", avg_time);
-
+        
         // Ensure parsing is reasonably fast (less than 1000 μs per parse)
         assert!(avg_time < 1000.0, "Parsing is too slow: {:.2} μs", avg_time);
     }
@@ -384,18 +384,18 @@ mod performance_tests {
     fn test_scanner_performance() {
         let test_input = b"my $variable = 42; print 'Hello, World!';";
         let iterations = 1000;
-
+        
         let mut scanner = RustScanner::new();
         let start = Instant::now();
-
+        
         for _ in 0..iterations {
             let _result = scanner.scan(test_input);
         }
         let duration = start.elapsed();
-
+        
         let avg_time = duration.as_micros() as f64 / iterations as f64;
         println!("Average scan time: {:.2} μs", avg_time);
-
+        
         // Ensure scanning is reasonably fast (less than 500 μs per scan)
         assert!(avg_time < 500.0, "Scanning is too slow: {:.2} μs", avg_time);
     }
@@ -422,14 +422,14 @@ mod corpus_tests {
         path: &PathBuf,
     ) -> Result<Vec<CorpusTestCase>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-
+        
         let mut test_cases = Vec::new();
         let mut current_name = String::new();
         let mut current_source = String::new();
         let mut current_expected = String::new();
         let mut in_source = false;
         let mut in_expected = false;
-
+        
         for line in content.lines() {
             if line.starts_with(
                 "================================================================================",
@@ -445,7 +445,7 @@ mod corpus_tests {
                         expected: current_expected.clone(),
                     });
                 }
-
+                
                 // Start new test case
                 current_name.clear();
                 current_source.clear();
@@ -468,7 +468,7 @@ mod corpus_tests {
                 in_source = true;
             }
         }
-
+        
         // Add the last test case
         if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
             test_cases.push(CorpusTestCase {
@@ -477,7 +477,7 @@ mod corpus_tests {
                 expected: current_expected,
             });
         }
-
+        
         Ok(test_cases)
     }
 
@@ -495,10 +495,10 @@ mod corpus_tests {
     ) -> Result<bool, Box<dyn std::error::Error>> {
         // Parse the source code using tree-sitter-perl
         let tree = parse(&test_case.source)?;
-
+        
         let actual = normalize_sexp(&tree.root_node().to_sexp());
         let expected = normalize_sexp(test_case.expected.trim());
-
+        
         if actual == expected {
             Ok(true)
         } else {
@@ -535,7 +535,7 @@ mod corpus_tests {
                 || path.extension().is_none()
             {
                 println!("\n📁 Testing corpus file: {}", path.display());
-
+                
                 match parse_corpus_file(&path.to_path_buf()) {
                     Ok(test_cases) => {
                         for test_case in test_cases {
@@ -567,7 +567,7 @@ mod corpus_tests {
         println!("   Total: {}", total_tests);
         println!("   Passed: {} ✅", passed_tests);
         println!("   Failed: {} ❌", failed_tests);
-
+        
         if failed_tests > 0 {
             panic!("{} corpus tests failed", failed_tests);
         }
@@ -674,7 +674,7 @@ mod highlight_tests {
         path: &PathBuf,
     ) -> Result<Vec<HighlightTestCase>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-
+        
         // Simple parsing for highlight test files
         // Each file contains Perl code that should produce specific token classifications
         let test_case = HighlightTestCase {
@@ -682,7 +682,7 @@ mod highlight_tests {
             source: content,
             expected_tokens: Vec::new(), // TODO: Parse expected token classifications
         };
-
+        
         Ok(vec![test_case])
     }
 
@@ -701,11 +701,11 @@ mod highlight_tests {
         for entry in fs::read_dir(&highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-
+            
             if path.extension().and_then(|s| s.to_str()) == Some("pm") {
                 total_files += 1;
                 println!("📁 Testing highlight file: {}", path.display());
-
+                
                 match parse_highlight_file(&path) {
                     Ok(test_cases) => {
                         for test_case in test_cases {
@@ -730,7 +730,7 @@ mod highlight_tests {
         println!("\n📊 Highlight Test Summary:");
         println!("   Total files: {}", total_files);
         println!("   Successfully parsed: {} ✅", parsed_files);
-
+        
         if parsed_files < total_files {
             panic!(
                 "{} highlight files failed to parse",
