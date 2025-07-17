@@ -32,6 +32,9 @@ pub mod unicode;
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
 
+#[cfg(any(feature = "pure-rust", feature = "test-utils"))]
+pub mod comparison_harness;
+
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
