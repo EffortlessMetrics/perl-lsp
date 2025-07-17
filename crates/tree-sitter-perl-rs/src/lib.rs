@@ -42,6 +42,9 @@ mod fuzz_tests;
 pub mod stateful_parser;
 
 #[cfg(feature = "pure-rust")]
+pub mod context_sensitive;
+
+#[cfg(feature = "pure-rust")]
 pub mod enhanced_parser;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
