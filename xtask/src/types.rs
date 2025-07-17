@@ -15,3 +15,10 @@ pub enum ScannerType {
     Rust,
     Both,
 }
+
+#[derive(Clone, clap::ValueEnum)]
+pub enum OutputFormat {
+    Human,
+    Json,
+    Csv,
+}

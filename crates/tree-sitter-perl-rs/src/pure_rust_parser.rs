@@ -363,6 +363,19 @@ impl PureRustPerlParser {
             Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
                 Ok(Some(AstNode::String(pair.as_str().to_string())))
             }
+            Rule::list => {
+                let mut elements = Vec::new();
+                for inner in pair.into_inner() {
+                    if inner.as_rule() == Rule::list_elements {
+                        for elem in inner.into_inner() {
+                            if let Some(node) = self.build_node(elem)? {
+                                elements.push(node);
+                            }
+                        }
+                    }
+                }
+                Ok(Some(AstNode::List(elements)))
+            }
             Rule::comment => {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
             }
@@ -543,6 +556,42 @@ mod tests {
         match result {
             Ok(ast) => {
                 let sexp = parser.to_sexp(&ast);
+                println!("S-expression: {}", sexp);
+            }
+            Err(e) => {
+                println!("Parse error: {}", e);
+                assert!(false, "Parse should succeed");
+            }
+        }
+    }
+    
+    #[test]
+    fn test_array_assignment() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "@array = (1, 2, 3);";
+        let result = parser.parse(source);
+        match result {
+            Ok(ast) => {
+                let sexp = parser.to_sexp(&ast);
+                println!("Array assignment AST: {:?}", ast);
+                println!("S-expression: {}", sexp);
+            }
+            Err(e) => {
+                println!("Parse error: {}", e);
+                assert!(false, "Parse should succeed");
+            }
+        }
+    }
+    
+    #[test]
+    fn test_hash_assignment() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "%hash = (a => 1, b => 2);";
+        let result = parser.parse(source);
+        match result {
+            Ok(ast) => {
+                let sexp = parser.to_sexp(&ast);
+                println!("Hash assignment AST: {:?}", ast);
                 println!("S-expression: {}", sexp);
             }
             Err(e) => {

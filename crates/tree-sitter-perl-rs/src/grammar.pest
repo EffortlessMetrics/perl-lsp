@@ -182,6 +182,7 @@ decrement = { "--" }
 primary_expression = {
     literal
     | variable
+    | list
     | "(" ~ expression ~ ")"
     | block
     | anonymous_sub
@@ -193,6 +194,11 @@ primary_expression = {
     | readline
     | qw_list
 }
+
+// List literal
+list = { "(" ~ list_elements? ~ ")" }
+list_elements = { list_element ~ (("," | "=>") ~ list_element)* ~ ","? }
+list_element = { expression }
 
 // Literals
 literal = {
@@ -279,7 +285,7 @@ special_var_name = @{
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 qualified_name = @{ identifier ~ ("::" ~ identifier)* }
 label = @{ identifier ~ ":" }
-bareword = @{ identifier }
+bareword = { identifier }
 
 // Regular Expressions
 regex = {

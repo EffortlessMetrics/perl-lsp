@@ -198,6 +198,25 @@ enum Commands {
         port: u16,
     },
 
+
+    /// Run pure Rust parser
+    ParseRust {
+        /// Source file to parse
+        source: PathBuf,
+
+        /// Output S-expression
+        #[arg(long)]
+        sexp: bool,
+
+        /// Output AST debug format
+        #[arg(long)]
+        ast: bool,
+
+        /// Benchmark parsing time
+        #[arg(long)]
+        bench: bool,
+    },
+
     /// Prepare release
     Release {
         /// Version to release
@@ -259,6 +278,7 @@ fn main() -> Result<()> {
         Commands::Clean { all } => clean::run(all),
         Commands::Bindings { output } => bindings::run(output),
         Commands::Dev { watch, port } => dev::run(watch, port),
+        Commands::ParseRust { source, sexp, ast, bench } => parse_rust::run(source, sexp, ast, bench),
         Commands::Release { version, yes } => release::run(version, yes),
     }
 }
