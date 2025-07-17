@@ -36,4 +36,4 @@ required-features = ["test-utils"]
 
 [build-dependencies]
 cc = "1.0"
-bindgen = "0.69" 
+bindgen = "0.72" 
