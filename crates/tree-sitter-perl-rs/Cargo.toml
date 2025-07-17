@@ -51,6 +51,11 @@ name = "test_stateful"
 path = "src/bin/test_stateful.rs"
 required-features = ["pure-rust"]
 
+[[bin]]
+name = "test_pest_parser"
+path = "src/bin/test_pest_parser.rs"
+required-features = ["pure-rust"]
+
 [[bench]]
 name = "scanner_benchmarks"
 path = "../../benches/scanner_benchmarks.rs"
