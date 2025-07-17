@@ -445,20 +445,25 @@ impl PureRustPerlParser {
             Rule::relational_expression => {
                 let mut inner = pair.into_inner();
                 let left = if let Some(first) = inner.next() {
-                    Box::new(self.build_node(first)?.unwrap_or(AstNode::Identifier(String::new())))
+                    self.build_node(first)?.map(Box::new)
                 } else {
                     return Ok(None);
                 };
                 if let Some(op_pair) = inner.next() {
                     let op = op_pair.as_str().to_string();
                     let right = if let Some(second) = inner.next() {
-                        Box::new(self.build_node(second)?.unwrap_or(AstNode::Identifier(String::new())))
+                        self.build_node(second)?.map(Box::new)
                     } else {
-                        return Ok(Some(*left));
+                        return Ok(left.map(|l| *l));
                     };
-                    Ok(Some(AstNode::BinaryOp { op, left, right }))
+                    match (left, right) {
+                        (Some(left), Some(right)) => Ok(Some(AstNode::BinaryOp { op, left, right })),
+                        (Some(left), None) => Ok(Some(*left)),
+                        (None, Some(right)) => Ok(Some(*right)),
+                        (None, None) => Ok(None),
+                    }
                 } else {
-                    Ok(Some(*left))
+                    Ok(left.map(|l| *l))
                 }
             }
             _ => {
