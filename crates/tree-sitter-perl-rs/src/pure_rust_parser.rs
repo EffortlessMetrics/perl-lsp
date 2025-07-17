@@ -403,6 +403,11 @@ impl PureRustPerlParser {
             Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
                 Ok(Some(AstNode::String(pair.as_str().to_string())))
             }
+            Rule::qq_string => {
+                // Extract the content from qq{...}
+                let inner = pair.into_inner().next().unwrap();
+                Ok(Some(AstNode::QqString(inner.as_str().to_string())))
+            }
             Rule::list => {
                 let mut elements = Vec::new();
                 for inner in pair.into_inner() {

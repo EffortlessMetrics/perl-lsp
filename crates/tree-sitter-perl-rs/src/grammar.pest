@@ -67,7 +67,10 @@ constant_declaration = {
     "use" ~ "constant" ~ identifier ~ "=>" ~ expression
 }
 
-variable_list = { variable ~ ("," ~ variable)* }
+variable_list = { 
+    ("(" ~ variable ~ ("," ~ variable)* ~ ")") |
+    (variable ~ ("," ~ variable)*)
+}
 
 // Control Flow
 if_statement = {
@@ -90,7 +93,12 @@ until_statement = {
 }
 
 for_statement = {
-    label? ~ "for" ~ "(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block
+    label? ~ "for" ~ (
+        // C-style for loop
+        ("(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block) |
+        // foreach-style for loop
+        (variable ~ "(" ~ expression ~ ")" ~ block)
+    )
 }
 
 foreach_statement = {
@@ -257,7 +265,21 @@ backtick_string = @{ "`" ~ backtick_content ~ "`" }
 backtick_content = @{ (!"`" ~ (escape_sequence | interpolation | ANY))* }
 
 q_string = { "q" ~ delimiter ~ q_string_content ~ delimiter }
-qq_string = { "qq" ~ delimiter ~ qq_string_content ~ delimiter }
+qq_string = { 
+    "qq" ~ (
+        ("(" ~ qq_paren_content ~ ")") |
+        ("[" ~ qq_bracket_content ~ "]") |
+        ("{" ~ qq_brace_content ~ "}") |
+        ("<" ~ qq_angle_content ~ ">") |
+        (qq_delimiter ~ qq_delimited_content ~ qq_delimiter)
+    )
+}
+qq_paren_content = @{ (!")" ~ (escape_sequence | interpolation | ANY))* }
+qq_bracket_content = @{ (!"]" ~ (escape_sequence | interpolation | ANY))* }
+qq_brace_content = @{ (!"}" ~ (escape_sequence | interpolation | ANY))* }
+qq_angle_content = @{ (!">" ~ (escape_sequence | interpolation | ANY))* }
+qq_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
+qq_delimited_content = @{ (!qq_delimiter ~ (escape_sequence | interpolation | ANY))* }
 qx_string = { "qx" ~ delimiter ~ qx_string_content ~ delimiter }
 
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
@@ -384,7 +406,7 @@ unitcheck_block = { "UNITCHECK" ~ block }
 // do/eval/goto
 do_block = { "do" ~ (block | expression) ~ semicolon? }
 eval_statement = { "eval" ~ (block | expression) ~ semicolon? }
-goto_statement = { "goto" ~ (label | expression) ~ semicolon? }
+goto_statement = { "goto" ~ (identifier | expression) ~ semicolon? }
 
 // POD
 pod_section = @{ 
