@@ -375,6 +375,10 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
             }
             Rule::semicolon | Rule::WHITESPACE => Ok(None),
+            Rule::standalone_expression => {
+                let inner = pair.into_inner().next().unwrap();
+                self.build_node(inner)
+            }
             Rule::for_statement => {
                 let mut inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
