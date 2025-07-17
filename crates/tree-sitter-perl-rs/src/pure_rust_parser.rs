@@ -379,6 +379,12 @@ impl PureRustPerlParser {
                 let inner = pair.into_inner().next().unwrap();
                 self.build_node(inner)
             }
+            Rule::regex => {
+                let mut inner = pair.into_inner();
+                let pattern = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                Ok(Some(AstNode::Regex { pattern, flags }))
+            }
             Rule::for_statement => {
                 let mut inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
@@ -435,12 +441,6 @@ impl PureRustPerlParser {
                     }
                 }
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
-            }
-            Rule::regex | Rule::match_regex => {
-                let mut inner = pair.into_inner();
-                let pattern = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                Ok(Some(AstNode::Regex { pattern, flags }))
             }
             Rule::relational_expression => {
                 let mut inner = pair.into_inner();
