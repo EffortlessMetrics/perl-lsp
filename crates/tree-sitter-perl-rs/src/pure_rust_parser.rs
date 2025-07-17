@@ -508,7 +508,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::QqString(inner.as_str().to_string())))
             }
             Rule::heredoc => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut indented = false;
                 let mut marker = String::new();
                 let mut quoted = false;
@@ -711,7 +711,7 @@ impl PureRustPerlParser {
                 }
             }
             Rule::for_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
                 // Don't skip "for" - it's already consumed by the grammar
                 let mut init = None;
