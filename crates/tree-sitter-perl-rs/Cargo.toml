@@ -23,7 +23,7 @@ criterion = "0.5"
 test-case = "3.3"
 
 [features]
-default = ["rust-scanner"]
+default = ["c-scanner"]
 rust-scanner = []
 c-scanner = []
 test-utils = []
