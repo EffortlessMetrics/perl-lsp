@@ -10,6 +10,9 @@ use pest_derive::Parser;
 #[grammar = "grammar.pest"]
 pub struct PerlParser;
 
+use PerlParser as PestParser;
+use self::PestParser::Rule;
+
 /// AST node types for the pure Rust parser
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
@@ -164,6 +167,8 @@ pub enum AstNode {
         body: Box<AstNode>,
     },
     List(Vec<AstNode>),
+    ArrayRef(Vec<AstNode>),
+    HashRef(Vec<AstNode>),
     
     // Additional Perl constructs
     BeginBlock(Box<AstNode>),
@@ -559,6 +564,32 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::List(elements)))
             }
+            Rule::array_ref => {
+                let mut elements = Vec::new();
+                for inner in pair.into_inner() {
+                    if inner.as_rule() == Rule::list_elements {
+                        for elem in inner.into_inner() {
+                            if let Some(node) = self.build_node(elem)? {
+                                elements.push(node);
+                            }
+                        }
+                    }
+                }
+                Ok(Some(AstNode::ArrayRef(elements)))
+            }
+            Rule::hash_ref => {
+                let mut elements = Vec::new();
+                for inner in pair.into_inner() {
+                    if inner.as_rule() == Rule::hash_elements {
+                        for elem in inner.into_inner() {
+                            if let Some(node) = self.build_node(elem)? {
+                                elements.push(node);
+                            }
+                        }
+                    }
+                }
+                Ok(Some(AstNode::HashRef(elements)))
+            }
             Rule::begin_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
@@ -656,7 +687,7 @@ impl PureRustPerlParser {
                 let mut inner = pair.into_inner();
                 if let Some(first) = inner.next() {
                     match first.as_rule() {
-                        Rule::match_regex => {
+                        rule if rule == Rule::match_regex => {
                             let mut match_inner = first.into_inner();
                             let pattern = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
                             let flags = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
@@ -870,6 +901,14 @@ impl PureRustPerlParser {
             AstNode::List(items) => {
                 let item_sexps: Vec<String> = items.iter().map(Self::node_to_sexp).collect();
                 item_sexps.join(" ")
+            }
+            AstNode::ArrayRef(items) => {
+                let item_sexps: Vec<String> = items.iter().map(Self::node_to_sexp).collect();
+                format!("(array_ref {})", item_sexps.join(" "))
+            }
+            AstNode::HashRef(items) => {
+                let item_sexps: Vec<String> = items.iter().map(Self::node_to_sexp).collect();
+                format!("(hash_ref {})", item_sexps.join(" "))
             }
             AstNode::ForStatement { init, condition, update, block, .. } => {
                 let mut parts = vec![];
