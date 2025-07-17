@@ -26,7 +26,10 @@ statement = {
     | next_statement
     | redo_statement
     | comment
+    | empty_statement
 }
+
+empty_statement = { semicolon }
 
 expression_statement = { expression ~ semicolon? }
 declaration_statement = { declaration ~ semicolon? }
@@ -80,7 +83,7 @@ foreach_statement = {
     label? ~ "foreach" ~ variable? ~ "(" ~ expression ~ ")" ~ block
 }
 
-for_init = { declaration | expression }
+for_init = { declaration | assignment_expression | expression }
 
 // Subroutines
 sub_declaration = {
@@ -99,7 +102,7 @@ attribute_args = { (!(")" | ",") ~ ANY)+ }
 
 // Packages and Modules
 package_declaration = {
-    "package" ~ qualified_name ~ version? ~ block?
+    "package" ~ qualified_name ~ version? ~ block? ~ semicolon?
 }
 
 use_statement = {
