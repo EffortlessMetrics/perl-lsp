@@ -27,9 +27,12 @@ statement = {
     | redo_statement
     | comment
     | empty_statement
+    | standalone_expression
+    | regex
 }
 
 empty_statement = { semicolon }
+standalone_expression = { expression }
 
 expression_statement = { expression ~ semicolon? }
 declaration_statement = { declaration ~ semicolon? }
