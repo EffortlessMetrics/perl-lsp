@@ -154,6 +154,10 @@ pub enum AstNode {
     // Other
     Comment(String),
     Label(String),
+    LabeledBlock {
+        label: String,
+        block: Box<AstNode>,
+    },
     AnonymousSub {
         prototype: Option<String>,
         body: Box<AstNode>,
@@ -499,6 +503,13 @@ impl PureRustPerlParser {
             Rule::end_section => {
                 Ok(Some(AstNode::EndSection(pair.as_str().to_string())))
             }
+            Rule::labeled_block => {
+                let mut inner = pair.into_inner();
+                let label_pair = inner.next().unwrap();
+                let label = label_pair.as_str().trim_end_matches(':').to_string();
+                let block = self.build_node(inner.next().unwrap())?.map(Box::new);
+                Ok(block.map(|b| AstNode::LabeledBlock { label, block: b }))
+            }
             Rule::comment => {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
             }
@@ -768,6 +779,9 @@ impl PureRustPerlParser {
             }
             AstNode::GotoStatement { target } => {
                 format!("(goto_statement {})", target)
+            }
+            AstNode::LabeledBlock { label, block } => {
+                format!("(labeled_block {} {})", label, Self::node_to_sexp(block))
             }
             AstNode::Pod(content) => {
                 format!("(pod {})", content)

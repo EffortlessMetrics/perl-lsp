@@ -30,6 +30,7 @@ statement = {
     | last_statement
     | next_statement
     | redo_statement
+    | labeled_block
     | declaration_statement
     | expression_statement 
     | block_statement
@@ -52,6 +53,8 @@ return_statement = { "return" ~ expression? ~ semicolon? }
 last_statement = { "last" ~ label? ~ semicolon? }
 next_statement = { "next" ~ label? ~ semicolon? }
 redo_statement = { "redo" ~ label? ~ semicolon? }
+
+labeled_block = { label ~ block }
 
 // Declarations
 declaration = {
@@ -408,7 +411,12 @@ unitcheck_block = { "UNITCHECK" ~ block }
 // do/eval/goto
 do_block = { "do" ~ (block | expression) ~ semicolon? }
 eval_statement = { "eval" ~ (block | expression) ~ semicolon? }
-goto_statement = { "goto" ~ (goto_target | expression) ~ semicolon? }
+goto_statement = { "goto" ~ (goto_target | expression) ~ statement_modifier? ~ semicolon? }
+
+// Statement modifiers (postfix if/unless/while/until/for/foreach)
+statement_modifier = {
+    ("if" | "unless" | "while" | "until" | "for" | "foreach") ~ expression
+}
 
 // POD
 pod_section = @{ 
