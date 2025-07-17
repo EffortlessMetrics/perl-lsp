@@ -26,6 +26,7 @@ struct HeredocContent {
     content: String,
     indented: bool,
     quoted: bool,
+    #[allow(dead_code)]
     command: bool,
 }
 
@@ -339,6 +340,7 @@ impl StatefulPerlParser {
     }
 
     /// Strip common leading whitespace for indented heredocs
+    #[allow(dead_code)]
     fn strip_indent(&self, line: &str) -> String {
         // For indented heredocs (<<~), Perl strips the same amount of leading
         // whitespace from each line as found on the terminator line
@@ -465,7 +467,7 @@ impl StatefulPerlParser {
                     self.walk_and_inject(arg, depth + 1)?;
                 }
             }
-            AstNode::MethodCall { object, method, args } => {
+            AstNode::MethodCall { object, method: _, args } => {
                 self.walk_and_inject(object, depth + 1)?;
                 for arg in args {
                     self.walk_and_inject(arg, depth + 1)?;
