@@ -391,11 +391,19 @@ heredoc = {
 }
 heredoc_indented = { "~" }
 heredoc_delimiter = {
-    single_quoted_string |
-    double_quoted_string |
-    backtick_string |
+    heredoc_single_quoted |
+    heredoc_double_quoted |
+    heredoc_backtick |
+    heredoc_escaped |
     bare_heredoc_delimiter
 }
+
+// Specific heredoc delimiter forms
+heredoc_single_quoted = { "'" ~ bare_heredoc_delimiter ~ "'" }
+heredoc_double_quoted = { "\"" ~ bare_heredoc_delimiter ~ "\"" }
+heredoc_backtick = { "`" ~ bare_heredoc_delimiter ~ "`" }
+heredoc_escaped = { "\\" ~ bare_heredoc_delimiter }
+
 bare_heredoc_delimiter = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
 glob = { "<" ~ glob_pattern ~ ">" }
@@ -447,7 +455,9 @@ statement_modifier = {
 
 // POD
 pod_section = @{ 
-    "=" ~ ASCII_ALPHA+ ~ (!("=cut") ~ ANY)* ~ "=cut"
+    "=" ~ ASCII_ALPHA+ ~ (!NEWLINE ~ ANY)* ~ NEWLINE ~ 
+    (!(NEWLINE ~ "=cut") ~ ANY)* ~ 
+    NEWLINE ~ "=cut" ~ (!NEWLINE ~ ANY)* ~ (NEWLINE | EOI)
 }
 
 // DATA/END sections
