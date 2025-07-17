@@ -3,16 +3,51 @@
 //! This module contains benchmarks to measure the overall parsing
 //! performance of the tree-sitter Perl parser.
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tree_sitter::Parser;
-use tree_sitter_perl::{language, parse};
+
+// Import the language function based on features
+#[cfg(all(feature = "c-scanner", not(feature = "pure-rust")))]
+use tree_sitter_perl::language;
+
+#[cfg(all(feature = "rust-scanner", not(feature = "pure-rust")))]
+use tree_sitter_perl::language_rust as language;
+
+#[cfg(feature = "pure-rust")]
+use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
+
+// Helper function to parse code
+#[cfg(not(feature = "pure-rust"))]
+fn parse(code: &str) -> Result<tree_sitter::Tree, String> {
+    let mut parser = Parser::new();
+    parser.set_language(&language()).map_err(|e| e.to_string())?;
+    parser.parse(code, None).ok_or_else(|| "Failed to parse".to_string())
+}
+
+#[cfg(feature = "pure-rust")]
+fn parse(code: &str) -> Result<String, String> {
+    let mut parser = PureRustPerlParser::new();
+    match parser.parse(code) {
+        Ok(ast) => Ok(parser.to_sexp(&ast)),
+        Err(e) => Err(e.to_string()),
+    }
+}
 
 fn bench_parser_creation(c: &mut Criterion) {
     c.bench_function("parser_creation", |b| {
         b.iter(|| {
-            let mut parser = Parser::new();
-            parser.set_language(&language()).unwrap();
-            black_box(parser);
+            #[cfg(not(feature = "pure-rust"))]
+            {
+                let mut parser = Parser::new();
+                parser.set_language(&language()).unwrap();
+                black_box(parser);
+            }
+            #[cfg(feature = "pure-rust")]
+            {
+                let parser = PureRustPerlParser::new();
+                black_box(parser);
+            }
         });
     });
 }
@@ -89,6 +124,7 @@ sub baz {
     });
 }
 
+#[cfg(not(feature = "pure-rust"))]
 fn bench_incremental_parsing(c: &mut Criterion) {
     let mut parser = Parser::new();
     parser.set_language(&language()).unwrap();
@@ -101,6 +137,17 @@ fn bench_incremental_parsing(c: &mut Criterion) {
     c.bench_function("incremental_parsing", |b| {
         b.iter(|| {
             black_box(parser.parse(modified_code, Some(&tree)).unwrap());
+        });
+    });
+}
+
+#[cfg(feature = "pure-rust")]
+fn bench_incremental_parsing(c: &mut Criterion) {
+    // Pure Rust parser doesn't support incremental parsing yet
+    c.bench_function("incremental_parsing", |b| {
+        b.iter(|| {
+            // Just parse the modified code directly
+            black_box(parse("my $var = 42; print 'Hello';").unwrap());
         });
     });
 }

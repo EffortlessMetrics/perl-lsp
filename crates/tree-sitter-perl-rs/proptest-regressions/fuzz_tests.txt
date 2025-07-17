@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b9cb187818b91566c0fc2adf09035d1be37025824d31552bb502f38ef86d3cf4 # shrinks to stmts = ["if ($A > 0) { $A = '{'; }", "my $A = \"$\";"]
+cc 6a7ff172068f827411722e030d092789313baf79a11b68e6195f7180dfb9acb0 # shrinks to ident = "q_"
+cc fef904b4a22ce7f8c460cbfc7d751c158491d49acc2e0f2b2e5b911fd11eec2d # shrinks to s = "\"{$\""
