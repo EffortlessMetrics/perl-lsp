@@ -17,6 +17,8 @@ walkdir = "2.4"
 thiserror = "1.0"
 unicode-ident = "1.0"
 unicode-normalization = "0.1"
+pest = "27"
+pest_derive = "2.7"
 
 [dev-dependencies]
 criterion = "0.5"
