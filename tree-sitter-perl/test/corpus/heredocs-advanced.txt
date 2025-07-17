@@ -1,0 +1,304 @@
+==========================================
+Multiple heredocs on one line
+==========================================
+
+print <<EOF, <<'END', <<"DONE";
+First heredoc
+with $interpolation
+EOF
+Second heredoc
+no interpolation
+END
+Third heredoc
+also with $interpolation
+DONE
+
+---
+
+(source_file
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier))
+    (comma)
+    (heredoc
+      (heredoc_start_identifier))
+    (comma)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content)
+  (heredoc_content)
+  (heredoc_content))
+
+==========================================
+Heredocs in list context
+==========================================
+
+@array = (<<EOF, "string", <<'END');
+First element
+$interpolated
+EOF
+Last element
+not $interpolated
+END
+
+---
+
+(source_file
+  (assignment_expression
+    (array_variable)
+    (assignment_operator)
+    (list_expression
+      (heredoc
+        (heredoc_start_identifier))
+      (comma)
+      (string_literal
+        (string_content))
+      (comma)
+      (heredoc
+        (heredoc_start_identifier))))
+  (heredoc_content)
+  (heredoc_content))
+
+==========================================
+Heredocs with method calls
+==========================================
+
+$obj->method(<<EOF);
+Method argument
+as heredoc
+EOF
+
+$result = $obj->process(<<'DATA')->trim;
+Raw data
+for processing
+DATA
+
+---
+
+(source_file
+  (method_call_expression
+    (scalar_variable)
+    (arrow_operator)
+    (identifier)
+    (arguments
+      (heredoc
+        (heredoc_start_identifier))))
+  (heredoc_content)
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (method_call_expression
+      (method_call_expression
+        (scalar_variable)
+        (arrow_operator)
+        (identifier)
+        (arguments
+          (heredoc
+            (heredoc_start_identifier))))
+      (arrow_operator)
+      (identifier)))
+  (heredoc_content))
+
+==========================================
+Heredocs in complex expressions
+==========================================
+
+$x = 5 + <<EOF =~ s/\d+/10/r;
+The number is 42
+EOF
+
+if (<<EOF eq <<'END') {
+test string
+EOF
+test string
+END
+    print "match\n";
+}
+
+---
+
+(source_file
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (binary_expression
+      (integer)
+      (binary_operator)
+      (binary_expression
+        (heredoc
+          (heredoc_start_identifier))
+        (binary_operator)
+        (regex_substitution_expression
+          (regex
+            (regex_pattern)
+            (string_content)
+            (regex_flags))))))
+  (heredoc_content)
+  (if_statement
+    (condition
+      (binary_expression
+        (heredoc
+          (heredoc_start_identifier))
+        (binary_operator)
+        (heredoc
+          (heredoc_start_identifier))))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (string_literal
+          (string_content)))))
+  (heredoc_content)
+  (heredoc_content))
+
+==========================================
+Heredocs with special delimiters
+==========================================
+
+print <<\EOF;
+Backslashed delimiter
+no $interpolation
+EOF
+
+print <<'';
+Empty delimiter
+on next line
+
+print <<"END_${var}_TEXT";
+Dynamic delimiter
+with $interpolation
+END_${var}_TEXT
+
+---
+
+(source_file
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content)
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content)
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content))
+
+==========================================
+Indented heredocs (Perl 5.26+)
+==========================================
+
+if (1) {
+    print <<~EOF;
+    This text
+    is indented
+    consistently
+    EOF
+}
+
+$code = <<~'CODE';
+    sub example {
+        return 42;
+    }
+    CODE
+
+---
+
+(source_file
+  (if_statement
+    (condition
+      (integer))
+    (block
+      (func1op_call_expression
+        (identifier)
+        (heredoc
+          (heredoc_start_identifier)))
+      (heredoc_content)))
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content))
+
+==========================================
+Heredocs with interpolation edge cases
+==========================================
+
+print <<"EOF";
+Array: @{[ map { $_ * 2 } 1..5 ]}
+Hash: ${\( $hash{key} )}
+Code: @{[ do { local $" = ', '; "@array" } ]}
+Special: ${^GLOBAL_PHASE}
+EOF
+
+---
+
+(source_file
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content))
+
+==========================================
+Command heredocs
+==========================================
+
+$output = <<`SHELL`;
+ls -la
+date
+SHELL
+
+system(<<`END`);
+echo "Running command"
+pwd
+END
+
+---
+
+(source_file
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content)
+  (func1op_call_expression
+    (identifier)
+    (arguments
+      (heredoc
+        (heredoc_start_identifier))))
+  (heredoc_content))
+
+==========================================
+Nested heredoc-like structures
+==========================================
+
+print <<EOF;
+This contains what looks like <<INNER
+but it's just text
+INNER
+not a real heredoc
+EOF
+
+$regex = qr/<<(\w+).*?\n\1/s;
+
+---
+
+(source_file
+  (func1op_call_expression
+    (identifier)
+    (heredoc
+      (heredoc_start_identifier)))
+  (heredoc_content)
+  (assignment_expression
+    (scalar_variable)
+    (assignment_operator)
+    (quoted_regex
+      (regex_pattern)
+      (regex_flags))))

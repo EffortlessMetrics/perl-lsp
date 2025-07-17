@@ -1,0 +1,276 @@
+==========================================
+Basic format declaration
+==========================================
+
+format STDOUT =
+Name: @<<<<<<<<< Age: @###
+$name, $age
+Address: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$address
+.
+
+write;
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable))
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)))
+  (func0op_call_expression
+    (identifier)))
+
+==========================================
+Format with top of page
+==========================================
+
+format REPORT_TOP =
+                    Page @###
+                         $%
+================================
+.
+
+format REPORT =
+@<<<<<<<<<  @|||||||  @>>>>>>>
+$left,      $center,  $right
+.
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (special_scalar_variable))
+    (format_picture_line))
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable))))
+
+==========================================
+Format with multiline fields
+==========================================
+
+format MULTILINE =
+Description:
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+.
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable))
+    (format_picture_line)
+    (format_variables
+      (scalar_variable))
+    (format_picture_line)
+    (format_variables
+      (scalar_variable))))
+
+==========================================
+Format with numeric fields
+==========================================
+
+format NUMBERS =
+Integer: @####   Float: @###.##   Money: @$###.##
+$int,            $float,          $money
+Binary: @||||||||  Hex: @>>>>>>>>
+$binary,           $hex
+.
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable))
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable))))
+
+==========================================
+Format with expressions
+==========================================
+
+format EXPR =
+Name: @<<<<<<<<<<<<< Length: @###
+$name, length($name)
+Date: @<<<<<<<<<<<< Time: @<<<<<<<<<
+scalar(localtime), $^T
+.
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (function_call_expression
+        (identifier)
+        (arguments
+          (scalar_variable))))
+    (format_picture_line)
+    (format_variables
+      (function_call_expression
+        (identifier)
+        (arguments
+          (function_call_expression
+            (identifier))))
+      (comma)
+      (special_scalar_variable))))
+
+==========================================
+Format with special variables
+==========================================
+
+format SPECIAL =
+File: @<<<<<<<<<<< Line: @#### Page: @###
+$ARGV,             $.,         $%
+.
+
+$~ = "SPECIAL";
+$^ = "SPECIAL_TOP";
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (special_scalar_variable)
+      (comma)
+      (special_scalar_variable)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (special_scalar_variable)
+    (assignment_operator)
+    (string_literal
+      (string_content))))
+
+==========================================
+Format with filehandle
+==========================================
+
+format FILE =
+@<<<<<<<<< @|||||||||| @>>>>>>>>>
+$col1,     $col2,      $col3
+.
+
+open(FILE, ">", "output.txt");
+select(FILE);
+write;
+close(FILE);
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable)))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword)
+      (comma)
+      (string_literal
+        (string_content))
+      (comma)
+      (string_literal
+        (string_content))))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword)))
+  (func0op_call_expression
+    (identifier))
+  (function_call_expression
+    (identifier)
+    (arguments
+      (bareword))))
+
+==========================================
+Complex format pictures
+==========================================
+
+format COMPLEX =
+~~^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$long_text
+@||||||||||||||||||||||||||||||||||||||||||||||||||||
+"centered text"
+@#####.## @<<<< @>>>> @|||| @#### @>>>>>>>>
+$num1, $str1, $str2, $str3, $num2, $str4
+.
+
+---
+
+(source_file
+  (format_declaration
+    (identifier)
+    (format_picture_line)
+    (format_variables
+      (scalar_variable))
+    (format_picture_line)
+    (format_variables
+      (string_literal
+        (string_content)))
+    (format_picture_line)
+    (format_variables
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable)
+      (comma)
+      (scalar_variable))))
