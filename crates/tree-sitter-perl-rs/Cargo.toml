@@ -11,17 +11,17 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 tree-sitter = "0.25"
 serde = { version = "1.0", features = ["derive"] }
-bincode = "1.3"
+bincode = "2.01"
 proptest = "1.3"
 walkdir = "2.4"
-thiserror = "1.0"
+thiserror = "2.012"
 unicode-ident = "1.0"
 unicode-normalization = "0.1"
 pest = "2.8.1"
 pest_derive = "2.8.0"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.6.0"
 test-case = "3.3"
 
 [features]
