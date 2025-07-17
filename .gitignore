@@ -3,6 +3,8 @@ node_modules
 build
 *.log
 package-lock.json
+# Debug and build artifacts
+/debug_parse/
 /target/
 *.a
 *.dylib
