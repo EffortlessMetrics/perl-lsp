@@ -1,54 +1,15 @@
 // Pest grammar for Perl parsing
 // This is a simplified version to get started with pure Rust parsing
 
-WHITESPACE = _[object Object]| t |r| "\n" }
-COMMENT = _{ #~ (!\n" ~ ANY)* ~ ("\n" | EOI) }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
 
-// Identifiers and variables
-identifier = [object Object](_ | ASCII_ALPHA) ~ (_ |ASCII_ALPHANUMERIC)* }
+identifier = { (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" )* }
 scalar_variable = { "$" ~ identifier }
 array_variable = { "@" ~ identifier }
 hash_variable = { "%" ~ identifier }
-glob_variable = { "*~ identifier }
+number = { ASCII_DIGIT+ }
 
-// Numbers
-number = { ASCII_DIGIT+ ~ (.~ ASCII_DIGIT+)? ~ (("e" | E") ~ ("+" |-)? ~ ASCII_DIGIT+)? }
-
-// Strings
-single_quoted_string = {" ~ (!"' ~ ANY)* ~ "" }
-double_quoted_string = { "\"~ (!"\"" ~ ANY)* ~ "\"" }
-backtick_string = {`" ~ (!"`" ~ ANY)* ~ `" }
-
-// Keywords
-keyword = [object Object]
-   package" |use" |require| "sub| "my | our" | "local|
-   return |if" | unless" | elsif" | else" |while" | until" |
-   for" | foreach" |do |last |next | redo | goto |
-    die | warn |print" |say" | defined" | "undef
-}
-
-//Operators
-operator = [object Object]   + |- |*" | /|%" | ** |++" |--" |
-   ==| !=| < |>" |<=" | >=" | <=> |
-    eq" | ne" | lt" | gt" | le" | ge" | cmp |
-   && | || |! |& ||" | ^|~ |<<| ">>|
-   =" | +=" | -=" | *=" |/=" | %=" |**=" |
-    &&=|||=" | &=" ||=| ^=" | "<<=" | >>= |
-    =>" | "->| .." |..." |? |:" | ";" | "," | "."
-}
-
-// Basic expressions
-expression = { 
-    scalar_variable | array_variable | hash_variable | glob_variable |
-    number | single_quoted_string | double_quoted_string | backtick_string |
-    identifier | keyword
-}
-
-// Statements
-statement =[object Object] 
-    expression ~ (";" | EOI) |
-    keyword ~ expression* ~ (";" | EOI)
-}
-
-// Program
-program = [object Object]SOI ~ (statement | COMMENT)* ~ EOI } 
+expression = { scalar_variable | array_variable | hash_variable | number | identifier }
+statement = { expression ~ (";" | EOI) }
+program = { SOI ~ (statement | COMMENT)* ~ EOI } 
