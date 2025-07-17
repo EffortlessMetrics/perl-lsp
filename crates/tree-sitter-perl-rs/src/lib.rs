@@ -35,6 +35,9 @@ pub mod pure_rust_parser;
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
+#[cfg(all(test, feature = "pure-rust"))]
+mod fuzz_tests;
+
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 
