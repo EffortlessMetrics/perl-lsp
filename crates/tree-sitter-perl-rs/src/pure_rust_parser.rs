@@ -286,8 +286,9 @@ impl PureRustPerlParser {
             }
             Rule::if_statement => {
                 let mut inner = pair.into_inner();
-                inner.next(); // skip "if"
+                // The first item should be the expression (condition)
                 let condition = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                // The second item should be the block
                 let then_block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 let mut elsif_clauses = Vec::new();
                 let mut else_block = None;
@@ -296,14 +297,15 @@ impl PureRustPerlParser {
                     match p.as_rule() {
                         Rule::elsif_clause => {
                             let mut elsif_inner = p.into_inner();
-                            elsif_inner.next(); // skip "elsif"
+                            // First is the condition expression
                             let cond = self.build_node(elsif_inner.next().unwrap())?.unwrap();
+                            // Second is the block
                             let block = self.build_node(elsif_inner.next().unwrap())?.unwrap();
                             elsif_clauses.push((cond, block));
                         }
                         Rule::else_clause => {
                             let mut else_inner = p.into_inner();
-                            else_inner.next(); // skip "else"
+                            // The only item should be the block
                             else_block = self.build_node(else_inner.next().unwrap())?.map(Box::new);
                         }
                         _ => {}
@@ -402,7 +404,7 @@ impl PureRustPerlParser {
             Rule::for_statement => {
                 let mut inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
-                inner.next(); // skip "for"
+                // Don't skip "for" - it's already consumed by the grammar
                 let mut init = None;
                 let mut condition = None;
                 let mut update = None;
