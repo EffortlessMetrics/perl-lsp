@@ -10,8 +10,6 @@ use pest_derive::Parser;
 #[grammar = "grammar.pest"]
 pub struct PerlParser;
 
-use PerlParser as PestParser;
-use self::PestParser::Rule;
 
 /// AST node types for the pure Rust parser
 #[derive(Debug, Clone, PartialEq)]
@@ -314,7 +312,7 @@ impl PureRustPerlParser {
         groups
     }
     
-    fn build_ast(&mut self, pairs: Pairs<Rule>) -> Result<AstNode, Box<dyn std::error::Error>> {
+    fn build_ast(&mut self, pairs: Pairs<crate::pure_rust_parser::PerlParser::Rule>) -> Result<AstNode, Box<dyn std::error::Error>> {
         let mut nodes = Vec::new();
         for pair in pairs {
             if let Some(node) = self.build_node(pair)? {
@@ -328,9 +326,9 @@ impl PureRustPerlParser {
         }
     }
 
-    fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+    fn build_node(&mut self, pair: Pair<crate::pure_rust_parser::PerlParser::Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         match pair.as_rule() {
-            Rule::program => {
+            crate::pure_rust_parser::PerlParser::Rule::program => {
                 let mut statements = Vec::new();
                 for inner in pair.into_inner() {
                     if let Some(node) = self.build_node(inner)? {
@@ -339,7 +337,7 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::Program(statements)))
             }
-            Rule::statements => {
+            crate::pure_rust_parser::PerlParser::Rule::statements => {
                 let mut statements = Vec::new();
                 for inner in pair.into_inner() {
                     if let Some(node) = self.build_node(inner)? {
@@ -348,11 +346,11 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::Program(statements)))
             }
-            Rule::statement => {
+            crate::pure_rust_parser::PerlParser::Rule::statement => {
                 let inner = pair.into_inner().next().unwrap();
                 self.build_node(inner)
             }
-            Rule::expression_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::expression_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 if let Some(expr) = self.build_node(inner)? {
                     Ok(Some(AstNode::Statement(Box::new(expr))))
@@ -360,11 +358,11 @@ impl PureRustPerlParser {
                     Ok(None)
                 }
             }
-            Rule::declaration_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::declaration_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 self.build_node(inner)
             }
-            Rule::variable_declaration => {
+            crate::pure_rust_parser::PerlParser::Rule::variable_declaration => {
                 let mut inner = pair.into_inner();
                 let scope = inner.next().unwrap().as_str().to_string();
                 let mut variables = Vec::new();
@@ -372,14 +370,14 @@ impl PureRustPerlParser {
                 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::variable_list => {
+                        crate::pure_rust_parser::PerlParser::Rule::variable_list => {
                             for var in p.into_inner() {
                                 if let Some(v) = self.build_node(var)? {
                                     variables.push(v);
                                 }
                             }
                         }
-                        Rule::expression => {
+                        crate::pure_rust_parser::PerlParser::Rule::expression => {
                             initializer = self.build_node(p)?.map(Box::new);
                         }
                         _ => {}
@@ -392,7 +390,7 @@ impl PureRustPerlParser {
                     initializer,
                 }))
             }
-            Rule::sub_declaration => {
+            crate::pure_rust_parser::PerlParser::Rule::sub_declaration => {
                 let mut inner = pair.into_inner();
                 inner.next(); // skip "sub"
                 let name = inner.next().unwrap().as_str().to_string();
@@ -402,15 +400,15 @@ impl PureRustPerlParser {
                 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::prototype => {
+                        crate::pure_rust_parser::PerlParser::Rule::prototype => {
                             prototype = Some(p.as_str().to_string());
                         }
-                        Rule::attributes => {
+                        crate::pure_rust_parser::PerlParser::Rule::attributes => {
                             for attr in p.into_inner() {
                                 attributes.push(attr.as_str().to_string());
                             }
                         }
-                        Rule::block => {
+                        crate::pure_rust_parser::PerlParser::Rule::block => {
                             body = self.build_node(p)?.map(Box::new);
                         }
                         _ => {}
@@ -424,7 +422,7 @@ impl PureRustPerlParser {
                     body: body.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
                 }))
             }
-            Rule::if_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::if_statement => {
                 let mut inner = pair.into_inner();
                 // The first item should be the expression (condition)
                 let condition = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
@@ -435,7 +433,7 @@ impl PureRustPerlParser {
                 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::elsif_clause => {
+                        crate::pure_rust_parser::PerlParser::Rule::elsif_clause => {
                             let mut elsif_inner = p.into_inner();
                             // First is the condition expression
                             let cond = self.build_node(elsif_inner.next().unwrap())?.unwrap();
@@ -443,7 +441,7 @@ impl PureRustPerlParser {
                             let block = self.build_node(elsif_inner.next().unwrap())?.unwrap();
                             elsif_clauses.push((cond, block));
                         }
-                        Rule::else_clause => {
+                        crate::pure_rust_parser::PerlParser::Rule::else_clause => {
                             let mut else_inner = p.into_inner();
                             // The only item should be the block
                             else_block = self.build_node(else_inner.next().unwrap())?.map(Box::new);
@@ -459,10 +457,10 @@ impl PureRustPerlParser {
                     else_block,
                 }))
             }
-            Rule::block => {
+            crate::pure_rust_parser::PerlParser::Rule::block => {
                 let mut statements = Vec::new();
                 for inner in pair.into_inner() {
-                    if inner.as_rule() == Rule::statements {
+                    if inner.as_rule() == crate::pure_rust_parser::PerlParser::Rule::statements {
                         for stmt in inner.into_inner() {
                             if let Some(node) = self.build_node(stmt)? {
                                 statements.push(node);
@@ -472,40 +470,40 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::Block(statements)))
             }
-            Rule::expression => {
+            crate::pure_rust_parser::PerlParser::Rule::expression => {
                 self.build_expression(pair)
             }
-            Rule::assignment_expression => {
+            crate::pure_rust_parser::PerlParser::Rule::assignment_expression => {
                 let mut inner = pair.into_inner();
                 let target = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 let op = inner.next().unwrap().as_str().to_string();
                 let value = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 Ok(Some(AstNode::Assignment { target, op, value }))
             }
-            Rule::scalar_variable => {
+            crate::pure_rust_parser::PerlParser::Rule::scalar_variable => {
                 Ok(Some(AstNode::ScalarVariable(pair.as_str().to_string())))
             }
-            Rule::array_variable => {
+            crate::pure_rust_parser::PerlParser::Rule::array_variable => {
                 Ok(Some(AstNode::ArrayVariable(pair.as_str().to_string())))
             }
-            Rule::hash_variable => {
+            crate::pure_rust_parser::PerlParser::Rule::hash_variable => {
                 Ok(Some(AstNode::HashVariable(pair.as_str().to_string())))
             }
-            Rule::number => {
+            crate::pure_rust_parser::PerlParser::Rule::number => {
                 Ok(Some(AstNode::Number(pair.as_str().to_string())))
             }
-            Rule::identifier => {
+            crate::pure_rust_parser::PerlParser::Rule::identifier => {
                 Ok(Some(AstNode::Identifier(pair.as_str().to_string())))
             }
-            Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
+            crate::pure_rust_parser::PerlParser::Rule::string | crate::pure_rust_parser::PerlParser::Rule::single_quoted_string | crate::pure_rust_parser::PerlParser::Rule::double_quoted_string => {
                 Ok(Some(AstNode::String(pair.as_str().to_string())))
             }
-            Rule::qq_string => {
+            crate::pure_rust_parser::PerlParser::Rule::qq_string => {
                 // Extract the content from qq{...}
                 let inner = pair.into_inner().next().unwrap();
                 Ok(Some(AstNode::QqString(inner.as_str().to_string())))
             }
-            Rule::heredoc => {
+            crate::pure_rust_parser::PerlParser::Rule::heredoc => {
                 let mut inner = pair.into_inner();
                 let mut indented = false;
                 let mut marker = String::new();
@@ -513,22 +511,22 @@ impl PureRustPerlParser {
                 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::heredoc_indented => {
+                        crate::pure_rust_parser::PerlParser::Rule::heredoc_indented => {
                             indented = true;
                         }
-                        Rule::heredoc_delimiter => {
+                        crate::pure_rust_parser::PerlParser::Rule::heredoc_delimiter => {
                             let delimiter_str = p.as_str();
                             let delimiter_inner = p.into_inner().next();
                             if let Some(d) = delimiter_inner {
                                 match d.as_rule() {
-                                    Rule::single_quoted_string => {
+                                    crate::pure_rust_parser::PerlParser::Rule::single_quoted_string => {
                                         quoted = true;
                                         marker = d.as_str().trim_matches('\'').to_string();
                                     }
-                                    Rule::double_quoted_string => {
+                                    crate::pure_rust_parser::PerlParser::Rule::double_quoted_string => {
                                         marker = d.as_str().trim_matches('"').to_string();
                                     }
-                                    Rule::bare_heredoc_delimiter => {
+                                    crate::pure_rust_parser::PerlParser::Rule::bare_heredoc_delimiter => {
                                         marker = d.as_str().to_string();
                                     }
                                     _ => {}
@@ -551,10 +549,10 @@ impl PureRustPerlParser {
                     content: String::new(), // This would be filled by a stateful parser
                 }))
             }
-            Rule::list => {
+            crate::pure_rust_parser::PerlParser::Rule::list => {
                 let mut elements = Vec::new();
                 for inner in pair.into_inner() {
-                    if inner.as_rule() == Rule::list_elements {
+                    if inner.as_rule() == crate::pure_rust_parser::PerlParser::Rule::list_elements {
                         for elem in inner.into_inner() {
                             if let Some(node) = self.build_node(elem)? {
                                 elements.push(node);
@@ -564,10 +562,10 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::List(elements)))
             }
-            Rule::array_ref => {
+            crate::pure_rust_parser::PerlParser::Rule::array_ref => {
                 let mut elements = Vec::new();
                 for inner in pair.into_inner() {
-                    if inner.as_rule() == Rule::list_elements {
+                    if inner.as_rule() == crate::pure_rust_parser::PerlParser::Rule::list_elements {
                         for elem in inner.into_inner() {
                             if let Some(node) = self.build_node(elem)? {
                                 elements.push(node);
@@ -577,10 +575,10 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::ArrayRef(elements)))
             }
-            Rule::hash_ref => {
+            crate::pure_rust_parser::PerlParser::Rule::hash_ref => {
                 let mut elements = Vec::new();
                 for inner in pair.into_inner() {
-                    if inner.as_rule() == Rule::hash_elements {
+                    if inner.as_rule() == crate::pure_rust_parser::PerlParser::Rule::hash_elements {
                         for elem in inner.into_inner() {
                             if let Some(node) = self.build_node(elem)? {
                                 elements.push(node);
@@ -590,38 +588,38 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::HashRef(elements)))
             }
-            Rule::begin_block => {
+            crate::pure_rust_parser::PerlParser::Rule::begin_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(|b| AstNode::BeginBlock(b)))
             }
-            Rule::end_block => {
+            crate::pure_rust_parser::PerlParser::Rule::end_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(|b| AstNode::EndBlock(b)))
             }
-            Rule::check_block => {
+            crate::pure_rust_parser::PerlParser::Rule::check_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(|b| AstNode::CheckBlock(b)))
             }
-            Rule::init_block => {
+            crate::pure_rust_parser::PerlParser::Rule::init_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(|b| AstNode::InitBlock(b)))
             }
-            Rule::unitcheck_block => {
+            crate::pure_rust_parser::PerlParser::Rule::unitcheck_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(|b| AstNode::UnitcheckBlock(b)))
             }
-            Rule::qw_list => {
+            crate::pure_rust_parser::PerlParser::Rule::qw_list => {
                 let mut words = Vec::new();
                 for inner in pair.into_inner() {
                     match inner.as_rule() {
-                        Rule::qw_paren_items | Rule::qw_bracket_items | 
-                        Rule::qw_brace_items | Rule::qw_angle_items |
-                        Rule::qw_delimited_items => {
+                        crate::pure_rust_parser::PerlParser::Rule::qw_paren_items | crate::pure_rust_parser::PerlParser::Rule::qw_bracket_items | 
+                        crate::pure_rust_parser::PerlParser::Rule::qw_brace_items | crate::pure_rust_parser::PerlParser::Rule::qw_angle_items |
+                        crate::pure_rust_parser::PerlParser::Rule::qw_delimited_items => {
                             // Split the content by whitespace
                             let content = inner.as_str();
                             words.extend(content.split_whitespace().map(|s| s.to_string()));
@@ -631,12 +629,12 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::QwList(words)))
             }
-            Rule::do_block => {
+            crate::pure_rust_parser::PerlParser::Rule::do_block => {
                 let inner = pair.into_inner().next().unwrap();
                 let expr = self.build_node(inner)?.map(Box::new);
                 Ok(expr.map(|e| AstNode::DoBlock(e)))
             }
-            Rule::eval_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::eval_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 let expr = self.build_node(inner)?;
                 Ok(expr.map(|e| match e {
@@ -644,10 +642,10 @@ impl PureRustPerlParser {
                     _ => AstNode::EvalString(Box::new(e)),
                 }))
             }
-            Rule::goto_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::goto_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 let target = match inner.as_rule() {
-                    Rule::goto_target => inner.as_str().to_string(),
+                    crate::pure_rust_parser::PerlParser::Rule::goto_target => inner.as_str().to_string(),
                     _ => {
                         // For expressions, we need to evaluate them
                         if let Some(expr) = self.build_node(inner)? {
@@ -659,35 +657,35 @@ impl PureRustPerlParser {
                 };
                 Ok(Some(AstNode::GotoStatement { target }))
             }
-            Rule::pod_section => {
+            crate::pure_rust_parser::PerlParser::Rule::pod_section => {
                 Ok(Some(AstNode::Pod(pair.as_str().to_string())))
             }
-            Rule::data_section => {
+            crate::pure_rust_parser::PerlParser::Rule::data_section => {
                 Ok(Some(AstNode::DataSection(pair.as_str().to_string())))
             }
-            Rule::end_section => {
+            crate::pure_rust_parser::PerlParser::Rule::end_section => {
                 Ok(Some(AstNode::EndSection(pair.as_str().to_string())))
             }
-            Rule::labeled_block => {
+            crate::pure_rust_parser::PerlParser::Rule::labeled_block => {
                 let mut inner = pair.into_inner();
                 let label_pair = inner.next().unwrap();
                 let label = label_pair.as_str().trim_end_matches(':').to_string();
                 let block = self.build_node(inner.next().unwrap())?.map(Box::new);
                 Ok(block.map(|b| AstNode::LabeledBlock { label, block: b }))
             }
-            Rule::comment => {
+            crate::pure_rust_parser::PerlParser::Rule::comment => {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
             }
-            Rule::semicolon | Rule::WHITESPACE => Ok(None),
-            Rule::standalone_expression => {
+            crate::pure_rust_parser::PerlParser::Rule::semicolon | crate::pure_rust_parser::PerlParser::Rule::WHITESPACE => Ok(None),
+            crate::pure_rust_parser::PerlParser::Rule::standalone_expression => {
                 let inner = pair.into_inner().next().unwrap();
                 self.build_node(inner)
             }
-            Rule::regex => {
+            crate::pure_rust_parser::PerlParser::Rule::regex => {
                 let mut inner = pair.into_inner();
                 if let Some(first) = inner.next() {
                     match first.as_rule() {
-                        rule if rule == Rule::match_regex => {
+                        rule if rule == crate::pure_rust_parser::PerlParser::Rule::match_regex => {
                             let mut match_inner = first.into_inner();
                             let pattern = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
                             let flags = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
@@ -708,7 +706,7 @@ impl PureRustPerlParser {
                     Ok(Some(AstNode::Regex { pattern: String::new(), flags: String::new(), named_groups: Vec::new() }))
                 }
             }
-            Rule::for_statement => {
+            crate::pure_rust_parser::PerlParser::Rule::for_statement => {
                 let mut inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
                 // Don't skip "for" - it's already consumed by the grammar
@@ -720,17 +718,17 @@ impl PureRustPerlParser {
                 // Parse for loop components
                 for p in inner {
                     match p.as_rule() {
-                        Rule::for_init => {
+                        crate::pure_rust_parser::PerlParser::Rule::for_init => {
                             init = self.build_node(p)?.map(Box::new);
                         }
-                        Rule::expression => {
+                        crate::pure_rust_parser::PerlParser::Rule::expression => {
                             if condition.is_none() {
                                 condition = self.build_node(p)?.map(Box::new);
                             } else if update.is_none() {
                                 update = self.build_node(p)?.map(Box::new);
                             }
                         }
-                        Rule::block => {
+                        crate::pure_rust_parser::PerlParser::Rule::block => {
                             block = self.build_node(p)?.map(Box::new);
                         }
                         _ => {}
@@ -745,7 +743,7 @@ impl PureRustPerlParser {
                     block: block.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
                 }))
             }
-            Rule::package_declaration => {
+            crate::pure_rust_parser::PerlParser::Rule::package_declaration => {
                 let mut inner = pair.into_inner();
                 inner.next(); // skip "package"
                 // Accept qualified_name as identifier
@@ -758,14 +756,14 @@ impl PureRustPerlParser {
                 let mut block = None;
                 for p in inner {
                     match p.as_rule() {
-                        Rule::version => version = Some(p.as_str().to_string()),
-                        Rule::block => block = self.build_node(p)?.map(Box::new),
+                        crate::pure_rust_parser::PerlParser::Rule::version => version = Some(p.as_str().to_string()),
+                        crate::pure_rust_parser::PerlParser::Rule::block => block = self.build_node(p)?.map(Box::new),
                         _ => {}
                     }
                 }
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
             }
-            Rule::relational_expression => {
+            crate::pure_rust_parser::PerlParser::Rule::relational_expression => {
                 let mut inner = pair.into_inner();
                 let left = if let Some(first) = inner.next() {
                     self.build_node(first)?.map(Box::new)
@@ -815,7 +813,7 @@ impl PureRustPerlParser {
         }
     }
 
-    fn build_expression(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+    fn build_expression(&mut self, pair: Pair<crate::pure_rust_parser::PerlParser::Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         // This is a simplified expression builder
         // In a full implementation, this would handle operator precedence
         let inner: Vec<_> = pair.into_inner().collect();
