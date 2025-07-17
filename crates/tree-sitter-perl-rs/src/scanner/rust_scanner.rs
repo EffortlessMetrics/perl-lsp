@@ -293,7 +293,7 @@ impl PerlScanner for RustScanner {
 
     fn serialize(&self, buffer: &mut Vec<u8>) -> ParseResult<()> {
         // Serialize scanner state
-        let serialized = bincode::serialize(&self.state)
+        let serialized = bincode::encode_to_vec(&self.state, bincode::config::standard())
             .map_err(|_| crate::error::ParseError::SerializationFailed)?;
         buffer.extend_from_slice(&serialized);
         Ok(())
@@ -301,8 +301,9 @@ impl PerlScanner for RustScanner {
 
     fn deserialize(&mut self, buffer: &[u8]) -> ParseResult<()> {
         // Deserialize scanner state
-        self.state = bincode::deserialize(buffer)
+        let (decoded, _) = bincode::decode_from_slice(buffer, bincode::config::standard())
             .map_err(|_| crate::error::ParseError::DeserializationFailed)?;
+        self.state = decoded;
         Ok(())
     }
 

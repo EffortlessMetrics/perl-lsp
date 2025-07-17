@@ -278,12 +278,11 @@ mod error_tests {
     #[test]
     fn test_error_serialization() {
         let error = ParseError::ParseFailed;
-        let serialized = bincode::serialize(&error);
+        let serialized = bincode::encode_to_vec(&error, bincode::config::standard());
         assert!(serialized.is_ok(), "Error serialization failed");
         
-        let deserialized: Result<ParseError, _> = bincode::deserialize(&serialized.unwrap());
-        assert!(deserialized.is_ok(), "Error deserialization failed");
-        assert!(matches!(deserialized.unwrap(), ParseError::ParseFailed));
+        let (deserialized, _): (ParseError, _) = bincode::decode_from_slice(&serialized.unwrap(), bincode::config::standard()).unwrap();
+        assert!(matches!(deserialized, ParseError::ParseFailed));
     }
 }
 
