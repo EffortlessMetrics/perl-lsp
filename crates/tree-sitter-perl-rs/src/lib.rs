@@ -94,7 +94,8 @@ pub fn parse_with_tree(
 }
 
 #[cfg(feature = "pure-rust")]
-pub use pure_rust_parser::{PureRustPerlParser, AstNode};
+pub use pure_rust_parser::{PureRustPerlParser, AstNode, PerlParser};
+// Rule is available as a type inside pure_rust_parser module when using PerlParser
 
 #[cfg(feature = "pure-rust")]
 pub use enhanced_parser::EnhancedPerlParser;

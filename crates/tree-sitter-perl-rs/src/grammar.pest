@@ -303,7 +303,7 @@ qq_string_content = @{ (!delimiter ~ ANY)* }
 qx_string_content = @{ (!delimiter ~ ANY)* }
 
 escape_sequence = @{ "\\" ~ ANY }
-interpolation = { scalar_variable | array_element | hash_element }
+interpolation = { scalar_variable | array_element | hash_element_access }
 
 // Variables
 variable = {
@@ -311,7 +311,7 @@ variable = {
     | array_variable
     | hash_variable
     | array_element
-    | hash_element
+    | hash_element_access
     | special_variable
 }
 
@@ -319,7 +319,7 @@ scalar_variable = @{ "$" ~ variable_name }
 array_variable = @{ "@" ~ variable_name }
 hash_variable = @{ "%" ~ variable_name }
 array_element = { "$" ~ variable_name ~ "[" ~ expression ~ "]" }
-hash_element = { "$" ~ variable_name ~ "{" ~ expression ~ "}" }
+hash_element_access = { "$" ~ variable_name ~ "{" ~ expression ~ "}" }
 
 variable_name = @{
     identifier
