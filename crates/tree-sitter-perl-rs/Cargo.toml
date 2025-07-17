@@ -19,6 +19,7 @@ unicode-ident = "1.0"
 unicode-normalization = "0.1"
 pest = "2.8"
 pest_derive = "2.8"
+regex = "1.11"
 
 [dev-dependencies]
 criterion = "0.6"
@@ -44,6 +45,11 @@ required-features = ["test-utils"]
 name = "compare_parsers"
 path = "src/bin/compare_parsers.rs"
 required-features = ["test-utils"]
+
+[[bin]]
+name = "test_stateful"
+path = "src/bin/test_stateful.rs"
+required-features = ["pure-rust"]
 
 [[bench]]
 name = "scanner_benchmarks"
