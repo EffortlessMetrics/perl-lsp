@@ -159,6 +159,49 @@ pub enum AstNode {
         body: Box<AstNode>,
     },
     List(Vec<AstNode>),
+    
+    // Additional Perl constructs
+    BeginBlock(Box<AstNode>),
+    EndBlock(Box<AstNode>),
+    CheckBlock(Box<AstNode>),
+    InitBlock(Box<AstNode>),
+    UnitcheckBlock(Box<AstNode>),
+    
+    // Quoting constructs
+    QwList(Vec<String>),
+    QqString(String),
+    QxString(String),
+    QrRegex {
+        pattern: String,
+        flags: String,
+    },
+    
+    // Here documents
+    Heredoc {
+        marker: String,
+        content: String,
+    },
+    
+    // File operations
+    Glob(String),
+    Readline {
+        filehandle: Option<String>,
+    },
+    
+    // Special constructs
+    DoBlock(Box<AstNode>),
+    EvalBlock(Box<AstNode>),
+    EvalString(Box<AstNode>),
+    GotoStatement {
+        target: String,
+    },
+    
+    // Data sections
+    DataSection(String),
+    EndSection(String),
+    
+    // POD
+    Pod(String),
 }
 
 /// Pure Rust Perl parser implementation
@@ -372,6 +415,74 @@ impl PureRustPerlParser {
                     }
                 }
                 Ok(Some(AstNode::List(elements)))
+            }
+            Rule::begin_block => {
+                let inner = pair.into_inner().next().unwrap(); // get the block
+                let block = self.build_node(inner)?.map(Box::new);
+                Ok(block.map(|b| AstNode::BeginBlock(b)))
+            }
+            Rule::end_block => {
+                let inner = pair.into_inner().next().unwrap(); // get the block
+                let block = self.build_node(inner)?.map(Box::new);
+                Ok(block.map(|b| AstNode::EndBlock(b)))
+            }
+            Rule::check_block => {
+                let inner = pair.into_inner().next().unwrap(); // get the block
+                let block = self.build_node(inner)?.map(Box::new);
+                Ok(block.map(|b| AstNode::CheckBlock(b)))
+            }
+            Rule::init_block => {
+                let inner = pair.into_inner().next().unwrap(); // get the block
+                let block = self.build_node(inner)?.map(Box::new);
+                Ok(block.map(|b| AstNode::InitBlock(b)))
+            }
+            Rule::unitcheck_block => {
+                let inner = pair.into_inner().next().unwrap(); // get the block
+                let block = self.build_node(inner)?.map(Box::new);
+                Ok(block.map(|b| AstNode::UnitcheckBlock(b)))
+            }
+            Rule::qw_list => {
+                let mut words = Vec::new();
+                for inner in pair.into_inner() {
+                    match inner.as_rule() {
+                        Rule::qw_paren_items | Rule::qw_bracket_items | 
+                        Rule::qw_brace_items | Rule::qw_angle_items |
+                        Rule::qw_delimited_items => {
+                            // Split the content by whitespace
+                            let content = inner.as_str();
+                            words.extend(content.split_whitespace().map(|s| s.to_string()));
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(Some(AstNode::QwList(words)))
+            }
+            Rule::do_block => {
+                let inner = pair.into_inner().next().unwrap();
+                let expr = self.build_node(inner)?.map(Box::new);
+                Ok(expr.map(|e| AstNode::DoBlock(e)))
+            }
+            Rule::eval_statement => {
+                let inner = pair.into_inner().next().unwrap();
+                let expr = self.build_node(inner)?;
+                Ok(expr.map(|e| match e {
+                    AstNode::Block(_) => AstNode::EvalBlock(Box::new(e)),
+                    _ => AstNode::EvalString(Box::new(e)),
+                }))
+            }
+            Rule::goto_statement => {
+                let inner = pair.into_inner().next().unwrap();
+                let target = inner.as_str().to_string();
+                Ok(Some(AstNode::GotoStatement { target }))
+            }
+            Rule::pod_section => {
+                Ok(Some(AstNode::Pod(pair.as_str().to_string())))
+            }
+            Rule::data_section => {
+                Ok(Some(AstNode::DataSection(pair.as_str().to_string())))
+            }
+            Rule::end_section => {
+                Ok(Some(AstNode::EndSection(pair.as_str().to_string())))
             }
             Rule::comment => {
                 Ok(Some(AstNode::Comment(pair.as_str().to_string())))
@@ -611,6 +722,46 @@ impl PureRustPerlParser {
             }
             AstNode::Regex { pattern, flags } => {
                 format!("(regex {} {})", pattern, flags)
+            }
+            AstNode::BeginBlock(block) => {
+                format!("(begin_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::EndBlock(block) => {
+                format!("(end_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::CheckBlock(block) => {
+                format!("(check_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::InitBlock(block) => {
+                format!("(init_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::UnitcheckBlock(block) => {
+                format!("(unitcheck_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::QwList(words) => {
+                let word_list = words.iter().map(|w| format!("(word {})", w)).collect::<Vec<_>>().join(" ");
+                format!("(qw_list {})", word_list)
+            }
+            AstNode::DoBlock(expr) => {
+                format!("(do_block {})", Self::node_to_sexp(expr))
+            }
+            AstNode::EvalBlock(block) => {
+                format!("(eval_block {})", Self::node_to_sexp(block))
+            }
+            AstNode::EvalString(expr) => {
+                format!("(eval_string {})", Self::node_to_sexp(expr))
+            }
+            AstNode::GotoStatement { target } => {
+                format!("(goto_statement {})", target)
+            }
+            AstNode::Pod(content) => {
+                format!("(pod {})", content)
+            }
+            AstNode::DataSection(content) => {
+                format!("(data_section {})", content)
+            }
+            AstNode::EndSection(content) => {
+                format!("(end_section {})", content)
             }
             _ => format!("(unhandled_node {:?})", node),
         }

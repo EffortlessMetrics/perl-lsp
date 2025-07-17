@@ -54,7 +54,7 @@ fn main() {
         }
         
         let success_rate = if total_files > 0 {
-            ((total_files - error_files) as f64/ total_files as f64* 1000.0)
+            (total_files - error_files) as f64 / total_files as f64 * 100.0
         } else {
             0.0
         };

@@ -430,4 +430,87 @@ mod tests {
         parse_successfully("if ($x) { if ($y) { $z = 1; } }");
         parse_successfully("while ($x) { while ($y) { $z++; } }");
     }
+
+    #[test]
+    fn test_begin_end_blocks() {
+        // BEGIN blocks
+        parse_successfully("BEGIN { }");
+        parse_successfully("BEGIN { print 'start'; }");
+        parse_successfully("BEGIN { $x = 1; $y = 2; }");
+        
+        // END blocks
+        parse_successfully("END { }");
+        parse_successfully("END { print 'cleanup'; }");
+        
+        // Other phase blocks
+        parse_successfully("CHECK { }");
+        parse_successfully("INIT { }");
+        parse_successfully("UNITCHECK { }");
+        
+        // S-expression check
+        check_sexp_contains("BEGIN { $x = 1; }", "begin_block");
+        check_sexp_contains("END { $x = 1; }", "end_block");
+    }
+
+    #[test]
+    fn test_qw_lists() {
+        // Basic qw with different delimiters
+        parse_successfully("qw(foo bar baz)");
+        parse_successfully("qw[foo bar baz]");
+        parse_successfully("qw{foo bar baz}");
+        parse_successfully("qw<foo bar baz>");
+        parse_successfully("qw/foo bar baz/");
+        parse_successfully("qw!foo bar baz!");
+        
+        // qw in assignments
+        parse_successfully("my @words = qw(foo bar baz)");
+        parse_successfully("@list = qw[one two three]");
+        
+        // S-expression check
+        check_sexp_contains("qw(foo bar)", "qw_list");
+        check_sexp_contains("qw(foo bar)", "(word foo)");
+        check_sexp_contains("qw(foo bar)", "(word bar)");
+    }
+
+    #[test]
+    fn test_eval_do_statements() {
+        // eval block form
+        parse_successfully("eval { }");
+        parse_successfully("eval { die 'error'; }");
+        parse_successfully("eval { $x = 1; $y = 2; }");
+        
+        // eval string form
+        parse_successfully("eval 'print 42'");
+        parse_successfully("eval \"$code\"");
+        parse_successfully("eval $var");
+        
+        // do blocks
+        parse_successfully("do { }");
+        parse_successfully("do { $x = 1; }");
+        parse_successfully("do { $x = 1; $y = 2; }");
+        
+        // do file
+        parse_successfully("do 'file.pl'");
+        parse_successfully("do $filename");
+        
+        // S-expression check
+        check_sexp_contains("eval { $x = 1; }", "eval_block");
+        check_sexp_contains("eval '$x = 1'", "eval_string");
+        check_sexp_contains("do { $x = 1; }", "do_block");
+    }
+
+    #[test]
+    fn test_goto_statements() {
+        // goto label
+        parse_successfully("goto LABEL");
+        parse_successfully("goto END");
+        
+        // goto expression
+        parse_successfully("goto $label");
+        parse_successfully("goto $hash{key}");
+        
+        // S-expression check
+        check_sexp_contains("goto LABEL", "goto_statement");
+        check_sexp_contains("goto LABEL", "LABEL");
+    }
 }
