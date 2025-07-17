@@ -79,7 +79,7 @@ until_statement = {
 }
 
 for_statement = {
-    label? ~ "for" ~ "(" ~ for_init? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block
+    label? ~ "for" ~ "(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block
 }
 
 foreach_statement = {
@@ -145,7 +145,7 @@ equality_expression = {
 }
 
 relational_expression = {
-    shift_expression ~ (("<" | ">" | "<=" | ">=" | "lt" | "gt" | "le" | "ge") ~ shift_expression)*
+    shift_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge") ~ shift_expression)*
 }
 
 shift_expression = { additive_expression ~ (("<<" | ">>") ~ additive_expression)* }
@@ -289,7 +289,7 @@ special_var_name = @{
 
 // Identifiers
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-qualified_name = @{ identifier ~ ("::" ~ identifier)* }
+qualified_name = { identifier ~ ("::" ~ identifier)* }
 label = @{ identifier ~ ":" }
 bareword = { identifier }
 
@@ -299,8 +299,9 @@ regex = {
     | qr_regex
 }
 
-match_regex = { "/" ~ regex_pattern ~ "/" ~ regex_flags? }
+match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
 qr_regex = { "qr" ~ delimiter ~ regex_pattern ~ delimiter ~ regex_flags? }
+match_regex_pattern = @{ (!"/" ~ ANY)* }
 regex_pattern = @{ (!delimiter ~ ANY)* }
 regex_flags = @{ ASCII_ALPHA* }
 
