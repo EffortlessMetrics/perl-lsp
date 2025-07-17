@@ -14,14 +14,14 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_handles_arbitrary_strings(input in "[\\x00-\\xff]*") {
+        fn test_scanner_handles_arbitrary_strings(input in r#"[\\x00-\\xff]*"#) {
             // Scanner should handle arbitrary strings gracefully
             let mut scanner = RustScanner::new();
             let _result = scanner.scan(input.as_bytes());
         }
 
         #[test]
-        fn test_scanner_position_monotonic(input in "[a-zA-Z0-9_\\s\\{\\}\\(\\)\\[\\]\\\"\\'\\;\\,\\.\\+\\-\\*\\/\\=\\<\\>\\!\\&\\|\\^\\~\\%\\#\\@\\$\\`\\{\\}]+") {
+        fn test_scanner_position_monotonic(input in r#"[a-zA-Z0-9_\s\{\}\(\)\[\]\"\'\;\,\.\+\-\*\/\=\<\>\!\&\|\^\~\%\#\@\$\`\{\}]+"#) {
             // Scanner position should be monotonic (never decrease)
             let mut scanner = RustScanner::new();
             let initial_position = scanner.position();
@@ -31,7 +31,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_serialization_roundtrip(input in "[a-zA-Z0-9_\\s]+") {
+        fn test_scanner_serialization_roundtrip(input in r#"[a-zA-Z0-9_\s]+"#) {
             // Scanner state should survive serialization/deserialization
             let mut scanner1 = RustScanner::new();
             let _ = scanner1.scan(input.as_bytes());
@@ -49,7 +49,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_unicode_normalization_idempotent(input in "[a-zA-Z0-9_\\u{00C0}-\\u{017F}\\u{0100}-\\u{024F}\\u{1E00}-\\u{1EFF}\\u{2C60}-\\u{2C7F}\\u{A720}-\\u{A7FF}]+") {
+        fn test_unicode_normalization_idempotent(input in r#"[a-zA-Z0-9_\u{00C0}-\u{017F}\u{0100}-\u{024F}\u{1E00}-\u{1EFF}\u{2C60}-\u{2C7F}\u{A720}-\u{A7FF}]+"#) {
             // Unicode normalization should be idempotent
             let normalized1 = UnicodeUtils::normalize_identifier(&input);
             let normalized2 = UnicodeUtils::normalize_identifier(&normalized1);
@@ -90,7 +90,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_token_type_consistency(input in "[a-zA-Z0-9_\\s\\{\\}\\(\\)\\[\\]\\\"\\'\\;\\,\\.\\+\\-\\*\\/\\=\\<\\>\\!\\&\\|\\^\\~\\%\\#\\@\\$\\`\\{\\}]+") {
+        fn test_scanner_token_type_consistency(input in r#"[a-zA-Z0-9_\s\{\}\(\)\[\]\"\'\;\,\.\+\-\*\/\=\<\>\!\&\|\^\~\%\#\@\$\`\{\}]+"#) {
             // Scanner should return consistent token types for same input
             let mut scanner1 = RustScanner::new();
             let mut scanner2 = RustScanner::new();
@@ -114,7 +114,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_whitespace_handling(input in "[\\s\\t\\n\\r]+") {
+        fn test_scanner_whitespace_handling(input in r#"[\s\t\n\r]+"#) {
             // Scanner should handle whitespace consistently
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());
@@ -138,7 +138,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_number_handling(input in "[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?") {
+        fn test_scanner_number_handling(input in r#"[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?"#) {
             // Scanner should handle numeric literals
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());
@@ -162,7 +162,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_operator_handling(input in "[+\\-*/=<>!&|^~%#@$`]+") {
+        fn test_scanner_operator_handling(input in r#"[+\-*/=<>!&|^~%#@$`]+"#) {
             // Scanner should handle operators
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());
@@ -174,7 +174,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_comment_handling(input in "#[^\\n]*") {
+        fn test_scanner_comment_handling(input in r#"#[^\n]*"#) {
             // Scanner should handle comments
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());
@@ -198,7 +198,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_multiple_tokens(input in "[a-zA-Z_][a-zA-Z0-9_]*\\s+[0-9]+") {
+        fn test_scanner_multiple_tokens(input in r#"[a-zA-Z_][a-zA-Z0-9_]*\s+[0-9]+"#) {
             // Scanner should handle multiple tokens in sequence
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());
@@ -206,7 +206,7 @@ mod property_scanner {
         }
 
         #[test]
-        fn test_scanner_unicode_identifier_handling(input in "[\\u{00C0}-\\u{017F}\\u{0100}-\\u{024F}\\u{1E00}-\\u{1EFF}\\u{2C60}-\\u{2C7F}\\u{A720}-\\u{A7FF}]+") {
+        fn test_scanner_unicode_identifier_handling(input in r#"[\u{00C0}-\u{017F}\u{0100}-\u{024F}\u{1E00}-\u{1EFF}\u{2C60}-\u{2C7F}\u{A720}-\u{A7FF}]+"#) {
             // Scanner should handle Unicode identifiers
             let mut scanner = RustScanner::new();
             let result = scanner.scan(input.as_bytes());

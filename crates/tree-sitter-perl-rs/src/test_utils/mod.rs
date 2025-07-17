@@ -79,7 +79,7 @@ impl TestUtils {
             "my @array = (1, 2, 3);".to_string(),
             "my %hash = (key => 'value');".to_string(),
             "# This is a comment\nmy $var = 1;".to_string(),
-            "my $str = \"Hello\\nWorld\";".to_string(),
+            r#"my $str = "Hello\nWorld";"#.to_string(),
             "my $regex = qr/pattern/;".to_string(),
         ]
     }
