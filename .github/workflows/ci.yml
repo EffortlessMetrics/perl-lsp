@@ -1,19 +1,159 @@
 name: CI
+
 on:
-  workflow_dispatch:
+  push:
+    branches: [ master, main ]
   pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   test:
+    name: Test Suite
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust:
+          - stable
+          - nightly
+        include:
+          - os: ubuntu-latest
+            rust: stable
+            coverage: true
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm run dev-install
-      - run: npm test
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install cargo-llvm-cov (coverage only)
+      if: matrix.coverage
+      uses: taiki-e/install-action@cargo-llvm-cov
+
+    - name: Check formatting
+      run: cargo xtask fmt -- --check
+
+    - name: Run clippy
+      run: cargo xtask check --clippy
+
+    - name: Build with default features (C scanner)
+      run: cargo xtask build
+
+    - name: Build with pure Rust parser
+      run: cargo xtask build --features pure-rust
+
+    - name: Run all tests
+      run: cargo xtask test
+
+    - name: Run corpus tests
+      run: cargo xtask corpus
+
+    - name: Run pure Rust parser tests
+      run: |
+        cargo test --features pure-rust --test comprehensive_feature_tests
+        cargo test --features pure-rust --test context_sensitive_tests
+        cargo test --features pure-rust --test stateful_parser_tests
+
+    - name: Run benchmarks (check they compile)
+      run: cargo bench --features pure-rust --no-run
+
+    - name: Generate coverage report
+      if: matrix.coverage
+      run: |
+        cargo llvm-cov --features pure-rust --workspace --lcov --output-path lcov.info
+        cargo llvm-cov report --features pure-rust
+
+    - name: Upload coverage to Codecov
+      if: matrix.coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: lcov.info
+        fail_ci_if_error: false
+
+  comparison:
+    name: Parser Comparison Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run parser comparison
+      run: |
+        cargo run --features "pure-rust test-utils" --bin compare_parsers -- --test
+        cargo xtask compare
+
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust nightly
+      uses: dtolnay/rust-toolchain@nightly
+
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
+
+    - name: Run fuzz tests (limited time)
+      run: |
+        cd crates/tree-sitter-perl-rs
+        cargo +nightly fuzz run fuzz_parser -- -max_total_time=60 || true
+
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install MSRV toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.70.0  # Adjust based on your MSRV
+
+    - name: Check MSRV
+      run: cargo check --all-features
