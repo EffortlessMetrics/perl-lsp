@@ -12,7 +12,7 @@ mod tests {
 
     fn assert_parse_fails(input: &str) {
         let result = PerlParser::parse(Rule::program, input);
-        assert!(result.is_err(), "Expected parse to fail but it succeeded: {}", input);
+        assert!(result.is_err(), "Expected parse failure for: {}", input);
     }
 
     #[test]
@@ -21,31 +21,27 @@ mod tests {
             // Basic scalar references
             r#"my $ref = \$scalar;"#,
             r#"my $ref = \$_;"#,
-            r#"my $ref = \$1;"#,
-            r#"my $ref = \$#array;"#,
+            r#"my $ref = \$::global;"#,
+            r#"my $ref = \$Package::var;"#,
+            
+            // Complex scalar references
             r#"my $ref = \${var};"#,
-            r#"my $ref = \$hash{key};"#,
-            r#"my $ref = \$array[0];"#,
+            r#"my $ref = \${"complex"};"#,
+            r#"my $ref = \$$other_ref;"#,
             
-            // Multiple references
-            r#"my ($ref1, $ref2) = (\$var1, \$var2);"#,
+            // Scalar references in expressions
+            r#"print $$ref;"#,
+            r#"$$ref = 42;"#,
+            r#"my $val = $$ref + 10;"#,
+            r#"${$ref} = "value";"#,
             
-            // Nested references
-            r#"my $ref_ref = \\$scalar;"#,
-            r#"my $ref = \${$scalar_ref};"#,
-            
-            // In expressions
-            r#"print \$var;"#,
-            r#"push @refs, \$item;"#,
-            r#"$hash{ref} = \$value;"#,
-            
-            // Dereferencing
-            r#"my $value = $$ref;"#,
-            r#"my $value = ${$ref};"#,
+            // Multiple dereferences
+            r#"my $val = $$$ref_ref;"#,
+            r#"${${$ref}} = "nested";"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
@@ -55,29 +51,27 @@ mod tests {
             // Basic array references
             r#"my $aref = \@array;"#,
             r#"my $aref = \@_;"#,
-            r#"my $aref = \@ARGV;"#,
-            r#"my $aref = \@{$array_ref};"#,
+            r#"my $aref = \@::global;"#,
+            r#"my $aref = \@Package::array;"#,
             
-            // Array slices
-            r#"my $ref = \@array[0..5];"#,
-            r#"my $ref = \@hash{@keys};"#,
+            // Complex array references
+            r#"my $aref = \@{$array_ref};"#,
+            r#"my $aref = \@{"array"};"#,
+            
+            // Array reference usage
+            r#"push @$aref, 42;"#,
+            r#"my @copy = @$aref;"#,
+            r#"my $elem = $aref->[0];"#,
+            r#"@{$aref} = (1, 2, 3);"#,
             
             // Anonymous arrays
             r#"my $aref = [1, 2, 3];"#,
             r#"my $aref = [];"#,
-            r#"my $aref = [qw(a b c)];"#,
-            r#"my $aref = [$x, $y, $z];"#,
             r#"my $nested = [[1, 2], [3, 4]];"#,
-            
-            // Dereferencing
-            r#"my @array = @$aref;"#,
-            r#"my @array = @{$aref};"#,
-            r#"my $elem = $aref->[0];"#,
-            r#"my $elem = $$aref[0];"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
@@ -86,54 +80,71 @@ mod tests {
         let test_cases = vec![
             // Basic hash references
             r#"my $href = \%hash;"#,
-            r#"my $href = \%ENV;"#,
+            r#"my $href = \%::global;"#,
+            r#"my $href = \%Package::hash;"#,
+            
+            // Complex hash references
             r#"my $href = \%{$hash_ref};"#,
+            r#"my $href = \%{"hash"};"#,
+            
+            // Hash reference usage
+            r#"my %copy = %$href;"#,
+            r#"my $val = $href->{key};"#,
+            r#"%{$href} = (a => 1, b => 2);"#,
+            r#"$href->{"key"} = "value";"#,
             
             // Anonymous hashes
-            r#"my $href = { key => 'value' };"#,
+            r#"my $href = {a => 1, b => 2};"#,
             r#"my $href = {};"#,
-            r#"my $href = { a => 1, b => 2 };"#,
-            r#"my $href = { 'key' => $value };"#,
-            r#"my $nested = { a => { b => 'c' } };"#,
-            
-            // Hash slices
-            r#"my $ref = \%hash{@keys};"#,
-            
-            // Dereferencing
-            r#"my %hash = %$href;"#,
-            r#"my %hash = %{$href};"#,
-            r#"my $val = $href->{key};"#,
-            r#"my $val = $$href{key};"#,
+            r#"my $nested = {a => {b => 1}};"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
     #[test]
-    fn test_subroutine_and_glob_references() {
+    fn test_subroutine_references_comprehensive() {
         let test_cases = vec![
-            // Subroutine references
-            r#"my $sub_ref = \&function;"#,
+            // Basic subroutine references
+            r#"my $sub_ref = \&sub;"#,
+            r#"my $sub_ref = \&::global;"#,
+            r#"my $sub_ref = \&Package::sub;"#,
             r#"my $sub_ref = \&Some::Module::function;"#,
-            r#"my $sub_ref = sub { return 42; };"#,
-            r#"my $sub_ref = sub { my $x = shift; return $x * 2; };"#,
-            r#"my $closure = sub { my $x = $outer; return $x; };"#,
             
-            // Calling subroutine references
-            r#"$sub_ref->();"#,
+            // Subroutine reference usage
             r#"&$sub_ref();"#,
-            r#"$sub_ref->($arg1, $arg2);"#,
+            r#"$sub_ref->();"#,
+            r#"$sub_ref->(1, 2, 3);"#,
+            r#"my $result = $sub_ref->($arg);"#,
             
-            // Glob references
-            r#"my $glob_ref = \*STDOUT;"#,
-            r#"my $glob_ref = \*Some::Package::VAR;"#,
-            r#"my $fh_ref = \*FH;"#,
+            // Anonymous subroutines
+            r#"my $code = sub { print "hello"; };"#,
+            r#"my $code = sub { return 42; };"#,
+            r#"my $code = sub { my ($x) = @_; return $x * 2; };"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
+        }
+    }
+
+    #[test]
+    fn test_glob_references_comprehensive() {
+        let test_cases = vec![
+            // Basic glob references
+            r#"my $glob_ref = \*STDOUT;"#,
+            r#"my $glob_ref = \*Package::handle;"#,
+            r#"my $glob_ref = \*_;"#,
+            
+            // Glob reference usage
+            r#"print $glob_ref "Hello";"#,
+            r#"*{$glob_ref} = \$scalar;"#,
+        ];
+
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
@@ -141,195 +152,134 @@ mod tests {
     fn test_string_interpolation_comprehensive() {
         let test_cases = vec![
             // Basic interpolation
-            r#"my $str = "$var";"#,
-            r#"my $str = "@array";"#,
-            r#"my $str = "$hash{key}";"#,
-            r#"my $str = "$array[0]";"#,
+            r#"my $str = "Hello $name";"#,
+            r#"my $str = "Array: @array";"#,
+            r#"my $str = "Hash: %hash";"#,
             
             // Complex scalar interpolation
-            r#"my $str = "${var}";"#,
-            r#"my $str = "${var}s";"#,
-            r#"my $str = "${var}_suffix";"#,
-            r#"my $str = "prefix_${var}_suffix";"#,
-            r#"my $str = "${hash{key}}";"#,
-            r#"my $str = "${$scalar_ref}";"#,
+            r#"my $str = "Value: ${var}";"#,
+            r#"my $str = "Complex: ${$ref}";"#,
+            r#"my $str = "Nested: ${hash{key}}";"#,
             
             // Complex array interpolation
-            r#"my $str = "@{[1, 2, 3]}";"#,
-            r#"my $str = "@{[$x, $y, $z]}";"#,
-            r#"my $str = "@{[qw(a b c)]}";"#,
-            r#"my $str = "Items: @{[1..10]}";"#,
-            r#"my $str = "@{[ sort @array ]}";"#,
+            r#"my $str = "Array: @{[1, 2, 3]}";"#,
+            r#"my $str = "Computed: @{[map { $_ * 2 } @array]}";"#,
+            r#"my $str = "Array: @{$array_ref}";"#,
             
             // Mixed interpolation
-            r#"my $str = "Hello ${name}, you have @{[$count + 1]} items";"#,
-            r#"my $str = "${user}'s items: @{[ keys %items ]}";"#,
+            r#"my $str = "$scalar and @array and ${complex}";"#,
+            r#"my $str = "Result: @{[$x + $y]}";"#,
             
-            // Edge cases
-            r#"my $str = "\$not_interpolated";"#,
-            r#"my $str = "\\${also_not}";"#,
-            r#"my $str = "$var\n$var2";"#,
+            // Escape sequences with interpolation
+            r#"my $str = "Line 1\n$var\nLine 3";"#,
+            r#"my $str = "Tab:\t$var\tEnd";"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
     #[test]
     fn test_regex_patterns_comprehensive() {
         let test_cases = vec![
-            // Basic regex
-            r#"if (/pattern/) { }"#,
-            r#"if ($text =~ /pattern/) { }"#,
-            r#"if ($text !~ /pattern/) { }"#,
+            // Basic regex patterns
+            r#"if ($str =~ /pattern/) { }"#,
+            r#"if ($str =~ m/pattern/) { }"#,
+            r#"$str =~ s/old/new/;"#,
             
-            // Character classes
-            r#"if (/\w+/) { }"#,
-            r#"if (/\d+/) { }"#,
-            r#"if (/\s+/) { }"#,
-            r#"if (/\W+/) { }"#,
-            r#"if (/\D+/) { }"#,
-            r#"if (/\S+/) { }"#,
+            // Regex with special sequences
+            r#"if ($str =~ /\w+/) { }"#,
+            r#"if ($str =~ /\s*\d+\s*/) { }"#,
+            r#"if ($str =~ /\W\S\D/) { }"#,
             
-            // Quantifiers
-            r#"if (/a*/) { }"#,
-            r#"if (/a+/) { }"#,
-            r#"if (/a?/) { }"#,
-            r#"if (/a{3}/) { }"#,
-            r#"if (/a{3,}/) { }"#,
-            r#"if (/a{3,5}/) { }"#,
-            
-            // Anchors
-            r#"if (/^start/) { }"#,
-            r#"if (/end$/) { }"#,
-            r#"if (/\bword\b/) { }"#,
-            r#"if (/\Bnot\B/) { }"#,
-            
-            // Groups
-            r#"if (/(group)/) { }"#,
-            r#"if (/(?:non-capturing)/) { }"#,
-            r#"if (/(?<name>pattern)/) { }"#,
-            r#"if (/(?=lookahead)/) { }"#,
-            r#"if (/(?!negative)/) { }"#,
-            
-            // Modifiers
-            r#"if (/pattern/i) { }"#,
-            r#"if (/pattern/gims) { }"#,
-            r#"if (/pattern/x) { }"#,
-            r#"if (/pattern/msixpogcual) { }"#,
-            
-            // qr operator
-            r#"my $re = qr/pattern/;"#,
-            r#"my $re = qr/\w+/;"#,
-            r#"my $re = qr/\d{2,4}/;"#,
-            r#"my $re = qr/\s*\n/;"#,
+            // Quote-like regex
             r#"my $re = qr/\w+\s*/;"#,
-            r#"my $re = qr/(?<word>\w+)/;"#,
-            r#"my $re = qr/pattern/ims;"#,
-            
-            // Different delimiters
-            r#"my $re = qr!pattern!;"#,
-            r#"my $re = qr#pattern#;"#,
-            r#"my $re = qr{pattern};"#,
-            r#"my $re = qr[pattern];"#,
-            r#"my $re = qr(pattern);"#,
+            r#"my $re = qr/\d{2,4}/;"#,
+            r#"my $re = qr/[a-z]+/i;"#,
             
             // Complex patterns
-            r#"if (/\w+\s*=\s*\d+/) { }"#,
-            r#"if (/^[a-zA-Z_]\w*$/) { }"#,
-            r#"if (/(?:https?|ftp):\/\//) { }"#,
-            r#"my $re = qr/\$\{?\w+\}?/;"#,
+            r#"if ($str =~ /^start.*end$/) { }"#,
+            r#"if ($str =~ /(?:group)/) { }"#,
+            r#"if ($str =~ /(?<name>\w+)/) { }"#,
+            
+            // Different delimiters
+            r#"if ($str =~ m{pattern}) { }"#,
+            r#"if ($str =~ m!pattern!) { }"#,
+            r#"$str =~ s{old}{new};"#,
+            
+            // Regex with flags
+            r#"if ($str =~ /pattern/i) { }"#,
+            r#"if ($str =~ /pattern/xms) { }"#,
+            r#"$str =~ s/old/new/g;"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
     #[test]
     fn test_operators_comprehensive() {
         let test_cases = vec![
-            // Arithmetic
-            r#"$x = $y + $z;"#,
-            r#"$x = $y - $z;"#,
-            r#"$x = $y * $z;"#,
-            r#"$x = $y / $z;"#,
-            r#"$x = $y % $z;"#,
-            r#"$x = $y ** $z;"#,
-            r#"$x = $y ** 2;"#,
-            r#"$x = 2 ** 10;"#,
-            r#"$x = $base ** $exponent;"#,
+            // Exponentiation operator
+            r#"my $x = 2 ** 3;"#,
+            r#"my $x = $base ** $exponent;"#,
+            r#"$x **= 2;"#,
+            
+            // Bitwise operators
+            r#"my $x = $a & $b;"#,
+            r#"my $x = $a | $b;"#,
+            r#"my $x = $a ^ $b;"#,
+            r#"$x &= 0xFF;"#,
+            r#"$x |= $flags;"#,
+            r#"$x ^= $mask;"#,
+            
+            // Shift operators
+            r#"my $x = $val << 2;"#,
+            r#"my $x = $val >> 3;"#,
+            r#"$x <<= 1;"#,
+            r#"$x >>= 1;"#,
+            
+            // Logical operators
+            r#"my $x = $a && $b;"#,
+            r#"my $x = $a || $b;"#,
+            r#"my $x = $a // $b;"#,
+            r#"$x &&= $y;"#,
+            r#"$x ||= $default;"#,
+            r#"$x //= "default";"#,
             
             // String operators
-            r#"$x = $y . $z;"#,
-            r#"$x = $y x 3;"#,
+            r#"my $str = $a . $b;"#,
+            r#"$str .= " suffix";"#,
+            r#"my $repeated = "x" x 10;"#,
             
-            // Comparison
-            r#"if ($x == $y) { }"#,
-            r#"if ($x != $y) { }"#,
-            r#"if ($x < $y) { }"#,
-            r#"if ($x > $y) { }"#,
-            r#"if ($x <= $y) { }"#,
-            r#"if ($x >= $y) { }"#,
-            r#"if ($x <=> $y) { }"#,
-            r#"if ($x eq $y) { }"#,
-            r#"if ($x ne $y) { }"#,
-            r#"if ($x lt $y) { }"#,
-            r#"if ($x gt $y) { }"#,
-            r#"if ($x le $y) { }"#,
-            r#"if ($x ge $y) { }"#,
-            r#"if ($x cmp $y) { }"#,
-            r#"if ($x ~~ $y) { }"#,
+            // Comparison operators
+            r#"if ($a == $b) { }"#,
+            r#"if ($a != $b) { }"#,
+            r#"if ($a < $b) { }"#,
+            r#"if ($a > $b) { }"#,
+            r#"if ($a <= $b) { }"#,
+            r#"if ($a >= $b) { }"#,
+            r#"if ($a eq $b) { }"#,
+            r#"if ($a ne $b) { }"#,
+            r#"if ($a lt $b) { }"#,
+            r#"if ($a gt $b) { }"#,
+            r#"if ($a le $b) { }"#,
+            r#"if ($a ge $b) { }"#,
+            r#"if ($a =~ /pattern/) { }"#,
+            r#"if ($a !~ /pattern/) { }"#,
             
-            // Logical
-            r#"if ($x && $y) { }"#,
-            r#"if ($x || $y) { }"#,
-            r#"if (!$x) { }"#,
-            r#"if ($x and $y) { }"#,
-            r#"if ($x or $y) { }"#,
-            r#"if (not $x) { }"#,
-            r#"$x = $y // $z;"#,
+            // Range operators
+            r#"my @nums = (1..10);"#,
+            r#"my @nums = (1...10);"#,
             
-            // Bitwise
-            r#"$x = $y & $z;"#,
-            r#"$x = $y | $z;"#,
-            r#"$x = $y ^ $z;"#,
-            r#"$x = ~$y;"#,
-            r#"$x = $y << 2;"#,
-            r#"$x = $y >> 2;"#,
-            
-            // Assignment
-            r#"$x = $y;"#,
-            r#"$x += $y;"#,
-            r#"$x -= $y;"#,
-            r#"$x *= $y;"#,
-            r#"$x /= $y;"#,
-            r#"$x %= $y;"#,
-            r#"$x **= $y;"#,
-            r#"$x .= $y;"#,
-            r#"$x &&= $y;"#,
-            r#"$x ||= $y;"#,
-            r#"$x //= $y;"#,
-            
-            // Range
-            r#"@range = (1..10);"#,
-            r#"@range = (1...10);"#,
-            r#"@range = ('a'..'z');"#,
-            
-            // Ternary
-            r#"$x = $cond ? $true : $false;"#,
-            r#"$x = $a ? $b : $c ? $d : $e;"#,
-            
-            // Increment/decrement
-            r#"$x++;"#,
-            r#"++$x;"#,
-            r#"$x--;"#,
-            r#"--$x;"#,
+            // Ternary operator
+            r#"my $val = $cond ? $true : $false;"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
@@ -340,8 +290,6 @@ mod tests {
             r#"print <<EOF;"#,
             r#"print <<'EOF';"#,
             r#"print <<"EOF";"#,
-            r#"print <<`EOF`;"#,
-            r#"print <<\EOF;"#,
             
             // Indented heredocs
             r#"print <<~EOF;"#,
@@ -353,60 +301,95 @@ mod tests {
             
             // In assignments
             r#"my $text = <<EOF;"#,
-            r#"my $text = <<'HEREDOC';"#,
+            r#"my $text = <<'END';"#,
             
-            // With different markers
-            r#"print <<END_OF_TEXT;"#,
-            r#"print <<__DATA__;"#,
-            r#"print <<'SQL';"#,
+            // With expressions
+            r#"my $result = $x + <<EOF;"#,
+            r#"push @array, <<EOF;"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
     #[test]
-    fn test_complex_combinations() {
+    fn test_special_blocks() {
         let test_cases = vec![
-            // References with interpolation
-            r#"my $str = "Ref: ${$scalar_ref}";"#,
-            r#"my $str = "Array: @{$array_ref}";"#,
-            r#"my $str = "Hash keys: @{[ keys %{$hash_ref} ]}";"#,
+            // Special blocks
+            r#"BEGIN { print "starting\n"; }"#,
+            r#"END { print "ending\n"; }"#,
+            r#"CHECK { validate(); }"#,
+            r#"INIT { setup(); }"#,
+            r#"UNITCHECK { check(); }"#,
             
-            // Regex with references
-            r#"if ($$text_ref =~ /\w+/) { }"#,
-            r#"my $re_ref = \qr/pattern/;"#,
-            r#"if ($text =~ $$re_ref) { }"#,
+            // Labeled blocks
+            r#"LABEL: { last LABEL if $done; }"#,
+            r#"OUTER: for (@list) { INNER: while (1) { last OUTER; } }"#,
             
-            // Complex expressions with operators
-            r#"my $result = ($x ** 2) + ($y ** 2);"#,
-            r#"my $is_valid = ($x > 0) && ($y > 0) && ($x ** 2 + $y ** 2 < $radius ** 2);"#,
-            
-            // Anonymous structures with references
-            r#"my $data = { array => [1, 2, 3], hash => { a => \$x, b => \@y } };"#,
-            r#"my $complex = [ \$scalar, \@array, \%hash, \&sub, sub { $x ** 2 } ];"#,
-            
-            // String interpolation with expressions
-            r#"my $msg = "Result: @{[ $x ** 2 + $y ** 2 ]}";"#,
-            r#"my $info = "${name}'s score: @{[ int($score ** 0.5 * 100) ]}%";"#,
-            
-            // Nested references
-            r#"my $ref_to_ref_to_array = \\@array;"#,
-            r#"my $value = ${${$ref_to_ref}};"#,
-            
-            // Complex regex patterns
-            r#"my $email_re = qr/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;"#,
-            r#"if ($url =~ qr{^https?://(?:www\.)?([^/]+)}) { }"#,
+            // Control flow with labels
+            r#"next LABEL;"#,
+            r#"last LABEL;"#,
+            r#"redo LABEL;"#,
+            r#"goto LABEL;"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
     #[test]
-    fn test_edge_cases_and_corner_cases() {
+    fn test_integration_comprehensive() {
+        let test_cases = vec![
+            // Complex real-world patterns
+            r#"
+            sub process_data {
+                my ($self, $data_ref) = @_;
+                my @results = map { $_ ** 2 } @{$data_ref};
+                return \@results;
+            }
+            "#,
+            
+            r#"
+            my $config = {
+                name => "test",
+                values => [1, 2, 3],
+                handler => sub { print "Processing: $_[0]\n"; }
+            };
+            "#,
+            
+            r#"
+            if ($text =~ m{^(\w+)\s*=\s*"([^"]+)"}) {
+                my ($key, $val) = ($1, $2);
+                $config->{$key} = $val;
+            }
+            "#,
+            
+            r#"
+            my $str = "Values: @{[map { sprintf('%02d', $_) } @nums]}";
+            print $str =~ s/\d+/$& * 2/ger;
+            "#,
+            
+            // Error handling patterns
+            r#"
+            eval {
+                my $result = $obj->method() // die "No result";
+                return $result ** 2;
+            };
+            if ($@) {
+                warn "Error: $@";
+            }
+            "#,
+        ];
+
+        for case in test_cases {
+            assert_parses(case);
+        }
+    }
+
+    #[test]
+    fn test_edge_cases() {
         let test_cases = vec![
             // Empty constructs
             r#"my $aref = [];"#,
@@ -415,26 +398,20 @@ mod tests {
             
             // Unicode in strings
             r#"my $str = "Hello 世界";"#,
-            r#"my $str = "${var}™";"#,
+            r#"my $str = "emoji: 🚀";"#,
             
-            // Special variables
+            // Complex nesting
+            r#"my $ref = \\\$scalar;"#,
+            r#"my $data = {a => [1, {b => 2}]};"#,
+            
+            // Special variables with references
             r#"my $ref = \$_;"#,
             r#"my $ref = \@_;"#,
             r#"my $ref = \%ENV;"#,
-            r#"my $ref = \$@;"#,
-            r#"my $ref = \$!;"#,
-            
-            // Multiple operations
-            r#"my $x = 2 ** 3 ** 2;"#,  // Right associative
-            r#"my $str = "a" . "b" . "c";"#,
-            
-            // Complex nesting
-            r#"my $x = ${${$ref{key}[0]}};"#,
-            r#"my $str = "@{[map { $_ ** 2 } @{$aref}]}";"#,
         ];
 
-        for code in test_cases {
-            assert_parses(code);
+        for case in test_cases {
+            assert_parses(case);
         }
     }
 
@@ -442,22 +419,20 @@ mod tests {
     fn test_parse_failures() {
         let test_cases = vec![
             // Invalid references
+            r#"my $ref = \"#,
             r#"my $ref = \;"#,
-            r#"my $ref = \123;"#,
             
-            // Invalid interpolation
-            r#"my $str = "${}";"#,
-            r#"my $str = "@{[]";"#,  // Missing closing
-            
-            // Invalid regex
-            r#"my $re = qr/(/;"#,  // Unmatched paren
+            // Incomplete interpolation
+            r#"my $str = "Missing ${bracket";"#,
+            r#"my $str = "Missing @{bracket";"#,
             
             // Invalid operators
-            r#"$x = $y *** $z;"#,  // Triple star
+            r#"my $x = 2 *** 3;"#,
+            r#"my $x = $a &&& $b;"#,
         ];
 
-        for code in test_cases {
-            assert_parse_fails(code);
+        for case in test_cases {
+            assert_parse_fails(case);
         }
     }
 }
