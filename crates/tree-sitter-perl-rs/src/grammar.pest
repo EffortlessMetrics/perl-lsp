@@ -7,8 +7,18 @@ program = { SOI ~ statements? ~ EOI }
 // Statements
 statements = { statement+ }
 
+// Fast-path rules for common patterns
+simple_assignment = @{ variable ~ "=" ~ (literal | variable) ~ semicolon }
+simple_method_call = @{ variable ~ "->" ~ identifier ~ "(" ~ ")" ~ semicolon }
+simple_function_call = @{ identifier ~ "(" ~ (literal | variable)? ~ ")" ~ semicolon }
+
 statement = { 
-    sub_declaration
+    // Fast paths first
+    simple_assignment
+    | simple_method_call
+    | simple_function_call
+    // Regular statements
+    | sub_declaration
     | format_declaration
     | package_declaration
     | use_statement

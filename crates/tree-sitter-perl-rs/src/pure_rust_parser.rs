@@ -5,6 +5,7 @@
 
 use pest::{iterators::{Pair, Pairs}, Parser};
 use pest_derive::Parser;
+use std::sync::Arc;
 use crate::pratt_parser::PrattParser;
 
 #[derive(Parser)]
@@ -26,23 +27,23 @@ pub enum AstNode {
     
     // Declarations
     VariableDeclaration {
-        scope: String,
+        scope: Arc<str>,
         variables: Vec<AstNode>,
         initializer: Option<Box<AstNode>>,
     },
     SubDeclaration {
-        name: String,
-        prototype: Option<String>,
-        attributes: Vec<String>,
+        name: Arc<str>,
+        prototype: Option<Arc<str>>,
+        attributes: Vec<Arc<str>>,
         body: Box<AstNode>,
     },
     FormatDeclaration {
-        name: String,
-        format_lines: Vec<String>,
+        name: Arc<str>,
+        format_lines: Vec<Arc<str>>,
     },
     PackageDeclaration {
-        name: String,
-        version: Option<String>,
+        name: Arc<str>,
+        version: Option<Arc<str>>,
         block: Option<Box<AstNode>>,
     },
     
@@ -64,19 +65,19 @@ pub enum AstNode {
         default_block: Option<Box<AstNode>>,
     },
     WhileStatement {
-        label: Option<String>,
+        label: Option<Arc<str>>,
         condition: Box<AstNode>,
         block: Box<AstNode>,
     },
     ForStatement {
-        label: Option<String>,
+        label: Option<Arc<str>>,
         init: Option<Box<AstNode>>,
         condition: Option<Box<AstNode>>,
         update: Option<Box<AstNode>>,
         block: Box<AstNode>,
     },
     ForeachStatement {
-        label: Option<String>,
+        label: Option<Arc<str>>,
         variable: Option<Box<AstNode>>,
         list: Box<AstNode>,
         block: Box<AstNode>,
@@ -84,12 +85,12 @@ pub enum AstNode {
     
     // Expressions
     BinaryOp {
-        op: String,
+        op: Arc<str>,
         left: Box<AstNode>,
         right: Box<AstNode>,
     },
     UnaryOp {
-        op: String,
+        op: Arc<str>,
         operand: Box<AstNode>,
     },
     TernaryOp {
@@ -99,15 +100,15 @@ pub enum AstNode {
     },
     PostfixDereference {
         expr: Box<AstNode>,
-        deref_type: String,
+        deref_type: Arc<str>,
     },
     TypeglobSlotAccess {
         typeglob: Box<AstNode>,
-        slot: String,
+        slot: Arc<str>,
     },
     Assignment {
         target: Box<AstNode>,
-        op: String,
+        op: Arc<str>,
         value: Box<AstNode>,
     },
     FunctionCall {
@@ -116,7 +117,7 @@ pub enum AstNode {
     },
     MethodCall {
         object: Box<AstNode>,
-        method: String,
+        method: Arc<str>,
         args: Vec<AstNode>,
     },
     ArrayAccess {
@@ -129,58 +130,58 @@ pub enum AstNode {
     },
     
     // Variables
-    ScalarVariable(String),
-    ArrayVariable(String),
-    HashVariable(String),
-    TypeglobVariable(String),
+    ScalarVariable(Arc<str>),
+    ArrayVariable(Arc<str>),
+    HashVariable(Arc<str>),
+    TypeglobVariable(Arc<str>),
     
     // References
-    ScalarReference(String),
-    ArrayReference(String),
-    HashReference(String),
-    SubroutineReference(String),
-    GlobReference(String),
+    ScalarReference(Arc<str>),
+    ArrayReference(Arc<str>),
+    HashReference(Arc<str>),
+    SubroutineReference(Arc<str>),
+    GlobReference(Arc<str>),
     ArrayElement {
-        array: String,
+        array: Arc<str>,
         index: Box<AstNode>,
     },
     HashElement {
-        hash: String,
+        hash: Arc<str>,
         key: Box<AstNode>,
     },
     
     // Literals
-    Number(String),
-    String(String),
-    Identifier(String),
-    Bareword(String),
+    Number(Arc<str>),
+    String(Arc<str>),
+    Identifier(Arc<str>),
+    Bareword(Arc<str>),
     Regex {
-        pattern: String,
-        flags: String,
-        named_groups: Vec<String>,
+        pattern: Arc<str>,
+        flags: Arc<str>,
+        named_groups: Vec<Arc<str>>,
     },
     Substitution {
-        pattern: String,
-        replacement: String,
-        flags: String,
+        pattern: Arc<str>,
+        replacement: Arc<str>,
+        flags: Arc<str>,
     },
     
     // Special statements
     UseStatement {
-        module: String,
-        imports: Vec<String>,
+        module: Arc<str>,
+        imports: Vec<Arc<str>>,
     },
     RequireStatement {
-        module: String,
+        module: Arc<str>,
     },
     ReturnStatement {
         value: Option<Box<AstNode>>,
     },
     LastStatement {
-        label: Option<String>,
+        label: Option<Arc<str>>,
     },
     NextStatement {
-        label: Option<String>,
+        label: Option<Arc<str>>,
     },
     TieStatement {
         variable: Box<AstNode>,
@@ -195,14 +196,14 @@ pub enum AstNode {
     },
     
     // Other
-    Comment(String),
-    Label(String),
+    Comment(Arc<str>),
+    Label(Arc<str>),
     LabeledBlock {
-        label: String,
+        label: Arc<str>,
         block: Box<AstNode>,
     },
     AnonymousSub {
-        prototype: Option<String>,
+        prototype: Option<Arc<str>>,
         body: Box<AstNode>,
     },
     List(Vec<AstNode>),
@@ -217,27 +218,27 @@ pub enum AstNode {
     UnitcheckBlock(Box<AstNode>),
     
     // Quoting constructs
-    QwList(Vec<String>),
-    QqString(String),
-    QxString(String),
+    QwList(Vec<Arc<str>>),
+    QqString(Arc<str>),
+    QxString(Arc<str>),
     QrRegex {
-        pattern: String,
-        flags: String,
-        named_groups: Vec<String>,
+        pattern: Arc<str>,
+        flags: Arc<str>,
+        named_groups: Vec<Arc<str>>,
     },
     
     // Here documents
     Heredoc {
-        marker: String,
+        marker: Arc<str>,
         indented: bool,
         quoted: bool,
-        content: String,
+        content: Arc<str>,
     },
     
     // File operations
-    Glob(String),
+    Glob(Arc<str>),
     Readline {
-        filehandle: Option<String>,
+        filehandle: Option<Arc<str>>,
     },
     
     // Special constructs
@@ -245,15 +246,15 @@ pub enum AstNode {
     EvalBlock(Box<AstNode>),
     EvalString(Box<AstNode>),
     GotoStatement {
-        target: String,
+        target: Arc<str>,
     },
     
     // Data sections
-    DataSection(String),
-    EndSection(String),
+    DataSection(Arc<str>),
+    EndSection(Arc<str>),
     
     // POD
-    Pod(String),
+    Pod(Arc<str>),
 }
 
 /// Pure Rust Perl parser implementation
@@ -268,6 +269,7 @@ impl PureRustPerlParser {
         }
     }
 
+    #[inline(always)]
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
         match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
             Ok(pairs) => self.build_ast(pairs),
@@ -320,7 +322,7 @@ impl PureRustPerlParser {
                     }
                 } else if trimmed.starts_with('#') {
                     // Handle comments
-                    statements.push(AstNode::Comment(trimmed.to_string()));
+                    statements.push(AstNode::Comment(Arc::from(trimmed)));
                     current_block.clear();
                 }
             }
@@ -333,7 +335,7 @@ impl PureRustPerlParser {
         }
     }
 
-    fn extract_named_groups(&self, pattern: &str) -> Vec<String> {
+    fn extract_named_groups(&self, pattern: &str) -> Vec<Arc<str>> {
         let mut groups = Vec::new();
         let chars: Vec<char> = pattern.chars().collect();
         let mut i = 0;
@@ -348,7 +350,7 @@ impl PureRustPerlParser {
                     i += 1;
                 }
                 if !name.is_empty() {
-                    groups.push(name);
+                    groups.push(Arc::from(name));
                 }
             }
             i += 1;
@@ -371,8 +373,45 @@ impl PureRustPerlParser {
         }
     }
 
+    #[inline]
     pub(crate) fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         match pair.as_rule() {
+            // Fast-path rules
+            Rule::simple_assignment => {
+                let mut inner = pair.into_inner();
+                let var = self.build_node(inner.next().unwrap())?.unwrap();
+                let value = self.build_node(inner.next().unwrap())?.unwrap();
+                Ok(Some(AstNode::Assignment {
+                    target: Box::new(var),
+                    op: Arc::from("="),
+                    value: Box::new(value),
+                }))
+            }
+            Rule::simple_method_call => {
+                let mut inner = pair.into_inner();
+                let object = self.build_node(inner.next().unwrap())?.unwrap();
+                let method = Arc::from(inner.next().unwrap().as_str());
+                Ok(Some(AstNode::MethodCall {
+                    object: Box::new(object),
+                    method,
+                    args: vec![],
+                }))
+            }
+            Rule::simple_function_call => {
+                let mut inner = pair.into_inner();
+                let func_name = inner.next().unwrap().as_str();
+                let func = AstNode::Identifier(Arc::from(func_name));
+                let mut args = vec![];
+                if let Some(arg) = inner.next() {
+                    if let Some(node) = self.build_node(arg)? {
+                        args.push(node);
+                    }
+                }
+                Ok(Some(AstNode::FunctionCall {
+                    function: Box::new(func),
+                    args,
+                }))
+            }
             Rule::program => {
                 let mut statements = Vec::new();
                 for inner in pair.into_inner() {
@@ -409,7 +448,7 @@ impl PureRustPerlParser {
             }
             Rule::variable_declaration => {
                 let mut inner = pair.into_inner();
-                let scope = inner.next().unwrap().as_str().to_string();
+                let scope = Arc::from(inner.next().unwrap().as_str());
                 let mut variables = Vec::new();
                 let mut initializer = None;
                 
@@ -438,7 +477,7 @@ impl PureRustPerlParser {
             Rule::sub_declaration => {
                 let inner = pair.into_inner();
                 let mut _sub_modifier = None;
-                let mut name = String::new();
+                let mut name = Arc::from("");
                 let mut prototype = None;
                 let mut attributes = Vec::new();
                 let mut body = None;
@@ -449,17 +488,17 @@ impl PureRustPerlParser {
                             _sub_modifier = Some(p.as_str().to_string());
                         }
                         Rule::identifier => {
-                            name = p.as_str().to_string();
+                            name = Arc::from(p.as_str());
                         }
                         Rule::prototype => {
-                            prototype = Some(p.as_str().to_string());
+                            prototype = Some(Arc::from(p.as_str()));
                         }
                         Rule::signature => {
-                            prototype = Some(p.as_str().to_string());
+                            prototype = Some(Arc::from(p.as_str()));
                         }
                         Rule::attributes => {
                             for attr in p.into_inner() {
-                                attributes.push(attr.as_str().to_string());
+                                attributes.push(Arc::from(attr.as_str()));
                             }
                         }
                         Rule::block => {
@@ -478,18 +517,18 @@ impl PureRustPerlParser {
             }
             Rule::format_declaration => {
                 let inner = pair.into_inner();
-                let mut name = String::new();
+                let mut name = Arc::from("");
                 let mut format_lines = Vec::new();
                 
                 for p in inner {
                     match p.as_rule() {
                         Rule::format_name => {
-                            name = p.as_str().to_string();
+                            name = Arc::from(p.as_str());
                         }
                         Rule::format_lines => {
                             for line in p.into_inner() {
                                 if line.as_rule() == Rule::format_line {
-                                    format_lines.push(line.as_str().to_string());
+                                    format_lines.push(Arc::from(line.as_str()));
                                 }
                             }
                         }
@@ -645,7 +684,7 @@ impl PureRustPerlParser {
             Rule::assignment_expression => {
                 let mut inner = pair.into_inner();
                 let target = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                let op = inner.next().unwrap().as_str().to_string();
+                let op = Arc::from(inner.next().unwrap().as_str());
                 let value = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 Ok(Some(AstNode::Assignment { target, op, value }))
             }
@@ -661,7 +700,7 @@ impl PureRustPerlParser {
                     }
                     _ => {
                         // It's an operator
-                        let op = first.as_str().to_string();
+                        let op = Arc::from(first.as_str());
                         if let Some(next_pair) = inner.next() {
                             if let Some(operand_node) = self.build_node(next_pair)? {
                                 let operand = Box::new(operand_node);
@@ -689,12 +728,12 @@ impl PureRustPerlParser {
                                     let deref_type = op_inner.into_inner().next().unwrap().as_str();
                                     expr = AstNode::PostfixDereference {
                                         expr: Box::new(expr),
-                                        deref_type: deref_type.to_string(),
+                                        deref_type: Arc::from(deref_type),
                                     };
                                 }
                                 Rule::method_call => {
                                     let mut method_inner = op_inner.into_inner();
-                                    let method = method_inner.next().unwrap().as_str().to_string();
+                                    let method = Arc::from(method_inner.next().unwrap().as_str());
                                     let args = if let Some(args_pair) = method_inner.next() {
                                         self.parse_arg_list(args_pair)?
                                     } else {
@@ -707,7 +746,7 @@ impl PureRustPerlParser {
                                     };
                                 }
                                 Rule::typeglob_slot_access => {
-                                    let slot = op_inner.into_inner().next().unwrap().as_str().to_string();
+                                    let slot = Arc::from(op_inner.into_inner().next().unwrap().as_str());
                                     expr = AstNode::TypeglobSlotAccess {
                                         typeglob: Box::new(expr),
                                         slot,
@@ -723,42 +762,42 @@ impl PureRustPerlParser {
                 Ok(Some(expr))
             }
             Rule::scalar_variable => {
-                Ok(Some(AstNode::ScalarVariable(pair.as_str().to_string())))
+                Ok(Some(AstNode::ScalarVariable(Arc::from(pair.as_str()))))
             }
             Rule::array_variable => {
-                Ok(Some(AstNode::ArrayVariable(pair.as_str().to_string())))
+                Ok(Some(AstNode::ArrayVariable(Arc::from(pair.as_str()))))
             }
             Rule::hash_variable => {
-                Ok(Some(AstNode::HashVariable(pair.as_str().to_string())))
+                Ok(Some(AstNode::HashVariable(Arc::from(pair.as_str()))))
             }
             Rule::typeglob_variable => {
-                Ok(Some(AstNode::TypeglobVariable(pair.as_str().to_string())))
+                Ok(Some(AstNode::TypeglobVariable(Arc::from(pair.as_str()))))
             }
             Rule::number => {
-                Ok(Some(AstNode::Number(pair.as_str().to_string())))
+                Ok(Some(AstNode::Number(Arc::from(pair.as_str()))))
             }
             Rule::identifier => {
-                Ok(Some(AstNode::Identifier(pair.as_str().to_string())))
+                Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
             }
             Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
-                Ok(Some(AstNode::String(pair.as_str().to_string())))
+                Ok(Some(AstNode::String(Arc::from(pair.as_str()))))
             }
             Rule::q_string => {
                 // q strings don't interpolate, so we just return the whole construct as a string
-                Ok(Some(AstNode::String(pair.as_str().to_string())))
+                Ok(Some(AstNode::String(Arc::from(pair.as_str()))))
             }
             Rule::qq_string => {
                 // qq strings interpolate, so we mark them differently
-                Ok(Some(AstNode::QqString(pair.as_str().to_string())))
+                Ok(Some(AstNode::QqString(Arc::from(pair.as_str()))))
             }
             Rule::qx_string => {
                 // qx strings are for command execution
-                Ok(Some(AstNode::QxString(pair.as_str().to_string())))
+                Ok(Some(AstNode::QxString(Arc::from(pair.as_str()))))
             }
             Rule::heredoc => {
                 let inner = pair.into_inner();
                 let mut indented = false;
-                let mut marker = String::new();
+                let mut marker = Arc::from("");
                 let mut quoted = false;
                 
                 for p in inner {
@@ -773,24 +812,24 @@ impl PureRustPerlParser {
                                 match d.as_rule() {
                                     Rule::heredoc_single_quoted => {
                                         quoted = true;
-                                        marker = d.as_str().trim_matches('\'').to_string();
+                                        marker = Arc::from(d.as_str().trim_matches('\''));
                                     }
                                     Rule::heredoc_double_quoted => {
-                                        marker = d.as_str().trim_matches('"').to_string();
+                                        marker = Arc::from(d.as_str().trim_matches('"'));
                                     }
                                     Rule::heredoc_backtick => {
-                                        marker = d.as_str().trim_matches('`').to_string();
+                                        marker = Arc::from(d.as_str().trim_matches('`'));
                                     }
                                     Rule::heredoc_escaped => {
-                                        marker = d.as_str().trim_start_matches('\\').to_string();
+                                        marker = Arc::from(d.as_str().trim_start_matches('\\'));
                                     }
                                     Rule::bare_heredoc_delimiter => {
-                                        marker = d.as_str().to_string();
+                                        marker = Arc::from(d.as_str());
                                     }
                                     _ => {}
                                 }
                             } else {
-                                marker = delimiter_str.to_string();
+                                marker = Arc::from(delimiter_str);
                             }
                         }
                         _ => {}
@@ -804,7 +843,7 @@ impl PureRustPerlParser {
                     marker,
                     indented,
                     quoted,
-                    content: String::new(), // This would be filled by a stateful parser
+                    content: Arc::from(""), // This would be filled by a stateful parser
                 }))
             }
             Rule::list => {
@@ -880,7 +919,7 @@ impl PureRustPerlParser {
                         Rule::qw_delimited_items => {
                             // Split the content by whitespace
                             let content = inner.as_str();
-                            words.extend(content.split_whitespace().map(|s| s.to_string()));
+                            words.extend(content.split_whitespace().map(|s| Arc::from(s)));
                         }
                         _ => {}
                     }
@@ -903,36 +942,36 @@ impl PureRustPerlParser {
             Rule::goto_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 let target = match inner.as_rule() {
-                    Rule::goto_target => inner.as_str().to_string(),
+                    Rule::goto_target => Arc::from(inner.as_str()),
                     _ => {
                         // For expressions, we need to evaluate them
                         if let Some(expr) = self.build_node(inner)? {
-                            format!("{:?}", expr) // Simple representation for now
+                            Arc::from(format!("{:?}", expr)) // Simple representation for now
                         } else {
-                            String::new()
+                            Arc::from("")
                         }
                     }
                 };
                 Ok(Some(AstNode::GotoStatement { target }))
             }
             Rule::pod_section => {
-                Ok(Some(AstNode::Pod(pair.as_str().to_string())))
+                Ok(Some(AstNode::Pod(Arc::from(pair.as_str()))))
             }
             Rule::data_section => {
-                Ok(Some(AstNode::DataSection(pair.as_str().to_string())))
+                Ok(Some(AstNode::DataSection(Arc::from(pair.as_str()))))
             }
             Rule::end_section => {
-                Ok(Some(AstNode::EndSection(pair.as_str().to_string())))
+                Ok(Some(AstNode::EndSection(Arc::from(pair.as_str()))))
             }
             Rule::labeled_block => {
                 let mut inner = pair.into_inner();
                 let label_pair = inner.next().unwrap();
-                let label = label_pair.as_str().trim_end_matches(':').to_string();
+                let label = Arc::from(label_pair.as_str().trim_end_matches(':'));
                 let block = self.build_node(inner.next().unwrap())?.map(Box::new);
                 Ok(block.map(|b| AstNode::LabeledBlock { label, block: b }))
             }
             Rule::comment => {
-                Ok(Some(AstNode::Comment(pair.as_str().to_string())))
+                Ok(Some(AstNode::Comment(Arc::from(pair.as_str()))))
             }
             Rule::semicolon | Rule::WHITESPACE => Ok(None),
             Rule::standalone_expression => {
@@ -945,8 +984,8 @@ impl PureRustPerlParser {
                     match first.as_rule() {
                         rule if rule == Rule::match_regex => {
                             let mut match_inner = first.into_inner();
-                            let pattern = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-                            let flags = match_inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                            let pattern = match_inner.next().map(|p| Arc::from(p.as_str())).unwrap_or_else(|| Arc::from(""));
+                            let flags = match_inner.next().map(|p| Arc::from(p.as_str())).unwrap_or_else(|| Arc::from(""));
                             
                             // Extract named groups from pattern
                             let named_groups = self.extract_named_groups(&pattern);
@@ -954,14 +993,14 @@ impl PureRustPerlParser {
                             Ok(Some(AstNode::Regex { pattern, flags, named_groups }))
                         }
                         _ => {
-                            let pattern = first.as_str().to_string();
-                            let flags = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                            let pattern = Arc::from(first.as_str());
+                            let flags = inner.next().map(|p| Arc::from(p.as_str())).unwrap_or_else(|| Arc::from(""));
                             let named_groups = self.extract_named_groups(&pattern);
                             Ok(Some(AstNode::Regex { pattern, flags, named_groups }))
                         }
                     }
                 } else {
-                    Ok(Some(AstNode::Regex { pattern: String::new(), flags: String::new(), named_groups: Vec::new() }))
+                    Ok(Some(AstNode::Regex { pattern: Arc::from(""), flags: Arc::from(""), named_groups: Vec::new() }))
                 }
             }
             Rule::for_statement => {
@@ -1006,15 +1045,15 @@ impl PureRustPerlParser {
                 inner.next(); // skip "package"
                 // Accept qualified_name as identifier
                 let name = if let Some(name_pair) = inner.next() {
-                    name_pair.as_str().to_string()
+                    Arc::from(name_pair.as_str())
                 } else {
-                    String::new()
+                    Arc::from("")
                 };
                 let mut version = None;
                 let mut block = None;
                 for p in inner {
                     match p.as_rule() {
-                        Rule::version => version = Some(p.as_str().to_string()),
+                        Rule::version => version = Some(Arc::from(p.as_str())),
                         Rule::block => block = self.build_node(p)?.map(Box::new),
                         _ => {}
                     }
@@ -1043,23 +1082,23 @@ impl PureRustPerlParser {
             }
             Rule::scalar_reference => {
                 let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::ScalarReference(inner.as_str().to_string())))
+                Ok(Some(AstNode::ScalarReference(Arc::from(inner.as_str()))))
             }
             Rule::array_reference => {
                 let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::ArrayReference(inner.as_str().to_string())))
+                Ok(Some(AstNode::ArrayReference(Arc::from(inner.as_str()))))
             }
             Rule::hash_reference => {
                 let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::HashReference(inner.as_str().to_string())))
+                Ok(Some(AstNode::HashReference(Arc::from(inner.as_str()))))
             }
             Rule::subroutine_reference => {
                 let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::SubroutineReference(inner.as_str().to_string())))
+                Ok(Some(AstNode::SubroutineReference(Arc::from(inner.as_str()))))
             }
             Rule::glob_reference => {
                 let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::GlobReference(inner.as_str().to_string())))
+                Ok(Some(AstNode::GlobReference(Arc::from(inner.as_str()))))
             }
             _ => {
                 // For unhandled rules, try to process inner pairs
@@ -1096,6 +1135,7 @@ impl PureRustPerlParser {
         }
     }
     
+    #[inline]
     fn build_ternary_expression(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         let inner: Vec<_> = pair.into_inner().collect();
         if inner.len() == 1 {
@@ -1111,6 +1151,7 @@ impl PureRustPerlParser {
         }
     }
     
+    #[inline]
     fn build_binary_expression(&mut self, pair: Pair<Rule>, _op_rule: Rule) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         let inner: Vec<_> = pair.into_inner().collect();
         if inner.len() == 1 {
@@ -1129,13 +1170,13 @@ impl PureRustPerlParser {
         let mut i = 1;
         
         while i < pairs.len() {
-            let op = pairs[i].as_str().to_string();
+            let op = Arc::from(pairs[i].as_str());
             let right = self.build_node(pairs[i + 1].clone())?.unwrap();
             
             // Get operator precedence
             if let Some(op_info) = self.pratt_parser.get_operator_info(&op) {
                 // Handle precedence by restructuring the tree if needed
-                result = self.apply_precedence(result, op, right, op_info.precedence.0);
+                result = self.apply_precedence(result, op.clone(), right, op_info.precedence.0);
             } else {
                 // Unknown operator, use default left-associative
                 result = AstNode::BinaryOp {
@@ -1151,7 +1192,7 @@ impl PureRustPerlParser {
         Ok(Some(result))
     }
     
-    fn apply_precedence(&self, left: AstNode, op: String, right: AstNode, _prec: u8) -> AstNode {
+    fn apply_precedence(&self, left: AstNode, op: Arc<str>, right: AstNode, _prec: u8) -> AstNode {
         // For now, simple left-associative. Full Pratt parser implementation would go here
         AstNode::BinaryOp {
             op,

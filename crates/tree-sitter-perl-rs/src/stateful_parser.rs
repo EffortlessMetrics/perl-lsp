@@ -5,6 +5,7 @@
 
 use crate::pure_rust_parser::AstNode;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct HeredocMarker {
@@ -281,8 +282,8 @@ impl StatefulPerlParser {
         }
         
         // Create a map for quick lookup
-        let mut content_map: std::collections::HashMap<String, String> = 
-            contents.into_iter().collect();
+        let mut content_map: std::collections::HashMap<Arc<str>, String> = 
+            contents.into_iter().map(|(k, v)| (Arc::from(k), v)).collect();
         
         // Recursively walk the AST and update heredoc nodes
         self.update_heredoc_nodes(ast, &mut content_map);
@@ -295,19 +296,21 @@ impl StatefulPerlParser {
         }
         
         // Create a map for quick lookup
-        let content_map: std::collections::HashMap<String, Vec<String>> = 
-            self.format_contents.clone().into_iter().collect();
+        let content_map: std::collections::HashMap<Arc<str>, Vec<Arc<str>>> = 
+            self.format_contents.clone().into_iter()
+                .map(|(k, v)| (Arc::from(k), v.into_iter().map(Arc::from).collect()))
+                .collect();
         
         // Recursively walk the AST and update format nodes
         self.update_format_nodes(ast, &content_map);
     }
     
     /// Recursively update heredoc nodes with their content
-    fn update_heredoc_nodes(&self, node: &mut AstNode, content_map: &mut std::collections::HashMap<String, String>) {
+    fn update_heredoc_nodes(&self, node: &mut AstNode, content_map: &mut std::collections::HashMap<Arc<str>, String>) {
         match node {
             AstNode::Heredoc { marker, content, .. } => {
                 if let Some(collected_content) = content_map.remove(marker) {
-                    *content = collected_content;
+                    *content = Arc::from(collected_content);
                 }
             }
             AstNode::Program(nodes) | 
@@ -406,7 +409,7 @@ impl StatefulPerlParser {
     }
     
     /// Recursively update format nodes with their content
-    fn update_format_nodes(&self, node: &mut AstNode, content_map: &std::collections::HashMap<String, Vec<String>>) {
+    fn update_format_nodes(&self, node: &mut AstNode, content_map: &std::collections::HashMap<Arc<str>, Vec<Arc<str>>>) {
         match node {
             AstNode::FormatDeclaration { name, format_lines } => {
                 if let Some(collected_lines) = content_map.get(name) {

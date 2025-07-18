@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use pest::iterators::Pair;
 use crate::pure_rust_parser::Rule;
 use crate::pure_rust_parser::AstNode;
@@ -226,7 +227,7 @@ impl PrattParser {
                 
                 // Create binary op node
                 left = AstNode::BinaryOp {
-                    op: op.to_string(),
+                    op: Arc::from(op),
                     left: Box::new(left),
                     right: Box::new(right),
                 };
