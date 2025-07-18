@@ -80,16 +80,8 @@ impl FullPerlParser {
         match node {
             AstNode::String(value) => {
                 // Check if this is a heredoc placeholder
-                if value.contains("__HEREDOC__") {
-                    // Extract the original heredoc content
-                    for (placeholder_id, content) in placeholder_map {
-                        let marker = format!("__HEREDOC__{}__HEREDOC__", placeholder_id);
-                        if value.contains(&marker) {
-                            *value = content.clone();
-                            // Heredocs maintain their interpolation status
-                            break;
-                        }
-                    }
+                if let Some(content) = placeholder_map.get(value.as_ref()) {
+                    *value = content.clone();
                 }
             }
             AstNode::Block(statements) |
@@ -126,6 +118,17 @@ impl FullPerlParser {
                 if let Some(block) = else_block {
                     self.restore_node_content(block, placeholder_map);
                 }
+            }
+            AstNode::VariableDeclaration { variables, initializer, .. } => {
+                for var in variables {
+                    self.restore_node_content(var, placeholder_map);
+                }
+                if let Some(init) = initializer {
+                    self.restore_node_content(init, placeholder_map);
+                }
+            }
+            AstNode::Statement(inner) => {
+                self.restore_node_content(inner, placeholder_map);
             }
             _ => {
                 // For other node types, recursively process any child nodes
