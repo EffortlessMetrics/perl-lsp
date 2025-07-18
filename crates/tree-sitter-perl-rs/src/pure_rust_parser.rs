@@ -662,8 +662,16 @@ impl PureRustPerlParser {
                     _ => {
                         // It's an operator
                         let op = first.as_str().to_string();
-                        let operand = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                        Ok(Some(AstNode::UnaryOp { op, operand }))
+                        if let Some(next_pair) = inner.next() {
+                            if let Some(operand_node) = self.build_node(next_pair)? {
+                                let operand = Box::new(operand_node);
+                                Ok(Some(AstNode::UnaryOp { op, operand }))
+                            } else {
+                                Ok(None)
+                            }
+                        } else {
+                            Ok(None)
+                        }
                     }
                 }
             }
