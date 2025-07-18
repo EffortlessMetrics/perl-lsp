@@ -5,7 +5,7 @@
 
 use pest::{iterators::{Pair, Pairs}, Parser};
 use pest_derive::Parser;
-use crate::pratt_parser::{PrattParser, Precedence};
+use crate::pratt_parser::PrattParser;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -436,8 +436,8 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::sub_declaration => {
-                let mut inner = pair.into_inner();
-                let mut sub_modifier = None;
+                let inner = pair.into_inner();
+                let mut _sub_modifier = None;
                 let mut name = String::new();
                 let mut prototype = None;
                 let mut attributes = Vec::new();
@@ -446,7 +446,7 @@ impl PureRustPerlParser {
                 for p in inner {
                     match p.as_rule() {
                         Rule::sub_modifier => {
-                            sub_modifier = Some(p.as_str().to_string());
+                            _sub_modifier = Some(p.as_str().to_string());
                         }
                         Rule::identifier => {
                             name = p.as_str().to_string();
@@ -477,7 +477,7 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::format_declaration => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut name = String::new();
                 let mut format_lines = Vec::new();
                 
@@ -1103,7 +1103,7 @@ impl PureRustPerlParser {
         }
     }
     
-    fn build_binary_expression(&mut self, pair: Pair<Rule>, op_rule: Rule) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+    fn build_binary_expression(&mut self, pair: Pair<Rule>, _op_rule: Rule) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         let inner: Vec<_> = pair.into_inner().collect();
         if inner.len() == 1 {
             self.build_node(inner.into_iter().next().unwrap())
@@ -1143,7 +1143,7 @@ impl PureRustPerlParser {
         Ok(Some(result))
     }
     
-    fn apply_precedence(&self, left: AstNode, op: String, right: AstNode, prec: u8) -> AstNode {
+    fn apply_precedence(&self, left: AstNode, op: String, right: AstNode, _prec: u8) -> AstNode {
         // For now, simple left-associative. Full Pratt parser implementation would go here
         AstNode::BinaryOp {
             op,

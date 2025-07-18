@@ -3,8 +3,7 @@
 //! This module provides a stateful wrapper around the Pest parser to handle
 //! constructs like heredocs that require maintaining state across lines.
 
-use crate::pure_rust_parser::{AstNode, PerlParser, Rule};
-use pest::Parser;
+use crate::pure_rust_parser::AstNode;
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone)]
@@ -32,12 +31,23 @@ pub struct StatefulPerlParser {
     line_buffer: Vec<String>,
     /// Current parsing state
     state: ParserState,
+    /// Format declaration info when collecting format content
+    current_format: Option<FormatInfo>,
+    /// Collected format contents
+    format_contents: Vec<(String, Vec<String>)>,
+}
+
+#[derive(Debug, Clone)]
+struct FormatInfo {
+    name: String,
+    start_line: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ParserState {
     Normal,
     CollectingHeredoc,
+    CollectingFormat,
 }
 
 impl StatefulPerlParser {
@@ -46,6 +56,8 @@ impl StatefulPerlParser {
             pending_heredocs: VecDeque::new(),
             line_buffer: Vec::new(),
             state: ParserState::Normal,
+            current_format: None,
+            format_contents: Vec::new(),
         }
     }
 
@@ -61,8 +73,15 @@ impl StatefulPerlParser {
             
             match self.state {
                 ParserState::Normal => {
+                    // Check if this line contains a format declaration
+                    if let Some(format_info) = self.extract_format_declaration(line) {
+                        self.current_format = Some(format_info);
+                        self.state = ParserState::CollectingFormat;
+                        processed_lines.push(line.to_string());
+                        i += 1;
+                    }
                     // Check if this line contains a heredoc declaration
-                    if let Some(heredoc_info) = self.extract_heredoc_declaration(line) {
+                    else if let Some(heredoc_info) = self.extract_heredoc_declaration(line) {
                         eprintln!("DEBUG: Found heredoc declaration: {:?}", heredoc_info);
                         self.pending_heredocs.push_back(heredoc_info);
                         processed_lines.push(line.to_string());
@@ -103,17 +122,70 @@ impl StatefulPerlParser {
                         }
                     }
                 }
+                ParserState::CollectingFormat => {
+                    // Check if this line is the format terminator (single '.')
+                    if line.trim() == "." {
+                        if let Some(format_info) = &self.current_format {
+                            // Save the collected format content
+                            self.format_contents.push((
+                                format_info.name.clone(),
+                                self.line_buffer.clone()
+                            ));
+                            self.line_buffer.clear();
+                            self.current_format = None;
+                            self.state = ParserState::Normal;
+                        }
+                        processed_lines.push(line.to_string());
+                        i += 1;
+                    } else {
+                        // This is format content
+                        self.line_buffer.push(line.to_string());
+                        i += 1;
+                    }
+                }
             }
         }
 
         // Join processed lines and parse
         let processed_input = processed_lines.join("\n");
         
-        // Build AST and inject heredoc contents
+        // Build AST and inject heredoc and format contents
         let mut ast = self.build_ast_from_processed_input(&processed_input)?;
         self.inject_heredoc_contents(&mut ast, heredoc_contents);
+        self.inject_format_contents(&mut ast);
         
         Ok(ast)
+    }
+    
+    /// Extract format declaration information from a line
+    pub fn extract_format_declaration(&self, line: &str) -> Option<FormatInfo> {
+        let trimmed = line.trim();
+        
+        // Check if line starts with "format"
+        if !trimmed.starts_with("format") {
+            return None;
+        }
+        
+        let after_format = &trimmed[6..].trim_start();
+        
+        // Check for equals sign
+        if let Some(eq_pos) = after_format.find('=') {
+            let name_part = after_format[..eq_pos].trim();
+            
+            // If no name specified, use empty string (parser will use default)
+            let name = if name_part.is_empty() {
+                String::new()
+            } else {
+                name_part.to_string()
+            };
+            
+            Some(FormatInfo {
+                name,
+                start_line: 0, // Not used in current implementation
+            })
+        } else {
+            None
+        }
     }
 
     /// Extract heredoc declaration information from a line
@@ -214,6 +286,20 @@ impl StatefulPerlParser {
         
         // Recursively walk the AST and update heredoc nodes
         self.update_heredoc_nodes(ast, &mut content_map);
+    }
+    
+    /// Inject collected format contents into the AST
+    fn inject_format_contents(&self, ast: &mut AstNode) {
+        if self.format_contents.is_empty() {
+            return;
+        }
+        
+        // Create a map for quick lookup
+        let content_map: std::collections::HashMap<String, Vec<String>> = 
+            self.format_contents.clone().into_iter().collect();
+        
+        // Recursively walk the AST and update format nodes
+        self.update_format_nodes(ast, &content_map);
     }
     
     /// Recursively update heredoc nodes with their content
@@ -318,6 +404,68 @@ impl StatefulPerlParser {
             }
         }
     }
+    
+    /// Recursively update format nodes with their content
+    fn update_format_nodes(&self, node: &mut AstNode, content_map: &std::collections::HashMap<String, Vec<String>>) {
+        match node {
+            AstNode::FormatDeclaration { name, format_lines } => {
+                if let Some(collected_lines) = content_map.get(name) {
+                    *format_lines = collected_lines.clone();
+                }
+            }
+            AstNode::Program(nodes) | 
+            AstNode::Block(nodes) => {
+                for child in nodes {
+                    self.update_format_nodes(child, content_map);
+                }
+            }
+            AstNode::Statement(inner) |
+            AstNode::BeginBlock(inner) |
+            AstNode::EndBlock(inner) |
+            AstNode::CheckBlock(inner) |
+            AstNode::InitBlock(inner) |
+            AstNode::UnitcheckBlock(inner) |
+            AstNode::DoBlock(inner) |
+            AstNode::EvalBlock(inner) |
+            AstNode::EvalString(inner) => {
+                self.update_format_nodes(inner, content_map);
+            }
+            AstNode::IfStatement { then_block, elsif_clauses, else_block, .. } => {
+                self.update_format_nodes(then_block, content_map);
+                for (_, block) in elsif_clauses {
+                    self.update_format_nodes(block, content_map);
+                }
+                if let Some(else_block) = else_block {
+                    self.update_format_nodes(else_block, content_map);
+                }
+            }
+            AstNode::UnlessStatement { block, else_block, .. } => {
+                self.update_format_nodes(block, content_map);
+                if let Some(else_block) = else_block {
+                    self.update_format_nodes(else_block, content_map);
+                }
+            }
+            AstNode::WhileStatement { block, .. } |
+            AstNode::ForeachStatement { block, .. } |
+            AstNode::ForStatement { block, .. } => {
+                self.update_format_nodes(block, content_map);
+            }
+            AstNode::SubDeclaration { body, .. } => {
+                self.update_format_nodes(body, content_map);
+            }
+            AstNode::LabeledBlock { block, .. } => {
+                self.update_format_nodes(block, content_map);
+            }
+            AstNode::PackageDeclaration { block, .. } => {
+                if let Some(block) = block {
+                    self.update_format_nodes(block, content_map);
+                }
+            }
+            _ => {
+                // Other nodes don't contain format declarations
+            }
+        }
+    }
 }
 
 impl Default for StatefulPerlParser {
@@ -366,5 +514,32 @@ With $interpolation
 INTERP"#;
 
         // Test different quote types
+    }
+    
+    #[test]
+    fn test_format_declaration() {
+        let mut parser = StatefulPerlParser::new();
+        let input = r#"format STDOUT =
+@<<<< @||||| @>>>>
+$name, $login, $office
+.
+print "after format";"#;
+
+        // Test format parsing
+        // let ast = parser.parse(input).unwrap();
+    }
+    
+    #[test]
+    fn test_named_format() {
+        let mut parser = StatefulPerlParser::new();
+        let input = r#"format EMPLOYEE =
+Name: @<<<<<<<<<<<<<<<<<<
+      $name
+Login: @<<<<<<<<
+       $login
+.
+write EMPLOYEE;"#;
+
+        // Test named format
     }
 }
