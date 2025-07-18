@@ -17,6 +17,8 @@ statement = {
     simple_assignment
     | simple_method_call
     | simple_function_call
+    // Comments
+    | comment
     // Regular statements
     | sub_declaration
     | format_declaration
@@ -357,6 +359,7 @@ primary_expression = {
     | glob
     | readline
     | qw_list
+    | identifier
 }
 
 // References to variables
@@ -773,6 +776,6 @@ end_section = @{
 }
 
 // Comments and whitespace
-comment = @{ "#" ~ (!NEWLINE ~ ANY)* }
-
+comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ (NEWLINE | EOI) }
+NEWLINE = _{ "\r\n" | "\n" | "\r" }
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
