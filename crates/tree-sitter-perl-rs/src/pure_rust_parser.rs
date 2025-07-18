@@ -77,6 +77,11 @@ pub enum AstNode {
         condition: Box<AstNode>,
         block: Box<AstNode>,
     },
+    UntilStatement {
+        label: Option<Arc<str>>,
+        condition: Box<AstNode>,
+        block: Box<AstNode>,
+    },
     ForStatement {
         label: Option<Arc<str>>,
         init: Option<Box<AstNode>>,
@@ -172,6 +177,11 @@ pub enum AstNode {
     Substitution {
         pattern: Arc<str>,
         replacement: Arc<str>,
+        flags: Arc<str>,
+    },
+    Transliteration {
+        search_list: Arc<str>,
+        replace_list: Arc<str>,
         flags: Arc<str>,
     },
     ReturnStatement {
@@ -556,6 +566,19 @@ impl PureRustPerlParser {
                     attributes,
                     body: body.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
                 }))
+            }
+            Rule::glob => {
+                let inner = pair.into_inner().next().unwrap(); // glob_pattern
+                Ok(Some(AstNode::Glob(Arc::from(inner.as_str()))))
+            }
+            Rule::readline => {
+                let mut filehandle = None;
+                for p in pair.into_inner() {
+                    if p.as_rule() == Rule::filehandle {
+                        filehandle = Some(Arc::from(p.as_str()));
+                    }
+                }
+                Ok(Some(AstNode::Readline { filehandle }))
             }
             Rule::format_declaration => {
                 let inner = pair.into_inner();
@@ -1174,17 +1197,158 @@ impl PureRustPerlParser {
                 }
             }
             Rule::substitution => {
-                // For now, just return a placeholder that shows it was recognized
-                Ok(Some(AstNode::String(Arc::from("(substitution)"))))
+                let mut inner = pair.into_inner();
+                let mut pattern = Arc::from("");
+                let mut replacement = Arc::from("");
+                let mut flags = Arc::from("");
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::sub_pattern => {
+                            pattern = Arc::from(p.as_str());
+                        }
+                        Rule::replacement => {
+                            replacement = Arc::from(p.as_str());
+                        }
+                        Rule::regex_flags => {
+                            flags = Arc::from(p.as_str());
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::Substitution { pattern, replacement, flags }))
             }
             Rule::transliteration => {
-                // For now, just return a placeholder
-                Ok(Some(AstNode::String(Arc::from("(transliteration)"))))
+                let mut inner = pair.into_inner();
+                let mut search_list = Arc::from("");
+                let mut replace_list = Arc::from("");
+                let mut flags = Arc::from("");
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::search_list => {
+                            search_list = Arc::from(p.as_str());
+                        }
+                        Rule::replace_list => {
+                            replace_list = Arc::from(p.as_str());
+                        }
+                        Rule::trans_flags => {
+                            flags = Arc::from(p.as_str());
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::Transliteration { search_list, replace_list, flags }))
+            }
+            Rule::while_statement => {
+                let mut inner = pair.into_inner();
+                let mut label = None;
+                let mut condition = None;
+                let mut block = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::label => {
+                            label = Some(Arc::from(p.as_str().trim_end_matches(':')));
+                        }
+                        Rule::expression => {
+                            condition = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        Rule::block => {
+                            block = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::WhileStatement {
+                    label,
+                    condition: condition.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                    block: block.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                }))
+            }
+            Rule::until_statement => {
+                let mut inner = pair.into_inner();
+                let mut label = None;
+                let mut condition = None;
+                let mut block = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::label => {
+                            label = Some(Arc::from(p.as_str().trim_end_matches(':')));
+                        }
+                        Rule::expression => {
+                            condition = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        Rule::block => {
+                            block = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::UntilStatement {
+                    label,
+                    condition: condition.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                    block: block.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                }))
+            }
+            Rule::unless_statement => {
+                let mut inner = pair.into_inner();
+                let condition = Box::new(self.build_node(inner.next().unwrap())?.unwrap_or(AstNode::EmptyExpression));
+                let block = Box::new(self.build_node(inner.next().unwrap())?.unwrap_or(AstNode::EmptyExpression));
+                let mut else_block = None;
+                
+                // Check for else clause
+                if let Some(else_clause) = inner.next() {
+                    if else_clause.as_rule() == Rule::else_clause {
+                        let mut else_inner = else_clause.into_inner();
+                        if let Some(else_block_pair) = else_inner.next() {
+                            else_block = Some(Box::new(self.build_node(else_block_pair)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                    }
+                }
+                
+                Ok(Some(AstNode::UnlessStatement { condition, block, else_block }))
+            }
+            Rule::foreach_statement => {
+                let mut inner = pair.into_inner();
+                let mut label = None;
+                let mut variable = None;
+                let mut list = None;
+                let mut block = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::label => {
+                            label = Some(Arc::from(p.as_str().trim_end_matches(':')));
+                        }
+                        Rule::variable => {
+                            variable = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        Rule::expression => {
+                            list = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        Rule::block => {
+                            block = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::ForeachStatement {
+                    label,
+                    variable,
+                    list: list.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                    block: block.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                }))
             }
             Rule::for_statement => {
                 let inner = pair.into_inner();
-                let label = None; // TODO: handle label if present
-                // Don't skip "for" - it's already consumed by the grammar
+                let mut label = None;
                 let mut init = None;
                 let mut condition = None;
                 let mut update = None;
@@ -1193,6 +1357,9 @@ impl PureRustPerlParser {
                 // Parse for loop components
                 for p in inner {
                     match p.as_rule() {
+                        Rule::label => {
+                            label = Some(Arc::from(p.as_str().trim_end_matches(':')));
+                        }
                         Rule::for_init => {
                             init = self.build_node(p)?.map(Box::new);
                         }
@@ -1621,6 +1788,18 @@ impl PureRustPerlParser {
                 let item_sexps: Vec<String> = items.iter().map(Self::node_to_sexp).collect();
                 format!("(hash_ref {})", item_sexps.join(" "))
             }
+            AstNode::WhileStatement { label, condition, block } => {
+                let label_str = if let Some(l) = label { format!(" (label {})", l) } else { String::new() };
+                format!("(while_statement{} {} {})", label_str, Self::node_to_sexp(condition), Self::node_to_sexp(block))
+            }
+            AstNode::UntilStatement { label, condition, block } => {
+                let label_str = if let Some(l) = label { format!(" (label {})", l) } else { String::new() };
+                format!("(until_statement{} {} {})", label_str, Self::node_to_sexp(condition), Self::node_to_sexp(block))
+            }
+            AstNode::UnlessStatement { condition, block, else_block } => {
+                let else_str = if let Some(e) = else_block { format!(" (else {})", Self::node_to_sexp(e)) } else { String::new() };
+                format!("(unless_statement {} {}{}", Self::node_to_sexp(condition), Self::node_to_sexp(block), else_str)
+            }
             AstNode::ForStatement { init, condition, update, block, .. } => {
                 let mut parts = vec![];
                 if let Some(i) = init { parts.push(format!("(init {})", Self::node_to_sexp(i))); }
@@ -1628,6 +1807,11 @@ impl PureRustPerlParser {
                 if let Some(u) = update { parts.push(format!("(update {})", Self::node_to_sexp(u))); }
                 parts.push(format!("(body {})", Self::node_to_sexp(block)));
                 format!("(for_statement {})", parts.join(" "))
+            }
+            AstNode::ForeachStatement { label, variable, list, block } => {
+                let label_str = if let Some(l) = label { format!(" (label {})", l) } else { String::new() };
+                let var_str = if let Some(v) = variable { format!(" (variable {})", Self::node_to_sexp(v)) } else { String::new() };
+                format!("(foreach_statement{}{} {} {})", label_str, var_str, Self::node_to_sexp(list), Self::node_to_sexp(block))
             }
             AstNode::PackageDeclaration { name, version, block } => {
                 let mut parts = vec![format!("(name {})", name)];
@@ -1654,6 +1838,20 @@ impl PureRustPerlParser {
                     String::new()
                 };
                 format!("(regex {} {}{})", pattern, flags, groups_str)
+            }
+            AstNode::Substitution { pattern, replacement, flags } => {
+                if flags.is_empty() {
+                    format!("(substitution s/{}/{}/ )", pattern, replacement)
+                } else {
+                    format!("(substitution s/{}/{}/{} )", pattern, replacement, flags)
+                }
+            }
+            AstNode::Transliteration { search_list, replace_list, flags } => {
+                if flags.is_empty() {
+                    format!("(transliteration tr/{}/{}/ )", search_list, replace_list)
+                } else {
+                    format!("(transliteration tr/{}/{}/{} )", search_list, replace_list, flags)
+                }
             }
             AstNode::BeginBlock(block) => {
                 format!("(begin_block {})", Self::node_to_sexp(block))
@@ -1711,6 +1909,16 @@ impl PureRustPerlParser {
             }
             AstNode::EndSection(content) => {
                 format!("(end_section {})", content)
+            }
+            AstNode::Glob(pattern) => {
+                format!("(glob <{}>)", pattern)
+            }
+            AstNode::Readline { filehandle } => {
+                if let Some(fh) = filehandle {
+                    format!("(readline <{}>)", fh)
+                } else {
+                    "(readline <>)".to_string()
+                }
             }
             _ => format!("(unhandled_node {:?})", node),
         }
