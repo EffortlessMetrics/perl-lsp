@@ -8,6 +8,56 @@ mod tests {
         // Test just the keyword
         let result = PerlParser::parse(Rule::reserved_word, "format");
         println!("Reserved word 'format': {:?}", result);
+        
+        // Test format as a literal in a simple rule
+        // Create a test rule that just matches "format"
+        println!("\nDirect parsing tests:");
+        
+        // Test if it's being parsed as "for"
+        let for_result = PerlParser::parse(Rule::for_statement, "format STDOUT =");
+        println!("As for_statement: {:?}", for_result.err());
+    }
+    
+    #[test]
+    fn test_format_parsing_debug() {
+        // First test if format_keyword works
+        println!("Testing format_keyword:");
+        match PerlParser::parse(Rule::format_keyword, "format ") {
+            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
+            Err(e) => println!("  FAILED: {:?}", e),
+        }
+        
+        // Test minimal format declaration
+        println!("\nTesting minimal format declaration:");
+        let minimal = "format\n.\n";
+        match PerlParser::parse(Rule::format_declaration, minimal) {
+            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
+            Err(e) => println!("  FAILED: {:?}", e),
+        }
+        
+        // Test with equals
+        println!("\nTesting with equals:");
+        let with_equals = "format =\n.\n";
+        match PerlParser::parse(Rule::format_declaration, with_equals) {
+            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
+            Err(e) => println!("  FAILED: {:?}", e),
+        }
+        
+        // Test the actual format declaration
+        let format_decl = "format STDOUT =\ntest\n.\n";
+        println!("\nTesting complete format declaration:");
+        match PerlParser::parse(Rule::format_declaration, format_decl) {
+            Ok(pairs) => {
+                println!("SUCCESS! Parsed as format_declaration");
+                for pair in pairs {
+                    println!("  {:?}", pair);
+                }
+            }
+            Err(e) => {
+                println!("FAILED to parse as format_declaration");
+                println!("  Error: {:?}", e);
+            }
+        }
     }
     
     #[test] 
@@ -74,7 +124,25 @@ test line
 .
 "#;
         
-        let pairs = PerlParser::parse(Rule::program, input);
-        assert!(pairs.is_ok(), "Failed to parse program with format: {:?}", pairs.err());
+        println!("Testing format in program context:");
+        match PerlParser::parse(Rule::program, input) {
+            Ok(pairs) => {
+                println!("SUCCESS parsing as program!");
+                for pair in pairs {
+                    println!("Top level: {:?}", pair.as_rule());
+                    for inner in pair.into_inner() {
+                        println!("  Statement: {:?}", inner.as_rule());
+                        if inner.as_rule() == Rule::statements {
+                            for stmt in inner.into_inner() {
+                                println!("    Statement type: {:?}", stmt.as_rule());
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("FAILED: {:?}", e);
+            }
+        }
     }
 }

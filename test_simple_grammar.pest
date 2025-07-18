@@ -1,0 +1,2 @@
+test_format = { "format" ~ "STDOUT" ~ "=" }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
