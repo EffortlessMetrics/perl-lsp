@@ -186,7 +186,7 @@ format_declaration = {
     format_end
 }
 
-format_name = { identifier | filehandle }
+format_name = { filehandle | identifier }
 filehandle = { 
     "STDOUT" | "STDERR" | "STDIN" | "ARGV" | "DATA" | 
     "ARGVOUT" | identifier
@@ -558,8 +558,8 @@ identifier = @{
 // Reserved words that should not be identifiers
 reserved_word = { 
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
-    "while" | "until" | "for" | "foreach" | "return" | "last" | "next" | "redo" |
-    "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" | "format"
+    "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
+    "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q"
 }
 
 // Special identifiers that are only reserved in specific contexts
