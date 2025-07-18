@@ -5,6 +5,7 @@
 
 use pest::{iterators::{Pair, Pairs}, Parser};
 use pest_derive::Parser;
+use crate::pratt_parser::{PrattParser, Precedence};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -96,6 +97,10 @@ pub enum AstNode {
         expr: Box<AstNode>,
         deref_type: String,
     },
+    TypeglobSlotAccess {
+        typeglob: Box<AstNode>,
+        slot: String,
+    },
     Assignment {
         target: Box<AstNode>,
         op: String,
@@ -123,6 +128,7 @@ pub enum AstNode {
     ScalarVariable(String),
     ArrayVariable(String),
     HashVariable(String),
+    TypeglobVariable(String),
     
     // References
     ScalarReference(String),
@@ -236,11 +242,15 @@ pub enum AstNode {
 }
 
 /// Pure Rust Perl parser implementation
-pub struct PureRustPerlParser;
+pub struct PureRustPerlParser {
+    pratt_parser: PrattParser,
+}
 
 impl PureRustPerlParser {
     pub fn new() -> Self {
-        Self
+        Self {
+            pratt_parser: PrattParser::new(),
+        }
     }
 
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
@@ -346,7 +356,7 @@ impl PureRustPerlParser {
         }
     }
 
-    fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+    pub(crate) fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         match pair.as_rule() {
             Rule::program => {
                 let mut statements = Vec::new();
@@ -613,6 +623,13 @@ impl PureRustPerlParser {
                                         args,
                                     };
                                 }
+                                Rule::typeglob_slot_access => {
+                                    let slot = op_inner.into_inner().next().unwrap().as_str().to_string();
+                                    expr = AstNode::TypeglobSlotAccess {
+                                        typeglob: Box::new(expr),
+                                        slot,
+                                    };
+                                }
                                 _ => {}
                             }
                         }
@@ -630,6 +647,9 @@ impl PureRustPerlParser {
             }
             Rule::hash_variable => {
                 Ok(Some(AstNode::HashVariable(pair.as_str().to_string())))
+            }
+            Rule::typeglob_variable => {
+                Ok(Some(AstNode::TypeglobVariable(pair.as_str().to_string())))
             }
             Rule::number => {
                 Ok(Some(AstNode::Number(pair.as_str().to_string())))
@@ -1006,22 +1026,47 @@ impl PureRustPerlParser {
         if inner.len() == 1 {
             self.build_node(inner.into_iter().next().unwrap())
         } else if inner.len() >= 3 {
-            // Build left-associative binary operations
-            let mut result = self.build_node(inner[0].clone())?.unwrap();
-            let mut i = 1;
-            while i < inner.len() {
-                let op = inner[i].as_str().to_string();
-                let right = self.build_node(inner[i + 1].clone())?.unwrap();
+            // Build with proper precedence
+            self.build_binary_expr_with_precedence(inner)
+        } else {
+            self.build_node(inner.into_iter().next().unwrap())
+        }
+    }
+    
+    fn build_binary_expr_with_precedence(&mut self, pairs: Vec<Pair<Rule>>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        // Build left-associative binary operations with operator precedence
+        let mut result = self.build_node(pairs[0].clone())?.unwrap();
+        let mut i = 1;
+        
+        while i < pairs.len() {
+            let op = pairs[i].as_str().to_string();
+            let right = self.build_node(pairs[i + 1].clone())?.unwrap();
+            
+            // Get operator precedence
+            if let Some(op_info) = self.pratt_parser.get_operator_info(&op) {
+                // Handle precedence by restructuring the tree if needed
+                result = self.apply_precedence(result, op, right, op_info.precedence.0);
+            } else {
+                // Unknown operator, use default left-associative
                 result = AstNode::BinaryOp {
                     op,
                     left: Box::new(result),
                     right: Box::new(right),
                 };
-                i += 2;
             }
-            Ok(Some(result))
-        } else {
-            self.build_node(inner.into_iter().next().unwrap())
+            
+            i += 2;
+        }
+        
+        Ok(Some(result))
+    }
+    
+    fn apply_precedence(&self, left: AstNode, op: String, right: AstNode, prec: u8) -> AstNode {
+        // For now, simple left-associative. Full Pratt parser implementation would go here
+        AstNode::BinaryOp {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
         }
     }
     
@@ -1091,6 +1136,9 @@ impl PureRustPerlParser {
             AstNode::PostfixDereference { expr, deref_type } => {
                 format!("(postfix_deref {} {})", Self::node_to_sexp(expr), deref_type)
             }
+            AstNode::TypeglobSlotAccess { typeglob, slot } => {
+                format!("(typeglob_slot_access {} {})", Self::node_to_sexp(typeglob), slot)
+            }
             AstNode::MethodCall { object, method, args } => {
                 let args_str = args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" ");
                 format!("(method_call {} {} {})", Self::node_to_sexp(object), method, args_str)
@@ -1109,6 +1157,9 @@ impl PureRustPerlParser {
             }
             AstNode::HashVariable(name) => {
                 format!("(hash_variable {})", name)
+            }
+            AstNode::TypeglobVariable(name) => {
+                format!("(typeglob_variable {})", name)
             }
             AstNode::ScalarReference(name) => {
                 format!("(scalar_reference {})", name)

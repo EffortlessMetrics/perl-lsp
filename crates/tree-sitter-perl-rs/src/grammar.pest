@@ -171,7 +171,7 @@ default_value = {
 prototype = { "(" ~ prototype_args? ~ ")" }
 prototype_args = { prototype_arg ~ ("," ~ prototype_arg)* }
 prototype_arg = { "$" | "@" | "%" | "&" | "\\" ~ ("$" | "@" | "%" | "&") | "*" | ";" }
-sigil = { "$" | "@" | "%" | "&" }
+sigil = { "$" | "@" | "%" | "&" | "*" }
 
 attributes = { ":" ~ attribute_list }
 attribute_list = { attribute ~ (":" ~ attribute)* }
@@ -260,6 +260,7 @@ postfix_expression = {
 postfix_operator = {
     array_access
     | hash_access
+    | typeglob_slot_access
     | method_call
     | function_call
     | increment
@@ -281,6 +282,8 @@ postfix_dereference = {
 
 array_access = { "[" ~ expression ~ "]" }
 hash_access = { "{" ~ expression ~ "}" }
+typeglob_slot_access = { "{" ~ typeglob_slot ~ "}" }
+typeglob_slot = { "SCALAR" | "ARRAY" | "HASH" | "CODE" | "IO" | "GLOB" | "FORMAT" | "NAME" | "PACKAGE" }
 method_call = { "->" ~ (identifier ~ function_args? | function_args) }
 function_call = { function_args }
 function_args = { "(" ~ arg_list? ~ ")" }
@@ -424,6 +427,7 @@ variable = {
     scalar_variable
     | array_variable
     | hash_variable
+    | typeglob_variable
     | array_element
     | hash_element_access
     | special_variable
@@ -432,6 +436,7 @@ variable = {
 scalar_variable = @{ "$" ~ variable_name }
 array_variable = @{ "@" ~ variable_name }
 hash_variable = @{ "%" ~ variable_name }
+typeglob_variable = @{ "*" ~ variable_name }
 array_element = { "$" ~ variable_name ~ "[" ~ expression ~ "]" }
 hash_element_access = { "$" ~ variable_name ~ "{" ~ expression ~ "}" }
 
