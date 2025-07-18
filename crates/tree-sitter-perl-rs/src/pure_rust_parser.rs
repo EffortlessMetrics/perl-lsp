@@ -694,6 +694,34 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::Block(statements)))
             }
+            Rule::anonymous_sub => {
+                let mut inner = pair.into_inner();
+                let mut prototype = None;
+                let mut attributes: Vec<Arc<str>> = Vec::new();
+                let mut body = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::prototype => {
+                            prototype = Some(Arc::from(p.as_str()));
+                        }
+                        Rule::attributes => {
+                            for attr in p.into_inner() {
+                                attributes.push(Arc::from(attr.as_str()));
+                            }
+                        }
+                        Rule::block => {
+                            body = self.build_node(p)?.map(Box::new);
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::AnonymousSub {
+                    prototype,
+                    body: body.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
+                }))
+            }
             Rule::expression => {
                 self.build_expression(pair)
             }
@@ -802,6 +830,31 @@ impl PureRustPerlParser {
                                     expr = AstNode::TypeglobSlotAccess {
                                         typeglob: Box::new(expr),
                                         slot,
+                                    };
+                                }
+                                Rule::array_access => {
+                                    let index_expr = self.build_node(op_inner.into_inner().next().unwrap())?.unwrap();
+                                    expr = AstNode::ArrayAccess {
+                                        array: Box::new(expr),
+                                        index: Box::new(index_expr),
+                                    };
+                                }
+                                Rule::hash_access => {
+                                    let key_expr = self.build_node(op_inner.into_inner().next().unwrap())?.unwrap();
+                                    expr = AstNode::HashAccess {
+                                        hash: Box::new(expr),
+                                        key: Box::new(key_expr),
+                                    };
+                                }
+                                Rule::function_call => {
+                                    let args = if let Some(args_pair) = op_inner.into_inner().next() {
+                                        self.parse_arg_list(args_pair)?
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    expr = AstNode::FunctionCall {
+                                        function: Box::new(expr),
+                                        args,
                                     };
                                 }
                                 _ => {}
@@ -1005,6 +1058,20 @@ impl PureRustPerlParser {
                     }
                 };
                 Ok(Some(AstNode::GotoStatement { target }))
+            }
+            Rule::return_statement => {
+                let mut inner = pair.into_inner();
+                // Return statement might have an optional expression
+                if let Some(expr_pair) = inner.next() {
+                    if expr_pair.as_rule() != Rule::semicolon {
+                        let expr = self.build_node(expr_pair)?;
+                        Ok(Some(AstNode::ReturnStatement { value: expr.map(Box::new) }))
+                    } else {
+                        Ok(Some(AstNode::ReturnStatement { value: None }))
+                    }
+                } else {
+                    Ok(Some(AstNode::ReturnStatement { value: None }))
+                }
             }
             Rule::pod_section => {
                 Ok(Some(AstNode::Pod(Arc::from(pair.as_str()))))
@@ -1348,6 +1415,9 @@ impl PureRustPerlParser {
             AstNode::SubDeclaration { name, body, .. } => {
                 format!("(subroutine (identifier {}) {})", name, Self::node_to_sexp(body))
             }
+            AstNode::AnonymousSub { body, .. } => {
+                format!("(anonymous_subroutine {})", Self::node_to_sexp(body))
+            }
             AstNode::FormatDeclaration { name, format_lines } => {
                 let lines_sexp = format_lines.iter()
                     .map(|line| format!("(format_line \"{}\")", line.replace("\"", "\\\"")))
@@ -1389,6 +1459,12 @@ impl PureRustPerlParser {
             AstNode::TypeglobSlotAccess { typeglob, slot } => {
                 format!("(typeglob_slot_access {} {})", Self::node_to_sexp(typeglob), slot)
             }
+            AstNode::ArrayAccess { array, index } => {
+                format!("(array_access {} {})", Self::node_to_sexp(array), Self::node_to_sexp(index))
+            }
+            AstNode::HashAccess { hash, key } => {
+                format!("(hash_access {} {})", Self::node_to_sexp(hash), Self::node_to_sexp(key))
+            }
             AstNode::MethodCall { object, method, args } => {
                 let args_str = if args.is_empty() {
                     "( )".to_string()
@@ -1399,6 +1475,14 @@ impl PureRustPerlParser {
             }
             AstNode::Assignment { target, op, value } => {
                 format!("(assignment {} ({}) {})", Self::node_to_sexp(target), op, Self::node_to_sexp(value))
+            }
+            AstNode::FunctionCall { function, args } => {
+                let args_str = if args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" {}", args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" "))
+                };
+                format!("(function_call {}{})", Self::node_to_sexp(function), args_str)
             }
             AstNode::BinaryOp { op, left, right } => {
                 format!("(binary_expression {} ({}) {})", Self::node_to_sexp(left), op, Self::node_to_sexp(right))
@@ -1518,6 +1602,13 @@ impl PureRustPerlParser {
             }
             AstNode::GotoStatement { target } => {
                 format!("(goto_statement {})", target)
+            }
+            AstNode::ReturnStatement { value } => {
+                if let Some(v) = value {
+                    format!("(return_statement {})", Self::node_to_sexp(v))
+                } else {
+                    "(return_statement)".to_string()
+                }
             }
             AstNode::LabeledBlock { label, block } => {
                 format!("(labeled_block {} {})", label, Self::node_to_sexp(block))
