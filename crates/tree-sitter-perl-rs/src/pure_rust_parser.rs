@@ -750,7 +750,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Block(statements)))
             }
             Rule::anonymous_sub => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut prototype = None;
                 let mut attributes: Vec<Arc<str>> = Vec::new();
                 let mut body = None;
@@ -1013,6 +1013,10 @@ impl PureRustPerlParser {
                 // Backtick strings are also for command execution
                 Ok(Some(AstNode::QxString(Arc::from(pair.as_str()))))
             }
+            Rule::heredoc_placeholder => {
+                // Heredoc placeholders are replaced with actual content during post-processing
+                Ok(Some(AstNode::String(Arc::from(pair.as_str()))))
+            }
             Rule::heredoc => {
                 let inner = pair.into_inner();
                 let mut indented = false;
@@ -1182,7 +1186,7 @@ impl PureRustPerlParser {
                 for p in inner {
                     match p.as_rule() {
                         Rule::catch_clause => {
-                            let mut catch_inner = p.into_inner();
+                            let catch_inner = p.into_inner();
                             let mut param = None;
                             let mut block = None;
                             
@@ -1379,7 +1383,7 @@ impl PureRustPerlParser {
                 }
             }
             Rule::substitution => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut pattern = Arc::from("");
                 let mut replacement = Arc::from("");
                 let mut flags = Arc::from("");
@@ -1402,7 +1406,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Substitution { pattern, replacement, flags }))
             }
             Rule::transliteration => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut search_list = Arc::from("");
                 let mut replace_list = Arc::from("");
                 let mut flags = Arc::from("");
@@ -1425,7 +1429,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Transliteration { search_list, replace_list, flags }))
             }
             Rule::while_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut label = None;
                 let mut condition = None;
                 let mut block = None;
@@ -1452,7 +1456,7 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::until_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut label = None;
                 let mut condition = None;
                 let mut block = None;
@@ -1497,7 +1501,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::UnlessStatement { condition, block, else_block }))
             }
             Rule::foreach_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut label = None;
                 let mut variable = None;
                 let mut list = None;
@@ -1588,7 +1592,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
             }
             Rule::use_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 
                 let mut module = Arc::from("");
                 let mut version = None;
@@ -1616,7 +1620,7 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::UseStatement { module, version, import_list }))
             }
             Rule::require_statement => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 
                 let mut module = Arc::from("");
                 

@@ -62,6 +62,12 @@ mod test_slash;
 #[cfg(feature = "pure-rust")]
 pub mod pratt_parser;
 
+#[cfg(feature = "pure-rust")]
+pub mod heredoc_parser;
+
+#[cfg(feature = "pure-rust")]
+pub mod full_parser;
+
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 
@@ -120,6 +126,9 @@ pub use pure_rust_parser::{PureRustPerlParser, AstNode, PerlParser};
 
 #[cfg(feature = "pure-rust")]
 pub use enhanced_parser::EnhancedPerlParser;
+
+#[cfg(feature = "pure-rust")]
+pub use full_parser::FullPerlParser;
 
 #[cfg(test)]
 mod test {

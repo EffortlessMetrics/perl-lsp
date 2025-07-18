@@ -199,14 +199,22 @@ To extend the Pest grammar:
   - Context-sensitive slash disambiguation (/, s///, tr///, m//, qr//)
   - Modern Perl features (try/catch, defer, class/method)
   - All operators including smart match (~~), file tests, and bitwise string ops
-- Remaining work: Full heredoc content collection (requires stateful parser)
+  - Full heredoc support via multi-phase parsing
 
-### Slash Disambiguation Solution
+### Context-Sensitive Features
 
-The parser includes a sophisticated solution for Perl's context-sensitive slash operator:
+The parser includes sophisticated solutions for Perl's context-sensitive features:
 
+#### Slash Disambiguation
 1. **Mode-aware lexer** (`perl_lexer.rs`) - Tracks parser state to disambiguate / as division vs regex
 2. **Preprocessing adapter** (`lexer_adapter.rs`) - Transforms ambiguous tokens for PEG parsing
 3. **Disambiguated parser** (`disambiguated_parser.rs`) - High-level API with automatic handling
 
-See `SLASH_DISAMBIGUATION.md` for full details on this innovative approach.
+See `SLASH_DISAMBIGUATION.md` for full details.
+
+#### Heredoc Support
+1. **Multi-phase parser** (`heredoc_parser.rs`) - Three-phase approach to handle stateful heredocs
+2. **Full parser** (`full_parser.rs`) - Combines heredoc and slash handling
+3. **Complete coverage** - Supports all heredoc variants including indented heredocs
+
+See `HEREDOC_IMPLEMENTATION.md` for full details.
