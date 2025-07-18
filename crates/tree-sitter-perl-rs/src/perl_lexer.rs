@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use pest::Span;
 
 /// Perl lexer mode to disambiguate slash tokens
 #[derive(Debug, Clone, Copy, PartialEq)]

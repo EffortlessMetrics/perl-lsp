@@ -2,7 +2,6 @@ use crate::pure_rust_parser::{PerlParser, Rule, AstNode, PureRustPerlParser};
 use crate::lexer_adapter::LexerAdapter;
 use crate::error::ParseError;
 use pest::Parser;
-use std::sync::Arc;
 
 /// A Perl parser that handles context-sensitive constructs
 /// by preprocessing the input to disambiguate slashes
