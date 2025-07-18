@@ -33,7 +33,7 @@ tree-sitter-perl/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/tree-sitter-perl.git
+   git clone https://github.com/EffortlessSteven/tree-sitter-perl.git
    cd tree-sitter-perl
    ```
 
