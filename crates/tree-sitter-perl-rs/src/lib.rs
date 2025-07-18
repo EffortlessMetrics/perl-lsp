@@ -48,6 +48,15 @@ pub mod context_sensitive;
 pub mod enhanced_parser;
 
 #[cfg(feature = "pure-rust")]
+pub mod perl_lexer;
+
+#[cfg(feature = "pure-rust")]
+pub mod lexer_adapter;
+
+#[cfg(feature = "pure-rust")]
+pub mod disambiguated_parser;
+
+#[cfg(feature = "pure-rust")]
 pub mod pratt_parser;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
