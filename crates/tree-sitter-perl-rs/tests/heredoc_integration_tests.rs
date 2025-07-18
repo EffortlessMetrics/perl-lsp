@@ -73,8 +73,10 @@ DATA
 print $result;"#;
 
         let mut parser = FullPerlParser::new();
-        let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc in expression");
+        match parser.parse(input) {
+            Ok(_) => (),
+            Err(e) => panic!("Failed to parse heredoc in expression: {:?}", e),
+        }
     }
 
     #[test]
