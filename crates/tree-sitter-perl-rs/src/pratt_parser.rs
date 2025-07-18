@@ -221,7 +221,7 @@ impl PrattParser {
             let op = pairs[i].as_str();
             
             // Get operator info
-            if let Some(op_info) = self.get_operator_info(op) {
+            if let Some(_op_info) = self.get_operator_info(op) {
                 // Parse right operand
                 let right = parser.build_node(pairs[i + 1].clone())?.ok_or("Failed to parse right operand")?;
                 

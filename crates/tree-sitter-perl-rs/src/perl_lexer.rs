@@ -55,7 +55,7 @@ pub struct PerlLexer<'a> {
     position: usize,
     mode: LexerMode,
     /// Stack for nested delimiters in s{}{} constructs
-    delimiter_stack: Vec<char>,
+    _delimiter_stack: Vec<char>,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -64,7 +64,7 @@ impl<'a> PerlLexer<'a> {
             input,
             position: 0,
             mode: LexerMode::ExpectTerm,
-            delimiter_stack: Vec::new(),
+            _delimiter_stack: Vec::new(),
         }
     }
     
@@ -91,7 +91,7 @@ impl<'a> PerlLexer<'a> {
     }
     
     /// Peek at the next non-whitespace character
-    fn peek_next_non_ws(&self) -> Option<char> {
+    fn _peek_next_non_ws(&self) -> Option<char> {
         let mut pos = self.position;
         while pos < self.input.len() {
             let ch = self.input.as_bytes()[pos];
