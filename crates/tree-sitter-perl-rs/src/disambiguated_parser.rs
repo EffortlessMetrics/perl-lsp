@@ -1,6 +1,6 @@
 use crate::pure_rust_parser::{PerlParser, Rule, AstNode, PureRustPerlParser};
 use crate::lexer_adapter::LexerAdapter;
-use crate::error::PerlParseError;
+use crate::error::ParseError;
 use pest::Parser;
 use std::sync::Arc;
 
@@ -10,19 +10,19 @@ pub struct DisambiguatedParser;
 
 impl DisambiguatedParser {
     /// Parse Perl code with slash disambiguation
-    pub fn parse(input: &str) -> Result<AstNode, PerlParseError> {
+    pub fn parse(input: &str) -> Result<AstNode, ParseError> {
         // Step 1: Preprocess the input to disambiguate slashes
         let preprocessed = LexerAdapter::preprocess(input);
         
         // Step 2: Parse with the modified input
         let pairs = PerlParser::parse(Rule::program, &preprocessed)
-            .map_err(|e| PerlParseError::ParseError(format!("Parse error: {}", e)))?;
+            .map_err(|_| ParseError::ParseFailed)?;
         
         // Step 3: Build AST
         let mut parser = PureRustPerlParser::new();
         let mut ast = None;
         for pair in pairs {
-            ast = parser.build_node(pair)?;
+            ast = parser.build_node(pair).map_err(|_| ParseError::ParseFailed)?;
         }
         
         // Step 4: Postprocess to restore original tokens
@@ -30,13 +30,14 @@ impl DisambiguatedParser {
             LexerAdapter::postprocess(node);
         }
         
-        ast.ok_or_else(|| PerlParseError::ParseError("Empty program".to_string()))
+        ast.ok_or(ParseError::ParseFailed)
     }
     
     /// Parse and return S-expression format
-    pub fn parse_to_sexp(input: &str) -> Result<String, PerlParseError> {
+    pub fn parse_to_sexp(input: &str) -> Result<String, ParseError> {
         let ast = Self::parse(input)?;
-        Ok(PureRustPerlParser::node_to_sexp(&ast))
+        let parser = PureRustPerlParser::new();
+        Ok(parser.to_sexp(&ast))
     }
 }
 

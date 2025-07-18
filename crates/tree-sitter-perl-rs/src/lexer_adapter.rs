@@ -72,7 +72,7 @@ impl LexerAdapter {
         
         match node {
             AstNode::BinaryOp { op, left, right } => {
-                if op == "÷" {
+                if op.as_ref() == "÷" {
                     *op = Arc::from("/");
                 }
                 Self::postprocess(left);
@@ -120,11 +120,16 @@ impl LexerAdapter {
                 Self::postprocess(condition);
                 Self::postprocess(block);
             }
-            AstNode::ForStatement { variable, list, block, .. } => {
-                if let Some(v) = variable {
-                    Self::postprocess(v);
+            AstNode::ForStatement { init, condition, update, block, .. } => {
+                if let Some(i) = init {
+                    Self::postprocess(i);
                 }
-                Self::postprocess(list);
+                if let Some(c) = condition {
+                    Self::postprocess(c);
+                }
+                if let Some(u) = update {
+                    Self::postprocess(u);
+                }
                 Self::postprocess(block);
             }
             AstNode::ForeachStatement { variable, list, block, .. } => {
@@ -152,13 +157,13 @@ impl LexerAdapter {
             AstNode::UnaryOp { operand, .. } => {
                 Self::postprocess(operand);
             }
-            AstNode::TernaryExpression { condition, true_expr, false_expr } => {
+            AstNode::TernaryOp { condition, true_expr, false_expr } => {
                 Self::postprocess(condition);
                 Self::postprocess(true_expr);
                 Self::postprocess(false_expr);
             }
             AstNode::SubDeclaration { body, .. } |
-            AstNode::AnonSub { body, .. } => {
+            AstNode::AnonymousSub { body, .. } => {
                 Self::postprocess(body);
             }
             AstNode::MethodCall { object, args, .. } => {
@@ -167,9 +172,9 @@ impl LexerAdapter {
                     Self::postprocess(arg);
                 }
             }
-            AstNode::ReturnStatement(expr) => {
-                if let Some(e) = expr {
-                    Self::postprocess(e);
+            AstNode::ReturnStatement { value } => {
+                if let Some(v) = value {
+                    Self::postprocess(v);
                 }
             }
             AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
