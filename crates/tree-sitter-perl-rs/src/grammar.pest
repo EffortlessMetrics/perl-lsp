@@ -253,17 +253,21 @@ ternary_expression = {
     logical_or_expression ~ ("?" ~ expression ~ ":" ~ expression)?
 }
 
-logical_or_expression = { defined_or_expression ~ (("||" | "or") ~ defined_or_expression)* }
+logical_or_expression = { defined_or_expression ~ (logical_or_op ~ defined_or_expression)* }
+logical_or_op = { "||" | "or" }
 defined_or_expression = { logical_and_expression ~ ("//" ~ logical_and_expression)* }
-logical_and_expression = { equality_expression ~ (("&&" | "and") ~ equality_expression)* }
+logical_and_expression = { equality_expression ~ (logical_and_op ~ equality_expression)* }
+logical_and_op = { "&&" | "and" }
 
 equality_expression = {
-    relational_expression ~ (("==" | "!=" | "eq" | "ne" | "<=>" | "cmp" | "~~") ~ relational_expression)*
+    relational_expression ~ (equality_op ~ relational_expression)*
 }
+equality_op = { "==" | "!=" | "eq" | "ne" | "<=>" | "cmp" | "~~" }
 
 relational_expression = {
-    isa_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ isa_expression)*
+    isa_expression ~ (relational_op ~ isa_expression)*
 }
+relational_op = { "<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~" }
 
 isa_expression = {
     bitwise_expression ~ ("isa" ~ bitwise_expression)*
@@ -274,19 +278,23 @@ bitwise_string_expression = { shift_expression ~ (("&." | "|." | "^.") ~ shift_e
 
 shift_expression = { range_expression ~ (("<<" | ">>") ~ range_expression)* }
 
-range_expression = { additive_expression ~ (("..." | "..") ~ additive_expression)* }
+range_expression = { additive_expression ~ (range_op ~ additive_expression)* }
+range_op = { "..." | ".." }
 
 additive_expression = {
-    multiplicative_expression ~ (("+" | "-" | ".") ~ multiplicative_expression)*
+    multiplicative_expression ~ (additive_op ~ multiplicative_expression)*
 }
+additive_op = { "+" | "-" | "." }
 
 multiplicative_expression = {
-    exponential_expression ~ (("*" | "/" | "%" | "x") ~ exponential_expression)*
+    exponential_expression ~ (multiplicative_op ~ exponential_expression)*
 }
+multiplicative_op = { "*" | "/" | "%" | "x" }
 
 exponential_expression = {
-    unary_expression ~ ("**" ~ unary_expression)*
+    unary_expression ~ (exponential_op ~ unary_expression)*
 }
+exponential_op = { "**" }
 
 unary_expression = {
     ("!" | "-" | "+" | "~" | "~." | "not")+ ~ unary_expression

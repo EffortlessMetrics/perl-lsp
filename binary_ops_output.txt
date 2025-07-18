@@ -1,0 +1,65 @@
+   Compiling tree-sitter-perl v0.0.1 (/home/steven/code/tree-sitter-perl/crates/tree-sitter-perl-rs)
+warning: variable does not need to be mutable
+    --> crates/tree-sitter-perl-rs/src/pure_rust_parser.rs:1116:21
+     |
+1116 |                 let mut inner = pair.into_inner();
+     |                     ----^^^^^
+     |                     |
+     |                     help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+    --> crates/tree-sitter-perl-rs/src/pure_rust_parser.rs:1144:21
+     |
+1144 |                 let mut inner = pair.into_inner();
+     |                     ----^^^^^
+     |                     |
+     |                     help: remove this `mut`
+
+warning: unused variable: `op_info`
+   --> crates/tree-sitter-perl-rs/src/pratt_parser.rs:224:25
+    |
+224 |             if let Some(op_info) = self.get_operator_info(op) {
+    |                         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_op_info`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: type `FormatInfo` is more private than the item `StatefulPerlParser::extract_format_declaration`
+   --> crates/tree-sitter-perl-rs/src/stateful_parser.rs:162:5
+    |
+162 |     pub fn extract_format_declaration(&self, line: &str) -> Option<FormatInfo> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `StatefulPerlParser::extract_format_declaration` is reachable at visibility `pub`
+    |
+note: but type `FormatInfo` is only usable at visibility `pub(self)`
+   --> crates/tree-sitter-perl-rs/src/stateful_parser.rs:42:1
+    |
+42  | struct FormatInfo {
+    | ^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: field `start_line` is never read
+  --> crates/tree-sitter-perl-rs/src/stateful_parser.rs:44:5
+   |
+42 | struct FormatInfo {
+   |        ---------- field in this struct
+43 |     name: String,
+44 |     start_line: usize,
+   |     ^^^^^^^^^^
+   |
+   = note: `FormatInfo` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `tree-sitter-perl` (lib) generated 5 warnings (run `cargo fix --lib -p tree-sitter-perl` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 33.88s
+     Running `target/release/compare_parsers test_binary_ops.pl 1`
+Parsing file: test_binary_ops.pl (569 bytes)
+Iterations: 1
+
+Tree-sitter parser:
+  ✗ Failed: Tree-sitter parser not available with pure-rust feature
+
+Pure Rust parser:
+  ✓ Success
+  Parse time: 406.600µs
+  S-expression: (source_file (comment #!/usr/bin/perl) (comment # Arithmetic operators) (variable_declaration $sum   = (number 5)) (variable_declaration $diff   = (number 10)) (variable_declaration $product   = (number 6)) (variable_declaration $quotient   = (number 20)) (variable_declaration $power   = (number 2)) (comment # String concatenation) (variable_declaration $string   = (binary_expression (string_literal "Hello") (" " ) (string_literal "World"))) (comment # Range operator) (variable_declaration @numbers   = (number 1)) (comment # Logical operators) (variable_declaration $result   = (scalar_variable $foo)) (variable_declaration $check   = (scalar_variable $x)) (comment # Comparison) (variable_declaration $equal   = (scalar_variable $a)) (variable_declaration $not_equal   = (scalar_variable $x)) (variable_declaration $less_than   = (scalar_variable $i)) (variable_declaration $greater   = (scalar_variable $j)) (comment # Complex expressions) (variable_declaration $complex   = (scalar_variable $x)) (variable_declaration $with_parens   = (scalar_variable $a)) (comment # Fat comma) (variable_declaration %hash   = (identifier name) (string_literal "John") (identifier age) (number 30)

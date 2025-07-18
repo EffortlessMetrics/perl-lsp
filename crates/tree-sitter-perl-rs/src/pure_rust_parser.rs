@@ -387,29 +387,70 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::simple_method_call => {
-                let mut inner = pair.into_inner();
-                let object = self.build_node(inner.next().unwrap())?.unwrap();
-                let method = Arc::from(inner.next().unwrap().as_str());
-                Ok(Some(AstNode::MethodCall {
-                    object: Box::new(object),
-                    method,
-                    args: vec![],
-                }))
+                // This is an atomic rule, parse from the string directly
+                let text = pair.as_str();
+                // Format: variable -> identifier ( ) ;
+                let parts: Vec<&str> = text.split("->").collect();
+                if parts.len() == 2 {
+                    let var_part = parts[0].trim();
+                    let method_part = parts[1].trim();
+                    
+                    // Extract method name (before parentheses)
+                    let method_name = method_part.split('(').next().unwrap_or("").trim();
+                    
+                    // Create a simple variable node for the object
+                    let object = if var_part.starts_with('$') {
+                        AstNode::ScalarVariable(Arc::from(var_part))
+                    } else {
+                        AstNode::Identifier(Arc::from(var_part))
+                    };
+                    
+                    Ok(Some(AstNode::MethodCall {
+                        object: Box::new(object),
+                        method: Arc::from(method_name),
+                        args: vec![],
+                    }))
+                } else {
+                    Ok(None)
+                }
             }
             Rule::simple_function_call => {
-                let mut inner = pair.into_inner();
-                let func_name = inner.next().unwrap().as_str();
-                let func = AstNode::Identifier(Arc::from(func_name));
-                let mut args = vec![];
-                if let Some(arg) = inner.next() {
-                    if let Some(node) = self.build_node(arg)? {
-                        args.push(node);
-                    }
+                // This is an atomic rule, parse from the string directly
+                let text = pair.as_str();
+                // Format: identifier ( literal/variable ) ;
+                let parts: Vec<&str> = text.split('(').collect();
+                if parts.len() >= 2 {
+                    let func_name = parts[0].trim();
+                    let func = AstNode::Identifier(Arc::from(func_name));
+                    
+                    // Extract argument if present
+                    let args = if let Some(arg_part) = parts.get(1) {
+                        let arg_text = arg_part.trim_end_matches(");").trim_end_matches(';').trim();
+                        if !arg_text.is_empty() {
+                            let arg = if arg_text.starts_with('$') {
+                                AstNode::ScalarVariable(Arc::from(arg_text))
+                            } else if arg_text.starts_with('"') || arg_text.starts_with('\'') {
+                                AstNode::String(Arc::from(arg_text))
+                            } else if arg_text.chars().all(|c| c.is_numeric() || c == '.') {
+                                AstNode::Number(Arc::from(arg_text))
+                            } else {
+                                AstNode::Identifier(Arc::from(arg_text))
+                            };
+                            vec![arg]
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    };
+                    
+                    Ok(Some(AstNode::FunctionCall {
+                        function: Box::new(func),
+                        args,
+                    }))
+                } else {
+                    Ok(None)
                 }
-                Ok(Some(AstNode::FunctionCall {
-                    function: Box::new(func),
-                    args,
-                }))
             }
             Rule::program => {
                 let mut statements = Vec::new();
@@ -679,6 +720,18 @@ impl PureRustPerlParser {
             }
             Rule::bitwise_string_expression => {
                 self.build_binary_expression(pair, Rule::bitwise_string_expression)
+            }
+            Rule::range_expression => {
+                self.build_binary_expression(pair, Rule::range_expression)
+            }
+            Rule::additive_expression => {
+                self.build_binary_expression(pair, Rule::additive_expression)
+            }
+            Rule::multiplicative_expression => {
+                self.build_binary_expression(pair, Rule::multiplicative_expression)
+            }
+            Rule::exponential_expression => {
+                self.build_binary_expression(pair, Rule::exponential_expression)
             }
             Rule::assignment_expression => {
                 let mut inner = pair.into_inner();
@@ -1212,26 +1265,21 @@ impl PureRustPerlParser {
     }
     
     fn build_binary_expr_with_precedence(&mut self, pairs: Vec<Pair<Rule>>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
-        // Build left-associative binary operations with operator precedence
+        // Build left-associative binary operations
         let mut result = self.build_node(pairs[0].clone())?.unwrap();
         let mut i = 1;
         
-        while i < pairs.len() {
+        while i < pairs.len() - 1 {
+            // The operator is at position i
             let op = Arc::from(pairs[i].as_str());
+            // The right operand is at position i + 1
             let right = self.build_node(pairs[i + 1].clone())?.unwrap();
             
-            // Get operator precedence
-            if let Some(op_info) = self.pratt_parser.get_operator_info(&op) {
-                // Handle precedence by restructuring the tree if needed
-                result = self.apply_precedence(result, op.clone(), right, op_info.precedence.0);
-            } else {
-                // Unknown operator, use default left-associative
-                result = AstNode::BinaryOp {
-                    op,
-                    left: Box::new(result),
-                    right: Box::new(right),
-                };
-            }
+            result = AstNode::BinaryOp {
+                op,
+                left: Box::new(result),
+                right: Box::new(right),
+            };
             
             i += 2;
         }
@@ -1291,8 +1339,11 @@ impl PureRustPerlParser {
             }
             AstNode::VariableDeclaration { scope, variables, initializer } => {
                 let var_sexps: Vec<String> = variables.iter().map(Self::node_to_sexp).collect();
-                let init_sexp = initializer.as_ref().map(|i| Self::node_to_sexp(i)).unwrap_or_default();
-                format!("(variable_declaration ({}) {} {})", scope, var_sexps.join(" "), init_sexp)
+                if let Some(init) = initializer {
+                    format!("(variable_declaration {} {} = {})", scope, var_sexps.join(" "), Self::node_to_sexp(init))
+                } else {
+                    format!("(variable_declaration {} {})", scope, var_sexps.join(" "))
+                }
             }
             AstNode::SubDeclaration { name, body, .. } => {
                 format!("(subroutine (identifier {}) {})", name, Self::node_to_sexp(body))
@@ -1339,8 +1390,12 @@ impl PureRustPerlParser {
                 format!("(typeglob_slot_access {} {})", Self::node_to_sexp(typeglob), slot)
             }
             AstNode::MethodCall { object, method, args } => {
-                let args_str = args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" ");
-                format!("(method_call {} {} {})", Self::node_to_sexp(object), method, args_str)
+                let args_str = if args.is_empty() {
+                    "( )".to_string()
+                } else {
+                    format!("( {} )", args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" "))
+                };
+                format!("(method_call_expression {} -> (method {}) {})", Self::node_to_sexp(object), method, args_str)
             }
             AstNode::Assignment { target, op, value } => {
                 format!("(assignment {} ({}) {})", Self::node_to_sexp(target), op, Self::node_to_sexp(value))
