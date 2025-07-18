@@ -173,15 +173,6 @@ pub enum AstNode {
         replacement: Arc<str>,
         flags: Arc<str>,
     },
-    
-    // Special statements
-    UseStatement {
-        module: Arc<str>,
-        imports: Vec<Arc<str>>,
-    },
-    RequireStatement {
-        module: Arc<str>,
-    },
     ReturnStatement {
         value: Option<Box<AstNode>>,
     },
@@ -1070,23 +1061,24 @@ impl PureRustPerlParser {
             }
             Rule::use_statement => {
                 let mut inner = pair.into_inner();
-                inner.next(); // skip "use"
                 
-                let module = if let Some(module_pair) = inner.next() {
-                    Arc::from(module_pair.as_str())
-                } else {
-                    Arc::from("")
-                };
-                
+                let mut module = Arc::from("");
                 let mut version = None;
                 let mut import_list = Vec::new();
                 
                 for p in inner {
                     match p.as_rule() {
+                        Rule::module_name => module = Arc::from(p.as_str()),
                         Rule::version => version = Some(Arc::from(p.as_str())),
                         Rule::import_list => {
                             for item in p.into_inner() {
-                                import_list.push(Arc::from(item.as_str()));
+                                if item.as_rule() == Rule::import_items {
+                                    for import_item in item.into_inner() {
+                                        if import_item.as_rule() == Rule::import_item {
+                                            import_list.push(Arc::from(import_item.as_str()));
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {}
@@ -1097,13 +1089,21 @@ impl PureRustPerlParser {
             }
             Rule::require_statement => {
                 let mut inner = pair.into_inner();
-                inner.next(); // skip "require"
                 
-                let module = if let Some(module_pair) = inner.next() {
-                    Arc::from(module_pair.as_str())
-                } else {
-                    Arc::from("")
-                };
+                let mut module = Arc::from("");
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::module_name => module = Arc::from(p.as_str()),
+                        Rule::expression => {
+                            // For require expressions, we'll use the expression as the module
+                            if let Some(expr) = self.build_node(p)? {
+                                module = Arc::from(Self::node_to_sexp(&expr));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 
                 Ok(Some(AstNode::RequireStatement { module }))
             }
@@ -1412,6 +1412,18 @@ impl PureRustPerlParser {
                 if let Some(v) = version { parts.push(format!("(version {})", v)); }
                 if let Some(b) = block { parts.push(format!("(body {})", Self::node_to_sexp(b))); }
                 format!("(package_declaration {})", parts.join(" "))
+            }
+            AstNode::UseStatement { module, version, import_list } => {
+                let mut parts = vec![format!("use (package {})", module)];
+                if let Some(v) = version { parts.push(format!("(version {})", v)); }
+                if !import_list.is_empty() {
+                    parts.push(format!("(import_list {})", import_list.join(" ")));
+                }
+                parts.push(";".to_string());
+                format!("(use_statement {})", parts.join(" "))
+            }
+            AstNode::RequireStatement { module } => {
+                format!("(require_statement require (package {}) ;)", module)
             }
             AstNode::Regex { pattern, flags, named_groups } => {
                 let groups_str = if !named_groups.is_empty() {
