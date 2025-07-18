@@ -1,0 +1,182 @@
+// Optimized Perl Grammar for Pest Parser
+// Using atomic rules and reduced backtracking
+
+// Main entry point
+program = { SOI ~ statements? ~ EOI }
+
+// Statements - use atomic for common patterns
+statements = { statement+ }
+
+statement = @{ 
+    sub_declaration
+    | format_declaration  
+    | package_declaration
+    | use_statement
+    | require_statement
+    | begin_block
+    | end_block
+    | if_statement
+    | unless_statement
+    | while_statement
+    | for_statement
+    | foreach_statement
+    | return_statement
+    | assignment_statement  // Fast path for common assignments
+    | method_call_statement // Fast path for method calls
+    | expression_statement
+    | comment
+    | empty_statement
+}
+
+// Fast paths for common constructs
+assignment_statement = @{ variable ~ "=" ~ expression ~ semicolon? }
+method_call_statement = @{ primary_expression ~ "->" ~ identifier ~ argument_list? ~ semicolon? }
+
+// Atomic rules for tokens that don't need backtracking
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+number = @{ 
+    ("0x" ~ ASCII_HEX_DIGIT+) |
+    ("0b" ~ ("0" | "1")+) |
+    ("0" ~ ASCII_OCT_DIGIT+) |
+    (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?)
+}
+
+// Variables - atomic since format is fixed
+scalar_variable = @{ "$" ~ identifier }
+array_variable = @{ "@" ~ identifier }
+hash_variable = @{ "%" ~ identifier }
+typeglob_variable = @{ "*" ~ identifier }
+
+variable = @{
+    scalar_variable 
+    | array_variable
+    | hash_variable
+    | typeglob_variable
+}
+
+// Optimize expression parsing - reduce precedence levels
+expression = { assignment_expr | comparison_expr }
+
+assignment_expr = { 
+    comparison_expr ~ assignment_op ~ expression 
+}
+
+assignment_op = @{ 
+    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" 
+    | "<<=" | ">>=" | "&=" | "|=" | "^=" | "&&=" | "||=" | "//=" 
+}
+
+comparison_expr = { additive_expr ~ (comparison_op ~ additive_expr)* }
+comparison_op = @{ "==" | "!=" | "<=" | ">=" | "<" | ">" | "eq" | "ne" | "lt" | "gt" | "le" | "ge" }
+
+additive_expr = { multiplicative_expr ~ (additive_op ~ multiplicative_expr)* }
+additive_op = @{ "+" | "-" | "." }
+
+multiplicative_expr = { unary_expr ~ (multiplicative_op ~ unary_expr)* }
+multiplicative_op = @{ "*" | "/" | "%" | "x" }
+
+unary_expr = {
+    unary_op* ~ postfix_expr
+}
+
+unary_op = @{ "!" | "-" | "+" | "~" | "not" }
+
+postfix_expr = {
+    primary_expression ~ postfix_op*
+}
+
+postfix_op = {
+    array_access
+    | hash_access  
+    | method_call
+    | increment
+    | decrement
+}
+
+// Primary expressions with atomic string matching
+primary_expression = {
+    literal
+    | variable
+    | "(" ~ expression ~ ")"
+    | block
+}
+
+literal = {
+    number
+    | string
+    | regex_literal
+}
+
+// Optimize string parsing
+string = @{
+    single_quoted_string
+    | double_quoted_string
+}
+
+single_quoted_string = @{ "'" ~ (!("'") ~ ANY)* ~ "'" }
+double_quoted_string = @{ "\"" ~ (!("\"") ~ ANY)* ~ "\"" }
+
+// Common constructs with atomic rules
+array_access = @{ "[" ~ expression ~ "]" }
+hash_access = @{ "{" ~ expression ~ "}" }
+method_call = @{ "->" ~ identifier ~ argument_list? }
+argument_list = { "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
+
+increment = @{ "++" }
+decrement = @{ "--" }
+
+// Control structures - atomic where possible
+if_statement = {
+    "if" ~ "(" ~ expression ~ ")" ~ block ~ elsif_clause* ~ else_clause?
+}
+
+elsif_clause = { "elsif" ~ "(" ~ expression ~ ")" ~ block }
+else_clause = { "else" ~ block }
+
+while_statement = {
+    label? ~ "while" ~ "(" ~ expression ~ ")" ~ block
+}
+
+for_statement = {
+    label? ~ "for" ~ "(" ~ for_init? ~ ";" ~ expression? ~ ";" ~ for_update? ~ ")" ~ block
+}
+
+foreach_statement = {
+    label? ~ "foreach" ~ variable? ~ "(" ~ expression ~ ")" ~ block
+}
+
+// Blocks and declarations
+block = { "{" ~ statements? ~ "}" }
+
+sub_declaration = {
+    "sub" ~ identifier ~ prototype? ~ attributes? ~ block
+}
+
+// Misc
+comment = @{ "#" ~ (!("\n") ~ ANY)* }
+semicolon = @{ ";" }
+empty_statement = @{ semicolon }
+label = @{ identifier ~ ":" }
+
+// Simplified rules for less common constructs
+package_declaration = { "package" ~ identifier ~ ("VERSION" ~ version)? ~ (block | semicolon) }
+use_statement = { "use" ~ identifier ~ version? ~ import_list? ~ semicolon }
+require_statement = { "require" ~ (identifier | string) ~ semicolon }
+return_statement = { "return" ~ expression? ~ semicolon? }
+
+// Placeholders for other constructs (implement as needed)
+format_declaration = { "format" ~ identifier? ~ "=" ~ format_lines ~ "." }
+format_lines = { (!(".") ~ ANY)* }
+version = { number | string }
+import_list = { "(" ~ (identifier ~ ("," ~ identifier)*)? ~ ")" }
+prototype = { "(" ~ (!(")" ) ~ ANY)* ~ ")" }
+attributes = { ":" ~ identifier ~ ("(" ~ (!(")" ) ~ ANY)* ~ ")")? }
+begin_block = { "BEGIN" ~ block }
+end_block = { "END" ~ block }
+for_init = { expression }
+for_update = { expression }
+regex_literal = { "/" ~ (!(("/") ~ ANY))* ~ "/" ~ regex_flags? }
+regex_flags = @{ ASCII_ALPHA* }
+
+// Whitespace handling
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
