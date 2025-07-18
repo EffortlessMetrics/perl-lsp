@@ -3,8 +3,6 @@
 //! This module handles operators like s///, tr///, and m// that require
 //! context-sensitive parsing to distinguish from regular identifiers.
 
-use pest::iterators::Pair;
-use crate::pure_rust_parser::Rule;
 
 /// Context-sensitive token types
 #[derive(Debug, Clone, PartialEq)]
