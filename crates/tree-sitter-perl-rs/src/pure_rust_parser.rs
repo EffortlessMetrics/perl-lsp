@@ -163,6 +163,7 @@ pub enum AstNode {
     String(Arc<str>),
     Identifier(Arc<str>),
     Bareword(Arc<str>),
+    EmptyExpression,
     Regex {
         pattern: Arc<str>,
         flags: Arc<str>,
@@ -764,10 +765,15 @@ impl PureRustPerlParser {
             }
             Rule::assignment_expression => {
                 let mut inner = pair.into_inner();
-                let target = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                let op = Arc::from(inner.next().unwrap().as_str());
-                let value = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                Ok(Some(AstNode::Assignment { target, op, value }))
+                if let (Some(target_pair), Some(op_pair), Some(value_pair)) = 
+                    (inner.next(), inner.next(), inner.next()) {
+                    let target = Box::new(self.build_node(target_pair)?.unwrap_or(AstNode::EmptyExpression));
+                    let op = Arc::from(op_pair.as_str());
+                    let value = Box::new(self.build_node(value_pair)?.unwrap_or(AstNode::EmptyExpression));
+                    Ok(Some(AstNode::Assignment { target, op, value }))
+                } else {
+                    Ok(None)
+                }
             }
             Rule::unary_expression => {
                 let mut inner = pair.into_inner();
@@ -1377,15 +1383,19 @@ impl PureRustPerlParser {
     }
     
     fn build_binary_expr_with_precedence(&mut self, pairs: Vec<Pair<Rule>>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        if pairs.is_empty() {
+            return Ok(None);
+        }
+        
         // Build left-associative binary operations
-        let mut result = self.build_node(pairs[0].clone())?.unwrap();
+        let mut result = self.build_node(pairs[0].clone())?.unwrap_or(AstNode::EmptyExpression);
         let mut i = 1;
         
         while i < pairs.len() - 1 {
             // The operator is at position i
             let op = Arc::from(pairs[i].as_str());
             // The right operand is at position i + 1
-            let right = self.build_node(pairs[i + 1].clone())?.unwrap();
+            let right = self.build_node(pairs[i + 1].clone())?.unwrap_or(AstNode::EmptyExpression);
             
             result = AstNode::BinaryOp {
                 op,
@@ -1565,6 +1575,16 @@ impl PureRustPerlParser {
             AstNode::String(value) => {
                 format!("(string_literal {})", value)
             }
+            AstNode::Bareword(value) => {
+                format!("(bareword {})", value)
+            }
+            AstNode::Regex { pattern, flags, .. } => {
+                if flags.is_empty() {
+                    format!("(regex /{}/ )", pattern)
+                } else {
+                    format!("(regex /{}/{} )", pattern, flags)
+                }
+            }
             AstNode::InterpolatedString(parts) => {
                 let parts_str = parts.iter()
                     .map(|p| Self::node_to_sexp(p))
@@ -1574,6 +1594,9 @@ impl PureRustPerlParser {
             }
             AstNode::Identifier(name) => {
                 format!("(identifier {})", name)
+            }
+            AstNode::EmptyExpression => {
+                "(empty_expression)".to_string()
             }
             AstNode::Comment(content) => {
                 format!("(comment {})", content)
