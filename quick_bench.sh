@@ -36,19 +36,17 @@ for file in "${TEST_FILES[@]}"; do
     filename=$(basename "$file")
     filesize=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
     
-    # Test C parser
-    c_output=$(timeout 5s cargo run --release --features "c-scanner test-utils" --bin bench_parser -- "$file" 2>&1 || echo "FAILED")
-    if [[ "$c_output" == *"duration_us="* ]]; then
-        c_time=$(echo "$c_output" | grep -oE 'duration_us=[0-9]+' | sed 's/duration_us=//')
-    else
+    # Test C parser (capture all output)
+    c_output=$(timeout 5s cargo run --quiet --release --features "c-scanner test-utils" --bin bench_parser -- "$file" 2>&1 || echo "FAILED")
+    c_time=$(echo "$c_output" | grep "status=success" | grep -oE 'duration_us=[0-9]+' | sed 's/duration_us=//' | tail -1)
+    if [ -z "$c_time" ]; then
         c_time="FAIL"
     fi
     
-    # Test Rust parser
-    rust_output=$(timeout 5s cargo run --release --features "pure-rust test-utils" --bin bench_parser -- "$file" 2>&1 || echo "FAILED")
-    if [[ "$rust_output" == *"duration_us="* ]]; then
-        rust_time=$(echo "$rust_output" | grep -oE 'duration_us=[0-9]+' | sed 's/duration_us=//')
-    else
+    # Test Rust parser (capture all output)
+    rust_output=$(timeout 5s cargo run --quiet --release --features "pure-rust test-utils" --bin bench_parser -- "$file" 2>&1 || echo "FAILED")
+    rust_time=$(echo "$rust_output" | grep "status=success" | grep -oE 'duration_us=[0-9]+' | sed 's/duration_us=//' | tail -1)
+    if [ -z "$rust_time" ]; then
         rust_time="FAIL"
     fi
     
