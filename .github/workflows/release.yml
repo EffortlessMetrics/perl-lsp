@@ -1,29 +1,149 @@
-name: Release Flow
+name: Release
+
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
 
-concurrency:
-  group: release-master
-  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  test-and-release:
+  create-release:
+    name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm run dev-install
-      - run: npm test
-      - run: ./copy-to-release
-      - name: Deploy 🚀
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./release
-          publish_branch: release
-          user_name: GH Actions [beep-boop]
-          user_email: release-flow@beep.boop
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        draft: true
+        prerelease: false
+        body: |
+          ## Changes
+          
+          - TODO: Add release notes
+          
+          ## Installation
+          
+          ```bash
+          cargo add tree-sitter-perl
+          ```
+          
+          ## Features
+          
+          - Pure Rust parser option with `--features pure-rust`
+          - Full Perl syntax support
+          - Comprehensive test coverage
+
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: tree-sitter-perl-linux-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: tree-sitter-perl-windows-amd64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: tree-sitter-perl-macos-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: tree-sitter-perl-macos-arm64
+            
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Build release binary
+      run: |
+        cargo build --release --target ${{ matrix.target }} --features pure-rust
+        cargo build --release --target ${{ matrix.target }}
+
+    - name: Package artifacts (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        mkdir -p artifacts
+        cp target/${{ matrix.target }}/release/libTree_sitter_perl* artifacts/ || true
+        cp target/${{ matrix.target }}/release/tree_sitter_perl* artifacts/ || true
+        tar czf ${{ matrix.artifact_name }}.tar.gz -C artifacts .
+
+    - name: Package artifacts (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        mkdir artifacts
+        copy target\${{ matrix.target }}\release\*.dll artifacts\ 2>nul || echo "No DLLs found"
+        copy target\${{ matrix.target }}\release\*.lib artifacts\ 2>nul || echo "No libs found"
+        7z a ${{ matrix.artifact_name }}.zip artifacts\*
+
+    - name: Upload Release Asset (Unix)
+      if: matrix.os != 'windows-latest'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.artifact_name }}.tar.gz
+        asset_name: ${{ matrix.artifact_name }}.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.artifact_name }}.zip
+        asset_name: ${{ matrix.artifact_name }}.zip
+        asset_content_type: application/zip
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: build-artifacts
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Login to crates.io
+      run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+    - name: Publish tree-sitter-perl
+      run: |
+        cd crates/tree-sitter-perl-rs
+        cargo publish --allow-dirty

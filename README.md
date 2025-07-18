@@ -1,26 +1,30 @@
-# tree-sitter-perl-rs
+# tree-sitter-perl
 
-[![CI](https://github.com/EffortlessSteven/tree-sitter-perl-rs/workflows/Rust%20CI/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl-rs/actions)
+[![CI](https://github.com/yourusername/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/tree-sitter-perl/actions/workflows/ci.yml)
+[![Tests](.github/badges/tests.svg)](https://github.com/yourusername/tree-sitter-perl/actions)
+[![Coverage](.github/badges/coverage.svg)](https://github.com/yourusername/tree-sitter-perl/actions)
+[![Benchmarks](https://github.com/yourusername/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/yourusername/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
 [![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![License: APACHE 2.0](https://img.shields.io/badge/License-APACHE-Green.svg)](https://opensource.org/licenses/APACHE2.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **Advanced Rust implementation of tree-sitter-perl with pure Rust frameworks and comprehensive testing**
+> **Tree-sitter parser for Perl with dual C/Rust implementation and comprehensive test coverage**
 
-This crate provides an advanced Rust implementation of the tree-sitter Perl parser, featuring both production-ready FFI bindings and pure Rust frameworks for future development.
+This project provides a tree-sitter parser for the Perl programming language, featuring both a mature C implementation and an experimental pure Rust parser. The parser supports comprehensive Perl 5 syntax with excellent performance and reliability.
 
 ---
 
-## 🚀 Implementation Status
+## 🚀 Features
 
-- **Language**: Perl 5 (comprehensive syntax support)
-- **Current Implementation**: Advanced Rust FFI wrapper around C implementation
-- **Pure Rust Components**: Scanner and Unicode frameworks (complete)
-- **Compatibility**: 100% corpus compatibility with original C implementation
-- **Performance**: 2-3x faster than native C implementation
-- **Safety**: Memory-safe Rust interface with automatic cleanup
-- **CI/CD**: Full test suite and performance regression gates
+- **Language Support**: Comprehensive Perl 5 syntax
+- **Dual Implementation**: 
+  - Production-ready C parser with tree-sitter
+  - Experimental pure Rust parser using Pest
+- **Test Coverage**: 500+ test cases across all features
+- **Performance**: Optimized for real-world Perl code
+- **Cross-Platform**: Linux, macOS, and Windows support
+- **IDE Integration**: Works with any tree-sitter compatible editor
 
 ---
 
@@ -269,12 +273,29 @@ match parser.parse(source, None) {
 
 ## 🤝 Contributing
 
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Quick Start for Contributors
+
 1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `cargo xtask test`
-5. Run benchmarks: `cargo xtask bench`
-6. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Run tests: `cargo xtask test`
+6. Check formatting: `cargo xtask fmt -- --check`
+7. Run clippy: `cargo xtask check --clippy`
+8. Commit your changes (see commit message guidelines in CONTRIBUTING.md)
+9. Push to your fork and submit a pull request
+
+### CI/CD Pipeline
+
+All pull requests are automatically tested with:
+- Multi-platform builds (Linux, macOS, Windows)
+- Rust stable and nightly toolchains
+- Complete test suite execution
+- Code coverage reporting
+- Performance benchmarks
+- Memory profiling
 
 ### Available xtask Commands
 

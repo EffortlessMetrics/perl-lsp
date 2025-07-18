@@ -1,0 +1,151 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install hyperfine
+      run: |
+        wget https://github.com/sharkdp/hyperfine/releases/download/v1.18.0/hyperfine_1.18.0_amd64.deb
+        sudo dpkg -i hyperfine_1.18.0_amd64.deb
+
+    - name: Run Rust benchmarks
+      run: |
+        cargo bench --features pure-rust -- --output-format bencher | tee output.txt
+
+    - name: Run comparison benchmarks
+      run: |
+        ./benchmark_all.sh > benchmark_results.txt 2>&1 || true
+        ./compare_all_levels.sh > comparison_results.txt 2>&1 || true
+
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        name: Rust Benchmark
+        tool: 'cargo'
+        output-file-path: output.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: false
+        alert-threshold: '200%'
+        comment-on-alert: true
+        alert-comment-cc-users: '@maintainers'
+
+    - name: Upload benchmark artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: |
+          output.txt
+          benchmark_results.txt
+          comparison_results.txt
+
+  comparison-benchmark:
+    name: Parser Comparison Benchmark
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build comparison tool
+      run: cargo build --release --features "pure-rust test-utils" --bin compare_parsers
+
+    - name: Create test corpus
+      run: |
+        mkdir -p test_corpus
+        find . -name "*.pl" -type f | head -50 > test_files.txt || echo "No .pl files found"
+        
+    - name: Run detailed comparison
+      run: |
+        echo "# Parser Comparison Results" > comparison_report.md
+        echo "" >> comparison_report.md
+        echo "## Summary Statistics" >> comparison_report.md
+        cargo run --release --features "pure-rust test-utils" --bin compare_parsers -- --test >> comparison_report.md 2>&1 || true
+        
+    - name: Upload comparison report
+      uses: actions/upload-artifact@v3
+      with:
+        name: comparison-report
+        path: comparison_report.md
+
+  memory-profile:
+    name: Memory Usage Profile
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+
+    - name: Build for profiling
+      run: |
+        cargo build --release --features pure-rust
+        cargo build --release
+
+    - name: Profile memory usage
+      run: |
+        echo "# Memory Usage Profile" > memory_report.md
+        echo "" >> memory_report.md
+        
+        # Create a test file
+        echo 'my $x = 42; print "Hello, $x\n";' > test.pl
+        
+        # Profile C parser
+        echo "## C Parser Memory Usage" >> memory_report.md
+        valgrind --tool=massif --massif-out-file=massif.c.out \
+          cargo run --release -- test.pl 2>&1 | tee -a memory_report.md || true
+        
+        # Profile Rust parser  
+        echo "## Pure Rust Parser Memory Usage" >> memory_report.md
+        valgrind --tool=massif --massif-out-file=massif.rust.out \
+          cargo run --release --features pure-rust -- test.pl 2>&1 | tee -a memory_report.md || true
+
+    - name: Upload memory profile
+      uses: actions/upload-artifact@v3
+      with:
+        name: memory-profile
+        path: |
+          memory_report.md
+          massif.*.out

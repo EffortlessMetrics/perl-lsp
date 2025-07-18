@@ -1,132 +1,83 @@
-# Contributing to tree-sitter-perl-rs
+# Contributing to tree-sitter-perl
 
-Thank you for your interest in contributing to tree-sitter-perl-rs! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to tree-sitter-perl! This document provides guidelines for contributing to the project.
 
-## 🚀 Quick Start
+## Table of Contents
 
-### Prerequisites
+- [Project Structure](#project-structure)
+- [Development Setup](#development-setup)
+- [Testing Guidelines](#testing-guidelines)
+- [Adding New Features](#adding-new-features)
+- [Code Style](#code-style)
+- [Pull Request Process](#pull-request-process)
 
-- **Rust 1.70+** (stable channel)
-- **Git**
-- **Cargo** (comes with Rust)
-
-### Development Setup
-
-```bash
-# Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/tree-sitter-perl-rs.git
-cd tree-sitter-perl-rs
-
-# Install dependencies
-cargo build
-
-# Run tests to ensure everything works
-cargo xtask test
-```
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
-tree-sitter-perl-rs/
-├── crates/tree-sitter-perl-rs/     # Main Rust implementation
+tree-sitter-perl/
+├── crates/tree-sitter-perl-rs/     # Active Rust implementation
 │   ├── src/
-│   │   ├── lib.rs                  # Public API
-│   │   ├── scanner/                # Rust scanner implementation
-│   │   │   ├── mod.rs              # Scanner module
-│   │   │   ├── rust_scanner.rs     # Rust-native scanner
-│   │   │   └── types.rs            # Scanner types
-│   │   ├── unicode.rs              # Unicode utilities
-│   │   └── tests.rs                # Test suite
+│   │   ├── grammar.pest            # Pest grammar for pure Rust parser
+│   │   ├── pure_rust_parser.rs     # Pure Rust parser implementation
+│   │   ├── scanner/                # Scanner implementations
+│   │   └── tests/                  # Integration tests
 │   └── Cargo.toml
+├── tree-sitter-perl/               # Legacy C implementation (tests only)
+│   ├── grammar.js                  # Tree-sitter grammar
+│   └── test/corpus/                # Corpus tests
 ├── xtask/                          # Build automation
-├── tree-sitter-perl/               # Legacy C implementation
-├── benches/                        # Performance benchmarks
-└── .github/workflows/              # CI/CD pipelines
+└── benches/                        # Performance benchmarks
 ```
 
-## 🔧 Development Workflow
+## Development Setup
 
-### 1. Create a Feature Branch
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/tree-sitter-perl.git
+   cd tree-sitter-perl
+   ```
 
-```bash
-git checkout -b feature/your-feature-name
-# or
-git checkout -b fix/issue-description
-```
+2. **Install dependencies**
+   ```bash
+   # Rust toolchain
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   
+   # Node.js (for tree-sitter CLI)
+   npm install -g tree-sitter-cli
+   ```
 
-### 2. Make Your Changes
+3. **Build the project**
+   ```bash
+   # Build with C scanner (default)
+   cargo xtask build
+   
+   # Build with pure Rust parser
+   cargo xtask build --features pure-rust
+   ```
 
-Follow these guidelines:
+## Testing Guidelines
 
-- **Write tests first** (TDD approach)
-- **Keep changes focused** - one feature/fix per branch
-- **Follow Rust conventions** - use `cargo fmt` and `cargo clippy`
-- **Update documentation** for API changes
-
-### 3. Test Your Changes
+### Running Tests
 
 ```bash
 # Run all tests
 cargo xtask test
 
-# Run specific test categories
-cargo test --lib                    # Unit tests
-cargo xtask corpus                  # Corpus tests
-cargo xtask highlight               # Highlight tests
+# Run specific test suite
+cargo test --features pure-rust --test comprehensive_feature_tests
 
-# Check code quality
-cargo xtask check --all
-cargo xtask fmt --check
+# Run corpus tests with diagnostics
+cargo xtask corpus --diagnose
 
-# Run benchmarks (if applicable)
-cargo xtask bench
+# Run a single test
+cargo test test_name
 ```
 
-### 4. Commit Your Changes
+### Writing Tests
 
-Use conventional commit messages:
+#### 1. Unit Tests
 
-```bash
-git commit -m "feat: add new scanner feature"
-git commit -m "fix: resolve parsing issue with heredoc"
-git commit -m "docs: update API documentation"
-git commit -m "test: add test for edge case"
-```
-
-### 5. Push and Create Pull Request
-
-```bash
-git push origin feature/your-feature-name
-```
-
-Then create a pull request on GitHub.
-
-## 📝 Code Style Guidelines
-
-### Rust Code
-
-- Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- Use `cargo fmt` for formatting
-- Address all `cargo clippy` warnings
-- Write comprehensive documentation
-
-### Test Code
-
-- Use descriptive test names
-- Follow AAA pattern (Arrange, Act, Assert)
-- Add property-based tests for complex logic
-- Include edge cases and error conditions
-
-### Documentation
-
-- Document all public APIs
-- Include usage examples
-- Update README.md for user-facing changes
-- Keep CHANGELOG.md updated
-
-## 🧪 Testing Guidelines
-
-### Unit Tests
+Add unit tests directly in the source files:
 
 ```rust
 #[cfg(test)]
@@ -134,191 +85,220 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_feature_name() {
-        // Arrange
-        let input = "test input";
-        
-        // Act
-        let result = function_under_test(input);
-        
-        // Assert
+    fn test_feature() {
+        let input = "my $var = 42;";
+        let result = parse(input);
         assert!(result.is_ok());
     }
 }
 ```
 
-### Property Tests
+#### 2. Integration Tests
+
+Create new test files in `crates/tree-sitter-perl-rs/tests/`:
 
 ```rust
-use proptest::prelude::*;
+// tests/my_feature_test.rs
+use tree_sitter_perl::PureRustParser;
 
-proptest! {
-    #[test]
-    fn test_property_name(input in "[a-zA-Z0-9_]+") {
-        // Property-based test
-        assert!(function_under_test(&input).is_ok());
-    }
-}
-```
-
-### Integration Tests
-
-```rust
 #[test]
-fn test_corpus_file() {
-    let test_cases = parse_corpus_file("test/corpus/feature").unwrap();
+fn test_complex_feature() {
+    let parser = PureRustParser::new();
+    let input = r#"
+        package MyPackage;
+        use strict;
+        my $x = 42;
+    "#;
     
-    for test_case in test_cases {
-        let result = run_corpus_test_case(&test_case);
-        assert!(result.is_ok(), "Test case failed: {}", test_case.name);
-    }
+    let result = parser.parse(input);
+    assert!(result.is_ok());
+    // Add more specific assertions
 }
 ```
 
-## 🔍 Code Review Process
+#### 3. Corpus Tests
 
-### Before Submitting
+Add corpus tests to `tree-sitter-perl/test/corpus/`:
 
-1. **Self-review** your changes
-2. **Run all tests** locally
-3. **Check code quality** with clippy and fmt
-4. **Update documentation** if needed
-5. **Test with real Perl code** if applicable
-
-### Pull Request Guidelines
-
-- **Clear title** describing the change
-- **Detailed description** of what and why
-- **Link to issues** if applicable
-- **Include test results** if relevant
-- **Screenshots** for UI changes (if applicable)
-
-### Review Checklist
-
-- [ ] Code follows Rust conventions
-- [ ] Tests are comprehensive and pass
-- [ ] Documentation is updated
-- [ ] No performance regressions
-- [ ] Error handling is appropriate
-- [ ] Security considerations addressed
-
-## 🐛 Bug Reports
-
-### Before Reporting
-
-1. **Check existing issues** for duplicates
-2. **Try the latest version** from main branch
-3. **Reproduce the issue** with minimal example
-
-### Bug Report Template
-
-```markdown
-**Description**
-Brief description of the issue
-
-**Steps to Reproduce**
-1. Step 1
-2. Step 2
-3. Step 3
-
-**Expected Behavior**
-What should happen
-
-**Actual Behavior**
-What actually happens
-
-**Environment**
-- OS: [e.g., Ubuntu 22.04]
-- Rust version: [e.g., 1.75.0]
-- tree-sitter-perl-rs version: [e.g., 0.1.0]
-
-**Additional Context**
-Any other relevant information
 ```
+==================
+Test Name Here
+==================
 
-## 💡 Feature Requests
-
-### Before Requesting
-
-1. **Check existing features** and roadmap
-2. **Consider use cases** and impact
-3. **Think about implementation** complexity
-
-### Feature Request Template
-
-```markdown
-**Problem Statement**
-What problem does this feature solve?
-
-**Proposed Solution**
-How should this feature work?
-
-**Use Cases**
-Specific examples of how this would be used
-
-**Implementation Considerations**
-Any technical considerations or alternatives
-```
-
-## 🚀 Release Process
-
-### Version Bumping
-
-We follow [Semantic Versioning](https://semver.org/):
-
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backward compatible)
-- **PATCH**: Bug fixes (backward compatible)
-
-### Release Checklist
-
-- [ ] All tests pass
-- [ ] Documentation is updated
-- [ ] CHANGELOG.md is updated
-- [ ] Version is bumped in Cargo.toml
-- [ ] Release notes are prepared
-- [ ] CI/CD pipeline passes
-
-## 🤝 Community Guidelines
-
-### Communication
-
-- **Be respectful** and inclusive
-- **Ask questions** when unsure
-- **Provide constructive feedback**
-- **Help others** when possible
-
-### Recognition
-
-Contributors will be recognized in:
-- **README.md** acknowledgments
-- **CHANGELOG.md** for significant contributions
-- **GitHub contributors** page
-
-## 📚 Resources
-
-### Documentation
-
-- [Rust Book](https://doc.rust-lang.org/book/)
-- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- [Tree-sitter Documentation](https://tree-sitter.github.io/tree-sitter/)
-
-### Tools
-
-- [cargo-edit](https://github.com/killercup/cargo-edit) - Edit Cargo.toml
-- [cargo-watch](https://github.com/watchexec/cargo-watch) - Watch for changes
-- [cargo-audit](https://github.com/RustSec/cargo-audit) - Security audit
-
-## 🆘 Getting Help
-
-- **GitHub Issues**: For bugs and feature requests
-- **GitHub Discussions**: For questions and general discussion
-- **Code Review**: Ask questions in pull request comments
-
-## 📄 License
-
-By contributing to tree-sitter-perl-rs, you agree that your contributions will be licensed under the MIT License.
+my $var = "hello";
+print $var;
 
 ---
 
-Thank you for contributing to tree-sitter-perl-rs! 🎉 
+(source_file
+  (variable_declaration
+    (scalar_variable)
+    (string))
+  (function_call
+    (identifier)
+    (scalar_variable)))
+```
+
+### Test Categories
+
+When adding tests, consider these categories:
+
+1. **Positive Tests**: Valid Perl code that should parse successfully
+2. **Negative Tests**: Invalid code that should fail with appropriate errors
+3. **Edge Cases**: Boundary conditions and unusual constructs
+4. **Performance Tests**: Large files or complex nested structures
+5. **Regression Tests**: Previously broken cases
+
+## Adding New Features
+
+### 1. Grammar Changes
+
+#### For Tree-sitter (C parser):
+1. Edit `tree-sitter-perl/grammar.js`
+2. Regenerate the parser:
+   ```bash
+   cd tree-sitter-perl
+   npx tree-sitter generate
+   ```
+
+#### For Pest (Rust parser):
+1. Edit `crates/tree-sitter-perl-rs/src/grammar.pest`
+2. Update AST nodes in `pure_rust_parser.rs`
+3. Update the `build_node` method
+
+### 2. Scanner Updates
+
+If your feature requires scanner changes:
+
+1. Identify the token type needed
+2. Update the scanner interface in `scanner/mod.rs`
+3. Implement in both C and Rust scanners
+4. Add tests for the new tokens
+
+### 3. Testing New Features
+
+1. Add unit tests for the parser changes
+2. Add integration tests showing real usage
+3. Add corpus tests for tree-sitter compatibility
+4. Run comparison tests to ensure consistency
+
+### Example: Adding a New Operator
+
+```rust
+// 1. Update grammar.pest
+operator = { 
+    // existing operators...
+    | "**"  // new exponentiation operator
+}
+
+// 2. Update AST builder
+fn build_operator(pair: Pair<Rule>) -> Node {
+    match pair.as_str() {
+        "**" => Node::new("exponentiation_operator"),
+        // other cases...
+    }
+}
+
+// 3. Add tests
+#[test]
+fn test_exponentiation() {
+    let cases = vec![
+        "2 ** 3",
+        "$x ** $y",
+        "2 ** 3 ** 4",  // right associative
+    ];
+    
+    for input in cases {
+        let result = parser.parse(input);
+        assert!(result.is_ok());
+    }
+}
+```
+
+## Code Style
+
+### Rust Code
+
+- Follow standard Rust conventions
+- Use `cargo fmt` before committing
+- Run `cargo clippy` and address warnings
+- Add documentation comments for public APIs
+
+```rust
+/// Parses a Perl source file and returns an AST.
+/// 
+/// # Arguments
+/// * `input` - The Perl source code to parse
+/// 
+/// # Returns
+/// * `Ok(Node)` - The parsed AST
+/// * `Err(ParseError)` - If parsing fails
+pub fn parse(input: &str) -> Result<Node, ParseError> {
+    // implementation
+}
+```
+
+### Commit Messages
+
+Follow conventional commits format:
+
+```
+feat: add support for heredoc syntax
+fix: handle escaped characters in strings
+test: add tests for regex patterns
+docs: update README with new features
+refactor: simplify scanner state machine
+perf: optimize string interpolation parsing
+```
+
+## Pull Request Process
+
+1. **Fork and create a branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes**
+   - Write code
+   - Add tests
+   - Update documentation
+
+3. **Run tests locally**
+   ```bash
+   cargo xtask test
+   cargo xtask check --all
+   ```
+
+4. **Create a pull request**
+   - Fill in the PR template
+   - Link related issues
+   - Describe your changes
+
+5. **Address review feedback**
+   - Make requested changes
+   - Push updates to your branch
+   - Re-request review when ready
+
+### PR Checklist
+
+- [ ] Tests pass locally
+- [ ] Code is formatted (`cargo fmt`)
+- [ ] No clippy warnings (`cargo clippy`)
+- [ ] Documentation updated if needed
+- [ ] Commit messages follow conventions
+- [ ] PR description explains the changes
+
+## Getting Help
+
+- **Issues**: Check existing issues or create a new one
+- **Discussions**: Use GitHub Discussions for questions
+- **Documentation**: See CLAUDE.md for project-specific guidance
+
+## Recognition
+
+Contributors will be recognized in:
+- The project README
+- Release notes
+- The contributors graph
+
+Thank you for contributing to tree-sitter-perl!
