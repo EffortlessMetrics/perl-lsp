@@ -15,6 +15,8 @@ pub struct HeredocDeclaration {
     pub terminator: String,
     /// Position in input where the heredoc was declared
     pub declaration_pos: usize,
+    /// Position where the declaration ends (after terminator)
+    pub declaration_end: usize,
     /// Line number of declaration
     pub declaration_line: usize,
     /// Whether the heredoc is interpolated (<<EOF vs <<'EOF')
@@ -68,7 +70,11 @@ impl<'a> HeredocScanner<'a> {
                 self.position = temp_position;
                 self.line_number = temp_line;
                 
-                if let Some(decl) = self.parse_heredoc_declaration(&chars) {
+                if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
+                    // Store the actual positions for replacement
+                    decl.declaration_pos = saved_pos;
+                    decl.declaration_end = self.position;
+                    
                     // Mark the content lines to skip
                     let content_start_line = saved_line + 1;
                     
@@ -105,11 +111,11 @@ impl<'a> HeredocScanner<'a> {
             }
         }
         
-        // Second pass: build output, skipping marked lines
+        // Second pass: build output, skipping marked lines and replacing heredocs
         let mut output = String::with_capacity(self.input.len());
         self.position = 0;
         self.line_number = 1;
-        self.heredoc_counter = 0;
+        let mut decl_index = 0;
         
         while self.position < chars.len() {
             // Skip lines marked for skipping
@@ -125,15 +131,12 @@ impl<'a> HeredocScanner<'a> {
                 continue;
             }
             
-            if self.check_heredoc_start(&chars) {
-                if let Some(decl) = self.parse_heredoc_declaration(&chars) {
-                    // Replace heredoc with placeholder
-                    output.push_str(&decl.placeholder_id);
-                } else {
-                    // Not a heredoc, just copy the <<
-                    output.push_str("<<");
-                    self.position += 2;
-                }
+            // Check if we're at a heredoc declaration
+            if decl_index < declarations.len() && self.position == declarations[decl_index].declaration_pos {
+                let decl = &declarations[decl_index];
+                output.push_str(&decl.placeholder_id);
+                self.position = decl.declaration_end;
+                decl_index += 1;
             } else {
                 // Regular character
                 let ch = chars[self.position];
@@ -148,7 +151,7 @@ impl<'a> HeredocScanner<'a> {
         (output, declarations)
     }
 
-    fn check_heredoc_start(&self, chars: &[char]) -> bool {
+    fn _check_heredoc_start(&self, chars: &[char]) -> bool {
         self.position + 1 < chars.len() 
             && chars[self.position] == '<' 
             && chars[self.position + 1] == '<'
@@ -200,10 +203,12 @@ impl<'a> HeredocScanner<'a> {
 
         self.heredoc_counter += 1;
         let placeholder_id = format!("__HEREDOC_{}__", self.heredoc_counter);
+        let declaration_end = self.position;
 
         Some(HeredocDeclaration {
             terminator,
             declaration_pos: start_pos,
+            declaration_end,
             declaration_line: self.line_number,
             interpolated,
             indented,
@@ -247,14 +252,14 @@ impl<'a> HeredocScanner<'a> {
 
 /// Phase 2: Heredoc Content Collector
 pub struct HeredocCollector<'a> {
-    input: &'a str,
+    _input: &'a str,
     lines: Vec<&'a str>,
 }
 
 impl<'a> HeredocCollector<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
-            input,
+            _input: input,
             lines: input.lines().collect(),
         }
     }
@@ -324,28 +329,15 @@ impl<'a> HeredocCollector<'a> {
 pub struct HeredocIntegrator;
 
 impl HeredocIntegrator {
-    /// Replace heredoc placeholders with actual content for final parsing
-    pub fn integrate(processed_input: &str, declarations: &[HeredocDeclaration]) -> String {
-        let mut result = processed_input.to_string();
-        
-        // Replace placeholders with quoted content
-        for decl in declarations {
-            if let Some(ref content) = decl.content {
-                // For PEG parsing, we'll represent heredocs as special string literals
-                let replacement = if decl.interpolated {
-                    format!("qq{{__HEREDOC__{}__HEREDOC__}}", escape_for_qq(content))
-                } else {
-                    format!("q{{__HEREDOC__{}__HEREDOC__}}", content)
-                };
-                result = result.replace(&decl.placeholder_id, &replacement);
-            }
-        }
-        
-        result
+    /// For now, just return the processed input with placeholders
+    /// The parser will handle the placeholders and look up content from declarations
+    pub fn integrate(processed_input: &str, _declarations: &[HeredocDeclaration]) -> String {
+        // Don't replace placeholders - let the parser handle them
+        processed_input.to_string()
     }
 }
 
-fn escape_for_qq(s: &str) -> String {
+fn _escape_for_qq(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('{', "\\{")
         .replace('}', "\\}")

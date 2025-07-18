@@ -300,13 +300,13 @@ pub enum AstNode {
 
 /// Pure Rust Perl parser implementation
 pub struct PureRustPerlParser {
-    pratt_parser: PrattParser,
+    _pratt_parser: PrattParser,
 }
 
 impl PureRustPerlParser {
     pub fn new() -> Self {
         Self {
-            pratt_parser: PrattParser::new(),
+            _pratt_parser: PrattParser::new(),
         }
     }
 
@@ -1792,7 +1792,7 @@ impl PureRustPerlParser {
         Ok(Some(result))
     }
     
-    fn apply_precedence(&self, left: AstNode, op: Arc<str>, right: AstNode, _prec: u8) -> AstNode {
+    fn _apply_precedence(&self, left: AstNode, op: Arc<str>, right: AstNode, _prec: u8) -> AstNode {
         // For now, simple left-associative. Full Pratt parser implementation would go here
         AstNode::BinaryOp {
             op,
@@ -2041,14 +2041,6 @@ impl PureRustPerlParser {
             }
             AstNode::RequireStatement { module } => {
                 format!("(require_statement require (package {}) ;)", module)
-            }
-            AstNode::Regex { pattern, flags, named_groups } => {
-                let groups_str = if !named_groups.is_empty() {
-                    format!(" (named_groups {})", named_groups.join(" "))
-                } else {
-                    String::new()
-                };
-                format!("(regex {} {}{})", pattern, flags, groups_str)
             }
             AstNode::Substitution { pattern, replacement, flags } => {
                 if flags.is_empty() {

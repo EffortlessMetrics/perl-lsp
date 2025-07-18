@@ -39,9 +39,9 @@ pub struct StatefulPerlParser {
 }
 
 #[derive(Debug, Clone)]
-struct FormatInfo {
+pub struct FormatInfo {
     name: String,
-    start_line: usize,
+    _start_line: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -182,7 +182,7 @@ impl StatefulPerlParser {
             
             Some(FormatInfo {
                 name,
-                start_line: 0, // Not used in current implementation
+                _start_line: 0, // Not used in current implementation
             })
         } else {
             None
