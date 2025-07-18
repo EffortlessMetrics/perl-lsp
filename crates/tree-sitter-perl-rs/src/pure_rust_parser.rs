@@ -1173,6 +1173,14 @@ impl PureRustPerlParser {
                     Ok(Some(AstNode::Regex { pattern: Arc::from(""), flags: Arc::from(""), named_groups: Vec::new() }))
                 }
             }
+            Rule::substitution => {
+                // For now, just return a placeholder that shows it was recognized
+                Ok(Some(AstNode::String(Arc::from("(substitution)"))))
+            }
+            Rule::transliteration => {
+                // For now, just return a placeholder
+                Ok(Some(AstNode::String(Arc::from("(transliteration)"))))
+            }
             Rule::for_statement => {
                 let inner = pair.into_inner();
                 let label = None; // TODO: handle label if present
