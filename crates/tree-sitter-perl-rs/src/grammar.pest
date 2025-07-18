@@ -345,7 +345,7 @@ additive_op = { "+" | "-" | "." }
 multiplicative_expression = {
     exponential_expression ~ (multiplicative_op ~ exponential_expression)*
 }
-multiplicative_op = { "*" | "/" | "%" | "x" }
+multiplicative_op = { "*" | "/" | "÷" | "%" | "x" }
 
 exponential_expression = {
     unary_expression ~ (exponential_op ~ unary_expression)*
@@ -673,7 +673,7 @@ regex = {
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
 qr_regex = { 
-    "qr" ~ (
+    ("qr" | "ǫr") ~ (
         "/" ~ qr_slash_pattern ~ "/" |
         "!" ~ qr_exclaim_pattern ~ "!" |
         "#" ~ qr_hash_pattern ~ "#" |
@@ -728,14 +728,14 @@ regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 
 substitution = {
-    "s" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
+    ("s" | "ṡ") ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
 }
 sub_pattern = @{ (!delimiter ~ (regex_escape | regex_group | ANY))* }
 
 replacement = @{ (!delimiter ~ ANY)* }
 
 transliteration = {
-    ("tr" | "y") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?
+    ("tr" | "ṫr" | "y" | "ẏ") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?
 }
 
 search_list = @{ (!delimiter ~ ANY)* }

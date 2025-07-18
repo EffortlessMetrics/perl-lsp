@@ -1,0 +1,241 @@
+use std::sync::Arc;
+use crate::perl_lexer::{PerlLexer, TokenType};
+
+/// Adapter to use PerlLexer with Pest parser
+/// This allows us to pre-tokenize the slash ambiguities
+pub struct LexerAdapter;
+
+impl LexerAdapter {
+    /// Pre-process Perl source to disambiguate slashes
+    /// Returns a modified source where:
+    /// - Division operators become `÷` (U+00F7)
+    /// - Regex matches stay as `/pattern/`
+    /// - Substitutions become `ṡ/pat/repl/` (U+1E61)
+    /// - Transliterations become `ṫr/src/dst/` (U+1E6B)
+    pub fn preprocess(input: &str) -> String {
+        let mut lexer = PerlLexer::new(input);
+        let mut result = String::with_capacity(input.len() * 2);
+        let mut last_end = 0;
+        
+        while let Some(token) = lexer.next_token() {
+            // Add any text between tokens
+            if token.start > last_end {
+                result.push_str(&input[last_end..token.start]);
+            }
+            
+            match token.token_type {
+                TokenType::EOF => break,
+                TokenType::Division => {
+                    // Replace division with a unique character
+                    result.push('÷');
+                }
+                TokenType::Substitution => {
+                    // Mark substitution with special prefix
+                    result.push('ṡ');
+                    result.push_str(&token.text[1..]); // Skip original 's'
+                }
+                TokenType::Transliteration => {
+                    // Mark transliteration
+                    if token.text.starts_with("tr") {
+                        result.push('ṫ');
+                        result.push_str(&token.text[1..]); // Skip 't' from 'tr'
+                    } else {
+                        result.push('ẏ'); // For y///
+                        result.push_str(&token.text[1..]); // Skip 'y'
+                    }
+                }
+                TokenType::QuoteRegex => {
+                    // Mark qr//
+                    result.push('ǫ'); // Special q
+                    result.push_str(&token.text[1..]); // Skip original 'q'
+                }
+                _ => {
+                    // Keep other tokens as-is
+                    result.push_str(&token.text);
+                }
+            }
+            
+            last_end = token.end;
+        }
+        
+        // Add any remaining text
+        if last_end < input.len() {
+            result.push_str(&input[last_end..]);
+        }
+        
+        result
+    }
+    
+    /// Post-process the parsed AST to restore original tokens
+    pub fn postprocess(node: &mut crate::pure_rust_parser::AstNode) {
+        use crate::pure_rust_parser::AstNode;
+        
+        match node {
+            AstNode::BinaryOp { op, left, right } => {
+                if op == "÷" {
+                    *op = Arc::from("/");
+                }
+                Self::postprocess(left);
+                Self::postprocess(right);
+            }
+            AstNode::Substitution { .. } => {
+                // Already handled correctly
+            }
+            AstNode::Transliteration { .. } => {
+                // Already handled correctly
+            }
+            AstNode::Regex { .. } => {
+                // Already handled correctly
+            }
+            AstNode::Block(nodes) | 
+            AstNode::List(nodes) |
+            AstNode::ClassDeclaration { body: nodes, .. } => {
+                for node in nodes {
+                    Self::postprocess(node);
+                }
+            }
+            AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+                Self::postprocess(condition);
+                Self::postprocess(then_block);
+                for (cond, block) in elsif_clauses {
+                    Self::postprocess(cond);
+                    Self::postprocess(block);
+                }
+                if let Some(block) = else_block {
+                    Self::postprocess(block);
+                }
+            }
+            AstNode::UnlessStatement { condition, block, else_block } => {
+                Self::postprocess(condition);
+                Self::postprocess(block);
+                if let Some(else_b) = else_block {
+                    Self::postprocess(else_b);
+                }
+            }
+            AstNode::WhileStatement { condition, block, .. } => {
+                Self::postprocess(condition);
+                Self::postprocess(block);
+            }
+            AstNode::UntilStatement { condition, block, .. } => {
+                Self::postprocess(condition);
+                Self::postprocess(block);
+            }
+            AstNode::ForStatement { variable, list, block, .. } => {
+                if let Some(v) = variable {
+                    Self::postprocess(v);
+                }
+                Self::postprocess(list);
+                Self::postprocess(block);
+            }
+            AstNode::ForeachStatement { variable, list, block, .. } => {
+                if let Some(v) = variable {
+                    Self::postprocess(v);
+                }
+                Self::postprocess(list);
+                Self::postprocess(block);
+            }
+            AstNode::ArrayAccess { array, index } |
+            AstNode::HashAccess { hash: array, key: index } => {
+                Self::postprocess(array);
+                Self::postprocess(index);
+            }
+            AstNode::Assignment { target, value, .. } => {
+                Self::postprocess(target);
+                Self::postprocess(value);
+            }
+            AstNode::FunctionCall { function, args } => {
+                Self::postprocess(function);
+                for arg in args {
+                    Self::postprocess(arg);
+                }
+            }
+            AstNode::UnaryOp { operand, .. } => {
+                Self::postprocess(operand);
+            }
+            AstNode::TernaryExpression { condition, true_expr, false_expr } => {
+                Self::postprocess(condition);
+                Self::postprocess(true_expr);
+                Self::postprocess(false_expr);
+            }
+            AstNode::SubDeclaration { body, .. } |
+            AstNode::AnonSub { body, .. } => {
+                Self::postprocess(body);
+            }
+            AstNode::MethodCall { object, args, .. } => {
+                Self::postprocess(object);
+                for arg in args {
+                    Self::postprocess(arg);
+                }
+            }
+            AstNode::ReturnStatement(expr) => {
+                if let Some(e) = expr {
+                    Self::postprocess(e);
+                }
+            }
+            AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
+                Self::postprocess(try_block);
+                for (_, block) in catch_clauses {
+                    Self::postprocess(block);
+                }
+                if let Some(block) = finally_block {
+                    Self::postprocess(block);
+                }
+            }
+            AstNode::DeferStatement(block) => {
+                Self::postprocess(block);
+            }
+            AstNode::MethodDeclaration { body, .. } => {
+                Self::postprocess(body);
+            }
+            AstNode::FieldDeclaration { default, .. } => {
+                if let Some(d) = default {
+                    Self::postprocess(d);
+                }
+            }
+            _ => {
+                // Other nodes don't need postprocessing
+            }
+        }
+    }
+}
+
+/// Modified grammar rules to handle preprocessed tokens
+pub const PREPROCESSED_GRAMMAR: &str = r#"
+// Division operator (was /)
+division_op = { "÷" }
+
+// Substitution (was s///)
+substitution_op = { "ṡ" }
+
+// Transliteration (was tr/// or y///)
+transliteration_op = { "ṫ" | "ẏ" }
+
+// Quote regex (was qr//)
+quote_regex_op = { "ǫ" }
+"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_preprocessing() {
+        // Test division vs regex
+        let input = "x / 2 =~ /foo/";
+        let processed = LexerAdapter::preprocess(input);
+        assert!(processed.contains("÷"));
+        assert!(processed.contains("/foo/"));
+        
+        // Test substitution
+        let input = "s/foo/bar/g";
+        let processed = LexerAdapter::preprocess(input);
+        assert!(processed.starts_with("ṡ"));
+        
+        // Test complex case
+        let input = "1/ /abc/ + s{x}{y}";
+        let processed = LexerAdapter::preprocess(input);
+        assert!(processed.contains("1÷"));
+        assert!(processed.contains("/abc/"));
+        assert!(processed.contains("ṡ{x}{y}"));
+    }
+}
