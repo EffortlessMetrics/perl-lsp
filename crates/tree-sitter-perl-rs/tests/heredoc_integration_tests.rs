@@ -13,6 +13,9 @@ print $text;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
+        if let Err(ref e) = result {
+            eprintln!("Parse error: {:?}", e);
+        }
         assert!(result.is_ok(), "Failed to parse basic heredoc");
         
         let sexp = parser.parse_to_sexp(input).unwrap();
