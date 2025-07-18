@@ -5,7 +5,8 @@
 [![Coverage](.github/badges/coverage.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
 [![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
-[![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
+[![Documentation](https://docs.
+rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
