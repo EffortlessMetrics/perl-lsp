@@ -9,6 +9,7 @@ statements = { statement+ }
 
 statement = { 
     sub_declaration
+    | format_declaration
     | package_declaration
     | use_statement
     | require_statement
@@ -177,6 +178,27 @@ attributes = { ":" ~ attribute_list }
 attribute_list = { attribute ~ (":" ~ attribute)* }
 attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
+
+// Format declarations
+format_declaration = {
+    "format" ~ format_name? ~ "=" ~ NEWLINE ~
+    format_lines ~
+    format_end
+}
+
+format_name = { identifier | filehandle }
+filehandle = { 
+    "STDOUT" | "STDERR" | "STDIN" | "ARGV" | "DATA" | 
+    "ARGVOUT" | identifier
+}
+
+format_lines = { format_line* }
+
+format_line = { 
+    !format_end ~ (!NEWLINE ~ ANY)* ~ NEWLINE
+}
+
+format_end = { "." ~ (NEWLINE | EOI) }
 
 // Packages and Modules
 package_declaration = {
@@ -537,7 +559,7 @@ identifier = @{
 reserved_word = { 
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
     "while" | "until" | "for" | "foreach" | "return" | "last" | "next" | "redo" |
-    "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q"
+    "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" | "format"
 }
 
 // Special identifiers that are only reserved in specific contexts
@@ -650,7 +672,6 @@ glob = { "<" ~ glob_pattern ~ ">" }
 glob_pattern = @{ (!">'" ~ ANY)* }
 
 readline = { "<" ~ filehandle? ~ ">" }
-filehandle = { identifier | scalar_variable }
 
 qw_list = { 
     "qw" ~ (

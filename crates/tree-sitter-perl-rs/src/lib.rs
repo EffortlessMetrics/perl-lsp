@@ -59,6 +59,9 @@ pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(test, feature = "pure-rust"))]
+mod test_format;
+
 use tree_sitter::{Language, Parser};
 
 // External C functions from the generated parser
