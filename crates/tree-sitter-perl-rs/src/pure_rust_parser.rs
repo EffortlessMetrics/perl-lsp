@@ -167,6 +167,7 @@ pub enum AstNode {
     Number(Arc<str>),
     String(Arc<str>),
     Identifier(Arc<str>),
+    SpecialLiteral(Arc<str>),
     Bareword(Arc<str>),
     EmptyExpression,
     Regex {
@@ -266,6 +267,35 @@ pub enum AstNode {
     
     // POD
     Pod(Arc<str>),
+    
+    // Modern Perl features
+    TryCatch {
+        try_block: Box<AstNode>,
+        catch_clauses: Vec<(Option<Arc<str>>, AstNode)>, // (parameter, block)
+        finally_block: Option<Box<AstNode>>,
+    },
+    DeferStatement(Box<AstNode>),
+    ClassDeclaration {
+        name: Arc<str>,
+        version: Option<Arc<str>>,
+        superclass: Option<Arc<str>>,
+        body: Vec<AstNode>,
+    },
+    FieldDeclaration {
+        name: Arc<str>,
+        attributes: Vec<Arc<str>>,
+        default: Option<Box<AstNode>>,
+    },
+    MethodDeclaration {
+        name: Arc<str>,
+        signature: Option<Arc<str>>,
+        attributes: Vec<Arc<str>>,
+        body: Box<AstNode>,
+    },
+    RoleDeclaration {
+        name: Arc<str>,
+        body: Box<AstNode>,
+    },
 }
 
 /// Pure Rust Perl parser implementation
@@ -753,6 +783,9 @@ impl PureRustPerlParser {
             Rule::logical_or_expression => {
                 self.build_binary_expression(pair, Rule::logical_or_expression)
             }
+            Rule::logical_xor_expression => {
+                self.build_binary_expression(pair, Rule::logical_xor_expression)
+            }
             Rule::defined_or_expression => {
                 self.build_binary_expression(pair, Rule::defined_or_expression)
             }
@@ -808,7 +841,7 @@ impl PureRustPerlParser {
                         // No unary operator, just pass through
                         self.build_node(first)
                     }
-                    _ => {
+                    Rule::file_test_operator | _ => {
                         // It's an operator
                         let op = Arc::from(first.as_str());
                         if let Some(next_pair) = inner.next() {
@@ -914,6 +947,9 @@ impl PureRustPerlParser {
             Rule::identifier => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
             }
+            Rule::special_literal => {
+                Ok(Some(AstNode::SpecialLiteral(Arc::from(pair.as_str()))))
+            }
             Rule::string => {
                 // string can be single or double quoted, need to check inner
                 let inner_pairs: Vec<_> = pair.into_inner().collect();
@@ -971,6 +1007,10 @@ impl PureRustPerlParser {
             }
             Rule::qx_string => {
                 // qx strings are for command execution
+                Ok(Some(AstNode::QxString(Arc::from(pair.as_str()))))
+            }
+            Rule::backtick_string => {
+                // Backtick strings are also for command execution
                 Ok(Some(AstNode::QxString(Arc::from(pair.as_str()))))
             }
             Rule::heredoc => {
@@ -1132,6 +1172,148 @@ impl PureRustPerlParser {
                     }
                 };
                 Ok(Some(AstNode::GotoStatement { target }))
+            }
+            Rule::try_catch_statement => {
+                let mut inner = pair.into_inner();
+                let try_block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let mut catch_clauses = Vec::new();
+                let mut finally_block = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::catch_clause => {
+                            let mut catch_inner = p.into_inner();
+                            let mut param = None;
+                            let mut block = None;
+                            
+                            for cp in catch_inner {
+                                match cp.as_rule() {
+                                    Rule::catch_parameter => {
+                                        param = Some(Arc::from(cp.as_str()));
+                                    }
+                                    Rule::block => {
+                                        block = Some(self.build_node(cp)?.unwrap());
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            
+                            if let Some(b) = block {
+                                catch_clauses.push((param, b));
+                            }
+                        }
+                        Rule::finally_clause => {
+                            let mut finally_inner = p.into_inner();
+                            if let Some(block) = finally_inner.next() {
+                                finally_block = Some(Box::new(self.build_node(block)?.unwrap()));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::TryCatch {
+                    try_block,
+                    catch_clauses,
+                    finally_block,
+                }))
+            }
+            Rule::defer_statement => {
+                let mut inner = pair.into_inner();
+                let block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                Ok(Some(AstNode::DeferStatement(block)))
+            }
+            Rule::class_declaration => {
+                let mut inner = pair.into_inner();
+                let name = Arc::from(inner.next().unwrap().as_str());
+                let mut version = None;
+                let mut superclass = None;
+                let mut body = Vec::new();
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::version => {
+                            version = Some(Arc::from(p.as_str()));
+                        }
+                        Rule::superclass => {
+                            superclass = Some(Arc::from(p.into_inner().next().unwrap().as_str()));
+                        }
+                        Rule::class_body => {
+                            for member in p.into_inner() {
+                                if let Some(node) = self.build_node(member)? {
+                                    body.push(node);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::ClassDeclaration {
+                    name,
+                    version,
+                    superclass,
+                    body,
+                }))
+            }
+            Rule::method_declaration => {
+                let mut inner = pair.into_inner();
+                let name = Arc::from(inner.next().unwrap().as_str());
+                let mut signature = None;
+                let mut attributes = Vec::new();
+                let mut body = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::signature => {
+                            signature = Some(Arc::from(p.as_str()));
+                        }
+                        Rule::attributes => {
+                            for attr in p.into_inner() {
+                                attributes.push(Arc::from(attr.as_str()));
+                            }
+                        }
+                        Rule::block => {
+                            body = Some(Box::new(self.build_node(p)?.unwrap()));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::MethodDeclaration {
+                    name,
+                    signature,
+                    attributes,
+                    body: body.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
+                }))
+            }
+            Rule::field_declaration => {
+                let mut inner = pair.into_inner();
+                let name = Arc::from(inner.next().unwrap().as_str());
+                let mut attributes = Vec::new();
+                let mut default = None;
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::field_attributes => {
+                            for attr in p.into_inner() {
+                                attributes.push(Arc::from(attr.as_str()));
+                            }
+                        }
+                        Rule::default_value => {
+                            if let Some(expr) = p.into_inner().next() {
+                                default = Some(Box::new(self.build_node(expr)?.unwrap()));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::FieldDeclaration {
+                    name,
+                    attributes,
+                    default,
+                }))
             }
             Rule::return_statement => {
                 let mut inner = pair.into_inner();
@@ -1770,6 +1952,9 @@ impl PureRustPerlParser {
             AstNode::Identifier(name) => {
                 format!("(identifier {})", name)
             }
+            AstNode::SpecialLiteral(name) => {
+                format!("(special_literal {})", name)
+            }
             AstNode::EmptyExpression => {
                 "(empty_expression)".to_string()
             }
@@ -1913,12 +2098,76 @@ impl PureRustPerlParser {
             AstNode::Glob(pattern) => {
                 format!("(glob <{}>)", pattern)
             }
+            AstNode::QqString(content) => {
+                format!("(string_literal {})", content)
+            }
+            AstNode::QxString(content) => {
+                format!("(command_substitution {})", content)
+            }
             AstNode::Readline { filehandle } => {
                 if let Some(fh) = filehandle {
                     format!("(readline <{}>)", fh)
                 } else {
                     "(readline <>)".to_string()
                 }
+            }
+            AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
+                let mut result = format!("(try_catch_statement {}", Self::node_to_sexp(try_block));
+                for (param, block) in catch_clauses {
+                    if let Some(p) = param {
+                        result.push_str(&format!(" (catch ({}) {})", p, Self::node_to_sexp(block)));
+                    } else {
+                        result.push_str(&format!(" (catch {})", Self::node_to_sexp(block)));
+                    }
+                }
+                if let Some(finally) = finally_block {
+                    result.push_str(&format!(" (finally {})", Self::node_to_sexp(finally)));
+                }
+                result.push(')');
+                result
+            }
+            AstNode::DeferStatement(block) => {
+                format!("(defer_statement {})", Self::node_to_sexp(block))
+            }
+            AstNode::ClassDeclaration { name, version, superclass, body } => {
+                let mut result = format!("(class_declaration {}", name);
+                if let Some(v) = version {
+                    result.push_str(&format!(" (version {})", v));
+                }
+                if let Some(s) = superclass {
+                    result.push_str(&format!(" (superclass {})", s));
+                }
+                for member in body {
+                    result.push_str(&format!(" {}", Self::node_to_sexp(member)));
+                }
+                result.push(')');
+                result
+            }
+            AstNode::MethodDeclaration { name, signature, attributes, body } => {
+                let mut result = format!("(method_declaration {}", name);
+                if let Some(sig) = signature {
+                    result.push_str(&format!(" (signature {})", sig));
+                }
+                if !attributes.is_empty() {
+                    result.push_str(&format!(" (attributes {})", attributes.join(" ")));
+                }
+                result.push_str(&format!(" {}", Self::node_to_sexp(body)));
+                result.push(')');
+                result
+            }
+            AstNode::FieldDeclaration { name, attributes, default } => {
+                let mut result = format!("(field_declaration {}", name);
+                if !attributes.is_empty() {
+                    result.push_str(&format!(" (attributes {})", attributes.join(" ")));
+                }
+                if let Some(d) = default {
+                    result.push_str(&format!(" (default {})", Self::node_to_sexp(d)));
+                }
+                result.push(')');
+                result
+            }
+            AstNode::RoleDeclaration { name, body } => {
+                format!("(role_declaration {} {})", name, Self::node_to_sexp(body))
             }
             _ => format!("(unhandled_node {:?})", node),
         }

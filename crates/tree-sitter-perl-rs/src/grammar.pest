@@ -49,6 +49,10 @@ statement = {
     | untie_statement
     | tied_statement
     | labeled_block
+    | try_catch_statement
+    | defer_statement
+    | class_declaration
+    | method_declaration
     | declaration_statement
     | expression_statement 
     | block_statement
@@ -78,6 +82,54 @@ untie_statement = { "untie" ~ variable ~ semicolon? }
 tied_statement = { "tied" ~ "(" ~ variable ~ ")" ~ semicolon? }
 
 labeled_block = { label ~ block }
+
+// Modern Perl features
+try_catch_statement = {
+    "try" ~ block ~ catch_clause* ~ finally_clause?
+}
+
+catch_clause = {
+    "catch" ~ ("(" ~ catch_parameter ~ ")")? ~ block
+}
+
+catch_parameter = { variable }
+
+finally_clause = {
+    "finally" ~ block
+}
+
+defer_statement = {
+    "defer" ~ block
+}
+
+class_declaration = {
+    "class" ~ identifier ~ version? ~ superclass? ~ "{" ~ class_body ~ "}"
+}
+
+superclass = { ":" ~ identifier }
+
+class_body = { class_member* }
+
+class_member = {
+    field_declaration
+    | method_declaration
+    | role_declaration
+}
+
+field_declaration = {
+    "field" ~ variable ~ field_attributes? ~ default_value? ~ ";"
+}
+
+field_attributes = { ":" ~ field_attribute ~ (":" ~ field_attribute)* }
+field_attribute = { "param" | "reader" | "writer" | identifier }
+
+method_declaration = {
+    "method" ~ identifier ~ signature? ~ attributes? ~ block
+}
+
+role_declaration = {
+    "role" ~ identifier ~ block
+}
 
 // Declarations
 declaration = {
@@ -255,8 +307,10 @@ ternary_expression = {
     logical_or_expression ~ ("?" ~ expression ~ ":" ~ expression)?
 }
 
-logical_or_expression = { defined_or_expression ~ (logical_or_op ~ defined_or_expression)* }
+logical_or_expression = { logical_xor_expression ~ (logical_or_op ~ logical_xor_expression)* }
 logical_or_op = { "||" | "or" }
+logical_xor_expression = { defined_or_expression ~ (logical_xor_op ~ defined_or_expression)* }
+logical_xor_op = { "^^" | "xor" }
 defined_or_expression = { logical_and_expression ~ ("//" ~ logical_and_expression)* }
 logical_and_expression = { equality_expression ~ (logical_and_op ~ equality_expression)* }
 logical_and_op = { "&&" | "and" }
@@ -300,8 +354,14 @@ exponential_op = { "**" }
 
 unary_expression = {
     ("!" | "-" | "+" | "~" | "~." | "not")+ ~ unary_expression
+    | file_test_operator ~ unary_expression
     | reference
     | postfix_expression
+}
+
+file_test_operator = @{
+    "-" ~ ("r" | "w" | "x" | "o" | "R" | "W" | "X" | "O" | "e" | "z" | "s" | "f" | "d" | 
+           "l" | "p" | "S" | "b" | "c" | "t" | "u" | "g" | "k" | "T" | "B" | "M" | "A" | "C")
 }
 
 postfix_expression = {
@@ -392,7 +452,12 @@ list_element = { expression }
 literal = {
     number
     | string
+    | special_literal
     | bareword
+}
+
+special_literal = {
+    "__FILE__" | "__LINE__" | "__PACKAGE__" | "__SUB__"
 }
 
 number = @{
@@ -590,7 +655,8 @@ reserved_word = {
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
     "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
     "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" |
-    "tie" | "untie" | "tied"
+    "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" | 
+    "field" | "role"
 }
 
 // Special identifiers that are only reserved in specific contexts
