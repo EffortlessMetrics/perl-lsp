@@ -47,6 +47,9 @@ pub mod context_sensitive;
 #[cfg(feature = "pure-rust")]
 pub mod enhanced_parser;
 
+#[cfg(feature = "pure-rust")]
+pub mod pratt_parser;
+
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 
