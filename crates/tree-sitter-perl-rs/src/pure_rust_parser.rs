@@ -182,6 +182,17 @@ pub enum AstNode {
     NextStatement {
         label: Option<String>,
     },
+    TieStatement {
+        variable: Box<AstNode>,
+        class: Box<AstNode>,
+        args: Vec<AstNode>,
+    },
+    UntieStatement {
+        variable: Box<AstNode>,
+    },
+    TiedExpression {
+        variable: Box<AstNode>,
+    },
     
     // Other
     Comment(String),
@@ -524,6 +535,40 @@ impl PureRustPerlParser {
                     then_block,
                     elsif_clauses,
                     else_block,
+                }))
+            }
+            Rule::tie_statement => {
+                let mut inner = pair.into_inner();
+                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let class = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let mut args = Vec::new();
+                
+                for arg in inner {
+                    if let Some(node) = self.build_node(arg)? {
+                        args.push(node);
+                    }
+                }
+                
+                Ok(Some(AstNode::TieStatement {
+                    variable,
+                    class,
+                    args,
+                }))
+            }
+            Rule::untie_statement => {
+                let mut inner = pair.into_inner();
+                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                
+                Ok(Some(AstNode::UntieStatement {
+                    variable,
+                }))
+            }
+            Rule::tied_statement => {
+                let mut inner = pair.into_inner();
+                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                
+                Ok(Some(AstNode::TiedExpression {
+                    variable,
                 }))
             }
             Rule::given_statement => {
@@ -1180,6 +1225,16 @@ impl PureRustPerlParser {
                 }
                 result.push(')');
                 result
+            }
+            AstNode::TieStatement { variable, class, args } => {
+                let args_str = args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" ");
+                format!("(tie_statement {} {} {})", Self::node_to_sexp(variable), Self::node_to_sexp(class), args_str)
+            }
+            AstNode::UntieStatement { variable } => {
+                format!("(untie_statement {})", Self::node_to_sexp(variable))
+            }
+            AstNode::TiedExpression { variable } => {
+                format!("(tied_expression {})", Self::node_to_sexp(variable))
             }
             AstNode::PostfixDereference { expr, deref_type } => {
                 format!("(postfix_deref {} {})", Self::node_to_sexp(expr), deref_type)
