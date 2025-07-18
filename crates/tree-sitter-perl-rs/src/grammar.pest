@@ -352,9 +352,9 @@ primary_expression = {
     | "(" ~ expression ~ ")"
     | block
     | anonymous_sub
-    | regex
     | substitution
     | transliteration
+    | regex
     | heredoc
     | glob
     | readline
@@ -662,7 +662,7 @@ regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 
 substitution = {
-    "s" ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
+    "s" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
 }
 sub_pattern = @{ (!delimiter ~ (regex_escape | regex_group | ANY))* }
 
