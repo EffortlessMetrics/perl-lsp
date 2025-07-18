@@ -1,9 +1,9 @@
 # tree-sitter-perl
 
-[![CI](https://github.com/yourusername/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/tree-sitter-perl/actions/workflows/ci.yml)
-[![Tests](.github/badges/tests.svg)](https://github.com/yourusername/tree-sitter-perl/actions)
-[![Coverage](.github/badges/coverage.svg)](https://github.com/yourusername/tree-sitter-perl/actions)
-[![Benchmarks](https://github.com/yourusername/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/yourusername/tree-sitter-perl/actions/workflows/benchmark.yml)
+[![CI](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml)
+[![Tests](.github/badges/tests.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
+[![Coverage](.github/badges/coverage.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
+[![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
 [![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
