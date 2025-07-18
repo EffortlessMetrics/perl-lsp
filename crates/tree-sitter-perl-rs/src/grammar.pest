@@ -380,7 +380,17 @@ double_string_chars = @{ (!( "\"" | "$" | "@" ) ~ ANY)+ | "$" ~ !(ASCII_ALPHANUM
 backtick_string = @{ "`" ~ backtick_content ~ "`" }
 backtick_content = @{ (!"`" ~ ANY)* }
 
-q_string = { "q" ~ delimiter ~ q_string_content ~ delimiter }
+// Quote-like operators with proper nested delimiter support
+q_string = { 
+    "q" ~ (
+        ("(" ~ q_paren_content ~ ")") |
+        ("[" ~ q_bracket_content ~ "]") |
+        ("{" ~ q_brace_content ~ "}") |
+        ("<" ~ q_angle_content ~ ">") |
+        (q_delimiter ~ q_delimited_content ~ q_delimiter)
+    )
+}
+
 qq_string = { 
     "qq" ~ (
         ("(" ~ qq_paren_content ~ ")") |
@@ -390,18 +400,82 @@ qq_string = {
         (qq_delimiter ~ qq_delimited_content ~ qq_delimiter)
     )
 }
-qq_paren_content = @{ (!")" ~ ANY)* }
-qq_bracket_content = @{ (!"]" ~ ANY)* }
-qq_brace_content = @{ (!"}" ~ ANY)* }
-qq_angle_content = @{ (!">" ~ ANY)* }
-qq_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
-qq_delimited_content = @{ (!qq_delimiter ~ ANY)* }
-qx_string = { "qx" ~ delimiter ~ qx_string_content ~ delimiter }
 
-delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
-q_string_content = @{ (!delimiter ~ ANY)* }
-qq_string_content = @{ (!delimiter ~ ANY)* }
-qx_string_content = @{ (!delimiter ~ ANY)* }
+qx_string = { 
+    "qx" ~ (
+        ("(" ~ qx_paren_content ~ ")") |
+        ("[" ~ qx_bracket_content ~ "]") |
+        ("{" ~ qx_brace_content ~ "}") |
+        ("<" ~ qx_angle_content ~ ">") |
+        (qx_delimiter ~ qx_delimited_content ~ qx_delimiter)
+    )
+}
+
+// Content rules for q strings (no interpolation, but handle nesting)
+q_paren_content = { q_paren_part* }
+q_paren_part = { q_escape_sequence | q_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+q_nested_parens = { "(" ~ q_paren_content ~ ")" }
+
+q_bracket_content = { q_bracket_part* }
+q_bracket_part = { q_escape_sequence | q_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+q_nested_brackets = { "[" ~ q_bracket_content ~ "]" }
+
+q_brace_content = { q_brace_part* }
+q_brace_part = { q_escape_sequence | q_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+q_nested_braces = { "{" ~ q_brace_content ~ "}" }
+
+q_angle_content = { q_angle_part* }
+q_angle_part = { q_escape_sequence | q_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+q_nested_angles = { "<" ~ q_angle_content ~ ">" }
+
+// For non-paired delimiters
+q_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
+q_delimited_content = @{ (!q_delimiter ~ (q_escape_sequence | ANY))* }
+q_escape_sequence = @{ "\\" ~ ANY }
+
+// Content rules for qq strings (with interpolation and nesting)
+qq_paren_content = { qq_paren_part* }
+qq_paren_part = { interpolation | qq_escape_sequence | qq_nested_parens | (!(")" | "\\" | "(" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qq_nested_parens = { "(" ~ qq_paren_content ~ ")" }
+
+qq_bracket_content = { qq_bracket_part* }
+qq_bracket_part = { interpolation | qq_escape_sequence | qq_nested_brackets | (!("]" | "\\" | "[" | "$" | "@") ~ ANY) | ("$" ~ !(ASCII_ALPHANUMERIC | "_" | "{")) | ("@" ~ !(ASCII_ALPHANUMERIC | "_" | "{")) }
+qq_nested_brackets = { "[" ~ qq_bracket_content ~ "]" }
+
+qq_brace_content = { qq_brace_part* }
+qq_brace_part = { interpolation | qq_escape_sequence | qq_nested_braces | (!("}" | "\\" | "{" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qq_nested_braces = { "{" ~ qq_brace_content ~ "}" }
+
+qq_angle_content = { qq_angle_part* }
+qq_angle_part = { interpolation | qq_escape_sequence | qq_nested_angles | (!(">" | "\\" | "<" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qq_nested_angles = { "<" ~ qq_angle_content ~ ">" }
+
+// For non-paired delimiters
+qq_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
+qq_delimited_content = @{ (!qq_delimiter ~ (qq_escape_sequence | ANY))* }
+qq_escape_sequence = @{ "\\" ~ ANY }
+
+// Content rules for qx strings (command execution, with interpolation and nesting)
+qx_paren_content = { qx_paren_part* }
+qx_paren_part = { interpolation | qx_escape_sequence | qx_nested_parens | (!(")" | "\\" | "(" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qx_nested_parens = { "(" ~ qx_paren_content ~ ")" }
+
+qx_bracket_content = { qx_bracket_part* }
+qx_bracket_part = { interpolation | qx_escape_sequence | qx_nested_brackets | (!("]" | "\\" | "[" | "$" | "@") ~ ANY) | ("$" ~ !(ASCII_ALPHANUMERIC | "_" | "{")) | ("@" ~ !(ASCII_ALPHANUMERIC | "_" | "{")) }
+qx_nested_brackets = { "[" ~ qx_bracket_content ~ "]" }
+
+qx_brace_content = { qx_brace_part* }
+qx_brace_part = { interpolation | qx_escape_sequence | qx_nested_braces | (!("}" | "\\" | "{" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qx_nested_braces = { "{" ~ qx_brace_content ~ "}" }
+
+qx_angle_content = { qx_angle_part* }
+qx_angle_part = { interpolation | qx_escape_sequence | qx_nested_angles | (!(">" | "\\" | "<" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
+qx_nested_angles = { "<" ~ qx_angle_content ~ ">" }
+
+// For non-paired delimiters
+qx_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
+qx_delimited_content = @{ (!qx_delimiter ~ (qx_escape_sequence | ANY))* }
+qx_escape_sequence = @{ "\\" ~ ANY }
 
 escape_sequence = @{ "\\" ~ ANY }
 interpolation = { 
@@ -480,14 +554,38 @@ regex = {
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
 qr_regex = { 
-    "qr" ~ ("/" ~ qr_slash_pattern ~ "/" | 
-            "!" ~ qr_exclaim_pattern ~ "!" |
-            "#" ~ qr_hash_pattern ~ "#" |
-            regex_delimiter ~ qr_regex_pattern ~ regex_delimiter) ~ regex_flags? 
+    "qr" ~ (
+        "/" ~ qr_slash_pattern ~ "/" |
+        "!" ~ qr_exclaim_pattern ~ "!" |
+        "#" ~ qr_hash_pattern ~ "#" |
+        "(" ~ qr_paren_pattern ~ ")" |
+        "[" ~ qr_bracket_pattern ~ "]" |
+        "{" ~ qr_brace_pattern ~ "}" |
+        "<" ~ qr_angle_pattern ~ ">" |
+        regex_delimiter ~ qr_regex_pattern ~ regex_delimiter
+    ) ~ regex_flags? 
 }
 qr_slash_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
 qr_exclaim_pattern = @{ (!"!" ~ (regex_escape | regex_group | ANY))* }
 qr_hash_pattern = @{ (!"#" ~ (regex_escape | regex_group | ANY))* }
+
+// Patterns for paired delimiters with nesting support
+qr_paren_pattern = { qr_paren_part* }
+qr_paren_part = { regex_escape | regex_group | qr_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+qr_nested_parens = { "(" ~ qr_paren_pattern ~ ")" }
+
+qr_bracket_pattern = { qr_bracket_part* }
+qr_bracket_part = { regex_escape | regex_group | qr_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+qr_nested_brackets = { "[" ~ qr_bracket_pattern ~ "]" }
+
+qr_brace_pattern = { qr_brace_part* }
+qr_brace_part = { regex_escape | regex_group | qr_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+qr_nested_braces = { "{" ~ qr_brace_pattern ~ "}" }
+
+qr_angle_pattern = { qr_angle_part* }
+qr_angle_part = { regex_escape | regex_group | qr_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+qr_nested_angles = { "<" ~ qr_angle_pattern ~ ">" }
+
 match_regex_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
 qr_regex_pattern = @{ (!regex_delimiter ~ (regex_escape | regex_group | ANY))* }
 
@@ -506,6 +604,9 @@ regex_group_content = @{ (!(")" | "(") ~ (regex_escape | ANY))* }
 
 regex_delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p" | "c" | "e" | "r")* }
+
+// Generic delimiter for substitution and transliteration
+delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 
 substitution = {
     "s" ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
@@ -560,12 +661,27 @@ qw_list = {
         (qw_delimiter ~ qw_delimited_items ~ qw_delimiter)
     )
 }
-qw_paren_items = @{ (!")" ~ ANY)* }
-qw_bracket_items = @{ (!"]" ~ ANY)* }
-qw_brace_items = @{ (!"}" ~ ANY)* }
-qw_angle_items = @{ (!">" ~ ANY)* }
+// Content rules for qw lists (word lists, no interpolation but handle nesting)
+qw_paren_items = { qw_paren_part* }
+qw_paren_part = { qw_escape_sequence | qw_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+qw_nested_parens = { "(" ~ qw_paren_items ~ ")" }
+
+qw_bracket_items = { qw_bracket_part* }
+qw_bracket_part = { qw_escape_sequence | qw_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+qw_nested_brackets = { "[" ~ qw_bracket_items ~ "]" }
+
+qw_brace_items = { qw_brace_part* }
+qw_brace_part = { qw_escape_sequence | qw_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+qw_nested_braces = { "{" ~ qw_brace_items ~ "}" }
+
+qw_angle_items = { qw_angle_part* }
+qw_angle_part = { qw_escape_sequence | qw_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+qw_nested_angles = { "<" ~ qw_angle_items ~ ">" }
+
+// For non-paired delimiters
 qw_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
-qw_delimited_items = @{ (!qw_delimiter ~ ANY)* }
+qw_delimited_items = @{ (!qw_delimiter ~ (qw_escape_sequence | ANY))* }
+qw_escape_sequence = @{ "\\" ~ ANY }
 
 anonymous_sub = { "sub" ~ prototype? ~ attributes? ~ block }
 
