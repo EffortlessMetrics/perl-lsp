@@ -36,6 +36,10 @@ pub enum AstNode {
         attributes: Vec<String>,
         body: Box<AstNode>,
     },
+    FormatDeclaration {
+        name: String,
+        format_lines: Vec<String>,
+    },
     PackageDeclaration {
         name: String,
         version: Option<String>,
@@ -461,6 +465,32 @@ impl PureRustPerlParser {
                     body: body.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
                 }))
             }
+            Rule::format_declaration => {
+                let mut inner = pair.into_inner();
+                let mut name = String::new();
+                let mut format_lines = Vec::new();
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::format_name => {
+                            name = p.as_str().to_string();
+                        }
+                        Rule::format_lines => {
+                            for line in p.into_inner() {
+                                if line.as_rule() == Rule::format_line {
+                                    format_lines.push(line.as_str().to_string());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::FormatDeclaration {
+                    name,
+                    format_lines,
+                }))
+            }
             Rule::if_statement => {
                 let mut inner = pair.into_inner();
                 // The first item should be the expression (condition)
@@ -660,10 +690,17 @@ impl PureRustPerlParser {
             Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
                 Ok(Some(AstNode::String(pair.as_str().to_string())))
             }
+            Rule::q_string => {
+                // q strings don't interpolate, so we just return the whole construct as a string
+                Ok(Some(AstNode::String(pair.as_str().to_string())))
+            }
             Rule::qq_string => {
-                // Extract the content from qq{...}
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::QqString(inner.as_str().to_string())))
+                // qq strings interpolate, so we mark them differently
+                Ok(Some(AstNode::QqString(pair.as_str().to_string())))
+            }
+            Rule::qx_string => {
+                // qx strings are for command execution
+                Ok(Some(AstNode::QxString(pair.as_str().to_string())))
             }
             Rule::heredoc => {
                 let inner = pair.into_inner();
@@ -1118,6 +1155,17 @@ impl PureRustPerlParser {
             }
             AstNode::SubDeclaration { name, body, .. } => {
                 format!("(subroutine (identifier {}) {})", name, Self::node_to_sexp(body))
+            }
+            AstNode::FormatDeclaration { name, format_lines } => {
+                let lines_sexp = format_lines.iter()
+                    .map(|line| format!("(format_line \"{}\")", line.replace("\"", "\\\"")))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if name.is_empty() {
+                    format!("(format_declaration {})", lines_sexp)
+                } else {
+                    format!("(format_declaration (identifier {}) {})", name, lines_sexp)
+                }
             }
             AstNode::IfStatement { condition, then_block, .. } => {
                 format!("(if_statement {} {})", Self::node_to_sexp(condition), Self::node_to_sexp(then_block))
