@@ -59,10 +59,14 @@ impl<'a> HeredocScanner<'a> {
                     // Replace heredoc with placeholder
                     output.push_str(&decl.placeholder_id);
                     
-                    // Skip to end of line
+                    // Copy the rest of the line after the heredoc declaration
+                    let rest_of_line_start = self.position;
                     while self.position < chars.len() && chars[self.position] != '\n' {
+                        output.push(chars[self.position]);
                         self.position += 1;
                     }
+                    
+                    
                     if self.position < chars.len() {
                         output.push('\n');
                         self.position += 1;
