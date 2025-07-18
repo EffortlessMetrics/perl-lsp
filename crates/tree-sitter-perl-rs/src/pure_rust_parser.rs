@@ -53,6 +53,11 @@ pub enum AstNode {
         block: Box<AstNode>,
         else_block: Option<Box<AstNode>>,
     },
+    GivenStatement {
+        expression: Box<AstNode>,
+        when_clauses: Vec<(AstNode, AstNode)>,
+        default_block: Option<Box<AstNode>>,
+    },
     WhileStatement {
         label: Option<String>,
         condition: Box<AstNode>,
@@ -86,6 +91,15 @@ pub enum AstNode {
         condition: Box<AstNode>,
         true_expr: Box<AstNode>,
         false_expr: Box<AstNode>,
+    },
+    PostfixDereference {
+        expr: Box<AstNode>,
+        deref_type: String,
+    },
+    MethodCall {
+        object: Box<AstNode>,
+        method: String,
+        args: Vec<AstNode>,
     },
     Assignment {
         target: Box<AstNode>,
@@ -468,6 +482,37 @@ impl PureRustPerlParser {
                     else_block,
                 }))
             }
+            Rule::given_statement => {
+                let mut inner = pair.into_inner();
+                let expression = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let given_block = inner.next().unwrap();
+                
+                let mut when_clauses = Vec::new();
+                let mut default_block = None;
+                
+                for p in given_block.into_inner() {
+                    match p.as_rule() {
+                        Rule::when_clause => {
+                            let mut when_inner = p.into_inner();
+                            let when_cond = when_inner.next().unwrap();
+                            let cond = self.build_node(when_cond.into_inner().next().unwrap())?.unwrap();
+                            let block = self.build_node(when_inner.next().unwrap())?.unwrap();
+                            when_clauses.push((cond, block));
+                        }
+                        Rule::default_clause => {
+                            let mut default_inner = p.into_inner();
+                            default_block = Some(Box::new(self.build_node(default_inner.next().unwrap())?.unwrap()));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::GivenStatement {
+                    expression,
+                    when_clauses,
+                    default_block,
+                }))
+            }
             Rule::block => {
                 let mut statements = Vec::new();
                 for inner in pair.into_inner() {
@@ -484,12 +529,94 @@ impl PureRustPerlParser {
             Rule::expression => {
                 self.build_expression(pair)
             }
+            Rule::logical_or_expression => {
+                self.build_binary_expression(pair, Rule::logical_or_expression)
+            }
+            Rule::defined_or_expression => {
+                self.build_binary_expression(pair, Rule::defined_or_expression)
+            }
+            Rule::logical_and_expression => {
+                self.build_binary_expression(pair, Rule::logical_and_expression)
+            }
+            Rule::equality_expression => {
+                self.build_binary_expression(pair, Rule::equality_expression)
+            }
+            Rule::relational_expression => {
+                self.build_binary_expression(pair, Rule::relational_expression)
+            }
+            Rule::isa_expression => {
+                self.build_binary_expression(pair, Rule::isa_expression)
+            }
+            Rule::bitwise_expression => {
+                self.build_binary_expression(pair, Rule::bitwise_expression)
+            }
+            Rule::bitwise_string_expression => {
+                self.build_binary_expression(pair, Rule::bitwise_string_expression)
+            }
             Rule::assignment_expression => {
                 let mut inner = pair.into_inner();
                 let target = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 let op = inner.next().unwrap().as_str().to_string();
                 let value = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
                 Ok(Some(AstNode::Assignment { target, op, value }))
+            }
+            Rule::unary_expression => {
+                let mut inner = pair.into_inner();
+                let first = inner.next().unwrap();
+                
+                // Check if it's an operator or operand
+                match first.as_rule() {
+                    Rule::postfix_expression | Rule::reference => {
+                        // No unary operator, just pass through
+                        self.build_node(first)
+                    }
+                    _ => {
+                        // It's an operator
+                        let op = first.as_str().to_string();
+                        let operand = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                        Ok(Some(AstNode::UnaryOp { op, operand }))
+                    }
+                }
+            }
+            Rule::postfix_expression => {
+                let mut inner = pair.into_inner();
+                let mut expr = self.build_node(inner.next().unwrap())?.unwrap();
+                
+                // Apply postfix operators
+                for postfix_op in inner {
+                    match postfix_op.as_rule() {
+                        Rule::postfix_operator => {
+                            let op_inner = postfix_op.into_inner().next().unwrap();
+                            match op_inner.as_rule() {
+                                Rule::postfix_dereference => {
+                                    let deref_type = op_inner.into_inner().next().unwrap().as_str();
+                                    expr = AstNode::PostfixDereference {
+                                        expr: Box::new(expr),
+                                        deref_type: deref_type.to_string(),
+                                    };
+                                }
+                                Rule::method_call => {
+                                    let mut method_inner = op_inner.into_inner();
+                                    let method = method_inner.next().unwrap().as_str().to_string();
+                                    let args = if let Some(args_pair) = method_inner.next() {
+                                        self.parse_arg_list(args_pair)?
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    expr = AstNode::MethodCall {
+                                        object: Box::new(expr),
+                                        method,
+                                        args,
+                                    };
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(expr))
             }
             Rule::scalar_variable => {
                 Ok(Some(AstNode::ScalarVariable(pair.as_str().to_string())))
@@ -871,17 +998,61 @@ impl PureRustPerlParser {
     }
 
     fn build_expression(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
-        // This is a simplified expression builder
-        // In a full implementation, this would handle operator precedence
+        let inner = pair.into_inner().next().unwrap();
+        match inner.as_rule() {
+            Rule::assignment_expression => self.build_node(inner),
+            Rule::ternary_expression => self.build_ternary_expression(inner),
+            _ => self.build_node(inner),
+        }
+    }
+    
+    fn build_ternary_expression(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         let inner: Vec<_> = pair.into_inner().collect();
-        if inner.is_empty() {
-            Ok(None)
-        } else if inner.len() == 1 {
+        if inner.len() == 1 {
+            // No ternary, just pass through
             self.build_node(inner.into_iter().next().unwrap())
+        } else if inner.len() == 3 {
+            let condition = Box::new(self.build_node(inner[0].clone())?.unwrap());
+            let then_expr = Box::new(self.build_node(inner[1].clone())?.unwrap());
+            let else_expr = Box::new(self.build_node(inner[2].clone())?.unwrap());
+            Ok(Some(AstNode::TernaryOp { condition, then_expr, else_expr }))
         } else {
-            // For now, just return the first node
             self.build_node(inner.into_iter().next().unwrap())
         }
+    }
+    
+    fn build_binary_expression(&mut self, pair: Pair<Rule>, op_rule: Rule) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        let inner: Vec<_> = pair.into_inner().collect();
+        if inner.len() == 1 {
+            self.build_node(inner.into_iter().next().unwrap())
+        } else if inner.len() >= 3 {
+            // Build left-associative binary operations
+            let mut result = self.build_node(inner[0].clone())?.unwrap();
+            let mut i = 1;
+            while i < inner.len() {
+                let op = inner[i].as_str().to_string();
+                let right = self.build_node(inner[i + 1].clone())?.unwrap();
+                result = AstNode::BinaryOp {
+                    op,
+                    left: Box::new(result),
+                    right: Box::new(right),
+                };
+                i += 2;
+            }
+            Ok(Some(result))
+        } else {
+            self.build_node(inner.into_iter().next().unwrap())
+        }
+    }
+    
+    fn parse_arg_list(&mut self, pair: Pair<Rule>) -> Result<Vec<AstNode>, Box<dyn std::error::Error>> {
+        let mut args = Vec::new();
+        for arg in pair.into_inner() {
+            if let Some(node) = self.build_node(arg)? {
+                args.push(node);
+            }
+        }
+        Ok(args)
     }
 
     pub fn to_sexp(&self, node: &AstNode) -> String {
@@ -925,6 +1096,24 @@ impl PureRustPerlParser {
             }
             AstNode::IfStatement { condition, then_block, .. } => {
                 format!("(if_statement {} {})", Self::node_to_sexp(condition), Self::node_to_sexp(then_block))
+            }
+            AstNode::GivenStatement { expression, when_clauses, default_block } => {
+                let mut result = format!("(given_statement {}", Self::node_to_sexp(expression));
+                for (cond, block) in when_clauses {
+                    result.push_str(&format!(" (when_clause {} {})", Self::node_to_sexp(cond), Self::node_to_sexp(block)));
+                }
+                if let Some(default) = default_block {
+                    result.push_str(&format!(" (default_clause {})", Self::node_to_sexp(default)));
+                }
+                result.push(')');
+                result
+            }
+            AstNode::PostfixDereference { expr, deref_type } => {
+                format!("(postfix_deref {} {})", Self::node_to_sexp(expr), deref_type)
+            }
+            AstNode::MethodCall { object, method, args } => {
+                let args_str = args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" ");
+                format!("(method_call {} {} {})", Self::node_to_sexp(object), method, args_str)
             }
             AstNode::Assignment { target, op, value } => {
                 format!("(assignment {} ({}) {})", Self::node_to_sexp(target), op, Self::node_to_sexp(value))

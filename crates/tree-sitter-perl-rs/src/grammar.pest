@@ -19,6 +19,7 @@ statement = {
     | unitcheck_block
     | if_statement
     | unless_statement
+    | given_statement
     | while_statement
     | until_statement
     | for_statement
@@ -30,6 +31,7 @@ statement = {
     | last_statement
     | next_statement
     | redo_statement
+    | continue_statement
     | labeled_block
     | declaration_statement
     | expression_statement 
@@ -53,6 +55,7 @@ return_statement = { "return" ~ expression? ~ semicolon? }
 last_statement = { "last" ~ label? ~ semicolon? }
 next_statement = { "next" ~ label? ~ semicolon? }
 redo_statement = { "redo" ~ label? ~ semicolon? }
+continue_statement = { "continue" ~ semicolon? }
 
 labeled_block = { label ~ block }
 
@@ -87,6 +90,24 @@ unless_statement = {
     "unless" ~ "(" ~ expression ~ ")" ~ block ~ else_clause?
 }
 
+given_statement = {
+    "given" ~ "(" ~ expression ~ ")" ~ given_block
+}
+
+given_block = { "{" ~ when_clause* ~ default_clause? ~ "}" }
+
+when_clause = {
+    "when" ~ "(" ~ when_condition ~ ")" ~ block
+}
+
+when_condition = {
+    expression
+}
+
+default_clause = {
+    "default" ~ block
+}
+
 while_statement = {
     label? ~ "while" ~ "(" ~ expression ~ ")" ~ block
 }
@@ -114,7 +135,37 @@ for_init = { declaration | assignment_expression | expression }
 
 // Subroutines
 sub_declaration = {
-    "sub" ~ identifier ~ prototype? ~ attributes? ~ block
+    sub_modifier? ~ "sub" ~ identifier ~ (signature | prototype)? ~ attributes? ~ block
+}
+
+sub_modifier = { "my" | "our" | "state" }
+
+signature = { "(" ~ signature_params? ~ ")" }
+signature_params = { signature_param ~ ("," ~ signature_param)* }
+signature_param = {
+    named_param
+    | slurpy_param
+    | positional_param
+}
+
+positional_param = {
+    type_constraint? ~ variable ~ default_value?
+}
+
+named_param = {
+    ":" ~ variable ~ default_value?
+}
+
+slurpy_param = {
+    type_constraint? ~ (array_variable | hash_variable)
+}
+
+type_constraint = {
+    identifier ~ !("=" | "$" | "@" | "%" | ":")
+}
+
+default_value = {
+    "=" ~ expression
 }
 
 prototype = { "(" ~ prototype_args? ~ ")" }
@@ -129,7 +180,7 @@ attribute_args = { (!(")" | ",") ~ ANY)+ }
 
 // Packages and Modules
 package_declaration = {
-    "package" ~ qualified_name ~ version? ~ block? ~ semicolon?
+    "package" ~ qualified_name ~ version? ~ (block | semicolon)?
 }
 
 use_statement = {
@@ -154,14 +205,15 @@ assignment_expression = {
 
 assignment_operator = {
     "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
-    | "&&=" | "||=" | "//="
+    | "&&=" | "||=" | "//=" | "&.=" | "|.=" | "^.="
 }
 
 ternary_expression = {
     logical_or_expression ~ ("?" ~ expression ~ ":" ~ expression)?
 }
 
-logical_or_expression = { logical_and_expression ~ (("||" | "or") ~ logical_and_expression)* }
+logical_or_expression = { defined_or_expression ~ (("||" | "or") ~ defined_or_expression)* }
+defined_or_expression = { logical_and_expression ~ ("//" ~ logical_and_expression)* }
 logical_and_expression = { equality_expression ~ (("&&" | "and") ~ equality_expression)* }
 
 equality_expression = {
@@ -169,10 +221,15 @@ equality_expression = {
 }
 
 relational_expression = {
-    bitwise_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ bitwise_expression)*
+    isa_expression ~ (("<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~") ~ isa_expression)*
 }
 
-bitwise_expression = { shift_expression ~ (("&" | "|" | "^") ~ shift_expression)* }
+isa_expression = {
+    bitwise_expression ~ ("isa" ~ bitwise_expression)*
+}
+
+bitwise_expression = { bitwise_string_expression ~ (("&" | "|" | "^") ~ bitwise_string_expression)* }
+bitwise_string_expression = { shift_expression ~ (("&." | "|." | "^.") ~ shift_expression)* }
 
 shift_expression = { range_expression ~ (("<<" | ">>") ~ range_expression)* }
 
@@ -191,7 +248,7 @@ exponential_expression = {
 }
 
 unary_expression = {
-    ("!" | "-" | "+" | "~" | "not")+ ~ unary_expression
+    ("!" | "-" | "+" | "~" | "~." | "not")+ ~ unary_expression
     | reference
     | postfix_expression
 }
@@ -207,6 +264,19 @@ postfix_operator = {
     | function_call
     | increment
     | decrement
+    | postfix_dereference
+}
+
+postfix_dereference = {
+    "->" ~ (
+        "@*" |           // Array dereference
+        "%*" |           // Hash dereference
+        "$*" |           // Scalar dereference
+        "&*" |           // Code dereference
+        "**" |           // Glob dereference
+        "@" ~ array_access |  // Array slice
+        "@" ~ hash_access     // Hash slice
+    )
 }
 
 array_access = { "[" ~ expression ~ "]" }
