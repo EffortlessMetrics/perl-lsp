@@ -1,3 +1,0 @@
-format STDOUT =
-test line
-.
