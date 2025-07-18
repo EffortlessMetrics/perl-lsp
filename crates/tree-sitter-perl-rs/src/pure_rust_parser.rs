@@ -46,6 +46,14 @@ pub enum AstNode {
         version: Option<Arc<str>>,
         block: Option<Box<AstNode>>,
     },
+    UseStatement {
+        module: Arc<str>,
+        version: Option<Arc<str>>,
+        import_list: Vec<Arc<str>>,
+    },
+    RequireStatement {
+        module: Arc<str>,
+    },
     
     // Control flow
     IfStatement {
@@ -1060,6 +1068,45 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
             }
+            Rule::use_statement => {
+                let mut inner = pair.into_inner();
+                inner.next(); // skip "use"
+                
+                let module = if let Some(module_pair) = inner.next() {
+                    Arc::from(module_pair.as_str())
+                } else {
+                    Arc::from("")
+                };
+                
+                let mut version = None;
+                let mut import_list = Vec::new();
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::version => version = Some(Arc::from(p.as_str())),
+                        Rule::import_list => {
+                            for item in p.into_inner() {
+                                import_list.push(Arc::from(item.as_str()));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::UseStatement { module, version, import_list }))
+            }
+            Rule::require_statement => {
+                let mut inner = pair.into_inner();
+                inner.next(); // skip "require"
+                
+                let module = if let Some(module_pair) = inner.next() {
+                    Arc::from(module_pair.as_str())
+                } else {
+                    Arc::from("")
+                };
+                
+                Ok(Some(AstNode::RequireStatement { module }))
+            }
             Rule::interpolation => {
                 // Handle interpolation within strings
                 let inner = pair.into_inner().next().unwrap();
@@ -1081,24 +1128,24 @@ impl PureRustPerlParser {
                 self.build_node(inner)
             }
             Rule::scalar_reference => {
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::ScalarReference(Arc::from(inner.as_str()))))
+                // Since these are atomic rules, use the whole pair's text
+                Ok(Some(AstNode::ScalarReference(Arc::from(pair.as_str()))))
             }
             Rule::array_reference => {
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::ArrayReference(Arc::from(inner.as_str()))))
+                // Since these are atomic rules, use the whole pair's text
+                Ok(Some(AstNode::ArrayReference(Arc::from(pair.as_str()))))
             }
             Rule::hash_reference => {
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::HashReference(Arc::from(inner.as_str()))))
+                // Since these are atomic rules, use the whole pair's text
+                Ok(Some(AstNode::HashReference(Arc::from(pair.as_str()))))
             }
             Rule::subroutine_reference => {
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::SubroutineReference(Arc::from(inner.as_str()))))
+                // Since these are atomic rules, use the whole pair's text
+                Ok(Some(AstNode::SubroutineReference(Arc::from(pair.as_str()))))
             }
             Rule::glob_reference => {
-                let inner = pair.into_inner().next().unwrap();
-                Ok(Some(AstNode::GlobReference(Arc::from(inner.as_str()))))
+                // Since these are atomic rules, use the whole pair's text
+                Ok(Some(AstNode::GlobReference(Arc::from(pair.as_str()))))
             }
             _ => {
                 // For unhandled rules, try to process inner pairs
