@@ -96,11 +96,6 @@ pub enum AstNode {
         expr: Box<AstNode>,
         deref_type: String,
     },
-    MethodCall {
-        object: Box<AstNode>,
-        method: String,
-        args: Vec<AstNode>,
-    },
     Assignment {
         target: Box<AstNode>,
         op: String,
@@ -417,15 +412,24 @@ impl PureRustPerlParser {
             }
             Rule::sub_declaration => {
                 let mut inner = pair.into_inner();
-                inner.next(); // skip "sub"
-                let name = inner.next().unwrap().as_str().to_string();
+                let mut sub_modifier = None;
+                let mut name = String::new();
                 let mut prototype = None;
                 let mut attributes = Vec::new();
                 let mut body = None;
                 
                 for p in inner {
                     match p.as_rule() {
+                        Rule::sub_modifier => {
+                            sub_modifier = Some(p.as_str().to_string());
+                        }
+                        Rule::identifier => {
+                            name = p.as_str().to_string();
+                        }
                         Rule::prototype => {
+                            prototype = Some(p.as_str().to_string());
+                        }
+                        Rule::signature => {
                             prototype = Some(p.as_str().to_string());
                         }
                         Rule::attributes => {
@@ -907,30 +911,6 @@ impl PureRustPerlParser {
                 }
                 Ok(Some(AstNode::PackageDeclaration { name, version, block }))
             }
-            Rule::relational_expression => {
-                let mut inner = pair.into_inner();
-                let left = if let Some(first) = inner.next() {
-                    self.build_node(first)?.map(Box::new)
-                } else {
-                    return Ok(None);
-                };
-                if let Some(op_pair) = inner.next() {
-                    let op = op_pair.as_str().to_string();
-                    let right = if let Some(second) = inner.next() {
-                        self.build_node(second)?.map(Box::new)
-                    } else {
-                        return Ok(left.map(|l| *l));
-                    };
-                    match (left, right) {
-                        (Some(left), Some(right)) => Ok(Some(AstNode::BinaryOp { op, left, right })),
-                        (Some(left), None) => Ok(Some(*left)),
-                        (None, Some(right)) => Ok(Some(*right)),
-                        (None, None) => Ok(None),
-                    }
-                } else {
-                    Ok(left.map(|l| *l))
-                }
-            }
             Rule::interpolation => {
                 // Handle interpolation within strings
                 let inner = pair.into_inner().next().unwrap();
@@ -1015,7 +995,7 @@ impl PureRustPerlParser {
             let condition = Box::new(self.build_node(inner[0].clone())?.unwrap());
             let then_expr = Box::new(self.build_node(inner[1].clone())?.unwrap());
             let else_expr = Box::new(self.build_node(inner[2].clone())?.unwrap());
-            Ok(Some(AstNode::TernaryOp { condition, then_expr, else_expr }))
+            Ok(Some(AstNode::TernaryOp { condition, true_expr: then_expr, false_expr: else_expr }))
         } else {
             self.build_node(inner.into_iter().next().unwrap())
         }
