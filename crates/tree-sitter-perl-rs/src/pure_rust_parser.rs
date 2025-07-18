@@ -999,11 +999,33 @@ impl PureRustPerlParser {
             }
             Rule::q_string => {
                 // q strings don't interpolate, so we just return the whole construct as a string
-                Ok(Some(AstNode::String(Arc::from(pair.as_str()))))
+                // Special handling for heredoc placeholders
+                let content = pair.as_str();
+                if content.contains("__HEREDOC__") {
+                    // Extract actual heredoc content from q{__HEREDOC__content__HEREDOC__}
+                    if let Some(start_idx) = content.find("{__HEREDOC__") {
+                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
+                            let heredoc_content = &content[start_idx + 12..end_idx];
+                            return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
+                        }
+                    }
+                }
+                Ok(Some(AstNode::String(Arc::from(content))))
             }
             Rule::qq_string => {
                 // qq strings interpolate, so we mark them differently
-                Ok(Some(AstNode::QqString(Arc::from(pair.as_str()))))
+                // Special handling for heredoc placeholders
+                let content = pair.as_str();
+                if content.contains("__HEREDOC__") {
+                    // Extract actual heredoc content from qq{__HEREDOC__content__HEREDOC__}
+                    if let Some(start_idx) = content.find("{__HEREDOC__") {
+                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
+                            let heredoc_content = &content[start_idx + 12..end_idx];
+                            return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
+                        }
+                    }
+                }
+                Ok(Some(AstNode::QqString(Arc::from(content))))
             }
             Rule::qx_string => {
                 // qx strings are for command execution

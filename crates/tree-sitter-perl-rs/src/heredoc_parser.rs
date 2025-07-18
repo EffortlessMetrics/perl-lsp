@@ -5,7 +5,7 @@
 //! 2. Collection - Extract heredoc content from subsequent lines
 //! 3. Integration - Replace markers with content for PEG parsing
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Represents a heredoc declaration found during Phase 1
@@ -33,6 +33,8 @@ pub struct HeredocScanner<'a> {
     position: usize,
     line_number: usize,
     heredoc_counter: usize,
+    /// Track which lines should be skipped (heredoc content lines)
+    skip_lines: std::collections::HashSet<usize>,
 }
 
 impl<'a> HeredocScanner<'a> {
@@ -42,94 +44,91 @@ impl<'a> HeredocScanner<'a> {
             position: 0,
             line_number: 1,
             heredoc_counter: 0,
+            skip_lines: HashSet::new(),
         }
     }
 
-    /// Scan input for heredoc declarations and return processed input + declarations
+    /// Scan input for heredoc declarations and mark their positions
     pub fn scan(mut self) -> (String, Vec<HeredocDeclaration>) {
-        let mut output = String::with_capacity(self.input.len());
+        // First pass: find all heredocs and mark their content lines
+        let lines: Vec<&str> = self.input.lines().collect();
         let mut declarations = Vec::new();
         let chars: Vec<char> = self.input.chars().collect();
-        let lines: Vec<&str> = self.input.lines().collect();
-
-        while self.position < chars.len() {
-            if self.check_heredoc_start(&chars) {
-                let start_line = self.line_number;
-                if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
-                    // Replace heredoc with placeholder
-                    output.push_str(&decl.placeholder_id);
+        
+        // Scan for heredocs and mark content lines to skip
+        let mut temp_position = 0;
+        let mut temp_line = 1;
+        
+        while temp_position < chars.len() {
+            if temp_position + 1 < chars.len() && chars[temp_position] == '<' && chars[temp_position + 1] == '<' {
+                let saved_pos = temp_position;
+                let saved_line = temp_line;
+                
+                // Try to parse heredoc
+                self.position = temp_position;
+                self.line_number = temp_line;
+                
+                if let Some(decl) = self.parse_heredoc_declaration(&chars) {
+                    // Mark the content lines to skip
+                    let content_start_line = saved_line + 1;
                     
-                    // Copy the rest of the line after the heredoc declaration
-                    let rest_of_line_start = self.position;
-                    while self.position < chars.len() && chars[self.position] != '\n' {
-                        output.push(chars[self.position]);
-                        self.position += 1;
-                    }
-                    
-                    
-                    if self.position < chars.len() {
-                        output.push('\n');
-                        self.position += 1;
-                        self.line_number += 1;
-                    }
-                    
-                    // Now collect the heredoc content and skip it
-                    let mut content = String::new();
-                    let mut found_terminator = false;
-                    
-                    while self.line_number <= lines.len() {
-                        if self.line_number > lines.len() {
+                    // Find terminator line
+                    for i in content_start_line..=lines.len() {
+                        if i > lines.len() {
                             break;
                         }
-                        
-                        let line = lines[self.line_number - 1]; // Convert to 0-based
-                        
-                        // Check if this line is the terminator
+                        let line = lines[i - 1];
                         let is_terminator = if decl.indented {
                             line.trim() == decl.terminator
                         } else {
                             line == decl.terminator
                         };
                         
+                        self.skip_lines.insert(i);
+                        
                         if is_terminator {
-                            found_terminator = true;
-                            // Skip the terminator line
-                            while self.position < chars.len() && chars[self.position] != '\n' {
-                                self.position += 1;
-                            }
-                            if self.position < chars.len() {
-                                self.position += 1;
-                                self.line_number += 1;
-                            }
                             break;
                         }
-                        
-                        // Add line to content
-                        if !content.is_empty() {
-                            content.push('\n');
-                        }
-                        
-                        if decl.indented {
-                            content.push_str(line.trim_start());
-                        } else {
-                            content.push_str(line);
-                        }
-                        
-                        // Skip this line in the output
-                        while self.position < chars.len() && chars[self.position] != '\n' {
-                            self.position += 1;
-                        }
-                        if self.position < chars.len() {
-                            self.position += 1;
-                            self.line_number += 1;
-                        }
-                    }
-                    
-                    if found_terminator {
-                        decl.content = Some(Arc::from(content));
                     }
                     
                     declarations.push(decl);
+                    temp_position = self.position;
+                    temp_line = self.line_number;
+                } else {
+                    temp_position = saved_pos + 1;
+                }
+            } else {
+                if chars[temp_position] == '\n' {
+                    temp_line += 1;
+                }
+                temp_position += 1;
+            }
+        }
+        
+        // Second pass: build output, skipping marked lines
+        let mut output = String::with_capacity(self.input.len());
+        self.position = 0;
+        self.line_number = 1;
+        self.heredoc_counter = 0;
+        
+        while self.position < chars.len() {
+            // Skip lines marked for skipping
+            if self.skip_lines.contains(&self.line_number) {
+                // Skip to end of line
+                while self.position < chars.len() && chars[self.position] != '\n' {
+                    self.position += 1;
+                }
+                if self.position < chars.len() {
+                    self.position += 1;
+                    self.line_number += 1;
+                }
+                continue;
+            }
+            
+            if self.check_heredoc_start(&chars) {
+                if let Some(decl) = self.parse_heredoc_declaration(&chars) {
+                    // Replace heredoc with placeholder
+                    output.push_str(&decl.placeholder_id);
                 } else {
                     // Not a heredoc, just copy the <<
                     output.push_str("<<");
