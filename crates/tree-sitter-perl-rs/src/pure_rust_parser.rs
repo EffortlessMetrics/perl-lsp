@@ -225,6 +225,7 @@ pub enum AstNode {
         flags: Arc<str>,
         named_groups: Vec<Arc<str>>,
     },
+    InterpolatedString(Vec<AstNode>),
     
     // Here documents
     Heredoc {
@@ -884,8 +885,52 @@ impl PureRustPerlParser {
             Rule::identifier => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
             }
-            Rule::string | Rule::single_quoted_string | Rule::double_quoted_string => {
+            Rule::string => {
+                // string can be single or double quoted, need to check inner
+                let inner_pairs: Vec<_> = pair.into_inner().collect();
+                if let Some(inner) = inner_pairs.into_iter().next() {
+                    self.build_node(inner)
+                } else {
+                    Ok(Some(AstNode::String(Arc::from(""))))
+                }
+            }
+            Rule::single_quoted_string => {
                 Ok(Some(AstNode::String(Arc::from(pair.as_str()))))
+            }
+            Rule::double_quoted_string => {
+                // Parse interpolated content
+                let mut parts = Vec::new();
+                
+                if let Some(content_pair) = pair.into_inner().next() {
+                    // double_string_content
+                    for part in content_pair.into_inner() {
+                        // Each part is a double_string_part
+                        if let Some(inner) = part.into_inner().next() {
+                            match inner.as_rule() {
+                                Rule::double_string_chars => {
+                                    parts.push(AstNode::String(Arc::from(inner.as_str())));
+                                }
+                                Rule::interpolation => {
+                                    if let Ok(Some(interp_node)) = self.build_node(inner) {
+                                        parts.push(interp_node);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    
+                    if parts.is_empty() {
+                        Ok(Some(AstNode::String(Arc::from(""))))
+                    } else if parts.len() == 1 && matches!(parts[0], AstNode::String(_)) {
+                        Ok(Some(parts.into_iter().next().unwrap()))
+                    } else {
+                        Ok(Some(AstNode::InterpolatedString(parts)))
+                    }
+                } else {
+                    // Empty string
+                    Ok(Some(AstNode::String(Arc::from(""))))
+                }
             }
             Rule::q_string => {
                 // q strings don't interpolate, so we just return the whole construct as a string
@@ -1519,6 +1564,13 @@ impl PureRustPerlParser {
             }
             AstNode::String(value) => {
                 format!("(string_literal {})", value)
+            }
+            AstNode::InterpolatedString(parts) => {
+                let parts_str = parts.iter()
+                    .map(|p| Self::node_to_sexp(p))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(interpolated_string {})", parts_str)
             }
             AstNode::Identifier(name) => {
                 format!("(identifier {})", name)

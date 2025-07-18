@@ -1,0 +1,1 @@
+my $re = qr/pattern/;
