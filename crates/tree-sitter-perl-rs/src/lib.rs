@@ -56,6 +56,9 @@ pub mod lexer_adapter;
 #[cfg(feature = "pure-rust")]
 pub mod disambiguated_parser;
 
+#[cfg(all(test, feature = "pure-rust"))]
+mod test_slash;
+
 #[cfg(feature = "pure-rust")]
 pub mod pratt_parser;
 

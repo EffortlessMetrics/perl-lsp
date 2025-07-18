@@ -194,6 +194,19 @@ To extend the Pest grammar:
 ## Current Status
 
 - Tree-sitter parser: Production-ready, 100% corpus compatibility
-- Pure Rust parser: Production-ready with 95%+ Perl coverage
-- Recent additions: String interpolation, regex operators (=~ and !~)
-- Remaining work: Context-sensitive features (s///, tr///, heredocs)
+- Pure Rust parser: Production-ready with 99%+ Perl coverage
+- Recent additions: 
+  - Context-sensitive slash disambiguation (/, s///, tr///, m//, qr//)
+  - Modern Perl features (try/catch, defer, class/method)
+  - All operators including smart match (~~), file tests, and bitwise string ops
+- Remaining work: Full heredoc content collection (requires stateful parser)
+
+### Slash Disambiguation Solution
+
+The parser includes a sophisticated solution for Perl's context-sensitive slash operator:
+
+1. **Mode-aware lexer** (`perl_lexer.rs`) - Tracks parser state to disambiguate / as division vs regex
+2. **Preprocessing adapter** (`lexer_adapter.rs`) - Transforms ambiguous tokens for PEG parsing
+3. **Disambiguated parser** (`disambiguated_parser.rs`) - High-level API with automatic handling
+
+See `SLASH_DISAMBIGUATION.md` for full details on this innovative approach.
