@@ -54,6 +54,7 @@ statement = {
     | class_declaration
     | method_declaration
     | declaration_statement
+    | modified_statement
     | expression_statement 
     | block_statement
     | comment
@@ -68,6 +69,7 @@ statement = {
 empty_statement = { semicolon }
 standalone_expression = { expression }
 
+modified_statement = { expression ~ statement_modifier ~ semicolon? }
 expression_statement = { expression ~ semicolon? }
 declaration_statement = { declaration ~ semicolon? }
 block_statement = { block }
@@ -326,8 +328,10 @@ relational_expression = {
 relational_op = { "<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~" }
 
 isa_expression = {
-    bitwise_expression ~ ("isa" ~ bitwise_expression)*
+    bitwise_expression ~ (isa_operator ~ bitwise_expression)*
 }
+
+isa_operator = @{ "isa" ~ !(ASCII_ALPHANUMERIC | "_") }
 
 bitwise_expression = { bitwise_string_expression ~ (("&" | "|" | "^") ~ bitwise_string_expression)* }
 bitwise_string_expression = { shift_expression ~ (("&." | "|." | "^.") ~ shift_expression)* }

@@ -533,6 +533,69 @@ impl PureRustPerlParser {
                 let inner = pair.into_inner().next().unwrap();
                 self.build_node(inner)
             }
+            Rule::modified_statement => {
+                let mut inner = pair.into_inner();
+                let expr = self.build_node(inner.next().unwrap())?;
+                let modifier = inner.next().unwrap();
+                
+                // Extract modifier type and condition from the statement_modifier
+                let modifier_str = modifier.as_str();
+                let (modifier_type, condition_expr) = if modifier_str.starts_with("if ") {
+                    ("if", &modifier_str[3..])
+                } else if modifier_str.starts_with("unless ") {
+                    ("unless", &modifier_str[7..])
+                } else if modifier_str.starts_with("while ") {
+                    ("while", &modifier_str[6..])
+                } else if modifier_str.starts_with("until ") {
+                    ("until", &modifier_str[6..])
+                } else if modifier_str.starts_with("for ") {
+                    ("for", &modifier_str[4..])
+                } else if modifier_str.starts_with("foreach ") {
+                    ("foreach", &modifier_str[8..])
+                } else {
+                    return Ok(expr);
+                };
+                
+                // For now, create a simple identifier for the condition
+                // In a real implementation, we'd parse the condition expression
+                let condition = Some(AstNode::Identifier(Arc::from(condition_expr.trim())));
+                
+                if let (Some(expr), Some(condition)) = (expr, condition) {
+                    match modifier_type {
+                        "if" => Ok(Some(AstNode::IfStatement {
+                            condition: Box::new(condition),
+                            then_block: Box::new(expr),
+                            elsif_clauses: Vec::new(),
+                            else_block: None,
+                        })),
+                        "unless" => Ok(Some(AstNode::UnlessStatement {
+                            condition: Box::new(condition),
+                            block: Box::new(expr),
+                            else_block: None,
+                        })),
+                        "while" => Ok(Some(AstNode::WhileStatement {
+                            label: None,
+                            condition: Box::new(condition),
+                            block: Box::new(expr),
+                        })),
+                        "until" => Ok(Some(AstNode::UntilStatement {
+                            label: None,
+                            condition: Box::new(condition),
+                            block: Box::new(expr),
+                        })),
+                        "for" | "foreach" => Ok(Some(AstNode::ForStatement {
+                            init: None,
+                            condition: Some(Box::new(condition)),
+                            update: None,
+                            block: Box::new(expr),
+                            label: None,
+                        })),
+                        _ => Ok(Some(AstNode::Statement(Box::new(expr))))
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
             Rule::expression_statement => {
                 let inner = pair.into_inner().next().unwrap();
                 if let Some(expr) = self.build_node(inner)? {
@@ -968,6 +1031,9 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Number(Arc::from(pair.as_str()))))
             }
             Rule::identifier => {
+                Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
+            }
+            Rule::qualified_name => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
             }
             Rule::builtin_list_op => {
