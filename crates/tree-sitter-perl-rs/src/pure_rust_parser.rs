@@ -133,6 +133,10 @@ pub enum AstNode {
         method: Arc<str>,
         args: Vec<AstNode>,
     },
+    BuiltinListOp {
+        name: Arc<str>,
+        args: Vec<AstNode>,
+    },
     ArrayAccess {
         array: Box<AstNode>,
         index: Box<AstNode>,
@@ -946,6 +950,33 @@ impl PureRustPerlParser {
             }
             Rule::identifier => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
+            }
+            Rule::builtin_list_op => {
+                let mut inner = pair.into_inner();
+                let mut name = Arc::from("");
+                let mut args = Vec::new();
+                
+                while let Some(p) = inner.next() {
+                    match p.as_rule() {
+                        Rule::builtin_list_op_name => {
+                            name = Arc::from(p.as_str().trim());
+                        }
+                        Rule::list_op_args => {
+                            for arg_pair in p.into_inner() {
+                                if arg_pair.as_rule() == Rule::list_op_arg {
+                                    for expr_pair in arg_pair.into_inner() {
+                                        if let Ok(Some(arg)) = self.build_node(expr_pair) {
+                                            args.push(arg);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::BuiltinListOp { name, args }))
             }
             Rule::special_literal => {
                 Ok(Some(AstNode::SpecialLiteral(Arc::from(pair.as_str()))))
@@ -1921,6 +1952,14 @@ impl PureRustPerlParser {
                     format!(" {}", args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" "))
                 };
                 format!("(function_call {}{})", Self::node_to_sexp(function), args_str)
+            }
+            AstNode::BuiltinListOp { name, args } => {
+                let args_str = if args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" {}", args.iter().map(|a| Self::node_to_sexp(a)).collect::<Vec<_>>().join(" "))
+                };
+                format!("(function_call (identifier {}){})", name, args_str)
             }
             AstNode::BinaryOp { op, left, right } => {
                 format!("(binary_expression {} ({}) {})", Self::node_to_sexp(left), op, Self::node_to_sexp(right))

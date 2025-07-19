@@ -194,6 +194,11 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(arg, placeholder_map, next_depth);
                 }
             }
+            AstNode::BuiltinListOp { args, .. } => {
+                for arg in args {
+                    self.restore_node_content_with_depth(arg, placeholder_map, next_depth);
+                }
+            }
             
             // Handle various block types
             AstNode::DoBlock(block) |
