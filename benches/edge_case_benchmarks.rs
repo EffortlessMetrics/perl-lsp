@@ -1,6 +1,11 @@
 //! Benchmarks for edge case detection and handling performance
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion};
+
+#[cfg(feature = "pure-rust")]
+use criterion::BenchmarkId;
+
+#[cfg(feature = "pure-rust")]
 use std::hint::black_box;
 
 #[cfg(feature = "pure-rust")]
@@ -232,6 +237,7 @@ my $d = shift; my $t = <<$d; content EOF
 }
 
 /// Generate test Perl code with heredocs
+#[cfg(feature = "pure-rust")]
 fn generate_perl_code(statements: usize) -> String {
     let mut code = String::new();
     
@@ -290,6 +296,7 @@ fn bench_memory_usage(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "pure-rust")]
 fn generate_nested_code(depth: usize) -> String {
     let mut code = String::new();
     
