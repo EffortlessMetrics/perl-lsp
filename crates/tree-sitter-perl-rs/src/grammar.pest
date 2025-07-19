@@ -11,14 +11,12 @@ statements = { statement+ }
 simple_assignment = @{ variable ~ "=" ~ (literal | variable) ~ semicolon }
 simple_method_call = @{ variable ~ "->" ~ identifier ~ "(" ~ ")" ~ semicolon }
 simple_function_call = @{ identifier ~ "(" ~ (literal | variable)? ~ ")" ~ semicolon }
-qualified_method_call_statement = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ identifier ~ function_args? ~ semicolon? }
 
 statement = { 
     // Fast paths first
     simple_assignment
     | simple_method_call
     | simple_function_call
-    | qualified_method_call_statement
     // Comments
     | comment
     // Regular statements
@@ -402,7 +400,8 @@ array_access = { "[" ~ expression ~ "]" }
 hash_access = { "{" ~ expression ~ "}" }
 typeglob_slot_access = { "{" ~ typeglob_slot ~ "}" }
 typeglob_slot = { "SCALAR" | "ARRAY" | "HASH" | "CODE" | "IO" | "GLOB" | "FORMAT" | "NAME" | "PACKAGE" }
-method_call = { "->" ~ (identifier ~ function_args? | function_args) }
+method_call = { "->" ~ (method_name ~ function_args? | function_args) }
+method_name = @{ (ASCII_ALPHA | "_" | XID_START) ~ (ASCII_ALPHANUMERIC | "_" | XID_CONTINUE)* }
 function_call = { function_args }
 function_args = { "(" ~ arg_list? ~ ")" }
 arg_list = { expression ~ ("," ~ expression)* }
@@ -410,7 +409,10 @@ increment = { "++" }
 decrement = { "--" }
 
 primary_expression = {
-    literal
+    class_method_call
+    | user_function_call
+    | qualified_name_or_identifier
+    | literal
     | reference
     | variable
     | array_ref
@@ -427,11 +429,14 @@ primary_expression = {
     | readline
     | qw_list
     | builtin_list_op
-    | class_method_call
-    | qualified_name_or_identifier
 }
 
-class_method_call = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ identifier ~ arg_list? }
+// User-defined function calls (with optional arguments)
+user_function_call = {
+    identifier ~ list_op_args
+}
+
+class_method_call = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ method_name ~ function_args? }
 qualified_name_or_identifier = { identifier ~ ("::" ~ identifier)* }
 
 // References to variables
