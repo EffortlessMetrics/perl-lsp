@@ -3,7 +3,7 @@
 #[test]
 #[cfg(feature = "pure-rust")]
 fn test_stacker_with_deep_nesting() {
-    use tree_sitter_perl::pure_rust_parser::parse_perl;
+    use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
     
     // Test progressively deeper nesting
     let depths = [100, 500, 1000];
@@ -17,7 +17,8 @@ fn test_stacker_with_deep_nesting() {
             expr = format!("({})", expr);
         }
         
-        let result = parse_perl(&expr);
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(&expr);
         assert!(result.is_ok(), "Failed at depth {}: {:?}", depth, result.err());
     }
 }
@@ -25,7 +26,7 @@ fn test_stacker_with_deep_nesting() {
 #[test]
 #[cfg(feature = "pure-rust")]
 fn test_stacker_with_deep_blocks() {
-    use tree_sitter_perl::pure_rust_parser::parse_perl;
+    use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
     
     // Test with nested blocks
     let depth = 500;
@@ -34,6 +35,7 @@ fn test_stacker_with_deep_blocks() {
         code = format!("{{ {} }}", code);
     }
     
-    let result = parse_perl(&code);
+    let mut parser = PureRustPerlParser::new();
+    let result = parser.parse(&code);
     assert!(result.is_ok(), "Failed with nested blocks: {:?}", result.err());
 }

@@ -1,6 +1,6 @@
 // Simple test to verify stacker integration
 #[cfg(feature = "pure-rust")]
-use tree_sitter_perl::pure_rust_parser::parse_perl;
+use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 
 fn main() {
     #[cfg(not(feature = "pure-rust"))]
@@ -22,7 +22,8 @@ fn main() {
                 expr = format!("({})", expr);
             }
             
-            match parse_perl(&expr) {
+            let mut parser = PureRustPerlParser::new();
+            match parser.parse(&expr) {
                 Ok(_) => println!("✅ Success"),
                 Err(e) => {
                     println!("❌ Failed: {:?}", e);
