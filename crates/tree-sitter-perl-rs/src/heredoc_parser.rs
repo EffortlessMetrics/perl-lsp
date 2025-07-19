@@ -69,7 +69,7 @@ impl<'a> HeredocScanner<'a> {
                 
                 // Try to parse heredoc
                 self.position = temp_position;
-                self.declaration_line = temp_line;
+                self.line_number = temp_line;
                 
                 if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
                     // Store the actual positions for replacement
@@ -81,7 +81,7 @@ impl<'a> HeredocScanner<'a> {
                     
                     declarations.push(decl);
                     temp_position = self.position;
-                    temp_line = self.declaration_line;
+                    temp_line = self.line_number;
                 } else {
                     temp_position = saved_pos + 1;
                 }
@@ -122,19 +122,19 @@ impl<'a> HeredocScanner<'a> {
         // Second pass: build output, skipping marked lines and replacing heredocs
         let mut output = String::with_capacity(self.input.len());
         self.position = 0;
-        self.declaration_line = 1;
+        self.line_number = 1;
         let mut decl_index = 0;
         
         while self.position < chars.len() {
             // Skip lines marked for skipping
-            if self.skip_lines.contains(&self.declaration_line) {
+            if self.skip_lines.contains(&self.line_number) {
                 // Skip to end of line
                 while self.position < chars.len() && chars[self.position] != '\n' {
                     self.position += 1;
                 }
                 if self.position < chars.len() {
                     self.position += 1;
-                    self.declaration_line += 1;
+                    self.line_number += 1;
                 }
                 continue;
             }
@@ -150,7 +150,7 @@ impl<'a> HeredocScanner<'a> {
                 let ch = chars[self.position];
                 output.push(ch);
                 if ch == '\n' {
-                    self.declaration_line += 1;
+                    self.line_number += 1;
                 }
                 self.position += 1;
             }
@@ -217,7 +217,7 @@ impl<'a> HeredocScanner<'a> {
             terminator,
             declaration_pos: start_pos,
             declaration_end,
-            declaration_line: self.declaration_line,
+            declaration_line: self.line_number,
             interpolated,
             indented,
             placeholder_id,

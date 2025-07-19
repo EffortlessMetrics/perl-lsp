@@ -52,7 +52,7 @@ impl RuntimeHeredocHandler {
         let mut result = content.to_string();
         
         // Handle variable interpolation if enabled
-        if context.interpolated {
+        if context.interpolate {
             result = self.interpolate_variables(&result, &context.variables)?;
         }
         
@@ -161,7 +161,7 @@ impl RuntimeHeredocHandler {
     fn evaluate_heredoc_static(content: &str, context: &RuntimeHeredocContext, variables: &HashMap<String, String>) -> Result<String, RuntimeError> {
         let mut result = content.to_string();
         
-        if context.interpolated {
+        if context.interpolate {
             result = Self::interpolate_variables_static(&result, &context.variables)?;
             result = Self::interpolate_variables_static(&result, variables)?;
         }
