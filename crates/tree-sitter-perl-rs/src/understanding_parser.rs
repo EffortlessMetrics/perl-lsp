@@ -33,7 +33,7 @@ impl UnderstandingParser {
         match PerlParser::parse(Rule::program, code) {
             Ok(pairs) => {
                 // Normal parse succeeded, but we might still have warnings
-                let ast = self.build_extended_ast(pairs, &diagnostics);
+                let ast = self.build_extended_ast(pairs, &diagnostics, code);
                 Ok(ParseResult {
                     ast,
                     diagnostics,
@@ -57,6 +57,7 @@ impl UnderstandingParser {
         &self,
         pairs: pest::iterators::Pairs<Rule>,
         diagnostics: &[Diagnostic],
+        code: &str,
     ) -> ExtendedAstNode {
         let mut builder = ExtendedAstBuilder::new();
         
