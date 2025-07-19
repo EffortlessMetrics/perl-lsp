@@ -44,6 +44,15 @@ pub mod context_aware_parser;
 #[cfg(feature = "pure-rust")]
 pub mod runtime_heredoc_handler;
 
+#[cfg(feature = "pure-rust")]
+pub mod anti_pattern_detector;
+
+#[cfg(feature = "pure-rust")]
+pub mod partial_parse_ast;
+
+#[cfg(feature = "pure-rust")]
+pub mod understanding_parser;
+
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
