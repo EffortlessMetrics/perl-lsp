@@ -62,6 +62,12 @@ pub mod dynamic_delimiter_recovery;
 #[cfg(feature = "pure-rust")]
 pub mod edge_case_handler;
 
+#[cfg(feature = "pure-rust")]
+pub mod encoding_aware_lexer;
+
+#[cfg(feature = "pure-rust")]
+pub mod tree_sitter_adapter;
+
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
