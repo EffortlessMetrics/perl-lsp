@@ -11,12 +11,14 @@ statements = { statement+ }
 simple_assignment = @{ variable ~ "=" ~ (literal | variable) ~ semicolon }
 simple_method_call = @{ variable ~ "->" ~ identifier ~ "(" ~ ")" ~ semicolon }
 simple_function_call = @{ identifier ~ "(" ~ (literal | variable)? ~ ")" ~ semicolon }
+qualified_method_call_statement = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ identifier ~ function_args? ~ semicolon? }
 
 statement = { 
     // Fast paths first
     simple_assignment
     | simple_method_call
     | simple_function_call
+    | qualified_method_call_statement
     // Comments
     | comment
     // Regular statements
@@ -329,7 +331,7 @@ relational_expression = {
 relational_op = { "<=" | ">=" | "<" | ">" | "lt" | "gt" | "le" | "ge" | "=~" | "!~" }
 
 isa_expression = {
-    bitwise_expression ~ (isa_operator ~ bitwise_expression)*
+    bitwise_expression ~ (isa_operator ~ (qualified_name_or_identifier | bitwise_expression))*
 }
 
 isa_operator = @{ "isa" ~ !(ASCII_ALPHANUMERIC | "_") }
@@ -426,11 +428,11 @@ primary_expression = {
     | qw_list
     | builtin_list_op
     | class_method_call
-    | (identifier ~ ("::" ~ identifier)+)  // Try qualified_name inline before identifier
-    | identifier
+    | qualified_name_or_identifier
 }
 
 class_method_call = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ identifier ~ arg_list? }
+qualified_name_or_identifier = { identifier ~ ("::" ~ identifier)* }
 
 // References to variables
 reference = {
@@ -620,7 +622,7 @@ interpolation = {
 
 // Complex interpolation forms
 complex_scalar_interpolation = { "${" ~ expression ~ "}" }
-complex_array_interpolation = { "@{[" ~ list_elements? ~ "]}" }
+complex_array_interpolation = { "@{[" ~ expression ~ "]}" }
 array_dereference_interpolation = { "@{" ~ expression ~ "}" }
 hash_dereference_interpolation = { "%{" ~ expression ~ "}" }
 
@@ -673,7 +675,7 @@ reserved_word = {
 // Special identifiers that are only reserved in specific contexts
 goto_target = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 qualified_name = { identifier ~ ("::" ~ identifier)+ }
-label = @{ identifier ~ ":" ~ WHITESPACE }
+label = { identifier ~ ":" ~ &(WHITESPACE | "{") }
 bareword = { identifier }
 
 // Regular Expressions
@@ -853,7 +855,18 @@ builtin_list_op_name = @{
     ("print" | "say" | "warn" | "die" | "printf" | "bless" | "open" | "close" | 
      "push" | "pop" | "shift" | "unshift" | "splice" | "grep" | "map" | "sort" |
      "join" | "split" | "substr" | "sprintf" | "chomp" | "chop" | "defined" |
-     "undef" | "ref" | "scalar" | "keys" | "values" | "each" | "delete" | "exists") ~ !(ASCII_ALPHANUMERIC | "_")
+     "undef" | "ref" | "scalar" | "keys" | "values" | "each" | "delete" | "exists" |
+     "length" | "reverse" | "index" | "rindex" | "ord" | "chr" | "lc" | "uc" |
+     "lcfirst" | "ucfirst" | "abs" | "int" | "hex" | "oct" | "sqrt" | "exp" |
+     "log" | "sin" | "cos" | "atan2" | "rand" | "srand" | "time" | "localtime" |
+     "gmtime" | "stat" | "lstat" | "glob" | "readdir" | "telldir" | "seekdir" |
+     "rewinddir" | "closedir" | "opendir" | "rename" | "unlink" | "chmod" |
+     "chown" | "mkdir" | "rmdir" | "symlink" | "readlink" | "link" | "truncate" |
+     "pack" | "unpack" | "vec" | "binmode" | "eof" | "fileno" | "flock" | "getc" |
+     "read" | "readline" | "seek" | "tell" | "sysopen" | "sysread" | "syswrite" |
+     "sysseek" | "syscall" | "select" | "eval" | "exit" | "fork" | "wait" |
+     "waitpid" | "system" | "exec" | "kill" | "sleep" | "alarm" | "getpgrp" |
+     "getppid" | "getpriority" | "setpgrp" | "setpriority") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 
 // Arguments for list operators - consume expressions until statement boundary
