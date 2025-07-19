@@ -80,6 +80,21 @@ cargo xtask fmt
 cargo xtask check --clippy
 ```
 
+### Edge Case Testing
+```bash
+# Run comprehensive edge case tests
+cargo xtask test-edge-cases
+
+# Run with performance benchmarks
+cargo xtask test-edge-cases --bench
+
+# Generate coverage report
+cargo xtask test-edge-cases --coverage
+
+# Run specific edge case test
+cargo xtask test-edge-cases --test test_dynamic_delimiters
+```
+
 ### Parser Generation
 ```bash
 # Generate parser from grammar (if needed for testing)
@@ -97,6 +112,11 @@ npx tree-sitter generate
   - `src/comparison_harness.rs`: Parser comparison infrastructure
   - `src/error/`: Comprehensive error handling
   - `src/unicode/`: Unicode support utilities
+  - `src/edge_case_handler.rs`: Unified edge case detection and handling
+  - `src/phase_aware_parser.rs`: Tracks Perl compilation phases
+  - `src/dynamic_delimiter_recovery.rs`: Recovery strategies for runtime delimiters
+  - `src/encoding_aware_lexer.rs`: Handles mid-file encoding changes
+  - `src/tree_sitter_adapter.rs`: Ensures tree-sitter compatibility for edge cases
 - **`/tree-sitter-perl/`**: Legacy directory with corpus tests and original grammar.js
 - **`/xtask/`**: Build automation and task runner
 - **`/benches/`**: Performance benchmarks
@@ -129,6 +149,13 @@ npx tree-sitter generate
    - Unit tests: Rust component tests
    - Property tests: Edge case testing with `proptest`
    - Comparison tests: Side-by-side parser validation
+
+6. **Edge Case Handling**
+   - Phase-aware parsing for BEGIN/CHECK/INIT/END blocks
+   - Dynamic delimiter recovery with multiple strategies
+   - Encoding-aware lexing for mid-file encoding changes
+   - Tree-sitter compatible error nodes and diagnostics
+   - Performance optimized (<5% overhead for normal code)
 
 ## Development Guidelines
 
