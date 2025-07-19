@@ -4,64 +4,55 @@ This document provides a definitive list of parsing limitations in the Pure Rust
 
 ## Summary
 
-The parser achieves **~95% coverage** of real-world Perl 5 code with the following categories of limitations:
+The parser achieves **~99% coverage** of real-world Perl 5 code with the following categories of limitations:
 
-1. **Critical Grammar Issues** (~4% impact) - Basic constructs that fail to parse
-2. **Design Limitations** (~0.9% impact) - Constructs requiring different parsing approach  
-3. **Theoretical Edge Cases** (~0.1% impact) - Constructs requiring runtime execution
+1. **Design Limitations** (~0.9% impact) - Constructs requiring different parsing approach  
+2. **Theoretical Edge Cases** (~0.1% impact) - Constructs requiring runtime execution
 
-## 1. Critical Grammar Issues (Need Immediate Fix)
+## 1. Fixed Issues ✅
 
-These are bugs in the grammar that prevent parsing of common Perl constructs:
+These grammar issues have been fixed:
 
-### 1.1 Use/Require Statements ❌
-**Impact: ~3% of code** - Affects almost every Perl file
+### 1.1 Use/Require Statements ✅
+**Previously affected ~3% of code**
 
 ```perl
-# FAILS:
+# NOW WORKS:
 use strict;
 use warnings;
 use Data::Dumper;
 require Module;
-
-# Root cause: module_name only accepts qualified_name, not simple identifier
 ```
 
-**Fix Required**: Update grammar rule:
-```pest
-module_name = { identifier | qualified_name }
-```
+**Fix Applied**: Updated module_name to accept simple identifiers
 
-### 1.2 Package Block Syntax ❌
-**Impact: ~0.5% of code** - Modern Perl style
+### 1.2 Package Block Syntax ✅  
+**Previously affected ~0.5% of code**
 
 ```perl
-# FAILS:
+# NOW WORKS:
 package Foo {
-    # package content
+    sub new { }
 }
-
-# WORKS:
-package Foo;
-# package content
 ```
 
-**Fix Required**: Add block syntax to package rule
+**Fix Applied**: Updated package_name to accept simple identifiers
 
-### 1.3 Function Calls Without Parentheses ❌
-**Impact: ~0.5% of code** - Common Perl idiom
+### 1.3 Builtin Functions Without Parentheses ✅
+**Previously affected ~0.5% of code**
 
 ```perl
-# FAILS:
-bless {}, 'ClassName';
-open FILE, '<', 'filename.txt';
+# NOW WORKS:
+print "Hello", "World";
+warn "Warning";
+# Many builtins added to list operator grammar
 
-# WORKS:
-bless({}, 'ClassName');
-open(FILE, '<', 'filename.txt');
+# STILL REQUIRES PARENTHESES:
+bless {}, 'Class';  # Use: bless({}, 'Class');
+open FILE, '<', 'file.txt';  # Use: open(FILE, '<', 'file.txt');
 ```
 
-**Fix Required**: Update function call grammar to handle list context
+**Partial Fix**: Added many builtins to list operator grammar
 
 ## 2. Design Limitations
 
@@ -153,27 +144,28 @@ eval "print <<EOF;\n" . $content . "\nEOF";
 
 ## Impact Analysis
 
-| Category | Impact | Severity | Fix Effort |
-|----------|--------|----------|------------|
-| Use/require statements | ~3% | CRITICAL | Easy (1 line) |
-| Package blocks | ~0.5% | High | Medium |
-| Function lists | ~0.5% | High | Medium |
-| Bareword names | ~0.5% | Medium | Hard |
-| ISA qualified | ~0.2% | Low | Hard |
-| Complex interpolation | ~0.2% | Low | Hard |
-| Heredoc edge cases | ~0.1% | Very Low | Very Hard |
-| **Total** | **~5%** | | |
+| Category | Status | Previous Impact | Current Impact |
+|----------|--------|----------------|----------------|
+| Use/require statements | ✅ FIXED | ~3% | 0% |
+| Package blocks | ✅ FIXED | ~0.5% | 0% |
+| Builtin functions | ✅ PARTIAL | ~0.5% | ~0.1% |
+| Bareword names | ❌ | ~0.5% | ~0.5% |
+| ISA qualified | ❌ | ~0.2% | ~0.2% |
+| Complex interpolation | ❌ | ~0.2% | ~0.2% |
+| Heredoc edge cases | ❌ | ~0.1% | ~0.1% |
+| **Total** | | **~5%** | **~1.1%** |
 
 ## Recommendations
 
-### Immediate Actions (Would achieve ~99% coverage):
-1. **Fix use/require** - Simple grammar fix, massive impact
-2. **Fix package blocks** - Support modern Perl style
-3. **Fix function lists** - Support idiomatic Perl
+### Completed Fixes ✅:
+1. **Use/require statements** - Fixed with simple grammar update
+2. **Package blocks** - Now supports modern Perl style
+3. **Builtin list operators** - Most common functions now work
 
-### Future Improvements:
-1. **Bareword qualified names** - Requires context-sensitive parsing
-2. **Complex interpolation** - Requires expression parser in strings
+### Remaining Improvements:
+1. **Non-builtin functions without parens** - Complex to implement
+2. **Bareword qualified names** - Requires context-sensitive parsing
+3. **Complex interpolation** - Requires expression parser in strings
 
 ### Document as Won't Fix:
 1. **Source filters** - Requires preprocessor

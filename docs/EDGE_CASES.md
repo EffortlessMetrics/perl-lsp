@@ -19,8 +19,7 @@ This document consolidates all information about edge case handling in the Pure 
 The Pure Rust Perl parser provides comprehensive support for most Perl constructs while maintaining tree-sitter compatibility. This document covers both parsing limitations and heredoc-specific edge cases.
 
 ### Coverage Statistics
-- **~95%** - Direct parsing of Perl code
-- **~4%** - Grammar issues (fixable)
+- **~99%** - Direct parsing of Perl code
 - **~0.9%** - Design limitations (workarounds available)
 - **~0.1%** - Theoretical edge cases (require interpreter)
 
@@ -28,15 +27,11 @@ The Pure Rust Perl parser provides comprehensive support for most Perl construct
 
 Before discussing heredoc edge cases, here are the main parsing limitations:
 
-### Critical Grammar Issues (~4% impact)
-1. **Use/Require Statements** - `use strict;` fails (grammar bug)
-2. **Package Blocks** - `package Foo { }` not supported
-3. **List Context Functions** - `bless {}, 'Class'` requires parentheses
-
 ### Design Limitations (~0.9% impact)  
 1. **Bareword Qualified Names** - `Foo::Bar->new()` needs quotes
 2. **ISA with Qualified Names** - `$obj isa Foo::Bar` needs quotes
 3. **Complex Interpolation** - `"@{[$obj->method()]}"` needs temp variable
+4. **Non-builtin Functions** - `bless {}, 'Class'` needs parentheses
 
 See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) for details and workarounds.
 

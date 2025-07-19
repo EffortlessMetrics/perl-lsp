@@ -850,7 +850,10 @@ builtin_list_op = {
 }
 
 builtin_list_op_name = @{
-    ("print" | "say" | "warn" | "die" | "printf") ~ !(ASCII_ALPHANUMERIC | "_")
+    ("print" | "say" | "warn" | "die" | "printf" | "bless" | "open" | "close" | 
+     "push" | "pop" | "shift" | "unshift" | "splice" | "grep" | "map" | "sort" |
+     "join" | "split" | "substr" | "sprintf" | "chomp" | "chop" | "defined" |
+     "undef" | "ref" | "scalar" | "keys" | "values" | "each" | "delete" | "exists") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 
 // Arguments for list operators - consume expressions until statement boundary
