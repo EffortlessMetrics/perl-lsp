@@ -1711,19 +1711,16 @@ impl PureRustPerlParser {
             }
             Rule::package_declaration => {
                 let mut inner = pair.into_inner();
-                inner.next(); // skip "package"
-                // Accept qualified_name as identifier
-                let name = if let Some(name_pair) = inner.next() {
-                    Arc::from(name_pair.as_str())
-                } else {
-                    Arc::from("")
-                };
+                let mut name = Arc::from("");
                 let mut version = None;
                 let mut block = None;
+                
                 for p in inner {
                     match p.as_rule() {
+                        Rule::qualified_name => name = Arc::from(p.as_str()),
                         Rule::version => version = Some(Arc::from(p.as_str())),
                         Rule::block => block = self.build_node(p)?.map(Box::new),
+                        Rule::semicolon => {},
                         _ => {}
                     }
                 }
