@@ -419,6 +419,7 @@ primary_expression = {
     | glob
     | readline
     | qw_list
+    | builtin_list_op
     | identifier
 }
 
@@ -657,7 +658,7 @@ reserved_word = {
     "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
     "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" |
     "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" | 
-    "field" | "role"
+    "field" | "role" | "print" | "say" | "warn" | "die"
 }
 
 // Special identifiers that are only reserved in specific contexts
@@ -832,6 +833,30 @@ pod_section = @{
     "=" ~ ASCII_ALPHA+ ~ (!NEWLINE ~ ANY)* ~ NEWLINE ~ 
     (!(NEWLINE ~ "=cut") ~ ANY)* ~ 
     NEWLINE ~ "=cut" ~ (!NEWLINE ~ ANY)* ~ (NEWLINE | EOI)
+}
+
+// Builtin list operators (can take arguments without parentheses)
+builtin_list_op = {
+    builtin_list_op_name ~ list_op_args?
+}
+
+builtin_list_op_name = @{
+    ("print" | "say" | "warn" | "die" | "printf") ~ !(ASCII_ALPHANUMERIC | "_")
+}
+
+// Arguments for list operators - consume expressions until statement boundary
+list_op_args = {
+    list_op_arg ~ ("," ~ list_op_arg)*
+}
+
+// Single argument - stop at low precedence operators or statement boundaries
+list_op_arg = {
+    !statement_boundary ~ ternary_expression
+}
+
+// Statement boundaries where list operators stop consuming arguments
+statement_boundary = {
+    ";" | "}" | NEWLINE | EOI | statement_modifier | "&&" | "||" | "and" | "or"
 }
 
 // DATA/END sections
