@@ -76,6 +76,11 @@ name = "parser_benchmarks"
 path = "../../benches/parser_benchmarks.rs"
 harness = false
 
+[[bench]]
+name = "edge_case_benchmarks"
+path = "../../benches/edge_case_benchmarks.rs"
+harness = false
+
 [build-dependencies]
 cc = "1.0"
 bindgen = "0.72" 

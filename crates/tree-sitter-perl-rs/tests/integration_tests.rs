@@ -189,4 +189,136 @@ my $status = do {
         assert!(sexp.contains("source_file"));
         assert!(!sexp.contains("ERROR"));
     }
+
+    #[test]
+    fn test_edge_case_integration() {
+        use tree_sitter_perl::{
+            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
+            tree_sitter_adapter::TreeSitterAdapter,
+            dynamic_delimiter_recovery::RecoveryMode,
+        };
+
+        let code = r#"
+# Mix of normal and edge case code
+use strict;
+use warnings;
+
+# Normal heredoc
+my $normal = <<'EOF';
+This is a standard heredoc
+EOF
+
+# Dynamic delimiter
+my $delimiter = "END";
+my $dynamic = <<$delimiter;
+Dynamic delimiter content
+END
+
+# Phase dependent
+BEGIN {
+    our $CONFIG = <<'CFG';
+    compile-time config
+CFG
+}
+
+# Format with heredoc
+format REPORT =
+<<'HEADER'
+Report Header
+HEADER
+@<<<<<<<<<< @>>>>>>>>>
+$name,      $value
+.
+
+# Final normal code
+print "Done\n";
+"#;
+
+        let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
+        let analysis = handler.analyze(code);
+        
+        // Should detect multiple edge cases
+        assert!(!analysis.diagnostics.is_empty());
+        assert!(analysis.delimiter_resolutions.len() > 0);
+        
+        // Convert to tree-sitter format
+        let ts_output = TreeSitterAdapter::convert_to_tree_sitter(
+            analysis.ast,
+            analysis.diagnostics,
+            code,
+        );
+        
+        // Verify tree-sitter compatibility
+        assert_eq!(ts_output.tree.root.node_type, "source_file");
+        assert!(ts_output.metadata.edge_case_count > 0);
+        
+        // Should have both clean and problematic nodes
+        assert!(ts_output.metadata.parse_coverage > 50.0);
+    }
+
+    #[test]
+    fn test_recovery_mode_effectiveness() {
+        use tree_sitter_perl::{
+            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
+            dynamic_delimiter_recovery::RecoveryMode,
+        };
+
+        let code = r#"
+my $delim = "EOF";
+my $text = <<$delim;
+This should be recoverable
+EOF
+"#;
+
+        // Test BestGuess mode
+        let config = EdgeCaseConfig {
+            recovery_mode: RecoveryMode::BestGuess,
+            ..Default::default()
+        };
+        
+        let mut handler = EdgeCaseHandler::new(config);
+        let analysis = handler.analyze(code);
+        
+        // Should successfully recover the delimiter
+        assert_eq!(analysis.delimiter_resolutions.len(), 1);
+        assert!(analysis.delimiter_resolutions[0].resolved_to.is_some());
+        assert_eq!(
+            analysis.delimiter_resolutions[0].resolved_to.as_ref().unwrap(),
+            "EOF"
+        );
+    }
+
+    #[test]
+    fn test_encoding_aware_heredocs() {
+        use tree_sitter_perl::{
+            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
+        };
+
+        let code = r#"
+use encoding 'latin1';
+my $latin = <<'END';
+Latin-1 content
+END
+
+use utf8;
+my $unicode = <<'終了';
+Unicode content
+終了
+
+no utf8;
+my $bytes = <<'BYTES';
+Back to bytes
+BYTES
+"#;
+
+        let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
+        let analysis = handler.analyze(code);
+        
+        // Should have encoding-related diagnostics
+        let encoding_diagnostics = analysis.diagnostics.iter()
+            .filter(|d| d.message.contains("encoding") || d.message.contains("utf8"))
+            .count();
+        
+        assert!(encoding_diagnostics > 0);
+    }
 }
