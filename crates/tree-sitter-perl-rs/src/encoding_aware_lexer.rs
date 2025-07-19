@@ -111,7 +111,7 @@ impl EncodingAwareLexer {
         let encoding = match encoding_name.to_lowercase().as_str() {
             "utf8" | "utf-8" => UTF_8,
             "latin1" | "iso-8859-1" => WINDOWS_1252, // Close enough
-            "ascii" => encoding_rs::ASCII,
+            "ascii" => UTF_8, // ASCII is a subset of UTF-8
             "cp1252" | "windows-1252" => WINDOWS_1252,
             _ => {
                 self.warnings.push(EncodingWarning {

@@ -1859,7 +1859,7 @@ impl PureRustPerlParser {
         Self::node_to_sexp(node)
     }
 
-    fn node_to_sexp(node: &AstNode) -> String {
+    pub fn node_to_sexp(node: &AstNode) -> String {
         match node {
             AstNode::Program(children) => {
                 // Remove nested source_file in S-expression output
