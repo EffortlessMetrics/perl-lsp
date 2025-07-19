@@ -53,7 +53,7 @@ fn main() {
     }
     
     // Print results
-    println!("\n" + "=".repeat(80).as_str());
+    println!("\n{}", "=".repeat(80));
     suite.summary();
     
     // Comparisons

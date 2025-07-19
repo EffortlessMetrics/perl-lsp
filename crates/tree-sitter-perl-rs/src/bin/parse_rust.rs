@@ -3,7 +3,7 @@
 use std::env;
 use std::fs;
 use std::io::{self, Read};
-use tree_sitter_perl::PureRustPerlParser;
+use tree_sitter_perl::full_parser::FullPerlParser;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -24,18 +24,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let debug = args.contains(&"--debug".to_string());
     
     // Create parser
-    let mut parser = PureRustPerlParser::new();
+    let mut parser = FullPerlParser::new();
     
     // Parse the input
-    match parser.parse(&input) {
-        Ok(ast) => {
+    match parser.parse_to_sexp(&input) {
+        Ok(sexp) => {
             if debug {
                 eprintln!("✓ Successfully parsed {}", filename);
                 eprintln!("  Input size: {} bytes", input.len());
             }
             
             // Output S-expression
-            let sexp = parser.to_sexp(&ast);
             println!("{}", sexp);
             
             Ok(())

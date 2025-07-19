@@ -216,6 +216,7 @@ fn create_scanner() -> Box<dyn PerlScanner> {
     #[cfg(not(any(feature = "rust-scanner", feature = "c-scanner")))]
     {
         compile_error!("Must specify either rust-scanner or c-scanner feature");
+        unreachable!()
     }
 }
 
