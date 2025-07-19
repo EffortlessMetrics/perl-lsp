@@ -320,6 +320,7 @@ impl PureRustPerlParser {
         match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
             Ok(pairs) => self.build_ast(pairs),
             Err(e) => {
+                eprintln!("Parse error: {:?}", e);
                 // Attempt partial parsing by trying to parse individual statements
                 self.parse_with_recovery(source, e)
             }
@@ -1035,6 +1036,11 @@ impl PureRustPerlParser {
             }
             Rule::qualified_name => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
+            }
+            Rule::class_method_call => {
+                let s = pair.as_str();
+                // For now, treat it as an identifier
+                Ok(Some(AstNode::Identifier(Arc::from(s))))
             }
             Rule::builtin_list_op => {
                 let mut inner = pair.into_inner();
