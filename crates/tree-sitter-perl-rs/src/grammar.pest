@@ -277,8 +277,9 @@ format_end = { "." ~ (NEWLINE | EOI) }
 
 // Packages and Modules
 package_declaration = {
-    "package" ~ qualified_name ~ version? ~ (block | semicolon)?
+    "package" ~ package_name ~ version? ~ (block | semicolon)?
 }
+package_name = { identifier ~ ("::" ~ identifier)* }
 
 use_statement = {
     "use" ~ (module_name | version) ~ import_list? ~ semicolon?
@@ -288,7 +289,7 @@ require_statement = {
     "require" ~ (module_name | expression) ~ semicolon?
 }
 
-module_name = { qualified_name }
+module_name = { identifier ~ ("::" ~ identifier)* }
 import_list = { "(" ~ import_items? ~ ")" | import_items }
 import_items = { import_item ~ ("," ~ import_item)* }
 import_item = { identifier | string }
