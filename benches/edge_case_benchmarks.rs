@@ -324,6 +324,11 @@ criterion_group!(
 );
 
 #[cfg(not(feature = "pure-rust"))]
-criterion_group!(benches,);
+fn dummy_benchmark(_c: &mut Criterion) {
+    // No benchmarks when pure-rust feature is disabled
+}
+
+#[cfg(not(feature = "pure-rust"))]
+criterion_group!(benches, dummy_benchmark);
 
 criterion_main!(benches);

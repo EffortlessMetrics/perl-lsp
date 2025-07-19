@@ -238,6 +238,21 @@ enum Commands {
         #[arg(long)]
         verbose: bool,
     },
+
+    /// Test edge case handling functionality
+    TestEdgeCases {
+        /// Run benchmarks
+        #[arg(long)]
+        bench: bool,
+
+        /// Generate coverage report
+        #[arg(long)]
+        coverage: bool,
+
+        /// Run specific edge case test
+        #[arg(long)]
+        test: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -295,6 +310,9 @@ fn main() -> Result<()> {
         Commands::TestHeredoc { release, verbose } => {
             // Run heredoc tests using the test module with heredoc suite
             test::run(release, Some(TestSuite::Heredoc), Some(vec!["pure-rust".to_string()]), verbose, false)
+        },
+        Commands::TestEdgeCases { bench, coverage, test } => {
+            edge_cases::run(bench, coverage, test)
         },
     }
 }
