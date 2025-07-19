@@ -1,7 +1,7 @@
 {
   "name": "tree-sitter-perl",
   "version": "1.0.0",
-  "description": "A tree-sitter parser, for Perl!",
+  "description": "LEGACY: C-based tree-sitter parser for Perl. See Pure Rust parser in /crates/tree-sitter-perl-rs/",
   "main": "bindings/node",
   "types": "bindings/node",
   "scripts": {

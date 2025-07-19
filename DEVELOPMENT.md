@@ -1,8 +1,8 @@
 # Development Guide
 
-> **tree-sitter-perl Rust Conversion Development Guide**
+> **Pure Rust Perl Parser Development Guide**
 
-This document provides guidelines and instructions for contributors working on the Rust conversion of tree-sitter-perl.
+This document provides guidelines and instructions for contributors working on the Pure Rust Perl Parser built with Pest.
 
 ---
 
@@ -10,8 +10,7 @@ This document provides guidelines and instructions for contributors working on t
 
 ### Prerequisites
 - **Rust**: 1.70+ (stable)
-- **Node.js**: 20+ (for tree-sitter CLI and grammar generation)
-- **tree-sitter-cli**: `npm install -g tree-sitter-cli`
+- **Cargo**: Latest stable
 
 ### Development Setup
 ```bash
@@ -19,18 +18,14 @@ This document provides guidelines and instructions for contributors working on t
 git clone <repository-url>
 cd tree-sitter-perl
 
-# Install Rust dependencies
+# Build the Pure Rust parser (default)
 cargo build
 
-# Install tree-sitter CLI
-npm install -g tree-sitter-cli
-
-# Generate parser from grammar
-tree-sitter generate
-
 # Run tests
-cargo test
-tree-sitter test
+cargo test --features pure-rust
+
+# Run benchmarks
+cargo bench --features pure-rust
 ```
 
 ---
@@ -39,344 +34,221 @@ tree-sitter test
 
 ```
 tree-sitter-perl/
-├── src/                    # Rust source code
-│   ├── scanner.rs         # Scanner implementation (to be created)
-│   ├── unicode.rs         # Unicode helpers (to be created)
-│   ├── types.rs           # Type definitions (to be created)
-│   └── lib.rs             # Main library entry point
-├── bindings/rust/         # Rust bindings
-│   ├── lib.rs             # Public API
-│   └── build.rs           # Build script (to be simplified)
-├── grammar.js             # Tree-sitter grammar (unchanged)
-├── test/corpus/           # Tree-sitter corpus tests
-├── queries/               # Tree-sitter queries
-├── Cargo.toml             # Rust package manifest
-├── ROADMAP.md             # Project roadmap
-├── CHANGELOG.md           # Change tracking
-└── DEVELOPMENT.md         # This file
+├── crates/tree-sitter-perl-rs/   # Pure Rust Perl Parser
+│   ├── src/
+│   │   ├── grammar.pest          # Pest PEG grammar for Perl 5
+│   │   ├── pure_rust_parser.rs   # Main parser implementation
+│   │   ├── edge_case_handler.rs  # Edge case handling system
+│   │   ├── tree_sitter_adapter.rs # S-expression output
+│   │   └── lib.rs                # Public API
+│   ├── tests/                    # Integration tests
+│   └── benches/                  # Performance benchmarks
+├── xtask/                        # Development automation
+├── docs/                         # Architecture documentation
+└── tree-sitter-perl/             # Legacy C implementation (reference only)
 ```
 
 ---
 
-## 🔧 Development Workflow
+## 🔧 Common Development Tasks
 
-### 1. Understanding the Current Scanner
-
-The current C scanner (`src/scanner.c`) handles:
-- **Token Types**: 40+ different token types for Perl syntax
-- **State Management**: Quote stack, heredoc state, interpolation
-- **Unicode Support**: Identifier validation using Unicode properties
-- **Serialization**: State persistence for incremental parsing
-
-### 2. Porting Strategy
-
-#### Phase 1: Core Types and State
-```rust
-// src/types.rs
-#[derive(Debug, Clone, PartialEq)]
-pub enum TokenType {
-    Apostrophe,
-    DoubleQuote,
-    Backtick,
-    SearchSlash,
-    // ... all token types
-}
-
-#[derive(Debug, Clone)]
-pub struct ScannerState {
-    pub quotes: Vec<Quote>,
-    pub heredoc: HeredocState,
-    // ... other state
-}
-```
-
-#### Phase 2: Scanner Implementation
-```rust
-// src/scanner.rs
-use tree_sitter::{Lexer, Token};
-
-pub struct Scanner {
-    state: ScannerState,
-}
-
-impl Scanner {
-    pub fn scan(&mut self, lexer: &mut Lexer, valid_symbols: &[bool]) -> Option<Token> {
-        // Port logic from scanner.c
-    }
-}
-```
-
-#### Phase 3: Unicode Helpers
-```rust
-// src/unicode.rs
-pub fn is_identifier_start(c: char) -> bool {
-    // Port from tsp_unicode.h or use unicode-ident crate
-}
-
-pub fn is_identifier_continue(c: char) -> bool {
-    // Port from tsp_unicode.h or use unicode-ident crate
-}
-```
-
-### 3. Testing Strategy
-
-#### Unit Tests
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_heredoc_parsing() {
-        // Test heredoc logic
-    }
-
-    #[test]
-    fn test_quote_stack() {
-        // Test quote management
-    }
-
-    #[test]
-    fn test_unicode_identifiers() {
-        // Test Unicode identifier validation
-    }
-}
-```
-
-#### Property Tests
-```rust
-#[cfg(test)]
-mod property_tests {
-    use proptest::prelude::*;
-
-    proptest! {
-        #[test]
-        fn test_quote_balance(input: String) {
-            // Property test for quote balancing
-        }
-    }
-}
-```
-
-#### Integration Tests
-```rust
-#[test]
-fn test_corpus_integration() {
-    // Test with actual corpus files
-}
-```
-
----
-
-## 🧪 Testing Guidelines
-
-### Running Tests
+### Running the Parser
 ```bash
-# Run all Rust tests
-cargo test
+# Parse a Perl file and output S-expression
+cargo run --features pure-rust --bin parse-rust -- script.pl
 
-# Run with output
-cargo test -- --nocapture
+# Parse from stdin
+echo 'print "Hello"' | cargo run --features pure-rust --bin parse-rust -- -
+```
+
+### Testing
+```bash
+# Run all tests
+cargo xtask test
+
+# Run corpus tests
+cargo xtask corpus
+
+# Run edge case tests
+cargo xtask test-edge-cases
 
 # Run specific test
 cargo test test_heredoc_parsing
-
-# Run corpus tests
-tree-sitter test
-
-# Run with coverage
-cargo test --coverage
 ```
-
-### Test Coverage Goals
-- **Scanner Logic**: >95% coverage
-- **Unicode Helpers**: >90% coverage
-- **Integration**: All corpus tests passing
-- **Property Tests**: Edge case coverage
-
-### Test Data
-- Use `test/corpus/` files as test data
-- Create minimal test cases for edge cases
-- Include Unicode edge cases and malformed input
-
----
-
-## 🔍 Code Quality Standards
-
-### Rust Standards
-- **Edition**: 2021
-- **Formatting**: `rustfmt`
-- **Linting**: `clippy` with no warnings
-- **Documentation**: Comprehensive doc comments
-
-### Code Style
-```rust
-/// Scanner for Perl syntax with support for heredocs, quotes, and Unicode.
-///
-/// This scanner handles the complex lexical analysis required for Perl,
-/// including nested quotes, heredocs, and Unicode identifiers.
-pub struct Scanner {
-    /// Current scanner state including quote stack and heredoc info
-    state: ScannerState,
-}
-
-impl Scanner {
-    /// Creates a new scanner with default state.
-    pub fn new() -> Self {
-        Self {
-            state: ScannerState::default(),
-        }
-    }
-
-    /// Scans the next token from the lexer.
-    ///
-    /// # Arguments
-    /// * `lexer` - The tree-sitter lexer
-    /// * `valid_symbols` - Array indicating which tokens are valid
-    ///
-    /// # Returns
-    /// * `Some(Token)` if a token was found
-    /// * `None` if no token matches
-    pub fn scan(&mut self, lexer: &mut Lexer, valid_symbols: &[bool]) -> Option<Token> {
-        // Implementation
-    }
-}
-```
-
-### Error Handling
-```rust
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum ScannerError {
-    #[error("Invalid Unicode sequence: {0}")]
-    InvalidUnicode(String),
-    #[error("Unmatched quote: {0}")]
-    UnmatchedQuote(char),
-    #[error("Heredoc delimiter not found")]
-    HeredocDelimiterNotFound,
-}
-```
-
----
-
-## 🚀 Performance Considerations
-
-### Optimization Targets
-- **Memory Usage**: Minimize allocations in hot paths
-- **CPU Usage**: Efficient Unicode property lookups
-- **Serialization**: Fast state persistence
 
 ### Benchmarking
-```rust
-#[cfg(test)]
-mod benches {
-    use criterion::{black_box, criterion_group, criterion_main, Criterion};
+```bash
+# Run benchmarks
+cargo bench --features pure-rust
 
-    fn bench_scanner(c: &mut Criterion) {
-        c.bench_function("scan_perl_code", |b| {
-            b.iter(|| {
-                // Benchmark scanner performance
-            })
-        });
-    }
-
-    criterion_group!(benches, bench_scanner);
-    criterion_main!(benches);
-}
+# Compare with legacy implementation
+cargo xtask compare
 ```
 
 ---
 
-## 🔄 Integration with Tree-sitter
+## 🛠 Development Workflow
 
-### Scanner Registration
+### 1. Grammar Changes
+To modify the Perl grammar:
+1. Edit `crates/tree-sitter-perl-rs/src/grammar.pest`
+2. Update corresponding AST nodes in `pure_rust_parser.rs`
+3. Update the `build_node()` method
+4. Add tests for new constructs
+
+### 2. Adding Features
 ```rust
-// bindings/rust/lib.rs
-use tree_sitter::Language;
+// 1. Add new rule to grammar.pest
+new_feature = { "keyword" ~ expression }
 
-extern "C" {
-    fn tree_sitter_perl() -> Language;
+// 2. Add AST node
+#[derive(Debug, Clone)]
+pub struct NewFeature {
+    pub keyword: String,
+    pub expr: Box<AstNode>,
 }
 
-pub fn language() -> Language {
-    unsafe { tree_sitter_perl() }
+// 3. Update build_node() in pure_rust_parser.rs
+Rule::new_feature => {
+    // Build AST node
+}
+
+// 4. Add tests
+#[test]
+fn test_new_feature() {
+    let parser = PureRustPerlParser::new();
+    let ast = parser.parse("keyword expression").unwrap();
+    // Assert expectations
 }
 ```
 
-### Build Integration
-```rust
-// bindings/rust/build.rs
-fn main() {
-    // Generate parser from grammar.js
-    // Register Rust scanner
-    // Build final library
-}
-```
+### 3. Edge Case Handling
+For complex Perl edge cases:
+1. Add detection in `edge_case_handler.rs`
+2. Implement recovery strategy
+3. Add diagnostic information
+4. Update documentation in `docs/EDGE_CASES.md`
 
 ---
 
-## 📚 Resources
+## 📝 Code Style
 
-### Tree-sitter Documentation
-- [Tree-sitter Rust Scanner Example](https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_rust/examples/scanner)
-- [Tree-sitter Grammar Documentation](https://tree-sitter.github.io/tree-sitter/creating-parsers)
-- [Tree-sitter Rust Bindings](https://docs.rs/tree-sitter)
+### Rust Guidelines
+- Use `rustfmt` for formatting: `cargo fmt`
+- Run `clippy` for lints: `cargo clippy`
+- Write doc comments for public APIs
+- Use descriptive variable names
+- Prefer `Result<T, E>` for error handling
 
-### Rust Resources
-- [Rust Book](https://doc.rust-lang.org/book/)
-- [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
-- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+### Grammar Guidelines
+- Keep grammar rules simple and composable
+- Use meaningful rule names
+- Add comments for complex patterns
+- Test each rule independently
 
-### Unicode Resources
-- [unicode-ident crate](https://docs.rs/unicode-ident)
-- [Unicode Identifier Properties](https://unicode.org/reports/tr31/)
+---
+
+## 🧪 Testing Strategy
+
+### Unit Tests
+Test individual parser components:
+```rust
+#[test]
+fn test_variable_parsing() {
+    let result = parse_variable("$foo");
+    assert_eq!(result.name, "foo");
+}
+```
+
+### Integration Tests
+Test complete parsing scenarios:
+```rust
+#[test]
+fn test_complex_script() {
+    let script = include_str!("../test/complex.pl");
+    let ast = parser.parse(script).unwrap();
+    verify_ast_structure(&ast);
+}
+```
+
+### Edge Case Tests
+Test Perl's tricky syntax:
+```rust
+#[test]
+fn test_heredoc_in_eval() {
+    let code = r#"eval "print <<EOF\nHello\nEOF\n""#;
+    let result = parser.parse(code);
+    assert!(result.is_ok());
+}
+```
 
 ---
 
 ## 🐛 Debugging
 
-### Common Issues
-1. **Scanner State**: Ensure state is properly serialized/deserialized
-2. **Unicode**: Verify Unicode property lookups are correct
-3. **Memory**: Check for memory leaks in long-running scans
-4. **Performance**: Profile scanner performance with real Perl code
-
-### Debug Tools
+### Parser Debugging
 ```bash
-# Debug build
-cargo build --debug
+# Enable debug output
+RUST_LOG=debug cargo run --features pure-rust --bin parse-rust -- script.pl
 
-# Run with logging
-RUST_LOG=debug cargo test
-
-# Profile with perf
-perf record cargo test
-perf report
+# Use AST output for debugging
+cargo run --features pure-rust --bin parse-rust -- --ast script.pl
 ```
+
+### Common Issues
+1. **Stack overflow**: Use iterative parser for deeply nested code
+2. **Performance**: Check for backtracking in grammar rules
+3. **Edge cases**: Use edge case handler for diagnostics
 
 ---
 
-## 📝 Contributing
+## 📚 Resources
+
+### Documentation
+- [Pest Documentation](https://pest.rs/book/)
+- [Perl Language Reference](https://perldoc.perl.org/perlsyn)
+- [Tree-sitter Docs](https://tree-sitter.github.io/)
+
+### Architecture
+- `ARCHITECTURE.md`: System design
+- `docs/EDGE_CASES.md`: Edge case handling
+- `CLAUDE.md`: AI assistant guidance
+
+---
+
+## 🤝 Contributing
 
 ### Pull Request Process
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/scanner-port`
-3. **Implement** changes following this guide
-4. **Test** thoroughly: `cargo test && tree-sitter test`
-5. **Format** code: `cargo fmt`
-6. **Lint** code: `cargo clippy`
-7. **Submit** pull request with detailed description
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Run `cargo test` and `cargo fmt`
+6. Submit PR with clear description
 
-### Commit Messages
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-```
-feat(scanner): port heredoc logic to Rust
-fix(unicode): correct identifier property lookup
-docs: update development guide
-test: add property tests for quote balancing
-```
+### Code Review Checklist
+- [ ] Tests pass
+- [ ] Code is formatted
+- [ ] Documentation updated
+- [ ] No performance regressions
+- [ ] Edge cases handled
 
 ---
 
-*For project roadmap and progress tracking, see [ROADMAP.md](./ROADMAP.md)* 
+## 🚀 Advanced Topics
+
+### Performance Optimization
+- Use `cargo bench` to measure impact
+- Profile with `perf` or `flamegraph`
+- Minimize allocations in hot paths
+- Consider caching for repeated patterns
+
+### Grammar Optimization
+- Avoid left recursion
+- Use atomic rules for common patterns
+- Order alternatives by frequency
+- Minimize backtracking
+
+---
+
+*For questions or discussions, please open an issue on GitHub.*
