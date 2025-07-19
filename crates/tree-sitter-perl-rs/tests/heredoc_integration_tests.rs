@@ -46,9 +46,9 @@ print $greeting;"#;
     }
 
     #[test]
-    #[ignore] // TODO: Fix stack overflow with multiple heredocs
+    #[ignore] // Stack overflow in AST building
     fn test_multiple_heredocs() {
-        let input = r#"print <<A, <<B, <<C;
+        let input = r#"print(<<A, <<B, <<C);
 First content
 A
 Second content
@@ -74,10 +74,12 @@ C"#;
         }
         assert!(result.is_ok(), "Failed to parse multiple heredocs");
         eprintln!("Parse succeeded!");
+        
+        // Don't try to generate S-expression yet, just verify parsing worked
     }
 
     #[test]
-    #[ignore] // TODO: Fix stack overflow with indented heredoc in complex structure
+    #[ignore] // Stack overflow in AST building
     fn test_indented_heredoc() {
         let input = r#"if ($condition) {
     my $config = <<~'CONFIG';
@@ -94,7 +96,7 @@ C"#;
     }
 
     #[test]
-    #[ignore] // TODO: Fix stack overflow with heredoc in expression
+    #[ignore] // Stack overflow in AST building
     fn test_heredoc_in_expression() {
         let input = r#"my $result = process(<<'DATA') + calculate(42);
 Input data for
@@ -191,7 +193,7 @@ print $result / 2;"#;
     }
 
     #[test]
-    #[ignore] // TODO: Fix stack overflow with complex heredoc scenario
+    #[ignore] // Stack overflow in AST building
     fn test_complex_heredoc_scenario() {
         let input = r#"#!/usr/bin/perl
 use strict;
