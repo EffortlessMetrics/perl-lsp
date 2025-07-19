@@ -65,7 +65,7 @@ impl<'a> HeredocScanner<'a> {
         while temp_position < chars.len() {
             if temp_position + 1 < chars.len() && chars[temp_position] == '<' && chars[temp_position + 1] == '<' {
                 let saved_pos = temp_position;
-                let saved_line = temp_line;
+                let _saved_line = temp_line;
                 
                 // Try to parse heredoc
                 self.position = temp_position;

@@ -116,13 +116,11 @@ impl PureRustPerlParser {
                     Rule::hash_variable => {
                         return Ok(ProcessResult::Complete(Some(AstNode::HashVariable(Arc::from(pair_str)))));
                     }
-                    Rule::integer => {
-                        let value = pair_str.parse::<i64>()
-                            .map_err(|e| format!("Failed to parse integer {}: {}", pair_str, e))?;
-                        return Ok(ProcessResult::Complete(Some(AstNode::Integer(value))));
+                    Rule::number => {
+                        return Ok(ProcessResult::Complete(Some(AstNode::Number(Arc::from(pair_str)))));
                     }
-                    Rule::string_literal => {
-                        return Ok(ProcessResult::Complete(Some(AstNode::StringLiteral(Arc::from(pair_str)))));
+                    Rule::string => {
+                        return Ok(ProcessResult::Complete(Some(AstNode::String(Arc::from(pair_str)))));
                     }
                     Rule::identifier => {
                         return Ok(ProcessResult::Complete(Some(AstNode::Identifier(Arc::from(pair_str)))));
@@ -182,11 +180,11 @@ impl PureRustPerlParser {
     }
     
     /// Build a leaf node (no children)
-    fn build_leaf_node(&self, rule: Rule, text: &str) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+    fn build_leaf_node(&self, rule: Rule, _text: &str) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         match rule {
             Rule::EOI => Ok(None),
             Rule::WHITESPACE => Ok(None),
-            Rule::COMMENT => Ok(None),
+            Rule::comment => Ok(None),
             _ => Ok(Some(AstNode::Identifier(Arc::from(format!("unhandled_leaf_{:?}", rule)))))
         }
     }
@@ -224,47 +222,36 @@ impl PureRustPerlParser {
                 }
             }
             
-            Rule::binary_expression => {
-                if children.len() == 3 {
-                    // Assuming middle child is operator
-                    if let AstNode::Identifier(op) = &children[1] {
-                        Ok(Some(AstNode::BinaryOp {
-                            op: op.clone(),
-                            left: Box::new(children[0].clone()),
-                            right: Box::new(children[2].clone()),
+            Rule::assignment_expression => {
+                if children.len() >= 3 {
+                    // Find the operator
+                    let op_index = children.iter().position(|n| {
+                        matches!(n, AstNode::Identifier(s) if s.as_ref() == "=")
+                    }).unwrap_or(1);
+                    
+                    if op_index > 0 && op_index < children.len() - 1 {
+                        Ok(Some(AstNode::Assignment {
+                            target: Box::new(children[0].clone()),
+                            op: Arc::from("="),
+                            value: Box::new(children[op_index + 1].clone()),
                         }))
                     } else {
-                        Ok(Some(AstNode::BinaryOp {
-                            op: Arc::from("unknown_op"),
-                            left: Box::new(children[0].clone()),
-                            right: Box::new(children[2].clone()),
-                        }))
+                        Ok(Some(children[0].clone()))
                     }
                 } else if children.len() == 1 {
                     Ok(Some(children[0].clone()))
                 } else {
-                    Err("Invalid binary expression".into())
+                    Err("Invalid assignment expression".into())
                 }
             }
             
-            Rule::array_literal => {
-                Ok(Some(AstNode::ArrayLiteral(children)))
-            }
-            
-            Rule::hash_literal => {
-                Ok(Some(AstNode::HashLiteral(children)))
-            }
             
             Rule::function_call => {
                 if !children.is_empty() {
-                    if let AstNode::Identifier(name) = &children[0] {
-                        Ok(Some(AstNode::FunctionCall {
-                            name: name.clone(),
-                            args: children[1..].to_vec(),
-                        }))
-                    } else {
-                        Err("Invalid function call".into())
-                    }
+                    Ok(Some(AstNode::FunctionCall {
+                        function: Box::new(children[0].clone()),
+                        args: children[1..].to_vec(),
+                    }))
                 } else {
                     Err("Empty function call".into())
                 }
