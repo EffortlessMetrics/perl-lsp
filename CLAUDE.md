@@ -4,28 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Tree-sitter parser for the Perl programming language with two implementations:
-1. **C/tree-sitter parser**: Production-ready implementation with C scanner and tree-sitter generated parser
-2. **Pure Rust parser**: Production-ready implementation using Pest parser generator (95%+ Perl coverage)
+This is a **Pure Rust Perl Parser** built with Pest parser generator for Rust 2024. The parser:
+- Uses Pest PEG grammar for parsing Perl 5 syntax
+- Outputs tree-sitter compatible S-expressions
+- Has no C dependencies (pure Rust implementation)
+- Achieves 95%+ Perl syntax coverage with comprehensive edge case handling
 
-Both implementations are in `/crates/tree-sitter-perl-rs/`. The `/tree-sitter-perl/` directory contains the original grammar and corpus tests.
+The main implementation is in `/crates/tree-sitter-perl-rs/`. Legacy tree-sitter files in `/tree-sitter-perl/` are kept for reference only.
 
 ## Key Commands
 
 ### Build Commands
 ```bash
-# Build with default features (c-scanner)
-cargo xtask build
-
-# Build with pure Rust parser
+# Build the Pure Rust parser (canonical)
 cargo xtask build --features pure-rust
 
-# Build with specific scanner
-cargo xtask build --rust-scanner
-cargo xtask build --c-scanner
-
 # Build in release mode
-cargo xtask build --release
+cargo xtask build --features pure-rust --release
+
+# Build from crate directory
+cd crates/tree-sitter-perl-rs
+cargo build --features pure-rust
 ```
 
 ### Test Commands
@@ -47,25 +46,24 @@ cargo xtask test --suite integration
 cargo test test_name
 
 # Test pure Rust parser
-cargo test --features pure-rust pure_rust_parser::tests
+cargo test --features pure-rust
 ```
 
 ### Parser Commands
 ```bash
-# Run pure Rust parser on a file
+# Parse a Perl file with Pure Rust parser
 cargo xtask parse-rust file.pl --sexp
 
-# Compare C and Rust parsers
-cargo xtask compare
+# Parse from stdin
+echo 'print "Hello"' | cargo run --features pure-rust --bin parse-rust -- -
 
-# Run comparison tool
-cargo run --features "pure-rust test-utils" --bin compare_parsers -- --test
-cargo run --features "pure-rust test-utils" --bin compare_parsers -- file.pl
+# Run directly from crate
+cd crates/tree-sitter-perl-rs
+cargo run --features pure-rust --bin parse-rust -- script.pl
 
 # Run benchmarks
+cargo bench --features pure-rust
 cargo xtask bench
-./benchmark_all.sh
-./compare_all_levels.sh
 ```
 
 ### Code Quality
@@ -105,67 +103,63 @@ npx tree-sitter generate
 ## Architecture Overview
 
 ### Project Structure
-- **`/crates/tree-sitter-perl-rs/`**: Active Rust implementation - ALL new development happens here
-  - `src/scanner/`: Dual scanner implementation (C and Rust)
-  - `src/pure_rust_parser.rs`: Pure Rust parser using Pest
-  - `src/grammar.pest`: Pest grammar for Perl
-  - `src/comparison_harness.rs`: Parser comparison infrastructure
-  - `src/error/`: Comprehensive error handling
-  - `src/unicode/`: Unicode support utilities
-  - `src/edge_case_handler.rs`: Unified edge case detection and handling
-  - `src/phase_aware_parser.rs`: Tracks Perl compilation phases
-  - `src/dynamic_delimiter_recovery.rs`: Recovery strategies for runtime delimiters
-  - `src/encoding_aware_lexer.rs`: Handles mid-file encoding changes
-  - `src/tree_sitter_adapter.rs`: Ensures tree-sitter compatibility for edge cases
-- **`/tree-sitter-perl/`**: Legacy directory with corpus tests and original grammar.js
-- **`/xtask/`**: Build automation and task runner
+- **`/crates/tree-sitter-perl-rs/`**: Pure Rust Perl parser implementation
+  - `src/pure_rust_parser.rs`: Main Pest-based parser
+  - `src/grammar.pest`: Complete Perl 5 PEG grammar
+  - `src/error/`: Error handling and diagnostics
+  - `src/unicode/`: Unicode identifier support
+  - `src/edge_case_handler.rs`: Heredoc edge case detection
+  - `src/phase_aware_parser.rs`: BEGIN/END block handling
+  - `src/tree_sitter_adapter.rs`: S-expression output formatting
+  - `src/lib.rs`: Public API and exports
+- **`/xtask/`**: Development automation tools
+- **`/docs/`**: Architecture and design documentation
 - **`/benches/`**: Performance benchmarks
 
 ### Key Components
 
-1. **Dual Implementation Strategy**
-   - C/tree-sitter: FFI wrapper around tree-sitter generated C parser
-   - Pure Rust: Pest-based parser with no C dependencies
-   - Feature flags: `c-scanner` (default), `rust-scanner`, `pure-rust`
+1. **Pest Parser Architecture**
+   - PEG grammar in `grammar.pest` defines all Perl syntax
+   - Recursive descent parsing with packrat optimization
+   - Zero-copy parsing with `&str` slices
+   - Feature flag: `pure-rust` enables the Pest parser
 
-2. **Scanner Architecture**
-   - Implements `PerlScanner` trait for polymorphic scanner support
-   - Manages complex state: quote stacks, heredoc delimiters, interpolation contexts
-   - Handles 40+ token types including complex Perl constructs
+2. **AST Generation**
+   - Strongly typed AST nodes in `pure_rust_parser.rs`
+   - Arc<str> for efficient string storage
+   - Tree-sitter compatible node types
+   - Position tracking for all nodes
 
-3. **Pure Rust Parser (Pest)**
-   - Grammar defined in `src/grammar.pest`
-   - AST nodes in `pure_rust_parser.rs`
-   - S-expression output for compatibility
-   - Comparison harness for benchmarking against C parser
+3. **S-Expression Output**
+   - `to_sexp()` method produces tree-sitter format
+   - Compatible with existing tree-sitter tools
+   - Preserves all position information
+   - Error nodes for unparseable constructs
 
-4. **Error Handling**
-   - Comprehensive error types in `error.rs` and `error/` module
-   - Supports parsing, scanner, and Unicode errors
-   - Uses `thiserror` for ergonomic error definitions
+4. **Edge Case Handling**
+   - Comprehensive heredoc support (99% coverage)
+   - Phase-aware parsing for BEGIN/END blocks
+   - Dynamic delimiter detection and recovery
+   - Clear diagnostics for unparseable constructs
 
-5. **Testing Infrastructure**
-   - Corpus tests: `tree-sitter-perl/test/corpus/`
-   - Unit tests: Rust component tests
-   - Property tests: Edge case testing with `proptest`
-   - Comparison tests: Side-by-side parser validation
+5. **Testing Strategy**
+   - Grammar tests for each Perl construct
+   - Edge case tests with property testing
+   - Performance benchmarks
+   - Integration tests for S-expression output
 
-6. **Edge Case Handling**
-   - Phase-aware parsing for BEGIN/CHECK/INIT/END blocks
-   - Dynamic delimiter recovery with multiple strategies
    - Encoding-aware lexing for mid-file encoding changes
    - Tree-sitter compatible error nodes and diagnostics
    - Performance optimized (<5% overhead for normal code)
 
 ## Development Guidelines
 
-1. **Development Location**: ALL new development happens in `/crates/tree-sitter-perl-rs/`
-2. **Parser Choice**: Use feature flags to switch between implementations
-3. **Testing**: Always test with both parsers when making changes
-4. **Grammar Changes**: 
-   - For tree-sitter: Edit `tree-sitter-perl/grammar.js` and regenerate
-   - For Pest: Edit `crates/tree-sitter-perl-rs/src/grammar.pest`
+1. **Primary Parser**: Pure Rust Pest parser is the canonical implementation
+2. **Development Location**: ALL new development in `/crates/tree-sitter-perl-rs/`
+3. **Grammar Changes**: Edit `crates/tree-sitter-perl-rs/src/grammar.pest`
+4. **Testing**: Use `cargo test --features pure-rust`
 5. **Performance**: Run benchmarks to ensure no regressions
+6. **Legacy C Code**: C parser/scanner exist only for benchmarking comparison
 
 ## Pure Rust Parser Details
 
@@ -187,26 +181,27 @@ To extend the Pest grammar:
 - ✅ String interpolation ($var and @array)
 - ✅ Regular expressions (qr//, =~, !~)
 - ✅ Method calls and complex dereferencing
-- 🚧 Substitution operators (s///, tr///) - requires context-sensitive parsing
-- 🚧 Complex interpolation (${expr})
-- 🚧 Heredocs
+- ✅ Substitution operators (s///, tr///) via context-sensitive parsing
+- ✅ Complex interpolation (${expr})
+- ✅ Heredocs with multi-phase parsing
 
 ## Performance Characteristics
 
-- C/tree-sitter parser: ~12-68 µs for typical files
 - Pure Rust parser: ~200-450 µs for typical files (2.5KB)
-- Memory usage: Pure Rust uses Arc<str> for efficient string storage
-- Production ready: Both parsers handle real-world Perl code
-- Benchmarking: Use `cargo xtask compare` for detailed comparison
+- Memory usage: Arc<str> for zero-copy string storage
+- Production ready: Handles real-world Perl code
+- Predictable: ~180 µs/KB parsing speed
+- Legacy C parser: ~12-68 µs (kept for benchmark reference only)
 
 ## Common Development Tasks
 
 ### Adding a New Perl Feature
-1. Update grammar (either grammar.js or grammar.pest)
-2. Add/update scanner tokens if needed
-3. Add corpus test in `tree-sitter-perl/test/corpus/`
-4. Run tests: `cargo xtask test`
-5. Run benchmarks: `cargo xtask bench`
+1. Update `src/grammar.pest` with new syntax rules
+2. Add corresponding AST nodes in `pure_rust_parser.rs`
+3. Update `build_node()` method to handle new constructs
+4. Add tests in `tests/` directory
+5. Run tests: `cargo test --features pure-rust`
+6. Run benchmarks: `cargo bench --features pure-rust`
 
 ### Debugging Parse Failures
 1. Use `cargo xtask corpus --diagnose` for detailed error info
@@ -220,14 +215,13 @@ To extend the Pest grammar:
 
 ## Current Status
 
-- Tree-sitter parser: Production-ready, 100% corpus compatibility
-- Pure Rust parser: Production-ready with 99%+ Perl coverage
-- Recent additions: 
-  - Context-sensitive slash disambiguation (/, s///, tr///, m//, qr//)
-  - Modern Perl features (try/catch, defer, class/method)
-  - All operators including smart match (~~), file tests, and bitwise string ops
-  - Full heredoc support via multi-phase parsing
-  - Comprehensive edge case handling with tree-sitter compatibility
+**Pure Rust Pest Parser**: Production-ready with 99%+ Perl coverage
+- Complete Perl 5 syntax support
+- Tree-sitter compatible S-expression output
+- Context-sensitive features (slash disambiguation, heredocs)
+- Modern Perl features (try/catch, defer, class/method)
+- All operators including smart match (~~), file tests, bitwise ops
+- Comprehensive edge case handling system
 
 ### Context-Sensitive Features
 
