@@ -7,6 +7,7 @@ use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner, HeredocCollector
 use crate::pure_rust_parser::{PureRustPerlParser, AstNode};
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Parsing context for heredoc processing
 #[derive(Debug, Clone, PartialEq)]
@@ -155,8 +156,9 @@ impl<'a> ContextAwareHeredocParser<'a> {
                              eval_declarations: Vec<HeredocDeclaration>) {
         // Adjust positions relative to main input
         for mut decl in eval_declarations {
-            decl.position += eval_start;
-            decl.line_number += processed[..eval_start].lines().count();
+            decl.declaration_pos += eval_start;
+            decl.declaration_end += eval_start;
+            decl.declaration_line += processed[..eval_start].lines().count();
             main_declarations.push(decl);
         }
     }
@@ -175,13 +177,14 @@ impl<'a> ContextAwareHeredocParser<'a> {
         
         // Store metadata for runtime handling
         declarations.push(HeredocDeclaration {
-            delimiter: "EVAL_CONTEXT".to_string(),
-            quoted: false,
+            terminator: "EVAL_CONTEXT".to_string(),
+            declaration_pos: replacement_start,
+            declaration_end: replacement_end,
+            declaration_line: processed[..replacement_start].lines().count(),
+            interpolated: true,
             indented: false,
-            position: replacement_start,
-            line_number: processed[..replacement_start].lines().count(),
-            content: Some(replacement.to_string()),
-            interpolate: true,
+            placeholder_id: marker.clone(),
+            content: Some(Arc::from(replacement)),
         });
     }
 }
@@ -240,10 +243,10 @@ impl ContextAwareFullParser {
     fn annotate_ast(&self, ast: &mut AstNode, declarations: &[HeredocDeclaration]) {
         // Walk AST and mark nodes that contain heredocs
         match ast {
-            AstNode::EvalStatement { expression, .. } => {
+            AstNode::EvalString(expression) => {
                 // Mark eval nodes that contain heredocs
                 if let AstNode::String(content) = expression.as_ref() {
-                    if declarations.iter().any(|d| d.delimiter == "EVAL_CONTEXT") {
+                    if declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT") {
                         // Add metadata for runtime handling
                         // In a real implementation, we'd modify the AST node type
                         // to include heredoc metadata
@@ -251,7 +254,7 @@ impl ContextAwareFullParser {
                 }
             }
             AstNode::Substitution { replacement, flags, .. } => {
-                if flags.contains("e") && declarations.iter().any(|d| d.delimiter == "EVAL_CONTEXT") {
+                if flags.contains("e") && declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT") {
                     // Mark for runtime evaluation
                 }
             }
@@ -291,7 +294,7 @@ EOF
         assert!(declarations.len() >= 1, "Should find eval heredoc");
         
         // The eval content should be marked for re-parsing
-        assert!(declarations.iter().any(|d| d.delimiter == "EOF"));
+        assert!(declarations.iter().any(|d| d.terminator == "EOF"));
     }
     
     #[test]
@@ -309,7 +312,7 @@ END
         assert!(!declarations.is_empty(), "Should find heredoc in s///e");
         
         // Should have special context marker
-        assert!(declarations.iter().any(|d| d.delimiter == "EVAL_CONTEXT" || d.delimiter == "END"));
+        assert!(declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT" || d.terminator == "END"));
     }
     
     #[test]

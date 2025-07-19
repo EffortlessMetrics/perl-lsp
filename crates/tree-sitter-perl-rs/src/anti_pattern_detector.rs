@@ -58,7 +58,7 @@ pub enum AntiPattern {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub pattern: AntiPattern,
