@@ -117,7 +117,23 @@ pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
     let mut tracker = StatementTracker::new();
     let mut prev_char = None;
     
-    // Scan forward from the heredoc line to find where the statement ends
+    // First, we need to understand the context up to the heredoc line
+    // to get the correct bracket state
+    for (idx, line) in lines.iter().enumerate() {
+        let current_line = idx + 1;
+        if current_line >= heredoc_line {
+            break;
+        }
+        
+        for ch in line.chars() {
+            tracker.process_char(ch, prev_char);
+            prev_char = Some(ch);
+        }
+        tracker.process_char('\n', prev_char);
+        prev_char = Some('\n');
+    }
+    
+    // Now scan forward from the heredoc line to find where the statement ends
     for (idx, line) in lines.iter().enumerate() {
         let current_line = idx + 1;
         
