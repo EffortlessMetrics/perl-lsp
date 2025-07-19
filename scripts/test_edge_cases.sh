@@ -13,24 +13,24 @@ echo -e "${BLUE}=== Testing Edge Case Handling ===${NC}"
 
 # Run edge case specific tests
 echo -e "\n${YELLOW}Running edge case tests...${NC}"
-cargo test --features pure-rust edge_case_tests -- --nocapture
+cargo test --features "pure-rust test-utils" edge_case_tests -- --nocapture
 
 echo -e "\n${YELLOW}Running integration tests...${NC}"
-cargo test --features pure-rust test_edge_case_integration -- --nocapture
-cargo test --features pure-rust test_recovery_mode_effectiveness -- --nocapture
-cargo test --features pure-rust test_encoding_aware_heredocs -- --nocapture
+cargo test --features "pure-rust test-utils" test_edge_case_integration -- --nocapture
+cargo test --features "pure-rust test-utils" test_recovery_mode_effectiveness -- --nocapture
+cargo test --features "pure-rust test-utils" test_encoding_aware_heredocs -- --nocapture
 
 # Run benchmarks if requested
 if [ "$1" == "--bench" ]; then
     echo -e "\n${YELLOW}Running edge case benchmarks...${NC}"
-    cargo bench --features pure-rust edge_case_benchmarks
+    cargo bench --features "pure-rust test-utils" edge_case_benchmarks
 fi
 
 # Run examples
 echo -e "\n${YELLOW}Running edge case examples...${NC}"
-cargo run --features pure-rust --example edge_case_demo
-cargo run --features pure-rust --example anti_pattern_analysis
-cargo run --features pure-rust --example tree_sitter_compatibility
+cargo run --features "pure-rust test-utils" --example edge_case_demo
+cargo run --features "pure-rust test-utils" --example anti_pattern_analysis
+cargo run --features "pure-rust test-utils" --example tree_sitter_compatibility
 
 echo -e "\n${GREEN}✓ All edge case tests passed!${NC}"
 
