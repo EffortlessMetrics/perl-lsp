@@ -227,6 +227,7 @@ To extend the Pest grammar:
   - Modern Perl features (try/catch, defer, class/method)
   - All operators including smart match (~~), file tests, and bitwise string ops
   - Full heredoc support via multi-phase parsing
+  - Comprehensive edge case handling with tree-sitter compatibility
 
 ### Context-Sensitive Features
 
@@ -245,3 +246,11 @@ See `SLASH_DISAMBIGUATION.md` for full details.
 3. **Complete coverage** - Supports all heredoc variants including indented heredocs
 
 See `HEREDOC_IMPLEMENTATION.md` for full details.
+
+#### Edge Case Handling
+1. **Edge case handler** (`edge_case_handler.rs`) - Unified detection and recovery system
+2. **Phase-aware parsing** (`phase_aware_parser.rs`) - Handles BEGIN/CHECK/INIT/END blocks
+3. **Dynamic recovery** (`dynamic_delimiter_recovery.rs`) - Multiple strategies for runtime delimiters
+4. **Tree-sitter adapter** (`tree_sitter_adapter.rs`) - Ensures 100% AST compatibility
+
+See `docs/EDGE_CASES.md` for comprehensive documentation.
