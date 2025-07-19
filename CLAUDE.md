@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Production-Ready Pure Rust Perl Parser** built with Pest parser generator. The parser:
-- **99.9% Perl 5 syntax coverage** - handles virtually all real-world Perl code
+This is a **Pure Rust Perl Parser** built with Pest parser generator. The parser:
+- **~95% Perl 5 syntax coverage** - handles most real-world Perl code
 - Outputs tree-sitter compatible S-expressions for seamless integration
 - Zero C dependencies - 100% pure Rust implementation
 - Performance: ~200-450 µs for typical files (~180 µs/KB)
 - Full Unicode support including identifiers (café, π, Σ, etc.)
 - Comprehensive test suite with 16+ test files
-- Production-ready with only 0.1% edge cases having documented workarounds
+- Known limitations (~5%) with documented workarounds
 
 The main implementation is in `/crates/tree-sitter-perl-rs/`. Legacy tree-sitter files in `/tree-sitter-perl/` are kept for benchmarking comparison only.
 
@@ -173,7 +173,7 @@ To extend the Pest grammar:
 3. Update the `build_node` method to handle new rules
 4. Add tests for new constructs
 
-### Current Grammar Coverage (99.9%)
+### Current Grammar Coverage (~95%)
 - ✅ Variables (scalar, array, hash) with all declaration types (my, our, local, state)
 - ✅ Literals (numbers, strings with interpolation, identifiers, lists)
 - ✅ All operators with proper precedence including smart match (~~)
@@ -223,20 +223,28 @@ To extend the Pest grammar:
 
 ## Current Status
 
-**Pure Rust Pest Parser**: Production-ready with 99.9% Perl coverage
-- Complete Perl 5 syntax support (all versions through 5.38)
+**Pure Rust Pest Parser**: ~95% Perl coverage with known limitations
+- Most Perl 5 syntax support (versions through 5.38)
 - Tree-sitter compatible S-expression output
 - Context-sensitive features (slash disambiguation, heredocs)
 - Modern Perl features (try/catch, defer, class/method, signatures with type constraints)
-- All operators including smart match (~~), ISA, postfix deref, file tests, bitwise ops
+- Most operators including smart match (~~), ISA, postfix deref, file tests, bitwise ops
 - Comprehensive edge case handling system
 - Full Unicode support throughout
 
-### Known Limitations (0.1%)
-1. **Bareword qualified names**: `Foo::Bar->new()` requires quotes: `"Foo::Bar"->new()`
-2. **Complex array interpolation**: `"@{[$obj->method()]}"` - use temporary variables instead
+### Known Limitations (~5%)
 
-Both have simple, idiomatic workarounds.
+#### Critical Grammar Issues (~4%)
+1. **Use/require statements**: `use strict;` doesn't parse (grammar bug)
+2. **Package blocks**: `package Foo { }` not supported
+3. **Function lists**: `bless {}, 'Class'` needs parentheses
+
+#### Design Limitations (~1%)
+1. **Bareword qualified names**: `Foo::Bar->new()` requires quotes: `"Foo::Bar"->new()`
+2. **ISA with qualified names**: `$obj isa Foo::Bar` needs quotes
+3. **Complex array interpolation**: `"@{[$obj->method()]}"` - use temporary variables
+
+See KNOWN_LIMITATIONS.md for complete details and workarounds.
 
 ### Context-Sensitive Features
 

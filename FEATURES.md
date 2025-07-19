@@ -1,6 +1,6 @@
 # Pure Rust Perl Parser - Complete Feature List
 
-This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **99.9% coverage** of real-world Perl 5 code.
+This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **~95% coverage** of real-world Perl 5 code.
 
 ## ✅ Core Language Features (100% Coverage)
 
@@ -160,23 +160,69 @@ This document provides a comprehensive list of all features supported by the Pur
 - ✅ UTF-8 source files
 - ✅ Unicode properties in regex
 
-## ⚠️ Known Limitations (0.1%)
+## ⚠️ Known Limitations (~5%)
 
-### Bareword Qualified Names (0.05%)
+### Critical Grammar Issues (~4%)
+
+#### 1. Use/Require Statements
 ```perl
-# This doesn't parse:
+# FAILS:
+use strict;
+use warnings;
+require Module;
+
+# Root cause: Grammar bug in module_name rule
+```
+
+#### 2. Package Blocks
+```perl
+# FAILS:
+package Foo {
+    # content
+}
+
+# WORKS:
+package Foo;
+# content
+```
+
+#### 3. Function Calls in List Context
+```perl
+# FAILS:
+bless {}, 'Class';
+open FILE, '<', 'file.txt';
+
+# WORKS:
+bless({}, 'Class');
+open(FILE, '<', 'file.txt');
+```
+
+### Design Limitations (~1%)
+
+#### 1. Bareword Qualified Names
+```perl
+# FAILS:
 Foo::Bar->new();
 
-# Workaround - use quotes:
+# WORKAROUND:
 "Foo::Bar"->new();
 ```
 
-### Complex Array Interpolation (0.05%)
+#### 2. ISA with Qualified Names
 ```perl
-# This parses but not as single construct:
+# FAILS:
+$obj isa Foo::Bar
+
+# WORKS:
+$obj isa "Foo::Bar"
+```
+
+#### 3. Complex Array Interpolation
+```perl
+# MAY FAIL:
 print "@{[$obj->method()]}";
 
-# Workaround - use temporary:
+# WORKAROUND:
 my @temp = $obj->method();
 print "@temp";
 ```
@@ -185,12 +231,12 @@ print "@temp";
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| Core Perl 5 | 100% | All fundamental features |
-| Modern Perl | 100% | Including Perl 5.38 features |
-| Operators | 100% | 100+ operators supported |
-| Edge Cases | 99% | Heredocs, context-sensitive |
+| Core Perl 5 | ~90% | Most fundamental features |
+| Modern Perl | ~95% | Including Perl 5.38 features |
+| Operators | ~98% | Most operators supported |
+| Edge Cases | ~90% | Heredocs, context-sensitive |
 | Unicode | 100% | Full identifier and string support |
-| **Overall** | **99.9%** | **Production ready** |
+| **Overall** | **~95%** | **Known limitations documented** |
 
 ## 🚀 Performance Characteristics
 
@@ -201,4 +247,4 @@ print "@temp";
 
 ---
 
-The Pure Rust Perl Parser is **production-ready** for virtually all Perl codebases, with only minor edge cases requiring simple workarounds.
+The Pure Rust Perl Parser covers **~95%** of real-world Perl code. Critical grammar issues (especially with `use` statements) need to be fixed for production use. See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for complete details.

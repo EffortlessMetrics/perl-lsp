@@ -5,22 +5,40 @@ This document consolidates all information about edge case handling in the Pure 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Why These Edge Cases Are Hard](#why-these-edge-cases-are-hard)
-3. [Implementation Architecture](#implementation-architecture)
-4. [Supported Edge Cases](#supported-edge-cases)
-5. [Testing Strategy](#testing-strategy)
-6. [Performance Characteristics](#performance-characteristics)
-7. [Usage Guide](#usage-guide)
-8. [Technical Details](#technical-details)
+2. [Known Parsing Limitations](#known-parsing-limitations)
+3. [Why These Edge Cases Are Hard](#why-these-edge-cases-are-hard)
+4. [Implementation Architecture](#implementation-architecture)
+5. [Supported Edge Cases](#supported-edge-cases)
+6. [Testing Strategy](#testing-strategy)
+7. [Performance Characteristics](#performance-characteristics)
+8. [Usage Guide](#usage-guide)
+9. [Technical Details](#technical-details)
 
 ## Overview
 
-The Pure Rust Perl parser provides comprehensive support for Perl heredoc edge cases while maintaining 100% tree-sitter compatibility. Our solution transforms "unparseable" constructs into opportunities for code understanding and improvement.
+The Pure Rust Perl parser provides comprehensive support for most Perl constructs while maintaining tree-sitter compatibility. This document covers both parsing limitations and heredoc-specific edge cases.
 
 ### Coverage Statistics
-- **99%** - Direct parsing of standard heredocs
-- **0.9%** - Detection and recovery of edge cases
-- **0.1%** - Clear annotation of unparseable constructs
+- **~95%** - Direct parsing of Perl code
+- **~4%** - Grammar issues (fixable)
+- **~0.9%** - Design limitations (workarounds available)
+- **~0.1%** - Theoretical edge cases (require interpreter)
+
+## Known Parsing Limitations
+
+Before discussing heredoc edge cases, here are the main parsing limitations:
+
+### Critical Grammar Issues (~4% impact)
+1. **Use/Require Statements** - `use strict;` fails (grammar bug)
+2. **Package Blocks** - `package Foo { }` not supported
+3. **List Context Functions** - `bless {}, 'Class'` requires parentheses
+
+### Design Limitations (~0.9% impact)  
+1. **Bareword Qualified Names** - `Foo::Bar->new()` needs quotes
+2. **ISA with Qualified Names** - `$obj isa Foo::Bar` needs quotes
+3. **Complex Interpolation** - `"@{[$obj->method()]}"` needs temp variable
+
+See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) for details and workarounds.
 
 ## Why These Edge Cases Are Hard
 

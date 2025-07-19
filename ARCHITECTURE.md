@@ -4,11 +4,11 @@ This document provides a comprehensive overview of the Production-Ready Pure Rus
 
 ## 🏗️ System Overview
 
-The tree-sitter-perl project is a **Production-Ready Pure Rust Parser** achieving 99.9% Perl 5 syntax coverage:
+The tree-sitter-perl project is a **Pure Rust Parser** achieving ~95% Perl 5 syntax coverage:
 
 1. **Pest Parser**: Grammar-driven parsing with zero C dependencies
 2. **Tree-sitter Output**: 100% compatible S-expression format for IDE integration
-3. **99.9% Coverage**: Handles virtually all real-world Perl code
+3. **~95% Coverage**: Handles most real-world Perl code
 4. **Performance**: ~180 µs/KB parsing speed with efficient memory usage
 5. **Full Unicode Support**: Including identifiers and strings
 6. **Comprehensive Testing**: 16+ test files with edge case coverage
@@ -168,7 +168,7 @@ pub enum AstNode {
 - **Special Context**: Multiple specialized test files
 
 ### Coverage Areas
-- ✅ All Perl 5 syntax (99.9% coverage)
+- ✅ Most Perl 5 syntax (~95% coverage)
 - ✅ Unicode support (identifiers, strings)
 - ✅ Modern Perl features (signatures, try/catch)
 - ✅ Statement modifiers and postfix operators
