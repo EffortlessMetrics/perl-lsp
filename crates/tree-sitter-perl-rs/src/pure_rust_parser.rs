@@ -7,6 +7,7 @@ use pest::{iterators::{Pair, Pairs}, Parser};
 use pest_derive::Parser;
 use std::sync::Arc;
 use crate::pratt_parser::PrattParser;
+use stacker;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -418,8 +419,20 @@ impl PureRustPerlParser {
         }
     }
 
+    /// Public wrapper that uses stacker to grow the stack as needed
     #[inline]
     pub(crate) fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        // Use stacker to grow stack if needed, with 256KB red zone
+        const STACK_RED_ZONE: usize = 256 * 1024; // 256KB
+        const STACK_SIZE: usize = 2 * 1024 * 1024; // 2MB growth
+        stacker::maybe_grow(STACK_RED_ZONE, STACK_SIZE, || {
+            self.build_node_impl(pair)
+        })
+    }
+    
+    /// Actual implementation of build_node
+    #[inline]
+    fn build_node_impl(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         match pair.as_rule() {
             // Fast-path rules
             Rule::simple_assignment => {

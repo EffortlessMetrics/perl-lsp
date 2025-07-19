@@ -20,6 +20,7 @@ unicode-normalization = "0.1"
 pest = "2.8"
 pest_derive = "2.8"
 regex = "1.11"
+stacker = "0.1"
 
 [dev-dependencies]
 criterion = "0.6"
@@ -47,24 +48,10 @@ path = "src/bin/compare_parsers.rs"
 required-features = ["test-utils"]
 
 [[bin]]
-name = "test_stateful"
-path = "src/bin/test_stateful.rs"
+name = "test_stacker"
+path = "src/bin/test_stacker.rs"
 required-features = ["pure-rust"]
 
-[[bin]]
-name = "test_pest_parser"
-path = "src/bin/test_pest_parser.rs"
-required-features = ["pure-rust"]
-
-[[bin]]
-name = "test_enhanced"
-path = "src/bin/test_enhanced.rs"
-required-features = ["pure-rust"]
-
-[[bin]]
-name = "test_stateful_parser"
-path = "src/bin/test_stateful_parser.rs"
-required-features = ["pure-rust"]
 
 [[bench]]
 name = "scanner_benchmarks"
