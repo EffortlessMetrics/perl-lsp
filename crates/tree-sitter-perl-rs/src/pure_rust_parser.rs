@@ -885,7 +885,13 @@ impl PureRustPerlParser {
                             let op_inner = postfix_op.into_inner().next().unwrap();
                             match op_inner.as_rule() {
                                 Rule::postfix_dereference => {
-                                    let deref_type = op_inner.into_inner().next().unwrap().as_str();
+                                    let deref_str = op_inner.as_str();
+                                    // Extract the dereference type after "->"
+                                    let deref_type = if deref_str.starts_with("->") {
+                                        &deref_str[2..]
+                                    } else {
+                                        deref_str
+                                    };
                                     expr = AstNode::PostfixDereference {
                                         expr: Box::new(expr),
                                         deref_type: Arc::from(deref_type),
@@ -1894,8 +1900,13 @@ impl PureRustPerlParser {
                     format!("(variable_declaration {} {})", scope, var_sexps.join(" "))
                 }
             }
-            AstNode::SubDeclaration { name, body, .. } => {
-                format!("(subroutine (identifier {}) {})", name, Self::node_to_sexp(body))
+            AstNode::SubDeclaration { name, prototype, body, .. } => {
+                let mut parts = vec![format!("(identifier {})", name)];
+                if let Some(proto) = prototype {
+                    parts.push(format!("(signature {})", proto));
+                }
+                parts.push(Self::node_to_sexp(body));
+                format!("(subroutine {})", parts.join(" "))
             }
             AstNode::AnonymousSub { body, .. } => {
                 format!("(anonymous_subroutine {})", Self::node_to_sexp(body))
