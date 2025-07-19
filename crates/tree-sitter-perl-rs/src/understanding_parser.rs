@@ -25,7 +25,7 @@ impl UnderstandingParser {
     }
     
     /// Parse code with full anti-pattern detection and recovery
-    pub fn parse_with_understanding(&self, code: &str) -> Result<ParseResult, String> {
+    pub fn parse_with_understanding(&mut self, code: &str) -> Result<ParseResult, String> {
         // First, detect all anti-patterns
         let diagnostics = self.anti_pattern_detector.detect_all(code);
         
@@ -54,7 +54,7 @@ impl UnderstandingParser {
     
     /// Build extended AST with anti-pattern annotations
     fn build_extended_ast(
-        &self,
+        &mut self,
         pairs: pest::iterators::Pairs<Rule>,
         diagnostics: &[Diagnostic],
         code: &str,
@@ -67,7 +67,7 @@ impl UnderstandingParser {
         }
         
         // Build normal AST
-        if let Some(ast) = self.base_parser.build_ast(pairs) {
+        if let Ok(ast) = self.base_parser.build_ast(pairs) {
             builder.build_normal(ast)
         } else {
             ExtendedAstNode::Unparseable {
@@ -128,7 +128,7 @@ impl UnderstandingParser {
                     // Parse the clean part before the anti-pattern
                     let clean_chunk = &chunk[..pattern_offset];
                     if let Ok(pairs) = PerlParser::parse(Rule::statement, clean_chunk) {
-                        if let Some(ast) = self.base_parser.build_ast(pairs) {
+                        if let Ok(ast) = self.base_parser.build_ast(pairs) {
                             parsed_fragments.push(ExtendedAstNode::Normal(ast));
                             recovery_state.last_good_position = current_pos + pattern_offset;
                         }
@@ -152,7 +152,7 @@ impl UnderstandingParser {
                 // No more anti-patterns, try to parse the rest
                 match PerlParser::parse(Rule::program, chunk) {
                     Ok(pairs) => {
-                        if let Some(ast) = self.base_parser.build_ast(pairs) {
+                        if let Ok(ast) = self.base_parser.build_ast(pairs) {
                             parsed_fragments.push(ExtendedAstNode::Normal(ast));
                         }
                         break;
