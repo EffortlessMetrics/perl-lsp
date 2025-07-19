@@ -11,6 +11,7 @@ mod tasks;
 mod types;
 use tasks::*;
 use types::*;
+use types::TestSuite;
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -226,6 +227,17 @@ enum Commands {
         #[arg(long)]
         yes: bool,
     },
+
+    /// Run heredoc-specific tests
+    TestHeredoc {
+        /// Run tests in release mode
+        #[arg(long)]
+        release: bool,
+
+        /// Run tests with verbose output
+        #[arg(long)]
+        verbose: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -280,5 +292,9 @@ fn main() -> Result<()> {
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::ParseRust { source, sexp, ast, bench } => parse_rust::run(source, sexp, ast, bench),
         Commands::Release { version, yes } => release::run(version, yes),
+        Commands::TestHeredoc { release, verbose } => {
+            // Run heredoc tests using the test module with heredoc suite
+            test::run(release, Some(TestSuite::Heredoc), Some(vec!["pure-rust".to_string()]), verbose, false)
+        },
     }
 }
