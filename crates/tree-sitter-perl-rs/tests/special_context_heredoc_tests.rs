@@ -20,7 +20,7 @@ print "After eval\n";
         let (processed, declarations) = parser.parse();
         
         assert_eq!(declarations.len(), 1, "Should find one heredoc");
-        assert_eq!(declarations[0].delimiter, "EOF");
+        assert_eq!(declarations[0].terminator, "EOF");
         assert!(declarations[0].content.is_some());
     }
     
@@ -41,11 +41,11 @@ CODE
         let (processed, declarations) = parser.parse();
         
         // Should find the outer heredoc
-        assert!(declarations.iter().any(|d| d.delimiter == "CODE"));
+        assert!(declarations.iter().any(|d| d.terminator == "CODE"));
         
         // The inner heredoc should be detected when eval content is parsed
         let eval_content = declarations.iter()
-            .find(|d| d.delimiter == "CODE")
+            .find(|d| d.terminator == "CODE")
             .and_then(|d| d.content.as_ref())
             .unwrap();
         
@@ -69,7 +69,7 @@ print $text;
         let (processed, declarations) = parser.parse();
         
         // Should detect heredoc in s///e
-        assert!(declarations.iter().any(|d| d.delimiter == "REPLACEMENT" || d.delimiter == "EVAL_CONTEXT"));
+        assert!(declarations.iter().any(|d| d.terminator == "REPLACEMENT" || d.terminator == "EVAL_CONTEXT"));
     }
     
     #[test]
@@ -123,7 +123,7 @@ OUTER
         let (processed, declarations) = parser.parse();
         
         // Should find at least the outer heredoc
-        assert!(declarations.iter().any(|d| d.delimiter == "OUTER"));
+        assert!(declarations.iter().any(|d| d.terminator == "OUTER"));
     }
     
     #[test]
@@ -157,7 +157,7 @@ EOF
         let (processed, declarations) = parser.parse();
         
         // Should NOT treat this as a heredoc (it's in a regex pattern)
-        assert!(declarations.is_empty() || !declarations.iter().any(|d| d.delimiter == "EOF"));
+        assert!(declarations.is_empty() || !declarations.iter().any(|d| d.terminator == "EOF"));
     }
     
     #[test]

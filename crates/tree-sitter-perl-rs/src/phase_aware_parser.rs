@@ -226,7 +226,7 @@ impl PhaseAwareParser {
                 pattern: AntiPattern::BeginTimeHeredoc {
                     location: heredoc.location.clone(),
                     side_effects: vec!["Phase-dependent parsing".to_string()],
-                    heredoc_content: heredoc.delimiter.clone(),
+                    heredoc_content: heredoc.terminator.clone(),
                 },
                 message: format!("Heredoc in {} block", self.phase_name()),
                 explanation: heredoc.reason.clone(),
@@ -301,7 +301,7 @@ impl PhaseAwareParser {
             construct_type: format!("{}_heredoc", self.phase_name()),
             static_parts: vec![],
             dynamic_parts: vec![crate::partial_parse_ast::DynamicPart {
-                expression: heredoc.delimiter.clone(),
+                expression: heredoc.terminator.clone(),
                 context: match self.current_phase {
                     PerlPhase::Begin => RuntimeContext::BeginBlock,
                     PerlPhase::Eval => RuntimeContext::EvalString,

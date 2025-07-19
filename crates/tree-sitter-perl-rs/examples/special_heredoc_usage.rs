@@ -50,7 +50,7 @@ print "Config loaded\n";
     println!("Input code:{}", code);
     println!("\nFound {} heredoc declarations", declarations.len());
     for decl in &declarations {
-        println!("  - Delimiter: '{}', Line: {}", decl.delimiter, decl.line_number);
+        println!("  - Delimiter: '{}', Line: {}", decl.terminator, decl.declaration_line);
     }
     println!();
 }
@@ -81,7 +81,7 @@ print $template;
     println!("\nHeredocs in s///e context:");
     for decl in &declarations {
         println!("  - Delimiter: '{}', Interpolate: {}", 
-                decl.delimiter, decl.interpolate);
+                decl.terminator, decl.interpolated);
     }
     println!();
 }
