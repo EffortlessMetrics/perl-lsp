@@ -424,6 +424,7 @@ primary_expression = {
     | readline
     | qw_list
     | builtin_list_op
+    | qualified_name
     | identifier
 }
 
@@ -653,7 +654,7 @@ special_var_name = @{
 
 // Identifiers - must not be a complete keyword
 identifier = @{ 
-    !(reserved_word ~ !(ASCII_ALPHANUMERIC | "_")) ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* 
+    !(reserved_word ~ !(ASCII_ALPHANUMERIC | "_")) ~ (ASCII_ALPHA | "_" | XID_START) ~ (ASCII_ALPHANUMERIC | "_" | XID_CONTINUE)* 
 }
 
 // Reserved words that should not be identifiers
@@ -667,7 +668,7 @@ reserved_word = {
 
 // Special identifiers that are only reserved in specific contexts
 goto_target = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-qualified_name = { identifier ~ ("::" ~ identifier)* }
+qualified_name = { identifier ~ ("::" ~ identifier)+ }
 label = @{ identifier ~ ":" }
 bareword = { identifier }
 

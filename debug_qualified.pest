@@ -1,0 +1,5 @@
+// Minimal test grammar
+test = { SOI ~ qualified ~ EOI }
+qualified = { ident ~ ("::" ~ ident)+ }
+ident = @{ ASCII_ALPHA+ }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
