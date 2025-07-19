@@ -2,7 +2,7 @@
 //! This creates deeply nested Perl structures to identify recursion issues
 
 #[cfg(feature = "pure-rust")]
-use tree_sitter_perl::pure_rust_parser::parse_perl;
+use tree_sitter_perl::PureRustPerlParser;
 
 #[test]
 #[cfg(feature = "pure-rust")]
@@ -20,7 +20,8 @@ fn test_deep_nested_expression() {
     println!("Expression length: {} bytes", expr.len());
     
     // This should overflow in debug builds
-    let result = parse_perl(&expr);
+    let mut parser = PureRustPerlParser::new();
+    let result = parser.parse(&expr);
     
     match result {
         Ok(ast) => {
@@ -46,7 +47,8 @@ fn test_deep_nested_blocks() {
     
     println!("Testing nested blocks with depth: {}", depth);
     
-    let result = parse_perl(&code);
+    let mut parser = PureRustPerlParser::new();
+    let result = parser.parse(&code);
     
     match result {
         Ok(ast) => {
@@ -71,7 +73,8 @@ fn test_deep_nested_arrays() {
     
     println!("Testing nested arrays with depth: {}", depth);
     
-    let result = parse_perl(&expr);
+    let mut parser = PureRustPerlParser::new();
+    let result = parser.parse(&expr);
     
     match result {
         Ok(ast) => {
@@ -96,7 +99,8 @@ fn test_deep_method_chain() {
     
     println!("Testing method chain with depth: {}", depth);
     
-    let result = parse_perl(&expr);
+    let mut parser = PureRustPerlParser::new();
+    let result = parser.parse(&expr);
     
     match result {
         Ok(ast) => {

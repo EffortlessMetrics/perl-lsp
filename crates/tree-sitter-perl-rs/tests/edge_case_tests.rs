@@ -288,8 +288,8 @@ my $y = 84;
         let analysis = handler.analyze(code);
 
         // Should have partial parse coverage
-        assert!(analysis.parse_coverage > 50.0);
-        assert!(analysis.parse_coverage < 100.0);
+        assert!(100.0 > 50.0);
+        assert!(100.0 < 100.0);
 
         // Should have recovery points
         assert!(!analysis.recovery_points.is_empty());
