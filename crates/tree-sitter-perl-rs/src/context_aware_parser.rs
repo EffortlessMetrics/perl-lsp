@@ -3,7 +3,7 @@
 //! This module implements the fourth parsing phase that handles heredocs
 //! in special contexts like eval strings and regex substitutions with /e flag.
 
-use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner, ContentCollector};
+use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner, HeredocCollector};
 use crate::pure_rust_parser::{PureRustPerlParser, AstNode};
 use regex::Regex;
 use std::collections::HashMap;
@@ -20,17 +20,17 @@ pub enum ParseContext {
 }
 
 /// Context-aware heredoc parser
-pub struct ContextAwareHeredocParser {
+pub struct ContextAwareHeredocParser<'a> {
     /// Base heredoc scanner
-    scanner: HeredocScanner,
+    scanner: HeredocScanner<'a>,
     /// Current parsing context stack
     context_stack: Vec<ParseContext>,
     /// Cached eval content for re-parsing
     eval_cache: HashMap<String, Vec<HeredocDeclaration>>,
 }
 
-impl ContextAwareHeredocParser {
-    pub fn new(input: &str) -> Self {
+impl<'a> ContextAwareHeredocParser<'a> {
+    pub fn new(input: &'a str) -> Self {
         Self {
             scanner: HeredocScanner::new(input),
             context_stack: vec![ParseContext::Normal],

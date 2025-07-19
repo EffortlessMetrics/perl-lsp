@@ -233,8 +233,3 @@ fn print_tree_sitter_output(output: &str) {
 }}"#);
 }
 
-// Mock the actual implementation for example
-#[cfg(not(feature = "pure-rust"))]
-fn main() {
-    eprintln!("This example requires the pure-rust feature");
-}

@@ -66,7 +66,7 @@ static PHASE_BLOCK_PATTERN: Lazy<Regex> = Lazy::new(|| {
 });
 
 static EVAL_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\beval\s*[\"'{]").unwrap()
+    Regex::new(r#"\beval\s*["'{]"#).unwrap()
 });
 
 static USE_PATTERN: Lazy<Regex> = Lazy::new(|| {
