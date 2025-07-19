@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use crate::statement_tracker::find_statement_end_line;
 
 /// Represents a heredoc declaration found during Phase 1
 #[derive(Debug, Clone)]
@@ -277,8 +278,10 @@ impl<'a> HeredocCollector<'a> {
 
         // For each line with heredocs, collect content
         for (line_num, heredoc_indices) in line_to_heredocs {
-            // Heredoc content starts on the line after declaration
-            let mut content_line = line_num; // line_num is 1-based, lines array is 0-based
+            // Find where the statement containing the heredoc actually ends
+            let statement_end_line = find_statement_end_line(&self._input, line_num);
+            // Heredoc content starts on the line after the statement ends
+            let mut content_line = statement_end_line; // statement_end_line is 1-based, lines array is 0-based
             
             for &idx in &heredoc_indices {
                 let decl = &declarations[idx];
