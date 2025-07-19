@@ -9,6 +9,7 @@ pub mod compare;
 pub mod corpus;
 pub mod dev;
 pub mod doc;
+pub mod edge_cases;
 pub mod fmt;
 pub mod highlight;
 pub mod parse_rust;
