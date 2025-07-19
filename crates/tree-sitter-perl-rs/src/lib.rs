@@ -53,6 +53,15 @@ pub mod partial_parse_ast;
 #[cfg(feature = "pure-rust")]
 pub mod understanding_parser;
 
+#[cfg(feature = "pure-rust")]
+pub mod phase_aware_parser;
+
+#[cfg(feature = "pure-rust")]
+pub mod dynamic_delimiter_recovery;
+
+#[cfg(feature = "pure-rust")]
+pub mod edge_case_handler;
+
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
