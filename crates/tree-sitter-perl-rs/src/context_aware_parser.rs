@@ -45,7 +45,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
         let (mut processed, mut declarations) = self.scanner.scan();
         
         // Phase 2: Detect special contexts
-        let contexts = self.detect_contexts(&processed);
+        let contexts = Self::detect_contexts_static(&processed);
         
         // Phase 3: Process special contexts
         for context in contexts {
@@ -53,8 +53,8 @@ impl<'a> ContextAwareHeredocParser<'a> {
                 ContextInfo::Eval { start, end, content } => {
                     // Re-parse eval content for heredocs
                     if content.contains("<<") {
-                        let eval_declarations = self.parse_eval_content(&content);
-                        self.merge_eval_declarations(&mut processed, &mut declarations, 
+                        let eval_declarations = Self::parse_eval_content_static(&content);
+                        Self::merge_eval_declarations_static(&mut processed, &mut declarations, 
                                                    start, end, eval_declarations);
                     }
                 }
@@ -63,7 +63,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
                     // Handle s///e replacements
                     let replacement = &processed[replacement_start..replacement_end];
                     if replacement.contains("<<") {
-                        self.handle_substitution_heredoc(&mut processed, &mut declarations,
+                        Self::handle_substitution_heredoc_static(&mut processed, &mut declarations,
                                                        pattern_start, replacement_start, 
                                                        replacement_end);
                     }
@@ -75,7 +75,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Detect special contexts in the input
-    fn detect_contexts(&self, input: &str) -> Vec<ContextInfo> {
+    fn detect_contexts_static(input: &str) -> Vec<ContextInfo> {
         let mut contexts = Vec::new();
         
         // Detect eval contexts
@@ -84,7 +84,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
             if let Some(m) = cap.get(0) {
                 let terminator = cap.get(2).unwrap().as_str();
                 // Find the heredoc content
-                if let Some(content_range) = self.find_heredoc_content(input, m.end(), terminator) {
+                if let Some(content_range) = Self::find_heredoc_content_static(input, m.end(), terminator) {
                     contexts.push(ContextInfo::Eval {
                         start: m.start(),
                         end: content_range.end,
@@ -114,7 +114,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Find heredoc content boundaries
-    fn find_heredoc_content(&self, input: &str, start: usize, terminator: &str) -> Option<ContentRange> {
+    fn find_heredoc_content_static(input: &str, start: usize, terminator: &str) -> Option<ContentRange> {
         let lines: Vec<&str> = input[start..].lines().collect();
         let mut content_start = None;
         let mut content_end = None;
@@ -138,19 +138,16 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Parse heredocs within eval content
-    fn parse_eval_content(&mut self, content: &str) -> Vec<HeredocDeclaration> {
+    fn parse_eval_content_static(content: &str) -> Vec<HeredocDeclaration> {
         // Create a sub-scanner for the eval content
         let mut eval_scanner = HeredocScanner::new(content);
         let (_, declarations) = eval_scanner.scan();
-        
-        // Cache the results
-        self.eval_cache.insert(content.to_string(), declarations.clone());
         
         declarations
     }
     
     /// Merge eval heredoc declarations back into main parse
-    fn merge_eval_declarations(&self, processed: &mut String, 
+    fn merge_eval_declarations_static(processed: &mut String, 
                              main_declarations: &mut Vec<HeredocDeclaration>,
                              eval_start: usize, eval_end: usize,
                              eval_declarations: Vec<HeredocDeclaration>) {
@@ -164,7 +161,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Handle heredocs in s///e replacements
-    fn handle_substitution_heredoc(&self, processed: &mut String,
+    fn handle_substitution_heredoc_static(processed: &mut String,
                                  declarations: &mut Vec<HeredocDeclaration>,
                                  pattern_start: usize,
                                  replacement_start: usize,

@@ -111,11 +111,11 @@ impl PatternDetector for FormatHeredocDetector {
                     
                     results.push((
                         AntiPattern::FormatHeredoc {
-                            location,
+                            location: location.clone(),
                             format_name,
                             heredoc_delimiter: delimiter,
                         },
-                        location.clone(),
+                        location,
                     ));
                 }
             }
@@ -182,11 +182,11 @@ impl PatternDetector for BeginTimeHeredocDetector {
             
             results.push((
                 AntiPattern::BeginTimeHeredoc {
-                    location,
+                    location: location.clone(),
                     side_effects,
                     heredoc_content: block_content.to_string(),
                 },
-                location.clone(),
+                location,
             ));
         }
         
@@ -237,10 +237,10 @@ impl PatternDetector for DynamicDelimiterDetector {
             
             results.push((
                 AntiPattern::DynamicHeredocDelimiter {
-                    location,
+                    location: location.clone(),
                     expression: match_pos.as_str().to_string(),
                 },
-                location.clone(),
+                location,
             ));
         }
         

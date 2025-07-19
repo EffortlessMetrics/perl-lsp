@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 /// Runtime context for heredoc evaluation
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RuntimeHeredocContext {
     /// Variables available in the current scope
     pub variables: HashMap<String, String>,
@@ -113,8 +113,8 @@ impl RuntimeHeredocHandler {
                 // Find the heredoc content
                 if let Some(heredoc_content) = self.extract_heredoc_content(&processed[offset..], delim) {
                     // Evaluate the heredoc content
-                    let context = self.current_context();
-                    let evaluated = self.evaluate_heredoc(&heredoc_content, context)?;
+                    let context = self.current_context().clone();
+                    let evaluated = Self::evaluate_heredoc_static(&heredoc_content, &context, &context.variables)?;
                     
                     // Replace in the processed string
                     let heredoc_full = format!("{}\n{}\n{}", full_match.as_str(), heredoc_content, delim);
@@ -155,6 +155,31 @@ impl RuntimeHeredocHandler {
         } else {
             None
         }
+    }
+    
+    /// Static version of evaluate_heredoc for avoiding borrow conflicts
+    fn evaluate_heredoc_static(content: &str, context: &RuntimeHeredocContext, variables: &HashMap<String, String>) -> Result<String, RuntimeError> {
+        let mut result = content.to_string();
+        
+        if context.interpolate {
+            result = Self::interpolate_variables_static(&result, &context.variables)?;
+            result = Self::interpolate_variables_static(&result, variables)?;
+        }
+        
+        Ok(result)
+    }
+    
+    /// Static interpolate variables
+    fn interpolate_variables_static(content: &str, variables: &HashMap<String, String>) -> Result<String, RuntimeError> {
+        let mut result = content.to_string();
+        
+        // Simple variable interpolation (real Perl is more complex)
+        for (name, value) in variables {
+            result = result.replace(&format!("${}", name), value);
+            result = result.replace(&format!("${{{}}}", name), value);
+        }
+        
+        Ok(result)
     }
     
     /// Interpolate variables in content

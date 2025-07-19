@@ -128,7 +128,7 @@ impl UnderstandingParser {
                     // Parse the clean part before the anti-pattern
                     let clean_chunk = &chunk[..pattern_offset];
                     if let Ok(pairs) = PerlParser::parse(Rule::statement, clean_chunk) {
-                        if let Ok(ast) = self.base_parser.build_ast(pairs) {
+                        if let Ok(ast) = PureRustPerlParser::new().build_ast(pairs) {
                             parsed_fragments.push(ExtendedAstNode::Normal(ast));
                             recovery_state.last_good_position = current_pos + pattern_offset;
                         }
@@ -152,7 +152,7 @@ impl UnderstandingParser {
                 // No more anti-patterns, try to parse the rest
                 match PerlParser::parse(Rule::program, chunk) {
                     Ok(pairs) => {
-                        if let Ok(ast) = self.base_parser.build_ast(pairs) {
+                        if let Ok(ast) = PureRustPerlParser::new().build_ast(pairs) {
                             parsed_fragments.push(ExtendedAstNode::Normal(ast));
                         }
                         break;
@@ -346,7 +346,7 @@ mod tests {
     
     #[test]
     fn test_understanding_parser_clean_code() {
-        let parser = UnderstandingParser::new();
+        let mut parser = UnderstandingParser::new();
         let code = r#"
 my $x = 42;
 print "Hello, world!\n";
@@ -359,7 +359,7 @@ print "Hello, world!\n";
     
     #[test]
     fn test_understanding_parser_with_format() {
-        let parser = UnderstandingParser::new();
+        let mut parser = UnderstandingParser::new();
         let code = r#"
 format REPORT =
 <<'END'
@@ -376,7 +376,7 @@ END
     
     #[test]
     fn test_understanding_parser_with_begin_heredoc() {
-        let parser = UnderstandingParser::new();
+        let mut parser = UnderstandingParser::new();
         let code = r#"
 BEGIN {
     $config = <<'END';
