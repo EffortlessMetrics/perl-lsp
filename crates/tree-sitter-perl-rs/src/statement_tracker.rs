@@ -3,7 +3,6 @@
 //! This module provides a simple statement boundary detector that helps
 //! the heredoc scanner know when a statement containing heredocs actually ends.
 
-use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum BracketType {
@@ -114,50 +113,72 @@ impl StatementTracker {
 /// Find the line where a statement containing a heredoc actually ends
 pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
     let lines: Vec<&str> = input.lines().collect();
-    let mut tracker = StatementTracker::new();
-    let mut prev_char = None;
     
-    // First, we need to understand the context up to the heredoc line
-    // to get the correct bracket state
-    for (idx, line) in lines.iter().enumerate() {
-        let current_line = idx + 1;
-        if current_line >= heredoc_line {
-            break;
+    // For heredocs, we only care about the immediate statement boundary,
+    // not enclosing blocks. Just scan the heredoc line itself.
+    if heredoc_line > 0 && heredoc_line <= lines.len() {
+        let line = lines[heredoc_line - 1];
+        
+        // Simple heuristic: if the line ends with a semicolon, the statement ends here
+        if line.trim_end().ends_with(';') {
+            return heredoc_line;
         }
         
+        // If it's inside a parenthesized expression, find the closing paren
+        let mut paren_depth: i32 = 0;
+        let mut in_string = false;
+        let mut string_char = ' ';
+        
+        // Count unclosed parens on the heredoc line
         for ch in line.chars() {
-            tracker.process_char(ch, prev_char);
-            prev_char = Some(ch);
-        }
-        tracker.process_char('\n', prev_char);
-        prev_char = Some('\n');
-    }
-    
-    // Now scan forward from the heredoc line to find where the statement ends
-    for (idx, line) in lines.iter().enumerate() {
-        let current_line = idx + 1;
-        
-        // Skip lines before the heredoc line
-        if current_line < heredoc_line {
-            continue;
-        }
-        
-        for ch in line.chars() {
-            if tracker.process_char(ch, prev_char) {
-                return current_line;
+            if in_string {
+                if ch == string_char && line.chars().nth(line.find(ch).unwrap_or(0).saturating_sub(1)) != Some('\\') {
+                    in_string = false;
+                }
+            } else {
+                match ch {
+                    '"' | '\'' => {
+                        in_string = true;
+                        string_char = ch;
+                    }
+                    '(' => paren_depth += 1,
+                    ')' => paren_depth = paren_depth.saturating_sub(1),
+                    _ => {}
+                }
             }
-            prev_char = Some(ch);
         }
         
-        // Check end of line
-        if tracker.process_char('\n', prev_char) {
-            return current_line;
+        // If we have unclosed parens, scan forward to find the closing
+        if paren_depth > 0 {
+            for (idx, scan_line) in lines.iter().enumerate().skip(heredoc_line) {
+                for ch in scan_line.chars() {
+                    if in_string {
+                        if ch == string_char {
+                            in_string = false;
+                        }
+                    } else {
+                        match ch {
+                            '"' | '\'' => {
+                                in_string = true;
+                                string_char = ch;
+                            }
+                            '(' => paren_depth += 1,
+                            ')' => {
+                                paren_depth = paren_depth.saturating_sub(1);
+                                if paren_depth == 0 && scan_line.trim_end().ends_with(");") {
+                                    return idx + 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
         }
-        prev_char = Some('\n');
     }
     
-    // If we didn't find an end, assume it's at the last line
-    lines.len()
+    // Default: statement ends on the same line as the heredoc
+    heredoc_line
 }
 
 #[cfg(test)]

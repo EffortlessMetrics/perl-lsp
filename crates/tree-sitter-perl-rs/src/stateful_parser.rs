@@ -521,8 +521,8 @@ INTERP"#;
     
     #[test]
     fn test_format_declaration() {
-        let mut parser = StatefulPerlParser::new();
-        let input = r#"format STDOUT =
+        let _parser = StatefulPerlParser::new();
+        let _input = r#"format STDOUT =
 @<<<< @||||| @>>>>
 $name, $login, $office
 .
