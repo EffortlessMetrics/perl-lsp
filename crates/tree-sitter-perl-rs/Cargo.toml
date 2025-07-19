@@ -30,11 +30,12 @@ criterion = "0.6"
 test-case = "3.3"
 
 [features]
-default = ["c-scanner"]
-rust-scanner = []
-c-scanner = []
-test-utils = []
+default = ["pure-rust"]
 pure-rust = []
+test-utils = []
+# Legacy features (for benchmarking only)
+c-scanner = []
+rust-scanner = []
 
 [lib]
 name = "tree_sitter_perl"
@@ -63,6 +64,11 @@ required-features = ["pure-rust"]
 [[bin]]
 name = "test_parsers"
 path = "src/bin/test_parsers.rs"
+required-features = ["pure-rust"]
+
+[[bin]]
+name = "parse-rust"
+path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust"]
 
 

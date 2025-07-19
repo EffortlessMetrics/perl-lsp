@@ -3,7 +3,7 @@
 //! This module implements the fourth parsing phase that handles heredocs
 //! in special contexts like eval strings and regex substitutions with /e flag.
 
-use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner, HeredocCollector};
+use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner};
 use crate::pure_rust_parser::{PureRustPerlParser, AstNode};
 use regex::Regex;
 use std::collections::HashMap;

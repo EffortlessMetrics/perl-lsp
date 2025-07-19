@@ -1,7 +1,7 @@
 //! Parser performance benchmarks
 //!
-//! This module contains benchmarks to measure the overall parsing
-//! performance of the tree-sitter Perl parser.
+//! This module contains benchmarks to measure the parsing performance
+//! of the Pure Rust Perl parser, with optional comparison to legacy C parser.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
