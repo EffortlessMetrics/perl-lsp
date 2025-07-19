@@ -1,6 +1,9 @@
 //! Benchmarks for edge case detection and handling performance
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use std::hint::black_box;
+
+#[cfg(feature = "pure-rust")]
 use tree_sitter_perl::{
     edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
     dynamic_delimiter_recovery::RecoveryMode,
@@ -9,6 +12,7 @@ use tree_sitter_perl::{
 };
 
 /// Benchmark different types of Perl code
+#[cfg(feature = "pure-rust")]
 fn bench_edge_case_detection(c: &mut Criterion) {
     let mut group = c.benchmark_group("edge_case_detection");
     
@@ -108,6 +112,7 @@ use Filter::Simple;
 }
 
 /// Benchmark different recovery modes
+#[cfg(feature = "pure-rust")]
 fn bench_recovery_modes(c: &mut Criterion) {
     let mut group = c.benchmark_group("recovery_modes");
     
@@ -135,7 +140,7 @@ UNKNOWN
         group.bench_with_input(
             BenchmarkId::new("mode", name),
             &mode,
-            |b, mode| {
+            |b, mode: &RecoveryMode| {
                 b.iter(|| {
                     let config = EdgeCaseConfig {
                         recovery_mode: mode.clone(),
@@ -152,6 +157,7 @@ UNKNOWN
 }
 
 /// Benchmark tree-sitter conversion overhead
+#[cfg(feature = "pure-rust")]
 fn bench_tree_sitter_conversion(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree_sitter_conversion");
     
@@ -185,6 +191,7 @@ fn bench_tree_sitter_conversion(c: &mut Criterion) {
 }
 
 /// Benchmark understanding parser with edge cases
+#[cfg(feature = "pure-rust")]
 fn bench_understanding_parser(c: &mut Criterion) {
     let mut group = c.benchmark_group("understanding_parser");
     
@@ -256,6 +263,7 @@ fn generate_perl_code(statements: usize) -> String {
 }
 
 /// Benchmark memory usage patterns
+#[cfg(feature = "pure-rust")]
 fn bench_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_usage");
     
@@ -305,6 +313,7 @@ fn generate_nested_code(depth: usize) -> String {
     code
 }
 
+#[cfg(feature = "pure-rust")]
 criterion_group!(
     benches,
     bench_edge_case_detection,
@@ -313,4 +322,8 @@ criterion_group!(
     bench_understanding_parser,
     bench_memory_usage
 );
+
+#[cfg(not(feature = "pure-rust"))]
+criterion_group!(benches,);
+
 criterion_main!(benches);
