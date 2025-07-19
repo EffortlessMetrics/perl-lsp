@@ -963,12 +963,23 @@ impl PureRustPerlParser {
                                 }
                                 Rule::method_call => {
                                     let mut method_inner = op_inner.into_inner();
-                                    let method = Arc::from(method_inner.next().unwrap().as_str());
-                                    let args = if let Some(args_pair) = method_inner.next() {
-                                        self.parse_arg_list(args_pair)?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let mut method = Arc::from("");
+                                    let mut args = Vec::new();
+                                    
+                                    for p in method_inner {
+                                        match p.as_rule() {
+                                            Rule::method_name => {
+                                                method = Arc::from(p.as_str());
+                                            }
+                                            Rule::function_args => {
+                                                if let Some(arg_list) = p.into_inner().next() {
+                                                    args = self.parse_arg_list(arg_list)?;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    
                                     expr = AstNode::MethodCall {
                                         object: Box::new(expr),
                                         method,
@@ -1037,10 +1048,80 @@ impl PureRustPerlParser {
             Rule::qualified_name => {
                 Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
             }
+            Rule::qualified_name_or_identifier => {
+                Ok(Some(AstNode::Identifier(Arc::from(pair.as_str()))))
+            }
             Rule::class_method_call => {
-                let s = pair.as_str();
-                // For now, treat it as an identifier
-                Ok(Some(AstNode::Identifier(Arc::from(s))))
+                let inner = pair.into_inner();
+                let mut parts = Vec::new();
+                let mut args = Vec::new();
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::identifier => {
+                            parts.push(p.as_str());
+                        }
+                        Rule::method_name => {
+                            parts.push(p.as_str());
+                        }
+                        Rule::function_args => {
+                            if let Some(arg_list) = p.into_inner().next() {
+                                for arg_pair in arg_list.into_inner() {
+                                    if let Ok(Some(arg)) = self.build_node(arg_pair) {
+                                        args.push(arg);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                // Build qualified name from parts except the last one which is the method
+                if parts.len() >= 2 {
+                    let method_name = Arc::from(parts.pop().unwrap());
+                    let class_name = parts.join("::");
+                    let class_node = AstNode::Identifier(Arc::from(class_name));
+                    
+                    Ok(Some(AstNode::MethodCall {
+                        object: Box::new(class_node),
+                        method: method_name,
+                        args,
+                    }))
+                } else {
+                    // Fallback for malformed class method calls
+                    Ok(Some(AstNode::Identifier(Arc::from(""))))
+                }
+            }
+            Rule::user_function_call => {
+                let mut inner = pair.into_inner();
+                let mut name = Arc::from("");
+                let mut args = Vec::new();
+                
+                for p in inner {
+                    match p.as_rule() {
+                        Rule::identifier => {
+                            name = Arc::from(p.as_str());
+                        }
+                        Rule::list_op_args => {
+                            for arg_pair in p.into_inner() {
+                                if arg_pair.as_rule() == Rule::list_op_arg {
+                                    for expr_pair in arg_pair.into_inner() {
+                                        if let Ok(Some(arg)) = self.build_node(expr_pair) {
+                                            args.push(arg);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                Ok(Some(AstNode::FunctionCall {
+                    name: Box::new(AstNode::Identifier(name)),
+                    args,
+                }))
             }
             Rule::builtin_list_op => {
                 let mut inner = pair.into_inner();
