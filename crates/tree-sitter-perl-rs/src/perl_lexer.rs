@@ -68,6 +68,49 @@ impl<'a> PerlLexer<'a> {
         }
     }
     
+    /// Safely slice the input string ensuring UTF-8 boundaries
+    fn safe_slice(&self, start: usize, end: usize) -> &str {
+        // Find the nearest valid UTF-8 boundaries
+        let safe_start = if self.input.is_char_boundary(start) {
+            start
+        } else {
+            // Find the previous valid boundary
+            let mut s = start;
+            while s > 0 && !self.input.is_char_boundary(s) {
+                s -= 1;
+            }
+            s
+        };
+        
+        let safe_end = if self.input.is_char_boundary(end) {
+            end
+        } else {
+            // Find the next valid boundary
+            let mut e = end;
+            while e < self.input.len() && !self.input.is_char_boundary(e) {
+                e += 1;
+            }
+            e.min(self.input.len())
+        };
+        
+        &self.input[safe_start..safe_end]
+    }
+    
+    /// Advance position by one character (handling UTF-8)
+    fn _advance_char(&mut self) {
+        if self.position < self.input.len() {
+            let current_char = self.input[self.position..].chars().next();
+            if let Some(ch) = current_char {
+                self.position += ch.len_utf8();
+            }
+        }
+    }
+    
+    /// Get current character without advancing
+    fn _current_char(&self) -> Option<char> {
+        self.input[self.position..].chars().next()
+    }
+    
     /// Skip whitespace and return the count
     fn skip_whitespace(&mut self) -> usize {
         let start = self.position;
@@ -105,6 +148,10 @@ impl<'a> PerlLexer<'a> {
     
     /// Check if the next characters match a pattern
     fn peek_str(&self, s: &str) -> bool {
+        // Ensure we're at a valid UTF-8 boundary
+        if !self.input.is_char_boundary(self.position) {
+            return false;
+        }
         self.input[self.position..].starts_with(s)
     }
     
@@ -233,7 +280,7 @@ impl<'a> PerlLexer<'a> {
         
         Some(Token {
             token_type: TokenType::RegexMatch,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(self.safe_slice(start, self.position)),
             start,
             end: self.position,
         })
@@ -324,7 +371,7 @@ impl<'a> PerlLexer<'a> {
         
         Some(Token {
             token_type: TokenType::Substitution,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(self.safe_slice(start, self.position)),
             start,
             end: self.position,
         })
@@ -406,7 +453,7 @@ impl<'a> PerlLexer<'a> {
         
         Some(Token {
             token_type: TokenType::Transliteration,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(self.safe_slice(start, self.position)),
             start,
             end: self.position,
         })
@@ -463,7 +510,7 @@ impl<'a> PerlLexer<'a> {
         
         Some(Token {
             token_type: TokenType::QuoteRegex,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(self.safe_slice(start, self.position)),
             start,
             end: self.position,
         })
@@ -499,8 +546,8 @@ impl<'a> PerlLexer<'a> {
                 // Comment
                 self.skip_line();
                 Some(Token {
-                    token_type: TokenType::Comment(Arc::from(&self.input[start..self.position])),
-                    text: Arc::from(&self.input[start..self.position]),
+                    token_type: TokenType::Comment(Arc::from(self.safe_slice(start, self.position))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
                     start,
                     end: self.position,
                 })
@@ -644,8 +691,8 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 let token = Token {
-                    token_type: TokenType::Number(Arc::from(&self.input[start..self.position])),
-                    text: Arc::from(&self.input[start..self.position]),
+                    token_type: TokenType::Number(Arc::from(self.safe_slice(start, self.position))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
                     start,
                     end: self.position,
                 };
@@ -660,7 +707,7 @@ impl<'a> PerlLexer<'a> {
                         _ => break,
                     }
                 }
-                let text = &self.input[start..self.position];
+                let text = self.safe_slice(start, self.position);
                 let token = match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "given" |
                     "return" | "my" | "our" | "local" | "state" | "sub" | "do" | "eval" |
@@ -702,8 +749,8 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 let token = Token {
-                    token_type: TokenType::Operator(Arc::from(&self.input[start..self.position])),
-                    text: Arc::from(&self.input[start..self.position]),
+                    token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
                     start,
                     end: self.position,
                 };
