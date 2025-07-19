@@ -40,7 +40,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Parse input with context awareness
-    pub fn parse(&mut self) -> (String, Vec<HeredocDeclaration>) {
+    pub fn parse(mut self) -> (String, Vec<HeredocDeclaration>) {
         // Phase 1: Normal heredoc scanning
         let (mut processed, mut declarations) = self.scanner.scan();
         
