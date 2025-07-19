@@ -6,6 +6,7 @@ pub enum TestSuite {
     Integration,
     Property,
     Performance,
+    Heredoc,
     All,
 }
 
