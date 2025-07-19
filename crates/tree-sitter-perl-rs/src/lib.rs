@@ -50,7 +50,9 @@ pub mod pure_rust_parser;
 
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]
-pub use pure_rust_parser::{PureRustPerlParser, AstNode, PerlParser};
+pub use full_parser::FullPerlParser as PureRustPerlParser;
+#[cfg(feature = "pure-rust")]
+pub use pure_rust_parser::{AstNode, PerlParser};
 
 #[cfg(feature = "pure-rust")]
 pub mod iterative_parser;
