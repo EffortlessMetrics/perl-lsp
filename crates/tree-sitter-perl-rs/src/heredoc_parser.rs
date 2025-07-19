@@ -76,27 +76,8 @@ impl<'a> HeredocScanner<'a> {
                     decl.declaration_pos = saved_pos;
                     decl.declaration_end = self.position;
                     
-                    // Mark the content lines to skip
-                    let content_start_line = saved_line + 1;
-                    
-                    // Find terminator line
-                    for i in content_start_line..=lines.len() {
-                        if i > lines.len() {
-                            break;
-                        }
-                        let line = lines[i - 1];
-                        let is_terminator = if decl.indented {
-                            line.trim() == decl.terminator
-                        } else {
-                            line == decl.terminator
-                        };
-                        
-                        self.skip_lines.insert(i);
-                        
-                        if is_terminator {
-                            break;
-                        }
-                    }
+                    // Don't mark lines to skip yet - we need to know where the statement ends first
+                    // Just store the declaration for now
                     
                     declarations.push(decl);
                     temp_position = self.position;
@@ -109,6 +90,31 @@ impl<'a> HeredocScanner<'a> {
                     temp_line += 1;
                 }
                 temp_position += 1;
+            }
+        }
+        
+        // Now mark lines to skip based on statement boundaries
+        for decl in &declarations {
+            let statement_end_line = find_statement_end_line(self.input, decl.declaration_line);
+            let content_start_line = statement_end_line + 1;
+            
+            // Mark lines from content start to terminator
+            for i in content_start_line..=lines.len() {
+                if i > lines.len() {
+                    break;
+                }
+                let line = lines[i - 1];
+                let is_terminator = if decl.indented {
+                    line.trim() == decl.terminator
+                } else {
+                    line == decl.terminator
+                };
+                
+                self.skip_lines.insert(i);
+                
+                if is_terminator {
+                    break;
+                }
             }
         }
         
@@ -282,6 +288,7 @@ impl<'a> HeredocCollector<'a> {
             let statement_end_line = find_statement_end_line(&self._input, line_num);
             // Heredoc content starts on the line after the statement ends
             let mut content_line = statement_end_line; // statement_end_line is 1-based, lines array is 0-based
+            
             
             for &idx in &heredoc_indices {
                 let decl = &declarations[idx];

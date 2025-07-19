@@ -115,14 +115,28 @@ impl StatementTracker {
 pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
     let lines: Vec<&str> = input.lines().collect();
     let mut tracker = StatementTracker::new();
-    let mut current_line = 1;
     let mut prev_char = None;
+    let mut statement_start_line = heredoc_line;
     
+    // First, scan backwards to find where the statement starts
+    for line_idx in (0..heredoc_line).rev() {
+        let line = lines[line_idx];
+        // Simple heuristic: statement likely starts after a semicolon or at start of block
+        if line.trim().ends_with(';') || line.trim().ends_with('{') || line_idx == 0 {
+            statement_start_line = line_idx + 1;
+            if line_idx > 0 && (line.trim().ends_with(';') || line.trim().ends_with('{')) {
+                statement_start_line = line_idx + 2; // Next line after semicolon/brace
+            }
+            break;
+        }
+    }
+    
+    // Now scan forward from statement start to find where it ends
     for (idx, line) in lines.iter().enumerate() {
-        current_line = idx + 1;
+        let current_line = idx + 1;
         
-        // Only start tracking from the heredoc line
-        if current_line < heredoc_line {
+        // Skip lines before statement start
+        if current_line < statement_start_line {
             continue;
         }
         
