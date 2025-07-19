@@ -38,6 +38,12 @@ pub mod iterative_parser;
 #[cfg(all(feature = "pure-rust", test))]
 pub mod parser_benchmark;
 
+#[cfg(feature = "pure-rust")]
+pub mod context_aware_parser;
+
+#[cfg(feature = "pure-rust")]
+pub mod runtime_heredoc_handler;
+
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
