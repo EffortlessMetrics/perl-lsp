@@ -108,7 +108,7 @@ impl EdgeCaseHandler {
         self.delimiter_recovery.scan_for_assignments(code);
         
         // Phase 4: Integrated parsing with understanding
-        let understanding_parser = UnderstandingParser::new();
+        let mut understanding_parser = UnderstandingParser::new();
         let parse_result = understanding_parser.parse_with_understanding(code)
             .unwrap_or_else(|e| panic!("Parse failed: {}", e));
         

@@ -265,7 +265,7 @@ impl PhaseAwareParser {
         self.phase_name_for(&self.current_phase)
     }
     
-    fn phase_name_for(&self, phase: &PerlPhase) -> &str {
+    fn phase_name_for(&self, phase: &PerlPhase) -> &'static str {
         match phase {
             PerlPhase::TopLevel => "top-level",
             PerlPhase::Begin => "BEGIN",

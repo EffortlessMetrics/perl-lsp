@@ -534,8 +534,8 @@ print "after format";"#;
     
     #[test]
     fn test_named_format() {
-        let mut parser = StatefulPerlParser::new();
-        let input = r#"format EMPLOYEE =
+        let _parser = StatefulPerlParser::new();
+        let _input = r#"format EMPLOYEE =
 Name: @<<<<<<<<<<<<<<<<<<
       $name
 Login: @<<<<<<<<
