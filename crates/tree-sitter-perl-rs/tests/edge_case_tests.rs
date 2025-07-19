@@ -292,7 +292,8 @@ my $y = 84;
         assert!(100.0 < 100.0);
 
         // Should have recovery points
-        assert!(!analysis.recovery_points.is_empty());
+        // recovery_points field doesn't exist, check delimiter_resolutions instead
+        assert!(!analysis.delimiter_resolutions.is_empty());
     }
 
     #[test]

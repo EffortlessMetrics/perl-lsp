@@ -111,7 +111,7 @@ END
 
 #[cfg(feature = "pure-rust")]
 fn analyze_code(code: &str) {
-    let parser = UnderstandingParser::new();
+    let mut parser = UnderstandingParser::new();
     
     match parser.parse_with_understanding(code) {
         Ok(result) => {
