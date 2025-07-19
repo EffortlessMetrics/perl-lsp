@@ -226,7 +226,7 @@ my $d = shift; my $t = <<$d; content EOF
             code,
             |b, code| {
                 b.iter(|| {
-                    let parser = UnderstandingParser::new();
+                    let mut parser = UnderstandingParser::new();
                     black_box(parser.parse_with_understanding(code))
                 });
             },
