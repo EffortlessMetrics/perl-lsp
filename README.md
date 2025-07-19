@@ -128,46 +128,46 @@ cargo xtask bench
 
 ### Test Categories
 
-- **Corpus Tests**: Full compatibility with C implementation
-- **Scanner Tests**: Pure Rust scanner framework validation
-- **Unicode Tests**: Full Unicode support validated
-- **Performance Tests**: Performance regression detection
-- **Memory Safety Tests**: Zero memory leaks, thread-safe
-- **Cross-Platform Tests**: Linux, macOS, Windows compatible
-- **Property Tests**: Robustness testing with arbitrary inputs
+- **Grammar Tests**: Complete Perl 5 syntax coverage
+- **Edge Case Tests**: Heredoc and special construct handling
+- **Unicode Tests**: International identifier support
+- **Performance Tests**: Benchmarks and regression detection
+- **Property Tests**: Fuzzing with arbitrary inputs
+- **Integration Tests**: Tree-sitter output validation
+- **Cross-Platform**: Linux, macOS, Windows CI
 
 ---
 
-## 📈 Benefits
+## 📈 Benefits of Pure Rust Implementation
 
-### Safety
-- **Memory safe** with Rust's ownership system
-- **Thread safe** with built-in concurrency primitives
-- **Zero undefined behavior** guaranteed by Rust compiler
+### Developer Experience
+- **No Build Complexity**: Just `cargo build` - no C toolchain required
+- **Easy Integration**: Standard Rust crate, works with any Rust project
+- **Modern Tooling**: Full IDE support, cargo-doc, debugging, etc.
+- **Cross-Compilation**: Easy targeting of WASM, embedded, etc.
 
-### Performance
-- **Fast parsing** with optimized algorithms
-- **Zero-copy optimizations** where possible
-- **Reduced memory usage** through efficient data structures
-- **Optimized Unicode handling** for international identifiers
+### Technical Advantages  
+- **Memory Safe**: No segfaults, buffer overflows, or use-after-free
+- **Thread Safe**: Parse in parallel with Rust's Send/Sync traits
+- **Error Recovery**: Pest's built-in error handling and recovery
+- **Type Safe AST**: Strongly typed nodes prevent invalid trees
 
-### Advanced Features
-- **Pure Rust Scanner**: Complete scanner implementation with state management
-- **Unicode Framework**: Comprehensive Unicode utilities and validation
-- **Comprehensive Testing**: 39 tests with extensive coverage
-- **Performance Analysis**: Advanced benchmarking system
-- **Future-Proof**: Architecture ready for pure Rust implementation
+### Maintenance Benefits
+- **Single Language**: No C/Rust boundary to maintain
+- **Clear Grammar**: Pest's PEG syntax is readable and maintainable  
+- **Testable**: Easy unit testing of individual grammar rules
+- **Extensible**: Add new Perl features by updating grammar.pest
 
 ---
 
-## 🔍 Compatibility Guarantee
+## 🔍 Tree-sitter Compatibility
 
-The Rust implementation maintains 100% compatibility with the original C implementation through:
+The Pure Rust parser provides full tree-sitter compatibility through:
 
-- **Direct FFI**: Uses the same C parser under the hood
-- **Corpus Validation**: All corpus tests pass with identical output
-- **API Compatibility**: Same tree-sitter API surface
-- **Pure Rust Components**: Complete scanner and Unicode frameworks
+- **S-Expression Output**: Standard tree-sitter format for all AST nodes
+- **Error Recovery**: Graceful handling with error nodes in the tree
+- **Position Tracking**: Accurate byte offsets and ranges for all nodes
+- **Unicode Support**: Full UTF-8 support with proper character boundaries
 
 ---
 

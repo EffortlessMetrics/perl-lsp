@@ -1,29 +1,45 @@
-//! Tree-sitter Perl grammar with Rust-native scanner
+//! Pure Rust Perl Parser - A modern Pest-based parser with tree-sitter compatibility
 //!
-//! This crate provides a Perl grammar for tree-sitter with a high-performance
-//! Rust-native scanner implementation. It supports both C and Rust scanner backends
-//! for maximum compatibility and performance.
+//! This crate provides a Pure Rust parser for Perl 5, built with the Pest parser
+//! generator. It outputs tree-sitter compatible S-expressions and requires no C
+//! dependencies, making it ideal for cross-platform Perl tooling.
 //!
 //! ## Features
 //!
-//! - **rust-scanner** (default): Use the Rust-native scanner implementation
-//! - **c-scanner**: Use the legacy C scanner implementation  
-//! - **test-utils**: Include testing utilities and test data
+//! - **pure-rust**: Pure Rust Pest-based parser (canonical implementation)
+//! - **test-utils**: Testing utilities and benchmarking tools
+//! - **c-scanner**: Legacy C implementation (for benchmarking only)
 //!
 //! ## Usage
 //!
 //! ```rust
-//! use tree_sitter_perl::{parse, language};
-//! use tree_sitter::Parser;
+//! use tree_sitter_perl::PureRustPerlParser;
 //!
-//! let mut parser = Parser::new();
-//! parser.set_language(&language()).unwrap();
+//! // Create parser instance
+//! let mut parser = PureRustPerlParser::new();
 //!
-//! let source_code = "my $var = 42; print 'Hello, World!';";
-//! let tree = parser.parse(source_code, None).unwrap();
+//! // Parse Perl code
+//! let code = r#"
+//!     sub hello {
+//!         my $name = shift;
+//!         print "Hello, $name!\n";
+//!     }
+//! "#;
 //!
-//! println!("{}", tree.root_node().to_sexp());
+//! // Get AST and convert to S-expression
+//! let ast = parser.parse(code).unwrap();
+//! let sexp = parser.to_sexp(&ast);
+//! println!("{}", sexp);
 //! ```
+//!
+//! ## Architecture
+//!
+//! The parser uses a three-stage pipeline:
+//! 1. **Pest Parsing**: PEG grammar processes input into parse tree
+//! 2. **AST Building**: Type-safe AST construction with position tracking
+//! 3. **S-Expression Output**: Tree-sitter compatible format generation
+//!
+//! See [ARCHITECTURE.md](https://github.com/EffortlessSteven/tree-sitter-perl/blob/main/ARCHITECTURE.md) for details.
 
 pub mod error;
 pub mod scanner;
@@ -31,6 +47,10 @@ pub mod unicode;
 
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
+
+// Re-export the main parser for convenience
+#[cfg(feature = "pure-rust")]
+pub use pure_rust_parser::PureRustPerlParser;
 
 #[cfg(feature = "pure-rust")]
 pub mod iterative_parser;
