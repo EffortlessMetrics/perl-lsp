@@ -36,7 +36,11 @@ impl FullPerlParser {
         
         // Phase 3: Parse with Pest
         let pairs = PerlParser::parse(Rule::program, &fully_processed)
-            .map_err(|_| ParseError::ParseFailed)?;
+            .map_err(|e| {
+                eprintln!("Pest parse error: {:?}", e);
+                eprintln!("Input after preprocessing: {:?}", fully_processed);
+                ParseError::ParseFailed
+            })?;
         
         // Phase 4: Build AST
         let mut parser = PureRustPerlParser::new();
