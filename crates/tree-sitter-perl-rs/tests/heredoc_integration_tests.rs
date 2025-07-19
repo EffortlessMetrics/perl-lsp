@@ -46,7 +46,6 @@ print $greeting;"#;
     }
 
     #[test]
-    #[ignore] // Stack overflow in AST building
     fn test_multiple_heredocs() {
         let input = r#"print(<<A, <<B, <<C);
 First content
@@ -79,7 +78,6 @@ C"#;
     }
 
     #[test]
-    #[ignore] // Stack overflow in AST building
     fn test_indented_heredoc() {
         let input = r#"if ($condition) {
     my $config = <<~'CONFIG';
@@ -96,7 +94,6 @@ C"#;
     }
 
     #[test]
-    #[ignore] // Stack overflow in AST building
     fn test_heredoc_in_expression() {
         let input = r#"my $result = process(<<'DATA') + calculate(42);
 Input data for
@@ -193,7 +190,6 @@ print $result / 2;"#;
     }
 
     #[test]
-    #[ignore] // Stack overflow in AST building
     fn test_complex_heredoc_scenario() {
         let input = r#"#!/usr/bin/perl
 use strict;
