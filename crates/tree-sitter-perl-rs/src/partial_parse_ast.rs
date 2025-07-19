@@ -3,7 +3,7 @@
 //! This module extends the standard AST with nodes that can represent
 //! unparseable or problematic constructs while still maintaining a valid tree.
 
-use crate::pure_rust_parser::{AstNode, node_to_sexp};
+use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use crate::anti_pattern_detector::{AntiPattern, Diagnostic};
 use std::sync::Arc;
 
@@ -74,12 +74,12 @@ impl ExtendedAstNode {
     /// Convert to S-expression format for compatibility
     pub fn to_sexp(&self) -> String {
         match self {
-            ExtendedAstNode::Normal(node) => node_to_sexp(node),
+            ExtendedAstNode::Normal(node) => PureRustPerlParser::node_to_sexp(node),
             
             ExtendedAstNode::WithWarning { node, diagnostics } => {
                 format!(
                     "(with_warning {} ; {} warnings)",
-                    node_to_sexp(node),
+                    PureRustPerlParser::node_to_sexp(node),
                     diagnostics.len()
                 )
             }
