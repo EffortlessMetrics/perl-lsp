@@ -98,6 +98,7 @@ impl<'a> HeredocScanner<'a> {
             let statement_end_line = find_statement_end_line(self.input, decl.declaration_line);
             let content_start_line = statement_end_line + 1;
             
+            
             // Mark lines from content start to terminator
             for i in content_start_line..=lines.len() {
                 if i > lines.len() {

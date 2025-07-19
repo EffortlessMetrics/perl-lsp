@@ -13,25 +13,15 @@ BACKTICK
 print($single, $double, $backtick);"#;
 
     let mut scanner = HeredocScanner::new(input);
-    let (output, declarations, skip_lines) = scanner.scan();
+    let (output, declarations) = scanner.scan();
     
     println!("Scanner output:");
     println!("{}", output);
     println!("\nDeclarations: {:?}", declarations);
-    println!("\nSkip lines: {:?}", skip_lines);
     
     // Also test the full parse_with_heredocs function
     println!("\n\nTesting parse_with_heredocs:");
-    match parse_with_heredocs(input) {
-        Ok((processed, map)) => {
-            println!("Processed output:\n{}", processed);
-            println!("\nPlaceholder map:");
-            for (k, v) in map {
-                println!("  {} => {}", k, v);
-            }
-        }
-        Err(e) => {
-            println!("Parse failed: {}", e);
-        }
-    }
+    let (processed, decls) = parse_with_heredocs(input);
+    println!("Processed output:\n{}", processed);
+    println!("\nDeclarations from parse_with_heredocs: {:?}", decls);
 }
