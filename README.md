@@ -269,49 +269,91 @@ match parser.parse(source, None) {
 
 ---
 
-## 🔍 Edge Case Handling
+## 🔍 Advanced Heredoc Edge Case Handling
 
-The Pure Rust parser includes industry-leading support for Perl heredoc edge cases:
+The Pure Rust parser includes industry-leading support for Perl's most challenging heredoc patterns:
 
 ### Coverage Statistics
 - **99%** - Direct parsing of standard heredocs
-- **0.9%** - Detection and recovery of edge cases
+- **0.9%** - Detection and recovery of edge cases  
 - **0.1%** - Clear annotation of unparseable constructs
 
 ### Supported Edge Cases
-- **Dynamic delimiters** - Runtime-computed delimiters with recovery strategies
-- **Phase-dependent heredocs** - BEGIN/CHECK/INIT/END block handling
-- **Encoding-aware parsing** - Mid-file encoding changes tracked correctly
-- **Tied filehandles** - Detection and warnings for tied handle heredocs
-- **Source filters** - Identification of source filter usage
+
+#### 1. Dynamic Delimiters
+```perl
+my $delimiter = "EOF";
+print <<$delimiter;  # Detected and recovered using pattern analysis
+Dynamic content
+EOF
+```
+
+#### 2. Phase-Dependent Heredocs
+```perl
+BEGIN {
+    our $CONFIG = <<'END';  # Tracked as compile-time
+    Config data
+END
+}
+```
+
+#### 3. Encoding-Aware Parsing
+```perl
+use utf8;
+print <<'終了';  # UTF-8 delimiter tracked correctly
+Japanese content
+終了
+```
 
 ### Tree-sitter Compatibility
-All edge cases produce valid tree-sitter AST nodes with separate diagnostics:
-```rust
-// Example: Dynamic delimiter with recovery
+
+All edge cases produce valid tree-sitter AST nodes with diagnostics in a separate channel:
+
+```json
 {
-  "type": "dynamic_heredoc_delimiter",
+  "tree": {
+    "type": "source_file",
+    "children": [{
+      "type": "dynamic_heredoc_delimiter",
+      "isError": true
+    }]
+  },
   "diagnostics": [{
     "severity": "warning",
+    "code": "PERL103",
     "message": "Dynamic delimiter requires runtime evaluation",
     "suggestion": "Use static delimiter for better tooling support"
   }]
 }
 ```
 
-See [Edge Case Documentation](docs/EDGE_CASE_SOLUTION_COMPLETE.md) for full details.
+### Testing Edge Cases
+
+```bash
+# Run comprehensive edge case tests
+cargo xtask test-edge-cases
+
+# Include performance benchmarks
+cargo xtask test-edge-cases --bench
+
+# Generate coverage report
+cargo xtask test-edge-cases --coverage
+```
+
+See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 
 ---
 
 ## 📖 Documentation
 
 - [API Documentation](https://docs.rs/tree-sitter-perl)
+- [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) - Find the right docs
 - [Architecture Guide](ARCHITECTURE.md)
 - [Development Guide](DEVELOPMENT.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
-- [Edge Case Handling](docs/EDGE_CASE_SOLUTION_COMPLETE.md)
+- [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
+- [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
 - [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
-- [Unicode Framework](./crates/tree-sitter-perl-rs/src/unicode.rs) - Unicode utilities
 
 ---
 
