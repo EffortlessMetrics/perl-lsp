@@ -137,7 +137,7 @@ impl EdgeCaseHandler {
         
         DelimiterResolution {
             expression: expression.to_string(),
-            resolved_to: analysis.terminator,
+            resolved_to: analysis.delimiter,
             confidence: analysis.confidence,
             method: analysis.recovery_strategy,
         }

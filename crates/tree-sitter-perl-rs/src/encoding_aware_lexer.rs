@@ -219,7 +219,7 @@ impl EncodingAwareLexer {
     pub fn encoding_at_line(&self, line: usize) -> &'static Encoding {
         // Find the most recent encoding change before this line
         for change in self.context.encoding_stack.iter().rev() {
-            if change.declaration_line <= line {
+            if change.line_number <= line {
                 return change.encoding;
             }
         }
@@ -239,7 +239,7 @@ impl EncodingAwareLexer {
                     self.context.encoding_stack.len()),
                 severity: DiagnosticSeverity::Warning,
                 locations: self.context.encoding_stack.iter()
-                    .map(|c| c.declaration_line)
+                    .map(|c| c.line_number)
                     .collect(),
             });
         }
@@ -254,9 +254,9 @@ impl EncodingAwareLexer {
                     message: format!("Encoding changed from {} to {} at line {}", 
                         prev.encoding.name(),
                         next.encoding.name(),
-                        next.declaration_line),
+                        next.line_number),
                     severity: DiagnosticSeverity::Info,
-                    locations: vec![prev.declaration_line, next.declaration_line],
+                    locations: vec![prev.line_number, next.line_number],
                 });
             }
         }

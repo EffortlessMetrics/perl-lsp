@@ -128,7 +128,7 @@ impl DynamicDelimiterRecovery {
             RecoveryMode::BestGuess => {
                 // Try various heuristics
                 if let Some(delimiter) = self.try_resolve_variable(expression, context) {
-                    analysis.terminator = Some(delimiter.value.clone());
+                    analysis.delimiter = Some(delimiter.value.clone());
                     analysis.confidence = delimiter.confidence;
                     analysis.recovery_strategy = format!("Resolved via {:?}", delimiter.source);
                 } else {
@@ -137,7 +137,7 @@ impl DynamicDelimiterRecovery {
                     analysis.recovery_strategy = "Guessing from common patterns".to_string();
                     
                     if !analysis.alternatives.is_empty() {
-                        analysis.terminator = Some(analysis.alternatives[0].clone());
+                        analysis.delimiter = Some(analysis.alternatives[0].clone());
                         analysis.confidence = 0.3;
                     }
                 }
@@ -257,7 +257,7 @@ impl DynamicHeredocNode {
         format!(
             "Dynamic heredoc delimiter '{}' {}. {}",
             self.expression,
-            if let Some(ref delim) = self.analysis.terminator {
+            if let Some(ref delim) = self.analysis.delimiter {
                 format!("resolved to '{}' (confidence: {:.0}%)", delim, self.analysis.confidence * 100.0)
             } else {
                 "could not be resolved".to_string()
@@ -309,7 +309,7 @@ EOF
         };
         
         let analysis = recovery.analyze_dynamic_delimiter("$foo", &context);
-        assert!(analysis.terminator.is_none());
+        assert!(analysis.delimiter.is_none());
         assert!(!analysis.warnings.is_empty());
     }
 }
