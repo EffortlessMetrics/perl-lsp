@@ -48,9 +48,9 @@ pub mod unicode;
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
 
-// Re-export the main parser for convenience
+// Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]
-pub use pure_rust_parser::PureRustPerlParser;
+pub use pure_rust_parser::{PureRustPerlParser, AstNode, PerlParser};
 
 #[cfg(feature = "pure-rust")]
 pub mod iterative_parser;
@@ -179,8 +179,6 @@ pub fn parse_with_tree(
         .ok_or(error::ParseError::ParseFailed)
 }
 
-#[cfg(feature = "pure-rust")]
-pub use pure_rust_parser::{PureRustPerlParser, AstNode, PerlParser};
 // Rule is available as a type inside pure_rust_parser module when using PerlParser
 
 #[cfg(feature = "pure-rust")]

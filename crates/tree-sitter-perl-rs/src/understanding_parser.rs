@@ -6,7 +6,7 @@
 use crate::pure_rust_parser::{PureRustPerlParser, PerlParser, Rule, AstNode};
 use crate::anti_pattern_detector::{AntiPatternDetector, AntiPattern, Diagnostic};
 use crate::partial_parse_ast::{ExtendedAstNode, ExtendedAstBuilder, RecoveryState};
-use pest::{Parser, iterators::Pair};
+use pest::Parser;
 use std::sync::Arc;
 
 pub struct UnderstandingParser {

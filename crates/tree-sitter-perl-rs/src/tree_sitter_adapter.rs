@@ -5,7 +5,6 @@
 
 use crate::partial_parse_ast::ExtendedAstNode;
 use crate::anti_pattern_detector::{AntiPattern, Diagnostic};
-use tree_sitter::{Node, Parser, Tree};
 
 /// Tree-sitter compatible node types for edge cases
 #[derive(Debug, Clone)]
@@ -266,7 +265,6 @@ impl TreeSitterAdapter {
         match node {
             AstNode::Program(_) => "source_file",
             AstNode::Statement(_) => "statement",
-            AstNode::Expression(_) => "expression",
             AstNode::Identifier(_) => "identifier",
             AstNode::Number(_) => "number",
             AstNode::String(_) => "string",

@@ -1,6 +1,6 @@
-# Contributing to tree-sitter-perl
+# Contributing to Pure Rust Perl Parser
 
-Thank you for your interest in contributing to tree-sitter-perl! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to the Pure Rust Perl Parser! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 
@@ -15,18 +15,17 @@ Thank you for your interest in contributing to tree-sitter-perl! This document p
 
 ```
 tree-sitter-perl/
-├── crates/tree-sitter-perl-rs/     # Active Rust implementation
+├── crates/tree-sitter-perl-rs/     # Pure Rust Perl Parser
 │   ├── src/
-│   │   ├── grammar.pest            # Pest grammar for pure Rust parser
-│   │   ├── pure_rust_parser.rs     # Pure Rust parser implementation
-│   │   ├── scanner/                # Scanner implementations
-│   │   └── tests/                  # Integration tests
+│   │   ├── grammar.pest            # Pest PEG grammar for Perl 5
+│   │   ├── pure_rust_parser.rs     # Main parser implementation
+│   │   ├── edge_case_handler.rs    # Edge case handling system
+│   │   └── lib.rs                  # Public API
 │   └── Cargo.toml
-├── tree-sitter-perl/               # Legacy C implementation (tests only)
-│   ├── grammar.js                  # Tree-sitter grammar
-│   └── test/corpus/                # Corpus tests
-├── xtask/                          # Build automation
-└── benches/                        # Performance benchmarks
+├── docs/                           # Architecture and design docs
+├── xtask/                          # Development automation
+├── benches/                        # Performance benchmarks
+└── tree-sitter-perl/               # Legacy reference (corpus tests)
 ```
 
 ## Development Setup
@@ -48,10 +47,11 @@ tree-sitter-perl/
 
 3. **Build the project**
    ```bash
-   # Build with C scanner (default)
-   cargo xtask build
+   # Build the Pure Rust parser (default)
+   cd crates/tree-sitter-perl-rs
+   cargo build --features pure-rust
    
-   # Build with pure Rust parser
+   # Or use xtask from root
    cargo xtask build --features pure-rust
    ```
 

@@ -1,7 +1,7 @@
-//! Scanner module for tree-sitter Perl parser
+//! Scanner module (legacy) - Used only for C parser benchmarking
 //!
-//! This module provides the lexical analysis functionality for parsing Perl code.
-//! It supports both Rust-native and C scanner implementations through feature flags.
+//! Note: The Pure Rust Pest parser does not use this scanner module.
+//! This is retained only for benchmarking comparisons with the legacy C implementation.
 
 #[cfg(feature = "rust-scanner")]
 mod rust_scanner;

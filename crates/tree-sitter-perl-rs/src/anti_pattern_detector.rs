@@ -3,7 +3,6 @@
 //! This module provides detection and analysis of problematic Perl patterns
 //! that make static parsing difficult or impossible, particularly around heredocs.
 
-use std::collections::HashMap;
 use regex::Regex;
 use once_cell::sync::Lazy;
 
