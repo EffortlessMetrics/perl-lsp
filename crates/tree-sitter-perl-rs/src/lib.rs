@@ -68,6 +68,9 @@ pub mod heredoc_parser;
 #[cfg(feature = "pure-rust")]
 pub mod full_parser;
 
+#[cfg(feature = "pure-rust")]
+mod statement_tracker;
+
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 

@@ -44,7 +44,6 @@ print @messages;"#;
     }
 
     #[test]
-    #[ignore] // Known limitation: heredoc in multi-line statements
     fn test_heredoc_as_hash_value() {
         // This is valid Perl but our parser can't handle heredocs
         // in multi-line statements because we don't track statement boundaries
