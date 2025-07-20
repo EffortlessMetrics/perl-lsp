@@ -905,7 +905,14 @@ impl PureRustPerlParser {
                 if let (Some(target_pair), Some(op_pair), Some(value_pair)) = 
                     (inner.next(), inner.next(), inner.next()) {
                     let target = Box::new(self.build_node(target_pair)?.unwrap_or(AstNode::EmptyExpression));
-                    let op = Arc::from(op_pair.as_str());
+                    let op_str = op_pair.as_str();
+                    let op = if op_str == "_DIV_=" {
+                        Arc::from("/=")
+                    } else if op_str.contains("_DIV_") {
+                        Arc::from(op_str.replace("_DIV_", "/"))
+                    } else {
+                        Arc::from(op_str)
+                    };
                     let value = Box::new(self.build_node(value_pair)?.unwrap_or(AstNode::EmptyExpression));
                     Ok(Some(AstNode::Assignment { target, op, value }))
                 } else {
@@ -2006,7 +2013,8 @@ impl PureRustPerlParser {
         
         while i < pairs.len() - 1 {
             // The operator is at position i
-            let op = Arc::from(pairs[i].as_str());
+            let op_str = pairs[i].as_str();
+            let op = Arc::from(if op_str == "_DIV_" { "/" } else { op_str });
             // The right operand is at position i + 1
             let right = self.build_node(pairs[i + 1].clone())?.unwrap_or(AstNode::EmptyExpression);
             

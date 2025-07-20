@@ -8,10 +8,10 @@ pub struct LexerAdapter;
 impl LexerAdapter {
     /// Pre-process Perl source to disambiguate slashes
     /// Returns a modified source where:
-    /// - Division operators become `÷` (U+00F7)
+    /// - Division operators become `_DIV_`
     /// - Regex matches stay as `/pattern/`
-    /// - Substitutions become `ṡ/pat/repl/` (U+1E61)
-    /// - Transliterations become `ṫr/src/dst/` (U+1E6B)
+    /// - Substitutions become `_SUB_/pat/repl/`
+    /// - Transliterations become `_TRANS_/src/dst/`
     pub fn preprocess(input: &str) -> String {
         let mut lexer = PerlLexer::new(input);
         let mut result = String::with_capacity(input.len() * 2);
@@ -26,28 +26,27 @@ impl LexerAdapter {
             match token.token_type {
                 TokenType::EOF => break,
                 TokenType::Division => {
-                    // Replace division with a unique character
-                    result.push('÷');
+                    // Replace division with a unique token
+                    result.push_str("_DIV_");
                 }
                 TokenType::Substitution => {
                     // Mark substitution with special prefix
-                    result.push('ṡ');
+                    result.push_str("_SUB_");
                     result.push_str(&token.text[1..]); // Skip original 's'
                 }
                 TokenType::Transliteration => {
                     // Mark transliteration
+                    result.push_str("_TRANS_");
                     if token.text.starts_with("tr") {
-                        result.push('ṫ');
-                        result.push_str(&token.text[1..]); // Skip 't' from 'tr'
+                        result.push_str(&token.text[2..]); // Skip 'tr'
                     } else {
-                        result.push('ẏ'); // For y///
                         result.push_str(&token.text[1..]); // Skip 'y'
                     }
                 }
                 TokenType::QuoteRegex => {
                     // Mark qr//
-                    result.push('ǫ'); // Special q
-                    result.push_str(&token.text[1..]); // Skip original 'q'
+                    result.push_str("_QR_");
+                    result.push_str(&token.text[2..]); // Skip original 'qr'
                 }
                 _ => {
                     // Keep other tokens as-is
@@ -72,7 +71,7 @@ impl LexerAdapter {
         
         match node {
             AstNode::BinaryOp { op, left, right } => {
-                if op.as_ref() == "÷" {
+                if op.as_ref() == "_DIV_" {
                     *op = Arc::from("/");
                 }
                 Self::postprocess(left);
