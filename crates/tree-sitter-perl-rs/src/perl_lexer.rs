@@ -126,6 +126,14 @@ impl<'a> PerlLexer<'a> {
         &self.input[safe_start..safe_end]
     }
     
+    fn is_unicode_identifier_start(&self, ch: char) -> bool {
+        ch.is_alphabetic() || ch == '_'
+    }
+    
+    fn is_unicode_identifier_continue(&self, ch: char) -> bool {
+        ch.is_alphanumeric() || ch == '_'
+    }
+    
     /// Advance position by one character (handling UTF-8)
     fn _advance_char(&mut self) {
         if self.position < self.input.len() {
@@ -762,6 +770,55 @@ impl<'a> PerlLexer<'a> {
         let start = self.position;
         let ch = self.input.as_bytes()[self.position];
         
+        // If this is not an ASCII character (high bit set), handle it as Unicode
+        if ch > 127 {
+            if let Some(unicode_ch) = self.input[self.position..].chars().next() {
+                if self.is_unicode_identifier_start(unicode_ch) {
+                    // Parse Unicode identifier
+                    let char_len = unicode_ch.len_utf8();
+                    self.position += char_len;
+                    
+                    // Continue scanning identifier
+                    while self.position < self.input.len() {
+                        if let Some(ch) = self.input[self.position..].chars().next() {
+                            if self.is_unicode_identifier_continue(ch) {
+                                self.position += ch.len_utf8();
+                            } else if ch == ':' && self.position + ch.len_utf8() < self.input.len() {
+                                // Check for :: in package names
+                                let next_pos = self.position + ch.len_utf8();
+                                if next_pos < self.input.len() && self.input.as_bytes()[next_pos] == b':' {
+                                    self.position += 2;
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    let text = self.safe_slice(start, self.position);
+                    let token = Token {
+                        token_type: TokenType::Identifier(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    };
+                    self.update_mode(&token.token_type);
+                    return Some(token);
+                }
+            }
+            // If not a valid identifier start, skip the character
+            if let Some(unicode_ch) = self.input[self.position..].chars().next() {
+                self.position += unicode_ch.len_utf8();
+            } else {
+                self.position += 1;
+            }
+            return self.next_token();
+        }
+        
         // Check for regex-like constructs first
         if ch == b'/' || (self.mode == LexerMode::ExpectTerm && (self.peek_str("s/") || self.peek_str("s{") || self.peek_str("m/") || self.peek_str("m{") || self.peek_str("tr/") || self.peek_str("y/") || self.peek_str("qr/") || self.peek_str("qr{"))) {
             if let Some(token) = self.scan_regex_like() {
@@ -1159,9 +1216,19 @@ impl<'a> PerlLexer<'a> {
                         self.position += 1;
                         // Scan the variable name
                         while self.position < self.input.len() {
-                            match self.input.as_bytes()[self.position] {
-                                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
-                                _ => break,
+                            if let Some(ch) = self.input[self.position..].chars().next() {
+                                if ch.is_ascii() {
+                                    match self.input.as_bytes()[self.position] {
+                                        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
+                                        _ => break,
+                                    }
+                                } else if self.is_unicode_identifier_continue(ch) {
+                                    self.position += ch.len_utf8();
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                break;
                             }
                         }
                         let text = self.safe_slice(start, self.position);
@@ -1173,6 +1240,34 @@ impl<'a> PerlLexer<'a> {
                         };
                         self.update_mode(&token.token_type);
                         return Some(token);
+                    } else if let Some(ch) = self.input[(self.position + 1)..].chars().next() {
+                        // Check for Unicode identifier start after sigil
+                        if self.is_unicode_identifier_start(ch) {
+                            self.position += 1; // Skip sigil
+                            self.position += ch.len_utf8();
+                            
+                            // Continue scanning identifier
+                            while self.position < self.input.len() {
+                                if let Some(ch) = self.input[self.position..].chars().next() {
+                                    if self.is_unicode_identifier_continue(ch) {
+                                        self.position += ch.len_utf8();
+                                    } else {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            }
+                            let text = self.safe_slice(start, self.position);
+                            let token = Token {
+                                token_type: TokenType::Identifier(Arc::from(text)),
+                                text: Arc::from(text),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            return Some(token);
+                        }
                     }
                 }
                 // Otherwise treat as operator (for % modulo)
@@ -1254,7 +1349,7 @@ impl<'a> PerlLexer<'a> {
                     "return" | "my" | "our" | "local" | "state" | "sub" | "do" | "eval" |
                     "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" |
                     "print" | "say" | "printf" | "split" | "grep" | "map" | "sort" | "die" |
-                    "warn" | "open" | "close" | "read" | "write" => {
+                    "warn" | "open" | "close" | "read" | "write" | "tie" | "format" => {
                         Token {
                             token_type: TokenType::Keyword(Arc::from(text)),
                             text: Arc::from(text),

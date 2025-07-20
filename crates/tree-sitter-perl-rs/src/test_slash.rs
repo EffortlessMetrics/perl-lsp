@@ -618,4 +618,177 @@ mod test_slash {
         let junction = lexer.next_token().unwrap();
         assert!(matches!(junction.token_type, TokenType::Operator(_)));
     }
+    
+    #[test]
+    fn test_unicode_identifiers() {
+        // Unicode identifiers in variables
+        let mut lexer = PerlLexer::new("$café");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+        assert_eq!(token.text.as_ref(), "$café");
+        
+        // Greek letters
+        let mut lexer = PerlLexer::new("$π = 3.14159");
+        let var = lexer.next_token().unwrap();
+        assert!(matches!(var.token_type, TokenType::Identifier(_)));
+        assert_eq!(var.text.as_ref(), "$π");
+        
+        // Unicode in subroutine names (using valid Unicode letters)
+        let mut lexer = PerlLexer::new("sub été { }");
+        let _sub = lexer.next_token().unwrap();
+        let name = lexer.next_token().unwrap();
+        assert!(matches!(name.token_type, TokenType::Identifier(_)));
+        assert_eq!(name.text.as_ref(), "été");
+        
+        // Unicode in package names
+        let mut lexer = PerlLexer::new("package Ω::Utils;");
+        let _package = lexer.next_token().unwrap();
+        let name = lexer.next_token().unwrap();
+        assert!(matches!(name.token_type, TokenType::Identifier(_)));
+        assert_eq!(name.text.as_ref(), "Ω::Utils");
+    }
+    
+    #[test]
+    fn test_format_declarations() {
+        // Basic format declaration
+        let mut lexer = PerlLexer::new("format STDOUT =");
+        let format = lexer.next_token().unwrap();
+        assert!(matches!(format.token_type, TokenType::Keyword(_)));
+        assert_eq!(format.text.as_ref(), "format");
+        
+        // Format with filehandle
+        let mut lexer = PerlLexer::new("format MY_HANDLE =");
+        let _format = lexer.next_token().unwrap();
+        let handle = lexer.next_token().unwrap();
+        assert!(matches!(handle.token_type, TokenType::Identifier(_)));
+        
+        // Format declaration without space
+        let mut lexer = PerlLexer::new("format=");
+        let format = lexer.next_token().unwrap();
+        assert!(matches!(format.token_type, TokenType::Keyword(_)));
+        assert_eq!(format.text.as_ref(), "format");
+    }
+    
+    #[test]
+    fn test_tied_variables() {
+        // Tied scalar
+        let mut lexer = PerlLexer::new("tie $scalar, 'MyClass'");
+        let tie = lexer.next_token().unwrap();
+        assert!(matches!(tie.token_type, TokenType::Keyword(_)));
+        assert_eq!(tie.text.as_ref(), "tie");
+        
+        // Tied array
+        let mut lexer = PerlLexer::new("tie @array, 'MyArray'");
+        let _tie = lexer.next_token().unwrap();
+        let array = lexer.next_token().unwrap();
+        assert!(matches!(array.token_type, TokenType::Identifier(_)));
+        assert_eq!(array.text.as_ref(), "@array");
+        
+        // Tied hash
+        let mut lexer = PerlLexer::new("tie %hash, 'MyHash'");
+        let _tie = lexer.next_token().unwrap();
+        let hash = lexer.next_token().unwrap();
+        assert!(matches!(hash.token_type, TokenType::Identifier(_)));
+        assert_eq!(hash.text.as_ref(), "%hash");
+        
+        // Tied filehandle
+        let mut lexer = PerlLexer::new("tie *FH, 'MyIO'");
+        let _tie = lexer.next_token().unwrap();
+        let fh = lexer.next_token().unwrap();
+        assert!(matches!(fh.token_type, TokenType::Operator(_)));
+        assert_eq!(fh.text.as_ref(), "*");
+    }
+    
+    #[test]
+    fn test_overloaded_operators() {
+        // Overload pragma
+        let mut lexer = PerlLexer::new("use overload '+' => \\&add");
+        let _use = lexer.next_token().unwrap();
+        let overload = lexer.next_token().unwrap();
+        assert!(matches!(overload.token_type, TokenType::Identifier(_)));
+        assert_eq!(overload.text.as_ref(), "overload");
+        
+        // String overload
+        let mut lexer = PerlLexer::new("use overload '\"\"' => \\&stringify");
+        let _use = lexer.next_token().unwrap();
+        let _overload = lexer.next_token().unwrap();
+        let string_op = lexer.next_token().unwrap();
+        assert!(matches!(string_op.token_type, TokenType::StringLiteral));
+        
+        // Comparison overload
+        let mut lexer = PerlLexer::new("use overload '<=>' => \\&compare");
+        let _use = lexer.next_token().unwrap();
+        let _overload = lexer.next_token().unwrap();
+        let cmp_op = lexer.next_token().unwrap();
+        assert!(matches!(cmp_op.token_type, TokenType::StringLiteral));
+    }
+    
+    #[test]
+    fn test_complex_dereferencing() {
+        // Array slice dereference
+        let mut lexer = PerlLexer::new("@$ref[0..5]");
+        let array = lexer.next_token().unwrap();
+        assert!(matches!(array.token_type, TokenType::Identifier(_)));
+        assert_eq!(array.text.as_ref(), "@");
+        
+        // Hash slice dereference
+        let mut lexer = PerlLexer::new("@{$ref}{qw(a b c)}");
+        let array = lexer.next_token().unwrap();
+        assert!(matches!(array.token_type, TokenType::Identifier(_)));
+        assert_eq!(array.text.as_ref(), "@");
+        
+        // Code reference dereference
+        let mut lexer = PerlLexer::new("&{$coderef}(@args)");
+        let amp = lexer.next_token().unwrap();
+        assert!(matches!(amp.token_type, TokenType::Operator(_)));
+        assert_eq!(amp.text.as_ref(), "&");
+        
+        // Postfix dereference (Perl 5.20+)
+        let mut lexer = PerlLexer::new("$ref->@*");
+        let _var = lexer.next_token().unwrap();
+        let arrow = lexer.next_token().unwrap();
+        assert_eq!(arrow.token_type, TokenType::Arrow);
+        let at = lexer.next_token().unwrap();
+        assert!(matches!(at.token_type, TokenType::Operator(_)));
+        assert_eq!(at.text.as_ref(), "@");
+        
+        // Complex chain
+        let mut lexer = PerlLexer::new("$obj->method->{key}->@*");
+        let _var = lexer.next_token().unwrap();
+        let arrow1 = lexer.next_token().unwrap();
+        assert_eq!(arrow1.token_type, TokenType::Arrow);
+    }
+    
+    #[test]
+    fn test_attribute_syntax() {
+        // Subroutine attributes
+        let mut lexer = PerlLexer::new("sub foo :lvalue :method { }");
+        let _sub = lexer.next_token().unwrap();
+        let _name = lexer.next_token().unwrap();
+        let colon1 = lexer.next_token().unwrap();
+        assert!(matches!(colon1.token_type, TokenType::Colon));
+        let attr1 = lexer.next_token().unwrap();
+        assert!(matches!(attr1.token_type, TokenType::Identifier(_)));
+        assert_eq!(attr1.text.as_ref(), "lvalue");
+        
+        // Variable attributes
+        let mut lexer = PerlLexer::new("my $var :shared :unique");
+        let _my = lexer.next_token().unwrap();
+        let _var = lexer.next_token().unwrap();
+        let colon = lexer.next_token().unwrap();
+        assert!(matches!(colon.token_type, TokenType::Colon));
+        let attr = lexer.next_token().unwrap();
+        assert!(matches!(attr.token_type, TokenType::Identifier(_)));
+        assert_eq!(attr.text.as_ref(), "shared");
+        
+        // Package attributes
+        let mut lexer = PerlLexer::new("package Foo :bar(baz)");
+        let _package = lexer.next_token().unwrap();
+        let _name = lexer.next_token().unwrap();
+        let colon = lexer.next_token().unwrap();
+        assert!(matches!(colon.token_type, TokenType::Colon));
+        let attr = lexer.next_token().unwrap();
+        assert!(matches!(attr.token_type, TokenType::Identifier(_)));
+        assert_eq!(attr.text.as_ref(), "bar");
+    }
 }
