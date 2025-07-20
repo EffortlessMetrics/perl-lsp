@@ -49,13 +49,13 @@ pub mod unicode;
 pub mod pure_rust_parser;
 
 #[cfg(feature = "token-parser")]
-pub mod logos_lexer;
+pub mod simple_token;
 
 #[cfg(feature = "token-parser")]
-pub mod token_parser;
+pub mod token_ast;
 
 #[cfg(feature = "token-parser")]
-pub mod token_parser_poc;
+pub mod simple_parser;
 
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]

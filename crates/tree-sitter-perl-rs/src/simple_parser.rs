@@ -1,0 +1,400 @@
+//! Simple recursive descent parser for Perl
+//!
+//! This demonstrates the token-based approach without complex parser combinators
+
+use crate::simple_token::{Token, PerlLexer};
+use crate::token_ast::AstNode;
+use std::sync::Arc;
+
+pub struct SimpleParser<'source> {
+    lexer: PerlLexer<'source>,
+    current_pos: usize,
+}
+
+impl<'source> SimpleParser<'source> {
+    pub fn new(input: &'source str) -> Self {
+        Self {
+            lexer: PerlLexer::new(input),
+            current_pos: 0,
+        }
+    }
+    
+    pub fn parse(&mut self) -> Result<AstNode, String> {
+        self.parse_statements()
+    }
+    
+    fn parse_statements(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        let mut statements = Vec::new();
+        
+        loop {
+            // Skip newlines
+            while self.lexer.peek() == &Token::Newline {
+                self.lexer.next_token();
+            }
+            
+            if self.lexer.peek() == &Token::Eof {
+                break;
+            }
+            
+            statements.push(self.parse_statement()?);
+        }
+        
+        Ok(AstNode {
+            node_type: "program".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: statements,
+        })
+    }
+    
+    fn parse_statement(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        
+        match self.lexer.peek() {
+            Token::My | Token::Our | Token::Local => {
+                self.parse_variable_declaration()
+            }
+            Token::If => self.parse_if_statement(),
+            Token::While => self.parse_while_statement(),
+            Token::Sub => self.parse_subroutine(),
+            Token::Return => self.parse_return_statement(),
+            _ => {
+                // Expression statement
+                let expr = self.parse_expression()?;
+                self.consume_semicolon()?;
+                Ok(expr)
+            }
+        }
+    }
+    
+    fn parse_variable_declaration(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        let decl_type = match self.lexer.next_token() {
+            Token::My => "my",
+            Token::Our => "our",
+            Token::Local => "local",
+            _ => unreachable!(),
+        };
+        
+        let var = self.parse_variable()?;
+        
+        let value = if self.lexer.peek() == &Token::Assign {
+            self.lexer.next_token(); // consume =
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+        
+        self.consume_semicolon()?;
+        
+        Ok(AstNode {
+            node_type: format!("{}_declaration", decl_type),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: if let Some(val) = value {
+                vec![var, *val]
+            } else {
+                vec![var]
+            },
+        })
+    }
+    
+    fn parse_variable(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        let token = self.lexer.next_token();
+        
+        match token {
+            Token::ScalarVar => Ok(AstNode {
+                node_type: "scalar_variable".to_string(),
+                start_position: start,
+                end_position: self.current_pos,
+                value: Some(Arc::from(self.lexer.slice())),
+                children: vec![],
+            }),
+            Token::ArrayVar => Ok(AstNode {
+                node_type: "array_variable".to_string(),
+                start_position: start,
+                end_position: self.current_pos,
+                value: Some(Arc::from(self.lexer.slice())),
+                children: vec![],
+            }),
+            Token::HashVar => Ok(AstNode {
+                node_type: "hash_variable".to_string(),
+                start_position: start,
+                end_position: self.current_pos,
+                value: Some(Arc::from(self.lexer.slice())),
+                children: vec![],
+            }),
+            _ => Err(format!("Expected variable, got {:?}", token)),
+        }
+    }
+    
+    fn parse_expression(&mut self) -> Result<AstNode, String> {
+        self.parse_additive()
+    }
+    
+    fn parse_additive(&mut self) -> Result<AstNode, String> {
+        let mut left = self.parse_multiplicative()?;
+        
+        loop {
+            let op = match self.lexer.peek() {
+                Token::Plus => "+",
+                Token::Minus => "-",
+                _ => break,
+            };
+            
+            self.lexer.next_token();
+            let right = self.parse_multiplicative()?;
+            
+            left = AstNode {
+                node_type: "binary_expression".to_string(),
+                start_position: left.start_position,
+                end_position: right.end_position,
+                value: Some(Arc::from(op)),
+                children: vec![left, right],
+            };
+        }
+        
+        Ok(left)
+    }
+    
+    fn parse_multiplicative(&mut self) -> Result<AstNode, String> {
+        let mut left = self.parse_primary()?;
+        
+        loop {
+            let op = match self.lexer.peek() {
+                Token::Multiply => "*",
+                Token::Divide => "/",
+                Token::Modulo => "%",
+                _ => break,
+            };
+            
+            self.lexer.next_token();
+            let right = self.parse_primary()?;
+            
+            left = AstNode {
+                node_type: "binary_expression".to_string(),
+                start_position: left.start_position,
+                end_position: right.end_position,
+                value: Some(Arc::from(op)),
+                children: vec![left, right],
+            };
+        }
+        
+        Ok(left)
+    }
+    
+    fn parse_primary(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        
+        match self.lexer.peek() {
+            Token::Number => {
+                self.lexer.next_token();
+                Ok(AstNode {
+                    node_type: "number".to_string(),
+                    start_position: start,
+                    end_position: self.current_pos,
+                    value: Some(Arc::from(self.lexer.slice())),
+                    children: vec![],
+                })
+            }
+            Token::String => {
+                self.lexer.next_token();
+                Ok(AstNode {
+                    node_type: "string".to_string(),
+                    start_position: start,
+                    end_position: self.current_pos,
+                    value: Some(Arc::from(self.lexer.slice())),
+                    children: vec![],
+                })
+            }
+            Token::ScalarVar | Token::ArrayVar | Token::HashVar => {
+                self.parse_variable()
+            }
+            Token::LParen => {
+                self.lexer.next_token(); // consume (
+                let expr = self.parse_expression()?;
+                if self.lexer.next_token() != Token::RParen {
+                    return Err("Expected )".to_string());
+                }
+                Ok(expr)
+            }
+            _ => Err(format!("Unexpected token: {:?}", self.lexer.peek())),
+        }
+    }
+    
+    fn parse_if_statement(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        self.lexer.next_token(); // consume 'if'
+        
+        if self.lexer.next_token() != Token::LParen {
+            return Err("Expected ( after if".to_string());
+        }
+        
+        let condition = self.parse_expression()?;
+        
+        if self.lexer.next_token() != Token::RParen {
+            return Err("Expected ) after condition".to_string());
+        }
+        
+        let body = self.parse_block()?;
+        
+        Ok(AstNode {
+            node_type: "if_statement".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: vec![condition, body],
+        })
+    }
+    
+    fn parse_while_statement(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        self.lexer.next_token(); // consume 'while'
+        
+        if self.lexer.next_token() != Token::LParen {
+            return Err("Expected ( after while".to_string());
+        }
+        
+        let condition = self.parse_expression()?;
+        
+        if self.lexer.next_token() != Token::RParen {
+            return Err("Expected ) after condition".to_string());
+        }
+        
+        let body = self.parse_block()?;
+        
+        Ok(AstNode {
+            node_type: "while_statement".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: vec![condition, body],
+        })
+    }
+    
+    fn parse_block(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        
+        if self.lexer.next_token() != Token::LBrace {
+            return Err("Expected {".to_string());
+        }
+        
+        let mut statements = Vec::new();
+        
+        loop {
+            // Skip newlines
+            while self.lexer.peek() == &Token::Newline {
+                self.lexer.next_token();
+            }
+            
+            if self.lexer.peek() == &Token::RBrace {
+                self.lexer.next_token();
+                break;
+            }
+            
+            statements.push(self.parse_statement()?);
+        }
+        
+        Ok(AstNode {
+            node_type: "block".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: statements,
+        })
+    }
+    
+    fn parse_subroutine(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        self.lexer.next_token(); // consume 'sub'
+        
+        let name = if self.lexer.peek() == &Token::Identifier {
+            self.lexer.next_token();
+            Some(Arc::from(self.lexer.slice()))
+        } else {
+            None
+        };
+        
+        let body = self.parse_block()?;
+        
+        Ok(AstNode {
+            node_type: "subroutine".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: name,
+            children: vec![body],
+        })
+    }
+    
+    fn parse_return_statement(&mut self) -> Result<AstNode, String> {
+        let start = self.current_pos;
+        self.lexer.next_token(); // consume 'return'
+        
+        let value = if self.lexer.peek() != &Token::Semicolon {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+        
+        self.consume_semicolon()?;
+        
+        Ok(AstNode {
+            node_type: "return_statement".to_string(),
+            start_position: start,
+            end_position: self.current_pos,
+            value: None,
+            children: value.map(|v| vec![v]).unwrap_or_default(),
+        })
+    }
+    
+    fn consume_semicolon(&mut self) -> Result<(), String> {
+        match self.lexer.next_token() {
+            Token::Semicolon => Ok(()),
+            Token::Newline | Token::Eof => Ok(()), // Perl allows newline as statement terminator
+            token => Err(format!("Expected ; or newline, got {:?}", token)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_simple_declaration() {
+        let input = "my $x = 42;";
+        let mut parser = SimpleParser::new(input);
+        let ast = parser.parse().unwrap();
+        
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "my_declaration");
+    }
+    
+    #[test]
+    fn test_arithmetic() {
+        let input = "$a + $b * $c;";
+        let mut parser = SimpleParser::new(input);
+        let ast = parser.parse().unwrap();
+        
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "binary_expression");
+        assert_eq!(ast.children[0].value.as_ref().map(|s| s.as_ref()), Some("+"));
+    }
+    
+    #[test]
+    fn test_if_statement() {
+        let input = "if ($x) { return 42; }";
+        let mut parser = SimpleParser::new(input);
+        let ast = parser.parse().unwrap();
+        
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "if_statement");
+    }
+}
