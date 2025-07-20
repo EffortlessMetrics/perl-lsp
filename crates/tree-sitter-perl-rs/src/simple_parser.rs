@@ -2,12 +2,13 @@
 //!
 //! This demonstrates the token-based approach without complex parser combinators
 
-use crate::simple_token::{Token, PerlLexer};
+use crate::simple_token::Token;
+use crate::context_lexer_simple::ContextLexer;
 use crate::token_ast::AstNode;
 use std::sync::Arc;
 
 pub struct SimpleParser<'source> {
-    lexer: PerlLexer<'source>,
+    lexer: ContextLexer<'source>,
     current_pos: usize,
 }
 
@@ -29,11 +30,11 @@ impl<'source> SimpleParser<'source> {
         
         loop {
             // Skip newlines
-            while self.lexer.peek() == &Token::Newline {
-                self.lexer.next_token();
+            while let Some(Token::Newline) = self.lexer.peek() {
+                self.lexer.next();
             }
             
-            if self.lexer.peek() == &Token::Eof {
+            if self.lexer.peek().is_none() {
                 break;
             }
             
@@ -52,7 +53,7 @@ impl<'source> SimpleParser<'source> {
     fn parse_statement(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
         
-        match self.lexer.peek() {
+        match self.lexer.peek().cloned() {
             Token::My | Token::Our | Token::Local => {
                 self.parse_variable_declaration()
             }
@@ -71,7 +72,7 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_variable_declaration(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        let decl_type = match self.lexer.next_token() {
+        let decl_type = match self.lexer.next().ok_or("Unexpected EOF".to_string())? {
             Token::My => "my",
             Token::Our => "our",
             Token::Local => "local",
@@ -80,8 +81,8 @@ impl<'source> SimpleParser<'source> {
         
         let var = self.parse_variable()?;
         
-        let value = if self.lexer.peek() == &Token::Assign {
-            self.lexer.next_token(); // consume =
+        let value = if let Some(Token::Assign) = self.lexer.peek() {
+            self.lexer.next(); // consume =
             Some(Box::new(self.parse_expression()?))
         } else {
             None
@@ -104,28 +105,28 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_variable(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        let token = self.lexer.next_token();
+        let token = self.lexer.next().ok_or("Unexpected EOF".to_string())?;
         
         match token {
             Token::ScalarVar => Ok(AstNode {
                 node_type: "scalar_variable".to_string(),
                 start_position: start,
                 end_position: self.current_pos,
-                value: Some(Arc::from(self.lexer.slice())),
+                value: Some(Arc::from("value")),
                 children: vec![],
             }),
             Token::ArrayVar => Ok(AstNode {
                 node_type: "array_variable".to_string(),
                 start_position: start,
                 end_position: self.current_pos,
-                value: Some(Arc::from(self.lexer.slice())),
+                value: Some(Arc::from("value")),
                 children: vec![],
             }),
             Token::HashVar => Ok(AstNode {
                 node_type: "hash_variable".to_string(),
                 start_position: start,
                 end_position: self.current_pos,
-                value: Some(Arc::from(self.lexer.slice())),
+                value: Some(Arc::from("value")),
                 children: vec![],
             }),
             _ => Err(format!("Expected variable, got {:?}", token)),
@@ -141,12 +142,12 @@ impl<'source> SimpleParser<'source> {
         
         loop {
             let op = match self.lexer.peek() {
-                Token::Plus => "+",
-                Token::Minus => "-",
+                Some(Token::Plus) => "+",
+                Some(Token::Minus) => "-",
                 _ => break,
             };
             
-            self.lexer.next_token();
+            self.lexer.next().ok_or("Unexpected EOF".to_string())?;
             let right = self.parse_multiplicative()?;
             
             left = AstNode {
@@ -166,13 +167,13 @@ impl<'source> SimpleParser<'source> {
         
         loop {
             let op = match self.lexer.peek() {
-                Token::Multiply => "*",
-                Token::Divide => "/",
-                Token::Modulo => "%",
+                Some(Token::Multiply) => "*",
+                Some(Token::Divide) => "/",
+                Some(Token::Modulo) => "%",
                 _ => break,
             };
             
-            self.lexer.next_token();
+            self.lexer.next().ok_or("Unexpected EOF".to_string())?;
             let right = self.parse_primary()?;
             
             left = AstNode {
@@ -190,34 +191,34 @@ impl<'source> SimpleParser<'source> {
     fn parse_primary(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
         
-        match self.lexer.peek() {
-            Token::Number => {
-                self.lexer.next_token();
+        match self.lexer.peek().cloned() {
+            Some(Token::IntegerLiteral) | Some(Token::FloatLiteral) => {
+                self.lexer.next().ok_or("Unexpected EOF".to_string())?;
                 Ok(AstNode {
                     node_type: "number".to_string(),
                     start_position: start,
                     end_position: self.current_pos,
-                    value: Some(Arc::from(self.lexer.slice())),
+                    value: Some(Arc::from("value")),
                     children: vec![],
                 })
             }
-            Token::String => {
-                self.lexer.next_token();
+            Some(Token::StringLiteral) => {
+                self.lexer.next().ok_or("Unexpected EOF".to_string())?;
                 Ok(AstNode {
                     node_type: "string".to_string(),
                     start_position: start,
                     end_position: self.current_pos,
-                    value: Some(Arc::from(self.lexer.slice())),
+                    value: Some(Arc::from("value")),
                     children: vec![],
                 })
             }
-            Token::ScalarVar | Token::ArrayVar | Token::HashVar => {
+            Some(Token::ScalarVar) | Some(Token::ArrayVar) | Some(Token::HashVar) => {
                 self.parse_variable()
             }
-            Token::LParen => {
-                self.lexer.next_token(); // consume (
+            Some(Token::LParen) => {
+                self.lexer.next().ok_or("Unexpected EOF".to_string())?; // consume (
                 let expr = self.parse_expression()?;
-                if self.lexer.next_token() != Token::RParen {
+                if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::RParen {
                     return Err("Expected )".to_string());
                 }
                 Ok(expr)
@@ -228,15 +229,15 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_if_statement(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        self.lexer.next_token(); // consume 'if'
+        self.lexer.next().ok_or("Unexpected EOF".to_string())?; // consume 'if'
         
-        if self.lexer.next_token() != Token::LParen {
+        if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::LParen {
             return Err("Expected ( after if".to_string());
         }
         
         let condition = self.parse_expression()?;
         
-        if self.lexer.next_token() != Token::RParen {
+        if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::RParen {
             return Err("Expected ) after condition".to_string());
         }
         
@@ -253,15 +254,15 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_while_statement(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        self.lexer.next_token(); // consume 'while'
+        self.lexer.next().ok_or("Unexpected EOF".to_string())?; // consume 'while'
         
-        if self.lexer.next_token() != Token::LParen {
+        if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::LParen {
             return Err("Expected ( after while".to_string());
         }
         
         let condition = self.parse_expression()?;
         
-        if self.lexer.next_token() != Token::RParen {
+        if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::RParen {
             return Err("Expected ) after condition".to_string());
         }
         
@@ -279,7 +280,7 @@ impl<'source> SimpleParser<'source> {
     fn parse_block(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
         
-        if self.lexer.next_token() != Token::LBrace {
+        if self.lexer.next().ok_or("Unexpected EOF".to_string())? != Token::LBrace {
             return Err("Expected {".to_string());
         }
         
@@ -287,12 +288,12 @@ impl<'source> SimpleParser<'source> {
         
         loop {
             // Skip newlines
-            while self.lexer.peek() == &Token::Newline {
-                self.lexer.next_token();
+            while let Some(Token::Newline) = self.lexer.peek() {
+                self.lexer.next();
             }
             
-            if self.lexer.peek() == &Token::RBrace {
-                self.lexer.next_token();
+            if let Some(Token::RBrace) = self.lexer.peek() {
+                self.lexer.next();
                 break;
             }
             
@@ -310,11 +311,11 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_subroutine(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        self.lexer.next_token(); // consume 'sub'
+        self.lexer.next().ok_or("Unexpected EOF".to_string())?; // consume 'sub'
         
-        let name = if self.lexer.peek() == &Token::Identifier {
-            self.lexer.next_token();
-            Some(Arc::from(self.lexer.slice()))
+        let name = if let Some(Token::Identifier) = self.lexer.peek() {
+            self.lexer.next();
+            Some(Arc::from("value"))
         } else {
             None
         };
@@ -332,9 +333,9 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_return_statement(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
-        self.lexer.next_token(); // consume 'return'
+        self.lexer.next().ok_or("Unexpected EOF".to_string())?; // consume 'return'
         
-        let value = if self.lexer.peek() != &Token::Semicolon {
+        let value = if !matches!(self.lexer.peek(), Some(Token::Semicolon) | None) {
             Some(self.parse_expression()?)
         } else {
             None
@@ -352,7 +353,7 @@ impl<'source> SimpleParser<'source> {
     }
     
     fn consume_semicolon(&mut self) -> Result<(), String> {
-        match self.lexer.next_token() {
+        match self.lexer.next().ok_or("Unexpected EOF".to_string())? {
             Token::Semicolon => Ok(()),
             Token::Newline | Token::Eof => Ok(()), // Perl allows newline as statement terminator
             token => Err(format!("Expected ; or newline, got {:?}", token)),

@@ -11,12 +11,25 @@ pub enum Token {
     #[regex(r"-?0[xX][0-9a-fA-F_]+")]
     #[regex(r"-?0[bB][01_]+")]
     #[regex(r"-?0[0-7_]+")]
-    #[regex(r"-?[0-9][0-9_]*(\.[0-9_]+)?([eE][+-]?[0-9_]+)?")]
+    #[regex(r"-?[0-9]+")]
+    IntegerLiteral,
+    
+    #[regex(r"-?[0-9]*\.[0-9]+([eE][+-]?[0-9]+)?")]
+    #[regex(r"-?[0-9]+[eE][+-]?[0-9]+")]
+    FloatLiteral,
+    
+    // Legacy combined number token
     Number,
     
-    // Strings (simplified for now)
+    // Strings
     #[regex(r#""([^"\\]|\\.)*""#)]
     #[regex(r"'([^'\\]|\\.)*'")]
+    StringLiteral,
+    
+    #[regex(r"`([^`\\]|\\.)*`")]
+    Backtick,
+    
+    // Legacy string token
     String,
     
     // Variables
@@ -67,6 +80,12 @@ pub enum Token {
     Use,
     #[token("require")]
     Require,
+    #[token("class")]
+    Class,
+    #[token("method")]
+    Method,
+    #[token("has")]
+    Has,
     
     // Operators
     #[token("=")]
@@ -76,9 +95,23 @@ pub enum Token {
     #[token("-=")]
     MinusAssign,
     #[token("*=")]
-    MultiplyAssign,
+    StarAssign,
     #[token("/=")]
-    DivideAssign,
+    SlashAssign,
+    #[token("%=")]
+    PercentAssign,
+    #[token(".=")]
+    DotAssign,
+    #[token("&=")]
+    AndAssign,
+    #[token("|=")]
+    OrAssign,
+    #[token("^=")]
+    XorAssign,
+    #[token("<<=")]
+    LshiftAssign,
+    #[token(">>=")]
+    RshiftAssign,
     
     #[token("+")]
     Plus,
@@ -98,15 +131,15 @@ pub enum Token {
     #[token("!=")]
     NumNe,
     #[token("<")]
-    Lt,
+    NumLt,
     #[token(">")]
-    Gt,
+    NumGt,
     #[token("<=")]
-    Le,
+    NumLe,
     #[token(">=")]
-    Ge,
+    NumGe,
     #[token("<=>")]
-    Cmp,
+    Spaceship,
     
     #[token("eq")]
     StrEq,
@@ -120,18 +153,31 @@ pub enum Token {
     StrLe,
     #[token("ge")]
     StrGe,
+    #[token("cmp")]
+    Cmp,
+    
+    #[token("isa")]
+    Isa,
     
     #[token("&&")]
-    And,
+    LogAnd,
     #[token("||")]
-    Or,
+    LogOr,
     #[token("!")]
     Not,
+    #[token("&")]
+    BitAnd,
+    #[token("|")]
+    BitOr,
+    #[token("^")]
+    BitXor,
+    #[token("~")]
+    BitNot,
     
     #[token("=~")]
-    Match,
+    BinMatch,
     #[token("!~")]
-    NotMatch,
+    BinNotMatch,
     
     #[token("->")]
     Arrow,
@@ -163,6 +209,10 @@ pub enum Token {
     Range,
     #[token("...")]
     Ellipsis,
+    #[token(":")]
+    Colon,
+    #[token("?")]
+    Question,
     
     #[regex(r"\n")]
     Newline,
@@ -173,6 +223,17 @@ pub enum Token {
     // Identifiers (must be after keywords)
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
     Identifier,
+    
+    // Barewords (same pattern but treated differently)
+    Bareword,
+    
+    // Special tokens
+    #[regex(r"/[^/\n]*/[gimsoxadlupnce]*")]
+    Regex,
+    
+    // More keywords
+    #[token("state")]
+    State,
     
     // EOF
     Eof,
@@ -234,7 +295,7 @@ mod tests {
         assert_eq!(lexer.next_token(), Token::My);
         assert_eq!(lexer.next_token(), Token::ScalarVar);
         assert_eq!(lexer.next_token(), Token::Assign);
-        assert_eq!(lexer.next_token(), Token::Number);
+        assert_eq!(lexer.next_token(), Token::IntegerLiteral);
         assert_eq!(lexer.next_token(), Token::Semicolon);
         assert_eq!(lexer.next_token(), Token::Eof);
     }
