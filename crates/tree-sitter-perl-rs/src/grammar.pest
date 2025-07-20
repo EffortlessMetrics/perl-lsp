@@ -350,7 +350,7 @@ additive_op = { "+" | "-" | "." }
 multiplicative_expression = {
     exponential_expression ~ (multiplicative_op ~ exponential_expression)*
 }
-multiplicative_op = { "*" | "/" | "÷" | "%" | "x" }
+multiplicative_op = { "*" | "/" | "_DIV_" | "%" | "x" }
 
 exponential_expression = {
     unary_expression ~ (exponential_op ~ unary_expression)*
@@ -705,7 +705,7 @@ regex = {
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
 qr_regex = { 
-    ("qr" | "ǫr") ~ (
+    ("_QR_" ~ (
         "/" ~ qr_slash_pattern ~ "/" |
         "!" ~ qr_exclaim_pattern ~ "!" |
         "#" ~ qr_hash_pattern ~ "#" |
@@ -714,7 +714,17 @@ qr_regex = {
         "{" ~ qr_brace_pattern ~ "}" |
         "<" ~ qr_angle_pattern ~ ">" |
         regex_delimiter ~ qr_regex_pattern ~ regex_delimiter
-    ) ~ regex_flags? 
+    ) ~ regex_flags?) |
+    ("qr" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+        "/" ~ qr_slash_pattern ~ "/" |
+        "!" ~ qr_exclaim_pattern ~ "!" |
+        "#" ~ qr_hash_pattern ~ "#" |
+        "(" ~ qr_paren_pattern ~ ")" |
+        "[" ~ qr_bracket_pattern ~ "]" |
+        "{" ~ qr_brace_pattern ~ "}" |
+        "<" ~ qr_angle_pattern ~ ">" |
+        regex_delimiter ~ qr_regex_pattern ~ regex_delimiter
+    ) ~ regex_flags?) 
 }
 qr_slash_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
 qr_exclaim_pattern = @{ (!"!" ~ (regex_escape | regex_group | ANY))* }
@@ -760,14 +770,17 @@ regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 
 substitution = {
-    ("s" | "ṡ") ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?
+    ("_SUB_" ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?) |
+    ("s" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?)
 }
 sub_pattern = @{ (!delimiter ~ (regex_escape | regex_group | ANY))* }
 
 replacement = @{ (!delimiter ~ ANY)* }
 
 transliteration = {
-    ("tr" | "ṫr" | "y" | "ẏ") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?
+    ("_TRANS_" ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?) |
+    ("tr" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?) |
+    ("y" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?)
 }
 
 search_list = @{ (!delimiter ~ ANY)* }

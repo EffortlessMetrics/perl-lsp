@@ -165,10 +165,11 @@ impl<'a> PerlLexer<'a> {
         use TokenType::*;
         self.mode = match token {
             // These produce a value, so next slash is division
-            Identifier(_) | Number(_) | RightParen | RightBracket | RightBrace => LexerMode::ExpectOperator,
+            Identifier(_) | Number(_) | RightParen | RightBracket | RightBrace | 
+            RegexMatch | Substitution | Transliteration | QuoteRegex => LexerMode::ExpectOperator,
             
             // These expect a value next, so slash starts regex
-            Operator(_) | LeftParen | LeftBracket | LeftBrace | Semicolon | Comma | Arrow | FatComma => LexerMode::ExpectTerm,
+            Operator(_) | LeftParen | LeftBracket | LeftBrace | Semicolon | Comma | Arrow | FatComma | Division => LexerMode::ExpectTerm,
             
             // Keywords depend on which keyword
             Keyword(kw) => match kw.as_ref() {
@@ -189,18 +190,26 @@ impl<'a> PerlLexer<'a> {
     fn scan_regex_like(&mut self) -> Option<Token> {
         let start = self.position;
         
-        // Check for explicit operators
-        if self.peek_str("s/") || self.peek_str("s{") || self.peek_str("s(") || self.peek_str("s[") {
-            return self.scan_substitution();
-        }
-        if self.peek_str("tr/") || self.peek_str("y/") {
-            return self.scan_transliteration();
-        }
-        if self.peek_str("m/") || self.peek_str("m{") || self.peek_str("m(") || self.peek_str("m[") {
-            return self.scan_match_regex();
-        }
-        if self.peek_str("qr/") || self.peek_str("qr{") || self.peek_str("qr(") || self.peek_str("qr[") {
-            return self.scan_quote_regex();
+        // Check for explicit operators with delimiters
+        if self.position + 1 < self.input.len() {
+            let ch = self.input.as_bytes()[self.position] as char;
+            let next = self.input.as_bytes()[self.position + 1] as char;
+            
+            // Check for s///, tr///, y///, m//, qr// patterns
+            match ch {
+                's' if Self::is_regex_delimiter(next) => return self.scan_substitution(),
+                't' if self.position + 2 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'r' && 
+                       Self::is_regex_delimiter(self.input.as_bytes()[self.position + 2] as char) => {
+                    return self.scan_transliteration();
+                }
+                'y' if Self::is_regex_delimiter(next) => return self.scan_transliteration(),
+                'm' if Self::is_regex_delimiter(next) => return self.scan_match_regex(),
+                'q' if self.position + 2 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'r' && 
+                       Self::is_regex_delimiter(self.input.as_bytes()[self.position + 2] as char) => {
+                    return self.scan_quote_regex();
+                }
+                _ => {}
+            }
         }
         
         // Bare slash - could be regex or division based on mode
@@ -533,7 +542,7 @@ impl<'a> PerlLexer<'a> {
         let ch = self.input.as_bytes()[self.position];
         
         // Check for regex-like constructs first
-        if ch == b'/' || self.peek_str("s") || self.peek_str("m") || self.peek_str("tr") || self.peek_str("y") || self.peek_str("qr") {
+        if ch == b'/' || (self.mode == LexerMode::ExpectTerm && (self.peek_str("s/") || self.peek_str("s{") || self.peek_str("m/") || self.peek_str("m{") || self.peek_str("tr/") || self.peek_str("y/") || self.peek_str("qr/") || self.peek_str("qr{"))) {
             if let Some(token) = self.scan_regex_like() {
                 self.update_mode(&token.token_type);
                 return Some(token);
