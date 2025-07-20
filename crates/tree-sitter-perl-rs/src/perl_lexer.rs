@@ -19,6 +19,23 @@ pub enum TokenType {
     Transliteration,   // tr/// or y///
     QuoteRegex,        // qr//
     
+    // String and quote tokens
+    StringLiteral,     // "string" or 'string'
+    QuoteSingle,       // q//
+    QuoteDouble,       // qq//
+    QuoteWords,        // qw//
+    QuoteCommand,      // qx// or `backticks`
+    
+    // Heredoc tokens
+    HeredocStart,      // <<EOF or <<'EOF'
+    HeredocBody(Arc<str>),
+    
+    // Version strings
+    Version(Arc<str>), // v5.32.0
+    
+    // POD documentation
+    Pod,
+    
     // Other tokens that affect mode
     Identifier(Arc<str>),
     Number(Arc<str>),
@@ -32,6 +49,7 @@ pub enum TokenType {
     RightBrace,
     Semicolon,
     Comma,
+    Colon,
     Arrow,             // =>
     FatComma,          // ,
     Whitespace,
@@ -175,7 +193,8 @@ impl<'a> PerlLexer<'a> {
             Keyword(kw) => match kw.as_ref() {
                 // These expect a value
                 "if" | "unless" | "while" | "until" | "for" | "foreach" | "given" |
-                "return" | "my" | "our" | "local" | "state" => LexerMode::ExpectTerm,
+                "return" | "my" | "our" | "local" | "state" | "print" | "say" | "printf" |
+                "split" | "grep" | "map" | "sort" => LexerMode::ExpectTerm,
                 // These produce a value
                 "sub" => LexerMode::ExpectOperator,
                 _ => self.mode, // Keep current mode
@@ -468,6 +487,71 @@ impl<'a> PerlLexer<'a> {
         })
     }
     
+    /// Scan quote operators (q//, qq//, qw//, qx//)
+    fn scan_quote_operator(&mut self) -> Option<Token> {
+        let start = self.position;
+        
+        // Determine quote type
+        let (quote_type, prefix_len) = if self.peek_str("qq") {
+            (TokenType::QuoteDouble, 2)
+        } else if self.peek_str("qw") {
+            (TokenType::QuoteWords, 2)
+        } else if self.peek_str("qx") {
+            (TokenType::QuoteCommand, 2)
+        } else if self.peek_str("qr") {
+            // Handle qr// separately
+            return self.scan_quote_regex();
+        } else if self.peek_str("q") {
+            (TokenType::QuoteSingle, 1)
+        } else {
+            return None;
+        };
+        
+        // Skip prefix
+        self.position += prefix_len;
+        
+        // Get delimiter
+        if self.position >= self.input.len() {
+            return None;
+        }
+        let delimiter = self.input.as_bytes()[self.position] as char;
+        if !Self::is_regex_delimiter(delimiter) {
+            return None;
+        }
+        self.position += 1;
+        
+        let closing = match delimiter {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delimiter,
+        };
+        
+        // Scan content
+        while self.position < self.input.len() {
+            let ch = self.input.as_bytes()[self.position];
+            if ch as char == closing {
+                self.position += 1;
+                break;
+            }
+            if ch == b'\\' && self.position + 1 < self.input.len() {
+                self.position += 2;
+            } else {
+                self.position += 1;
+            }
+        }
+        
+        let token = Token {
+            token_type: quote_type,
+            text: Arc::from(self.safe_slice(start, self.position)),
+            start,
+            end: self.position,
+        };
+        self.update_mode(&token.token_type);
+        Some(token)
+    }
+    
     /// Scan a qr// regex
     fn scan_quote_regex(&mut self) -> Option<Token> {
         let start = self.position;
@@ -525,6 +609,109 @@ impl<'a> PerlLexer<'a> {
         })
     }
     
+    /// Scan a heredoc start token (<<EOF or <<'EOF')
+    fn scan_heredoc_start(&mut self) -> Option<Token> {
+        let start = self.position;
+        
+        // Skip <<
+        self.position += 2;
+        
+        // Check for indented heredoc (<<~)
+        if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'~' {
+            self.position += 1;
+        }
+        
+        // Skip optional whitespace
+        while self.position < self.input.len() && self.input.as_bytes()[self.position] == b' ' {
+            self.position += 1;
+        }
+        
+        // Check for quoted delimiter
+        let quoted = if self.position < self.input.len() {
+            match self.input.as_bytes()[self.position] {
+                b'\'' | b'"' | b'`' => {
+                    self.position += 1;
+                    true
+                }
+                _ => false,
+            }
+        } else {
+            false
+        };
+        
+        // Scan delimiter
+        while self.position < self.input.len() {
+            let ch = self.input.as_bytes()[self.position];
+            if quoted && (ch == b'\'' || ch == b'"' || ch == b'`') {
+                self.position += 1;
+                break;
+            } else if !quoted && (ch == b' ' || ch == b'\t' || ch == b'\n' || ch == b';') {
+                break;
+            }
+            self.position += 1;
+        }
+        
+        let token = Token {
+            token_type: TokenType::HeredocStart,
+            text: Arc::from(self.safe_slice(start, self.position)),
+            start,
+            end: self.position,
+        };
+        self.update_mode(&token.token_type);
+        Some(token)
+    }
+    
+    /// Scan POD documentation
+    fn scan_pod(&mut self) -> Option<Token> {
+        let start = self.position;
+        
+        // Scan until =cut
+        while self.position < self.input.len() {
+            if self.peek_str("\n=cut") {
+                self.position += 5; // Skip "\n=cut"
+                // Skip to end of line
+                self.skip_line();
+                break;
+            }
+            self.position += 1;
+        }
+        
+        Some(Token {
+            token_type: TokenType::Pod,
+            text: Arc::from(self.safe_slice(start, self.position)),
+            start,
+            end: self.position,
+        })
+    }
+    
+    /// Scan a version string (v5.32.0)
+    fn scan_version(&mut self) -> Option<Token> {
+        let start = self.position;
+        
+        // Skip 'v'
+        self.position += 1;
+        
+        // Scan version parts
+        while self.position < self.input.len() {
+            let ch = self.input.as_bytes()[self.position];
+            if ch.is_ascii_digit() || ch == b'.' || ch == b'_' {
+                self.position += 1;
+            } else {
+                break;
+            }
+        }
+        
+        let text = self.safe_slice(start, self.position);
+        let token = Token {
+            token_type: TokenType::Version(Arc::from(text)),
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        };
+        self.update_mode(&token.token_type);
+        Some(token)
+    }
+    
     /// Get the next token
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
@@ -547,6 +734,45 @@ impl<'a> PerlLexer<'a> {
                 self.update_mode(&token.token_type);
                 return Some(token);
             }
+        }
+        
+        // Check for quote operators
+        if self.peek_str("q/") || self.peek_str("q{") || self.peek_str("q(") || self.peek_str("q[") || self.peek_str("q!") || self.peek_str("q#") || self.peek_str("q|") || self.peek_str("q<") {
+            return self.scan_quote_operator();
+        }
+        if self.peek_str("qq/") || self.peek_str("qq{") || self.peek_str("qq(") || self.peek_str("qq[") || self.peek_str("qq!") || self.peek_str("qq#") || self.peek_str("qq|") || self.peek_str("qq<") {
+            return self.scan_quote_operator();
+        }
+        if self.peek_str("qw/") || self.peek_str("qw{") || self.peek_str("qw(") || self.peek_str("qw[") || self.peek_str("qw!") || self.peek_str("qw#") || self.peek_str("qw|") || self.peek_str("qw<") {
+            return self.scan_quote_operator();
+        }
+        if self.peek_str("qx/") || self.peek_str("qx{") || self.peek_str("qx(") || self.peek_str("qx[") || self.peek_str("qx!") || self.peek_str("qx#") || self.peek_str("qx|") || self.peek_str("qx<") {
+            return self.scan_quote_operator();
+        }
+        
+        // Check for heredocs
+        if ch == b'<' && self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'<' {
+            return self.scan_heredoc_start();
+        }
+        
+        // Check for POD - must be at start of line and followed by a POD directive
+        if ch == b'=' && (self.position == 0 || (self.position > 0 && self.input.as_bytes()[self.position - 1] == b'\n')) {
+            // Check if it's a POD directive
+            if self.position + 2 < self.input.len() {
+                let next_chars = &self.input.as_bytes()[self.position..];
+                if next_chars.starts_with(b"=pod") || next_chars.starts_with(b"=head") || 
+                   next_chars.starts_with(b"=over") || next_chars.starts_with(b"=item") ||
+                   next_chars.starts_with(b"=back") || next_chars.starts_with(b"=cut") ||
+                   next_chars.starts_with(b"=for") || next_chars.starts_with(b"=begin") ||
+                   next_chars.starts_with(b"=end") || next_chars.starts_with(b"=encoding") {
+                    return self.scan_pod();
+                }
+            }
+        }
+        
+        // Check for version strings
+        if ch == b'v' && self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1].is_ascii_digit() {
+            return self.scan_version();
         }
         
         // Handle other tokens
@@ -720,10 +946,56 @@ impl<'a> PerlLexer<'a> {
             }
             b'0'..=b'9' => {
                 // Number
-                while self.position < self.input.len() {
-                    match self.input.as_bytes()[self.position] {
-                        b'0'..=b'9' | b'.' | b'e' | b'E' | b'_' => self.position += 1,
-                        _ => break,
+                if ch == b'0' && self.position + 1 < self.input.len() {
+                    match self.input.as_bytes()[self.position + 1] {
+                        b'x' | b'X' => {
+                            // Hex number
+                            self.position += 2;
+                            while self.position < self.input.len() {
+                                match self.input.as_bytes()[self.position] {
+                                    b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b'_' => self.position += 1,
+                                    _ => break,
+                                }
+                            }
+                        }
+                        b'b' | b'B' => {
+                            // Binary number
+                            self.position += 2;
+                            while self.position < self.input.len() {
+                                match self.input.as_bytes()[self.position] {
+                                    b'0' | b'1' | b'_' => self.position += 1,
+                                    _ => break,
+                                }
+                            }
+                        }
+                        b'0'..=b'7' => {
+                            // Octal number
+                            self.position += 1;
+                            while self.position < self.input.len() {
+                                match self.input.as_bytes()[self.position] {
+                                    b'0'..=b'7' | b'_' => self.position += 1,
+                                    _ => break,
+                                }
+                            }
+                        }
+                        _ => {
+                            // Regular number starting with 0
+                            self.position += 1;
+                            while self.position < self.input.len() {
+                                match self.input.as_bytes()[self.position] {
+                                    b'0'..=b'9' | b'.' | b'e' | b'E' | b'_' => self.position += 1,
+                                    _ => break,
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Regular decimal number
+                    while self.position < self.input.len() {
+                        match self.input.as_bytes()[self.position] {
+                            b'0'..=b'9' | b'.' | b'e' | b'E' | b'_' => self.position += 1,
+                            _ => break,
+                        }
                     }
                 }
                 let token = Token {
@@ -736,9 +1008,97 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             b'$' | b'@' | b'%' | b'*' => {
-                // Variable sigil - only if followed by a valid identifier character
+                // Variable sigil
+                let sigil = ch;
                 if self.position + 1 < self.input.len() {
                     let next = self.input.as_bytes()[self.position + 1];
+                    
+                    // Handle special variables
+                    if sigil == b'$' {
+                        match next {
+                            // Special single-char variables
+                            b'_' | b'.' | b'@' | b'!' | b'?' | b'&' | b'`' | b'\'' | b'+' |
+                            b'$' | b'<' | b'>' | b'(' | b')' | b'[' | b']' |
+                            b'|' | b'~' | b'%' => {
+                                self.position += 2;
+                                let text = self.safe_slice(start, self.position);
+                                let token = Token {
+                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    text: Arc::from(text),
+                                    start,
+                                    end: self.position,
+                                };
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                            // Numeric special variables like $1, $2, $10, etc.
+                            b'0'..=b'9' => {
+                                self.position += 2;
+                                // Continue scanning digits for multi-digit variables like $10
+                                while self.position < self.input.len() && self.input.as_bytes()[self.position].is_ascii_digit() {
+                                    self.position += 1;
+                                }
+                                let text = self.safe_slice(start, self.position);
+                                let token = Token {
+                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    text: Arc::from(text),
+                                    start,
+                                    end: self.position,
+                                };
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                            b'^' => {
+                                // Handle ${^VARNAME} special variables
+                                self.position += 2;
+                                // Check if it's a single char like $^A or extended like ${^TAINT}
+                                if self.position < self.input.len() {
+                                    let ch = self.input.as_bytes()[self.position];
+                                    if matches!(ch, b'A'..=b'Z') {
+                                        self.position += 1;
+                                    }
+                                }
+                                let text = self.safe_slice(start, self.position);
+                                let token = Token {
+                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    text: Arc::from(text),
+                                    start,
+                                    end: self.position,
+                                };
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                            b'{' => {
+                                // Handle ${identifier} or ${^SPECIAL}
+                                self.position += 2;
+                                if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'^' {
+                                    self.position += 1;
+                                }
+                                while self.position < self.input.len() {
+                                    match self.input.as_bytes()[self.position] {
+                                        b'}' => {
+                                            self.position += 1;
+                                            break;
+                                        }
+                                        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
+                                        _ => break,
+                                    }
+                                }
+                                let text = self.safe_slice(start, self.position);
+                                let token = Token {
+                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    text: Arc::from(text),
+                                    start,
+                                    end: self.position,
+                                };
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                            _ => {}
+                        }
+                    }
+                    
+                    // Regular variables
                     if matches!(next, b'a'..=b'z' | b'A'..=b'Z' | b'_' | b'0'..=b'9') {
                         self.position += 1;
                         // Scan the variable name
@@ -832,7 +1192,8 @@ impl<'a> PerlLexer<'a> {
                 let token = match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "given" |
                     "return" | "my" | "our" | "local" | "state" | "sub" | "do" | "eval" |
-                    "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" => {
+                    "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" |
+                    "print" | "say" | "printf" | "split" | "grep" | "map" | "sort" => {
                         Token {
                             token_type: TokenType::Keyword(Arc::from(text)),
                             text: Arc::from(text),
@@ -853,6 +1214,25 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'<' | b'>' | b'.' => {
+                // Check for number starting with decimal point
+                if ch == b'.' && self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1].is_ascii_digit() {
+                    self.position += 1;
+                    while self.position < self.input.len() {
+                        match self.input.as_bytes()[self.position] {
+                            b'0'..=b'9' | b'e' | b'E' | b'_' => self.position += 1,
+                            _ => break,
+                        }
+                    }
+                    let token = Token {
+                        token_type: TokenType::Number(Arc::from(self.safe_slice(start, self.position))),
+                        text: Arc::from(self.safe_slice(start, self.position)),
+                        start,
+                        end: self.position,
+                    };
+                    self.update_mode(&token.token_type);
+                    return Some(token);
+                }
+                
                 // Operators
                 self.position += 1;
                 // Check for compound operators
@@ -862,6 +1242,18 @@ impl<'a> PerlLexer<'a> {
                         (b'+', b'+') | (b'-', b'-') | (b'*', b'*') | (b'<', b'<') | (b'>', b'>') |
                         (b'&', b'&') | (b'|', b'|') | (b'!', b'~') => {
                             self.position += 1;
+                        }
+                        (b'-', b'>') => {
+                            // -> method call operator
+                            self.position += 1;
+                            let token = Token {
+                                token_type: TokenType::Arrow,
+                                text: Arc::from("->"),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            return Some(token);
                         }
                         (b'.', b'.') => {
                             self.position += 1;
@@ -883,6 +1275,89 @@ impl<'a> PerlLexer<'a> {
                 let token = Token {
                     token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
                     text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                Some(token)
+            }
+            b'"' => {
+                // Double-quoted string
+                self.position += 1;
+                while self.position < self.input.len() {
+                    match self.input.as_bytes()[self.position] {
+                        b'"' => {
+                            self.position += 1;
+                            break;
+                        }
+                        b'\\' if self.position + 1 < self.input.len() => {
+                            self.position += 2;
+                        }
+                        _ => self.position += 1,
+                    }
+                }
+                let token = Token {
+                    token_type: TokenType::StringLiteral,
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                Some(token)
+            }
+            b'\'' => {
+                // Single-quoted string
+                self.position += 1;
+                while self.position < self.input.len() {
+                    match self.input.as_bytes()[self.position] {
+                        b'\'' => {
+                            self.position += 1;
+                            break;
+                        }
+                        b'\\' if self.position + 1 < self.input.len() => {
+                            self.position += 2;
+                        }
+                        _ => self.position += 1,
+                    }
+                }
+                let token = Token {
+                    token_type: TokenType::StringLiteral,
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                Some(token)
+            }
+            b'`' => {
+                // Backtick command execution
+                self.position += 1;
+                while self.position < self.input.len() {
+                    match self.input.as_bytes()[self.position] {
+                        b'`' => {
+                            self.position += 1;
+                            break;
+                        }
+                        b'\\' if self.position + 1 < self.input.len() => {
+                            self.position += 2;
+                        }
+                        _ => self.position += 1,
+                    }
+                }
+                let token = Token {
+                    token_type: TokenType::QuoteCommand,
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                Some(token)
+            }
+            b':' => {
+                self.position += 1;
+                let token = Token {
+                    token_type: TokenType::Colon,
+                    text: Arc::from(":"),
                     start,
                     end: self.position,
                 };
