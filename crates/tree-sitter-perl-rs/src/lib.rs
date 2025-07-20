@@ -63,6 +63,12 @@ pub mod simple_parser;
 #[cfg(feature = "token-parser")]
 pub mod simple_parser_v2;
 
+#[cfg(all(feature = "token-parser", test))]
+pub mod test_token_parser;
+
+#[cfg(all(feature = "token-parser", test))]
+pub mod test_debug;
+
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]
 pub use full_parser::FullPerlParser as PureRustPerlParser;

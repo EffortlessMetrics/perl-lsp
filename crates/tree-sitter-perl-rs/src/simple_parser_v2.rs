@@ -217,7 +217,7 @@ impl<'source> SimpleParser<'source> {
     fn parse_logical_or(&mut self) -> Result<AstNode, String> {
         let mut left = self.parse_logical_and()?;
         
-        while matches!(self.peek(), Token::Or | Token::BitOr) {
+        while matches!(self.peek(), Token::LogOr | Token::BitOr) {
             let op = self.next();
             let right = self.parse_logical_and()?;
             
@@ -236,7 +236,7 @@ impl<'source> SimpleParser<'source> {
     fn parse_logical_and(&mut self) -> Result<AstNode, String> {
         let mut left = self.parse_equality()?;
         
-        while matches!(self.peek(), Token::And | Token::BitAnd) {
+        while matches!(self.peek(), Token::LogAnd | Token::BitAnd) {
             let op = self.next();
             let right = self.parse_equality()?;
             
@@ -331,7 +331,7 @@ impl<'source> SimpleParser<'source> {
     fn parse_regex_match(&mut self) -> Result<AstNode, String> {
         let mut left = self.parse_unary()?;
         
-        while matches!(self.peek(), Token::Match | Token::NotMatch) {
+        while matches!(self.peek(), Token::BinMatch | Token::BinNotMatch) {
             let op = self.next();
             let right = self.parse_unary()?;
             
@@ -370,10 +370,10 @@ impl<'source> SimpleParser<'source> {
         
         loop {
             match self.peek() {
-                Token::LeftBracket => {
+                Token::LBracket => {
                     self.next();
                     let index = self.parse_expression()?;
-                    self.consume(Token::RightBracket)?;
+                    self.consume(Token::RBracket)?;
                     
                     expr = AstNode {
                         node_type: "array_access".to_string(),
@@ -383,10 +383,10 @@ impl<'source> SimpleParser<'source> {
                         children: vec![expr, index],
                     };
                 }
-                Token::LeftBrace => {
+                Token::LBrace => {
                     self.next();
                     let key = self.parse_expression()?;
-                    self.consume(Token::RightBrace)?;
+                    self.consume(Token::RBrace)?;
                     
                     expr = AstNode {
                         node_type: "hash_access".to_string(),
@@ -399,10 +399,10 @@ impl<'source> SimpleParser<'source> {
                 Token::Arrow => {
                     self.next();
                     
-                    if self.check(&Token::LeftBracket) {
+                    if self.check(&Token::LBracket) {
                         self.next();
                         let index = self.parse_expression()?;
-                        self.consume(Token::RightBracket)?;
+                        self.consume(Token::RBracket)?;
                         
                         expr = AstNode {
                             node_type: "deref_array_access".to_string(),
@@ -411,10 +411,10 @@ impl<'source> SimpleParser<'source> {
                             value: None,
                             children: vec![expr, index],
                         };
-                    } else if self.check(&Token::LeftBrace) {
+                    } else if self.check(&Token::LBrace) {
                         self.next();
                         let key = self.parse_expression()?;
-                        self.consume(Token::RightBrace)?;
+                        self.consume(Token::RBrace)?;
                         
                         expr = AstNode {
                             node_type: "deref_hash_access".to_string(),
@@ -435,19 +435,19 @@ impl<'source> SimpleParser<'source> {
                         };
                         
                         // Parse method arguments if present
-                        if self.check(&Token::LeftParen) {
+                        if self.check(&Token::LParen) {
                             self.next();
                             let mut args = vec![];
                             
-                            while !self.check(&Token::RightParen) {
+                            while !self.check(&Token::RParen) {
                                 args.push(self.parse_expression()?);
                                 
-                                if !self.check(&Token::RightParen) {
+                                if !self.check(&Token::RParen) {
                                     self.consume(Token::Comma)?;
                                 }
                             }
                             
-                            self.consume(Token::RightParen)?;
+                            self.consume(Token::RParen)?;
                             expr.children.extend(args);
                         }
                     }
@@ -494,19 +494,19 @@ impl<'source> SimpleParser<'source> {
             Token::ScalarVar | Token::ArrayVar | Token::HashVar => {
                 self.parse_variable()
             }
-            Token::LeftParen => {
+            Token::LParen => {
                 self.next();
                 let expr = self.parse_expression()?;
-                self.consume(Token::RightParen)?;
+                self.consume(Token::RParen)?;
                 Ok(expr)
             }
-            Token::LeftBracket => {
+            Token::LBracket => {
                 self.parse_array_literal()
             }
-            Token::LeftBrace => {
+            Token::LBrace => {
                 self.parse_hash_literal()
             }
-            Token::RegexMatch => {
+            Token::Regex => {
                 self.next();
                 Ok(AstNode {
                     node_type: "regex_literal".to_string(),
@@ -526,19 +526,19 @@ impl<'source> SimpleParser<'source> {
                 let name = self.next();
                 
                 // Check if it's a function call
-                if self.check(&Token::LeftParen) {
+                if self.check(&Token::LParen) {
                     self.next();
                     let mut args = vec![];
                     
-                    while !self.check(&Token::RightParen) {
+                    while !self.check(&Token::RParen) {
                         args.push(self.parse_expression()?);
                         
-                        if !self.check(&Token::RightParen) {
+                        if !self.check(&Token::RParen) {
                             self.consume(Token::Comma)?;
                         }
                     }
                     
-                    self.consume(Token::RightParen)?;
+                    self.consume(Token::RParen)?;
                     
                     Ok(AstNode {
                         node_type: "function_call".to_string(),
@@ -562,18 +562,18 @@ impl<'source> SimpleParser<'source> {
     }
     
     fn parse_array_literal(&mut self) -> Result<AstNode, String> {
-        self.consume(Token::LeftBracket)?;
+        self.consume(Token::LBracket)?;
         let mut elements = vec![];
         
-        while !self.check(&Token::RightBracket) {
+        while !self.check(&Token::RBracket) {
             elements.push(self.parse_expression()?);
             
-            if !self.check(&Token::RightBracket) {
+            if !self.check(&Token::RBracket) {
                 self.consume(Token::Comma)?;
             }
         }
         
-        self.consume(Token::RightBracket)?;
+        self.consume(Token::RBracket)?;
         
         Ok(AstNode {
             node_type: "array_literal".to_string(),
@@ -585,10 +585,10 @@ impl<'source> SimpleParser<'source> {
     }
     
     fn parse_hash_literal(&mut self) -> Result<AstNode, String> {
-        self.consume(Token::LeftBrace)?;
+        self.consume(Token::LBrace)?;
         let mut pairs = vec![];
         
-        while !self.check(&Token::RightBrace) {
+        while !self.check(&Token::RBrace) {
             let key = self.parse_expression()?;
             self.consume(Token::FatArrow)?;
             let value = self.parse_expression()?;
@@ -601,12 +601,12 @@ impl<'source> SimpleParser<'source> {
                 children: vec![key, value],
             });
             
-            if !self.check(&Token::RightBrace) {
+            if !self.check(&Token::RBrace) {
                 self.consume(Token::Comma)?;
             }
         }
         
-        self.consume(Token::RightBrace)?;
+        self.consume(Token::RBrace)?;
         
         Ok(AstNode {
             node_type: "hash_literal".to_string(),
@@ -619,9 +619,9 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_if_statement(&mut self) -> Result<AstNode, String> {
         self.consume(Token::If)?;
-        self.consume(Token::LeftParen)?;
+        self.consume(Token::LParen)?;
         let condition = self.parse_expression()?;
-        self.consume(Token::RightParen)?;
+        self.consume(Token::RParen)?;
         let then_block = self.parse_block()?;
         
         let mut children = vec![condition, then_block];
@@ -629,9 +629,9 @@ impl<'source> SimpleParser<'source> {
         // Handle elsif/else
         while self.check(&Token::Elsif) {
             self.next();
-            self.consume(Token::LeftParen)?;
+            self.consume(Token::LParen)?;
             let elsif_cond = self.parse_expression()?;
-            self.consume(Token::RightParen)?;
+            self.consume(Token::RParen)?;
             let elsif_block = self.parse_block()?;
             
             children.push(AstNode {
@@ -660,9 +660,9 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_unless_statement(&mut self) -> Result<AstNode, String> {
         self.consume(Token::Unless)?;
-        self.consume(Token::LeftParen)?;
+        self.consume(Token::LParen)?;
         let condition = self.parse_expression()?;
-        self.consume(Token::RightParen)?;
+        self.consume(Token::RParen)?;
         let body = self.parse_block()?;
         
         Ok(AstNode {
@@ -676,9 +676,9 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_while_statement(&mut self) -> Result<AstNode, String> {
         self.consume(Token::While)?;
-        self.consume(Token::LeftParen)?;
+        self.consume(Token::LParen)?;
         let condition = self.parse_expression()?;
-        self.consume(Token::RightParen)?;
+        self.consume(Token::RParen)?;
         let body = self.parse_block()?;
         
         Ok(AstNode {
@@ -692,9 +692,9 @@ impl<'source> SimpleParser<'source> {
     
     fn parse_until_statement(&mut self) -> Result<AstNode, String> {
         self.consume(Token::Until)?;
-        self.consume(Token::LeftParen)?;
+        self.consume(Token::LParen)?;
         let condition = self.parse_expression()?;
-        self.consume(Token::RightParen)?;
+        self.consume(Token::RParen)?;
         let body = self.parse_block()?;
         
         Ok(AstNode {
@@ -710,7 +710,7 @@ impl<'source> SimpleParser<'source> {
         let keyword = self.next(); // for or foreach
         
         // C-style for loop
-        if self.check(&Token::LeftParen) {
+        if self.check(&Token::LParen) {
             self.next();
             
             // Init
@@ -730,12 +730,12 @@ impl<'source> SimpleParser<'source> {
             self.consume(Token::Semicolon)?;
             
             // Update
-            let update = if !self.check(&Token::RightParen) {
+            let update = if !self.check(&Token::RParen) {
                 Some(self.parse_expression()?)
             } else {
                 None
             };
-            self.consume(Token::RightParen)?;
+            self.consume(Token::RParen)?;
             
             let body = self.parse_block()?;
             
@@ -762,9 +762,9 @@ impl<'source> SimpleParser<'source> {
                 return Err("Expected variable in foreach".to_string());
             };
             
-            self.consume(Token::LeftParen)?;
+            self.consume(Token::LParen)?;
             let list = self.parse_expression()?;
-            self.consume(Token::RightParen)?;
+            self.consume(Token::RParen)?;
             
             let body = self.parse_block()?;
             
@@ -789,19 +789,19 @@ impl<'source> SimpleParser<'source> {
         };
         
         // Parse signature if present
-        let signature = if self.check(&Token::LeftParen) {
+        let signature = if self.check(&Token::LParen) {
             self.next();
             let mut params = vec![];
             
-            while !self.check(&Token::RightParen) {
+            while !self.check(&Token::RParen) {
                 params.push(self.parse_expression()?);
                 
-                if !self.check(&Token::RightParen) {
+                if !self.check(&Token::RParen) {
                     self.consume(Token::Comma)?;
                 }
             }
             
-            self.consume(Token::RightParen)?;
+            self.consume(Token::RParen)?;
             Some(params)
         } else {
             None
@@ -886,14 +886,14 @@ impl<'source> SimpleParser<'source> {
     }
     
     fn parse_block(&mut self) -> Result<AstNode, String> {
-        self.consume(Token::LeftBrace)?;
+        self.consume(Token::LBrace)?;
         
         let mut statements = Vec::new();
         
         loop {
             self.skip_newlines();
             
-            if self.check(&Token::RightBrace) {
+            if self.check(&Token::RBrace) {
                 self.next();
                 break;
             }
