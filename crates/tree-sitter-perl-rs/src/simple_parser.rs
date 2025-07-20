@@ -15,7 +15,7 @@ pub struct SimpleParser<'source> {
 impl<'source> SimpleParser<'source> {
     pub fn new(input: &'source str) -> Self {
         Self {
-            lexer: PerlLexer::new(input),
+            lexer: ContextLexer::new(input),
             current_pos: 0,
         }
     }
@@ -53,14 +53,14 @@ impl<'source> SimpleParser<'source> {
     fn parse_statement(&mut self) -> Result<AstNode, String> {
         let start = self.current_pos;
         
-        match self.lexer.peek().cloned() {
-            Token::My | Token::Our | Token::Local => {
+        match self.lexer.peek() {
+            Some(Token::My) | Some(Token::Our) | Some(Token::Local) => {
                 self.parse_variable_declaration()
             }
-            Token::If => self.parse_if_statement(),
-            Token::While => self.parse_while_statement(),
-            Token::Sub => self.parse_subroutine(),
-            Token::Return => self.parse_return_statement(),
+            Some(Token::If) => self.parse_if_statement(),
+            Some(Token::While) => self.parse_while_statement(),
+            Some(Token::Sub) => self.parse_subroutine(),
+            Some(Token::Return) => self.parse_return_statement(),
             _ => {
                 // Expression statement
                 let expr = self.parse_expression()?;

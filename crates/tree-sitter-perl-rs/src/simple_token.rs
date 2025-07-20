@@ -228,7 +228,7 @@ pub enum Token {
     Bareword,
     
     // Special tokens
-    #[regex(r"/[^/\n]*/[gimsoxadlupnce]*")]
+    // Note: Regex is not defined here - it's handled by context-aware lexing
     Regex,
     
     // More keywords
