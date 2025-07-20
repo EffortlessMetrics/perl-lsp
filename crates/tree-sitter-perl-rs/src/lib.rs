@@ -58,6 +58,12 @@ pub mod token_ast;
 pub mod context_lexer_simple;
 
 #[cfg(feature = "token-parser")]
+pub mod regex_parser;
+
+#[cfg(feature = "token-parser")]
+pub mod context_lexer_v2;
+
+#[cfg(feature = "token-parser")]
 pub mod simple_parser;
 
 #[cfg(feature = "token-parser")]
