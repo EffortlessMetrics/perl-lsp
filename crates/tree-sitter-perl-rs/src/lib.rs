@@ -55,7 +55,13 @@ pub mod simple_token;
 pub mod token_ast;
 
 #[cfg(feature = "token-parser")]
+pub mod context_lexer_simple;
+
+#[cfg(feature = "token-parser")]
 pub mod simple_parser;
+
+#[cfg(feature = "token-parser")]
+pub mod simple_parser_v2;
 
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]
