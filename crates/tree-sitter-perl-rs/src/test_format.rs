@@ -42,6 +42,13 @@ mod tests {
             Err(e) => println!("  FAILED: {:?}", e),
         }
         
+        // Test if reserved_word matches format
+        println!("\nTesting reserved_word for 'format':");
+        match PerlParser::parse(Rule::reserved_word, "format") {
+            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
+            Err(e) => println!("  FAILED: {:?}", e),
+        }
+        
         // Test with equals
         println!("\nTesting with equals:");
         let with_equals = "format =\n.\n";
@@ -111,6 +118,22 @@ test line
         println!("\nTrying as statement:");
         let stmt_result = PerlParser::parse(Rule::statement, input);
         println!("  Statement result: {:?}", stmt_result);
+        
+        // Try parsing just the first word
+        println!("\nTrying to parse 'format' as identifier:");
+        let id_result = PerlParser::parse(Rule::identifier, "format");
+        println!("  Identifier result: {:?}", id_result);
+        
+        // Try parsing format_declaration directly
+        println!("\nTrying format_declaration directly:");
+        let fd_result = PerlParser::parse(Rule::format_declaration, input);
+        println!("  Format declaration result: {:?}", fd_result);
+        
+        // Try parsing just the first part
+        println!("\nTrying to parse just 'format STDOUT =':");
+        let partial = "format STDOUT =\n";
+        let partial_result = PerlParser::parse(Rule::format_declaration, partial);
+        println!("  Partial result: {:?}", partial_result);
         
         let pairs = PerlParser::parse(Rule::format_declaration, input);
         assert!(pairs.is_ok(), "Failed to parse format declaration: {:?}", pairs.err());
