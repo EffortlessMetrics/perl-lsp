@@ -423,9 +423,9 @@ impl PureRustPerlParser {
     /// Public wrapper that uses stacker to grow the stack as needed
     #[inline]
     pub(crate) fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
-        // Use stacker to grow stack if needed, with 256KB red zone
-        const STACK_RED_ZONE: usize = 256 * 1024; // 256KB
-        const STACK_SIZE: usize = 2 * 1024 * 1024; // 2MB growth
+        // Use stacker to grow stack if needed, with 512KB red zone
+        const STACK_RED_ZONE: usize = 512 * 1024; // 512KB
+        const STACK_SIZE: usize = 8 * 1024 * 1024; // 8MB growth
         stacker::maybe_grow(STACK_RED_ZONE, STACK_SIZE, || {
             self.build_node_impl(pair)
         })
@@ -1900,6 +1900,36 @@ impl PureRustPerlParser {
             Rule::glob_reference => {
                 // Since these are atomic rules, use the whole pair's text
                 Ok(Some(AstNode::GlobReference(Arc::from(pair.as_str()))))
+            }
+            Rule::primary_expression => {
+                // Handle primary expressions including parenthesized expressions
+                let inner: Vec<_> = pair.into_inner().collect();
+                if inner.is_empty() {
+                    Ok(None)
+                } else if inner.len() == 1 {
+                    let first = inner.into_iter().next().unwrap();
+                    // Check if it's a parenthesized expression
+                    match first.as_rule() {
+                        Rule::expression => {
+                            // It's a parenthesized expression, just unwrap it
+                            self.build_node(first)
+                        }
+                        _ => self.build_node(first)
+                    }
+                } else {
+                    // Handle multiple parts (shouldn't happen for primary_expression)
+                    let mut result = None;
+                    for p in inner {
+                        if p.as_str() == "(" || p.as_str() == ")" {
+                            // Skip parentheses tokens
+                            continue;
+                        }
+                        if let Some(node) = self.build_node(p)? {
+                            result = Some(node);
+                        }
+                    }
+                    Ok(result)
+                }
             }
             _ => {
                 // For unhandled rules, try to process inner pairs

@@ -78,11 +78,16 @@ impl<'a> ContextAwareHeredocParser<'a> {
     fn detect_contexts_static(input: &str) -> Vec<ContextInfo> {
         let mut contexts = Vec::new();
         
-        // Detect eval contexts
-        let eval_regex = Regex::new(r#"eval\s*<<\s*(['"]?)(\w+)\1"#).unwrap();
+        // Detect eval contexts - use a more permissive regex without backreferences
+        let eval_regex = Regex::new(r#"eval\s*<<\s*(?:'(\w+)'|"(\w+)"|(\w+))"#).unwrap();
         for cap in eval_regex.captures_iter(input) {
             if let Some(m) = cap.get(0) {
-                let terminator = cap.get(2).unwrap().as_str();
+                // Get terminator from whichever capture group matched
+                let terminator = cap.get(1)
+                    .or_else(|| cap.get(2))
+                    .or_else(|| cap.get(3))
+                    .map(|m| m.as_str())
+                    .unwrap_or("");
                 // Find the heredoc content
                 if let Some(content_range) = Self::find_heredoc_content_static(input, m.end(), terminator) {
                     contexts.push(ContextInfo::Eval {
@@ -94,18 +99,24 @@ impl<'a> ContextAwareHeredocParser<'a> {
             }
         }
         
-        // Detect s///e contexts
-        let subst_regex = Regex::new(r#"s([/|#])([^/|#]*)(\1)([^/|#]*)(\1)([a-z]*e[a-z]*)"#).unwrap();
-        for cap in subst_regex.captures_iter(input) {
-            if let (Some(pattern), Some(replacement), Some(flags)) = 
-                (cap.get(2), cap.get(4), cap.get(6)) {
-                if flags.as_str().contains('e') && replacement.as_str().contains("<<") {
-                    contexts.push(ContextInfo::SubstitutionWithE {
-                        pattern_start: pattern.start(),
-                        pattern_end: pattern.end(),
-                        replacement_start: replacement.start(),
-                        replacement_end: replacement.end(),
-                    });
+        // Detect s///e contexts - handle common delimiters separately to avoid backreferences
+        let subst_slash_regex = Regex::new(r#"s/([^/]*)/([^/]*)/([a-z]*e[a-z]*)"#).unwrap();
+        let subst_pipe_regex = Regex::new(r#"s\|([^|]*)\|([^|]*)\|([a-z]*e[a-z]*)"#).unwrap();
+        let subst_hash_regex = Regex::new(r#"s#([^#]*)#([^#]*)#([a-z]*e[a-z]*)"#).unwrap();
+        
+        // Process all substitution regex patterns
+        for regex in &[subst_slash_regex, subst_pipe_regex, subst_hash_regex] {
+            for cap in regex.captures_iter(input) {
+                if let (Some(pattern), Some(replacement), Some(flags)) = 
+                    (cap.get(1), cap.get(2), cap.get(3)) {
+                    if flags.as_str().contains('e') && replacement.as_str().contains("<<") {
+                        contexts.push(ContextInfo::SubstitutionWithE {
+                            pattern_start: pattern.start(),
+                            pattern_end: pattern.end(),
+                            replacement_start: replacement.start(),
+                            replacement_end: replacement.end(),
+                        });
+                    }
                 }
             }
         }
