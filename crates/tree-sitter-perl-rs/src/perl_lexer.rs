@@ -157,7 +157,7 @@ impl<'a> PerlLexer<'a> {
     
     /// Check if character can be a regex delimiter
     fn is_regex_delimiter(ch: char) -> bool {
-        matches!(ch, '/' | '!' | '#' | '%' | '&' | '*' | ',' | '.' | ':' | ';' | '=' | '?' | '@' | '^' | '|' | '~' | '\'' | '"' | '`')
+        matches!(ch, '/' | '!' | '#' | '%' | '&' | '*' | ',' | '.' | ':' | ';' | '=' | '?' | '@' | '^' | '|' | '~' | '\'' | '"' | '`' | '{' | '[' | '(' | '<')
     }
     
     /// Update mode based on the token type
@@ -659,26 +659,53 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             b'=' => {
-                if self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'>' {
-                    self.position += 2;
-                    let token = Token {
-                        token_type: TokenType::Arrow,
-                        text: Arc::from("=>"),
-                        start,
-                        end: self.position,
-                    };
-                    self.update_mode(&token.token_type);
-                    Some(token)
-                } else if self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'~' {
-                    self.position += 2;
-                    let token = Token {
-                        token_type: TokenType::Operator(Arc::from("=~")),
-                        text: Arc::from("=~"),
-                        start,
-                        end: self.position,
-                    };
-                    self.update_mode(&token.token_type);
-                    Some(token)
+                if self.position + 1 < self.input.len() {
+                    match self.input.as_bytes()[self.position + 1] {
+                        b'>' => {
+                            self.position += 2;
+                            let token = Token {
+                                token_type: TokenType::Arrow,
+                                text: Arc::from("=>"),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            Some(token)
+                        }
+                        b'~' => {
+                            self.position += 2;
+                            let token = Token {
+                                token_type: TokenType::Operator(Arc::from("=~")),
+                                text: Arc::from("=~"),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            Some(token)
+                        }
+                        b'=' => {
+                            self.position += 2;
+                            let token = Token {
+                                token_type: TokenType::Operator(Arc::from("==")),
+                                text: Arc::from("=="),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            Some(token)
+                        }
+                        _ => {
+                            self.position += 1;
+                            let token = Token {
+                                token_type: TokenType::Operator(Arc::from("=")),
+                                text: Arc::from("="),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            Some(token)
+                        }
+                    }
                 } else {
                     self.position += 1;
                     let token = Token {
@@ -708,8 +735,93 @@ impl<'a> PerlLexer<'a> {
                 self.update_mode(&token.token_type);
                 Some(token)
             }
+            b'$' | b'@' | b'%' | b'*' => {
+                // Variable sigil - only if followed by a valid identifier character
+                if self.position + 1 < self.input.len() {
+                    let next = self.input.as_bytes()[self.position + 1];
+                    if matches!(next, b'a'..=b'z' | b'A'..=b'Z' | b'_' | b'0'..=b'9') {
+                        self.position += 1;
+                        // Scan the variable name
+                        while self.position < self.input.len() {
+                            match self.input.as_bytes()[self.position] {
+                                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
+                                _ => break,
+                            }
+                        }
+                        let text = self.safe_slice(start, self.position);
+                        let token = Token {
+                            token_type: TokenType::Identifier(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        };
+                        self.update_mode(&token.token_type);
+                        return Some(token);
+                    }
+                }
+                // Otherwise treat as operator (for % modulo)
+                self.position += 1;
+                let token = Token {
+                    token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                Some(token)
+            }
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
-                // Identifier or keyword
+                // Check for regex operators first
+                if self.position < self.input.len() {
+                    let ch = self.input.as_bytes()[self.position] as char;
+                    if ch == 's' && self.position + 1 < self.input.len() {
+                        let next = self.input.as_bytes()[self.position + 1] as char;
+                        if Self::is_regex_delimiter(next) {
+                            if let Some(token) = self.scan_regex_like() {
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                        }
+                    } else if ch == 'm' && self.position + 1 < self.input.len() {
+                        let next = self.input.as_bytes()[self.position + 1] as char;
+                        if Self::is_regex_delimiter(next) {
+                            if let Some(token) = self.scan_regex_like() {
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                        }
+                    } else if ch == 'y' && self.position + 1 < self.input.len() {
+                        let next = self.input.as_bytes()[self.position + 1] as char;
+                        if Self::is_regex_delimiter(next) {
+                            if let Some(token) = self.scan_regex_like() {
+                                self.update_mode(&token.token_type);
+                                return Some(token);
+                            }
+                        }
+                    } else if ch == 't' && self.position + 2 < self.input.len() {
+                        if self.input.as_bytes()[self.position + 1] == b'r' {
+                            let next = self.input.as_bytes()[self.position + 2] as char;
+                            if Self::is_regex_delimiter(next) {
+                                if let Some(token) = self.scan_regex_like() {
+                                    self.update_mode(&token.token_type);
+                                    return Some(token);
+                                }
+                            }
+                        }
+                    } else if ch == 'q' && self.position + 2 < self.input.len() {
+                        if self.input.as_bytes()[self.position + 1] == b'r' {
+                            let next = self.input.as_bytes()[self.position + 2] as char;
+                            if Self::is_regex_delimiter(next) {
+                                if let Some(token) = self.scan_regex_like() {
+                                    self.update_mode(&token.token_type);
+                                    return Some(token);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Regular identifier or keyword
                 while self.position < self.input.len() {
                     match self.input.as_bytes()[self.position] {
                         b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
@@ -740,7 +852,7 @@ impl<'a> PerlLexer<'a> {
                 self.update_mode(&token.token_type);
                 Some(token)
             }
-            b'+' | b'-' | b'*' | b'%' | b'&' | b'|' | b'^' | b'~' | b'!' | b'<' | b'>' | b'.' => {
+            b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'<' | b'>' | b'.' => {
                 // Operators
                 self.position += 1;
                 // Check for compound operators
@@ -748,11 +860,22 @@ impl<'a> PerlLexer<'a> {
                     let next = self.input.as_bytes()[self.position];
                     match (ch, next) {
                         (b'+', b'+') | (b'-', b'-') | (b'*', b'*') | (b'<', b'<') | (b'>', b'>') |
-                        (b'&', b'&') | (b'|', b'|') | (b'.', b'.') | (b'!', b'~') => {
+                        (b'&', b'&') | (b'|', b'|') | (b'!', b'~') => {
                             self.position += 1;
+                        }
+                        (b'.', b'.') => {
+                            self.position += 1;
+                            // Check for third dot  
+                            if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'.' {
+                                self.position += 1;
+                            }
                         }
                         (b'<', b'=') | (b'>', b'=') | (b'!', b'=') | (b'=', b'=') => {
                             self.position += 1;
+                            // Check for <=> (spaceship operator)
+                            if ch == b'<' && self.position < self.input.len() && self.input.as_bytes()[self.position] == b'>' {
+                                self.position += 1;
+                            }
                         }
                         _ => {}
                     }
