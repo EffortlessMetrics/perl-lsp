@@ -253,10 +253,8 @@ attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
 
 // Format declarations
-format_keyword = { "format" ~ !(ASCII_ALPHANUMERIC | "_") }
-
 format_declaration = {
-    format_keyword ~ format_name? ~ "=" ~ NEWLINE ~
+    "format" ~ format_name? ~ "=" ~ ("\n" | "\r\n") ~
     format_lines ~
     format_end
 }
@@ -270,10 +268,10 @@ filehandle = {
 format_lines = { format_line* }
 
 format_line = { 
-    !format_end ~ (!NEWLINE ~ ANY)* ~ NEWLINE
+    !format_end ~ (!("\n" | "\r\n") ~ ANY)* ~ ("\n" | "\r\n")
 }
 
-format_end = { "." ~ (NEWLINE | EOI) }
+format_end = { "." ~ (("\n" | "\r\n") | EOI) }
 
 // Packages and Modules
 package_declaration = {
@@ -685,7 +683,7 @@ identifier = @{
 // Reserved words that should not be identifiers
 reserved_word = { 
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
-    "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
+    "while" | "until" | "foreach" | "for" | "return" | "last" | "next" | "redo" |
     "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" |
     "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" | 
     "field" | "role" | "print" | "say" | "warn" | "die"
