@@ -20,9 +20,9 @@ mod tests {
     
     #[test]
     fn test_format_parsing_debug() {
-        // First test if format_keyword works
-        println!("Testing format_keyword:");
-        match PerlParser::parse(Rule::format_keyword, "format ") {
+        // First test if reserved_word works
+        println!("Testing reserved_word for 'format':");
+        match PerlParser::parse(Rule::reserved_word, "format") {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }
@@ -35,16 +35,10 @@ mod tests {
             Err(e) => println!("  FAILED: {:?}", e),
         }
         
-        // Test if format_keyword alone works
-        println!("\nTesting just format keyword with space:");
-        match PerlParser::parse(Rule::format_keyword, "format ") {
-            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
-            Err(e) => println!("  FAILED: {:?}", e),
-        }
-        
-        // Test if reserved_word matches format
-        println!("\nTesting reserved_word for 'format':");
-        match PerlParser::parse(Rule::reserved_word, "format") {
+        // Test format with space
+        println!("\nTesting 'format ' as format_declaration start:");
+        let with_space = "format \n.\n";
+        match PerlParser::parse(Rule::format_declaration, with_space) {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }

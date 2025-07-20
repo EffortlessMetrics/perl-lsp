@@ -19,9 +19,10 @@ statement = {
     | simple_function_call
     // Comments
     | comment
+    // Format must come before expression_statement
+    | format_declaration
     // Regular statements
     | sub_declaration
-    | format_declaration
     | package_declaration
     | use_statement
     | require_statement
@@ -252,9 +253,9 @@ attribute_list = { attribute ~ (":" ~ attribute)* }
 attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
 
-// Format declarations
+// Format declarations  
 format_declaration = {
-    "format" ~ format_name? ~ "=" ~ ("\n" | "\r\n") ~
+    "format" ~ !(ASCII_ALPHANUMERIC | "_") ~ format_name? ~ "=" ~ ("\n" | "\r\n") ~
     format_lines ~
     format_end
 }
@@ -683,7 +684,7 @@ identifier = @{
 // Reserved words that should not be identifiers
 reserved_word = { 
     "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
-    "while" | "until" | "foreach" | "for" | "return" | "last" | "next" | "redo" |
+    "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
     "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" |
     "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" | 
     "field" | "role" | "print" | "say" | "warn" | "die"
