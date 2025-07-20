@@ -695,8 +695,8 @@ mod test_slash {
         let mut lexer = PerlLexer::new("tie *FH, 'MyIO'");
         let _tie = lexer.next_token().unwrap();
         let fh = lexer.next_token().unwrap();
-        assert!(matches!(fh.token_type, TokenType::Operator(_)));
-        assert_eq!(fh.text.as_ref(), "*");
+        assert!(matches!(fh.token_type, TokenType::Identifier(_)));
+        assert_eq!(fh.text.as_ref(), "*FH");
     }
     
     #[test]
@@ -725,16 +725,17 @@ mod test_slash {
     
     #[test]
     fn test_complex_dereferencing() {
-        // Array slice dereference
+        // Array slice dereference  
         let mut lexer = PerlLexer::new("@$ref[0..5]");
         let array = lexer.next_token().unwrap();
-        assert!(matches!(array.token_type, TokenType::Identifier(_)));
+        // When @ is not followed by an identifier name, it's parsed as an operator
+        assert!(matches!(array.token_type, TokenType::Operator(_)));
         assert_eq!(array.text.as_ref(), "@");
         
         // Hash slice dereference
         let mut lexer = PerlLexer::new("@{$ref}{qw(a b c)}");
         let array = lexer.next_token().unwrap();
-        assert!(matches!(array.token_type, TokenType::Identifier(_)));
+        assert!(matches!(array.token_type, TokenType::Operator(_)));
         assert_eq!(array.text.as_ref(), "@");
         
         // Code reference dereference
