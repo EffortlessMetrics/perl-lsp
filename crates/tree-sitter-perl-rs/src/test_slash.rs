@@ -435,4 +435,187 @@ mod test_slash {
         let attr = lexer.next_token().unwrap();
         assert!(matches!(attr.token_type, TokenType::Identifier(_)));
     }
+    
+    #[test]
+    fn test_file_test_operators() {
+        // File test operators should be recognized
+        let file_tests = vec![
+            "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O", "-e", "-z", "-s",
+            "-f", "-d", "-l", "-p", "-S", "-b", "-c", "-t", "-u", "-g", "-k",
+            "-T", "-B", "-M", "-A", "-C"
+        ];
+        
+        for op in file_tests {
+            let input = format!("{} $file", op);
+            let mut lexer = PerlLexer::new(&input);
+            let token = lexer.next_token().unwrap();
+            assert!(matches!(token.token_type, TokenType::Operator(_)), 
+                    "Failed to recognize file test operator: {}", op);
+            assert_eq!(token.text.as_ref(), op);
+        }
+        
+        // Stacked file tests
+        let mut lexer = PerlLexer::new("-f -w -x $file");
+        let op1 = lexer.next_token().unwrap();
+        assert!(matches!(op1.token_type, TokenType::Operator(_)));
+        let op2 = lexer.next_token().unwrap();
+        assert!(matches!(op2.token_type, TokenType::Operator(_)));
+        let op3 = lexer.next_token().unwrap();
+        assert!(matches!(op3.token_type, TokenType::Operator(_)));
+    }
+    
+    #[test]
+    fn test_glob_and_filehandles() {
+        // GLOB filehandles
+        let mut lexer = PerlLexer::new("open(FH, '<', 'file.txt')");
+        let _open = lexer.next_token().unwrap();
+        let _paren = lexer.next_token().unwrap();
+        let fh = lexer.next_token().unwrap();
+        assert!(matches!(fh.token_type, TokenType::Identifier(_)));
+        assert_eq!(fh.text.as_ref(), "FH");
+        
+        // Diamond operator
+        let mut lexer = PerlLexer::new("<>");
+        let diamond = lexer.next_token().unwrap();
+        assert!(matches!(diamond.token_type, TokenType::Operator(_)));
+        assert_eq!(diamond.text.as_ref(), "<>");
+        
+        // Glob operator
+        let mut lexer = PerlLexer::new("<*.txt>");
+        let glob = lexer.next_token().unwrap();
+        assert!(matches!(glob.token_type, TokenType::Operator(_)));
+        
+        // Readline from filehandle
+        let mut lexer = PerlLexer::new("<FH>");
+        let readline = lexer.next_token().unwrap();
+        assert!(matches!(readline.token_type, TokenType::Operator(_)));
+    }
+    
+    #[test]
+    fn test_regex_modifiers() {
+        // All regex modifiers
+        let mut lexer = PerlLexer::new("/pattern/gimsxoadlupn");
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+        assert!(token.text.contains("gimsxoadlupn"));
+        
+        // Substitution with eval modifier
+        let mut lexer = PerlLexer::new("s/old/new/gee");
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::Substitution);
+        assert!(token.text.contains("gee"));
+        
+        // Match with compiled flag
+        let mut lexer = PerlLexer::new("m/pattern/o");
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+        
+        // Extended regex with comments
+        let mut lexer = PerlLexer::new("/(?x) pattern # comment/");
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+    }
+    
+    #[test]
+    fn test_statement_modifiers() {
+        // if modifier
+        let mut lexer = PerlLexer::new("print $x if $y");
+        let _print = lexer.next_token().unwrap();
+        let _var1 = lexer.next_token().unwrap();
+        let if_mod = lexer.next_token().unwrap();
+        assert!(matches!(if_mod.token_type, TokenType::Keyword(ref k) if k.as_ref() == "if"));
+        
+        // unless modifier
+        let mut lexer = PerlLexer::new("die unless $ok");
+        let _die = lexer.next_token().unwrap();
+        let unless = lexer.next_token().unwrap();
+        assert!(matches!(unless.token_type, TokenType::Keyword(ref k) if k.as_ref() == "unless"));
+        
+        // while modifier
+        let mut lexer = PerlLexer::new("$x++ while $y");
+        let _var = lexer.next_token().unwrap();
+        let _op = lexer.next_token().unwrap();
+        let while_mod = lexer.next_token().unwrap();
+        assert!(matches!(while_mod.token_type, TokenType::Keyword(ref k) if k.as_ref() == "while"));
+    }
+    
+    #[test]
+    fn test_package_and_method_calls() {
+        // Package separator
+        let mut lexer = PerlLexer::new("Foo::Bar::baz");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+        // Note: Currently we treat Foo::Bar::baz as a single identifier
+        
+        // Method calls with packages
+        let mut lexer = PerlLexer::new("Foo::Bar->new");
+        let _package = lexer.next_token().unwrap();
+        let arrow = lexer.next_token().unwrap();
+        assert_eq!(arrow.token_type, TokenType::Arrow);
+        let method = lexer.next_token().unwrap();
+        assert!(matches!(method.token_type, TokenType::Identifier(_)));
+        
+        // SUPER and CORE
+        let mut lexer = PerlLexer::new("SUPER::method");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+    }
+    
+    #[test]
+    fn test_block_and_hash_disambiguation() {
+        // Anonymous hash
+        let mut lexer = PerlLexer::new("{ key => 'value' }");
+        let brace = lexer.next_token().unwrap();
+        assert_eq!(brace.token_type, TokenType::LeftBrace);
+        
+        // Code block after map/grep
+        let mut lexer = PerlLexer::new("map { $_ * 2 }");
+        let _map = lexer.next_token().unwrap();
+        let brace = lexer.next_token().unwrap();
+        assert_eq!(brace.token_type, TokenType::LeftBrace);
+        
+        // Hash slice
+        let mut lexer = PerlLexer::new("@hash{qw(a b c)}");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+    }
+    
+    #[test]
+    fn test_special_literals() {
+        // __END__ and __DATA__
+        let mut lexer = PerlLexer::new("__END__");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+        assert_eq!(token.text.as_ref(), "__END__");
+        
+        let mut lexer = PerlLexer::new("__DATA__");
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+        assert_eq!(token.text.as_ref(), "__DATA__");
+        
+        // __FILE__, __LINE__, __PACKAGE__
+        let special = vec!["__FILE__", "__LINE__", "__PACKAGE__", "__SUB__"];
+        for lit in special {
+            let mut lexer = PerlLexer::new(lit);
+            let token = lexer.next_token().unwrap();
+            assert!(matches!(token.token_type, TokenType::Identifier(_)));
+            assert_eq!(token.text.as_ref(), lit);
+        }
+    }
+    
+    #[test]
+    fn test_smartmatch_and_junction() {
+        // Smart match operator
+        let mut lexer = PerlLexer::new("$x ~~ $y");
+        let _var1 = lexer.next_token().unwrap();
+        let smartmatch = lexer.next_token().unwrap();
+        assert!(matches!(smartmatch.token_type, TokenType::Operator(_)));
+        assert_eq!(smartmatch.text.as_ref(), "~~");
+        
+        // Junction operators (Perl 6 style, sometimes used)
+        let mut lexer = PerlLexer::new("$a | $b");
+        let _var1 = lexer.next_token().unwrap();
+        let junction = lexer.next_token().unwrap();
+        assert!(matches!(junction.token_type, TokenType::Operator(_)));
+    }
 }

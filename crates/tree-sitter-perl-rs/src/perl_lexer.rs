@@ -74,6 +74,14 @@ pub struct PerlLexer<'a> {
     mode: LexerMode,
     /// Stack for nested delimiters in s{}{} constructs
     _delimiter_stack: Vec<char>,
+    /// Track if we're inside prototype parens after 'sub'
+    in_prototype: bool,
+    /// Paren depth to track when we exit prototype
+    paren_depth: usize,
+    /// Track if last token was 'sub'
+    last_was_sub: bool,
+    /// Track if we've seen sub NAME and expecting prototype
+    expect_prototype: bool,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -83,6 +91,10 @@ impl<'a> PerlLexer<'a> {
             position: 0,
             mode: LexerMode::ExpectTerm,
             _delimiter_stack: Vec::new(),
+            in_prototype: false,
+            paren_depth: 0,
+            last_was_sub: false,
+            expect_prototype: false,
         }
     }
     
@@ -181,6 +193,28 @@ impl<'a> PerlLexer<'a> {
     /// Update mode based on the token type
     fn update_mode(&mut self, token: &TokenType) {
         use TokenType::*;
+        
+        // Track sub NAME ( pattern
+        match token {
+            Keyword(kw) if kw.as_ref() == "sub" => {
+                self.last_was_sub = true;
+                self.expect_prototype = false;
+            }
+            Identifier(_) if self.last_was_sub => {
+                self.expect_prototype = true;
+                self.last_was_sub = false;
+            }
+            LeftParen if self.expect_prototype => {
+                self.in_prototype = true;
+                self.paren_depth = 1;
+                self.expect_prototype = false;
+            }
+            _ => {
+                self.last_was_sub = false;
+                self.expect_prototype = false;
+            }
+        }
+        
         self.mode = match token {
             // These produce a value, so next slash is division
             Identifier(_) | Number(_) | RightParen | RightBracket | RightBrace | 
@@ -798,6 +832,9 @@ impl<'a> PerlLexer<'a> {
             }
             b'(' => {
                 self.position += 1;
+                if self.in_prototype {
+                    self.paren_depth += 1;
+                }
                 let token = Token {
                     token_type: TokenType::LeftParen,
                     text: Arc::from("("),
@@ -809,6 +846,12 @@ impl<'a> PerlLexer<'a> {
             }
             b')' => {
                 self.position += 1;
+                if self.in_prototype && self.paren_depth > 0 {
+                    self.paren_depth -= 1;
+                    if self.paren_depth == 0 {
+                        self.in_prototype = false;
+                    }
+                }
                 let token = Token {
                     token_type: TokenType::RightParen,
                     text: Arc::from(")"),
@@ -1008,6 +1051,19 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             b'$' | b'@' | b'%' | b'*' => {
+                // In prototype context, these are prototype specifiers, not variables
+                if self.in_prototype && (ch == b'$' || ch == b'@' || ch == b'%' || ch == b'*') {
+                    self.position += 1;
+                    let token = Token {
+                        token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
+                        text: Arc::from(self.safe_slice(start, self.position)),
+                        start,
+                        end: self.position,
+                    };
+                    self.update_mode(&token.token_type);
+                    return Some(token);
+                }
+                
                 // Variable sigil
                 let sigil = ch;
                 if self.position + 1 < self.input.len() {
@@ -1181,10 +1237,14 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 
-                // Regular identifier or keyword
+                // Regular identifier or keyword (including package names with ::)
                 while self.position < self.input.len() {
                     match self.input.as_bytes()[self.position] {
                         b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.position += 1,
+                        b':' if self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1] == b':' => {
+                            // Include :: in identifier for package names
+                            self.position += 2;
+                        }
                         _ => break,
                     }
                 }
@@ -1193,7 +1253,8 @@ impl<'a> PerlLexer<'a> {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "given" |
                     "return" | "my" | "our" | "local" | "state" | "sub" | "do" | "eval" |
                     "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" |
-                    "print" | "say" | "printf" | "split" | "grep" | "map" | "sort" => {
+                    "print" | "say" | "printf" | "split" | "grep" | "map" | "sort" | "die" |
+                    "warn" | "open" | "close" | "read" | "write" => {
                         Token {
                             token_type: TokenType::Keyword(Arc::from(text)),
                             text: Arc::from(text),
@@ -1213,7 +1274,60 @@ impl<'a> PerlLexer<'a> {
                 self.update_mode(&token.token_type);
                 Some(token)
             }
-            b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'<' | b'>' | b'.' => {
+            b'<' => {
+                // Could be <FH> readline, <*.txt> glob, or < operator
+                if self.position + 1 < self.input.len() {
+                    let mut end_pos = self.position + 1;
+                    // Look for closing >
+                    while end_pos < self.input.len() && self.input.as_bytes()[end_pos] != b'>' {
+                        end_pos += 1;
+                    }
+                    if end_pos < self.input.len() && self.input.as_bytes()[end_pos] == b'>' {
+                        // Found closing >, check if it's readline/glob
+                        let content = &self.input[(self.position + 1)..end_pos];
+                        if content.is_empty() || // <> diamond
+                           content.chars().all(|c| c.is_ascii_uppercase() || c == '_') || // <FH>
+                           content.contains('*') || content.contains('?') || content.contains('[') { // glob
+                            self.position = end_pos + 1;
+                            let token = Token {
+                                token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
+                                text: Arc::from(self.safe_slice(start, self.position)),
+                                start,
+                                end: self.position,
+                            };
+                            self.update_mode(&token.token_type);
+                            return Some(token);
+                        }
+                    }
+                }
+                // Fall through to regular < operator handling
+                self.position += 1;
+                // Check for compound operators
+                if self.position < self.input.len() {
+                    let next = self.input.as_bytes()[self.position];
+                    match next {
+                        b'<' => self.position += 1, // <<
+                        b'=' => {
+                            self.position += 1; // <=
+                            // Check for <=> (spaceship operator)
+                            if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'>' {
+                                self.position += 1;
+                            }
+                        }
+                        b'>' => self.position += 1, // <>
+                        _ => {}
+                    }
+                }
+                let token = Token {
+                    token_type: TokenType::Operator(Arc::from(self.safe_slice(start, self.position))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                return Some(token);
+            }
+            b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' => {
                 // Check for number starting with decimal point
                 if ch == b'.' && self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1].is_ascii_digit() {
                     self.position += 1;
@@ -1255,6 +1369,17 @@ impl<'a> PerlLexer<'a> {
                             self.update_mode(&token.token_type);
                             return Some(token);
                         }
+                        (b'~', b'~') => {
+                            // ~~ smart match operator
+                            self.position += 1;
+                        }
+                        // File test operators
+                        (b'-', ch2) if matches!(ch2, b'r' | b'w' | b'x' | b'o' | b'R' | b'W' | b'X' | b'O' |
+                                                     b'e' | b'z' | b's' | b'f' | b'd' | b'l' | b'p' | b'S' |
+                                                     b'b' | b'c' | b't' | b'u' | b'g' | b'k' | b'T' | b'B' |
+                                                     b'M' | b'A' | b'C') => {
+                            self.position += 1;
+                        }
                         (b'.', b'.') => {
                             self.position += 1;
                             // Check for third dot  
@@ -1268,6 +1393,10 @@ impl<'a> PerlLexer<'a> {
                             if ch == b'<' && self.position < self.input.len() && self.input.as_bytes()[self.position] == b'>' {
                                 self.position += 1;
                             }
+                        }
+                        (b'<', b'>') => {
+                            // <> diamond operator
+                            self.position += 1;
                         }
                         _ => {}
                     }
