@@ -253,10 +253,10 @@ attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
 
 // Format declarations
-format_keyword = @{ "format" ~ !(ASCII_ALPHANUMERIC | "_") }
+format_keyword = { "format" ~ !(ASCII_ALPHANUMERIC | "_") }
 
 format_declaration = {
-    "format" ~ format_name? ~ "=" ~ NEWLINE ~
+    format_keyword ~ format_name? ~ "=" ~ NEWLINE ~
     format_lines ~
     format_end
 }

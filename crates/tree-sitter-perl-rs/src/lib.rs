@@ -140,6 +140,10 @@ mod tests;
 
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_format;
+#[cfg(all(test, feature = "pure-rust"))]
+mod test_format_order;
+#[cfg(all(test, feature = "pure-rust"))]
+mod test_statement_debug;
 
 use tree_sitter::{Language, Parser};
 
