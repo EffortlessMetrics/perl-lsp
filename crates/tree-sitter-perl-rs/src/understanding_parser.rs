@@ -237,7 +237,7 @@ impl UnderstandingParser {
                 (node, end_pos + 2) // +2 for "\n."
             }
             
-            AntiPattern::BeginTimeHeredoc { heredoc_content, side_effects, .. } => {
+            AntiPattern::BeginTimeHeredoc { heredoc_content,  .. } => {
                 // Create a runtime-dependent node
                 let node = ExtendedAstNode::RuntimeDependentParse {
                     construct_type: "BEGIN_heredoc".to_string(),

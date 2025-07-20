@@ -969,7 +969,7 @@ impl PureRustPerlParser {
                                     };
                                 }
                                 Rule::method_call => {
-                                    let mut method_inner = op_inner.into_inner();
+                                    let method_inner = op_inner.into_inner();
                                     let mut method = Arc::from("");
                                     let mut args = Vec::new();
                                     
@@ -1101,7 +1101,7 @@ impl PureRustPerlParser {
                 }
             }
             Rule::user_function_call => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut name = Arc::from("");
                 let mut args = Vec::new();
                 
@@ -1804,7 +1804,7 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::package_declaration => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut name = Arc::from("");
                 let mut version = None;
                 let mut block = None;

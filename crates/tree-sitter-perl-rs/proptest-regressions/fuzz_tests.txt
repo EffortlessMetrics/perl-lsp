@@ -8,3 +8,5 @@ cc b9cb187818b91566c0fc2adf09035d1be37025824d31552bb502f38ef86d3cf4 # shrinks to
 cc 6a7ff172068f827411722e030d092789313baf79a11b68e6195f7180dfb9acb0 # shrinks to ident = "q_"
 cc fef904b4a22ce7f8c460cbfc7d751c158491d49acc2e0f2b2e5b911fd11eec2d # shrinks to s = "\"{$\""
 cc 55f4e23f5217643c3df01d0dc834d61707d0774dc0ac6789b6127ba75f144e26 # shrinks to stmt = "my @q = ();"
+cc 654624096f0061692845cac797b1dc3b9e53daec9c95c5434f76504fd31da0f3 # shrinks to s = "'{\\'"
+cc 449ba099aca513373f097fb6dbcaddadb16d7a1216ed4a18d96f560a62ee715b # shrinks to stmt = "print '{\\';"

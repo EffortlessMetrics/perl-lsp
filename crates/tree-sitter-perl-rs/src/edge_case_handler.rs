@@ -81,7 +81,7 @@ impl EdgeCaseHandler {
     pub fn analyze(&mut self, code: &str) -> EdgeCaseAnalysis {
         let mut diagnostics = Vec::new();
         let mut phase_warnings = Vec::new();
-        let mut delimiter_resolutions = Vec::new();
+        let delimiter_resolutions = Vec::new();
         let mut recommended_actions = Vec::new();
         
         // Phase 1: Anti-pattern detection

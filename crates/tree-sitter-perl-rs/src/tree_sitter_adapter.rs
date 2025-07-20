@@ -153,7 +153,7 @@ impl TreeSitterAdapter {
             
             ExtendedAstNode::WithWarning { node, diagnostics: node_diags } => {
                 // Convert node normally but add diagnostics
-                let mut ts_node = Self::convert_normal_node(node, source);
+                let ts_node = Self::convert_normal_node(node, source);
                 
                 // Add warnings to diagnostic list
                 for diag in node_diags {
@@ -193,7 +193,7 @@ impl TreeSitterAdapter {
                 }
             }
             
-            ExtendedAstNode::Unparseable { pattern, raw_text, .. } => {
+            ExtendedAstNode::Unparseable {  raw_text, .. } => {
                 // Create ERROR node
                 metadata.edge_case_count += 1;
                 

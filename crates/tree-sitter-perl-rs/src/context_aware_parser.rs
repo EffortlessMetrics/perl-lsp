@@ -40,7 +40,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     }
     
     /// Parse input with context awareness
-    pub fn parse(mut self) -> (String, Vec<HeredocDeclaration>) {
+    pub fn parse(self) -> (String, Vec<HeredocDeclaration>) {
         // Phase 1: Normal heredoc scanning
         let (mut processed, mut declarations) = self.scanner.scan();
         
@@ -58,13 +58,13 @@ impl<'a> ContextAwareHeredocParser<'a> {
                                                    start, end, eval_declarations);
                     }
                 }
-                ContextInfo::SubstitutionWithE { pattern_start, pattern_end, 
+                ContextInfo::SubstitutionWithE { pattern_start: _, pattern_end: _, 
                                                 replacement_start, replacement_end } => {
                     // Handle s///e replacements
                     let replacement = &processed[replacement_start..replacement_end];
                     if replacement.contains("<<") {
                         Self::handle_substitution_heredoc_static(&mut processed, &mut declarations,
-                                                       pattern_start, replacement_start, 
+                                                       0, replacement_start, 
                                                        replacement_end);
                     }
                 }
@@ -151,7 +151,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     /// Parse heredocs within eval content
     fn parse_eval_content_static(content: &str) -> Vec<HeredocDeclaration> {
         // Create a sub-scanner for the eval content
-        let mut eval_scanner = HeredocScanner::new(content);
+        let eval_scanner = HeredocScanner::new(content);
         let (_, declarations) = eval_scanner.scan();
         
         declarations
@@ -160,7 +160,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     /// Merge eval heredoc declarations back into main parse
     fn merge_eval_declarations_static(processed: &mut String, 
                              main_declarations: &mut Vec<HeredocDeclaration>,
-                             eval_start: usize, eval_end: usize,
+                             eval_start: usize, _eval_end: usize,
                              eval_declarations: Vec<HeredocDeclaration>) {
         // Adjust positions relative to main input
         for mut decl in eval_declarations {
@@ -235,7 +235,7 @@ impl ContextAwareFullParser {
     /// Parse with full context awareness
     pub fn parse(&mut self, input: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
         // Use context-aware heredoc parser
-        let mut heredoc_parser = ContextAwareHeredocParser::new(input);
+        let heredoc_parser = ContextAwareHeredocParser::new(input);
         let (processed, declarations) = heredoc_parser.parse();
         
         // Parse the processed input
@@ -253,7 +253,7 @@ impl ContextAwareFullParser {
         match ast {
             AstNode::EvalString(expression) => {
                 // Mark eval nodes that contain heredocs
-                if let AstNode::String(content) = expression.as_ref() {
+                if let AstNode::String(_content) = expression.as_ref() {
                     if declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT") {
                         // Add metadata for runtime handling
                         // In a real implementation, we'd modify the AST node type
@@ -261,7 +261,7 @@ impl ContextAwareFullParser {
                     }
                 }
             }
-            AstNode::Substitution { replacement, flags, .. } => {
+            AstNode::Substitution {  flags, .. } => {
                 if flags.contains("e") && declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT") {
                     // Mark for runtime evaluation
                 }
@@ -274,7 +274,7 @@ impl ContextAwareFullParser {
     }
     
     /// Recursively walk and annotate AST
-    fn walk_and_annotate(&self, ast: &mut AstNode, declarations: &[HeredocDeclaration]) {
+    fn walk_and_annotate(&self, _ast: &mut AstNode, _declarations: &[HeredocDeclaration]) {
         // This would walk all children nodes
         // For brevity, not implementing full tree walking here
     }

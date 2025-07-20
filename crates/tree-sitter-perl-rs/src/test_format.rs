@@ -35,6 +35,13 @@ mod tests {
             Err(e) => println!("  FAILED: {:?}", e),
         }
         
+        // Test if format_keyword alone works
+        println!("\nTesting just format keyword with space:");
+        match PerlParser::parse(Rule::format_keyword, "format ") {
+            Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
+            Err(e) => println!("  FAILED: {:?}", e),
+        }
+        
         // Test with equals
         println!("\nTesting with equals:");
         let with_equals = "format =\n.\n";
