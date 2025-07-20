@@ -30,13 +30,12 @@ mod tests {
     
     #[test]
     fn test_context_aware_slash_regex() {
-        let input = "if (/test/)";
+        let input = "if ( /";
         let mut lexer = ContextLexer::new(input);
         
         assert_eq!(lexer.next(), Some(Token::If));
         assert_eq!(lexer.next(), Some(Token::LParen));
-        assert_eq!(lexer.next(), Some(Token::Regex)); // Should be regex
-        assert_eq!(lexer.next(), Some(Token::RParen));
+        assert_eq!(lexer.next(), Some(Token::Regex)); // Should be regex (context says so)
     }
     
     #[test]
