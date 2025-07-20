@@ -1119,7 +1119,7 @@ impl PureRustPerlParser {
                 }
                 
                 Ok(Some(AstNode::FunctionCall {
-                    name: Box::new(AstNode::Identifier(name)),
+                    function: Box::new(AstNode::Identifier(name)),
                     args,
                 }))
             }
@@ -1173,7 +1173,7 @@ impl PureRustPerlParser {
                     // double_string_content
                     for part in content_pair.into_inner() {
                         // Each part is a double_string_part
-                        if let Some(inner) = part.into_inner().next() {
+                        for inner in part.into_inner() {
                             match inner.as_rule() {
                                 Rule::double_string_chars => {
                                     parts.push(AstNode::String(Arc::from(inner.as_str())));

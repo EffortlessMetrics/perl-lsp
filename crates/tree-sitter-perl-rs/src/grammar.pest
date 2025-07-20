@@ -510,7 +510,14 @@ double_string_part = {
     interpolation
     | double_string_chars
 }
-double_string_chars = @{ (!( "\"" | "$" | "@" ) ~ ANY)+ | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{" ) | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{" ) }
+double_string_chars = @{ 
+    (
+        !( "\"" | "$" | "@" | "\\" ) ~ ANY
+        | "\\" ~ ANY 
+        | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{" | "$" | "!" | "?" | "#" | "*" | ASCII_DIGIT)
+        | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{" | "+" | "-" | "#")
+    )+
+}
 
 backtick_string = @{ "`" ~ backtick_content ~ "`" }
 backtick_content = @{ (!"`" ~ ANY)* }
@@ -618,6 +625,7 @@ interpolation = {
     | complex_array_interpolation
     | array_dereference_interpolation
     | hash_dereference_interpolation
+    | special_variable
     | scalar_variable
     | array_variable
     | hash_variable
@@ -651,8 +659,14 @@ hash_element_access = { "$" ~ variable_name ~ "{" ~ expression ~ "}" }
 
 variable_name = @{
     identifier
+    | reserved_word_as_var
     | package_variable
     | special_var_name
+}
+
+// Reserved words can be used as variable names
+reserved_word_as_var = @{
+    reserved_word
 }
 
 package_variable = @{ qualified_name ~ "::" ~ identifier }

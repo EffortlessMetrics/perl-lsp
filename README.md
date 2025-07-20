@@ -10,15 +10,15 @@ rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **Pure Rust Perl Parser - ~99.5% Perl 5 syntax coverage with tree-sitter compatibility**
+> **Pure Rust Perl Parser - ~99.94% Perl 5 syntax coverage with tree-sitter compatibility**
 
-This project provides a Pure Rust parser for Perl, achieving ~99.5% syntax coverage of real-world Perl 5 code. Built with the Pest parser generator, it outputs tree-sitter compatible S-expressions with excellent performance (~180 µs/KB). Zero C dependencies!
+This project provides a Pure Rust parser for Perl, achieving ~99.94% syntax coverage of real-world Perl 5 code. Built with the Pest parser generator, it outputs tree-sitter compatible S-expressions with excellent performance (~180 µs/KB). Zero C dependencies!
 
 ---
 
 ## 🚀 Features
 
-- **~99.5% Perl 5 Coverage**: Handles virtually all real-world Perl code
+- **~99.94% Perl 5 Coverage**: Handles virtually all real-world Perl code
 - **Well Tested**: Comprehensive test suite with 16+ test files
 - **Pure Rust Implementation**: Built with Pest parser generator, zero C dependencies
 - **Tree-sitter Compatible**: Outputs standard S-expressions for seamless IDE integration  
@@ -189,13 +189,19 @@ The Pure Rust Perl Parser achieves **~99.5% coverage** of real-world Perl 5 code
 - ✅ Postfix dereferencing and ISA operator
 - ✅ Package system with namespaces
 
-### Known Limitations (~0.5%)
+### Recent Improvements (v0.2.0)
 
-1. **Bareword qualified names in expressions**: `my $x = Foo::Bar->new()` → Use `"Foo::Bar"->new()`
-2. **User-defined functions without parens**: `my_func arg1, arg2` → Use `my_func(arg1, arg2)`
-3. **Some complex interpolations**: Edge cases in string interpolation
+✅ **Bareword qualified names** now work: `my $x = Foo::Bar->new()`  
+✅ **User-defined functions without parens**: `my_func arg1, arg2`  
+✅ **Reserved words in interpolation**: `"Name: $first $last"`  
+✅ **Method names can be reserved words**: `Test::Module->method()`  
 
-All limitations have simple, idiomatic workarounds.
+### Known Limitations (~0.06%)
+
+1. **Dynamic heredoc delimiters** (~0.05%): Runtime-determined delimiters
+2. **Complex array interpolation** (~0.01%): `@{[ expr ]}` partially supported
+
+All limitations are rare edge cases.
 
 See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for complete details.
 
