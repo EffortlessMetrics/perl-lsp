@@ -19,6 +19,8 @@ unicode-ident = "1.0"
 unicode-normalization = "0.1"
 pest = "2.8"
 pest_derive = "2.8"
+logos = "0.14"
+chumsky = "0.9"
 regex = "1.11"
 stacker = "0.1"
 encoding_rs = "0.8"
@@ -32,6 +34,7 @@ test-case = "3.3"
 [features]
 default = ["pure-rust"]
 pure-rust = []
+token-parser = []
 test-utils = []
 # Legacy features (for benchmarking only)
 c-scanner = []

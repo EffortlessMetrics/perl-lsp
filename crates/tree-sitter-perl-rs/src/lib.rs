@@ -48,6 +48,15 @@ pub mod unicode;
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
 
+#[cfg(feature = "token-parser")]
+pub mod logos_lexer;
+
+#[cfg(feature = "token-parser")]
+pub mod token_parser;
+
+#[cfg(feature = "token-parser")]
+pub mod token_parser_poc;
+
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust")]
 pub use full_parser::FullPerlParser as PureRustPerlParser;
