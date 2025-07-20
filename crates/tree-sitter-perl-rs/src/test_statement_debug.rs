@@ -31,11 +31,11 @@ mod tests {
             }
         }
         
-        // Test parsing just "format " (with space)
-        println!("\nTesting 'format ' (with space):");
-        match PerlParser::parse(Rule::format_keyword, "format ") {
+        // Test parsing just "format" as reserved word
+        println!("\nTesting 'format' as reserved word:");
+        match PerlParser::parse(Rule::reserved_word, "format") {
             Ok(pairs) => {
-                println!("  ✓ Parsed as format_keyword");
+                println!("  ✓ 'format' is a reserved word");
                 for pair in pairs {
                     println!("    Matched: '{}'", pair.as_str());
                 }
