@@ -56,6 +56,8 @@ pub enum TokenKind {
     FatArrow,
     Dot,
     Range,
+    Increment,
+    Decrement,
     
     // Delimiters
     LeftParen,
@@ -188,8 +190,12 @@ impl<'a> TokenStream<'a> {
                 "&&" => TokenKind::And,
                 "||" => TokenKind::Or,
                 "!" => TokenKind::Not,
+                "->" => TokenKind::Arrow,
+                "=>" => TokenKind::FatArrow,
                 "." => TokenKind::Dot,
                 ".." => TokenKind::Range,
+                "++" => TokenKind::Increment,
+                "--" => TokenKind::Decrement,
                 _ => TokenKind::Unknown,
             },
             
@@ -221,7 +227,14 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::Operator(op) if op.as_ref() == "*" => TokenKind::GlobSigil,
             
             // Identifiers
-            LexerTokenType::Identifier(_) => TokenKind::Identifier,
+            LexerTokenType::Identifier(text) => {
+                // Special case: * by itself is multiplication, not a glob
+                if text.as_ref() == "*" {
+                    TokenKind::Star
+                } else {
+                    TokenKind::Identifier
+                }
+            }
             
             // Handle error tokens that might be valid syntax
             LexerTokenType::Error(msg) => {
