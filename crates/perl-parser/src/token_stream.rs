@@ -232,11 +232,15 @@ impl<'a> TokenStream<'a> {
             
             // Identifiers
             LexerTokenType::Identifier(text) => {
-                // Special case: * by itself is multiplication, not a glob
-                if text.as_ref() == "*" {
-                    TokenKind::Star
-                } else {
-                    TokenKind::Identifier
+                // Check if it's actually a keyword that the lexer didn't recognize
+                match text.as_ref() {
+                    "no" => TokenKind::No,
+                    "*" => TokenKind::Star, // Special case: * by itself is multiplication
+                    "$" => TokenKind::ScalarSigil,
+                    "@" => TokenKind::ArraySigil,
+                    "%" => TokenKind::HashSigil,
+                    "&" => TokenKind::SubSigil,
+                    _ => TokenKind::Identifier
                 }
             }
             

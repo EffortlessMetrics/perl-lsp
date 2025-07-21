@@ -179,6 +179,79 @@ impl<'a> Parser<'a> {
         ))
     }
     
+    /// Parse a variable when we have a sigil token first
+    fn parse_variable_from_sigil(&mut self) -> ParseResult<Node> {
+        let sigil_token = self.consume_token()?;
+        let sigil = sigil_token.text.clone();
+        let start = sigil_token.start;
+        
+        // Check if next token is an identifier for the variable name
+        let name = if self.peek_kind() == Some(TokenKind::Identifier) {
+            let name_token = self.tokens.next()?;
+            name_token.text.clone()
+        } else {
+            // Handle special variables like $$, $@, $!, $?, etc.
+            match self.peek_kind() {
+                Some(TokenKind::ScalarSigil) => {
+                    // $$ - process ID
+                    self.tokens.next()?;
+                    "$".to_string()
+                }
+                Some(TokenKind::ArraySigil) => {
+                    // $@ - eval error
+                    self.tokens.next()?;
+                    "@".to_string()
+                }
+                Some(TokenKind::Not) => {
+                    // $! - system error
+                    self.tokens.next()?;
+                    "!".to_string()
+                }
+                Some(TokenKind::Unknown) => {
+                    // Could be $?, $^, or other special
+                    let token = self.tokens.peek()?;
+                    match token.text.as_str() {
+                        "?" => {
+                            self.tokens.next()?;
+                            "?".to_string()
+                        }
+                        "^" => {
+                            // Handle $^X variables
+                            self.tokens.next()?;
+                            if self.peek_kind() == Some(TokenKind::Identifier) {
+                                let var_token = self.tokens.next()?;
+                                format!("^{}", var_token.text)
+                            } else {
+                                "^".to_string()
+                            }
+                        }
+                        _ => {
+                            return Err(ParseError::syntax(
+                                &format!("Unexpected character after sigil: {}", token.text),
+                                token.start
+                            ));
+                        }
+                    }
+                }
+                Some(TokenKind::Number) => {
+                    // $0, $1, $2, etc. - numbered capture groups
+                    let num_token = self.tokens.next()?;
+                    num_token.text.clone()
+                }
+                _ => {
+                    // Empty variable name (just the sigil)
+                    String::new()
+                }
+            }
+        };
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Variable { sigil, name },
+            SourceLocation { start, end }
+        ))
+    }
+    
     /// Parse if statement
     fn parse_if_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -923,6 +996,26 @@ impl<'a> Parser<'a> {
                     );
                 }
                 
+                Some(TokenKind::LeftBrace) => {
+                    // Hash element access
+                    self.tokens.next()?; // consume {
+                    let key = self.parse_expression()?;
+                    self.expect(TokenKind::RightBrace)?;
+                    
+                    let start = expr.location.start;
+                    let end = self.previous_position();
+                    
+                    // Represent as binary subscript operation
+                    expr = Node::new(
+                        NodeKind::Binary {
+                            op: "{}".to_string(),
+                            left: Box::new(expr),
+                            right: Box::new(key),
+                        },
+                        SourceLocation { start, end }
+                    );
+                }
+                
                 Some(TokenKind::LeftParen) if matches!(&expr.kind, NodeKind::Identifier { .. }) => {
                     // Function call
                     if let NodeKind::Identifier { name } = &expr.kind {
@@ -987,6 +1080,11 @@ impl<'a> Parser<'a> {
                         SourceLocation { start: token.start, end: token.end }
                     ))
                 }
+            }
+            
+            // Handle sigil tokens (for when lexer sends them separately)
+            TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil | TokenKind::SubSigil | TokenKind::GlobSigil => {
+                self.parse_variable_from_sigil()
             }
             
             TokenKind::LeftParen => {
