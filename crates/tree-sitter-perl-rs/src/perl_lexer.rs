@@ -9,6 +9,16 @@ pub enum LexerMode {
     ExpectOperator,
 }
 
+/// Parts of an interpolated string
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringPart {
+    Literal(Arc<str>),
+    Variable(Arc<str>),           // $var, @array, %hash
+    Expression(Arc<str>),          // ${expr}, @{expr}
+    MethodCall(Arc<str>),          // ->method()
+    ArraySlice(Arc<str>),          // [1..3]
+}
+
 /// Token types for disambiguation
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
@@ -25,6 +35,9 @@ pub enum TokenType {
     QuoteDouble,       // qq//
     QuoteWords,        // qw//
     QuoteCommand,      // qx// or `backticks`
+    
+    // String interpolation tokens
+    InterpolatedString(Vec<StringPart>), // String with interpolated parts
     
     // Heredoc tokens
     HeredocStart,      // <<EOF or <<'EOF'
@@ -56,6 +69,9 @@ pub enum TokenType {
     Newline,
     Comment(Arc<str>),
     EOF,
+    
+    // Error token for unknown/invalid input
+    Error(Arc<str>),
 }
 
 /// Token with position information
@@ -198,6 +214,237 @@ impl<'a> PerlLexer<'a> {
         matches!(ch, '/' | '!' | '#' | '%' | '&' | '*' | ',' | '.' | ':' | ';' | '=' | '?' | '@' | '^' | '|' | '~' | '\'' | '"' | '`' | '{' | '[' | '(' | '<')
     }
     
+    /// Scan an interpolated double-quoted string
+    fn scan_interpolated_string(&mut self) -> Option<Token> {
+        let start = self.position;
+        self.position += 1; // Skip opening quote
+        
+        let mut parts = Vec::new();
+        let mut current_literal = String::new();
+        
+        while self.position < self.input.len() {
+            match self.input.as_bytes()[self.position] {
+                b'"' => {
+                    // End of string
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(Arc::from(current_literal)));
+                    }
+                    self.position += 1;
+                    break;
+                }
+                b'\\' if self.position + 1 < self.input.len() => {
+                    // Escape sequence
+                    let next = self.input.as_bytes()[self.position + 1];
+                    match next {
+                        b'n' => current_literal.push('\n'),
+                        b'r' => current_literal.push('\r'),
+                        b't' => current_literal.push('\t'),
+                        b'\\' => current_literal.push('\\'),
+                        b'"' => current_literal.push('"'),
+                        b'$' => current_literal.push('$'),
+                        b'@' => current_literal.push('@'),
+                        _ => {
+                            current_literal.push('\\');
+                            current_literal.push(next as char);
+                        }
+                    }
+                    self.position += 2;
+                }
+                b'$' if self.position + 1 < self.input.len() => {
+                    // Possible variable interpolation
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(Arc::from(current_literal.clone())));
+                        current_literal.clear();
+                    }
+                    
+                    let var_start = self.position;
+                    self.position += 1;
+                    
+                    // Check for ${...} syntax
+                    if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'{' {
+                        self.position += 1;
+                        let expr_start = self.position;
+                        let mut brace_depth = 1;
+                        
+                        while self.position < self.input.len() && brace_depth > 0 {
+                            match self.input.as_bytes()[self.position] {
+                                b'{' => brace_depth += 1,
+                                b'}' => brace_depth -= 1,
+                                _ => {}
+                            }
+                            self.position += 1;
+                        }
+                        
+                        let expr = self.safe_slice(expr_start, self.position - 1);
+                        parts.push(StringPart::Expression(Arc::from(format!("${{{}}}", expr))));
+                    } else {
+                        // Simple variable name
+                        
+                        // Check for special variables
+                        if self.position < self.input.len() {
+                            let ch = self.input.as_bytes()[self.position];
+                            if matches!(ch, b'!' | b'"' | b'#' | b'$' | b'%' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b',' | b'-' | b'.' | b'/' | b'0'..=b'9' | b':' | b';' | b'<' | b'=' | b'>' | b'?' | b'@' | b'[' | b'\\' | b']' | b'^' | b'_' | b'`' | b'{' | b'|' | b'}' | b'~') {
+                                self.position += 1;
+                                let var = self.safe_slice(var_start, self.position);
+                                parts.push(StringPart::Variable(Arc::from(var)));
+                                continue;
+                            }
+                        }
+                        
+                        // Regular identifier
+                        while self.position < self.input.len() {
+                            let ch = self.input.as_bytes()[self.position];
+                            if ch.is_ascii_alphanumeric() || ch == b'_' {
+                                self.position += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        let var = self.safe_slice(var_start, self.position);
+                        parts.push(StringPart::Variable(Arc::from(var)));
+                        
+                        // Check for method calls
+                        if self.position + 2 < self.input.len() &&
+                           self.input.as_bytes()[self.position] == b'-' &&
+                           self.input.as_bytes()[self.position + 1] == b'>' {
+                            self.position += 2;
+                            let method_start = self.position;
+                            
+                            // Scan method name
+                            while self.position < self.input.len() {
+                                let ch = self.input.as_bytes()[self.position];
+                                if ch.is_ascii_alphanumeric() || ch == b'_' {
+                                    self.position += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
+                            let method = self.safe_slice(method_start, self.position);
+                            let method_str = method.to_string(); // Clone to avoid borrow issues
+                            parts.push(StringPart::MethodCall(Arc::from(format!("->{}", method_str))));
+                            
+                            // Check for method arguments
+                            if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'(' {
+                                // For now, just include the parens in the method call
+                                let paren_start = self.position;
+                                self.position += 1;
+                                let mut paren_depth = 1;
+                                
+                                while self.position < self.input.len() && paren_depth > 0 {
+                                    match self.input.as_bytes()[self.position] {
+                                        b'(' => paren_depth += 1,
+                                        b')' => paren_depth -= 1,
+                                        b'"' => break, // Don't go past string end
+                                        _ => {}
+                                    }
+                                    self.position += 1;
+                                }
+                                
+                                if paren_depth == 0 {
+                                    let args = self.safe_slice(paren_start, self.position);
+                                    parts.pop(); // Remove the method call we just added
+                                    parts.push(StringPart::MethodCall(Arc::from(format!("->{}{}", method_str, args))));
+                                }
+                            }
+                        }
+                        
+                        // Check for array/hash element access
+                        if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'[' {
+                            let bracket_start = self.position;
+                            self.position += 1;
+                            let mut bracket_depth = 1;
+                            
+                            while self.position < self.input.len() && bracket_depth > 0 {
+                                match self.input.as_bytes()[self.position] {
+                                    b'[' => bracket_depth += 1,
+                                    b']' => bracket_depth -= 1,
+                                    b'"' => break, // Don't go past string end
+                                    _ => {}
+                                }
+                                self.position += 1;
+                            }
+                            
+                            if bracket_depth == 0 {
+                                let slice = self.safe_slice(bracket_start, self.position);
+                                parts.push(StringPart::ArraySlice(Arc::from(slice)));
+                            }
+                        }
+                    }
+                }
+                b'@' if self.position + 1 < self.input.len() => {
+                    // Array interpolation
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(Arc::from(current_literal.clone())));
+                        current_literal.clear();
+                    }
+                    
+                    let var_start = self.position;
+                    self.position += 1;
+                    
+                    // Check for @{...} syntax
+                    if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'{' {
+                        self.position += 1;
+                        let expr_start = self.position;
+                        let mut brace_depth = 1;
+                        
+                        while self.position < self.input.len() && brace_depth > 0 {
+                            match self.input.as_bytes()[self.position] {
+                                b'{' => brace_depth += 1,
+                                b'}' => brace_depth -= 1,
+                                _ => {}
+                            }
+                            self.position += 1;
+                        }
+                        
+                        let expr = self.safe_slice(expr_start, self.position - 1);
+                        parts.push(StringPart::Expression(Arc::from(format!("@{{{}}}", expr))));
+                    } else {
+                        // Simple array name
+                        while self.position < self.input.len() {
+                            let ch = self.input.as_bytes()[self.position];
+                            if ch.is_ascii_alphanumeric() || ch == b'_' {
+                                self.position += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        let var = self.safe_slice(var_start, self.position);
+                        parts.push(StringPart::Variable(Arc::from(var)));
+                    }
+                }
+                _ => {
+                    current_literal.push(self.input.as_bytes()[self.position] as char);
+                    self.position += 1;
+                }
+            }
+        }
+        
+        // If we have multiple parts or any interpolation, it's an interpolated string
+        let token = if parts.is_empty() || (parts.len() == 1 && matches!(parts[0], StringPart::Literal(_))) {
+            // Just a literal string
+            Token {
+                token_type: TokenType::StringLiteral,
+                text: Arc::from(self.safe_slice(start, self.position)),
+                start,
+                end: self.position,
+            }
+        } else {
+            // Interpolated string
+            Token {
+                token_type: TokenType::InterpolatedString(parts),
+                text: Arc::from(self.safe_slice(start, self.position)),
+                start,
+                end: self.position,
+            }
+        };
+        
+        self.update_mode(&token.token_type);
+        Some(token)
+    }
+    
     /// Update mode based on the token type
     fn update_mode(&mut self, token: &TokenType) {
         use TokenType::*;
@@ -226,7 +473,8 @@ impl<'a> PerlLexer<'a> {
         self.mode = match token {
             // These produce a value, so next slash is division
             Identifier(_) | Number(_) | RightParen | RightBracket | RightBrace | 
-            RegexMatch | Substitution | Transliteration | QuoteRegex => LexerMode::ExpectOperator,
+            RegexMatch | Substitution | Transliteration | QuoteRegex | 
+            StringLiteral | InterpolatedString(_) | QuoteSingle | QuoteDouble | QuoteWords | QuoteCommand => LexerMode::ExpectOperator,
             
             // These expect a value next, so slash starts regex
             Operator(_) | LeftParen | LeftBracket | LeftBrace | Semicolon | Comma | Arrow | FatComma | Division => LexerMode::ExpectTerm,
@@ -810,13 +1058,21 @@ impl<'a> PerlLexer<'a> {
                     return Some(token);
                 }
             }
-            // If not a valid identifier start, skip the character
+            // If not a valid identifier start, generate error token
             if let Some(unicode_ch) = self.input[self.position..].chars().next() {
-                self.position += unicode_ch.len_utf8();
+                let char_len = unicode_ch.len_utf8();
+                self.position += char_len;
+                let token = Token {
+                    token_type: TokenType::Error(Arc::from(format!("Unknown character: '{}'", unicode_ch))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                return Some(token);
             } else {
                 self.position += 1;
+                return self.next_token();
             }
-            return self.next_token();
         }
         
         // Check for regex-like constructs first
@@ -1506,28 +1762,8 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             b'"' => {
-                // Double-quoted string
-                self.position += 1;
-                while self.position < self.input.len() {
-                    match self.input.as_bytes()[self.position] {
-                        b'"' => {
-                            self.position += 1;
-                            break;
-                        }
-                        b'\\' if self.position + 1 < self.input.len() => {
-                            self.position += 2;
-                        }
-                        _ => self.position += 1,
-                    }
-                }
-                let token = Token {
-                    token_type: TokenType::StringLiteral,
-                    text: Arc::from(self.safe_slice(start, self.position)),
-                    start,
-                    end: self.position,
-                };
-                self.update_mode(&token.token_type);
-                Some(token)
+                // Double-quoted string with interpolation support
+                self.scan_interpolated_string()
             }
             b'\'' => {
                 // Single-quoted string
@@ -1589,9 +1825,16 @@ impl<'a> PerlLexer<'a> {
                 Some(token)
             }
             _ => {
-                // Unknown character, skip it
+                // Unknown character, generate error token
                 self.position += 1;
-                self.next_token()
+                let token = Token {
+                    token_type: TokenType::Error(Arc::from(format!("Unknown character: '{}'", 
+                        self.safe_slice(start, self.position)))),
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                };
+                Some(token)
             }
         }
     }
@@ -1638,5 +1881,115 @@ mod tests {
         let mut lexer = PerlLexer::new("s{f{o}o}{bar}");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Substitution);
+    }
+    
+    #[test]
+    fn test_string_interpolation() {
+        // Test simple variable interpolation
+        let mut lexer = PerlLexer::new(r#""Hello $name""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Hello "));
+                assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$name"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test method call interpolation
+        let mut lexer = PerlLexer::new(r#""The value is $obj->method()""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 3);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "The value is "));
+                assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$obj"));
+                assert!(matches!(&parts[2], StringPart::MethodCall(s) if s.as_ref() == "->method()"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test ${expr} interpolation
+        let mut lexer = PerlLexer::new(r#""Total: ${count + 1}""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Total: "));
+                assert!(matches!(&parts[1], StringPart::Expression(s) if s.as_ref() == "${count + 1}"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test array interpolation
+        let mut lexer = PerlLexer::new(r#""Items: @array""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Items: "));
+                assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "@array"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test array slice interpolation
+        let mut lexer = PerlLexer::new(r#""Value: $array[0]""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 3);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Value: "));
+                assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$array"));
+                assert!(matches!(&parts[2], StringPart::ArraySlice(s) if s.as_ref() == "[0]"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test special variables
+        let mut lexer = PerlLexer::new(r#""PID: $$, Error: $!""#);
+        let token = lexer.next_token().unwrap();
+        match &token.token_type {
+            TokenType::InterpolatedString(parts) => {
+                assert_eq!(parts.len(), 4);
+                assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "PID: "));
+                assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$$"));
+                assert!(matches!(&parts[2], StringPart::Literal(s) if s.as_ref() == ", Error: "));
+                assert!(matches!(&parts[3], StringPart::Variable(s) if s.as_ref() == "$!"));
+            }
+            _ => panic!("Expected InterpolatedString"),
+        }
+        
+        // Test escaped characters (should be StringLiteral, not InterpolatedString)
+        let mut lexer = PerlLexer::new(r#""Line 1\nLine 2\t\$escaped""#);
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::StringLiteral));
+        
+        // Test plain string (no interpolation)
+        let mut lexer = PerlLexer::new(r#""Just a plain string""#);
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::StringLiteral));
+    }
+    
+    #[test]
+    fn test_error_tokens() {
+        // Test unknown character
+        let mut lexer = PerlLexer::new("x § y");
+        
+        let token1 = lexer.next_token().unwrap();
+        assert!(matches!(token1.token_type, TokenType::Identifier(_)));
+        
+        let token2 = lexer.next_token().unwrap();
+        match &token2.token_type {
+            TokenType::Error(msg) => {
+                assert!(msg.contains("Unknown character"));
+                assert!(msg.contains("§"));
+            }
+            _ => panic!("Expected Error token, got {:?}", token2.token_type),
+        }
+        
+        let token3 = lexer.next_token().unwrap();
+        assert!(matches!(token3.token_type, TokenType::Identifier(_)));
     }
 }
