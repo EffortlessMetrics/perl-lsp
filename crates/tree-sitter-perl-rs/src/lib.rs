@@ -142,6 +142,9 @@ pub mod perl_lexer;
 pub mod lexer_adapter;
 
 #[cfg(feature = "pure-rust")]
+pub mod heredoc_recovery;
+
+#[cfg(feature = "pure-rust")]
 pub mod disambiguated_parser;
 
 #[cfg(all(test, feature = "pure-rust"))]

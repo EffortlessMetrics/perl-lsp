@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use crate::heredoc_recovery::{HeredocRecovery, RecoveryConfig};
 
 /// Perl lexer mode to disambiguate slash tokens
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,6 +91,10 @@ pub struct PerlLexer<'a> {
     mode: LexerMode,
     /// Stack for nested delimiters in s{}{} constructs
     _delimiter_stack: Vec<char>,
+    /// Heredoc recovery system
+    heredoc_recovery: HeredocRecovery,
+    /// Collected tokens for static analysis
+    tokens: Vec<Token>,
     /// Track if we're inside prototype parens after 'sub'
     in_prototype: bool,
     /// Paren depth to track when we exit prototype
@@ -107,6 +112,8 @@ impl<'a> PerlLexer<'a> {
             position: 0,
             mode: LexerMode::ExpectTerm,
             _delimiter_stack: Vec::new(),
+            heredoc_recovery: HeredocRecovery::new(RecoveryConfig::default()),
+            tokens: Vec::new(),
             in_prototype: false,
             paren_depth: 0,
             last_was_sub: false,
@@ -899,7 +906,7 @@ impl<'a> PerlLexer<'a> {
         })
     }
     
-    /// Scan a heredoc start token (<<EOF or <<'EOF')
+    /// Scan a heredoc start token (<<EOF or <<'EOF' or <<$var)
     fn scan_heredoc_start(&mut self) -> Option<Token> {
         let start = self.position;
         
@@ -907,13 +914,49 @@ impl<'a> PerlLexer<'a> {
         self.position += 2;
         
         // Check for indented heredoc (<<~)
-        if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'~' {
+        let _indented = if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'~' {
             self.position += 1;
-        }
+            true
+        } else {
+            false
+        };
         
         // Skip optional whitespace
         while self.position < self.input.len() && self.input.as_bytes()[self.position] == b' ' {
             self.position += 1;
+        }
+        
+        // Check for dynamic delimiter (starts with $)
+        if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'$' {
+            // This is a dynamic heredoc delimiter
+            let recovery_result = self.heredoc_recovery.recover_dynamic_heredoc(
+                self.input,
+                start,
+                &self.tokens,
+            );
+            
+            // Update position to end of expression
+            let expr_end = self.heredoc_recovery.find_expression_end(self.input, start);
+            self.position = expr_end;
+            
+            if recovery_result.error_node {
+                // Generate error token
+                return Some(self.heredoc_recovery.generate_error_token(
+                    self.input,
+                    start,
+                    &recovery_result,
+                ));
+            } else if let Some(delimiter) = recovery_result.delimiter {
+                // Successfully recovered - generate a special token
+                let token = Token {
+                    token_type: TokenType::HeredocStart,
+                    text: Arc::from(format!("<<{}", delimiter)),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                return Some(token);
+            }
         }
         
         // Check for quoted delimiter
@@ -1002,12 +1045,27 @@ impl<'a> PerlLexer<'a> {
         Some(token)
     }
     
+    /// Store token for recovery analysis
+    fn store_token(&mut self, token: &Token) {
+        // Keep a reasonable window of tokens for analysis
+        if self.tokens.len() > 100 {
+            self.tokens.remove(0);
+        }
+        self.tokens.push(token.clone());
+    }
+    
+    /// Return a token and store it for recovery analysis
+    fn return_token(&mut self, token: Token) -> Option<Token> {
+        self.store_token(&token);
+        Some(token)
+    }
+    
     /// Get the next token
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
         
         if self.position >= self.input.len() {
-            return Some(Token {
+            return self.return_token(Token {
                 token_type: TokenType::EOF,
                 text: Arc::from(""),
                 start: self.position,
