@@ -34,6 +34,10 @@ name = "bench_parser_c"
 path = "src/bin/bench_parser.rs"
 required-features = ["test-utils"]
 
+[[bin]]
+name = "parse_c"
+path = "src/bin/parse_c.rs"
+
 [build-dependencies]
 cc = "1.0"
 bindgen = "0.72" 
