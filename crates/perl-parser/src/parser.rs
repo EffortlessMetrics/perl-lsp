@@ -453,7 +453,15 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'package'
         
-        let name = self.expect(TokenKind::Identifier)?.text.clone();
+        // Parse package name (can include ::)
+        let mut name = self.expect(TokenKind::Identifier)?.text.clone();
+        
+        // Handle :: in package names
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.tokens.next()?; // consume ::
+            name.push_str("::");
+            name.push_str(&self.expect(TokenKind::Identifier)?.text);
+        }
         
         let block = if self.peek_kind() == Some(TokenKind::LeftBrace) {
             Some(Box::new(self.parse_block()?))
@@ -987,6 +995,11 @@ impl<'a> Parser<'a> {
     /// Peek at the next token's kind
     fn peek_kind(&mut self) -> Option<TokenKind> {
         self.tokens.peek().ok().map(|t| t.kind)
+    }
+    
+    /// Peek at the next token without consuming it
+    fn peek_token(&mut self) -> ParseResult<&Token> {
+        self.tokens.peek()
     }
     
     /// Check if the next token starts a variable
