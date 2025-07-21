@@ -9,6 +9,7 @@ keywords = ["tree-sitter", "perl", "parser", "grammar"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
+perl-lexer = { workspace = true }
 tree-sitter = "0.25"
 serde = { version = "1.0", features = ["derive"] }
 bincode = "2"
