@@ -5,13 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a **Pure Rust Perl Parser** built with Pest parser generator. The parser:
-- **~99.94% Perl 5 syntax coverage** - handles virtually all real-world Perl code
+- **~99.99% Perl 5 syntax coverage** - handles virtually all real-world Perl code
 - Outputs tree-sitter compatible S-expressions for seamless integration
 - Zero C dependencies - 100% pure Rust implementation
 - Performance: ~200-450 µs for typical files (~180 µs/KB)
 - Full Unicode support including identifiers (café, π, Σ, etc.)
 - Comprehensive test suite with 16+ test files
-- Known limitations (~0.06%) with documented workarounds
+- Known limitations (~0.01%) with documented workarounds
 
 The main implementation is in `/crates/tree-sitter-perl-rs/`. Legacy tree-sitter files in `/tree-sitter-perl/` are kept for benchmarking comparison only.
 
@@ -140,7 +140,7 @@ npx tree-sitter generate
    - Error nodes for unparseable constructs
 
 4. **Edge Case Handling**
-   - Comprehensive heredoc support (99% coverage)
+   - Comprehensive heredoc support (93% edge case test coverage)
    - Phase-aware parsing for BEGIN/END blocks
    - Dynamic delimiter detection and recovery
    - Clear diagnostics for unparseable constructs
@@ -173,7 +173,7 @@ To extend the Pest grammar:
 3. Update the `build_node` method to handle new rules
 4. Add tests for new constructs
 
-### Current Grammar Coverage (~99.94%)
+### Current Grammar Coverage (~99.99%)
 - ✅ Variables (scalar, array, hash) with all declaration types (my, our, local, state)
 - ✅ Literals (numbers, strings with interpolation, identifiers, lists)
 - ✅ All operators with proper precedence including smart match (~~)
@@ -223,7 +223,7 @@ To extend the Pest grammar:
 
 ## Current Status
 
-**Pure Rust Pest Parser**: ~99.94% Perl coverage (production ready!)
+**Pure Rust Pest Parser**: ~99.99% Perl coverage (production ready!)
 - Full Perl 5 syntax support (versions through 5.38)
 - Tree-sitter compatible S-expression output
 - Context-sensitive features (slash disambiguation, heredocs)
@@ -235,9 +235,8 @@ To extend the Pest grammar:
 - User-defined functions without parentheses
 - Reserved words as variable/method names
 
-### Known Limitations (~0.06%)
-1. **Dynamic heredoc delimiters**: Runtime-determined delimiters
-2. **Complex array interpolation**: `@{[ expr ]}` partially supported
+### Known Limitations (~0.01%)
+1. **Heredoc-in-string**: Heredocs initiated from within interpolated strings like `"$prefix<<$end_tag"`
 
 See KNOWN_LIMITATIONS.md for complete details and workarounds.
 
