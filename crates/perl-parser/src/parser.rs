@@ -14,6 +14,7 @@ pub struct Parser<'a> {
     tokens: TokenStream<'a>,
     recursion_depth: usize,
     last_end_position: usize,
+    in_for_loop_init: bool,
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
@@ -25,6 +26,7 @@ impl<'a> Parser<'a> {
             tokens: TokenStream::new(input),
             recursion_depth: 0,
             last_end_position: 0,
+            in_for_loop_init: false,
         }
     }
     
@@ -130,7 +132,7 @@ impl<'a> Parser<'a> {
         };
         
         // Consume semicolon if present (but not in for loop context)
-        if self.peek_kind() == Some(TokenKind::Semicolon) {
+        if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
             self.consume_token()?;
         }
         
@@ -160,7 +162,8 @@ impl<'a> Parser<'a> {
             ("%".to_string(), rest.to_string())
         } else if let Some(rest) = text.strip_prefix('&') {
             ("&".to_string(), rest.to_string())
-        } else if let Some(rest) = text.strip_prefix('*') && !rest.is_empty() {
+        } else if text.starts_with('*') && text.len() > 1 {
+            let rest = &text[1..];
             ("*".to_string(), rest.to_string())
         } else {
             return Err(ParseError::syntax(
@@ -323,7 +326,9 @@ impl<'a> Parser<'a> {
             None
         } else if self.peek_kind() == Some(TokenKind::My) {
             // Handle variable declaration in for loop init
+            self.in_for_loop_init = true;
             let decl = self.parse_variable_declaration()?;
+            self.in_for_loop_init = false;
             // Variable declarations in for loops don't have trailing semicolons
             Some(Box::new(decl))
         } else {
