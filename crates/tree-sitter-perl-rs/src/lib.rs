@@ -44,9 +44,20 @@
 pub mod error;
 pub mod scanner;
 pub mod unicode;
+pub mod ast;
+pub mod parser;
+pub mod token_compat;
+pub mod minimal_parser;
 
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
+#[cfg(feature = "pure-rust")]
+pub mod perl_lexer;
+
+#[cfg(feature = "pure-rust")]
+pub use parser::Parser;
+#[cfg(feature = "pure-rust")]
+pub use ast::{Node, NodeKind, SourceLocation};
 
 #[cfg(feature = "token-parser")]
 pub mod simple_token;
@@ -136,9 +147,6 @@ pub mod context_sensitive;
 pub mod enhanced_parser;
 
 #[cfg(feature = "pure-rust")]
-pub mod perl_lexer;
-
-#[cfg(feature = "pure-rust")]
 pub mod lexer_adapter;
 
 #[cfg(feature = "pure-rust")]
@@ -178,7 +186,7 @@ mod test_format_order;
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_statement_debug;
 
-use tree_sitter::{Language, Parser};
+use tree_sitter::Language;
 
 // External C functions from the generated parser
 unsafe extern "C" {
@@ -190,9 +198,9 @@ pub fn language() -> Language {
     unsafe { Language::from_raw(tree_sitter_perl()) }
 }
 
-/// Create a new parser instance
-pub fn parser() -> Parser {
-    let mut parser = Parser::new();
+/// Create a new tree-sitter parser instance
+pub fn create_ts_parser() -> tree_sitter::Parser {
+    let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&language())
         .expect("Failed to set language");
@@ -201,7 +209,7 @@ pub fn parser() -> Parser {
 
 /// Parse Perl source code
 pub fn parse(source: &str) -> Result<tree_sitter::Tree, error::ParseError> {
-    let mut parser = parser();
+    let mut parser = create_ts_parser();
     parser
         .parse(source, None)
         .ok_or(error::ParseError::ParseFailed)
@@ -212,7 +220,7 @@ pub fn parse_with_tree(
     source: &str,
     old_tree: Option<&tree_sitter::Tree>,
 ) -> Result<tree_sitter::Tree, error::ParseError> {
-    let mut parser = parser();
+    let mut parser = create_ts_parser();
     parser
         .parse(source, old_tree)
         .ok_or(error::ParseError::ParseFailed)
@@ -250,7 +258,7 @@ mod test {
 
     #[test]
     fn test_parser_creation() {
-        let mut parser = Parser::new();
+        let mut parser = tree_sitter::Parser::new();
         parser.set_language(&language()).unwrap();
         // Test that parser has a language set
         assert!(parser.language().is_some());
