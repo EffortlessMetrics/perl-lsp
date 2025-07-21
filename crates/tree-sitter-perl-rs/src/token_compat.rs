@@ -48,6 +48,17 @@ pub enum TokenType {
     Dot,
     Range,
     Ellipsis,
+    Question,
+    ColonColon,
+    Spaceship,    // <=>
+    StringCmp,    // cmp
+    StringRepeat, // x
+    LeftShift,    // <<
+    RightShift,   // >>
+    BitwiseNot,   // ~
+    Backslash,    // \
+    Increment,    // ++
+    Decrement,    // --
     
     // Delimiters
     LeftParen,
@@ -168,6 +179,17 @@ pub fn from_perl_lexer_token(token: &crate::perl_lexer::Token) -> Token {
             ".." => TokenType::Range,
             "..." => TokenType::Ellipsis,
             "=>" => TokenType::Arrow, // Fat comma
+            "?" => TokenType::Question,
+            "::" => TokenType::ColonColon,
+            "<=>" => TokenType::Spaceship,
+            "cmp" => TokenType::StringCmp,
+            "x" => TokenType::StringRepeat,
+            "<<" => TokenType::LeftShift,
+            ">>" => TokenType::RightShift,
+            "~" => TokenType::BitwiseNot,
+            "\\" => TokenType::Backslash,
+            "++" => TokenType::Increment,
+            "--" => TokenType::Decrement,
             _ => TokenType::Error(format!("Unknown operator: {}", op)),
         },
         PLTokenType::LeftParen => TokenType::LeftParen,

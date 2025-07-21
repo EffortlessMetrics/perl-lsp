@@ -232,6 +232,57 @@ impl Node {
             NodeKind::Error { message } => {
                 format!("(ERROR {})", message)
             }
+            
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                format!("(ternary {} {} {})",
+                    condition.to_sexp(), then_expr.to_sexp(), else_expr.to_sexp())
+            }
+            
+            NodeKind::PrefixUpdate { op, operand } => {
+                let op_str = self.token_type_to_string(op);
+                format!("(prefix_{} {})", op_str, operand.to_sexp())
+            }
+            
+            NodeKind::PostfixUpdate { op, operand } => {
+                let op_str = self.token_type_to_string(op);
+                format!("(postfix_{} {})", op_str, operand.to_sexp())
+            }
+            
+            NodeKind::ArrayRef { elements } => {
+                let items = elements.iter()
+                    .map(|e| e.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(array_ref {})", items)
+            }
+            
+            NodeKind::HashRef { pairs } => {
+                let items = pairs.iter()
+                    .map(|(k, v)| format!("({} {})", k.to_sexp(), v.to_sexp()))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(hash_ref {})", items)
+            }
+            
+            NodeKind::Dereference { expr, type_ } => {
+                format!("(dereference {} {})", expr.to_sexp(), type_.to_sexp())
+            }
+            
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    format!("(return {})", val.to_sexp())
+                } else {
+                    "(return)".to_string()
+                }
+            }
+            
+            NodeKind::LoopControl { control_type, label } => {
+                if let Some(lbl) = label {
+                    format!("({} {})", control_type, lbl)
+                } else {
+                    format!("({})", control_type)
+                }
+            }
         }
     }
     
@@ -262,6 +313,17 @@ impl Node {
             TokenType::Dot => ".",
             TokenType::Range => "..",
             TokenType::Ellipsis => "...",
+            TokenType::Question => "?",
+            TokenType::ColonColon => "::",
+            TokenType::Spaceship => "<=>",
+            TokenType::StringCmp => "cmp",
+            TokenType::StringRepeat => "x",
+            TokenType::LeftShift => "<<",
+            TokenType::RightShift => ">>",
+            TokenType::BitwiseNot => "~",
+            TokenType::Backslash => "\\",
+            TokenType::Increment => "++",
+            TokenType::Decrement => "--",
             _ => "unknown",
         }
     }
@@ -404,6 +466,45 @@ pub enum NodeKind {
     // Error recovery
     Error {
         message: Arc<str>,
+    },
+    
+    // Additional expressions
+    Ternary {
+        condition: Box<Node>,
+        then_expr: Box<Node>,
+        else_expr: Box<Node>,
+    },
+    
+    PrefixUpdate {
+        op: TokenType,
+        operand: Box<Node>,
+    },
+    
+    PostfixUpdate {
+        op: TokenType,
+        operand: Box<Node>,
+    },
+    
+    ArrayRef {
+        elements: Vec<Node>,
+    },
+    
+    HashRef {
+        pairs: Vec<(Node, Node)>,
+    },
+    
+    Dereference {
+        expr: Box<Node>,
+        type_: Box<Node>,
+    },
+    
+    Return {
+        value: Option<Box<Node>>,
+    },
+    
+    LoopControl {
+        control_type: Arc<str>,
+        label: Option<Arc<str>>,
     },
 }
 

@@ -48,6 +48,7 @@ pub mod ast;
 pub mod parser;
 pub mod token_compat;
 pub mod minimal_parser;
+pub mod parser_v2;
 
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
@@ -56,6 +57,8 @@ pub mod perl_lexer;
 
 #[cfg(feature = "pure-rust")]
 pub use parser::Parser;
+#[cfg(feature = "pure-rust")]
+pub use parser_v2::ParserV2;
 #[cfg(feature = "pure-rust")]
 pub use ast::{Node, NodeKind, SourceLocation};
 
