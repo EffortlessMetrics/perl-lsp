@@ -1,0 +1,234 @@
+//! Token stream adapter for perl-lexer integration
+//!
+//! This module provides the bridge between perl-lexer's token output
+//! and the parser's token consumption model.
+
+use perl_lexer::{PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
+use crate::error::{ParseError, ParseResult};
+
+/// A simplified token representation for the parser
+#[derive(Debug, Clone, PartialEq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub text: String,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Simplified token types for parsing
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
+    // Keywords
+    My,
+    Our,
+    Local,
+    State,
+    Sub,
+    If,
+    Elsif,
+    Else,
+    Unless,
+    While,
+    Until,
+    For,
+    Foreach,
+    Return,
+    Package,
+    Use,
+    
+    // Operators
+    Assign,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
+    And,
+    Or,
+    Not,
+    Arrow,
+    FatArrow,
+    Dot,
+    Range,
+    
+    // Delimiters
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    LeftBracket,
+    RightBracket,
+    Semicolon,
+    Comma,
+    
+    // Literals
+    Number,
+    String,
+    Regex,
+    
+    // Identifiers and variables
+    Identifier,
+    ScalarSigil,
+    ArraySigil,
+    HashSigil,
+    SubSigil,
+    GlobSigil,
+    
+    // Special
+    Eof,
+    Unknown,
+}
+
+/// Token stream that wraps perl-lexer
+pub struct TokenStream<'a> {
+    lexer: PerlLexer<'a>,
+    peeked: Option<Token>,
+}
+
+impl<'a> TokenStream<'a> {
+    /// Create a new token stream from source code
+    pub fn new(input: &'a str) -> Self {
+        TokenStream {
+            lexer: PerlLexer::with_heredoc_recovery(input),
+            peeked: None,
+        }
+    }
+    
+    /// Peek at the next token without consuming it
+    pub fn peek(&mut self) -> ParseResult<&Token> {
+        if self.peeked.is_none() {
+            self.peeked = Some(self.next_token()?);
+        }
+        Ok(self.peeked.as_ref().unwrap())
+    }
+    
+    /// Consume and return the next token
+    pub fn next(&mut self) -> ParseResult<Token> {
+        if let Some(token) = self.peeked.take() {
+            Ok(token)
+        } else {
+            self.next_token()
+        }
+    }
+    
+    /// Check if we're at the end of input
+    pub fn is_eof(&mut self) -> bool {
+        matches!(self.peek(), Ok(token) if token.kind == TokenKind::Eof)
+    }
+    
+    /// Get the next token from the lexer
+    fn next_token(&mut self) -> ParseResult<Token> {
+        // Skip whitespace and comments
+        loop {
+            let lexer_token = self.lexer.next_token()
+                .ok_or_else(|| ParseError::UnexpectedEof)?;
+            
+            match lexer_token.token_type {
+                LexerTokenType::Whitespace | LexerTokenType::Comment => continue,
+                LexerTokenType::EOF => {
+                    return Ok(Token {
+                        kind: TokenKind::Eof,
+                        text: String::new(),
+                        start: lexer_token.start,
+                        end: lexer_token.end,
+                    });
+                }
+                _ => {
+                    return Ok(self.convert_token(lexer_token));
+                }
+            }
+        }
+    }
+    
+    /// Convert a lexer token to a parser token
+    fn convert_token(&self, token: LexerToken) -> Token {
+        let kind = match &token.token_type {
+            // Keywords
+            LexerTokenType::Keyword(kw) => match kw.as_str() {
+                "my" => TokenKind::My,
+                "our" => TokenKind::Our,
+                "local" => TokenKind::Local,
+                "state" => TokenKind::State,
+                "sub" => TokenKind::Sub,
+                "if" => TokenKind::If,
+                "elsif" => TokenKind::Elsif,
+                "else" => TokenKind::Else,
+                "unless" => TokenKind::Unless,
+                "while" => TokenKind::While,
+                "until" => TokenKind::Until,
+                "for" => TokenKind::For,
+                "foreach" => TokenKind::Foreach,
+                "return" => TokenKind::Return,
+                "package" => TokenKind::Package,
+                "use" => TokenKind::Use,
+                _ => TokenKind::Identifier,
+            },
+            
+            // Operators
+            LexerTokenType::Operator(op) => match op.as_str() {
+                "=" => TokenKind::Assign,
+                "+" => TokenKind::Plus,
+                "-" => TokenKind::Minus,
+                "*" => TokenKind::Star,
+                "/" => TokenKind::Slash,
+                "%" => TokenKind::Percent,
+                "==" => TokenKind::Equal,
+                "!=" => TokenKind::NotEqual,
+                "<" => TokenKind::Less,
+                ">" => TokenKind::Greater,
+                "<=" => TokenKind::LessEqual,
+                ">=" => TokenKind::GreaterEqual,
+                "&&" => TokenKind::And,
+                "||" => TokenKind::Or,
+                "!" => TokenKind::Not,
+                "->" => TokenKind::Arrow,
+                "=>" => TokenKind::FatArrow,
+                "." => TokenKind::Dot,
+                ".." => TokenKind::Range,
+                _ => TokenKind::Unknown,
+            },
+            
+            // Delimiters
+            LexerTokenType::LeftParen => TokenKind::LeftParen,
+            LexerTokenType::RightParen => TokenKind::RightParen,
+            LexerTokenType::LeftBrace => TokenKind::LeftBrace,
+            LexerTokenType::RightBrace => TokenKind::RightBrace,
+            LexerTokenType::LeftBracket => TokenKind::LeftBracket,
+            LexerTokenType::RightBracket => TokenKind::RightBracket,
+            LexerTokenType::Semicolon => TokenKind::Semicolon,
+            LexerTokenType::Comma => TokenKind::Comma,
+            
+            // Literals
+            LexerTokenType::Number => TokenKind::Number,
+            LexerTokenType::SingleQuotedString | 
+            LexerTokenType::DoubleQuotedString => TokenKind::String,
+            LexerTokenType::RegexBody => TokenKind::Regex,
+            
+            // Variables
+            LexerTokenType::ScalarSigil => TokenKind::ScalarSigil,
+            LexerTokenType::ArraySigil => TokenKind::ArraySigil,
+            LexerTokenType::HashSigil => TokenKind::HashSigil,
+            LexerTokenType::SubroutineSigil => TokenKind::SubSigil,
+            LexerTokenType::GlobSigil => TokenKind::GlobSigil,
+            
+            // Identifiers
+            LexerTokenType::Identifier => TokenKind::Identifier,
+            LexerTokenType::FullyQualifiedIdentifier => TokenKind::Identifier,
+            
+            _ => TokenKind::Unknown,
+        };
+        
+        Token {
+            kind,
+            text: token.value,
+            start: token.start,
+            end: token.end,
+        }
+    }
+}
