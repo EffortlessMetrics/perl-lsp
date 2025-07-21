@@ -482,10 +482,52 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'use'
         
-        let module = self.expect(TokenKind::Identifier)?.text.clone();
+        // Parse module name (can include ::)
+        let mut module = self.expect(TokenKind::Identifier)?.text.clone();
         
-        // TODO: Parse import list
-        let args = Vec::new();
+        // Handle :: in module names
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.tokens.next()?; // consume ::
+            module.push_str("::");
+            module.push_str(&self.expect(TokenKind::Identifier)?.text);
+        }
+        
+        // Parse optional version number
+        if self.peek_kind() == Some(TokenKind::Number) {
+            module.push(' ');
+            module.push_str(&self.tokens.next()?.text);
+        }
+        
+        // Parse optional import list
+        let mut args = Vec::new();
+        if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.tokens.next()?; // consume (
+            
+            // Parse import list
+            while self.peek_kind() != Some(TokenKind::RightParen) {
+                if self.peek_kind() == Some(TokenKind::String) {
+                    args.push(self.tokens.next()?.text.clone());
+                } else if self.peek_kind() == Some(TokenKind::Identifier) {
+                    args.push(self.tokens.next()?.text.clone());
+                } else {
+                    return Err(ParseError::syntax(
+                        "Expected string or identifier in import list",
+                        self.current_position()
+                    ));
+                }
+                
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.tokens.next()?; // consume comma
+                } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                    return Err(ParseError::syntax(
+                        "Expected comma or closing parenthesis",
+                        self.current_position()
+                    ));
+                }
+            }
+            
+            self.expect(TokenKind::RightParen)?;
+        }
         
         self.expect(TokenKind::Semicolon)?;
         

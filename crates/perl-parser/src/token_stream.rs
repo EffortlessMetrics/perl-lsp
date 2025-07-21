@@ -35,6 +35,7 @@ pub enum TokenKind {
     Return,
     Package,
     Use,
+    No,
     
     // Operators
     Assign,

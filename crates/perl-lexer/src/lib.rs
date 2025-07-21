@@ -430,7 +430,7 @@ impl<'a> PerlLexer<'a> {
         
         // Handle other operators - simplified
         match ch {
-            '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' => {
+            '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' | ':' => {
                 self.advance();
                 // Check for compound operators
                 if let Some(next) = self.current_char() {
@@ -731,6 +731,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
             b'!' => second_byte == b'=' || second_byte == b'~',
             b'.' => second_byte == b'.',
             b'~' => second_byte == b'~',
+            b':' => second_byte == b':',
             _ => false,
         }
     } else {
