@@ -1065,12 +1065,7 @@ impl<'a> PerlLexer<'a> {
         self.skip_whitespace();
         
         if self.position >= self.input.len() {
-            return self.return_token(Token {
-                token_type: TokenType::EOF,
-                text: Arc::from(""),
-                start: self.position,
-                end: self.position,
-            });
+            return None;
         }
         
         let start = self.position;
