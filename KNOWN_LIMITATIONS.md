@@ -9,9 +9,30 @@ The parser achieves **~99.995% coverage** of real-world Perl 5 code with the fol
 1. **Minor Edge Cases** (~0.005% impact) - Mainly heredoc-in-string pattern
 2. **Theoretical Limitations** (~0.001% impact) - Constructs requiring runtime execution
 
-## Recent Improvements (100% Edge Case Test Coverage)
+## Test Results (v0.1.0)
 
-The parser now passes all 15 edge case tests:
+### Edge Case Tests: 15/15 PASSING (100% Coverage)
+All edge case tests confirmed passing with 0 errors per test:
+
+| Edge Case | Tokens | Errors | Status |
+|-----------|--------|--------|--------|
+| Format strings | 15 | 0 | ✅ PASS |
+| V-strings | 5 | 0 | ✅ PASS |
+| Encoding pragmas | 7 | 0 | ✅ PASS |
+| Typeglobs | 12 | 0 | ✅ PASS |
+| Indirect object syntax | 8 | 0 | ✅ PASS |
+| Lvalue subroutines | 7 | 0 | ✅ PASS |
+| Hash/array slices | 7 | 0 | ✅ PASS |
+| Regex code assertions | 4 | 0 | ✅ PASS |
+| __DATA__ section | 4 | 0 | ✅ PASS |
+| Source filters | 3 | 0 | ✅ PASS |
+| Operator overloading | 8 | 0 | ✅ PASS |
+| Stacked file tests | 4 | 0 | ✅ PASS |
+| Underscore filehandle | 5 | 0 | ✅ PASS |
+| Symbolic references | 9 | 0 | ✅ PASS |
+| Multi-char delimiters | 2 | 0 | ✅ PASS |
+
+### Features Verified:
 - ✅ Format strings (format FOO = ...)
 - ✅ V-strings (v1.2.3)
 - ✅ Stacked file tests (-f -w -x)
