@@ -65,6 +65,35 @@ The Pure Rust Pest parser provides excellent performance for real-world Perl cod
 
 ---
 
+## 🌍 Unicode Support
+
+The parser provides comprehensive Unicode support matching Perl's actual behavior:
+
+### Supported Unicode Features
+- **Unicode Identifiers**: Variables, subroutines, and packages can use Unicode letters
+  ```perl
+  my $café = 5;        # French accented letters
+  sub été { }          # Unicode in subroutine names
+  package π::Math;     # Greek letters in package names
+  ```
+- **Unicode Strings**: Full UTF-8 support in string literals
+  ```perl
+  my $greeting = "Hello 世界 🌍";  # Mixed scripts and emoji
+  ```
+- **Unicode in Comments**: Comments and POD documentation support Unicode
+  ```perl
+  # Comment with emoji 🎯
+  ```
+
+### Important Unicode Limitations
+Not all Unicode characters are valid in identifiers, matching Perl's behavior:
+- ❌ Mathematical symbols: `∑` (U+2211), `∏` (U+220F) are **not** valid identifiers
+- ✅ Unicode letters: `π` (U+03C0), `é` (U+00E9) **are** valid identifiers
+
+This distinction is important: Rust's `is_alphabetic()` correctly identifies mathematical symbols as non-letters, and our parser matches Perl's behavior in rejecting them as identifiers.
+
+---
+
 ## 🏗️ Architecture
 
 ```
