@@ -1,8 +1,12 @@
 # Pure Rust vs C Implementation Comparison
 
+## ⚠️ Important Note
+
+The original benchmark data in this file was comparing two C implementations, not Pure Rust vs C. See `PURE_RUST_PERFORMANCE_ANALYSIS.md` for accurate performance data.
+
 ## Executive Summary
 
-The Pure Rust implementation demonstrates **comparable performance** to the C implementation with only a **1.5% performance overhead** while providing significant advantages in safety, maintainability, and portability.
+The Pure Rust (Pest) implementation is estimated to be **5-10x slower** than the C implementation for pure parsing, but provides significant advantages in safety, maintainability, and portability. Total execution time including startup is ~1ms for typical files.
 
 ## Performance Comparison
 
