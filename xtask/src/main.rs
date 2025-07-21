@@ -253,6 +253,17 @@ enum Commands {
         #[arg(long)]
         test: Option<String>,
     },
+
+    /// Run three-way parser comparison
+    CompareThree {
+        /// Show detailed output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Output format (table, json, markdown)
+        #[arg(long, default_value = "table")]
+        format: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -313,6 +324,9 @@ fn main() -> Result<()> {
         },
         Commands::TestEdgeCases { bench, coverage, test } => {
             edge_cases::run(bench, coverage, test)
+        },
+        Commands::CompareThree { verbose, format } => {
+            compare_parsers::run_three_way(verbose, format.as_str())
         },
     }
 }
