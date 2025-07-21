@@ -283,20 +283,89 @@ impl HeredocRecovery {
         position: usize,
         tokens: &[Token],
     ) -> Option<(Arc<str>, f32)> {
-        // Scan backwards through tokens looking for assignments
-        let var_pattern = Regex::new(r"\$(\w+)").unwrap();
-        
-        // Extract variable name from heredoc expression
+        // Extract variable info from heredoc expression
         let expr_end = self.find_expression_end(input, position);
         let expression = &input[position..expr_end];
         
+        // Check for array element access like $markers[1]
+        let array_pattern = Regex::new(r"\$(\w+)\[(\d+)\]").unwrap();
+        if let Some(cap) = array_pattern.captures(expression) {
+            let var_name = cap.get(1)?.as_str();
+            let index: usize = cap.get(2)?.as_str().parse().ok()?;
+            
+            // Look for array assignment
+            for i in (0..tokens.len()).rev() {
+                if let TokenType::Identifier(name) = &tokens[i].token_type {
+                    if name.as_ref() == format!("@{}", var_name) {
+                        // Found array variable, look for list assignment
+                        if i + 2 < tokens.len() {
+                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=") {
+                                // Look for the list values
+                                let mut list_values = Vec::new();
+                                let mut j = i + 2;
+                                let mut in_list = false;
+                                
+                                while j < tokens.len() {
+                                    match &tokens[j].token_type {
+                                        TokenType::LeftParen => in_list = true,
+                                        TokenType::RightParen => break,
+                                        TokenType::StringLiteral if in_list => {
+                                            if let Some(value) = self.extract_string_literal(&tokens[j].text) {
+                                                list_values.push(value);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    j += 1;
+                                }
+                                
+                                // Return the value at the requested index
+                                if index < list_values.len() {
+                                    return Some((Arc::from(list_values[index].clone()), 0.9));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Package-qualified variable pattern like $Package::var
+        let pkg_var_pattern = Regex::new(r"\$((?:\w+::)*\w+)").unwrap();
+        if let Some(cap) = pkg_var_pattern.captures(expression) {
+            let full_var = cap.get(1)?.as_str();
+            let var_name = full_var.split("::").last()?;
+            
+            // Look for 'our' declaration or direct assignment
+            for i in (0..tokens.len()).rev() {
+                if let TokenType::Identifier(name) = &tokens[i].token_type {
+                    if name.as_ref() == format!("${}", var_name) {
+                        // Check if next tokens form an assignment
+                        if i + 2 < tokens.len() {
+                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=") {
+                                if let TokenType::StringLiteral = tokens[i + 2].token_type {
+                                    // Extract the string value
+                                    let text = tokens[i + 2].text.as_ref();
+                                    if let Some(delimiter) = self.extract_string_literal(text) {
+                                        return Some((Arc::from(delimiter), 0.9));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Regular scalar variable pattern
+        let var_pattern = Regex::new(r"\$(\w+)").unwrap();
         if let Some(cap) = var_pattern.captures(expression) {
             let var_name = cap.get(1)?.as_str();
             
             // Look for assignment in previous tokens
             for i in (0..tokens.len()).rev() {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
-                    if name.as_ref() == var_name {
+                    if name.as_ref() == format!("${}", var_name) {
                         // Check if next tokens form an assignment
                         if i + 2 < tokens.len() {
                             if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=") {

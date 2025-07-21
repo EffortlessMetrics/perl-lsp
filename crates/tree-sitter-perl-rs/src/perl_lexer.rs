@@ -1074,6 +1074,15 @@ impl<'a> PerlLexer<'a> {
             return None;
         }
         
+        // Store and return the token
+        let token = self.next_token_internal()?;
+        self.store_token(&token);
+        Some(token)
+    }
+    
+    /// Internal token generation (without storing)
+    fn next_token_internal(&mut self) -> Option<Token> {
+        
         let start = self.position;
         let ch = self.input.as_bytes()[self.position];
         
