@@ -49,6 +49,7 @@ pub mod parser;
 pub mod token_compat;
 pub mod minimal_parser;
 pub mod parser_v2;
+pub mod working_parser;
 
 #[cfg(feature = "pure-rust")]
 pub mod pure_rust_parser;
