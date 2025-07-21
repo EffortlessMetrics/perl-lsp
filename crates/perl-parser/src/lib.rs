@@ -36,6 +36,7 @@ pub mod token_stream;
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
 pub use parser::Parser;
+pub use token_stream::{Token, TokenKind, TokenStream};
 
 #[cfg(test)]
 mod tests {

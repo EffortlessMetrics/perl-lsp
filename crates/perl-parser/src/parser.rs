@@ -106,7 +106,7 @@ impl<'a> Parser<'a> {
                 
                 // Consume optional semicolon
                 if self.peek_kind() == Some(TokenKind::Semicolon) {
-                    self.tokens.next()?;
+                    self.consume_token()?;
                 }
                 
                 Ok(expr)
@@ -129,9 +129,9 @@ impl<'a> Parser<'a> {
             None
         };
         
-        // Consume semicolon if present
+        // Consume semicolon if present (but not in for loop context)
         if self.peek_kind() == Some(TokenKind::Semicolon) {
-            self.tokens.next()?;
+            self.consume_token()?;
         }
         
         let end = self.previous_position();
@@ -160,7 +160,7 @@ impl<'a> Parser<'a> {
             ("%".to_string(), rest.to_string())
         } else if let Some(rest) = text.strip_prefix('&') {
             ("&".to_string(), rest.to_string())
-        } else if let Some(rest) = text.strip_prefix('*') {
+        } else if let Some(rest) = text.strip_prefix('*') && !rest.is_empty() {
             ("*".to_string(), rest.to_string())
         } else {
             return Err(ParseError::syntax(
@@ -321,6 +321,11 @@ impl<'a> Parser<'a> {
         // Parse init
         let init = if self.peek_kind() == Some(TokenKind::Semicolon) {
             None
+        } else if self.peek_kind() == Some(TokenKind::My) {
+            // Handle variable declaration in for loop init
+            let decl = self.parse_variable_declaration()?;
+            // Variable declarations in for loops don't have trailing semicolons
+            Some(Box::new(decl))
         } else {
             Some(Box::new(self.parse_expression()?))
         };
@@ -740,6 +745,20 @@ impl<'a> Parser<'a> {
         
         loop {
             match self.peek_kind() {
+                Some(TokenKind::Increment) | Some(TokenKind::Decrement) => {
+                    let op_token = self.consume_token()?;
+                    let start = expr.location.start;
+                    let end = op_token.end;
+                    
+                    expr = Node::new(
+                        NodeKind::Unary {
+                            op: op_token.text.clone(),
+                            operand: Box::new(expr),
+                        },
+                        SourceLocation { start, end }
+                    );
+                }
+                
                 Some(TokenKind::Arrow) => {
                     self.tokens.next()?; // consume ->
                     
@@ -838,8 +857,10 @@ impl<'a> Parser<'a> {
                 // Check if it's a variable (starts with sigil)
                 let token = self.tokens.peek()?;
                 if token.text.starts_with('$') || token.text.starts_with('@') ||
-                   token.text.starts_with('%') || token.text.starts_with('&') ||
-                   token.text.starts_with('*') {
+                   token.text.starts_with('%') || token.text.starts_with('&') {
+                    self.parse_variable()
+                } else if token.text.starts_with('*') && token.text.len() > 1 {
+                    // Only treat * as a glob sigil if followed by identifier
                     self.parse_variable()
                 } else {
                     // Regular identifier
