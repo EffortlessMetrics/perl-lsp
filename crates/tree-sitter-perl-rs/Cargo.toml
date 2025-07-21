@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-perl"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 description = "Tree-sitter Perl grammar with Rust-native scanner"
 license = "MIT"
