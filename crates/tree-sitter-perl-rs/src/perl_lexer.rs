@@ -932,7 +932,7 @@ impl<'a> PerlLexer<'a> {
             if ch == b'$' || ch == b'@' || ch == b'%' || ch == b'{' {
                 // This might be a dynamic heredoc delimiter
                 // First, parse the complete expression
-                if let Some((expression, expr_end)) = self.heredoc_recovery.parse_delimiter_expression(self.input, self.position) {
+                if let Some((_expression, expr_end)) = self.heredoc_recovery.parse_delimiter_expression(self.input, self.position) {
                     // Now try to recover the delimiter
                     let recovery_result = self.heredoc_recovery.recover_dynamic_heredoc(
                         self.input,
@@ -1060,11 +1060,6 @@ impl<'a> PerlLexer<'a> {
         self.tokens.push(token.clone());
     }
     
-    /// Return a token and store it for recovery analysis
-    fn return_token(&mut self, token: Token) -> Option<Token> {
-        self.store_token(&token);
-        Some(token)
-    }
     
     /// Get the next token
     pub fn next_token(&mut self) -> Option<Token> {
@@ -1817,13 +1812,6 @@ impl<'a> PerlLexer<'a> {
                                                      b'b' | b'c' | b't' | b'u' | b'g' | b'k' | b'T' | b'B' |
                                                      b'M' | b'A' | b'C') => {
                             self.position += 1;
-                        }
-                        (b'.', b'.') => {
-                            self.position += 1;
-                            // Check for third dot  
-                            if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'.' {
-                                self.position += 1;
-                            }
                         }
                         (b'<', b'=') | (b'>', b'=') | (b'!', b'=') | (b'=', b'=') => {
                             self.position += 1;
