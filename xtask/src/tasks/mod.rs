@@ -6,6 +6,7 @@ pub mod build;
 pub mod check;
 pub mod clean;
 pub mod compare;
+pub mod compare_parsers;
 pub mod corpus;
 pub mod dev;
 pub mod doc;
