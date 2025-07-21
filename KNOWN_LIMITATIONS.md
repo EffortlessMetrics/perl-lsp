@@ -196,6 +196,27 @@ eval "print <<EOF;\n" . $content . "\nEOF";
 2. **Runtime generation** - Requires interpreter  
 3. **Tied filehandles** - Requires runtime emulation
 
+## Unicode Edge Cases
+
+### Mathematical Symbols as Identifiers
+**Correctly Rejected**
+
+The parser correctly rejects Unicode mathematical symbols as identifiers, matching Perl's behavior:
+
+```perl
+# INVALID - Mathematical symbols not allowed:
+sub ∑ { }      # U+2211 (N-ARY SUMMATION)
+my $Σ = 42;    # U+03A3 (GREEK CAPITAL LETTER SIGMA) 
+package ∏::Utils;  # U+220F (N-ARY PRODUCT)
+
+# VALID - Unicode letters are allowed:
+sub été { }    # French accented letters
+my $café = 5;  # Accented characters
+package π::Math;  # Greek letter pi (U+03C0)
+```
+
+**Note**: While Rust's `is_alphabetic()` returns `false` for mathematical symbols like ∑, it returns `true` for actual Unicode letters. The parser correctly distinguishes between these categories, allowing only true Unicode letters as identifiers.
+
 ## Testing These Limitations
 
 Run the limitation tests:

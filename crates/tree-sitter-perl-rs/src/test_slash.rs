@@ -634,6 +634,8 @@ mod test_slash {
         assert_eq!(var.text.as_ref(), "$π");
         
         // Unicode in subroutine names (using valid Unicode letters)
+        // Note: Mathematical symbols like ∑ (U+2211) are NOT valid Perl identifiers
+        // even though they are Unicode. Only actual Unicode letters are allowed.
         let mut lexer = PerlLexer::new("sub été { }");
         let _sub = lexer.next_token().unwrap();
         let name = lexer.next_token().unwrap();
