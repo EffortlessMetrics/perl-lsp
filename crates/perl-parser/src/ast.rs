@@ -187,12 +187,21 @@ impl Node {
             }
             
             NodeKind::Use { module, args } => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!("(use {} ({}))", module, args_str)
+                if args.is_empty() {
+                    format!("(use {})", module)
+                } else {
+                    let args_str = args.join(" ");
+                    format!("(use {} ({}))", module, args_str)
+                }
+            }
+            
+            NodeKind::No { module, args } => {
+                if args.is_empty() {
+                    format!("(no {})", module)
+                } else {
+                    let args_str = args.join(" ");
+                    format!("(no {} ({}))", module, args_str)
+                }
             }
             
             NodeKind::Identifier { name } => {
@@ -341,7 +350,12 @@ pub enum NodeKind {
     
     Use {
         module: String,
-        args: Vec<Node>,
+        args: Vec<String>,
+    },
+    
+    No {
+        module: String,
+        args: Vec<String>,
     },
     
     // Misc
