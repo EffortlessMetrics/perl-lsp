@@ -95,7 +95,7 @@ impl<'a> TokenStream<'a> {
     /// Create a new token stream from source code
     pub fn new(input: &'a str) -> Self {
         TokenStream {
-            lexer: PerlLexer::with_heredoc_recovery(input),
+            lexer: PerlLexer::new(input),
             peeked: None,
         }
     }
@@ -129,8 +129,9 @@ impl<'a> TokenStream<'a> {
             let lexer_token = self.lexer.next_token()
                 .ok_or_else(|| ParseError::UnexpectedEof)?;
             
-            match lexer_token.token_type {
-                LexerTokenType::Whitespace | LexerTokenType::Comment => continue,
+            match &lexer_token.token_type {
+                LexerTokenType::Whitespace | LexerTokenType::Newline => continue,
+                LexerTokenType::Comment(_) => continue,
                 LexerTokenType::EOF => {
                     return Ok(Token {
                         kind: TokenKind::Eof,
@@ -150,7 +151,7 @@ impl<'a> TokenStream<'a> {
     fn convert_token(&self, token: LexerToken) -> Token {
         let kind = match &token.token_type {
             // Keywords
-            LexerTokenType::Keyword(kw) => match kw.as_str() {
+            LexerTokenType::Keyword(kw) => match kw.as_ref() {
                 "my" => TokenKind::My,
                 "our" => TokenKind::Our,
                 "local" => TokenKind::Local,
@@ -171,7 +172,7 @@ impl<'a> TokenStream<'a> {
             },
             
             // Operators
-            LexerTokenType::Operator(op) => match op.as_str() {
+            LexerTokenType::Operator(op) => match op.as_ref() {
                 "=" => TokenKind::Assign,
                 "+" => TokenKind::Plus,
                 "-" => TokenKind::Minus,
@@ -187,12 +188,14 @@ impl<'a> TokenStream<'a> {
                 "&&" => TokenKind::And,
                 "||" => TokenKind::Or,
                 "!" => TokenKind::Not,
-                "->" => TokenKind::Arrow,
-                "=>" => TokenKind::FatArrow,
                 "." => TokenKind::Dot,
                 ".." => TokenKind::Range,
                 _ => TokenKind::Unknown,
             },
+            
+            // Arrow tokens
+            LexerTokenType::Arrow => TokenKind::Arrow,
+            LexerTokenType::FatComma => TokenKind::FatArrow,
             
             // Delimiters
             LexerTokenType::LeftParen => TokenKind::LeftParen,
@@ -205,28 +208,37 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::Comma => TokenKind::Comma,
             
             // Literals
-            LexerTokenType::Number => TokenKind::Number,
-            LexerTokenType::SingleQuotedString | 
-            LexerTokenType::DoubleQuotedString => TokenKind::String,
-            LexerTokenType::RegexBody => TokenKind::Regex,
+            LexerTokenType::Number(_) => TokenKind::Number,
+            LexerTokenType::StringLiteral | 
+            LexerTokenType::InterpolatedString(_) => TokenKind::String,
+            LexerTokenType::RegexMatch | LexerTokenType::QuoteRegex => TokenKind::Regex,
             
-            // Variables
-            LexerTokenType::ScalarSigil => TokenKind::ScalarSigil,
-            LexerTokenType::ArraySigil => TokenKind::ArraySigil,
-            LexerTokenType::HashSigil => TokenKind::HashSigil,
-            LexerTokenType::SubroutineSigil => TokenKind::SubSigil,
-            LexerTokenType::GlobSigil => TokenKind::GlobSigil,
+            // Variables - detect sigils from operators
+            LexerTokenType::Operator(op) if op.as_ref() == "$" => TokenKind::ScalarSigil,
+            LexerTokenType::Operator(op) if op.as_ref() == "@" => TokenKind::ArraySigil,
+            LexerTokenType::Operator(op) if op.as_ref() == "%" => TokenKind::HashSigil,
+            LexerTokenType::Operator(op) if op.as_ref() == "&" => TokenKind::SubSigil,
+            LexerTokenType::Operator(op) if op.as_ref() == "*" => TokenKind::GlobSigil,
             
             // Identifiers
-            LexerTokenType::Identifier => TokenKind::Identifier,
-            LexerTokenType::FullyQualifiedIdentifier => TokenKind::Identifier,
+            LexerTokenType::Identifier(_) => TokenKind::Identifier,
+            
+            // Handle error tokens that might be valid syntax
+            LexerTokenType::Error(msg) => {
+                // Check if it's a brace that the lexer couldn't recognize
+                match token.text.as_ref() {
+                    "{" => TokenKind::LeftBrace,
+                    "}" => TokenKind::RightBrace,
+                    _ => TokenKind::Unknown,
+                }
+            }
             
             _ => TokenKind::Unknown,
         };
         
         Token {
             kind,
-            text: token.value,
+            text: token.text.to_string(),
             start: token.start,
             end: token.end,
         }

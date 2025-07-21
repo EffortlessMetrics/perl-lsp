@@ -1,6 +1,5 @@
 //! Error types for the Perl parser
 
-use std::fmt;
 use thiserror::Error;
 
 /// Result type for parser operations

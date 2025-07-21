@@ -13,6 +13,7 @@ use crate::{
 pub struct Parser<'a> {
     tokens: TokenStream<'a>,
     recursion_depth: usize,
+    last_end_position: usize,
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
@@ -23,6 +24,7 @@ impl<'a> Parser<'a> {
         Parser {
             tokens: TokenStream::new(input),
             recursion_depth: 0,
+            last_end_position: 0,
         }
     }
     
@@ -115,7 +117,7 @@ impl<'a> Parser<'a> {
     /// Parse variable declaration (my, our, local, state)
     fn parse_variable_declaration(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
-        let declarator_token = self.tokens.next()?;
+        let declarator_token = self.consume_token()?;
         let declarator = declarator_token.text.clone();
         
         let variable = self.parse_variable()?;
@@ -145,17 +147,31 @@ impl<'a> Parser<'a> {
     
     /// Parse a variable ($foo, @bar, %baz)
     fn parse_variable(&mut self) -> ParseResult<Node> {
-        let sigil_token = self.tokens.next()?;
-        let sigil = sigil_token.text.clone();
-        let start = sigil_token.start;
+        let token = self.consume_token()?;
         
-        let name_token = self.expect(TokenKind::Identifier)?;
-        let name = name_token.text.clone();
-        let end = name_token.end;
+        // The lexer returns variables as identifiers like "$x", "@array", etc.
+        // We need to split the sigil from the name
+        let text = &token.text;
+        let (sigil, name) = if let Some(rest) = text.strip_prefix('$') {
+            ("$".to_string(), rest.to_string())
+        } else if let Some(rest) = text.strip_prefix('@') {
+            ("@".to_string(), rest.to_string())
+        } else if let Some(rest) = text.strip_prefix('%') {
+            ("%".to_string(), rest.to_string())
+        } else if let Some(rest) = text.strip_prefix('&') {
+            ("&".to_string(), rest.to_string())
+        } else if let Some(rest) = text.strip_prefix('*') {
+            ("*".to_string(), rest.to_string())
+        } else {
+            return Err(ParseError::syntax(
+                &format!("Expected variable, found '{}'", text),
+                token.start
+            ));
+        };
         
         Ok(Node::new(
             NodeKind::Variable { sigil, name },
-            SourceLocation { start, end }
+            SourceLocation { start: token.start, end: token.end }
         ))
     }
     
@@ -795,9 +811,9 @@ impl<'a> Parser<'a> {
     
     /// Parse primary expression
     fn parse_primary(&mut self) -> ParseResult<Node> {
-        let token = self.tokens.peek()?;
+        let token_kind = self.tokens.peek()?.kind;
         
-        match token.kind {
+        match token_kind {
             TokenKind::Number => {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
@@ -818,25 +834,29 @@ impl<'a> Parser<'a> {
                 ))
             }
             
-            TokenKind::ScalarSigil | TokenKind::ArraySigil | 
-            TokenKind::HashSigil | TokenKind::SubSigil | TokenKind::GlobSigil => {
-                self.parse_variable()
-            }
-            
             TokenKind::Identifier => {
-                let token = self.tokens.next()?;
-                Ok(Node::new(
-                    NodeKind::Identifier { name: token.text.clone() },
-                    SourceLocation { start: token.start, end: token.end }
-                ))
+                // Check if it's a variable (starts with sigil)
+                let token = self.tokens.peek()?;
+                if token.text.starts_with('$') || token.text.starts_with('@') ||
+                   token.text.starts_with('%') || token.text.starts_with('&') ||
+                   token.text.starts_with('*') {
+                    self.parse_variable()
+                } else {
+                    // Regular identifier
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.clone() },
+                        SourceLocation { start: token.start, end: token.end }
+                    ))
+                }
             }
             
             TokenKind::LeftParen => {
-                self.tokens.next()?; // consume (
+                let start_token = self.tokens.next()?; // consume (
+                let start = start_token.start;
                 
                 // Check for empty list
                 if self.peek_kind() == Some(TokenKind::RightParen) {
-                    let start = token.start;
                     let end_token = self.tokens.next()?;
                     return Ok(Node::new(
                         NodeKind::ArrayLiteral { elements: vec![] },
@@ -859,7 +879,6 @@ impl<'a> Parser<'a> {
                         elements.push(self.parse_expression()?);
                     }
                     
-                    let start = token.start;
                     self.expect(TokenKind::RightParen)?;
                     let end = self.previous_position();
                     
@@ -876,8 +895,8 @@ impl<'a> Parser<'a> {
             
             TokenKind::LeftBracket => {
                 // Array literal
-                let start = token.start;
-                self.tokens.next()?; // consume [
+                let start_token = self.tokens.next()?; // consume [
+                let start = start_token.start;
                 
                 let mut elements = Vec::new();
                 
@@ -907,10 +926,12 @@ impl<'a> Parser<'a> {
             }
             
             _ => {
+                // Get position before consuming
+                let pos = self.current_position();
                 Err(ParseError::unexpected(
                     "expression",
-                    &format!("{:?}", token.kind),
-                    token.start
+                    &format!("{:?}", token_kind),
+                    pos
                 ))
             }
         }
@@ -962,6 +983,7 @@ impl<'a> Parser<'a> {
                 token.start
             ));
         }
+        self.last_end_position = token.end;
         Ok(token)
     }
     
@@ -972,9 +994,14 @@ impl<'a> Parser<'a> {
     
     /// Get previous position
     fn previous_position(&self) -> usize {
-        // This is a simplification - in a real implementation
-        // we'd track the last consumed token's end position
-        0
+        self.last_end_position
+    }
+    
+    /// Consume next token and track position
+    fn consume_token(&mut self) -> ParseResult<Token> {
+        let token = self.tokens.next()?;
+        self.last_end_position = token.end;
+        Ok(token)
     }
 }
 
