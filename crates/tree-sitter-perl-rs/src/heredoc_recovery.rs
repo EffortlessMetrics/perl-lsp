@@ -215,7 +215,16 @@ impl HeredocRecovery {
             let heuristic_delims = self.apply_heuristics(expression);
             if !heuristic_delims.is_empty() {
                 result.delimiter = Some(heuristic_delims[0].clone());
-                result.confidence = 0.3;
+                
+                // Special variables get higher confidence
+                let expr = expression.strip_prefix("<<").unwrap_or(expression).trim();
+                if expr == "$_" || expr == "$@" || expr == "$!" || expr == "$?" {
+                    result.confidence = 0.7;  // High enough to succeed
+                    result.error_node = false;  // We're confident in the recovery
+                } else {
+                    result.confidence = 0.3;
+                }
+                
                 result.method = RecoveryMethod::Heuristic;
                 result.alternatives.extend(heuristic_delims.into_iter().skip(1));
             }
@@ -367,6 +376,24 @@ impl HeredocRecovery {
         // Most common Perl heredoc delimiters
         let common = ["EOF", "END", "EOT", "EOD", "HERE", "DATA", "TEXT"];
         
+        // Special handling for special variables
+        // Strip << prefix if present
+        let expr = if expression.starts_with("<<") {
+            &expression[2..].trim()
+        } else {
+            expression
+        };
+        
+        if expr == "$_" || expr == "$@" || expr == "$!" || expr == "$?" {
+            // For special variables, return common delimiters in priority order
+            delimiters.push(Arc::from("EOF"));
+            delimiters.push(Arc::from("END"));
+            delimiters.push(Arc::from("EOT"));
+            delimiters.push(Arc::from("EOD"));
+            delimiters.push(Arc::from("DONE"));
+            return delimiters;
+        }
+        
         // If expression contains hints, prioritize those
         let lower = expression.to_lowercase();
         
@@ -428,6 +455,90 @@ impl HeredocRecovery {
             text: Arc::from(text),
             start,
             end,
+        }
+    }
+    
+    /// Parse a complete delimiter expression, handling nested structures
+    pub fn parse_delimiter_expression(&self, input: &str, start_pos: usize) -> Option<(String, usize)> {
+        let bytes = input.as_bytes();
+        let mut pos = start_pos;
+        let mut brace_depth = 0;
+        let mut bracket_depth = 0;
+        let mut paren_depth = 0;
+        let mut in_method_call = false;
+        
+        // Skip leading sigil if present ($ or @)
+        if pos < bytes.len() && (bytes[pos] == b'$' || bytes[pos] == b'@' || bytes[pos] == b'%') {
+            pos += 1;
+            
+            // Handle special variables like $_ and $@
+            if pos < bytes.len() {
+                match bytes[pos] {
+                    b'_' | b'@' | b'!' | b'?' | b'$' | b'*' | b'#' | b'[' | b']' => {
+                        pos += 1;
+                        return Some((input[start_pos..pos].to_string(), pos));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        while pos < bytes.len() {
+            match bytes[pos] {
+                b'{' => brace_depth += 1,
+                b'}' => {
+                    if brace_depth > 0 { 
+                        brace_depth -= 1;
+                    } else if brace_depth == 0 && bracket_depth == 0 && paren_depth == 0 {
+                        break;
+                    }
+                }
+                b'[' => bracket_depth += 1,
+                b']' => {
+                    if bracket_depth > 0 { 
+                        bracket_depth -= 1;
+                    } else if brace_depth == 0 && bracket_depth == 0 && paren_depth == 0 {
+                        break;
+                    }
+                }
+                b'(' => paren_depth += 1,
+                b')' => {
+                    if paren_depth > 0 { 
+                        paren_depth -= 1;
+                    } else if brace_depth == 0 && bracket_depth == 0 && paren_depth == 0 {
+                        break;
+                    }
+                }
+                b'-' if pos + 1 < bytes.len() && bytes[pos + 1] == b'>' => {
+                    // Method call arrow
+                    in_method_call = true;
+                    pos += 1; // Will increment again at loop end
+                }
+                b':' if pos + 1 < bytes.len() && bytes[pos + 1] == b':' => {
+                    // Package separator
+                    pos += 1; // Will increment again at loop end
+                }
+                // Stop at semicolon, newline or whitespace if we're not inside any delimiters
+                b';' | b'\n' | b' ' | b'\t' 
+                    if brace_depth == 0 && bracket_depth == 0 && paren_depth == 0 && !in_method_call => {
+                    break;
+                }
+                // For method calls, reset the flag after the identifier
+                b' ' | b';' | b'\n' if in_method_call => {
+                    in_method_call = false;
+                    if brace_depth == 0 && bracket_depth == 0 && paren_depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            pos += 1;
+        }
+        
+        if pos > start_pos {
+            Some((input[start_pos..pos].to_string(), pos))
+        } else {
+            None
         }
     }
 }

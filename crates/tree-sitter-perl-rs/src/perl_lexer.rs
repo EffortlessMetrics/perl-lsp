@@ -926,36 +926,42 @@ impl<'a> PerlLexer<'a> {
             self.position += 1;
         }
         
-        // Check for dynamic delimiter (starts with $)
-        if self.position < self.input.len() && self.input.as_bytes()[self.position] == b'$' {
-            // This is a dynamic heredoc delimiter
-            let recovery_result = self.heredoc_recovery.recover_dynamic_heredoc(
-                self.input,
-                start,
-                &self.tokens,
-            );
-            
-            // Update position to end of expression
-            let expr_end = self.heredoc_recovery.find_expression_end(self.input, start);
-            self.position = expr_end;
-            
-            if recovery_result.error_node {
-                // Generate error token
-                return Some(self.heredoc_recovery.generate_error_token(
-                    self.input,
-                    start,
-                    &recovery_result,
-                ));
-            } else if let Some(delimiter) = recovery_result.delimiter {
-                // Successfully recovered - generate a special token
-                let token = Token {
-                    token_type: TokenType::HeredocStart,
-                    text: Arc::from(format!("<<{}", delimiter)),
-                    start,
-                    end: self.position,
-                };
-                self.update_mode(&token.token_type);
-                return Some(token);
+        // Check for dynamic delimiter (starts with $ or contains special chars)
+        if self.position < self.input.len() {
+            let ch = self.input.as_bytes()[self.position];
+            if ch == b'$' || ch == b'@' || ch == b'%' || ch == b'{' {
+                // This might be a dynamic heredoc delimiter
+                // First, parse the complete expression
+                if let Some((expression, expr_end)) = self.heredoc_recovery.parse_delimiter_expression(self.input, self.position) {
+                    // Now try to recover the delimiter
+                    let recovery_result = self.heredoc_recovery.recover_dynamic_heredoc(
+                        self.input,
+                        start,
+                        &self.tokens,
+                    );
+                    
+                    // Update position to end of expression
+                    self.position = expr_end;
+                    
+                    if recovery_result.error_node {
+                        // Generate error token
+                        return Some(self.heredoc_recovery.generate_error_token(
+                            self.input,
+                            start,
+                            &recovery_result,
+                        ));
+                    } else if let Some(delimiter) = recovery_result.delimiter {
+                        // Successfully recovered - generate a special token
+                        let token = Token {
+                            token_type: TokenType::HeredocStart,
+                            text: Arc::from(format!("<<{}", delimiter)),
+                            start,
+                            end: self.position,
+                        };
+                        self.update_mode(&token.token_type);
+                        return Some(token);
+                    }
+                }
             }
         }
         
