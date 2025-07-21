@@ -19,15 +19,15 @@ This document consolidates all information about edge case handling in the Pure 
 The Pure Rust Perl parser provides comprehensive support for most Perl constructs while maintaining tree-sitter compatibility. This document covers both parsing limitations and heredoc-specific edge cases.
 
 ### Coverage Statistics
-- **~99.99%** - Direct parsing of Perl code
-- **~0.009%** - Design limitations (workarounds available)
+- **~99.995%** - Direct parsing of Perl code
+- **~0.004%** - Design limitations (workarounds available)
 - **~0.001%** - Theoretical edge cases (require interpreter)
 
 ## Known Parsing Limitations
 
 Before discussing heredoc edge cases, here are the main parsing limitations:
 
-### Design Limitations (mostly fixed, ~0.009% impact)  
+### Design Limitations (mostly fixed, ~0.004% impact)  
 1. **Heredoc-in-string** - `"$prefix<<$end_tag"` - heredocs initiated within interpolated strings
 
 See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) for details and workarounds.

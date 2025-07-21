@@ -1392,6 +1392,16 @@ impl<'a> PerlLexer<'a> {
                                 }
                             }
                         }
+                        b'o' | b'O' => {
+                            // Octal number (0o755 style)
+                            self.position += 2;
+                            while self.position < self.input.len() {
+                                match self.input.as_bytes()[self.position] {
+                                    b'0'..=b'7' | b'_' => self.position += 1,
+                                    _ => break,
+                                }
+                            }
+                        }
                         b'0'..=b'7' => {
                             // Octal number
                             self.position += 1;
@@ -1791,6 +1801,15 @@ impl<'a> PerlLexer<'a> {
                         (b'~', b'~') => {
                             // ~~ smart match operator
                             self.position += 1;
+                        }
+                        (b'.', b'.') => {
+                            // Check for ... ellipsis operator
+                            if self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1] == b'.' {
+                                self.position += 2; // skip the next two dots
+                            } else {
+                                // Just ..
+                                self.position += 1;
+                            }
                         }
                         // File test operators
                         (b'-', ch2) if matches!(ch2, b'r' | b'w' | b'x' | b'o' | b'R' | b'W' | b'X' | b'O' |

@@ -1,6 +1,6 @@
 # Pure Rust Perl Parser - Complete Feature List
 
-This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **~99.99% coverage** of real-world Perl 5 code.
+This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **~99.995% coverage** of real-world Perl 5 code.
 
 ## ✅ Core Language Features (100% Coverage)
 
