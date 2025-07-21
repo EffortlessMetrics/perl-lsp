@@ -172,6 +172,7 @@ impl<'a> TokenStream<'a> {
                 "return" => TokenKind::Return,
                 "package" => TokenKind::Package,
                 "use" => TokenKind::Use,
+                "no" => TokenKind::No,
                 _ => TokenKind::Identifier,
             },
             
