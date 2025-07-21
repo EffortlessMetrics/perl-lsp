@@ -10,15 +10,15 @@ rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **Pure Rust Perl Parser - ~99.99% Perl 5 syntax coverage with tree-sitter compatibility**
+> **Pure Rust Perl Parser - ~99.995% Perl 5 syntax coverage with tree-sitter compatibility**
 
-This project provides a Pure Rust parser for Perl, achieving ~99.99% syntax coverage of real-world Perl 5 code. Built with the Pest parser generator, it outputs tree-sitter compatible S-expressions with excellent performance (~180 µs/KB). Zero C dependencies!
+This project provides a Pure Rust parser for Perl, achieving ~99.995% syntax coverage of real-world Perl 5 code. Built with the Pest parser generator, it outputs tree-sitter compatible S-expressions with excellent performance (~180 µs/KB). Zero C dependencies!
 
 ---
 
 ## 🚀 Features
 
-- **~99.99% Perl 5 Coverage**: Handles virtually all real-world Perl code
+- **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
 - **Well Tested**: Comprehensive test suite with 16+ test files
 - **Pure Rust Implementation**: Built with Pest parser generator, zero C dependencies
 - **Tree-sitter Compatible**: Outputs standard S-expressions for seamless IDE integration  
