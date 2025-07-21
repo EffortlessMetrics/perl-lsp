@@ -2,6 +2,21 @@
 
 use thiserror::Error;
 
+/// Kinds of parse errors
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseErrorKind {
+    UnexpectedToken,
+    UnexpectedEndOfInput,
+    InvalidSyntax,
+    InvalidNumber,
+    InvalidString,
+    InvalidRegex,
+    InvalidVariable,
+    MissingToken(String),
+    InvalidOperator,
+    InvalidIdentifier,
+}
+
 /// Error types for tree-sitter Perl parser
 #[derive(Error, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub enum ParseError {
@@ -116,6 +131,23 @@ impl From<std::io::Error> for ParseError {
 }
 
 impl ParseError {
+    /// Create a new parse error
+    pub fn new(kind: ParseErrorKind, position: usize, message: String) -> Self {
+        let error_msg = match kind {
+            ParseErrorKind::UnexpectedToken => format!("Unexpected token at position {}: {}", position, message),
+            ParseErrorKind::UnexpectedEndOfInput => format!("Unexpected end of input at position {}: {}", position, message),
+            ParseErrorKind::InvalidSyntax => format!("Invalid syntax at position {}: {}", position, message),
+            ParseErrorKind::InvalidNumber => format!("Invalid number at position {}: {}", position, message),
+            ParseErrorKind::InvalidString => format!("Invalid string at position {}: {}", position, message),
+            ParseErrorKind::InvalidRegex => format!("Invalid regex at position {}: {}", position, message),
+            ParseErrorKind::InvalidVariable => format!("Invalid variable at position {}: {}", position, message),
+            ParseErrorKind::MissingToken(ref token) => format!("Missing {} at position {}: {}", token, position, message),
+            ParseErrorKind::InvalidOperator => format!("Invalid operator at position {}: {}", position, message),
+            ParseErrorKind::InvalidIdentifier => format!("Invalid identifier at position {}: {}", position, message),
+        };
+        ParseError::InvalidToken(error_msg)
+    }
+
     /// Create an error for unterminated string literals
     pub fn unterminated_string(position: (usize, usize)) -> Self {
         ParseError::ScannerError(format!(
