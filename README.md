@@ -34,7 +34,7 @@ This project provides a Pure Rust parser for Perl, achieving ~99.995% syntax cov
   - Advanced heredocs with complete edge case handling
   - Postfix dereferencing (->@*, ->%*, ->$*)
   - **Full Unicode support** including identifiers
-- **Excellent Performance**: ~200-450µs for typical files (~180 µs/KB)
+- **Production-Ready Performance**: ~1ms total execution time (including ~0.8ms startup overhead)
 - **Comprehensive Testing**: 16+ test files, property testing, edge case suite
 - **Memory Efficient**: Zero-copy parsing with Arc<str>
 - **Cross-Platform**: Linux, macOS, and Windows support
@@ -46,15 +46,12 @@ This project provides a Pure Rust parser for Perl, achieving ~99.995% syntax cov
 The Pure Rust Pest parser provides excellent performance for real-world Perl code:
 
 ### **Performance Characteristics**
-| Test Case | Input Size | Parse Time | Memory | Notes |
-|-----------|------------|------------|--------|-------|
-| Simple Script | 1KB | ~180 µs | Minimal | Basic variables and functions |
-| Complex Script | 2.5KB | ~450 µs | Zero-copy | Full feature usage |
-| Unicode Heavy | 1KB | ~200 µs | Efficient | Full Unicode support |
-| Heredocs | 2KB | ~400 µs | Optimized | Multi-phase parsing |
-| **Average** | **Per KB** | **~180 µs** | **Efficient** | **Production ready** |
-| Typical Module | 2.5KB | ~450 µs | Arc<str> | Real-world Perl module |
-| Large Application | 10KB | ~1.5 ms | Streaming | Production codebase |
+| Test Case | Input Size | Total Time | Parse Time (est.) | Notes |
+|-----------|------------|------------|-------------------|-------|
+| Simple Script | 389B | ~1.0 ms | ~0.2 ms | Including process startup |
+| Medium Module | 3KB | ~1.0 ms | ~0.5 ms | Real module-like code |
+| Large File | 12KB | ~1.0 ms | ~2.0 ms | Linear scaling |
+| **Throughput** | **-** | **-** | **~180-200 µs/KB** | **Pure parsing speed** |
 
 ### **Test Results (v0.1.0)**
 - ✅ **15/15 edge case tests passing** (100% coverage)
@@ -63,11 +60,13 @@ The Pure Rust Pest parser provides excellent performance for real-world Perl cod
 - ✅ **Performance benchmarks** confirmed
 
 **Key Advantages:**
-- **Pure Rust**: No FFI overhead, seamless integration
-- **Predictable Performance**: Consistent ~180 µs/KB parsing speed
-- **Memory Efficient**: Zero-copy parsing with Arc<str> strings
-- **Streaming Support**: Can parse large files incrementally
-- **Error Recovery**: Graceful handling of malformed input
+- **Pure Rust**: No C dependencies, maximum safety
+- **Predictable Performance**: Linear O(n) scaling, ~180-200 µs/KB
+- **Memory Safe**: No buffer overflows, use-after-free, or data races
+- **Thread Safe**: Parse in parallel without locks
+- **Cross-Platform**: Works anywhere Rust compiles
+
+**Performance Note:** While ~5-10x slower than C parsers, the Pure Rust implementation provides memory safety, thread safety, and maintainability benefits that make it ideal for production use. See `PURE_RUST_PERFORMANCE_ANALYSIS.md` for detailed benchmarks.
 
 ---
 
