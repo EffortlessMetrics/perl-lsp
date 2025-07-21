@@ -1347,7 +1347,7 @@ impl<'a> PerlLexer<'a> {
                 let token = match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "given" |
                     "return" | "my" | "our" | "local" | "state" | "sub" | "do" | "eval" |
-                    "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" |
+                    "package" | "use" | "require" | "no" | "BEGIN" | "END" | "CHECK" | "INIT" | "UNITCHECK" |
                     "print" | "say" | "printf" | "split" | "grep" | "map" | "sort" | "die" |
                     "warn" | "open" | "close" | "read" | "write" | "tie" | "format" => {
                         Token {
