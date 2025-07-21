@@ -1,855 +1,632 @@
-================================================================================
-basic comment
-================================================================================
-# this is a comment
---------------------------------------------------------------------------------
-
-(source_file
-  (comment))
-
-================================================================================
-Multiple lines are a single comment group
-================================================================================
-# this is a comment
-# split across
-# multiple lines
---------------------------------------------------------------------------------
-
-(source_file
-  (comment)
-  (comment)
-  (comment))
-
-================================================================================
-data section - basic
-================================================================================
-1 + 1;
-__DATA__
-$this = not `code`
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (binary_expression
-      (number)
-      (number)))
-  (eof_marker)
-  (data_section))
-
-================================================================================
-data section - ctrl-d
-================================================================================
-
-$this = not `code`
---------------------------------------------------------------------------------
-
-(source_file
-  (eof_marker))
-
-================================================================================
-data section - ctrl-z
-================================================================================
-1 
-$this = not `code`
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (number))
-  (eof_marker))
-
-================================================================================
-data section anywhere
-================================================================================
-1 + 2 __END__ this is ignored too
-$this = not `code`
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (binary_expression
-      (number)
-      (number)))
-  (eof_marker)
-  (data_section))
-
-================================================================================
-data section, but not in strings
-================================================================================
-'this is not a __DATA__ section'
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (string_literal
-      (string_content))))
-
-================================================================================
-maths! higher prec
-================================================================================
-2 * 4 ** 5;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (binary_expression
-      left: (number)
-      right: (binary_expression
-        left: (number)
-        right: (number)))))
-
-================================================================================
-maths: same prec - left assoc
-================================================================================
-3 x 5 % 2;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (binary_expression
-      left: (binary_expression
-        left: (number)
-        right: (number))
-      right: (number))))
-
-================================================================================
-unary prefixes!
-================================================================================
-!3;
-~0;
-~.0;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (unary_expression
-      (number)))
-  (expression_statement
-    (unary_expression
-      (number)))
-  (expression_statement
-    (unary_expression
-      (number))))
-
-================================================================================
-yadayada operator
-================================================================================
-...
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (yadayada)))
-
-================================================================================
-unicode whitespace
-================================================================================
-'several hair spaces'   ;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (string_literal
-      (string_content))))
-
-================================================================================
-booleans
-================================================================================
-true;
-false;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (boolean))
-  (expression_statement
-    (boolean)))
-================================================================================
-Non-quoted heredoc
-================================================================================
-print(<<TINGS, 'other content');
-this is just $content
-  TINGS here (or even \nTINGS here) does not end it\
-TINGS
-<<\RAW;
-This type does no $interp
-RAW
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (function_call_expression
-      (function)
-      (list_expression
-        (heredoc_token)
-        (string_literal
-          (string_content)))))
-  (heredoc_content
-    (scalar
-      (varname))
-    (escape_sequence)
-    (escape_sequence)
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end)))
-
-================================================================================
-Quoted heredocs
-================================================================================
-<<  "$STOP";
-please $STOP doing \\ silly things
-$STOP
-<<  '  CRAZY';
-you'd think this is just
-CRAZY, but you'd be \n $wrong
-  CRAZY
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (scalar
-      (varname))
-    (escape_sequence)
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end)))
-
-================================================================================
-Command heredocs
-================================================================================
-<< `BASH`;
-:(){ :|:& };:
-BASH
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (command_heredoc_token))
-  (heredoc_content
-    (heredoc_end)))
-
-================================================================================
-Indented heredocs
-================================================================================
-<<~SIMPLE;
-   This is indented
-   SIMPLE
-<<~    "QUOTED";
-    Guess what?
-    This $works, too!
-    QUOTED
-<<~\LOLWUT
-    And apparently, this $monstrosity works, too
-    LOLWUT
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (scalar
-      (varname))
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end)))
-
-================================================================================
-Insane heredocs
-================================================================================
-<<'WUT\'\n?';
-this is intersting
-WUT'\n?
-<<"WHY?$CUZ";
- WHY?$CUZ
-WHY?$CUZ
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (scalar
-      (varname))
-    (heredoc_end)))
-
-================================================================================
-heredocs after a statement (gh#92)
-================================================================================
-my $ting;
-print <<EOF;
-$tings --tings
-EOF
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (variable_declaration
-      (scalar
-        (varname))))
-  (expression_statement
-    (ambiguous_function_call_expression
-      (function)
-      (heredoc_token)))
-  (heredoc_content
-    (scalar
-      (varname))
-    (heredoc_end)))
-
-================================================================================
-weird heredoc interpolation (gh#133)
-================================================================================
-<<EOF;
-@
-EOF
-<<EOF;
-$sner->
-EOF
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end))
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (scalar
-      (varname))
-    (heredoc_end)))
-
-================================================================================
-utf8 heredoc delims
-================================================================================
-<<עד_כאן;
-this is just plain old דברים!
-עד_כאן
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (heredoc_token))
-  (heredoc_content
-    (heredoc_end)))
-================================================================================
-do { STMT; }
-================================================================================
-do { 1; 2; };
-do { 3; 4 };
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (do_expression
-      (block
-        (expression_statement
-          (number))
-        (expression_statement
-          (number)))))
-  (expression_statement
-    (do_expression
-      (block
-        (expression_statement
-          (number))
-        (expression_statement
-          (number))))))
-
-================================================================================
-do FILENAME
-================================================================================
-do './explode.pl';
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (eval_expression
-      (filename
-        (string_literal
-          (string_content))))))
-
-================================================================================
-eval STRING
-================================================================================
-eval $x;
-eval 'die $x';
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (eval_expression
-      (scalar
-        (varname))))
-  (expression_statement
-    (eval_expression
-      (string_literal
-        (string_content)))))
-
-================================================================================
-eval BLOCK
-================================================================================
-eval { $x };
-eval { die $x };
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (eval_expression
-      (block
-        (expression_statement
-          (scalar
-            (varname))))))
-  (expression_statement
-    (eval_expression
-      (block
-        (expression_statement
-          (ambiguous_function_call_expression
-            (function)
-            (scalar
-              (varname))))))))
-
-================================================================================
-Anonymous array
-================================================================================
-[ 1, 2 ];
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (anonymous_array_expression
-      (list_expression
-        (number)
-        (number)))))
-
-================================================================================
-Blocks that look like hashes
-================================================================================
-{ rand, 7 }
-{ qr/thing/, 5 }
-{ 1 + 2, 3 }
---------------------------------------------------------------------------------
-
-(source_file
-  (block_statement
-    (expression_statement
-      (list_expression
-        (func1op_call_expression)
-        (number))))
-  (block_statement
-    (expression_statement
-      (list_expression
-        (quoted_regexp
-          (regexp_content))
-        (number))))
-  (block_statement
-    (expression_statement
-      (list_expression
-        (binary_expression
-          (number)
-          (number))
-        (number)))))
-
-================================================================================
-Anonymous hash
-================================================================================
-{ 1, 2 };
-{ ting => 2 };
-{};
-+{ rand, 7 };
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (anonymous_hash_expression
-      (list_expression
-        (number)
-        (number))))
-  (expression_statement
-    (anonymous_hash_expression
-      (list_expression
-        (autoquoted_bareword)
-        (number))))
-  (expression_statement
-    (anonymous_hash_expression))
-  (expression_statement
-    (unary_expression
-      (anonymous_hash_expression
-        (list_expression
-          (func1op_call_expression)
-          (number))))))
-
-================================================================================
-Assignment
-================================================================================
-$var = 123;
-$var = 12 + 34;
-$var = 12, 34;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (assignment_expression
-      (scalar
-        (varname))
-      (number)))
-  (expression_statement
-    (assignment_expression
-      (scalar
-        (varname))
-      (binary_expression
-        (number)
-        (number))))
-  (expression_statement
-    (list_expression
-      (assignment_expression
-        (scalar
-          (varname))
-        (number))
-      (number))))
-
-================================================================================
-Anonymous Slices
-================================================================================
-(1, 2, 3)[0];
-qw/one two/[0];
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (anonymous_slice_expression
-      list: (list_expression
-        (number)
-        (number)
-        (number))
-      (number)))
-  (expression_statement
-    (anonymous_slice_expression
-      list: (quoted_word_list
-        content: (string_content))
-      (number))))
-
-================================================================================
-Slices
-================================================================================
-@ary[0,1];
-@hash{qw/key1 key2/};
-$aryref->@[0,1];
-[0,1]->@[0];
-$hashref->@{qw/key1 key2/};
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (slice_expression
-      array: (slice_container_variable
-        (varname))
-      (list_expression
-        (number)
-        (number))))
-  (expression_statement
-    (slice_expression
-      hash: (slice_container_variable
-        (varname))
-      (quoted_word_list
-        content: (string_content))))
-  (expression_statement
-    (slice_expression
-      arrayref: (scalar
-        (varname))
-      (list_expression
-        (number)
-        (number))))
-  (expression_statement
-    (slice_expression
-      arrayref: (anonymous_array_expression
-        (list_expression
-          (number)
-          (number)))
-      (number)))
-  (expression_statement
-    (slice_expression
-      hashref: (scalar
-        (varname))
-      (quoted_word_list
-        content: (string_content)))))
-
-================================================================================
-Keyval Slices
-================================================================================
-%ary[0,1];
-%hash{qw/key1 key2/};
-$aryref->%[0,1];
-[0,1]->%[0];
-$hashref->%{qw/key1 key2/};
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (keyval_expression
-      array: (keyval_container_variable
-        (varname))
-      (list_expression
-        (number)
-        (number))))
-  (expression_statement
-    (keyval_expression
-      hash: (keyval_container_variable
-        (varname))
-      (quoted_word_list
-        content: (string_content))))
-  (expression_statement
-    (keyval_expression
-      arrayref: (scalar
-        (varname))
-      (list_expression
-        (number)
-        (number))))
-  (expression_statement
-    (keyval_expression
-      arrayref: (anonymous_array_expression
-        (list_expression
-          (number)
-          (number)))
-      (number)))
-  (expression_statement
-    (keyval_expression
-      hashref: (scalar
-        (varname))
-      (quoted_word_list
-        content: (string_content)))))
-
-================================================================================
-Stub
-================================================================================
-();
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (stub_expression)))
-
-================================================================================
-Scalar deref
-================================================================================
-$$sref;
-$sref->$*;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (scalar
-      (varname
-        (scalar
-          (varname)))))
-  (expression_statement
-    (scalar_deref_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-Array deref
-================================================================================
-@$aref;
-$aref->@*;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (array
-      (varname
-        (scalar
-          (varname)))))
-  (expression_statement
-    (array_deref_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-Hash deref
-================================================================================
-%$href;
-$href->%*;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (hash
-      (varname
-        (scalar
-          (varname)))))
-  (expression_statement
-    (hash_deref_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-Amper deref
-================================================================================
-$cref->&*;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (amper_deref_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-Glob deref
-================================================================================
-*$gref;
-$gref->**;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (glob
-      (varname
-        (scalar
-          (varname)))))
-  (expression_statement
-    (glob_deref_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-require EXPR
-================================================================================
-require Your::Face;
-require v5.26;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (require_expression
-      (bareword)))
-  (expression_statement
-    (require_version_expression
-      (version))))
-
-================================================================================
-Loopex
-================================================================================
-next;
-last LOOP;
-redo;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (loopex_expression))
-  (expression_statement
-    (loopex_expression
-      (label)))
-  (expression_statement
-    (loopex_expression)))
-
-================================================================================
-goto
-================================================================================
-goto LABEL;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (goto_expression
-      (label))))
-
-================================================================================
-undef
-================================================================================
-undef;
-undef $var;
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (undef_expression))
-  (expression_statement
-    (undef_expression
-      (scalar
-        (varname)))))
-
-================================================================================
-local and dynamically
-================================================================================
-local $var;
-local $arr[$idx];
-local $hash{$key};
-dynamically $SIG{INT} = sub { ... };
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (localization_expression
-      (scalar
-        (varname))))
-  (expression_statement
-    (localization_expression
-      (array_element_expression
-        (container_variable
-          (varname))
-        (scalar
-          (varname)))))
-  (expression_statement
-    (localization_expression
-      (hash_element_expression
-        (container_variable
-          (varname))
-        (scalar
-          (varname)))))
-  (expression_statement
-    (assignment_expression
-      (localization_expression
-        (hash_element_expression
-          (container_variable
-            (varname))
-          (autoquoted_bareword)))
-      (anonymous_subroutine_expression
-        (block
-          (expression_statement
-            (yadayada)))))))
-
-================================================================================
-return
-================================================================================
-return;
-return 1, 2, 3;
-return 1, 2, 3 or die("never reached");
---------------------------------------------------------------------------------
-
-(source_file
-  (expression_statement
-    (return_expression))
-  (expression_statement
-    (return_expression
-      (list_expression
-        (number)
-        (number)
-        (number))))
-  (expression_statement
-    (lowprec_logical_expression
-      (return_expression
-        (list_expression
-          (number)
-          (number)
-          (number)))
-      (function_call_expression
-        (function)
-        (interpolated_string_literal
-          (string_content))))))
+package MyModule;
+use strict;
+use warnings;
+use feature 'say';
+
+our $VERSION = '1.0.0';
+
+# Unicode support
+my $café = "coffee shop";
+my $π = 3.14159265359;
+sub 日本語 { "Japanese text" }
+
+# Complex data structures
+my %config = (
+    database => {
+        host => 'localhost',
+        port => 5432,
+        name => 'myapp',
+        credentials => {
+            username => 'admin',
+            password => 'secret',
+        },
+    },
+    cache => {
+        type => 'redis',
+        ttl => 3600,
+        servers => ['127.0.0.1:6379', '127.0.0.2:6379'],
+    },
+);
+
+# Reference operator tests
+my $config_ref = \%config;
+my $db_ref = \$config{database};
+my $servers_ref = \@{$config{cache}{servers}};
+
+# Modern Perl features
+sub process_data {
+    my ($self, $data) = @_;
+    
+    given (ref $data) {
+        when ('ARRAY') {
+            return $self->process_array($data);
+        }
+        when ('HASH') {
+            return $self->process_hash($data);
+        }
+        default {
+            return $self->process_scalar($data);
+        }
+    }
+}
+
+# Method with ellipsis
+sub not_implemented {
+    ...
+}
+
+# Operator overloading
+use overload
+    '""' => sub { shift->stringify },
+    '0+' => sub { shift->numify },
+    fallback => 1;
+
+# Complex regex with substitutions
+sub sanitize_input {
+    my ($self, $input) = @_;
+    
+    # Remove HTML tags
+    $input =~ s/<[^>]+>//g;
+    
+    # Normalize whitespace
+    $input =~ s/\s+/ /g;
+    $input =~ s/^\s+|\s+$//g;
+    
+    # Escape special characters
+    $input =~ s/(['"\\])/\\$1/g;
+    
+    return $input;
+}
+
+# Heredoc usage
+my $usage = <<'USAGE';
+Usage: $0 [OPTIONS] FILE
+
+Options:
+    -h, --help      Show this help message
+    -v, --verbose   Enable verbose output
+    -d, --debug     Enable debug mode
+
+Example:
+    $0 -v input.txt
+USAGE
+
+# Anonymous subroutines and closures
+my $counter = do {
+    my $count = 0;
+    sub { ++$count }
+};
+
+# File operations
+sub read_config {
+    my ($self, $filename) = @_;
+    
+    open my $fh, '<', $filename or die "Cannot open $filename: $!";
+    
+    my %data;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next if $line =~ /^\s*#/;  # Skip comments
+        next if $line =~ /^\s*$/;  # Skip empty lines
+        
+        if ($line =~ /^(\w+)\s*=\s*(.+)$/) {
+            $data{$1} = $2;
+        }
+    }
+    
+    close $fh;
+    return \%data;
+}
+
+# Package with inheritance
+package MyModule::Child;
+use parent 'MyModule';
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    $self->{child_attribute} = 1;
+    return $self;
+}
+
+# Back to main package
+package MyModule;
+
+# Export functions
+use Exporter 'import';
+our @EXPORT_OK = qw(process_data sanitize_input);
+our %EXPORT_TAGS = (all => \@EXPORT_OK);
+
+1;
+
+__END__
+
+=head1 NAME
+
+MyModule - A sample Perl module for benchmarking
+
+=head1 SYNOPSIS
+
+    use MyModule;
+    my $obj = MyModule->new();
+    $obj->process_data($data);
+
+=head1 DESCRIPTION
+
+This module demonstrates various Perl features for parser benchmarking.
+
+=cut
+package MyModule;
+use strict;
+use warnings;
+use feature 'say';
+
+our $VERSION = '1.0.0';
+
+# Unicode support
+my $café = "coffee shop";
+my $π = 3.14159265359;
+sub 日本語 { "Japanese text" }
+
+# Complex data structures
+my %config = (
+    database => {
+        host => 'localhost',
+        port => 5432,
+        name => 'myapp',
+        credentials => {
+            username => 'admin',
+            password => 'secret',
+        },
+    },
+    cache => {
+        type => 'redis',
+        ttl => 3600,
+        servers => ['127.0.0.1:6379', '127.0.0.2:6379'],
+    },
+);
+
+# Reference operator tests
+my $config_ref = \%config;
+my $db_ref = \$config{database};
+my $servers_ref = \@{$config{cache}{servers}};
+
+# Modern Perl features
+sub process_data {
+    my ($self, $data) = @_;
+    
+    given (ref $data) {
+        when ('ARRAY') {
+            return $self->process_array($data);
+        }
+        when ('HASH') {
+            return $self->process_hash($data);
+        }
+        default {
+            return $self->process_scalar($data);
+        }
+    }
+}
+
+# Method with ellipsis
+sub not_implemented {
+    ...
+}
+
+# Operator overloading
+use overload
+    '""' => sub { shift->stringify },
+    '0+' => sub { shift->numify },
+    fallback => 1;
+
+# Complex regex with substitutions
+sub sanitize_input {
+    my ($self, $input) = @_;
+    
+    # Remove HTML tags
+    $input =~ s/<[^>]+>//g;
+    
+    # Normalize whitespace
+    $input =~ s/\s+/ /g;
+    $input =~ s/^\s+|\s+$//g;
+    
+    # Escape special characters
+    $input =~ s/(['"\\])/\\$1/g;
+    
+    return $input;
+}
+
+# Heredoc usage
+my $usage = <<'USAGE';
+Usage: $0 [OPTIONS] FILE
+
+Options:
+    -h, --help      Show this help message
+    -v, --verbose   Enable verbose output
+    -d, --debug     Enable debug mode
+
+Example:
+    $0 -v input.txt
+USAGE
+
+# Anonymous subroutines and closures
+my $counter = do {
+    my $count = 0;
+    sub { ++$count }
+};
+
+# File operations
+sub read_config {
+    my ($self, $filename) = @_;
+    
+    open my $fh, '<', $filename or die "Cannot open $filename: $!";
+    
+    my %data;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next if $line =~ /^\s*#/;  # Skip comments
+        next if $line =~ /^\s*$/;  # Skip empty lines
+        
+        if ($line =~ /^(\w+)\s*=\s*(.+)$/) {
+            $data{$1} = $2;
+        }
+    }
+    
+    close $fh;
+    return \%data;
+}
+
+# Package with inheritance
+package MyModule::Child;
+use parent 'MyModule';
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    $self->{child_attribute} = 1;
+    return $self;
+}
+
+# Back to main package
+package MyModule;
+
+# Export functions
+use Exporter 'import';
+our @EXPORT_OK = qw(process_data sanitize_input);
+our %EXPORT_TAGS = (all => \@EXPORT_OK);
+
+1;
+
+__END__
+
+=head1 NAME
+
+MyModule - A sample Perl module for benchmarking
+
+=head1 SYNOPSIS
+
+    use MyModule;
+    my $obj = MyModule->new();
+    $obj->process_data($data);
+
+=head1 DESCRIPTION
+
+This module demonstrates various Perl features for parser benchmarking.
+
+=cut
+package MyModule;
+use strict;
+use warnings;
+use feature 'say';
+
+our $VERSION = '1.0.0';
+
+# Unicode support
+my $café = "coffee shop";
+my $π = 3.14159265359;
+sub 日本語 { "Japanese text" }
+
+# Complex data structures
+my %config = (
+    database => {
+        host => 'localhost',
+        port => 5432,
+        name => 'myapp',
+        credentials => {
+            username => 'admin',
+            password => 'secret',
+        },
+    },
+    cache => {
+        type => 'redis',
+        ttl => 3600,
+        servers => ['127.0.0.1:6379', '127.0.0.2:6379'],
+    },
+);
+
+# Reference operator tests
+my $config_ref = \%config;
+my $db_ref = \$config{database};
+my $servers_ref = \@{$config{cache}{servers}};
+
+# Modern Perl features
+sub process_data {
+    my ($self, $data) = @_;
+    
+    given (ref $data) {
+        when ('ARRAY') {
+            return $self->process_array($data);
+        }
+        when ('HASH') {
+            return $self->process_hash($data);
+        }
+        default {
+            return $self->process_scalar($data);
+        }
+    }
+}
+
+# Method with ellipsis
+sub not_implemented {
+    ...
+}
+
+# Operator overloading
+use overload
+    '""' => sub { shift->stringify },
+    '0+' => sub { shift->numify },
+    fallback => 1;
+
+# Complex regex with substitutions
+sub sanitize_input {
+    my ($self, $input) = @_;
+    
+    # Remove HTML tags
+    $input =~ s/<[^>]+>//g;
+    
+    # Normalize whitespace
+    $input =~ s/\s+/ /g;
+    $input =~ s/^\s+|\s+$//g;
+    
+    # Escape special characters
+    $input =~ s/(['"\\])/\\$1/g;
+    
+    return $input;
+}
+
+# Heredoc usage
+my $usage = <<'USAGE';
+Usage: $0 [OPTIONS] FILE
+
+Options:
+    -h, --help      Show this help message
+    -v, --verbose   Enable verbose output
+    -d, --debug     Enable debug mode
+
+Example:
+    $0 -v input.txt
+USAGE
+
+# Anonymous subroutines and closures
+my $counter = do {
+    my $count = 0;
+    sub { ++$count }
+};
+
+# File operations
+sub read_config {
+    my ($self, $filename) = @_;
+    
+    open my $fh, '<', $filename or die "Cannot open $filename: $!";
+    
+    my %data;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next if $line =~ /^\s*#/;  # Skip comments
+        next if $line =~ /^\s*$/;  # Skip empty lines
+        
+        if ($line =~ /^(\w+)\s*=\s*(.+)$/) {
+            $data{$1} = $2;
+        }
+    }
+    
+    close $fh;
+    return \%data;
+}
+
+# Package with inheritance
+package MyModule::Child;
+use parent 'MyModule';
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    $self->{child_attribute} = 1;
+    return $self;
+}
+
+# Back to main package
+package MyModule;
+
+# Export functions
+use Exporter 'import';
+our @EXPORT_OK = qw(process_data sanitize_input);
+our %EXPORT_TAGS = (all => \@EXPORT_OK);
+
+1;
+
+__END__
+
+=head1 NAME
+
+MyModule - A sample Perl module for benchmarking
+
+=head1 SYNOPSIS
+
+    use MyModule;
+    my $obj = MyModule->new();
+    $obj->process_data($data);
+
+=head1 DESCRIPTION
+
+This module demonstrates various Perl features for parser benchmarking.
+
+=cut
+package MyModule;
+use strict;
+use warnings;
+use feature 'say';
+
+our $VERSION = '1.0.0';
+
+# Unicode support
+my $café = "coffee shop";
+my $π = 3.14159265359;
+sub 日本語 { "Japanese text" }
+
+# Complex data structures
+my %config = (
+    database => {
+        host => 'localhost',
+        port => 5432,
+        name => 'myapp',
+        credentials => {
+            username => 'admin',
+            password => 'secret',
+        },
+    },
+    cache => {
+        type => 'redis',
+        ttl => 3600,
+        servers => ['127.0.0.1:6379', '127.0.0.2:6379'],
+    },
+);
+
+# Reference operator tests
+my $config_ref = \%config;
+my $db_ref = \$config{database};
+my $servers_ref = \@{$config{cache}{servers}};
+
+# Modern Perl features
+sub process_data {
+    my ($self, $data) = @_;
+    
+    given (ref $data) {
+        when ('ARRAY') {
+            return $self->process_array($data);
+        }
+        when ('HASH') {
+            return $self->process_hash($data);
+        }
+        default {
+            return $self->process_scalar($data);
+        }
+    }
+}
+
+# Method with ellipsis
+sub not_implemented {
+    ...
+}
+
+# Operator overloading
+use overload
+    '""' => sub { shift->stringify },
+    '0+' => sub { shift->numify },
+    fallback => 1;
+
+# Complex regex with substitutions
+sub sanitize_input {
+    my ($self, $input) = @_;
+    
+    # Remove HTML tags
+    $input =~ s/<[^>]+>//g;
+    
+    # Normalize whitespace
+    $input =~ s/\s+/ /g;
+    $input =~ s/^\s+|\s+$//g;
+    
+    # Escape special characters
+    $input =~ s/(['"\\])/\\$1/g;
+    
+    return $input;
+}
+
+# Heredoc usage
+my $usage = <<'USAGE';
+Usage: $0 [OPTIONS] FILE
+
+Options:
+    -h, --help      Show this help message
+    -v, --verbose   Enable verbose output
+    -d, --debug     Enable debug mode
+
+Example:
+    $0 -v input.txt
+USAGE
+
+# Anonymous subroutines and closures
+my $counter = do {
+    my $count = 0;
+    sub { ++$count }
+};
+
+# File operations
+sub read_config {
+    my ($self, $filename) = @_;
+    
+    open my $fh, '<', $filename or die "Cannot open $filename: $!";
+    
+    my %data;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next if $line =~ /^\s*#/;  # Skip comments
+        next if $line =~ /^\s*$/;  # Skip empty lines
+        
+        if ($line =~ /^(\w+)\s*=\s*(.+)$/) {
+            $data{$1} = $2;
+        }
+    }
+    
+    close $fh;
+    return \%data;
+}
+
+# Package with inheritance
+package MyModule::Child;
+use parent 'MyModule';
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    $self->{child_attribute} = 1;
+    return $self;
+}
+
+# Back to main package
+package MyModule;
+
+# Export functions
+use Exporter 'import';
+our @EXPORT_OK = qw(process_data sanitize_input);
+our %EXPORT_TAGS = (all => \@EXPORT_OK);
+
+1;
+
+__END__
+
+=head1 NAME
+
+MyModule - A sample Perl module for benchmarking
+
+=head1 SYNOPSIS
+
+    use MyModule;
+    my $obj = MyModule->new();
+    $obj->process_data($data);
+
+=head1 DESCRIPTION
+
+This module demonstrates various Perl features for parser benchmarking.
+
+=cut
