@@ -794,4 +794,161 @@ mod test_slash {
         assert!(matches!(attr.token_type, TokenType::Identifier(_)));
         assert_eq!(attr.text.as_ref(), "bar");
     }
+
+    #[test]
+    fn test_autoload_destroy_methods() {
+        // AUTOLOAD method
+        let mut lexer = PerlLexer::new("sub AUTOLOAD { print $AUTOLOAD }");
+        let _sub = lexer.next_token().unwrap();
+        let autoload = lexer.next_token().unwrap();
+        assert!(matches!(autoload.token_type, TokenType::Identifier(_)));
+        assert_eq!(autoload.text.as_ref(), "AUTOLOAD");
+        
+        // DESTROY method
+        let mut lexer = PerlLexer::new("sub DESTROY { undef $self }");
+        let _sub = lexer.next_token().unwrap();
+        let destroy = lexer.next_token().unwrap();
+        assert!(matches!(destroy.token_type, TokenType::Identifier(_)));
+        assert_eq!(destroy.text.as_ref(), "DESTROY");
+        
+        // AUTOLOAD variable
+        let mut lexer = PerlLexer::new("$AUTOLOAD =~ s/.*:://");
+        let var = lexer.next_token().unwrap();
+        assert!(matches!(var.token_type, TokenType::Identifier(_)));
+        assert_eq!(var.text.as_ref(), "$AUTOLOAD");
+    }
+
+    #[test]
+    fn test_typeglob_slots() {
+        // SCALAR slot
+        let mut lexer = PerlLexer::new("*foo{SCALAR}");
+        let glob = lexer.next_token().unwrap();
+        assert!(matches!(glob.token_type, TokenType::Identifier(_)));
+        assert_eq!(glob.text.as_ref(), "*foo");
+        let _lbrace = lexer.next_token().unwrap();
+        let slot = lexer.next_token().unwrap();
+        assert!(matches!(slot.token_type, TokenType::Identifier(_)));
+        assert_eq!(slot.text.as_ref(), "SCALAR");
+        
+        // Multiple slots
+        for slot_name in ["ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE"] {
+            let input = format!("*bar{{{}}}", slot_name);
+            let mut lexer = PerlLexer::new(&input);
+            let _glob = lexer.next_token().unwrap();
+            let _lbrace = lexer.next_token().unwrap();
+            let slot = lexer.next_token().unwrap();
+            assert!(matches!(slot.token_type, TokenType::Identifier(_)));
+            assert_eq!(slot.text.as_ref(), slot_name);
+        }
+    }
+
+    #[test]
+    fn test_advanced_regex_features() {
+        // Named captures
+        let mut lexer = PerlLexer::new(r#"m/(?<name>\w+)/"#);
+        let _m = lexer.next_token().unwrap();
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+        
+        // Positive lookahead
+        let mut lexer = PerlLexer::new(r#"/foo(?=bar)/"#);
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+        
+        // Negative lookahead
+        let mut lexer = PerlLexer::new(r#"/foo(?!bar)/"#);
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+        
+        // Positive lookbehind
+        let mut lexer = PerlLexer::new(r#"/(?<=foo)bar/"#);
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+        
+        // Negative lookbehind
+        let mut lexer = PerlLexer::new(r#"/(?<!foo)bar/"#);
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+        
+        // Code blocks in regex
+        let mut lexer = PerlLexer::new(r#"/pattern(?{ $count++ })/"#);
+        let regex = lexer.next_token().unwrap();
+        assert!(matches!(regex.token_type, TokenType::Regex(_)));
+    }
+
+    #[test]
+    fn test_file_test_operators() {
+        // Text/binary tests
+        let mut lexer = PerlLexer::new("if (-T $file) { }");
+        let _if = lexer.next_token().unwrap();
+        let _lparen = lexer.next_token().unwrap();
+        let op = lexer.next_token().unwrap();
+        assert!(matches!(op.token_type, TokenType::Operator(_)));
+        assert_eq!(op.text.as_ref(), "-T");
+        
+        // Binary test
+        let mut lexer = PerlLexer::new("-B $file");
+        let op = lexer.next_token().unwrap();
+        assert!(matches!(op.token_type, TokenType::Operator(_)));
+        assert_eq!(op.text.as_ref(), "-B");
+        
+        // Time-based tests
+        for op_str in ["-M", "-A", "-C"] {
+            let mut lexer = PerlLexer::new(&format!("{} $file", op_str));
+            let op = lexer.next_token().unwrap();
+            assert!(matches!(op.token_type, TokenType::Operator(_)));
+            assert_eq!(op.text.as_ref(), op_str);
+        }
+        
+        // Stacked file tests
+        let mut lexer = PerlLexer::new("-f -r -w -x $file");
+        for op_str in ["-f", "-r", "-w", "-x"] {
+            let op = lexer.next_token().unwrap();
+            assert!(matches!(op.token_type, TokenType::Operator(_)));
+            assert_eq!(op.text.as_ref(), op_str);
+        }
+    }
+
+    #[test]
+    fn test_network_socket_operations() {
+        // Socket operations
+        for func in ["socket", "socketpair", "bind", "listen", "accept", 
+                     "connect", "recv", "send", "shutdown",
+                     "getsockname", "getpeername", "getsockopt", "setsockopt"] {
+            let mut lexer = PerlLexer::new(&format!("{} $sock", func));
+            let op = lexer.next_token().unwrap();
+            assert!(matches!(op.token_type, TokenType::Identifier(_)));
+            assert_eq!(op.text.as_ref(), func);
+        }
+        
+        // Network database functions
+        for func in ["gethostbyname", "gethostbyaddr", "getnetbyname", "getnetbyaddr",
+                     "getprotobyname", "getprotobynumber", "getservbyname", "getservbyport"] {
+            let mut lexer = PerlLexer::new(&format!("{} $arg", func));
+            let op = lexer.next_token().unwrap();
+            assert!(matches!(op.token_type, TokenType::Identifier(_)));
+            assert_eq!(op.text.as_ref(), func);
+        }
+    }
+
+    #[test]
+    fn test_nested_quote_delimiters() {
+        // Nested braces
+        let mut lexer = PerlLexer::new("q{nested {braces} inside}");
+        let _q = lexer.next_token().unwrap();
+        let string = lexer.next_token().unwrap();
+        assert!(matches!(string.token_type, TokenType::String(_)));
+        
+        // Nested brackets
+        let mut lexer = PerlLexer::new("qq[nested [brackets] inside]");
+        let _qq = lexer.next_token().unwrap();
+        let string = lexer.next_token().unwrap();
+        assert!(matches!(string.token_type, TokenType::String(_)));
+        
+        // Mixed delimiters with parentheses
+        let mut lexer = PerlLexer::new("qw(word1 (nested) word2)");
+        let _qw = lexer.next_token().unwrap();
+        let list = lexer.next_token().unwrap();
+        assert!(matches!(list.token_type, TokenType::String(_)));
+    }
 }
