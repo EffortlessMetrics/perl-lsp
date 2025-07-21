@@ -1,0 +1,787 @@
+//! High-performance Perl lexer with context-aware tokenization
+//!
+//! This crate provides a lexer for Perl that handles the context-sensitive
+//! nature of the language, particularly the ambiguity of the `/` character
+//! which can be either division or the start of a regex.
+
+use std::sync::Arc;
+
+pub mod token;
+pub mod mode;
+pub mod error;
+
+pub use token::{Token, TokenType, StringPart};
+pub use mode::LexerMode;
+pub use error::{LexerError, Result};
+
+/// Configuration for the lexer
+#[derive(Debug, Clone)]
+pub struct LexerConfig {
+    /// Enable interpolation parsing in strings
+    pub parse_interpolation: bool,
+    /// Track token positions for error reporting
+    pub track_positions: bool,
+    /// Maximum lookahead for disambiguation
+    pub max_lookahead: usize,
+}
+
+impl Default for LexerConfig {
+    fn default() -> Self {
+        Self {
+            parse_interpolation: true,
+            track_positions: true,
+            max_lookahead: 1024,
+        }
+    }
+}
+
+/// Mode-aware Perl lexer
+pub struct PerlLexer<'a> {
+    input: &'a str,
+    /// Cached input bytes for faster access
+    input_bytes: &'a [u8],
+    position: usize,
+    mode: LexerMode,
+    config: LexerConfig,
+    /// Stack for nested delimiters in s{}{} constructs
+    delimiter_stack: Vec<char>,
+    /// Track if we're inside prototype parens after 'sub'
+    in_prototype: bool,
+    /// Paren depth to track when we exit prototype
+    prototype_depth: usize,
+}
+
+impl<'a> PerlLexer<'a> {
+    /// Create a new lexer for the given input
+    pub fn new(input: &'a str) -> Self {
+        Self::with_config(input, LexerConfig::default())
+    }
+
+    /// Create a new lexer with custom configuration
+    pub fn with_config(input: &'a str, config: LexerConfig) -> Self {
+        Self {
+            input,
+            input_bytes: input.as_bytes(),
+            position: 0,
+            mode: LexerMode::ExpectTerm,
+            config,
+            delimiter_stack: Vec::new(),
+            in_prototype: false,
+            prototype_depth: 0,
+        }
+    }
+
+    /// Get the next token from the input
+    pub fn next_token(&mut self) -> Option<Token> {
+        self.skip_whitespace_and_comments()?;
+        
+        if self.position >= self.input.len() {
+            return Some(Token {
+                token_type: TokenType::EOF,
+                text: Arc::from(""),
+                start: self.position,
+                end: self.position,
+            });
+        }
+
+        let start = self.position;
+        
+        // Check for special tokens first
+        if let Some(token) = self.try_heredoc() {
+            return Some(token);
+        }
+        
+        if let Some(token) = self.try_string() {
+            return Some(token);
+        }
+        
+        if let Some(token) = self.try_variable() {
+            return Some(token);
+        }
+        
+        if let Some(token) = self.try_number() {
+            return Some(token);
+        }
+        
+        if let Some(token) = self.try_identifier_or_keyword() {
+            return Some(token);
+        }
+        
+        if let Some(token) = self.try_operator() {
+            return Some(token);
+        }
+        
+        // If nothing else matches, return an error token
+        let ch = self.current_char()?;
+        self.advance();
+        
+        Some(Token {
+            token_type: TokenType::Error(Arc::from(format!("Unexpected character: {}", ch))),
+            text: Arc::from(ch.to_string()),
+            start,
+            end: self.position,
+        })
+    }
+
+    /// Peek at the next token without consuming it
+    pub fn peek_token(&mut self) -> Option<Token> {
+        let saved_pos = self.position;
+        let saved_mode = self.mode;
+        let saved_prototype = self.in_prototype;
+        let saved_depth = self.prototype_depth;
+        
+        let token = self.next_token();
+        
+        self.position = saved_pos;
+        self.mode = saved_mode;
+        self.in_prototype = saved_prototype;
+        self.prototype_depth = saved_depth;
+        
+        token
+    }
+
+    /// Get all remaining tokens
+    pub fn collect_tokens(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        while let Some(token) = self.next_token() {
+            if token.token_type == TokenType::EOF {
+                tokens.push(token);
+                break;
+            }
+            tokens.push(token);
+        }
+        tokens
+    }
+
+    /// Reset the lexer to the beginning
+    pub fn reset(&mut self) {
+        self.position = 0;
+        self.mode = LexerMode::ExpectTerm;
+        self.delimiter_stack.clear();
+        self.in_prototype = false;
+        self.prototype_depth = 0;
+    }
+
+    // Internal helper methods
+    
+    #[inline]
+    fn current_char(&self) -> Option<char> {
+        if self.position < self.input_bytes.len() {
+            // For ASCII, direct access is safe
+            let byte = self.input_bytes[self.position];
+            if byte < 128 {
+                Some(byte as char)
+            } else {
+                // For non-ASCII, fall back to proper UTF-8 parsing
+                self.input[self.position..].chars().next()
+            }
+        } else {
+            None
+        }
+    }
+    
+    #[inline]
+    fn peek_char(&self, offset: usize) -> Option<char> {
+        let pos = self.position + offset;
+        if pos < self.input_bytes.len() {
+            // For ASCII, direct access is safe
+            let byte = self.input_bytes[pos];
+            if byte < 128 {
+                Some(byte as char)
+            } else {
+                // For non-ASCII, use chars iterator
+                self.input[self.position..].chars().nth(offset)
+            }
+        } else {
+            None
+        }
+    }
+    
+    #[inline]
+    fn advance(&mut self) {
+        if self.position < self.input_bytes.len() {
+            let byte = self.input_bytes[self.position];
+            if byte < 128 {
+                // ASCII fast path
+                self.position += 1;
+            } else if let Some(ch) = self.input[self.position..].chars().next() {
+                self.position += ch.len_utf8();
+            }
+        }
+    }
+    
+    /// Fast byte-level check for ASCII characters
+    #[inline]
+    fn peek_byte(&self, offset: usize) -> Option<u8> {
+        let pos = self.position + offset;
+        if pos < self.input_bytes.len() {
+            Some(self.input_bytes[pos])
+        } else {
+            None
+        }
+    }
+    
+    /// Check if the next bytes match a pattern (ASCII only)
+    #[inline]
+    fn matches_bytes(&self, pattern: &[u8]) -> bool {
+        let end = self.position + pattern.len();
+        if end <= self.input_bytes.len() {
+            &self.input_bytes[self.position..end] == pattern
+        } else {
+            false
+        }
+    }
+    
+    fn skip_whitespace_and_comments(&mut self) -> Option<()> {
+        while self.position < self.input_bytes.len() {
+            let byte = self.input_bytes[self.position];
+            match byte {
+                b' ' | b'\t' | b'\r' => self.position += 1,
+                b'\n' => {
+                    self.position += 1;
+                    // Newlines can affect parsing context
+                }
+                b'#' => {
+                    // Skip line comment using byte-level operations
+                    self.position += 1;
+                    while self.position < self.input_bytes.len() {
+                        if self.input_bytes[self.position] == b'\n' {
+                            break;
+                        }
+                        self.position += 1;
+                    }
+                }
+                _ => {
+                    // For non-ASCII whitespace, use char check
+                    if byte >= 128 {
+                        if let Some(ch) = self.current_char() {
+                            if ch.is_whitespace() {
+                                self.advance();
+                                continue;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        Some(())
+    }
+    
+    fn try_heredoc(&mut self) -> Option<Token> {
+        // Simplified heredoc detection - full implementation would go here
+        if self.position + 2 < self.input.len() && &self.input[self.position..self.position + 2] == "<<" {
+            // This is a placeholder - real implementation would parse heredoc
+            None
+        } else {
+            None
+        }
+    }
+    
+    fn try_string(&mut self) -> Option<Token> {
+        let start = self.position;
+        let quote = self.current_char()?;
+        
+        match quote {
+            '"' => self.parse_double_quoted_string(start),
+            '\'' => self.parse_single_quoted_string(start),
+            '`' => self.parse_backtick_string(start),
+            'q' if self.peek_char(1) == Some('{') => self.parse_q_string(start),
+            _ => None,
+        }
+    }
+    
+    fn try_number(&mut self) -> Option<Token> {
+        let start = self.position;
+        
+        // Fast byte check for digits
+        if self.position < self.input_bytes.len() && self.input_bytes[self.position].is_ascii_digit() {
+            // Use byte-level parsing for numbers
+            while self.position < self.input_bytes.len() {
+                let byte = self.input_bytes[self.position];
+                match byte {
+                    b'0'..=b'9' | b'.' | b'_' => self.position += 1,
+                    b'e' | b'E' => {
+                        // Handle scientific notation
+                        self.position += 1;
+                        if self.position < self.input_bytes.len() {
+                            let next = self.input_bytes[self.position];
+                            if next == b'+' || next == b'-' {
+                                self.position += 1;
+                            }
+                        }
+                    }
+                    _ => break,
+                }
+            }
+            
+            let text = &self.input[start..self.position];
+            self.mode = LexerMode::ExpectOperator;
+            
+            Some(Token {
+                token_type: TokenType::Number(Arc::from(text)),
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            })
+        } else {
+            None
+        }
+    }
+    
+    fn try_variable(&mut self) -> Option<Token> {
+        let start = self.position;
+        let sigil = self.current_char()?;
+        
+        match sigil {
+            '$' | '@' | '%' | '*' => {
+                self.advance();
+                
+                // Parse variable name
+                if let Some(ch) = self.current_char() {
+                    if ch.is_alphabetic() || ch == '_' {
+                        while let Some(ch) = self.current_char() {
+                            if ch.is_alphanumeric() || ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                let text = &self.input[start..self.position];
+                self.mode = LexerMode::ExpectOperator;
+                
+                Some(Token {
+                    token_type: TokenType::Identifier(Arc::from(text)),
+                    text: Arc::from(text),
+                    start,
+                    end: self.position,
+                })
+            }
+            _ => None,
+        }
+    }
+    
+    fn try_identifier_or_keyword(&mut self) -> Option<Token> {
+        let start = self.position;
+        let ch = self.current_char()?;
+        
+        if ch.is_alphabetic() || ch == '_' {
+            while let Some(ch) = self.current_char() {
+                if ch.is_alphanumeric() || ch == '_' {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            
+            let text = &self.input[start..self.position];
+            let token_type = if is_keyword(text) {
+                // Check for special keywords that affect lexer mode
+                match text {
+                    "if" | "unless" | "while" | "until" | "for" | "foreach" => {
+                        self.mode = LexerMode::ExpectTerm;
+                    }
+                    "sub" => {
+                        self.in_prototype = true;
+                    }
+                    _ => {}
+                }
+                TokenType::Keyword(Arc::from(text))
+            } else {
+                self.mode = LexerMode::ExpectOperator;
+                TokenType::Identifier(Arc::from(text))
+            };
+            
+            Some(Token {
+                token_type,
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            })
+        } else {
+            None
+        }
+    }
+    
+    fn try_operator(&mut self) -> Option<Token> {
+        let start = self.position;
+        let ch = self.current_char()?;
+        
+        // Handle slash disambiguation
+        if ch == '/' {
+            if self.mode == LexerMode::ExpectTerm {
+                // It's a regex
+                return self.parse_regex(start);
+            } else {
+                // It's division
+                self.advance();
+                self.mode = LexerMode::ExpectTerm;
+                return Some(Token {
+                    token_type: TokenType::Division,
+                    text: Arc::from("/"),
+                    start,
+                    end: self.position,
+                });
+            }
+        }
+        
+        // Handle other operators - simplified
+        match ch {
+            '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' => {
+                self.advance();
+                // Check for compound operators
+                if let Some(next) = self.current_char() {
+                    if is_compound_operator(ch, next) {
+                        self.advance();
+                    }
+                }
+                
+                let text = &self.input[start..self.position];
+                self.mode = LexerMode::ExpectTerm;
+                
+                Some(Token {
+                    token_type: TokenType::Operator(Arc::from(text)),
+                    text: Arc::from(text),
+                    start,
+                    end: self.position,
+                })
+            }
+            '(' => {
+                self.advance();
+                if self.in_prototype {
+                    self.prototype_depth += 1;
+                }
+                self.mode = LexerMode::ExpectTerm;
+                Some(Token {
+                    token_type: TokenType::LeftParen,
+                    text: Arc::from("("),
+                    start,
+                    end: self.position,
+                })
+            }
+            ')' => {
+                self.advance();
+                if self.in_prototype && self.prototype_depth > 0 {
+                    self.prototype_depth -= 1;
+                    if self.prototype_depth == 0 {
+                        self.in_prototype = false;
+                    }
+                }
+                self.mode = LexerMode::ExpectOperator;
+                Some(Token {
+                    token_type: TokenType::RightParen,
+                    text: Arc::from(")"),
+                    start,
+                    end: self.position,
+                })
+            }
+            ';' => {
+                self.advance();
+                self.mode = LexerMode::ExpectTerm;
+                Some(Token {
+                    token_type: TokenType::Semicolon,
+                    text: Arc::from(";"),
+                    start,
+                    end: self.position,
+                })
+            }
+            ',' => {
+                self.advance();
+                self.mode = LexerMode::ExpectTerm;
+                Some(Token {
+                    token_type: TokenType::Comma,
+                    text: Arc::from(","),
+                    start,
+                    end: self.position,
+                })
+            }
+            _ => None,
+        }
+    }
+    
+    fn parse_double_quoted_string(&mut self, start: usize) -> Option<Token> {
+        self.advance(); // Skip opening quote
+        let mut parts = Vec::new();
+        let mut current_literal = String::new();
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '"' => {
+                    self.advance();
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(Arc::from(current_literal)));
+                    }
+                    
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: if parts.is_empty() {
+                            TokenType::StringLiteral
+                        } else {
+                            TokenType::InterpolatedString(parts)
+                        },
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                '\\' => {
+                    self.advance();
+                    if let Some(escaped) = self.current_char() {
+                        current_literal.push('\\');
+                        current_literal.push(escaped);
+                        self.advance();
+                    }
+                }
+                '$' if self.config.parse_interpolation => {
+                    // Handle variable interpolation
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(Arc::from(current_literal.clone())));
+                        current_literal.clear();
+                    }
+                    
+                    // Parse variable - simplified
+                    self.advance();
+                    let var_start = self.position;
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_alphanumeric() || ch == '_' {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    if self.position > var_start {
+                        let var_name = &self.input[var_start - 1..self.position];
+                        parts.push(StringPart::Variable(Arc::from(var_name)));
+                    }
+                }
+                _ => {
+                    current_literal.push(ch);
+                    self.advance();
+                }
+            }
+        }
+        
+        // Unterminated string
+        None
+    }
+    
+    fn parse_single_quoted_string(&mut self, start: usize) -> Option<Token> {
+        self.advance(); // Skip opening quote
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\'' => {
+                    self.advance();
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: TokenType::StringLiteral,
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                '\\' => {
+                    self.advance();
+                    if self.current_char() == Some('\'') || self.current_char() == Some('\\') {
+                        self.advance();
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Unterminated string
+        None
+    }
+    
+    fn parse_backtick_string(&mut self, start: usize) -> Option<Token> {
+        self.advance(); // Skip opening backtick
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '`' => {
+                    self.advance();
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: TokenType::QuoteCommand,
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Unterminated string
+        None
+    }
+    
+    fn parse_q_string(&mut self, _start: usize) -> Option<Token> {
+        // Simplified q-string parsing
+        None
+    }
+    
+    fn parse_regex(&mut self, start: usize) -> Option<Token> {
+        self.advance(); // Skip opening /
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '/' => {
+                    self.advance();
+                    // Parse flags
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_alphabetic() {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: TokenType::RegexMatch,
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Unterminated regex
+        None
+    }
+}
+
+/// Perl keywords sorted by length for faster rejection
+const KEYWORDS: &[&str] = &[
+    // 2 letters
+    "if", "do", "my", "or",
+    // 3 letters
+    "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "END",
+    // 4 letters
+    "else", "when", "next", "last", "redo", "goto", "eval", "warn", "INIT",
+    // 5 letters
+    "elsif", "while", "until", "local", "state", "given", "break", "print", "BEGIN", "CHECK",
+    // 6+ letters
+    "unless", "return", "require", "package", "default", "foreach", "continue", "UNITCHECK",
+];
+
+#[inline]
+fn is_keyword(word: &str) -> bool {
+    // Fast length check first
+    match word.len() {
+        2 => matches!(word, "if" | "do" | "my" | "or"),
+        3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "END"),
+        4 => matches!(word, "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"),
+        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "BEGIN" | "CHECK"),
+        6 => matches!(word, "unless" | "return"),
+        7 => matches!(word, "require" | "package" | "default" | "foreach"),
+        8 => word == "continue",
+        9 => word == "UNITCHECK",
+        _ => false,
+    }
+}
+
+/// Fast lookup table for compound operator second characters
+const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~";
+
+#[inline]
+fn is_compound_operator(first: char, second: char) -> bool {
+    // Fast path for ASCII
+    if first.is_ascii() && second.is_ascii() {
+        let first_byte = first as u8;
+        let second_byte = second as u8;
+        
+        match first_byte {
+            b'+' => second_byte == b'=' || second_byte == b'+',
+            b'-' => second_byte == b'=' || second_byte == b'-' || second_byte == b'>',
+            b'*' | b'/' | b'%' | b'^' => second_byte == b'=',
+            b'&' => second_byte == b'=' || second_byte == b'&',
+            b'|' => second_byte == b'=' || second_byte == b'|',
+            b'<' => second_byte == b'=' || second_byte == b'<',
+            b'>' => second_byte == b'=' || second_byte == b'>',
+            b'=' => second_byte == b'=' || second_byte == b'~' || second_byte == b'>',
+            b'!' => second_byte == b'=' || second_byte == b'~',
+            b'.' => second_byte == b'.',
+            b'~' => second_byte == b'~',
+            _ => false,
+        }
+    } else {
+        // Fallback for non-ASCII
+        matches!((first, second),
+            ('+', '=') | ('-', '=') | ('*', '=') | ('/', '=') | ('%', '=') |
+            ('&', '=') | ('|', '=') | ('^', '=') | ('<', '<') | ('>', '>') |
+            ('<', '=') | ('>', '=') | ('=', '=') | ('!', '=') | ('=', '~') |
+            ('!', '~') | ('+', '+') | ('-', '-') | ('&', '&') | ('|', '|') |
+            ('-', '>') | ('=', '>') | ('.', '.') | ('~', '~')
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_tokens() {
+        let mut lexer = PerlLexer::new("my $x = 42;");
+        
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::Keyword(Arc::from("my")));
+        
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Identifier(_)));
+        
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(_)));
+        
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Number(_)));
+        
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::Semicolon);
+    }
+
+    #[test]
+    fn test_slash_disambiguation() {
+        // Division
+        let mut lexer = PerlLexer::new("10 / 2");
+        lexer.next_token(); // 10
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::Division);
+        
+        // Regex
+        let mut lexer = PerlLexer::new("if (/pattern/)");
+        lexer.next_token(); // if
+        lexer.next_token(); // (
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+    }
+}
