@@ -1746,7 +1746,7 @@ impl<'a> PerlLexer<'a> {
                 self.update_mode(&token.token_type);
                 return Some(token);
             }
-            b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' => {
+            b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' | b'\\' => {
                 // Check for number starting with decimal point
                 if ch == b'.' && self.position + 1 < self.input.len() && self.input.as_bytes()[self.position + 1].is_ascii_digit() {
                     self.position += 1;
