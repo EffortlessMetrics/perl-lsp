@@ -29,7 +29,7 @@ fn test_nested_heredoc_delimiters() {
     let input = r#"
 my $outer = 'EOF';
 my $inner = $outer;
-my $doc = <<${${var}};
+my $doc = <<${${inner}};
 Nested content
 EOF
 "#;

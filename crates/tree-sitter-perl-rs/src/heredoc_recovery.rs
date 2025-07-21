@@ -357,6 +357,26 @@ impl HeredocRecovery {
             }
         }
         
+        // Brace-delimited variable pattern like ${var} or ${${var}}
+        let brace_var_pattern = Regex::new(r"\$\{(.+)\}").unwrap();
+        if let Some(cap) = brace_var_pattern.captures(expression) {
+            let inner = cap.get(1)?.as_str();
+            
+            // Check if it's a nested ${} expression
+            if inner.starts_with("${") && inner.ends_with('}') {
+                // Extract the innermost variable name
+                let innermost = inner.trim_start_matches("${").trim_end_matches('}');
+                if let Some(value) = self.resolve_variable_value(innermost, tokens) {
+                    return Some((Arc::from(value), 0.9));
+                }
+            } else {
+                // Simple ${var} case
+                if let Some(value) = self.resolve_variable_value(inner, tokens) {
+                    return Some((Arc::from(value), 0.9));
+                }
+            }
+        }
+        
         // Regular scalar variable pattern
         let var_pattern = Regex::new(r"\$(\w+)").unwrap();
         if let Some(cap) = var_pattern.captures(expression) {
@@ -395,6 +415,50 @@ impl HeredocRecovery {
                 return Some(text[1..text.len()-1].to_string());
             }
         }
+        None
+    }
+    
+    /// Resolve a variable value by following assignment chains
+    fn resolve_variable_value(&self, var_name: &str, tokens: &[Token]) -> Option<String> {
+        let mut current_var = var_name;
+        let mut visited = std::collections::HashSet::new();
+        
+        // Follow assignment chains up to a reasonable depth
+        for _ in 0..5 {
+            if visited.contains(current_var) {
+                break; // Circular reference
+            }
+            visited.insert(current_var);
+            
+            // Look for assignment of current variable
+            for i in (0..tokens.len()).rev() {
+                if let TokenType::Identifier(name) = &tokens[i].token_type {
+                    if name.as_ref() == format!("${}", current_var) {
+                        // Check if next tokens form an assignment
+                        if i + 2 < tokens.len() {
+                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=") {
+                                match &tokens[i + 2].token_type {
+                                    TokenType::StringLiteral => {
+                                        // Found a string literal value
+                                        let text = tokens[i + 2].text.as_ref();
+                                        return self.extract_string_literal(text);
+                                    }
+                                    TokenType::Identifier(next_var) => {
+                                        // Variable assigned to another variable
+                                        if let Some(stripped) = next_var.strip_prefix('$') {
+                                            current_var = stripped;
+                                            break; // Continue with the new variable
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         None
     }
     
