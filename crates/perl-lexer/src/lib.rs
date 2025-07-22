@@ -498,6 +498,26 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 })
             }
+            '[' => {
+                self.advance();
+                self.mode = LexerMode::ExpectTerm;
+                Some(Token {
+                    token_type: TokenType::LeftBracket,
+                    text: Arc::from("["),
+                    start,
+                    end: self.position,
+                })
+            }
+            ']' => {
+                self.advance();
+                self.mode = LexerMode::ExpectOperator;
+                Some(Token {
+                    token_type: TokenType::RightBracket,
+                    text: Arc::from("]"),
+                    start,
+                    end: self.position,
+                })
+            }
             _ => None,
         }
     }
