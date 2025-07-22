@@ -43,8 +43,8 @@ impl Node {
                 format!("(variable {} {})", sigil, name)
             }
             
-            NodeKind::Assignment { lhs, rhs } => {
-                format!("(assignment {} {})", lhs.to_sexp(), rhs.to_sexp())
+            NodeKind::Assignment { lhs, rhs, op } => {
+                format!("(assignment_{} {} {})", op.replace("=", "assign"), lhs.to_sexp(), rhs.to_sexp())
             }
             
             NodeKind::Binary { op, left, right } => {
@@ -246,6 +246,7 @@ pub enum NodeKind {
     Assignment {
         lhs: Box<Node>,
         rhs: Box<Node>,
+        op: String, // =, +=, -=, etc.
     },
     
     // Expressions

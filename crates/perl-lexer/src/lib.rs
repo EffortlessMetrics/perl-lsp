@@ -436,6 +436,24 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = self.current_char() {
                     if is_compound_operator(ch, next) {
                         self.advance();
+                        
+                        // Check for three-character operators like **=, <<=, >>=
+                        if self.position < self.input.len() {
+                            let third = self.current_char();
+                            if ch == '*' && next == '*' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '<' && next == '<' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '>' && next == '>' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '&' && next == '&' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '|' && next == '|' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '/' && next == '/' && third == Some('=') {
+                                self.advance(); // consume the =
+                            }
+                        }
                     }
                 }
                 
@@ -730,7 +748,7 @@ fn is_keyword(word: &str) -> bool {
 }
 
 /// Fast lookup table for compound operator second characters
-const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~";
+const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
 
 #[inline]
 fn is_compound_operator(first: char, second: char) -> bool {
@@ -742,7 +760,9 @@ fn is_compound_operator(first: char, second: char) -> bool {
         match first_byte {
             b'+' => second_byte == b'=' || second_byte == b'+',
             b'-' => second_byte == b'=' || second_byte == b'-' || second_byte == b'>',
-            b'*' | b'/' | b'%' | b'^' => second_byte == b'=',
+            b'*' => second_byte == b'=' || second_byte == b'*',
+            b'/' => second_byte == b'=' || second_byte == b'/',
+            b'%' | b'^' => second_byte == b'=',
             b'&' => second_byte == b'=' || second_byte == b'&',
             b'|' => second_byte == b'=' || second_byte == b'|',
             b'<' => second_byte == b'=' || second_byte == b'<',
@@ -757,7 +777,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
     } else {
         // Fallback for non-ASCII
         matches!((first, second),
-            ('+', '=') | ('-', '=') | ('*', '=') | ('/', '=') | ('%', '=') |
+            ('+', '=') | ('-', '=') | ('*', '=') | ('*', '*') | ('/', '=') | ('/', '/') | ('%', '=') |
             ('&', '=') | ('|', '=') | ('^', '=') | ('<', '<') | ('>', '>') |
             ('<', '=') | ('>', '=') | ('=', '=') | ('!', '=') | ('=', '~') |
             ('!', '~') | ('+', '+') | ('-', '-') | ('&', '&') | ('|', '|') |
