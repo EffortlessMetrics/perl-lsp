@@ -560,15 +560,40 @@ impl<'a> PerlLexer<'a> {
                 // It's a regex
                 return self.parse_regex(start);
             } else {
-                // It's division
+                // It's division or defined-or operator
                 self.advance();
-                self.mode = LexerMode::ExpectTerm;
-                return Some(Token {
-                    token_type: TokenType::Division,
-                    text: Arc::from("/"),
-                    start,
-                    end: self.position,
-                });
+                // Check for // or //=
+                if self.current_char() == Some('/') {
+                    self.advance(); // consume second /
+                    if self.current_char() == Some('=') {
+                        self.advance(); // consume =
+                        let text = &self.input[start..self.position];
+                        self.mode = LexerMode::ExpectTerm;
+                        return Some(Token {
+                            token_type: TokenType::Operator(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        });
+                    } else {
+                        let text = &self.input[start..self.position];
+                        self.mode = LexerMode::ExpectTerm;
+                        return Some(Token {
+                            token_type: TokenType::Operator(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        });
+                    }
+                } else {
+                    self.mode = LexerMode::ExpectTerm;
+                    return Some(Token {
+                        token_type: TokenType::Division,
+                        text: Arc::from("/"),
+                        start,
+                        end: self.position,
+                    });
+                }
             }
         }
         

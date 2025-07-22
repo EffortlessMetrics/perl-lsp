@@ -190,11 +190,15 @@ impl Node {
                 result
             }
             
-            NodeKind::For { init, condition, update, body } => {
+            NodeKind::For { init, condition, update, body, continue_block } => {
                 let init_str = init.as_ref().map(|i| i.to_sexp()).unwrap_or_else(|| "()".to_string());
                 let cond_str = condition.as_ref().map(|c| c.to_sexp()).unwrap_or_else(|| "()".to_string());
                 let update_str = update.as_ref().map(|u| u.to_sexp()).unwrap_or_else(|| "()".to_string());
-                format!("(for {} {} {} {})", init_str, cond_str, update_str, body.to_sexp())
+                let mut result = format!("(for {} {} {} {})", init_str, cond_str, update_str, body.to_sexp());
+                if let Some(cont) = continue_block {
+                    result.push_str(&format!(" (continue {})", cont.to_sexp()));
+                }
+                result
             }
             
             NodeKind::Foreach { variable, list, body } => {
@@ -437,6 +441,7 @@ pub enum NodeKind {
         condition: Option<Box<Node>>,
         update: Option<Box<Node>>,
         body: Box<Node>,
+        continue_block: Option<Box<Node>>,
     },
     
     Foreach {

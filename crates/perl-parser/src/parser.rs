@@ -465,8 +465,13 @@ impl<'a> Parser<'a> {
         
         let body = self.parse_block()?;
         
-        // TODO: Handle continue block
-        let continue_block = None;
+        // Handle continue block
+        let continue_block = if self.peek_kind() == Some(TokenKind::Continue) {
+            self.tokens.next()?; // consume 'continue'
+            Some(Box::new(self.parse_block()?))
+        } else {
+            None
+        };
         
         let end = self.previous_position();
         Ok(Node::new(
@@ -585,6 +590,14 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::RightParen)?;
         let body = self.parse_block()?;
         
+        // Handle continue block
+        let continue_block = if self.peek_kind() == Some(TokenKind::Continue) {
+            self.tokens.next()?; // consume 'continue'
+            Some(Box::new(self.parse_block()?))
+        } else {
+            None
+        };
+        
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::For {
@@ -592,6 +605,7 @@ impl<'a> Parser<'a> {
                 condition,
                 update,
                 body: Box::new(body),
+                continue_block,
             },
             SourceLocation { start, end }
         ))
@@ -799,7 +813,15 @@ impl<'a> Parser<'a> {
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
             self.tokens.next()?; // consume ::
             name.push_str("::");
-            name.push_str(&self.expect(TokenKind::Identifier)?.text);
+            
+            // Check if there's an identifier after ::
+            // If not, it's a trailing :: which is valid in Perl
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                name.push_str(&self.tokens.next()?.text);
+            } else {
+                // Trailing :: is valid, just break
+                break;
+            }
         }
         
         let block = if self.peek_kind() == Some(TokenKind::LeftBrace) {
@@ -1331,7 +1353,7 @@ impl<'a> Parser<'a> {
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {
-            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" => {
+            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" => {
                 let start = token.start;
                 let func_name = self.consume_token()?.text;
                 
@@ -1355,7 +1377,13 @@ impl<'a> Parser<'a> {
                         let mut args = vec![];
                         
                         // Parse first argument
-                        args.push(self.parse_expression()?);
+                        // Special handling for open/pipe/socket which can take my $var as first arg
+                        if (func_name == "open" || func_name == "pipe" || func_name == "socket") && 
+                           self.peek_kind() == Some(TokenKind::My) {
+                            args.push(self.parse_variable_declaration()?);
+                        } else {
+                            args.push(self.parse_expression()?);
+                        }
                         
                         // Parse remaining arguments
                         while self.peek_kind() == Some(TokenKind::Comma) {
@@ -2398,16 +2426,15 @@ impl<'a> Parser<'a> {
         // Keep consuming :: and identifiers
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
             self.consume_token()?; // consume ::
+            name.push_str("::");
+            
+            // In Perl, trailing :: is valid (e.g., Foo::Bar::)
+            // Only consume identifier if there is one
             if self.peek_kind() == Some(TokenKind::Identifier) {
                 let next_part = self.consume_token()?;
-                name.push_str("::");
                 name.push_str(&next_part.text);
-            } else {
-                return Err(ParseError::syntax(
-                    "Expected identifier after ::",
-                    self.current_position()
-                ));
             }
+            // No error for trailing :: - it's valid in Perl
         }
         
         let end = self.previous_position();
