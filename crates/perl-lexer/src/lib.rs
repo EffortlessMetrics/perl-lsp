@@ -843,6 +843,26 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 })
             }
+            '{' => {
+                self.advance();
+                self.mode = LexerMode::ExpectTerm;
+                Some(Token {
+                    token_type: TokenType::LeftBrace,
+                    text: Arc::from("{"),
+                    start,
+                    end: self.position,
+                })
+            }
+            '}' => {
+                self.advance();
+                self.mode = LexerMode::ExpectOperator;
+                Some(Token {
+                    token_type: TokenType::RightBrace,
+                    text: Arc::from("}"),
+                    start,
+                    end: self.position,
+                })
+            }
             _ => None,
         }
     }
@@ -1245,11 +1265,11 @@ const KEYWORDS: &[&str] = &[
     // 2 letters
     "if", "do", "my", "or",
     // 3 letters
-    "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "try", "END",
+    "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "try", "END", "cmp",
     // 4 letters
     "else", "when", "next", "last", "redo", "goto", "eval", "warn", "INIT",
     // 5 letters
-    "elsif", "while", "until", "local", "state", "given", "break", "print", "catch", "BEGIN", "CHECK", "class",
+    "elsif", "while", "until", "local", "state", "given", "break", "print", "catch", "BEGIN", "CHECK", "class", "undef",
     // 6+ letters
     "unless", "return", "require", "package", "default", "foreach", "finally", "continue", "UNITCHECK", "method", "format",
 ];
@@ -1259,9 +1279,9 @@ fn is_keyword(word: &str) -> bool {
     // Fast length check first
     match word.len() {
         2 => matches!(word, "if" | "do" | "my" | "or"),
-        3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "try" | "END"),
+        3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "try" | "END" | "cmp"),
         4 => matches!(word, "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"),
-        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK" | "class"),
+        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK" | "class" | "undef"),
         6 => matches!(word, "unless" | "return" | "method" | "format"),
         7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
         8 => word == "continue",

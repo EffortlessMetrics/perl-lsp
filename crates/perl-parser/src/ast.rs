@@ -90,6 +90,10 @@ impl Node {
                 "(ellipsis)".to_string()
             }
             
+            NodeKind::Undef => {
+                "(undef)".to_string()
+            }
+            
             NodeKind::Readline { filehandle } => {
                 if let Some(fh) = filehandle {
                     format!("(readline {})", fh)
@@ -408,6 +412,8 @@ pub enum NodeKind {
     Diamond, // <>
     
     Ellipsis, // ...
+    
+    Undef, // undef
     
     Readline {
         filehandle: Option<String>, // <STDIN>, <$fh>, etc.

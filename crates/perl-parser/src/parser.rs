@@ -2023,7 +2023,7 @@ impl<'a> Parser<'a> {
             match kind {
                 TokenKind::Less | TokenKind::Greater | 
                 TokenKind::LessEqual | TokenKind::GreaterEqual |
-                TokenKind::Spaceship => {
+                TokenKind::Spaceship | TokenKind::StringCompare => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_shift()?;
                     let start = expr.location.start;
@@ -2218,6 +2218,21 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Increment | TokenKind::Decrement => {
                     // Pre-increment and pre-decrement
+                    let op_token = self.tokens.next()?;
+                    let start = op_token.start;
+                    let operand = self.parse_unary()?;
+                    let end = operand.location.end;
+                    
+                    return Ok(Node::new(
+                        NodeKind::Unary {
+                            op: op_token.text.clone(),
+                            operand: Box::new(operand),
+                        },
+                        SourceLocation { start, end }
+                    ));
+                }
+                TokenKind::SmartMatch => {
+                    // Smart match can be used as a unary operator
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     let operand = self.parse_unary()?;
@@ -2516,16 +2531,46 @@ impl<'a> Parser<'a> {
                                 // Parse arguments without parentheses
                                 let mut args = Vec::new();
                                 
-                                // Parse the first argument
-                                args.push(self.parse_comma()?);
-                                
-                                // Parse remaining arguments separated by commas
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
-                                    if self.is_at_statement_end() {
-                                        break;
+                                // Special handling for sort, map, grep with block first argument
+                                if matches!(name.as_str(), "sort" | "map" | "grep") && 
+                                   self.peek_kind() == Some(TokenKind::LeftBrace) {
+                                    // Parse block expression as first argument
+                                    let block_start = self.current_position();
+                                    self.expect(TokenKind::LeftBrace)?;
+                                    
+                                    // Parse the expression inside the block
+                                    let block_expr = self.parse_expression()?;
+                                    
+                                    self.expect(TokenKind::RightBrace)?;
+                                    let block_end = self.previous_position();
+                                    
+                                    // Wrap the expression in a block node
+                                    let block = Node::new(
+                                        NodeKind::Block { statements: vec![block_expr] },
+                                        SourceLocation { start: block_start, end: block_end }
+                                    );
+                                    
+                                    args.push(block);
+                                    
+                                    // Parse remaining arguments
+                                    while !self.is_at_statement_end() {
+                                        if self.peek_kind() == Some(TokenKind::Comma) {
+                                            self.consume_token()?; // consume comma
+                                        }
+                                        args.push(self.parse_comma()?);
                                     }
+                                } else {
+                                    // Parse the first argument
                                     args.push(self.parse_comma()?);
+                                    
+                                    // Parse remaining arguments separated by commas
+                                    while self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?; // consume comma
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_comma()?);
+                                    }
                                 }
                                 
                                 let start = expr.location.start;
@@ -3088,6 +3133,14 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
                     NodeKind::Ellipsis,
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
+            
+            TokenKind::Undef => {
+                let token = self.tokens.next()?;
+                Ok(Node::new(
+                    NodeKind::Undef,
                     SourceLocation { start: token.start, end: token.end }
                 ))
             }

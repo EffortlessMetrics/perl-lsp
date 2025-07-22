@@ -53,6 +53,7 @@ pub enum TokenKind {
     Class,
     Method,
     Format,
+    Undef,
     
     // Operators
     Assign,
@@ -268,10 +269,12 @@ impl<'a> TokenStream<'a> {
                 "class" => TokenKind::Class,
                 "method" => TokenKind::Method,
                 "format" => TokenKind::Format,
+                "undef" => TokenKind::Undef,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,
                 "xor" => TokenKind::WordXor,
+                "cmp" => TokenKind::StringCompare,
                 "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
                 _ => TokenKind::Identifier,
             },
