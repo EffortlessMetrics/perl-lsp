@@ -914,6 +914,20 @@ impl<'a> Parser<'a> {
             }
         }
         
+        // Check for optional version number
+        let version = if self.peek_kind() == Some(TokenKind::Number) {
+            Some(self.tokens.next()?.text.clone())
+        } else {
+            None
+        };
+        
+        // If we have a version, append it to the name for now
+        // (In a real AST, you'd probably want these as separate fields)
+        if let Some(ver) = version {
+            name.push(' ');
+            name.push_str(&ver);
+        }
+        
         let block = if self.peek_kind() == Some(TokenKind::LeftBrace) {
             Some(Box::new(self.parse_block()?))
         } else {
@@ -2733,7 +2747,12 @@ impl<'a> Parser<'a> {
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
         let start_token = self.consume_token()?;
         let start = start_token.start;
-        let mut name = start_token.text.clone();
+        let mut name = if start_token.kind == TokenKind::DoubleColon {
+            // Handle absolute path like ::Foo::Bar
+            "::".to_string()
+        } else {
+            start_token.text.clone()
+        };
         
         // Keep consuming :: and identifiers
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
@@ -3090,6 +3109,11 @@ impl<'a> Parser<'a> {
                     NodeKind::Identifier { name: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end }
                 ))
+            }
+            
+            TokenKind::DoubleColon => {
+                // Absolute package path like ::Foo::Bar
+                self.parse_qualified_identifier()
             }
             
             _ => {
