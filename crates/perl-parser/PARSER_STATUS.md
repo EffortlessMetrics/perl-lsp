@@ -46,6 +46,11 @@ This document tracks the current capabilities of the perl-parser implementation.
 - Regex literals: `/pattern/`, `/pattern/modifiers`
 - Match operators: `$str =~ /pattern/`, `$str !~ /pattern/`
 
+### Other Features
+- Word lists: `qw(word1 word2 word3)`
+- Phase blocks: `BEGIN { }`, `END { }`, `CHECK { }`, `INIT { }`, `UNITCHECK { }`
+- Comments: `# single line comments`
+
 ## 🚧 Partially Implemented
 
 ### Expressions

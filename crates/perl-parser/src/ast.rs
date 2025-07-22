@@ -204,6 +204,10 @@ impl Node {
                 }
             }
             
+            NodeKind::PhaseBlock { phase, block } => {
+                format!("({} {})", phase, block.to_sexp())
+            }
+            
             NodeKind::Identifier { name } => {
                 format!("(identifier {})", name)
             }
@@ -356,6 +360,12 @@ pub enum NodeKind {
     No {
         module: String,
         args: Vec<String>,
+    },
+    
+    // Phase blocks
+    PhaseBlock {
+        phase: String, // BEGIN, END, CHECK, INIT, UNITCHECK
+        block: Box<Node>,
     },
     
     // Misc

@@ -97,6 +97,10 @@ impl<'a> Parser<'a> {
             TokenKind::Use => self.parse_use(),
             TokenKind::No => self.parse_no(),
             
+            // Phase blocks
+            TokenKind::Begin | TokenKind::End | TokenKind::Check | 
+            TokenKind::Init | TokenKind::Unitcheck => self.parse_phase_block(),
+            
             // Return statement
             TokenKind::Return => self.parse_return(),
             
@@ -612,6 +616,33 @@ impl<'a> Parser<'a> {
         ))
     }
     
+    /// Parse phase block (BEGIN, END, CHECK, INIT, UNITCHECK)
+    fn parse_phase_block(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let phase_token = self.consume_token()?;
+        let phase = phase_token.text.clone();
+        
+        // Phase blocks must be followed by a block
+        if self.peek_kind() != Some(TokenKind::LeftBrace) {
+            return Err(ParseError::syntax(
+                &format!("{} must be followed by a block", phase),
+                self.current_position()
+            ));
+        }
+        
+        let block = self.parse_block()?;
+        let end = block.location.end;
+        
+        // Create a special node for phase blocks
+        Ok(Node::new(
+            NodeKind::PhaseBlock { 
+                phase,
+                block: Box::new(block),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
     /// Parse no statement (similar to use but disables pragmas/modules)
     fn parse_no(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -1047,14 +1078,27 @@ impl<'a> Parser<'a> {
                     // Function call
                     if let NodeKind::Identifier { name } = &expr.kind {
                         let name = name.clone();
-                        let args = self.parse_args()?;
-                        let start = expr.location.start;
-                        let end = self.previous_position();
                         
-                        expr = Node::new(
-                            NodeKind::FunctionCall { name, args },
-                            SourceLocation { start, end }
-                        );
+                        // Special handling for qw()
+                        if name == "qw" {
+                            let words = self.parse_qw_list()?;
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+                            
+                            expr = Node::new(
+                                NodeKind::ArrayLiteral { elements: words },
+                                SourceLocation { start, end }
+                            );
+                        } else {
+                            let args = self.parse_args()?;
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+                            
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name, args },
+                                SourceLocation { start, end }
+                            );
+                        }
                     }
                 }
                 
@@ -1282,6 +1326,33 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next()?;
         self.last_end_position = token.end;
         Ok(token)
+    }
+    
+    /// Parse qw() word list
+    fn parse_qw_list(&mut self) -> ParseResult<Vec<Node>> {
+        self.expect(TokenKind::LeftParen)?; // consume (
+        
+        let mut words = Vec::new();
+        
+        // Parse space-separated words until )
+        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+            if let Some(TokenKind::Identifier) = self.peek_kind() {
+                let token = self.tokens.next()?;
+                words.push(Node::new(
+                    NodeKind::String { 
+                        value: format!("'{}'", token.text), // qw produces single-quoted strings
+                        interpolated: false,
+                    },
+                    SourceLocation { start: token.start, end: token.end }
+                ));
+            } else {
+                let pos = self.current_position();
+                return Err(ParseError::syntax("Expected word in qw() list", pos));
+            }
+        }
+        
+        self.expect(TokenKind::RightParen)?;
+        Ok(words)
     }
     
     /// Parse hash literal or block
