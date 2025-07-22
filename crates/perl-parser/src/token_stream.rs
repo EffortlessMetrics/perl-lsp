@@ -83,6 +83,8 @@ pub enum TokenKind {
     Greater,
     LessEqual,
     GreaterEqual,
+    Spaceship, // <=>
+    StringCompare, // cmp
     And,
     Or,
     Not,
@@ -272,6 +274,7 @@ impl<'a> TokenStream<'a> {
                 ">" => TokenKind::Greater,
                 "<=" => TokenKind::LessEqual,
                 ">=" => TokenKind::GreaterEqual,
+                "<=>" => TokenKind::Spaceship,
                 "&&" => TokenKind::And,
                 "||" => TokenKind::Or,
                 "!" => TokenKind::Not,
