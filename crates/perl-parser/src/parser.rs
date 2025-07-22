@@ -797,7 +797,7 @@ impl<'a> Parser<'a> {
         
         while let Some(kind) = self.peek_kind() {
             match kind {
-                TokenKind::Equal | TokenKind::NotEqual => {
+                TokenKind::Equal | TokenKind::NotEqual | TokenKind::Match | TokenKind::NotMatch => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_relational()?;
                     let start = expr.location.start;
@@ -1058,6 +1058,17 @@ impl<'a> Parser<'a> {
                     NodeKind::String { 
                         value: token.text.clone(),
                         interpolated: false,
+                    },
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
+            
+            TokenKind::Regex => {
+                let token = self.tokens.next()?;
+                Ok(Node::new(
+                    NodeKind::Regex { 
+                        pattern: token.text.clone(),
+                        modifiers: String::new(), // TODO: Parse modifiers
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
