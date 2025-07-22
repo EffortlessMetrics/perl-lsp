@@ -506,6 +506,23 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Regular braced variable like ${foo} or glob like *{$glob}
                     else {
+                        // Check if this is a dereference like ${$ref} or @{$ref}
+                        // If the next char is a sigil, we should stop here and let the parser handle it
+                        // EXCEPT for globs - *{$glob} should be parsed as one token
+                        if sigil != '*' && matches!(self.current_char(), Some('$') | Some('@') | Some('%') | Some('*') | Some('&')) {
+                            // This is a dereference, backtrack
+                            self.position = start + 1; // Just past the sigil
+                            let text = &self.input[start..self.position];
+                            self.mode = LexerMode::ExpectOperator;
+                            
+                            return Some(Token {
+                                token_type: TokenType::Identifier(Arc::from(text)),
+                                text: Arc::from(text),
+                                start,
+                                end: self.position,
+                            });
+                        }
+                        
                         // For glob access, we need to consume everything inside braces
                         if sigil == '*' {
                             let mut brace_depth = 1;
@@ -546,6 +563,14 @@ impl<'a> PerlLexer<'a> {
                                 break;
                             }
                         }
+                    }
+                    // Handle special punctuation variables
+                    else if sigil == '$' && matches!(ch, '?' | '!' | '@' | '&' | '`' | '\'' | '.' | '/' | '\\' | '|' | '+' | '-' | '[' | ']' | '$') {
+                        self.advance(); // consume the special character
+                    }
+                    // Handle special array/hash punctuation variables
+                    else if (sigil == '@' || sigil == '%') && matches!(ch, '+' | '-') {
+                        self.advance(); // consume the + or -
                     }
                     // Handle :: for package-qualified variables or stash access
                     else if ch == ':' && self.peek_char(1) == Some(':') {
