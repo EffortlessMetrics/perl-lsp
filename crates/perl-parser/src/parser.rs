@@ -718,9 +718,36 @@ impl<'a> Parser<'a> {
     /// Parse an expression
     fn parse_expression(&mut self) -> ParseResult<Node> {
         self.check_recursion()?;
-        let result = self.parse_assignment();
+        let result = self.parse_comma();
         self.exit_recursion();
         result
+    }
+    
+    /// Parse comma operator (lowest precedence)
+    fn parse_comma(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_assignment()?;
+        
+        // In scalar context, comma creates a list
+        // For now, we'll just parse it as sequential expressions
+        if self.peek_kind() == Some(TokenKind::Comma) {
+            let mut expressions = vec![expr];
+            
+            while self.peek_kind() == Some(TokenKind::Comma) {
+                self.tokens.next()?; // consume comma
+                expressions.push(self.parse_assignment()?);
+            }
+            
+            // Return as array literal for now
+            let start = expressions[0].location.start;
+            let end = expressions.last().unwrap().location.end;
+            
+            expr = Node::new(
+                NodeKind::ArrayLiteral { elements: expressions },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
     }
     
     /// Parse assignment expression
@@ -1053,11 +1080,12 @@ impl<'a> Parser<'a> {
             
             TokenKind::String => {
                 let token = self.tokens.next()?;
-                // TODO: Detect interpolation
+                // Check if it's a double-quoted string (interpolated)
+                let interpolated = token.text.starts_with('"');
                 Ok(Node::new(
                     NodeKind::String { 
                         value: token.text.clone(),
-                        interpolated: false,
+                        interpolated,
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
@@ -1167,9 +1195,9 @@ impl<'a> Parser<'a> {
             }
             
             TokenKind::LeftBrace => {
-                // Hash literal or block
-                // For now, treat as block
-                self.parse_block()
+                // Could be hash literal or block
+                // Try to parse as hash literal first
+                self.parse_hash_or_block()
             }
             
             _ => {
@@ -1254,6 +1282,39 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next()?;
         self.last_end_position = token.end;
         Ok(token)
+    }
+    
+    /// Parse hash literal or block
+    fn parse_hash_or_block(&mut self) -> ParseResult<Node> {
+        let start_token = self.tokens.next()?; // consume {
+        let start = start_token.start;
+        
+        // Peek ahead to determine if it's a hash or block
+        // Empty {} is always a hash ref in expression context
+        if self.peek_kind() == Some(TokenKind::RightBrace) {
+            self.tokens.next()?; // consume }
+            let end = self.previous_position();
+            return Ok(Node::new(
+                NodeKind::HashLiteral { pairs: Vec::new() },
+                SourceLocation { start, end }
+            ));
+        }
+        
+        // For now, just parse as block
+        // TODO: Implement proper hash vs block disambiguation
+        let mut statements = Vec::new();
+        
+        while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
+            statements.push(self.parse_statement()?);
+        }
+        
+        self.expect(TokenKind::RightBrace)?;
+        let end = self.previous_position();
+        
+        Ok(Node::new(
+            NodeKind::Block { statements },
+            SourceLocation { start, end }
+        ))
     }
 }
 
