@@ -253,8 +253,16 @@ impl<'a> Parser<'a> {
         let sigil = sigil_token.text.clone();
         let start = sigil_token.start;
         
-        // Check if next token is an identifier for the variable name
-        let (name, end) = if self.peek_kind() == Some(TokenKind::Identifier) {
+        // Check if next token is an identifier or a keyword that should be treated as identifier
+        let next_kind = self.peek_kind();
+        let (name, end) = if next_kind == Some(TokenKind::Identifier) || 
+                             // Keywords that can be used as subroutine names with & sigil
+                             (sigil == "&" && matches!(next_kind, 
+                                 Some(TokenKind::Sub) | Some(TokenKind::My) | Some(TokenKind::Our) |
+                                 Some(TokenKind::If) | Some(TokenKind::Unless) | Some(TokenKind::While) |
+                                 Some(TokenKind::For) | Some(TokenKind::Return) | Some(TokenKind::Do) |
+                                 Some(TokenKind::Eval) | Some(TokenKind::Use) | Some(TokenKind::Package)
+                             )) {
             let name_token = self.tokens.next()?;
             let mut name = name_token.text.clone();
             let mut end = name_token.end;
@@ -482,7 +490,7 @@ impl<'a> Parser<'a> {
         
         self.expect(TokenKind::LeftParen)?;
         
-        // Parse init
+        // Parse init (or check if it's a foreach)
         let init = if self.peek_kind() == Some(TokenKind::Semicolon) {
             None
         } else if self.peek_kind() == Some(TokenKind::My) {
@@ -493,7 +501,36 @@ impl<'a> Parser<'a> {
             // Variable declarations in for loops don't have trailing semicolons
             Some(Box::new(decl))
         } else {
-            Some(Box::new(self.parse_expression()?))
+            // Parse expression
+            let expr = self.parse_expression()?;
+            
+            // If followed by ), it's a foreach loop  
+            if self.peek_kind() == Some(TokenKind::RightParen) {
+                self.tokens.next()?; // consume )
+                let body = self.parse_block()?;
+                
+                let end = self.previous_position();
+                
+                // Create implicit $_ variable
+                let implicit_var = Node::new(
+                    NodeKind::Variable { 
+                        sigil: "$".to_string(),
+                        name: "_".to_string()
+                    },
+                    SourceLocation { start, end: start }
+                );
+                
+                return Ok(Node::new(
+                    NodeKind::Foreach {
+                        variable: Box::new(implicit_var),
+                        list: Box::new(expr),
+                        body: Box::new(body),
+                    },
+                    SourceLocation { start, end }
+                ));
+            }
+            
+            Some(Box::new(expr))
         };
         self.expect(TokenKind::Semicolon)?;
         
@@ -751,8 +788,46 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'use'
         
-        // Parse module name (can include ::)
-        let mut module = self.expect(TokenKind::Identifier)?.text.clone();
+        // Parse module name, version, or identifier
+        let mut module = if self.peek_kind() == Some(TokenKind::Number) {
+            // Numeric version like 5.036
+            self.tokens.next()?.text.clone()
+        } else {
+            let first_token = self.tokens.next()?;
+            
+            // Check for version strings
+            if first_token.kind == TokenKind::Identifier && first_token.text.starts_with('v') && 
+               first_token.text.chars().skip(1).all(|c| c.is_numeric()) {
+                // Version identifier like v5 or v536
+                let mut version = first_token.text.clone();
+                
+                // Check if followed by dot and more numbers (e.g., v5.36)
+                if self.peek_kind() == Some(TokenKind::Unknown) {
+                    if let Ok(dot_token) = self.tokens.peek() {
+                        if dot_token.text == "." {
+                            self.tokens.next()?; // consume dot
+                            if self.peek_kind() == Some(TokenKind::Number) {
+                                let num = self.tokens.next()?;
+                                version.push('.');
+                                version.push_str(&num.text);
+                            }
+                        }
+                    }
+                }
+                version
+            } else if first_token.text == "v" && self.peek_kind() == Some(TokenKind::Number) {
+                // Version string like v5.36 (tokenized as "v" followed by number)
+                let version = self.expect(TokenKind::Number)?;
+                format!("v{}", version.text)
+            } else if first_token.kind == TokenKind::Identifier {
+                first_token.text.clone()
+            } else {
+                return Err(ParseError::syntax(
+                    &format!("Expected module name or version, found {:?}", first_token.kind),
+                    first_token.start
+                ));
+            }
+        };
         
         // Handle :: in module names
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
@@ -769,7 +844,41 @@ impl<'a> Parser<'a> {
         
         // Parse optional import list
         let mut args = Vec::new();
-        if self.peek_kind() == Some(TokenKind::LeftParen) {
+        
+        // Handle bare arguments (no parentheses)
+        if matches!(self.peek_kind(), Some(TokenKind::String) | Some(TokenKind::Identifier)) &&
+           !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
+            // Parse bare arguments like: use warnings 'void'
+            loop {
+                match self.peek_kind() {
+                    Some(TokenKind::String) => {
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                    Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
+                        // Handle qw()
+                        self.tokens.next()?; // consume qw
+                        if self.peek_kind() == Some(TokenKind::LeftParen) {
+                            self.tokens.next()?; // consume (
+                            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                                if let Some(TokenKind::Identifier) = self.peek_kind() {
+                                    args.push(self.tokens.next()?.text.clone());
+                                }
+                            }
+                            self.expect(TokenKind::RightParen)?;
+                        }
+                    }
+                    Some(TokenKind::Identifier) => {
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                    _ => break,
+                }
+                
+                // Check if we should continue parsing arguments
+                if matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
+                    break;
+                }
+            }
+        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.tokens.next()?; // consume (
             
             // Parse import list
@@ -798,7 +907,10 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightParen)?;
         }
         
-        self.expect(TokenKind::Semicolon)?;
+        // Semicolon is optional at EOF
+        if !matches!(self.peek_kind(), Some(TokenKind::Eof) | None) {
+            self.expect(TokenKind::Semicolon)?;
+        }
         
         let end = self.previous_position();
         Ok(Node::new(
@@ -857,7 +969,41 @@ impl<'a> Parser<'a> {
         
         // Parse optional arguments list
         let mut args = Vec::new();
-        if self.peek_kind() == Some(TokenKind::LeftParen) {
+        
+        // Handle bare arguments (no parentheses)
+        if matches!(self.peek_kind(), Some(TokenKind::String) | Some(TokenKind::Identifier)) &&
+           !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
+            // Parse bare arguments like: no warnings 'void'
+            loop {
+                match self.peek_kind() {
+                    Some(TokenKind::String) => {
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                    Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
+                        // Handle qw()
+                        self.tokens.next()?; // consume qw
+                        if self.peek_kind() == Some(TokenKind::LeftParen) {
+                            self.tokens.next()?; // consume (
+                            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                                if let Some(TokenKind::Identifier) = self.peek_kind() {
+                                    args.push(self.tokens.next()?.text.clone());
+                                }
+                            }
+                            self.expect(TokenKind::RightParen)?;
+                        }
+                    }
+                    Some(TokenKind::Identifier) => {
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                    _ => break,
+                }
+                
+                // Check if we should continue parsing arguments
+                if matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
+                    break;
+                }
+            }
+        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.tokens.next()?; // consume (
             
             // Parse argument list
@@ -886,7 +1032,10 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightParen)?;
         }
         
-        self.expect(TokenKind::Semicolon)?;
+        // Semicolon is optional at EOF
+        if !matches!(self.peek_kind(), Some(TokenKind::Eof) | None) {
+            self.expect(TokenKind::Semicolon)?;
+        }
         
         let end = self.previous_position();
         Ok(Node::new(
@@ -900,7 +1049,10 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'return'
         
-        let value = if self.peek_kind() == Some(TokenKind::Semicolon) {
+        let value = if matches!(self.peek_kind(), 
+            Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace) | 
+            Some(TokenKind::Eof) | None
+        ) {
             None
         } else {
             Some(Box::new(self.parse_expression()?))
@@ -1154,14 +1306,15 @@ impl<'a> Parser<'a> {
                 match self.peek_kind() {
                     Some(TokenKind::Semicolon) | Some(TokenKind::If) | Some(TokenKind::Unless) |
                     Some(TokenKind::While) | Some(TokenKind::Until) | Some(TokenKind::For) | 
-                    Some(TokenKind::Foreach) | None => {
+                    Some(TokenKind::Foreach) | Some(TokenKind::RightBrace) | Some(TokenKind::Eof) | None => {
                         // No arguments - return as function call with empty args
+                        let end = self.previous_position();
                         Ok(Node::new(
                             NodeKind::FunctionCall { 
                                 name: func_name,
                                 args: vec![]
                             },
-                            SourceLocation { start, end: self.previous_position() }
+                            SourceLocation { start, end }
                         ))
                     }
                     _ => {
@@ -2102,7 +2255,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::If) | Some(TokenKind::Unless) | 
             Some(TokenKind::While) | Some(TokenKind::Until) |
             Some(TokenKind::For) | Some(TokenKind::Foreach) |
-            None
+            Some(TokenKind::Eof) | None
         )
     }
     
@@ -2141,7 +2294,9 @@ impl<'a> Parser<'a> {
             "undef" | "ref" | "chomp" | "chop" | "split" | "join" |
             "push" | "pop" | "shift" | "unshift" | "sort" | "map" |
             "grep" | "keys" | "values" | "each" | "delete" | "exists" |
-            "open" | "close" | "read" | "write" | "printf" | "sprintf"
+            "open" | "close" | "read" | "write" | "printf" | "sprintf" |
+            "exit" | "next" | "last" | "redo" | "goto" | "dump" | 
+            "caller" | "import" | "unimport" | "require"
         )
     }
     
