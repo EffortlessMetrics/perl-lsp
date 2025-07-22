@@ -1,41 +1,24 @@
-//! Test diamond operator
+//! Test diamond operator edge cases
 use perl_parser::Parser;
 
 fn main() {
     let tests = vec![
-        // Basic diamond operator
-        "<>",
-        "while (<>) { }",
-        "my $line = <>",
-        "$_ = <>",
-        
-        // Filehandle readline
-        "<STDIN>",
-        "<STDOUT>",
-        "<STDERR>",
-        "<DATA>",
-        "my $input = <STDIN>",
-        
-        // In different contexts
-        "print while <>",
-        "chomp(my $line = <>)",
+        "while (<>) { print }",
+        "while (<>) { print; }",
+        "while (<STDIN>) { print }",
+        "while (<$fh>) { print }",
         "for (<>) { print }",
-        
-        // Glob patterns (different from readline)
-        "glob('*.txt')",
-        "@files = <*.txt>",
+        "if (<>) { print }",
+        "print while <>",
+        "print for <>",
     ];
-
+    
     for test in tests {
-        print!("Testing: {:40} ", test);
+        println!("Testing: {:?}", test);
         let mut parser = Parser::new(test);
         match parser.parse() {
-            Ok(ast) => {
-                println!("✅ S-expr: {}", ast.to_sexp());
-            }
-            Err(e) => {
-                println!("❌ Error: {}", e);
-            }
+            Ok(ast) => println!("  ✅ S-expr: {}", ast.to_sexp()),
+            Err(e) => println!("  ❌ Error: {}", e),
         }
     }
 }
