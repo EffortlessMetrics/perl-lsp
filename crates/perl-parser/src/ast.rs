@@ -39,6 +39,19 @@ impl Node {
                 }
             }
             
+            NodeKind::VariableListDeclaration { declarator, variables, initializer } => {
+                let vars = variables
+                    .iter()
+                    .map(|v| v.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if let Some(init) = initializer {
+                    format!("({}_declaration ({}) {})", declarator, vars, init.to_sexp())
+                } else {
+                    format!("({}_declaration ({}))", declarator, vars)
+                }
+            }
+            
             NodeKind::Variable { sigil, name } => {
                 format!("(variable {} {})", sigil, name)
             }
@@ -291,6 +304,12 @@ pub enum NodeKind {
     VariableDeclaration {
         declarator: String, // my, our, local, state
         variable: Box<Node>,
+        initializer: Option<Box<Node>>,
+    },
+    
+    VariableListDeclaration {
+        declarator: String, // my, our, local, state
+        variables: Vec<Node>,
         initializer: Option<Box<Node>>,
     },
     

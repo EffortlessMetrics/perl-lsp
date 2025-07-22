@@ -122,29 +122,75 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?;
         let declarator = declarator_token.text.clone();
         
-        let variable = self.parse_variable()?;
-        
-        let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-            self.tokens.next()?; // consume =
-            Some(Box::new(self.parse_expression()?))
+        // Check if we have a list declaration like `my ($x, $y)`
+        if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.consume_token()?; // consume (
+            
+            let mut variables = Vec::new();
+            
+            // Parse comma-separated list of variables
+            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                variables.push(self.parse_variable()?);
+                
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // consume comma
+                } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                    return Err(ParseError::syntax(
+                        "Expected comma or closing parenthesis in variable list",
+                        self.current_position()
+                    ));
+                }
+            }
+            
+            self.expect(TokenKind::RightParen)?; // consume )
+            
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_expression()?))
+            } else {
+                None
+            };
+            
+            // Consume semicolon if present (but not in for loop context)
+            if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
+                self.consume_token()?;
+            }
+            
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableListDeclaration {
+                    declarator,
+                    variables,
+                    initializer,
+                },
+                SourceLocation { start, end }
+            ))
         } else {
-            None
-        };
-        
-        // Consume semicolon if present (but not in for loop context)
-        if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
-            self.consume_token()?;
+            // Single variable declaration
+            let variable = self.parse_variable()?;
+            
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_expression()?))
+            } else {
+                None
+            };
+            
+            // Consume semicolon if present (but not in for loop context)
+            if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
+                self.consume_token()?;
+            }
+            
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable: Box::new(variable),
+                    initializer,
+                },
+                SourceLocation { start, end }
+            ))
         }
-        
-        let end = self.previous_position();
-        Ok(Node::new(
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable: Box::new(variable),
-                initializer,
-            },
-            SourceLocation { start, end }
-        ))
     }
     
     /// Parse a variable ($foo, @bar, %baz)
@@ -505,8 +551,12 @@ impl<'a> Parser<'a> {
             None
         };
         
-        // TODO: Parse parameters
-        let params = Vec::new();
+        // Parse optional signature
+        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.parse_signature()?
+        } else {
+            Vec::new()
+        };
         
         let body = self.parse_block()?;
         
@@ -519,6 +569,110 @@ impl<'a> Parser<'a> {
             },
             SourceLocation { start, end }
         ))
+    }
+    
+    /// Parse subroutine signature
+    fn parse_signature(&mut self) -> ParseResult<Vec<Node>> {
+        self.expect(TokenKind::LeftParen)?; // consume (
+        let mut params = Vec::new();
+        
+        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+            // Parse parameter
+            let param = self.parse_signature_param()?;
+            params.push(param);
+            
+            // Check for comma or end of signature
+            if self.peek_kind() == Some(TokenKind::Comma) {
+                self.tokens.next()?; // consume comma
+            } else if self.peek_kind() == Some(TokenKind::RightParen) {
+                break;
+            } else {
+                return Err(ParseError::syntax(
+                    "Expected comma or closing parenthesis in signature",
+                    self.current_position()
+                ));
+            }
+        }
+        
+        self.expect(TokenKind::RightParen)?; // consume )
+        Ok(params)
+    }
+    
+    /// Parse a single signature parameter
+    fn parse_signature_param(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        
+        // Check for named parameter (:$name)
+        let named = if self.peek_kind() == Some(TokenKind::Colon) {
+            self.tokens.next()?; // consume :
+            true
+        } else {
+            false
+        };
+        
+        // Check for type constraint (Type $var)
+        let type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
+            // Look ahead to see if this is a type constraint
+            let token = self.tokens.peek()?;
+            if !token.text.starts_with('$') && !token.text.starts_with('@') && 
+               !token.text.starts_with('%') && !token.text.starts_with('&') {
+                // It's likely a type constraint
+                Some(self.tokens.next()?.text.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        // Parse the variable
+        let variable = self.parse_variable()?;
+        
+        // Check for default value (= expression)
+        let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
+            self.tokens.next()?; // consume =
+            // Parse a primary expression for default value to avoid parsing too far
+            Some(Box::new(self.parse_primary()?))
+        } else {
+            None
+        };
+        
+        let end = if let Some(ref default) = default_value {
+            default.location.end
+        } else {
+            variable.location.end
+        };
+        
+        // Create a parameter node
+        // For now, we'll use the Variable node with additional context
+        // In a full implementation, we might want a dedicated Parameter node kind
+        if named || type_constraint.is_some() || default_value.is_some() {
+            // We need to wrap this in a more complex structure
+            // For now, let's use a Block node to hold the parameter info
+            let mut statements = vec![variable];
+            
+            // Add type constraint as an identifier if present
+            if let Some(tc) = type_constraint {
+                let tc_node = Node::new(
+                    NodeKind::Identifier { name: tc },
+                    SourceLocation { start, end: start }
+                );
+                statements.insert(0, tc_node);
+            }
+            
+            // Add default value if present
+            if let Some(default) = default_value {
+                statements.push(*default);
+            }
+            
+            Ok(Node::new(
+                NodeKind::Block { statements },
+                SourceLocation { start, end }
+            ))
+        } else {
+            // Simple parameter, just return the variable
+            Ok(variable)
+        }
     }
     
     /// Parse package declaration
@@ -1559,27 +1713,168 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Arrow) => {
                     self.tokens.next()?; // consume ->
                     
-                    // Method call
-                    if self.peek_kind() == Some(TokenKind::Identifier) {
-                        let method = self.tokens.next()?.text.clone();
+                    // Check for postfix dereference operators
+                    match self.peek_kind() {
+                        Some(TokenKind::ArraySigil) => {
+                            // ->@* or ->@[...]
+                            self.tokens.next()?; // consume @
+                            
+                            if self.peek_kind() == Some(TokenKind::Star) {
+                                // ->@*
+                                self.tokens.next()?; // consume *
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                expr = Node::new(
+                                    NodeKind::Unary {
+                                        op: "->@*".to_string(),
+                                        operand: Box::new(expr),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            } else if self.peek_kind() == Some(TokenKind::LeftBracket) {
+                                // ->@[...] array slice
+                                self.tokens.next()?; // consume [
+                                let index = self.parse_expression()?;
+                                self.expect(TokenKind::RightBracket)?;
+                                
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                // Represent as a special binary operation for array slice dereference
+                                expr = Node::new(
+                                    NodeKind::Binary {
+                                        op: "->@[]".to_string(),
+                                        left: Box::new(expr),
+                                        right: Box::new(index),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
                         
-                        let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
-                            self.parse_args()?
-                        } else {
-                            Vec::new()
-                        };
+                        Some(TokenKind::HashSigil) => {
+                            // ->%* or ->%{...}
+                            self.tokens.next()?; // consume %
+                            
+                            if self.peek_kind() == Some(TokenKind::Star) {
+                                // ->%*
+                                self.tokens.next()?; // consume *
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                expr = Node::new(
+                                    NodeKind::Unary {
+                                        op: "->%*".to_string(),
+                                        operand: Box::new(expr),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            } else if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                                // ->%{...} hash slice
+                                self.tokens.next()?; // consume {
+                                let key = self.parse_expression()?;
+                                self.expect(TokenKind::RightBrace)?;
+                                
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                // Represent as a special binary operation for hash slice dereference
+                                expr = Node::new(
+                                    NodeKind::Binary {
+                                        op: "->%{}".to_string(),
+                                        left: Box::new(expr),
+                                        right: Box::new(key),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
                         
-                        let start = expr.location.start;
-                        let end = self.previous_position();
+                        Some(TokenKind::ScalarSigil) => {
+                            // ->$*
+                            self.tokens.next()?; // consume $
+                            
+                            if self.peek_kind() == Some(TokenKind::Star) {
+                                self.tokens.next()?; // consume *
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                expr = Node::new(
+                                    NodeKind::Unary {
+                                        op: "->$*".to_string(),
+                                        operand: Box::new(expr),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
                         
-                        expr = Node::new(
-                            NodeKind::MethodCall {
-                                object: Box::new(expr),
-                                method,
-                                args,
-                            },
-                            SourceLocation { start, end }
-                        );
+                        Some(TokenKind::SubSigil) => {
+                            // ->&*
+                            self.tokens.next()?; // consume &
+                            
+                            if self.peek_kind() == Some(TokenKind::Star) {
+                                self.tokens.next()?; // consume *
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                expr = Node::new(
+                                    NodeKind::Unary {
+                                        op: "->&*".to_string(),
+                                        operand: Box::new(expr),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
+                        
+                        Some(TokenKind::Star) => {
+                            // ->** (glob dereference)
+                            self.tokens.next()?; // consume first *
+                            
+                            if self.peek_kind() == Some(TokenKind::Star) {
+                                self.tokens.next()?; // consume second *
+                                let start = expr.location.start;
+                                let end = self.previous_position();
+                                
+                                expr = Node::new(
+                                    NodeKind::Unary {
+                                        op: "->**".to_string(),
+                                        operand: Box::new(expr),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
+                        
+                        Some(TokenKind::Identifier) => {
+                            // Method call
+                            let method = self.tokens.next()?.text.clone();
+                            
+                            let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
+                                self.parse_args()?
+                            } else {
+                                Vec::new()
+                            };
+                            
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+                            
+                            expr = Node::new(
+                                NodeKind::MethodCall {
+                                    object: Box::new(expr),
+                                    method,
+                                    args,
+                                },
+                                SourceLocation { start, end }
+                            );
+                        }
+                        
+                        _ => {
+                            // Just the arrow by itself - could be an error or incomplete
+                            // For now, we'll leave expr unchanged
+                        }
                     }
                 }
                 
@@ -2282,5 +2577,36 @@ mod tests {
         
         let ast = result.unwrap();
         println!("AST: {}", ast.to_sexp());
+    }
+    
+    #[test]
+    fn test_list_declarations() {
+        // Test simple list declaration
+        let mut parser = Parser::new("my ($x, $y);");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        println!("List declaration AST: {}", ast.to_sexp());
+        
+        // Test list declaration with initialization
+        let mut parser = Parser::new("state ($a, $b) = (1, 2);");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        println!("List declaration with init AST: {}", ast.to_sexp());
+        
+        // Test mixed sigils
+        let mut parser = Parser::new("our ($scalar, @array, %hash);");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        println!("Mixed sigils AST: {}", ast.to_sexp());
+        
+        // Test empty list
+        let mut parser = Parser::new("my ();");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        println!("Empty list AST: {}", ast.to_sexp());
     }
 }
