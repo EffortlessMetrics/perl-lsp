@@ -49,6 +49,7 @@ pub enum TokenKind {
     Try,
     Catch,
     Finally,
+    Continue,
     
     // Operators
     Assign,
@@ -241,6 +242,7 @@ impl<'a> TokenStream<'a> {
                 "try" => TokenKind::Try,
                 "catch" => TokenKind::Catch,
                 "finally" => TokenKind::Finally,
+                "continue" => TokenKind::Continue,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,
