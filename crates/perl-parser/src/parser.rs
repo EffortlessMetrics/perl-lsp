@@ -89,6 +89,7 @@ impl<'a> Parser<'a> {
             TokenKind::For => self.parse_for_statement(),
             TokenKind::Foreach => self.parse_foreach_statement(),
             TokenKind::Given => self.parse_given_statement(),
+            TokenKind::Try => self.parse_try(),
             
             // Subroutines
             TokenKind::Sub => self.parse_subroutine(),
@@ -110,14 +111,7 @@ impl<'a> Parser<'a> {
             
             // Expression statement
             _ => {
-                let expr = self.parse_expression()?;
-                
-                // Consume optional semicolon
-                if self.peek_kind() == Some(TokenKind::Semicolon) {
-                    self.consume_token()?;
-                }
-                
-                Ok(expr)
+                self.parse_expression_statement()
             }
         }
     }
@@ -751,6 +745,66 @@ impl<'a> Parser<'a> {
         }
     }
     
+    /// Parse try/catch/finally block
+    fn parse_try(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'try'
+        
+        // Parse the try body
+        let body = self.parse_block()?;
+        
+        let mut catch_blocks = Vec::new();
+        let mut finally_block = None;
+        
+        // Parse catch blocks
+        while self.peek_kind() == Some(TokenKind::Catch) {
+            self.consume_token()?; // consume 'catch'
+            
+            // Check for optional variable
+            let var = if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.consume_token()?; // consume '('
+                let var_name = if self.peek_kind() == Some(TokenKind::ScalarSigil) || 
+                               self.tokens.peek()?.text.starts_with('$') {
+                    let var = self.parse_variable()?;
+                    match &var.kind {
+                        NodeKind::Variable { sigil, name } => Some(format!("{}{}", sigil, name)),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                self.expect(TokenKind::RightParen)?;
+                var_name
+            } else {
+                None
+            };
+            
+            let block = self.parse_block()?;
+            catch_blocks.push((var, block));
+        }
+        
+        // Parse optional finally block
+        if self.peek_kind() == Some(TokenKind::Finally) {
+            self.consume_token()?; // consume 'finally'
+            finally_block = Some(Box::new(self.parse_block()?));
+        }
+        
+        let end = finally_block.as_ref()
+            .map(|b| b.location.end)
+            .or_else(|| catch_blocks.last().map(|(_, b)| b.location.end))
+            .unwrap_or(body.location.end);
+        
+        Ok(Node::new(
+            NodeKind::Try {
+                body: Box::new(body),
+                catch_blocks: catch_blocks.into_iter()
+                    .map(|(v, b)| (v, Box::new(b)))
+                    .collect(),
+                finally_block,
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
     /// Parse do expression/block
     fn parse_do(&mut self) -> ParseResult<Node> {
         let start = self.consume_token()?.start; // consume 'do'
@@ -863,6 +917,115 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Default {
                 body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse expression statement (which may have modifiers)
+    fn parse_expression_statement(&mut self) -> ParseResult<Node> {
+        // First, try to parse the initial part as a simple statement
+        let mut expr = self.parse_simple_statement()?;
+        
+        // Check for statement modifiers
+        expr = match self.peek_kind() {
+            Some(TokenKind::If) | Some(TokenKind::Unless) | 
+            Some(TokenKind::While) | Some(TokenKind::Until) | 
+            Some(TokenKind::For) | Some(TokenKind::Foreach) => {
+                self.parse_statement_modifier(expr)?
+            }
+            _ => expr
+        };
+        
+        // Consume optional semicolon
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse simple statement (print, die, next, last, etc. with their arguments)
+    fn parse_simple_statement(&mut self) -> ParseResult<Node> {
+        // Check if it's a builtin that can take arguments without parens
+        let token = self.tokens.peek()?;
+        
+        match token.text.as_ref() {
+            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" => {
+                let start = token.start;
+                let func_name = self.consume_token()?.text;
+                
+                // Check if there are arguments (not followed by semicolon or modifier)
+                match self.peek_kind() {
+                    Some(TokenKind::Semicolon) | Some(TokenKind::If) | Some(TokenKind::Unless) |
+                    Some(TokenKind::While) | Some(TokenKind::Until) | Some(TokenKind::For) | 
+                    Some(TokenKind::Foreach) | None => {
+                        // No arguments
+                        Ok(Node::new(
+                            NodeKind::Identifier { name: func_name },
+                            SourceLocation { start, end: self.previous_position() }
+                        ))
+                    }
+                    _ => {
+                        // Has arguments - parse them as a comma-separated list
+                        let mut args = vec![];
+                        
+                        // Parse first argument
+                        args.push(self.parse_expression()?);
+                        
+                        // Parse remaining arguments
+                        while self.peek_kind() == Some(TokenKind::Comma) {
+                            self.consume_token()?; // consume comma
+                            
+                            // Check if we hit a statement modifier
+                            match self.peek_kind() {
+                                Some(TokenKind::If) | Some(TokenKind::Unless) |
+                                Some(TokenKind::While) | Some(TokenKind::Until) | 
+                                Some(TokenKind::For) | Some(TokenKind::Foreach) => break,
+                                _ => args.push(self.parse_expression()?)
+                            }
+                        }
+                        
+                        let end = args.last().map(|a| a.location.end).unwrap_or(start);
+                        
+                        Ok(Node::new(
+                            NodeKind::FunctionCall {
+                                name: func_name,
+                                args,
+                            },
+                            SourceLocation { start, end }
+                        ))
+                    }
+                }
+            }
+            _ => {
+                // Regular expression
+                self.parse_expression()
+            }
+        }
+    }
+    
+    /// Parse statement modifier (if, unless, while, until, for)
+    fn parse_statement_modifier(&mut self, statement: Node) -> ParseResult<Node> {
+        let modifier_token = self.consume_token()?;
+        let modifier = modifier_token.text.clone();
+        
+        // For 'for' and 'foreach', we parse a list expression
+        let condition = if matches!(modifier_token.kind, TokenKind::For | TokenKind::Foreach) {
+            self.parse_expression()?
+        } else {
+            // For other modifiers, parse a regular expression
+            self.parse_expression()?
+        };
+        
+        let start = statement.location.start;
+        let end = condition.location.end;
+        
+        Ok(Node::new(
+            NodeKind::StatementModifier {
+                statement: Box::new(statement),
+                modifier,
+                condition: Box::new(condition),
             },
             SourceLocation { start, end }
         ))
@@ -1584,6 +1747,10 @@ impl<'a> Parser<'a> {
             
             TokenKind::Do => {
                 self.parse_do()
+            }
+            
+            TokenKind::Try => {
+                self.parse_try()
             }
             
             TokenKind::Identifier => {
