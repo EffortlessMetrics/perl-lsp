@@ -71,6 +71,15 @@ impl Node {
                 }
             }
             
+            NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
+                let type_str = if *indented {
+                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
+                } else {
+                    if *interpolated { "heredoc_interpolated" } else { "heredoc" }
+                };
+                format!("({} {:?} {:?})", type_str, delimiter, content)
+            }
+            
             NodeKind::ArrayLiteral { elements } => {
                 let elems = elements
                     .iter()
@@ -182,6 +191,11 @@ impl Node {
                         expr.to_sexp(), pattern, replacement, modifiers)
             }
             
+            NodeKind::Transliteration { expr, search, replace, modifiers } => {
+                format!("(transliteration {} {:?} {:?} {:?})", 
+                        expr.to_sexp(), search, replace, modifiers)
+            }
+            
             NodeKind::Package { name, block } => {
                 if let Some(blk) = block {
                     format!("(package {} {})", name, blk.to_sexp())
@@ -277,6 +291,13 @@ pub enum NodeKind {
         interpolated: bool,
     },
     
+    Heredoc {
+        delimiter: String,
+        content: String,
+        interpolated: bool,
+        indented: bool,
+    },
+    
     ArrayLiteral {
         elements: Vec<Node>,
     },
@@ -354,6 +375,13 @@ pub enum NodeKind {
         expr: Box<Node>,
         pattern: String,
         replacement: String,
+        modifiers: String,
+    },
+    
+    Transliteration {
+        expr: Box<Node>,
+        search: String,
+        replace: String,
         modifiers: String,
     },
     
