@@ -182,6 +182,10 @@ impl Node {
                 parts.join(" ")
             }
             
+            NodeKind::LabeledStatement { label, statement } => {
+                format!("(labeled_statement {} {})", label, statement.to_sexp())
+            }
+            
             NodeKind::While { condition, body, continue_block } => {
                 let mut result = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
                 if let Some(cont) = continue_block {
@@ -428,6 +432,11 @@ pub enum NodeKind {
         then_branch: Box<Node>,
         elsif_branches: Vec<(Box<Node>, Box<Node>)>,
         else_branch: Option<Box<Node>>,
+    },
+    
+    LabeledStatement {
+        label: String,
+        statement: Box<Node>,
     },
     
     While {
