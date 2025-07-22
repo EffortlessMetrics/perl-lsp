@@ -1035,13 +1035,13 @@ const KEYWORDS: &[&str] = &[
     // 2 letters
     "if", "do", "my", "or",
     // 3 letters
-    "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "END",
+    "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "try", "END",
     // 4 letters
     "else", "when", "next", "last", "redo", "goto", "eval", "warn", "INIT",
     // 5 letters
-    "elsif", "while", "until", "local", "state", "given", "break", "print", "BEGIN", "CHECK",
+    "elsif", "while", "until", "local", "state", "given", "break", "print", "catch", "BEGIN", "CHECK",
     // 6+ letters
-    "unless", "return", "require", "package", "default", "foreach", "continue", "UNITCHECK",
+    "unless", "return", "require", "package", "default", "foreach", "finally", "continue", "UNITCHECK",
 ];
 
 #[inline]
@@ -1049,11 +1049,11 @@ fn is_keyword(word: &str) -> bool {
     // Fast length check first
     match word.len() {
         2 => matches!(word, "if" | "do" | "my" | "or"),
-        3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "END"),
+        3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "try" | "END"),
         4 => matches!(word, "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"),
-        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "BEGIN" | "CHECK"),
+        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK"),
         6 => matches!(word, "unless" | "return"),
-        7 => matches!(word, "require" | "package" | "default" | "foreach"),
+        7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
         8 => word == "continue",
         9 => word == "UNITCHECK",
         _ => false,

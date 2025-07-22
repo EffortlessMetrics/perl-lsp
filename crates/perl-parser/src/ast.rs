@@ -115,6 +115,24 @@ impl Node {
                 format!("(do {})", block.to_sexp())
             }
             
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                let mut parts = vec![format!("(try {})", body.to_sexp())];
+                
+                for (var, block) in catch_blocks {
+                    if let Some(v) = var {
+                        parts.push(format!("(catch {} {})", v, block.to_sexp()));
+                    } else {
+                        parts.push(format!("(catch {})", block.to_sexp()));
+                    }
+                }
+                
+                if let Some(finally) = finally_block {
+                    parts.push(format!("(finally {})", finally.to_sexp()));
+                }
+                
+                parts.join(" ")
+            }
+            
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 let mut parts = vec![
                     format!("(if {} {})", condition.to_sexp(), then_branch.to_sexp())
@@ -160,6 +178,10 @@ impl Node {
             
             NodeKind::Default { body } => {
                 format!("(default {})", body.to_sexp())
+            }
+            
+            NodeKind::StatementModifier { statement, modifier, condition } => {
+                format!("(statement_modifier_{} {} {})", modifier, statement.to_sexp(), condition.to_sexp())
             }
             
             NodeKind::Subroutine { name, params, body } => {
@@ -339,6 +361,12 @@ pub enum NodeKind {
         block: Box<Node>,
     },
     
+    Try {
+        body: Box<Node>,
+        catch_blocks: Vec<(Option<String>, Box<Node>)>, // (variable, block)
+        finally_block: Option<Box<Node>>,
+    },
+    
     If {
         condition: Box<Node>,
         then_branch: Box<Node>,
@@ -377,6 +405,12 @@ pub enum NodeKind {
     
     Default {
         body: Box<Node>,
+    },
+    
+    StatementModifier {
+        statement: Box<Node>,
+        modifier: String,
+        condition: Box<Node>,
     },
     
     // Functions

@@ -46,6 +46,9 @@ pub enum TokenKind {
     Given,
     When,
     Default,
+    Try,
+    Catch,
+    Finally,
     
     // Operators
     Assign,
@@ -225,6 +228,9 @@ impl<'a> TokenStream<'a> {
                 "given" => TokenKind::Given,
                 "when" => TokenKind::When,
                 "default" => TokenKind::Default,
+                "try" => TokenKind::Try,
+                "catch" => TokenKind::Catch,
+                "finally" => TokenKind::Finally,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,
