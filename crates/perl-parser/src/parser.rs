@@ -2650,7 +2650,7 @@ impl<'a> Parser<'a> {
                     // Check if this is a builtin function that can take bare arguments
                     if let NodeKind::Identifier { name } = &expr.kind {
                         // Check for quote operators first
-                        if matches!(name.as_str(), "q" | "qq" | "qw" | "qr" | "qx") {
+                        if matches!(name.as_str(), "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s") {
                             // This was already parsed as a quote operator in parse_primary
                             // Don't try to parse arguments
                         } else if Self::is_builtin_function(name) {
@@ -2770,9 +2770,16 @@ impl<'a> Parser<'a> {
             _ => delim_char, // For other delimiters like / or |, use the same char
         };
         
+        // Store delimiters for later use
+        let opening_delim = delim_char;
+        let closing_delim = close_delim;
+        
         // Collect content until closing delimiter
         let mut content = String::new();
         let mut depth = 1;
+        
+        // For regex operators (m, s), we need to preserve the exact pattern
+        let preserve_exact_content = matches!(op, "m" | "s" | "qr");
         
         while depth > 0 && !self.tokens.is_eof() {
             // Check token kind first
@@ -2834,7 +2841,7 @@ impl<'a> Parser<'a> {
                         // Regular token, add to content
                         let token = self.consume_token()?;
                         content.push_str(&token.text);
-                        if !self.tokens.is_eof() && !content.is_empty() {
+                        if !preserve_exact_content && !self.tokens.is_eof() && !content.is_empty() {
                             content.push(' ');
                         }
                     }
@@ -2848,9 +2855,29 @@ impl<'a> Parser<'a> {
                     break;
                 } else {
                     content.push_str(&token.text);
-                    if !self.tokens.is_eof() {
+                    if !preserve_exact_content && !self.tokens.is_eof() {
                         content.push(' ');
                     }
+                }
+            }
+        }
+        
+        // Parse modifiers for regex operators
+        let mut modifiers = String::new();
+        if matches!(op, "m" | "s" | "qr") {
+            // Check for modifiers (letters after closing delimiter)
+            while let Ok(token) = self.tokens.peek() {
+                if token.kind == TokenKind::Identifier && token.text.len() == 1 {
+                    // Single letter identifier could be a modifier
+                    let ch = token.text.chars().next().unwrap();
+                    if ch.is_ascii_alphabetic() {
+                        modifiers.push(ch);
+                        self.tokens.next()?;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
                 }
             }
         }
@@ -2912,6 +2939,27 @@ impl<'a> Parser<'a> {
                     NodeKind::String {
                         value: format!("`{}`", content),
                         interpolated: true,
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            "m" => {
+                // Match operator with pattern
+                Ok(Node::new(
+                    NodeKind::Regex {
+                        pattern: format!("m{}{}{}", opening_delim, content, closing_delim),
+                        modifiers,
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            "s" => {
+                // Substitution operator - for now just parse as regex
+                // TODO: Parse replacement and modifiers
+                Ok(Node::new(
+                    NodeKind::Regex {
+                        pattern: format!("s{}{}{}", opening_delim, content, closing_delim),
+                        modifiers: String::new(),
                     },
                     SourceLocation { start, end }
                 ))
@@ -3146,9 +3194,9 @@ impl<'a> Parser<'a> {
                     // Only treat * as a glob sigil if followed by identifier
                     self.parse_variable()
                 } else {
-                    // Check if it's a quote operator (q, qq, qw, qr, qx)
+                    // Check if it's a quote operator (q, qq, qw, qr, qx, m, s)
                     match token.text.as_ref() {
-                        "q" | "qq" | "qw" | "qr" | "qx" => {
+                        "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" => {
                             self.parse_quote_operator()
                         }
                         _ => {
