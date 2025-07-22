@@ -107,6 +107,14 @@ impl Node {
                 format!("(block {})", stmts)
             }
             
+            NodeKind::Eval { block } => {
+                format!("(eval {})", block.to_sexp())
+            }
+            
+            NodeKind::Do { block } => {
+                format!("(do {})", block.to_sexp())
+            }
+            
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 let mut parts = vec![
                     format!("(if {} {})", condition.to_sexp(), then_branch.to_sexp())
@@ -140,6 +148,18 @@ impl Node {
             
             NodeKind::Foreach { variable, list, body } => {
                 format!("(foreach {} {} {})", variable.to_sexp(), list.to_sexp(), body.to_sexp())
+            }
+            
+            NodeKind::Given { expr, body } => {
+                format!("(given {} {})", expr.to_sexp(), body.to_sexp())
+            }
+            
+            NodeKind::When { condition, body } => {
+                format!("(when {} {})", condition.to_sexp(), body.to_sexp())
+            }
+            
+            NodeKind::Default { body } => {
+                format!("(default {})", body.to_sexp())
             }
             
             NodeKind::Subroutine { name, params, body } => {
@@ -311,6 +331,14 @@ pub enum NodeKind {
         statements: Vec<Node>,
     },
     
+    Eval {
+        block: Box<Node>,
+    },
+    
+    Do {
+        block: Box<Node>,
+    },
+    
     If {
         condition: Box<Node>,
         then_branch: Box<Node>,
@@ -334,6 +362,20 @@ pub enum NodeKind {
     Foreach {
         variable: Box<Node>,
         list: Box<Node>,
+        body: Box<Node>,
+    },
+    
+    Given {
+        expr: Box<Node>,
+        body: Box<Node>,
+    },
+    
+    When {
+        condition: Box<Node>,
+        body: Box<Node>,
+    },
+    
+    Default {
         body: Box<Node>,
     },
     
