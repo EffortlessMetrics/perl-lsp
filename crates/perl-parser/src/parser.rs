@@ -756,7 +756,7 @@ impl<'a> Parser<'a> {
     
     /// Parse comma operator (lowest precedence)
     fn parse_comma(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_assignment()?;
+        let mut expr = self.parse_word_or()?;
         
         // In scalar context, comma creates a list
         // For now, we'll just parse it as sequential expressions
@@ -781,23 +781,118 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
     
+    /// Parse word or expression (or, xor)
+    fn parse_word_or(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_word_and()?;
+        
+        while let Some(kind) = self.peek_kind() {
+            match kind {
+                TokenKind::WordOr | TokenKind::WordXor => {
+                    let op_token = self.tokens.next()?;
+                    let right = self.parse_word_and()?;
+                    let start = expr.location.start;
+                    let end = right.location.end;
+                    
+                    expr = Node::new(
+                        NodeKind::Binary {
+                            op: op_token.text.clone(),
+                            left: Box::new(expr),
+                            right: Box::new(right),
+                        },
+                        SourceLocation { start, end }
+                    );
+                }
+                _ => break,
+            }
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse word and expression
+    fn parse_word_and(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_word_not()?;
+        
+        while self.peek_kind() == Some(TokenKind::WordAnd) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_word_not()?;
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse word not expression
+    fn parse_word_not(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::WordNot) {
+            let op_token = self.tokens.next()?;
+            let start = op_token.start;
+            let operand = self.parse_word_not()?;
+            let end = operand.location.end;
+            
+            return Ok(Node::new(
+                NodeKind::Unary {
+                    op: op_token.text.clone(),
+                    operand: Box::new(operand),
+                },
+                SourceLocation { start, end }
+            ));
+        }
+        
+        self.parse_assignment()
+    }
+    
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_ternary()?;
         
-        if self.peek_kind() == Some(TokenKind::Assign) {
-            self.tokens.next()?; // consume =
-            let rhs = self.parse_assignment()?;
-            let start = expr.location.start;
-            let end = rhs.location.end;
+        // Check for assignment operators
+        if let Some(kind) = self.peek_kind() {
+            let op = match kind {
+                TokenKind::Assign => Some("="),
+                TokenKind::PlusAssign => Some("+="),
+                TokenKind::MinusAssign => Some("-="),
+                TokenKind::StarAssign => Some("*="),
+                TokenKind::SlashAssign => Some("/="),
+                TokenKind::PercentAssign => Some("%="),
+                TokenKind::DotAssign => Some(".="),
+                TokenKind::AndAssign => Some("&="),
+                TokenKind::OrAssign => Some("|="),
+                TokenKind::XorAssign => Some("^="),
+                TokenKind::PowerAssign => Some("**="),
+                TokenKind::LeftShiftAssign => Some("<<="),
+                TokenKind::RightShiftAssign => Some(">>="),
+                TokenKind::LogicalAndAssign => Some("&&="),
+                TokenKind::LogicalOrAssign => Some("||="),
+                TokenKind::DefinedOrAssign => Some("//="),
+                _ => None,
+            };
             
-            expr = Node::new(
-                NodeKind::Assignment {
-                    lhs: Box::new(expr),
-                    rhs: Box::new(rhs),
-                },
-                SourceLocation { start, end }
-            );
+            if let Some(op) = op {
+                self.tokens.next()?; // consume operator
+                let rhs = self.parse_assignment()?;
+                let start = expr.location.start;
+                let end = rhs.location.end;
+                
+                expr = Node::new(
+                    NodeKind::Assignment {
+                        lhs: Box::new(expr),
+                        rhs: Box::new(rhs),
+                        op: op.to_string(),
+                    },
+                    SourceLocation { start, end }
+                );
+            }
         }
         
         Ok(expr)
@@ -962,7 +1057,7 @@ impl<'a> Parser<'a> {
     
     /// Parse multiplicative expression
     fn parse_multiplicative(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_unary()?;
+        let mut expr = self.parse_power()?;
         
         while let Some(kind) = self.peek_kind() {
             match kind {
@@ -983,6 +1078,29 @@ impl<'a> Parser<'a> {
                 }
                 _ => break,
             }
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse power expression
+    fn parse_power(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_unary()?;
+        
+        while self.peek_kind() == Some(TokenKind::Power) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_unary()?; // Right associative
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
         }
         
         Ok(expr)
