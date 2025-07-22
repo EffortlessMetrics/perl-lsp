@@ -527,7 +527,7 @@ impl<'a> PerlLexer<'a> {
         
         // Handle other operators - simplified
         match ch {
-            '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' | ':' | '?' => {
+            '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' | ':' | '?' | '\\' => {
                 self.advance();
                 // Check for compound operators
                 if let Some(next) = self.current_char() {
