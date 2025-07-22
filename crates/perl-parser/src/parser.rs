@@ -2217,8 +2217,8 @@ impl<'a> Parser<'a> {
                             }
                         }
                         
-                        Some(TokenKind::SubSigil) => {
-                            // ->&*
+                        Some(TokenKind::SubSigil) | Some(TokenKind::BitwiseAnd) => {
+                            // ->&* (code dereference)
                             self.tokens.next()?; // consume &
                             
                             if self.peek_kind() == Some(TokenKind::Star) {
@@ -2356,7 +2356,11 @@ impl<'a> Parser<'a> {
                 _ => {
                     // Check if this is a builtin function that can take bare arguments
                     if let NodeKind::Identifier { name } = &expr.kind {
-                        if Self::is_builtin_function(name) {
+                        // Check for quote operators first
+                        if matches!(name.as_str(), "q" | "qq" | "qw" | "qr" | "qx") {
+                            // This was already parsed as a quote operator in parse_primary
+                            // Don't try to parse arguments
+                        } else if Self::is_builtin_function(name) {
                             // Check if we're at statement end (no arguments)
                             if self.is_at_statement_end() {
                                 // Bare builtin with no arguments
@@ -2417,6 +2421,187 @@ impl<'a> Parser<'a> {
         )
     }
     
+    /// Parse quote operator (q, qq, qw, qr, qx)
+    fn parse_quote_operator(&mut self) -> ParseResult<Node> {
+        let op_token = self.consume_token()?; // consume q/qq/qw/qr/qx
+        let start = op_token.start;
+        let op = op_token.text.as_ref();
+        
+        // Get the delimiter - it might be a bracket token or other punctuation
+        let delim_token = self.consume_token()?;
+        let delim_char = match delim_token.kind {
+            TokenKind::LeftBrace => '{',
+            TokenKind::LeftBracket => '[',
+            TokenKind::LeftParen => '(',
+            TokenKind::Less => '<',
+            _ => delim_token.text.chars().next()
+                .ok_or_else(|| ParseError::syntax("Expected delimiter after quote operator", delim_token.start))?
+        };
+        
+        // Determine closing delimiter
+        let close_delim = match delim_char {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delim_char, // For other delimiters like / or |, use the same char
+        };
+        
+        // Collect content until closing delimiter
+        let mut content = String::new();
+        let mut depth = 1;
+        
+        while depth > 0 && !self.tokens.is_eof() {
+            // Check token kind first
+            let token_kind = self.peek_kind();
+            
+            // Check for matching delimiter tokens
+            if matches!(delim_char, '{' | '[' | '(' | '<') {
+                // Handle bracket-based delimiters
+                match (delim_char, token_kind) {
+                    ('{', Some(TokenKind::LeftBrace)) => {
+                        self.consume_token()?;
+                        content.push_str("{");
+                        depth += 1;
+                    }
+                    ('{', Some(TokenKind::RightBrace)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            content.push_str("}");
+                        }
+                    }
+                    ('[', Some(TokenKind::LeftBracket)) => {
+                        self.consume_token()?;
+                        content.push_str("[");
+                        depth += 1;
+                    }
+                    ('[', Some(TokenKind::RightBracket)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            content.push_str("]");
+                        }
+                    }
+                    ('(', Some(TokenKind::LeftParen)) => {
+                        self.consume_token()?;
+                        content.push_str("(");
+                        depth += 1;
+                    }
+                    ('(', Some(TokenKind::RightParen)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            content.push_str(")");
+                        }
+                    }
+                    ('<', Some(TokenKind::Less)) => {
+                        self.consume_token()?;
+                        content.push_str("<");
+                        depth += 1;
+                    }
+                    ('<', Some(TokenKind::Greater)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            content.push_str(">");
+                        }
+                    }
+                    _ => {
+                        // Regular token, add to content
+                        let token = self.consume_token()?;
+                        content.push_str(&token.text);
+                        if !self.tokens.is_eof() && !content.is_empty() {
+                            content.push(' ');
+                        }
+                    }
+                }
+            } else {
+                // For non-bracket delimiters, just look for the closing delimiter
+                let token = self.consume_token()?;
+                if token.text.contains(close_delim) {
+                    let pos = token.text.find(close_delim).unwrap();
+                    content.push_str(&token.text[..pos]);
+                    break;
+                } else {
+                    content.push_str(&token.text);
+                    if !self.tokens.is_eof() {
+                        content.push(' ');
+                    }
+                }
+            }
+        }
+        
+        let end = self.previous_position();
+        
+        // Create appropriate node based on operator
+        match op {
+            "qq" => {
+                // Double-quoted string with interpolation
+                Ok(Node::new(
+                    NodeKind::String {
+                        value: format!("\"{}\"", content),
+                        interpolated: true,
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            "q" => {
+                // Single-quoted string without interpolation
+                Ok(Node::new(
+                    NodeKind::String {
+                        value: format!("'{}'", content),
+                        interpolated: false,
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            "qw" => {
+                // Word list - split on whitespace
+                let words: Vec<Node> = content.split_whitespace()
+                    .map(|word| Node::new(
+                        NodeKind::String {
+                            value: format!("'{}'", word),
+                            interpolated: false,
+                        },
+                        SourceLocation { start, end }
+                    ))
+                    .collect();
+                    
+                Ok(Node::new(
+                    NodeKind::ArrayLiteral { elements: words },
+                    SourceLocation { start, end }
+                ))
+            }
+            "qr" => {
+                // Regular expression
+                Ok(Node::new(
+                    NodeKind::Regex {
+                        pattern: format!("/{}/", content),
+                        modifiers: String::new(), // TODO: Parse modifiers after closing delimiter
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            "qx" => {
+                // Backticks/command execution
+                Ok(Node::new(
+                    NodeKind::String {
+                        value: format!("`{}`", content),
+                        interpolated: true,
+                    },
+                    SourceLocation { start, end }
+                ))
+            }
+            _ => {
+                Err(ParseError::syntax(
+                    &format!("Unknown quote operator: {}", op),
+                    start
+                ))
+            }
+        }
+    }
+    
     /// Parse qualified identifier (may contain ::)
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
         let start_token = self.consume_token()?;
@@ -2459,7 +2644,8 @@ impl<'a> Parser<'a> {
     
     /// Parse primary expression
     fn parse_primary(&mut self) -> ParseResult<Node> {
-        let token_kind = self.tokens.peek()?.kind;
+        let token = self.tokens.peek()?;
+        let token_kind = token.kind;
         
         match token_kind {
             TokenKind::Number => {
@@ -2634,8 +2820,16 @@ impl<'a> Parser<'a> {
                     // Only treat * as a glob sigil if followed by identifier
                     self.parse_variable()
                 } else {
-                    // Regular identifier (possibly qualified with ::)
-                    self.parse_qualified_identifier()
+                    // Check if it's a quote operator (q, qq, qw, qr, qx)
+                    match token.text.as_ref() {
+                        "q" | "qq" | "qw" | "qr" | "qx" => {
+                            self.parse_quote_operator()
+                        }
+                        _ => {
+                            // Regular identifier (possibly qualified with ::)
+                            self.parse_qualified_identifier()
+                        }
+                    }
                 }
             }
             
@@ -2753,6 +2947,7 @@ impl<'a> Parser<'a> {
                     SourceLocation { start: token.start, end: token.end }
                 ))
             }
+            
             
             _ => {
                 // Get position before consuming
