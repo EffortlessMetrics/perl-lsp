@@ -337,6 +337,10 @@ impl Node {
                 format!("(method {} ({}) {})", name, params_str, body.to_sexp())
             }
             
+            NodeKind::Format { name, body } => {
+                format!("(format {} {:?})", name, body)
+            }
+            
             NodeKind::Identifier { name } => {
                 format!("(identifier {})", name)
             }
@@ -590,6 +594,12 @@ pub enum NodeKind {
         name: String,
         params: Vec<Node>,
         body: Box<Node>,
+    },
+    
+    // Format declaration (legacy Perl)
+    Format {
+        name: String,
+        body: String,
     },
     
     // Misc

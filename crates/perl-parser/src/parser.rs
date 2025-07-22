@@ -105,6 +105,9 @@ impl<'a> Parser<'a> {
             TokenKind::Use => self.parse_use(),
             TokenKind::No => self.parse_no(),
             
+            // Format declaration
+            TokenKind::Format => self.parse_format(),
+            
             // Phase blocks
             TokenKind::Begin | TokenKind::End | TokenKind::Check | 
             TokenKind::Init | TokenKind::Unitcheck => self.parse_phase_block(),
@@ -1182,6 +1185,42 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::No { module, args },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse format declaration
+    fn parse_format(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'format'
+        
+        // Parse format name (typically STDOUT, a filehandle, or identifier)
+        let name = if self.peek_kind() == Some(TokenKind::Identifier) {
+            self.tokens.next()?.text.clone()
+        } else {
+            return Err(ParseError::syntax(
+                "Expected format name",
+                self.current_position()
+            ));
+        };
+        
+        // Expect = sign
+        if self.peek_kind() == Some(TokenKind::Assign) {
+            self.tokens.next()?; // consume =
+        } else {
+            return Err(ParseError::syntax(
+                "Expected '=' after format name",
+                self.current_position()
+            ));
+        }
+        
+        // For now, we'll just consume everything until we see a period on its own line
+        // In real Perl, format body is special syntax that ends with a period
+        let body = String::from("<format body placeholder>");
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Format { name, body },
             SourceLocation { start, end }
         ))
     }
@@ -2343,7 +2382,7 @@ impl<'a> Parser<'a> {
                             }
                         }
                         
-                        Some(TokenKind::Identifier) => {
+                        Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
                             // Method call
                             let method = self.tokens.next()?.text.clone();
                             
@@ -3043,7 +3082,7 @@ impl<'a> Parser<'a> {
             TokenKind::Init | TokenKind::Unitcheck | TokenKind::Do | TokenKind::Eval |
             TokenKind::Given | TokenKind::When | TokenKind::Default |
             TokenKind::Try | TokenKind::Catch | TokenKind::Finally |
-            TokenKind::Continue | TokenKind::Class | TokenKind::Method => {
+            TokenKind::Continue | TokenKind::Class | TokenKind::Method | TokenKind::Format => {
                 // In expression context, keywords can sometimes be used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
                 let token = self.tokens.next()?;

@@ -19,7 +19,7 @@ This project provides a Pure Rust parser for Perl, achieving ~99.995% syntax cov
 ## 🚀 Features
 
 - **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
-- **Well Tested**: Comprehensive test suite with 16+ test files, 94.5% edge case coverage (improved from 82.8%)
+- **Well Tested**: Comprehensive test suite with 16+ test files, 100% edge case coverage (all 128 tests passing)
 - **Pure Rust Implementation**: Built with Pest parser generator, zero C dependencies
 - **Tree-sitter Compatible**: Outputs standard S-expressions for seamless IDE integration  
 - **Comprehensive Perl 5 Support**:

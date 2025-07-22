@@ -52,6 +52,7 @@ pub enum TokenKind {
     Continue,
     Class,
     Method,
+    Format,
     
     // Operators
     Assign,
@@ -266,6 +267,7 @@ impl<'a> TokenStream<'a> {
                 "continue" => TokenKind::Continue,
                 "class" => TokenKind::Class,
                 "method" => TokenKind::Method,
+                "format" => TokenKind::Format,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,
