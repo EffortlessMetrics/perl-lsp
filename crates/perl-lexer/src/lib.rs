@@ -541,6 +541,9 @@ impl<'a> PerlLexer<'a> {
                                 self.advance(); // consume the =
                             } else if ch == '<' && next == '<' && third == Some('=') {
                                 self.advance(); // consume the =
+                            } else if ch == '<' && next == '=' && third == Some('>') {
+                                self.advance(); // consume the >
+                                // Special case: <=> spaceship operator
                             } else if ch == '>' && next == '>' && third == Some('=') {
                                 self.advance(); // consume the =
                             } else if ch == '&' && next == '&' && third == Some('=') {

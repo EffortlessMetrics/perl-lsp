@@ -72,6 +72,22 @@ impl Node {
                 format!("(unary_{} {})", op, operand.to_sexp())
             }
             
+            NodeKind::Diamond => {
+                "(diamond)".to_string()
+            }
+            
+            NodeKind::Readline { filehandle } => {
+                if let Some(fh) = filehandle {
+                    format!("(readline {})", fh)
+                } else {
+                    "(readline)".to_string()
+                }
+            }
+            
+            NodeKind::Glob { pattern } => {
+                format!("(glob {})", pattern)
+            }
+            
             NodeKind::Number { value } => {
                 format!("(number {})", value)
             }
@@ -340,6 +356,17 @@ pub enum NodeKind {
     Unary {
         op: String,
         operand: Box<Node>,
+    },
+    
+    // I/O operations
+    Diamond, // <>
+    
+    Readline {
+        filehandle: Option<String>, // <STDIN>, <$fh>, etc.
+    },
+    
+    Glob {
+        pattern: String, // <*.txt>
     },
     
     // Literals

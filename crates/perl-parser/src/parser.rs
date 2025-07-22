@@ -1144,9 +1144,8 @@ impl<'a> Parser<'a> {
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
     fn parse_simple_statement(&mut self) -> ParseResult<Node> {
         // Check if it's a builtin that can take arguments without parens
-        let token = self.tokens.peek()?;
-        
-        match token.text.as_ref() {
+        if let Ok(token) = self.tokens.peek() {
+            match token.text.as_ref() {
             "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" => {
                 let start = token.start;
                 let func_name = self.consume_token()?.text;
@@ -1156,9 +1155,12 @@ impl<'a> Parser<'a> {
                     Some(TokenKind::Semicolon) | Some(TokenKind::If) | Some(TokenKind::Unless) |
                     Some(TokenKind::While) | Some(TokenKind::Until) | Some(TokenKind::For) | 
                     Some(TokenKind::Foreach) | None => {
-                        // No arguments
+                        // No arguments - return as function call with empty args
                         Ok(Node::new(
-                            NodeKind::Identifier { name: func_name },
+                            NodeKind::FunctionCall { 
+                                name: func_name,
+                                args: vec![]
+                            },
                             SourceLocation { start, end: self.previous_position() }
                         ))
                     }
@@ -1194,10 +1196,14 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            _ => {
-                // Regular expression
-                self.parse_expression()
+                _ => {
+                    // Regular expression
+                    self.parse_expression()
+                }
             }
+        } else {
+            // Regular expression
+            self.parse_expression()
         }
     }
     
@@ -1592,7 +1598,8 @@ impl<'a> Parser<'a> {
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Less | TokenKind::Greater | 
-                TokenKind::LessEqual | TokenKind::GreaterEqual => {
+                TokenKind::LessEqual | TokenKind::GreaterEqual |
+                TokenKind::Spaceship => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_additive()?;
                     let start = expr.location.start;
@@ -2035,11 +2042,107 @@ impl<'a> Parser<'a> {
                     }
                 }
                 
-                _ => break,
+                _ => {
+                    // Check if this is a builtin function that can take bare arguments
+                    if let NodeKind::Identifier { name } = &expr.kind {
+                        if Self::is_builtin_function(name) {
+                            // Check if we're at statement end (no arguments)
+                            if self.is_at_statement_end() {
+                                // Bare builtin with no arguments
+                                expr = Node::new(
+                                    NodeKind::FunctionCall { 
+                                        name: name.clone(), 
+                                        args: vec![]
+                                    },
+                                    expr.location.clone()
+                                );
+                            } else {
+                                // Parse arguments without parentheses
+                                let mut args = Vec::new();
+                                
+                                // Parse the first argument
+                                args.push(self.parse_comma()?);
+                                
+                                // Parse remaining arguments separated by commas
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
+                                    args.push(self.parse_comma()?);
+                                }
+                                
+                                let start = expr.location.start;
+                                let end = args.last().unwrap().location.end;
+                                
+                                expr = Node::new(
+                                    NodeKind::FunctionCall { 
+                                        name: name.clone(), 
+                                        args 
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        }
+                    }
+                    break;
+                }
             }
         }
         
         Ok(expr)
+    }
+    
+    /// Check if we're at a statement boundary
+    fn is_at_statement_end(&mut self) -> bool {
+        matches!(
+            self.peek_kind(),
+            Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace) | 
+            Some(TokenKind::RightParen) | Some(TokenKind::RightBracket) |
+            Some(TokenKind::If) | Some(TokenKind::Unless) | 
+            Some(TokenKind::While) | Some(TokenKind::Until) |
+            Some(TokenKind::For) | Some(TokenKind::Foreach) |
+            None
+        )
+    }
+    
+    /// Parse qualified identifier (may contain ::)
+    fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
+        let start_token = self.consume_token()?;
+        let start = start_token.start;
+        let mut name = start_token.text.clone();
+        
+        // Keep consuming :: and identifiers
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.consume_token()?; // consume ::
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next_part = self.consume_token()?;
+                name.push_str("::");
+                name.push_str(&next_part.text);
+            } else {
+                return Err(ParseError::syntax(
+                    "Expected identifier after ::",
+                    self.current_position()
+                ));
+            }
+        }
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Identifier { name },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Check if an identifier is a builtin function that can take arguments without parens
+    fn is_builtin_function(name: &str) -> bool {
+        matches!(name, 
+            "print" | "say" | "die" | "warn" | "return" | "defined" | 
+            "undef" | "ref" | "chomp" | "chop" | "split" | "join" |
+            "push" | "pop" | "shift" | "unshift" | "sort" | "map" |
+            "grep" | "keys" | "values" | "each" | "delete" | "exists" |
+            "open" | "close" | "read" | "write" | "printf" | "sprintf"
+        )
     }
     
     /// Parse primary expression
@@ -2133,8 +2236,80 @@ impl<'a> Parser<'a> {
                 self.parse_do()
             }
             
+            TokenKind::Sub => {
+                // Anonymous subroutine
+                self.parse_subroutine()
+            }
+            
             TokenKind::Try => {
                 self.parse_try()
+            }
+            
+            TokenKind::Less => {
+                // Could be diamond operator <> or <FILEHANDLE>
+                let start = self.consume_token()?.start; // consume <
+                
+                if self.peek_kind() == Some(TokenKind::Greater) {
+                    // Diamond operator <>
+                    self.consume_token()?; // consume >
+                    let end = self.previous_position();
+                    Ok(Node::new(
+                        NodeKind::Diamond,
+                        SourceLocation { start, end }
+                    ))
+                } else {
+                    // Try to parse content until >
+                    let mut pattern = String::new();
+                    let mut has_glob_chars = false;
+                    
+                    while self.peek_kind() != Some(TokenKind::Greater) && !self.tokens.is_eof() {
+                        let token = self.consume_token()?;
+                        
+                        // Check if this looks like a glob pattern
+                        if token.text.contains('*') || token.text.contains('?') || 
+                           token.text.contains('[') || token.text.contains('.') {
+                            has_glob_chars = true;
+                        }
+                        
+                        pattern.push_str(&token.text);
+                    }
+                    
+                    if self.peek_kind() == Some(TokenKind::Greater) {
+                        self.consume_token()?; // consume >
+                        let end = self.previous_position();
+                        
+                        if pattern.is_empty() {
+                            // Empty <> is diamond operator
+                            Ok(Node::new(
+                                NodeKind::Diamond,
+                                SourceLocation { start, end }
+                            ))
+                        } else if has_glob_chars || pattern.contains('/') {
+                            // Looks like a glob pattern
+                            Ok(Node::new(
+                                NodeKind::Glob { pattern },
+                                SourceLocation { start, end }
+                            ))
+                        } else if pattern.chars().all(|c| c.is_uppercase() || c == '_') {
+                            // Looks like a filehandle
+                            Ok(Node::new(
+                                NodeKind::Readline { filehandle: Some(pattern) },
+                                SourceLocation { start, end }
+                            ))
+                        } else {
+                            // Default to glob
+                            Ok(Node::new(
+                                NodeKind::Glob { pattern },
+                                SourceLocation { start, end }
+                            ))
+                        }
+                    } else {
+                        return Err(ParseError::syntax(
+                            "Expected '>' to close angle bracket construct",
+                            self.current_position()
+                        ));
+                    }
+                }
             }
             
             TokenKind::Identifier => {
@@ -2283,25 +2458,6 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
     
-    /// Parse qualified identifier (e.g., Foo::Bar::Baz)
-    fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
-        let start = self.current_position();
-        let first_token = self.expect(TokenKind::Identifier)?;
-        let mut name = first_token.text.clone();
-        
-        // Handle :: in qualified names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.tokens.next()?; // consume ::
-            name.push_str("::");
-            name.push_str(&self.expect(TokenKind::Identifier)?.text);
-        }
-        
-        let end = self.previous_position();
-        Ok(Node::new(
-            NodeKind::Identifier { name },
-            SourceLocation { start, end }
-        ))
-    }
     
     // Helper methods
     
@@ -2356,19 +2512,6 @@ impl<'a> Parser<'a> {
         Ok(token)
     }
     
-    /// Check if we're at a statement boundary
-    fn is_at_statement_end(&mut self) -> bool {
-        match self.peek_kind() {
-            None => true,
-            Some(TokenKind::Semicolon) => true,
-            Some(TokenKind::RightParen) => true,
-            Some(TokenKind::RightBrace) => true,
-            Some(TokenKind::RightBracket) => true,
-            Some(TokenKind::Comma) => true,
-            Some(TokenKind::Eof) => true,
-            _ => false,
-        }
-    }
     
     /// Parse qw() word list
     fn parse_qw_list(&mut self) -> ParseResult<Vec<Node>> {
