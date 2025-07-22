@@ -105,7 +105,7 @@ impl<'a> Parser<'a> {
             TokenKind::Use => self.parse_use(),
             TokenKind::No => self.parse_no(),
             
-            // Format declaration
+            // Format declarations
             TokenKind::Format => self.parse_format(),
             
             // Phase blocks
@@ -729,14 +729,7 @@ impl<'a> Parser<'a> {
             None
         };
         
-        // Parse optional signature
-        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.parse_signature()?
-        } else {
-            Vec::new()
-        };
-        
-        // Parse optional attributes
+        // Parse optional attributes first (they come before signature in modern Perl)
         let mut attributes = Vec::new();
         while self.peek_kind() == Some(TokenKind::Colon) {
             self.tokens.next()?; // consume colon
@@ -750,8 +743,42 @@ impl<'a> Parser<'a> {
                     return Err(ParseError::syntax("Expected attribute name after :", self.current_position()));
                 }
             };
-            attributes.push(attr_token.text.clone());
+            
+            let mut attr_name = attr_token.text.clone();
+            
+            // Check if attribute has a value in parentheses (like :prototype($))
+            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.tokens.next()?; // consume (
+                attr_name.push('(');
+                
+                // Collect tokens until matching )
+                let mut paren_depth = 1;
+                while paren_depth > 0 && !self.tokens.is_eof() {
+                    let token = self.tokens.next()?;
+                    attr_name.push_str(&token.text);
+                    
+                    match token.kind {
+                        TokenKind::LeftParen => paren_depth += 1,
+                        TokenKind::RightParen => {
+                            paren_depth -= 1;
+                            if paren_depth == 0 {
+                                attr_name.push(')');
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            
+            attributes.push(attr_name);
         }
+        
+        // Parse optional signature after attributes
+        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.parse_signature()?
+        } else {
+            Vec::new()
+        };
         
         let body = self.parse_block()?;
         
@@ -811,6 +838,33 @@ impl<'a> Parser<'a> {
                 params,
                 body: Box::new(body),
             },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse format declaration
+    fn parse_format(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'format'
+        
+        // Parse format name
+        let name_token = self.expect(TokenKind::Identifier)?;
+        let name = name_token.text.clone();
+        
+        // Expect =
+        self.expect(TokenKind::Assign)?;
+        
+        // For format declarations, we need to consume the body until a line with just a dot
+        // Since the lexer filters out newlines, we'll create a placeholder for now
+        // A full implementation would require special lexer support for format blocks
+        let body = String::from("<format body>");
+        
+        // Note: In a complete implementation, the lexer would need to recognize format blocks
+        // and treat them specially, similar to how heredocs are handled
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Format { name, body },
             SourceLocation { start, end }
         ))
     }
@@ -1253,40 +1307,6 @@ impl<'a> Parser<'a> {
     }
     
     /// Parse format declaration
-    fn parse_format(&mut self) -> ParseResult<Node> {
-        let start = self.current_position();
-        self.tokens.next()?; // consume 'format'
-        
-        // Parse format name (typically STDOUT, a filehandle, or identifier)
-        let name = if self.peek_kind() == Some(TokenKind::Identifier) {
-            self.tokens.next()?.text.clone()
-        } else {
-            return Err(ParseError::syntax(
-                "Expected format name",
-                self.current_position()
-            ));
-        };
-        
-        // Expect = sign
-        if self.peek_kind() == Some(TokenKind::Assign) {
-            self.tokens.next()?; // consume =
-        } else {
-            return Err(ParseError::syntax(
-                "Expected '=' after format name",
-                self.current_position()
-            ));
-        }
-        
-        // For now, we'll just consume everything until we see a period on its own line
-        // In real Perl, format body is special syntax that ends with a period
-        let body = String::from("<format body placeholder>");
-        
-        let end = self.previous_position();
-        Ok(Node::new(
-            NodeKind::Format { name, body },
-            SourceLocation { start, end }
-        ))
-    }
     
     /// Parse return statement
     fn parse_return(&mut self) -> ParseResult<Node> {
@@ -2537,10 +2557,32 @@ impl<'a> Parser<'a> {
                 }
                 
                 Some(TokenKind::LeftBracket) => {
-                    // Array indexing
-                    self.tokens.next()?;
-                    let index = self.parse_expression()?;
+                    // Array indexing - can be a single index or slice with multiple indices
+                    self.tokens.next()?; // consume [
+                    
+                    // Check if this might be a slice (multiple indices)
+                    let mut indices = vec![self.parse_expression()?];
+                    
+                    // Look for comma-separated indices
+                    while self.peek_kind() == Some(TokenKind::Comma) {
+                        self.tokens.next()?; // consume comma
+                        indices.push(self.parse_expression()?);
+                    }
+                    
                     self.expect(TokenKind::RightBracket)?;
+                    
+                    // Create the index node - either single index or array of indices
+                    let index = if indices.len() == 1 {
+                        indices.into_iter().next().unwrap()
+                    } else {
+                        // Multiple indices - create an array literal node
+                        let start = indices.first().unwrap().location.start;
+                        let end = indices.last().unwrap().location.end;
+                        Node::new(
+                            NodeKind::ArrayLiteral { elements: indices },
+                            SourceLocation { start, end }
+                        )
+                    };
                     
                     let start = expr.location.start;
                     let end = self.previous_position();
