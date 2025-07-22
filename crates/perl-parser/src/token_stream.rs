@@ -101,6 +101,7 @@ pub enum TokenKind {
     DoubleColon,
     Question,
     Colon,
+    Backslash, // Reference operator
     
     // Delimiters
     LeftParen,
@@ -284,6 +285,7 @@ impl<'a> TokenStream<'a> {
                 "::" => TokenKind::DoubleColon,
                 "?" => TokenKind::Question,
                 ":" => TokenKind::Colon,
+                "\\" => TokenKind::Backslash,
                 // Sigils (when used as operators in certain contexts)
                 "$" => TokenKind::ScalarSigil,
                 "@" => TokenKind::ArraySigil,

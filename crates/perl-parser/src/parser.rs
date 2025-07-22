@@ -218,9 +218,32 @@ impl<'a> Parser<'a> {
             ));
         };
         
+        // Check if the variable name is followed by :: for package-qualified variables
+        let mut full_name = name;
+        let mut end = token.end;
+        
+        // Handle :: in package-qualified variables
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.tokens.next()?; // consume ::
+            full_name.push_str("::");
+            
+            // The next part might be an identifier or another variable
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let name_token = self.tokens.next()?;
+                full_name.push_str(&name_token.text);
+                end = name_token.end;
+            } else {
+                // Handle cases like $Foo::$bar
+                return Err(ParseError::syntax(
+                    "Expected identifier after :: in package-qualified variable",
+                    self.current_position()
+                ));
+            }
+        }
+        
         Ok(Node::new(
-            NodeKind::Variable { sigil, name },
-            SourceLocation { start: token.start, end: token.end }
+            NodeKind::Variable { sigil, name: full_name },
+            SourceLocation { start: token.start, end }
         ))
     }
     
@@ -231,43 +254,63 @@ impl<'a> Parser<'a> {
         let start = sigil_token.start;
         
         // Check if next token is an identifier for the variable name
-        let name = if self.peek_kind() == Some(TokenKind::Identifier) {
+        let (name, end) = if self.peek_kind() == Some(TokenKind::Identifier) {
             let name_token = self.tokens.next()?;
-            name_token.text.clone()
+            let mut name = name_token.text.clone();
+            let mut end = name_token.end;
+            
+            // Handle :: in package-qualified variables
+            while self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.tokens.next()?; // consume ::
+                name.push_str("::");
+                
+                if self.peek_kind() == Some(TokenKind::Identifier) {
+                    let next_token = self.tokens.next()?;
+                    name.push_str(&next_token.text);
+                    end = next_token.end;
+                } else {
+                    return Err(ParseError::syntax(
+                        "Expected identifier after :: in package-qualified variable",
+                        self.current_position()
+                    ));
+                }
+            }
+            
+            (name, end)
         } else {
             // Handle special variables like $$, $@, $!, $?, etc.
             match self.peek_kind() {
                 Some(TokenKind::ScalarSigil) => {
                     // $$ - process ID
-                    self.tokens.next()?;
-                    "$".to_string()
+                    let token = self.tokens.next()?;
+                    ("$".to_string(), token.end)
                 }
                 Some(TokenKind::ArraySigil) => {
                     // $@ - eval error
-                    self.tokens.next()?;
-                    "@".to_string()
+                    let token = self.tokens.next()?;
+                    ("@".to_string(), token.end)
                 }
                 Some(TokenKind::Not) => {
                     // $! - system error
-                    self.tokens.next()?;
-                    "!".to_string()
+                    let token = self.tokens.next()?;
+                    ("!".to_string(), token.end)
                 }
                 Some(TokenKind::Unknown) => {
                     // Could be $?, $^, or other special
                     let token = self.tokens.peek()?;
                     match token.text.as_str() {
                         "?" => {
-                            self.tokens.next()?;
-                            "?".to_string()
+                            let token = self.tokens.next()?;
+                            ("?".to_string(), token.end)
                         }
                         "^" => {
                             // Handle $^X variables
-                            self.tokens.next()?;
+                            let token = self.tokens.next()?;
                             if self.peek_kind() == Some(TokenKind::Identifier) {
                                 let var_token = self.tokens.next()?;
-                                format!("^{}", var_token.text)
+                                (format!("^{}", var_token.text), var_token.end)
                             } else {
-                                "^".to_string()
+                                ("^".to_string(), token.end)
                             }
                         }
                         _ => {
@@ -281,16 +324,15 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Number) => {
                     // $0, $1, $2, etc. - numbered capture groups
                     let num_token = self.tokens.next()?;
-                    num_token.text.clone()
+                    (num_token.text.clone(), num_token.end)
                 }
                 _ => {
                     // Empty variable name (just the sigil)
-                    String::new()
+                    (String::new(), self.previous_position())
                 }
             }
         };
         
-        let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Variable { sigil, name },
             SourceLocation { start, end }
@@ -1701,7 +1743,7 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end }
                     ));
                 }
-                TokenKind::Plus | TokenKind::Not => {
+                TokenKind::Plus | TokenKind::Not | TokenKind::Backslash => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     let operand = self.parse_unary()?;
@@ -2105,12 +2147,8 @@ impl<'a> Parser<'a> {
                     // Only treat * as a glob sigil if followed by identifier
                     self.parse_variable()
                 } else {
-                    // Regular identifier
-                    let token = self.tokens.next()?;
-                    Ok(Node::new(
-                        NodeKind::Identifier { name: token.text.clone() },
-                        SourceLocation { start: token.start, end: token.end }
-                    ))
+                    // Regular identifier (possibly qualified with ::)
+                    self.parse_qualified_identifier()
                 }
             }
             
@@ -2243,6 +2281,26 @@ impl<'a> Parser<'a> {
         
         self.expect(TokenKind::RightParen)?;
         Ok(args)
+    }
+    
+    /// Parse qualified identifier (e.g., Foo::Bar::Baz)
+    fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let first_token = self.expect(TokenKind::Identifier)?;
+        let mut name = first_token.text.clone();
+        
+        // Handle :: in qualified names
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.tokens.next()?; // consume ::
+            name.push_str("::");
+            name.push_str(&self.expect(TokenKind::Identifier)?.text);
+        }
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Identifier { name },
+            SourceLocation { start, end }
+        ))
     }
     
     // Helper methods
