@@ -462,11 +462,101 @@ impl<'a> PerlLexer<'a> {
             '$' | '@' | '%' | '*' => {
                 self.advance();
                 
-                // Parse variable name
-                if let Some(ch) = self.current_char() {
+                // Check for special cases like ${^MATCH} or ${::{foo}} or *{$glob}
+                if self.current_char() == Some('{') {
+                    self.advance(); // consume {
+                    
+                    // Handle special variables with caret
+                    if self.current_char() == Some('^') {
+                        self.advance(); // consume ^
+                        // Parse the special variable name
+                        while let Some(ch) = self.current_char() {
+                            if ch == '}' {
+                                self.advance(); // consume }
+                                break;
+                            } else if ch.is_alphanumeric() || ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    } 
+                    // Handle stash access like $::{foo}
+                    else if self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
+                        self.advance(); // consume first :
+                        self.advance(); // consume second :
+                        // Skip optional { and }
+                        if self.current_char() == Some('{') {
+                            self.advance();
+                        }
+                        // Parse the name
+                        while let Some(ch) = self.current_char() {
+                            if ch == '}' {
+                                self.advance();
+                                if self.current_char() == Some('}') {
+                                    self.advance(); // consume closing } of ${...}
+                                }
+                                break;
+                            } else if ch.is_alphanumeric() || ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    // Regular braced variable like ${foo} or glob like *{$glob}
+                    else {
+                        // For glob access, we need to consume everything inside braces
+                        if sigil == '*' {
+                            let mut brace_depth = 1;
+                            while let Some(ch) = self.current_char() {
+                                if ch == '{' {
+                                    brace_depth += 1;
+                                } else if ch == '}' {
+                                    brace_depth -= 1;
+                                    if brace_depth == 0 {
+                                        self.advance(); // consume final }
+                                        break;
+                                    }
+                                }
+                                self.advance();
+                            }
+                        } else {
+                            // Regular variable
+                            while let Some(ch) = self.current_char() {
+                                if ch == '}' {
+                                    self.advance(); // consume }
+                                    break;
+                                } else if ch.is_alphanumeric() || ch == '_' {
+                                    self.advance();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Parse regular variable name
+                else if let Some(ch) = self.current_char() {
                     if ch.is_alphabetic() || ch == '_' {
                         while let Some(ch) = self.current_char() {
                             if ch.is_alphanumeric() || ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    // Handle :: for package-qualified variables or stash access
+                    else if ch == ':' && self.peek_char(1) == Some(':') {
+                        self.advance(); // consume first :
+                        self.advance(); // consume second :
+                        // Now parse the rest like a normal identifier
+                        while let Some(ch) = self.current_char() {
+                            if ch.is_alphanumeric() || ch == '_' {
+                                self.advance();
+                            } else if ch == ':' && self.peek_char(1) == Some(':') {
+                                self.advance();
                                 self.advance();
                             } else {
                                 break;
