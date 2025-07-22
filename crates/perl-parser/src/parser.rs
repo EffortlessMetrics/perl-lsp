@@ -92,10 +92,13 @@ impl<'a> Parser<'a> {
             TokenKind::For => self.parse_for_statement(),
             TokenKind::Foreach => self.parse_foreach_statement(),
             TokenKind::Given => self.parse_given_statement(),
+            TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
             
-            // Subroutines
+            // Subroutines and modern OOP
             TokenKind::Sub => self.parse_subroutine(),
+            TokenKind::Class => self.parse_class(),
+            TokenKind::Method => self.parse_method(),
             
             // Package management
             TokenKind::Package => self.parse_package(),
@@ -151,6 +154,14 @@ impl<'a> Parser<'a> {
             
             self.expect(TokenKind::RightParen)?; // consume )
             
+            // Parse optional attributes
+            let mut attributes = Vec::new();
+            while self.peek_kind() == Some(TokenKind::Colon) {
+                self.tokens.next()?; // consume colon
+                let attr_token = self.expect(TokenKind::Identifier)?;
+                attributes.push(attr_token.text.clone());
+            }
+            
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
                 self.tokens.next()?; // consume =
                 Some(Box::new(self.parse_expression()?))
@@ -168,6 +179,7 @@ impl<'a> Parser<'a> {
                 NodeKind::VariableListDeclaration {
                     declarator,
                     variables,
+                    attributes,
                     initializer,
                 },
                 SourceLocation { start, end }
@@ -175,6 +187,14 @@ impl<'a> Parser<'a> {
         } else {
             // Single variable declaration
             let variable = self.parse_variable()?;
+            
+            // Parse optional attributes
+            let mut attributes = Vec::new();
+            while self.peek_kind() == Some(TokenKind::Colon) {
+                self.tokens.next()?; // consume colon
+                let attr_token = self.expect(TokenKind::Identifier)?;
+                attributes.push(attr_token.text.clone());
+            }
             
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
                 self.tokens.next()?; // consume =
@@ -193,6 +213,7 @@ impl<'a> Parser<'a> {
                 NodeKind::VariableDeclaration {
                     declarator,
                     variable: Box::new(variable),
+                    attributes,
                     initializer,
                 },
                 SourceLocation { start, end }
@@ -691,11 +712,70 @@ impl<'a> Parser<'a> {
             Vec::new()
         };
         
+        // Parse optional attributes
+        let mut attributes = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Colon) {
+            self.tokens.next()?; // consume colon
+            
+            // Expect an identifier as the attribute name
+            let attr_token = self.expect(TokenKind::Identifier)?;
+            attributes.push(attr_token.text.clone());
+        }
+        
         let body = self.parse_block()?;
         
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Subroutine {
+                name,
+                params,
+                attributes,
+                body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse class declaration (Perl 5.38+)
+    fn parse_class(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'class'
+        
+        let name_token = self.expect(TokenKind::Identifier)?;
+        let name = name_token.text.clone();
+        
+        let body = self.parse_block()?;
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Class {
+                name,
+                body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse method declaration (Perl 5.38+)
+    fn parse_method(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'method'
+        
+        let name_token = self.expect(TokenKind::Identifier)?;
+        let name = name_token.text.clone();
+        
+        // Parse optional signature
+        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.parse_signature()?
+        } else {
+            Vec::new()
+        };
+        
+        let body = self.parse_block()?;
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Method {
                 name,
                 params,
                 body: Box::new(body),
@@ -2963,7 +3043,7 @@ impl<'a> Parser<'a> {
             TokenKind::Init | TokenKind::Unitcheck | TokenKind::Do | TokenKind::Eval |
             TokenKind::Given | TokenKind::When | TokenKind::Default |
             TokenKind::Try | TokenKind::Catch | TokenKind::Finally |
-            TokenKind::Continue => {
+            TokenKind::Continue | TokenKind::Class | TokenKind::Method => {
                 // In expression context, keywords can sometimes be used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
                 let token = self.tokens.next()?;

@@ -31,24 +31,34 @@ impl Node {
                 format!("(program {})", stmts)
             }
             
-            NodeKind::VariableDeclaration { declarator, variable, initializer } => {
-                if let Some(init) = initializer {
-                    format!("({}_declaration {} {})", declarator, variable.to_sexp(), init.to_sexp())
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                let attrs_str = if attributes.is_empty() {
+                    String::new()
                 } else {
-                    format!("({}_declaration {})", declarator, variable.to_sexp())
+                    format!(" (attributes {})", attributes.join(" "))
+                };
+                if let Some(init) = initializer {
+                    format!("({}_declaration {}{}{})", declarator, variable.to_sexp(), attrs_str, init.to_sexp())
+                } else {
+                    format!("({}_declaration {}{})", declarator, variable.to_sexp(), attrs_str)
                 }
             }
             
-            NodeKind::VariableListDeclaration { declarator, variables, initializer } => {
+            NodeKind::VariableListDeclaration { declarator, variables, attributes, initializer } => {
                 let vars = variables
                     .iter()
                     .map(|v| v.to_sexp())
                     .collect::<Vec<_>>()
                     .join(" ");
-                if let Some(init) = initializer {
-                    format!("({}_declaration ({}) {})", declarator, vars, init.to_sexp())
+                let attrs_str = if attributes.is_empty() {
+                    String::new()
                 } else {
-                    format!("({}_declaration ({}))", declarator, vars)
+                    format!(" (attributes {})", attributes.join(" "))
+                };
+                if let Some(init) = initializer {
+                    format!("({}_declaration ({}){}{})", declarator, vars, attrs_str, init.to_sexp())
+                } else {
+                    format!("({}_declaration ({}){})", declarator, vars, attrs_str)
                 }
             }
             
@@ -225,14 +235,19 @@ impl Node {
                 format!("(statement_modifier_{} {} {})", modifier, statement.to_sexp(), condition.to_sexp())
             }
             
-            NodeKind::Subroutine { name, params, body } => {
+            NodeKind::Subroutine { name, params, attributes, body } => {
                 let name_str = name.as_deref().unwrap_or("anonymous");
                 let params_str = params
                     .iter()
                     .map(|p| p.to_sexp())
                     .collect::<Vec<_>>()
                     .join(" ");
-                format!("(sub {} ({}) {})", name_str, params_str, body.to_sexp())
+                let attrs_str = if attributes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (attributes {})", attributes.join(" "))
+                };
+                format!("(sub {} ({}){}{})", name_str, params_str, attrs_str, body.to_sexp())
             }
             
             NodeKind::Return { value } => {
@@ -309,6 +324,19 @@ impl Node {
                 format!("({} {})", phase, block.to_sexp())
             }
             
+            NodeKind::Class { name, body } => {
+                format!("(class {} {})", name, body.to_sexp())
+            }
+            
+            NodeKind::Method { name, params, body } => {
+                let params_str = params
+                    .iter()
+                    .map(|p| p.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(method {} ({}) {})", name, params_str, body.to_sexp())
+            }
+            
             NodeKind::Identifier { name } => {
                 format!("(identifier {})", name)
             }
@@ -332,12 +360,14 @@ pub enum NodeKind {
     VariableDeclaration {
         declarator: String, // my, our, local, state
         variable: Box<Node>,
+        attributes: Vec<String>,
         initializer: Option<Box<Node>>,
     },
     
     VariableListDeclaration {
         declarator: String, // my, our, local, state
         variables: Vec<Node>,
+        attributes: Vec<String>,
         initializer: Option<Box<Node>>,
     },
     
@@ -483,6 +513,7 @@ pub enum NodeKind {
     Subroutine {
         name: Option<String>,
         params: Vec<Node>,
+        attributes: Vec<String>,
         body: Box<Node>,
     },
     
@@ -547,6 +578,18 @@ pub enum NodeKind {
     PhaseBlock {
         phase: String, // BEGIN, END, CHECK, INIT, UNITCHECK
         block: Box<Node>,
+    },
+    
+    // Modern Perl OOP (5.38+)
+    Class {
+        name: String,
+        body: Box<Node>,
+    },
+    
+    Method {
+        name: String,
+        params: Vec<Node>,
+        body: Box<Node>,
     },
     
     // Misc
