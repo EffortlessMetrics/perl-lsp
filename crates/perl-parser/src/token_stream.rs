@@ -149,6 +149,7 @@ pub enum TokenKind {
 pub struct TokenStream<'a> {
     lexer: PerlLexer<'a>,
     peeked: Option<Token>,
+    peeked_second: Option<Token>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -157,6 +158,7 @@ impl<'a> TokenStream<'a> {
         TokenStream {
             lexer: PerlLexer::new(input),
             peeked: None,
+            peeked_second: None,
         }
     }
     
@@ -170,16 +172,33 @@ impl<'a> TokenStream<'a> {
     
     /// Consume and return the next token
     pub fn next(&mut self) -> ParseResult<Token> {
-        if let Some(token) = self.peeked.take() {
+        // If we have a peeked token, return it and move peeked_second to peeked
+        let result = if let Some(token) = self.peeked.take() {
+            self.peeked = self.peeked_second.take();
             Ok(token)
         } else {
             self.next_token()
-        }
+        };
+        
+        result
     }
     
     /// Check if we're at the end of input
     pub fn is_eof(&mut self) -> bool {
         matches!(self.peek(), Ok(token) if token.kind == TokenKind::Eof)
+    }
+    
+    /// Peek at the second token (two tokens ahead)
+    pub fn peek_second(&mut self) -> ParseResult<&Token> {
+        // First ensure we have a peeked token
+        self.peek()?;
+        
+        // If we don't have a second peeked token, get it
+        if self.peeked_second.is_none() {
+            self.peeked_second = Some(self.next_token()?);
+        }
+        
+        Ok(self.peeked_second.as_ref().unwrap())
     }
     
     /// Get the next token from the lexer
