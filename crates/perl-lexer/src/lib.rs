@@ -111,6 +111,10 @@ impl<'a> PerlLexer<'a> {
             return Some(token);
         }
         
+        if let Some(token) = self.try_delimiter() {
+            return Some(token);
+        }
+        
         // If nothing else matches, return an error token
         let ch = self.current_char()?;
         self.advance();
@@ -238,17 +242,17 @@ impl<'a> PerlLexer<'a> {
             match byte {
                 b' ' | b'\t' | b'\r' => self.position += 1,
                 b'\n' => {
-                    self.position += 1;
+                    self.advance();
                     // Newlines can affect parsing context
                 }
                 b'#' => {
                     // Skip line comment using byte-level operations
-                    self.position += 1;
+                    self.advance();
                     while self.position < self.input_bytes.len() {
                         if self.input_bytes[self.position] == b'\n' {
                             break;
                         }
-                        self.position += 1;
+                        self.advance();
                     }
                 }
                 _ => {
@@ -270,7 +274,7 @@ impl<'a> PerlLexer<'a> {
     
     fn try_heredoc(&mut self) -> Option<Token> {
         // Check for heredoc start
-        if self.position + 2 > self.input.len() || &self.input[self.position..self.position + 2] != "<<" {
+        if self.peek_byte(0) != Some(b'<') || self.peek_byte(1) != Some(b'<') {
             return None;
         }
         
@@ -278,56 +282,60 @@ impl<'a> PerlLexer<'a> {
         self.position += 2; // Skip <<
         
         // Check for indented heredoc (~)
-        let indented = if self.position < self.input.len() && self.input.chars().nth(self.position) == Some('~') {
-            self.position += 1;
+        let indented = if self.current_char() == Some('~') {
+            self.advance();
             true
         } else {
             false
         };
         
         // Skip whitespace
-        while self.position < self.input.len() && self.input.chars().nth(self.position).map_or(false, |c| c == ' ' || c == '\t') {
-            self.position += 1;
+        while let Some(ch) = self.current_char() {
+            if ch == ' ' || ch == '\t' {
+                self.advance();
+            } else {
+                break;
+            }
         }
         
         // Parse delimiter
         let delimiter_start = self.position;
         let delimiter = if self.position < self.input.len() {
-            match self.input.chars().nth(self.position) {
+            match self.current_char() {
                 Some('"') => {
                     // Double-quoted delimiter
-                    self.position += 1;
+                    self.advance();
                     let delim_start = self.position;
                     while self.position < self.input.len() {
-                        if self.input.chars().nth(self.position) == Some('"') {
+                        if self.current_char() == Some('"') {
                             let delim = self.input[delim_start..self.position].to_string();
-                            self.position += 1;
+                            self.advance();
                             break;
                         }
-                        self.position += 1;
+                        self.advance();
                     }
                     self.input[delim_start..self.position-1].to_string()
                 }
                 Some('\'') => {
                     // Single-quoted delimiter
-                    self.position += 1;
+                    self.advance();
                     let delim_start = self.position;
                     while self.position < self.input.len() {
-                        if self.input.chars().nth(self.position) == Some('\'') {
+                        if self.current_char() == Some('\'') {
                             let delim = self.input[delim_start..self.position].to_string();
-                            self.position += 1;
+                            self.advance();
                             break;
                         }
-                        self.position += 1;
+                        self.advance();
                     }
                     self.input[delim_start..self.position-1].to_string()
                 }
                 Some(c) if c.is_alphabetic() || c == '_' => {
                     // Bare word delimiter
                     while self.position < self.input.len() {
-                        if let Some(c) = self.input.chars().nth(self.position) {
+                        if let Some(c) = self.current_char() {
                             if c.is_alphanumeric() || c == '_' {
-                                self.position += 1;
+                                self.advance();
                             } else {
                                 break;
                             }
@@ -381,11 +389,11 @@ impl<'a> PerlLexer<'a> {
                     b'0'..=b'9' | b'.' | b'_' => self.position += 1,
                     b'e' | b'E' => {
                         // Handle scientific notation
-                        self.position += 1;
+                        self.advance();
                         if self.position < self.input_bytes.len() {
                             let next = self.input_bytes[self.position];
                             if next == b'+' || next == b'-' {
-                                self.position += 1;
+                                self.advance();
                             }
                         }
                     }
@@ -405,6 +413,45 @@ impl<'a> PerlLexer<'a> {
         } else {
             None
         }
+    }
+    
+    fn parse_decimal_number(&mut self, start: usize) -> Option<Token> {
+        // We're at the dot, consume it
+        self.advance();
+        
+        // Parse the fractional part
+        while self.position < self.input_bytes.len() {
+            let byte = self.input_bytes[self.position];
+            match byte {
+                b'0'..=b'9' | b'_' => self.position += 1,
+                b'e' | b'E' => {
+                    // Handle scientific notation
+                    self.advance();
+                    if self.position < self.input_bytes.len() {
+                        let next = self.input_bytes[self.position];
+                        if next == b'+' || next == b'-' {
+                            self.advance();
+                        }
+                    }
+                    // Parse exponent digits
+                    while self.position < self.input_bytes.len() && self.input_bytes[self.position].is_ascii_digit() {
+                        self.position += 1;
+                    }
+                    break;
+                }
+                _ => break,
+            }
+        }
+        
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectOperator;
+        
+        Some(Token {
+            token_type: TokenType::Number(Arc::from(text)),
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
     }
     
     fn try_variable(&mut self) -> Option<Token> {
@@ -527,6 +574,42 @@ impl<'a> PerlLexer<'a> {
         
         // Handle other operators - simplified
         match ch {
+            '.' => {
+                // Check if it's a decimal number like .5
+                if self.peek_char(1).map_or(false, |c| c.is_ascii_digit()) {
+                    return self.parse_decimal_number(start);
+                }
+                self.advance();
+                // Check for compound operators
+                if let Some(next) = self.current_char() {
+                    if is_compound_operator(ch, next) {
+                        self.advance();
+                        
+                        // Check for three-character operators like **=, <<=, >>=
+                        if self.position < self.input.len() {
+                            let third = self.current_char();
+                            if ch == '*' && next == '*' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '<' && next == '<' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '<' && next == '=' && third == Some('>') {
+                                self.advance(); // consume the >
+                                // Special case: <=> spaceship operator
+                            } else if ch == '>' && next == '>' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '&' && next == '&' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '|' && next == '|' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '/' && next == '/' && third == Some('=') {
+                                self.advance(); // consume the =
+                            } else if ch == '.' && next == '.' && third == Some('.') {
+                                self.advance(); // consume the third .
+                            }
+                        }
+                    }
+                }
+            }
             '+' | '-' | '*' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>' | ':' | '?' | '\\' => {
                 self.advance();
                 // Check for compound operators
@@ -556,17 +639,26 @@ impl<'a> PerlLexer<'a> {
                         }
                     }
                 }
-                
-                let text = &self.input[start..self.position];
-                self.mode = LexerMode::ExpectTerm;
-                
-                Some(Token {
-                    token_type: TokenType::Operator(Arc::from(text)),
-                    text: Arc::from(text),
-                    start,
-                    end: self.position,
-                })
             }
+            _ => return None,
+        }
+        
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectTerm;
+        
+        Some(Token {
+            token_type: TokenType::Operator(Arc::from(text)),
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
+    }
+    
+    fn try_delimiter(&mut self) -> Option<Token> {
+        let start = self.position;
+        let ch = self.current_char()?;
+        
+        match ch {
             '(' => {
                 self.advance();
                 if self.in_prototype {
@@ -1085,7 +1177,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
             b'>' => second_byte == b'=' || second_byte == b'>',
             b'=' => second_byte == b'=' || second_byte == b'~' || second_byte == b'>',
             b'!' => second_byte == b'=' || second_byte == b'~',
-            b'.' => second_byte == b'.',
+            b'.' => second_byte == b'.' || second_byte == b'=',
             b'~' => second_byte == b'~',
             b':' => second_byte == b':',
             _ => false,
@@ -1097,7 +1189,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
             ('&', '=') | ('|', '=') | ('^', '=') | ('<', '<') | ('>', '>') |
             ('<', '=') | ('>', '=') | ('=', '=') | ('!', '=') | ('=', '~') |
             ('!', '~') | ('+', '+') | ('-', '-') | ('&', '&') | ('|', '|') |
-            ('-', '>') | ('=', '>') | ('.', '.') | ('~', '~')
+            ('-', '>') | ('=', '>') | ('.', '.') | ('.', '=') | ('~', '~')
         )
     }
 }
