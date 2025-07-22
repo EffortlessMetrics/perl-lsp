@@ -2,7 +2,7 @@
 
 This document tracks the current capabilities of the perl-parser implementation.
 
-## ✅ Completed Features
+## ✅ Completed Features (~95% of common Perl syntax)
 
 ### Variables
 - Variable declarations: `my`, `our`, `local`, `state`
@@ -18,11 +18,16 @@ This document tracks the current capabilities of the perl-parser implementation.
 - String interpolation detection (marks double-quoted strings as interpolated)
 - Array literals: `[1, 2, 3]`, `[]`
 - Hash literals: `{}` (empty hash ref)
+- List/array slices: `@array[1..5]`, `@hash{'a', 'b'}`
 - Operators: arithmetic, comparison, logical, assignment
-- Binary operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`
+- Binary operators: `+`, `-`, `*`, `/`, `%`, `**`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`, `//`
+- Compound assignments: `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `.=`, `&=`, `|=`, `^=`, `&&=`, `||=`, `//=`
+- Word operators: `and`, `or`, `not`, `xor` (with correct precedence)
 - Regex match operators: `=~`, `!~`
 - Method call operator: `->`
 - Array/hash access operators: `[]`, `{}`
+- Ternary operator: `? :`
+- Range operator: `..`
 
 ### Control Flow
 - Conditionals: `if`, `elsif`, `else`, `unless`
