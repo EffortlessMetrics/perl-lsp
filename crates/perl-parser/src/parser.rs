@@ -417,7 +417,14 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'if'
         
         self.expect(TokenKind::LeftParen)?;
-        let condition = self.parse_expression()?;
+        
+        // Check if this is a variable declaration in the condition
+        let condition = if matches!(self.peek_kind(), Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State)) {
+            self.parse_variable_declaration()?
+        } else {
+            self.parse_expression()?
+        };
+        
         self.expect(TokenKind::RightParen)?;
         
         let then_branch = self.parse_block()?;
@@ -429,7 +436,14 @@ impl<'a> Parser<'a> {
         while self.peek_kind() == Some(TokenKind::Elsif) {
             self.tokens.next()?; // consume 'elsif'
             self.expect(TokenKind::LeftParen)?;
-            let elsif_cond = self.parse_expression()?;
+            
+            // Check if this is a variable declaration in the condition
+            let elsif_cond = if matches!(self.peek_kind(), Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State)) {
+                self.parse_variable_declaration()?
+            } else {
+                self.parse_expression()?
+            };
+            
             self.expect(TokenKind::RightParen)?;
             let elsif_block = self.parse_block()?;
             elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
@@ -491,7 +505,14 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'while'
         
         self.expect(TokenKind::LeftParen)?;
-        let condition = self.parse_expression()?;
+        
+        // Check if this is a variable declaration in the condition
+        let condition = if matches!(self.peek_kind(), Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State)) {
+            self.parse_variable_declaration()?
+        } else {
+            self.parse_expression()?
+        };
+        
         self.expect(TokenKind::RightParen)?;
         
         let body = self.parse_block()?;
@@ -720,8 +741,15 @@ impl<'a> Parser<'a> {
         while self.peek_kind() == Some(TokenKind::Colon) {
             self.tokens.next()?; // consume colon
             
-            // Expect an identifier as the attribute name
-            let attr_token = self.expect(TokenKind::Identifier)?;
+            // Attributes can be identifiers or keywords like 'method', 'lvalue', etc.
+            let attr_token = match self.peek_kind() {
+                Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
+                    self.tokens.next()?
+                }
+                _ => {
+                    return Err(ParseError::syntax("Expected attribute name after :", self.current_position()));
+                }
+            };
             attributes.push(attr_token.text.clone());
         }
         
@@ -1074,6 +1102,27 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Use { module, args },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse special block (AUTOLOAD, DESTROY, etc.)
+    fn parse_special_block(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let name_token = self.consume_token()?;
+        let name = name_token.text.clone();
+        
+        let block = self.parse_block()?;
+        let end = block.location.end;
+        
+        // Treat as a special subroutine
+        Ok(Node::new(
+            NodeKind::Subroutine {
+                name: Some(name),
+                params: vec![],
+                attributes: vec![],
+                body: Box::new(block),
+            },
             SourceLocation { start, end }
         ))
     }
@@ -1468,6 +1517,18 @@ impl<'a> Parser<'a> {
     
     /// Parse expression statement (which may have modifiers)
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
+        // Check for special blocks like AUTOLOAD and DESTROY
+        if let Ok(token) = self.tokens.peek() {
+            if matches!(token.text.as_str(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
+                // Check if next token is a block
+                if let Ok(second) = self.tokens.peek_second() {
+                    if second.kind == TokenKind::LeftBrace {
+                        return self.parse_special_block();
+                    }
+                }
+            }
+        }
+        
         // First, try to parse the initial part as a simple statement
         let mut expr = self.parse_simple_statement()?;
         
@@ -1494,7 +1555,7 @@ impl<'a> Parser<'a> {
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {
-            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" => {
+            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" | "tie" => {
                 let start = token.start;
                 let func_name = self.consume_token()?.text;
                 
@@ -1518,8 +1579,8 @@ impl<'a> Parser<'a> {
                         let mut args = vec![];
                         
                         // Parse first argument
-                        // Special handling for open/pipe/socket which can take my $var as first arg
-                        if (func_name == "open" || func_name == "pipe" || func_name == "socket") && 
+                        // Special handling for open/pipe/socket/tie which can take my $var as first arg
+                        if (func_name == "open" || func_name == "pipe" || func_name == "socket" || func_name == "tie") && 
                            self.peek_kind() == Some(TokenKind::My) {
                             args.push(self.parse_variable_declaration()?);
                         } else {
@@ -2205,6 +2266,23 @@ impl<'a> Parser<'a> {
                 TokenKind::Plus | TokenKind::Not | TokenKind::Backslash | TokenKind::BitwiseNot => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
+                    
+                    // Check if we're at EOF or a terminator (for standalone operators)
+                    if self.tokens.is_eof() || self.is_at_statement_end() {
+                        // Create a placeholder for standalone operator
+                        let end = op_token.end;
+                        return Ok(Node::new(
+                            NodeKind::Unary {
+                                op: op_token.text.clone(),
+                                operand: Box::new(Node::new(
+                                    NodeKind::Undef,
+                                    SourceLocation { start: end, end }
+                                )),
+                            },
+                            SourceLocation { start, end }
+                        ));
+                    }
+                    
                     let operand = self.parse_unary()?;
                     let end = operand.location.end;
                     
@@ -2235,6 +2313,23 @@ impl<'a> Parser<'a> {
                     // Smart match can be used as a unary operator
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
+                    
+                    // Check if we're at EOF or a terminator (for standalone operators)
+                    if self.tokens.is_eof() || self.is_at_statement_end() {
+                        // Create a placeholder for standalone operator
+                        let end = op_token.end;
+                        return Ok(Node::new(
+                            NodeKind::Unary {
+                                op: op_token.text.clone(),
+                                operand: Box::new(Node::new(
+                                    NodeKind::Undef,
+                                    SourceLocation { start: end, end }
+                                )),
+                            },
+                            SourceLocation { start, end }
+                        ));
+                    }
+                    
                     let operand = self.parse_unary()?;
                     let end = operand.location.end;
                     

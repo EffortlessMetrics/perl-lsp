@@ -462,6 +462,33 @@ impl<'a> PerlLexer<'a> {
             '$' | '@' | '%' | '*' => {
                 self.advance();
                 
+                // Check for $# (array length operator)
+                if sigil == '$' && self.current_char() == Some('#') {
+                    self.advance(); // consume #
+                    // Now parse the array name
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_alphanumeric() || ch == '_' {
+                            self.advance();
+                        } else if ch == ':' && self.peek_char(1) == Some(':') {
+                            // Package-qualified array name
+                            self.advance();
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: TokenType::Identifier(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                
                 // Check for special cases like ${^MATCH} or ${::{foo}} or *{$glob}
                 if self.current_char() == Some('{') {
                     self.advance(); // consume {
