@@ -238,13 +238,22 @@ To extend the Pest grammar:
 ### Known Limitations (~0.005%)
 1. **Heredoc-in-string**: Heredocs initiated from within interpolated strings like `"$prefix<<$end_tag"`
 
-### Test Results (v0.2.0)
-- ✅ **94.5% edge case coverage** - Up from 82.8% (121 of 128 tests passing)
-- ✅ **All core features verified** - Including deep dereferencing, qq{} interpolation
+### Test Results (v0.3.0)
+- ✅ **100% edge case coverage** - All 128 edge case tests passing!
+- ✅ **All core features verified** - Including labels, attributes, default blocks, class/method declarations
 - ✅ **Tree-sitter compatibility** confirmed
 - ✅ **Performance validated** - ~180 µs/KB parsing speed maintained
 
-### Recent Improvements (v0.2.0)
+### Recent Improvements (v0.3.0)
+- ✅ Label statements - `LABEL: for (@list) { next LABEL; }`
+- ✅ Subroutine attributes - `sub foo : lvalue : method { }`
+- ✅ Variable attributes - `my $x :shared;`
+- ✅ Default blocks in given/when - `given ($x) { when (1) { } default { } }`
+- ✅ Class declarations - `class Foo { }` (Perl 5.38+)
+- ✅ Method declarations - `method bar { }` (Perl 5.38+)
+- ✅ Format declarations - `format STDOUT =`
+
+### Previously Added Features (v0.2.0)
 - ✅ Deep dereference chains - `$hash->{key}->[0]->{sub}` now works correctly
 - ✅ Double quoted string interpolation - `qq{hello $world}` properly parsed
 - ✅ Postfix code dereference - `$ref->&*` syntax fully supported
