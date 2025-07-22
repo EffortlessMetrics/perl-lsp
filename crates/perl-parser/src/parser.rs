@@ -1219,12 +1219,44 @@ impl<'a> Parser<'a> {
         
         // In scalar context, comma creates a list
         // For now, we'll just parse it as sequential expressions
-        if self.peek_kind() == Some(TokenKind::Comma) {
+        // Also handle fat arrow (=>) which acts like comma
+        if self.peek_kind() == Some(TokenKind::Comma) || self.peek_kind() == Some(TokenKind::FatArrow) {
             let mut expressions = vec![expr];
             
-            while self.peek_kind() == Some(TokenKind::Comma) {
-                self.tokens.next()?; // consume comma
+            // Handle initial fat arrow
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                self.tokens.next()?; // consume =>
                 expressions.push(self.parse_assignment()?);
+            }
+            
+            while self.peek_kind() == Some(TokenKind::Comma) || self.peek_kind() == Some(TokenKind::FatArrow) {
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.tokens.next()?; // consume comma
+                }
+                
+                // Check for end of expression
+                match self.peek_kind() {
+                    Some(TokenKind::Semicolon) | Some(TokenKind::RightParen) | 
+                    Some(TokenKind::RightBrace) | Some(TokenKind::RightBracket) => break,
+                    _ => {}
+                }
+                
+                let elem = self.parse_assignment()?;
+                
+                // Check for fat arrow after element
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.tokens.next()?; // consume =>
+                    expressions.push(elem);
+                    
+                    // Check again for end of expression
+                    match self.peek_kind() {
+                        Some(TokenKind::Semicolon) | Some(TokenKind::RightParen) | 
+                        Some(TokenKind::RightBrace) | Some(TokenKind::RightBracket) => break,
+                        _ => expressions.push(self.parse_assignment()?)
+                    }
+                } else {
+                    expressions.push(elem);
+                }
             }
             
             // Return as array literal for now
@@ -1669,7 +1701,22 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end }
                     ));
                 }
-                TokenKind::Not => {
+                TokenKind::Plus | TokenKind::Not => {
+                    let op_token = self.tokens.next()?;
+                    let start = op_token.start;
+                    let operand = self.parse_unary()?;
+                    let end = operand.location.end;
+                    
+                    return Ok(Node::new(
+                        NodeKind::Unary {
+                            op: op_token.text.clone(),
+                            operand: Box::new(operand),
+                        },
+                        SourceLocation { start, end }
+                    ));
+                }
+                TokenKind::Increment | TokenKind::Decrement => {
+                    // Pre-increment and pre-decrement
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     let operand = self.parse_unary()?;
@@ -2088,16 +2135,37 @@ impl<'a> Parser<'a> {
                 // Parse comma-separated list
                 let first = self.parse_expression()?;
                 
-                if self.peek_kind() == Some(TokenKind::Comma) {
+                if self.peek_kind() == Some(TokenKind::Comma) || self.peek_kind() == Some(TokenKind::FatArrow) {
                     // It's a list
                     let mut elements = vec![first];
                     
-                    while self.peek_kind() == Some(TokenKind::Comma) {
-                        self.tokens.next()?; // consume comma
+                    // Handle fat arrow after first element
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.tokens.next()?; // consume =>
+                        elements.push(self.parse_expression()?);
+                    }
+                    
+                    while self.peek_kind() == Some(TokenKind::Comma) || self.peek_kind() == Some(TokenKind::FatArrow) {
+                        if self.peek_kind() == Some(TokenKind::Comma) {
+                            self.tokens.next()?; // consume comma
+                        }
+                        
                         if self.peek_kind() == Some(TokenKind::RightParen) {
                             break;
                         }
-                        elements.push(self.parse_expression()?);
+                        
+                        let elem = self.parse_expression()?;
+                        
+                        // Check for fat arrow after element
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.tokens.next()?; // consume =>
+                            elements.push(elem);
+                            if self.peek_kind() != Some(TokenKind::RightParen) {
+                                elements.push(self.parse_expression()?);
+                            }
+                        } else {
+                            elements.push(elem);
+                        }
                     }
                     
                     self.expect(TokenKind::RightParen)?;
@@ -2287,21 +2355,181 @@ impl<'a> Parser<'a> {
             ));
         }
         
-        // For now, just parse as block
-        // TODO: Implement proper hash vs block disambiguation
-        let mut statements = Vec::new();
+        // For non-empty braces, we need to check if it contains hash-like content
+        // Save position to potentially backtrack
+        let saved_pos = self.current_position();
         
-        while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
-            statements.push(self.parse_statement()?);
+        // Try to parse as expression (which might be hash contents)
+        let first_expr = match self.parse_expression() {
+            Ok(expr) => expr,
+            Err(_) => {
+                // If we can't parse an expression, parse as block statements
+                let mut statements = Vec::new();
+                while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
+                    statements.push(self.parse_statement()?);
+                }
+                
+                self.expect(TokenKind::RightBrace)?;
+                let end = self.previous_position();
+                
+                return Ok(Node::new(
+                    NodeKind::Block { statements },
+                    SourceLocation { start, end }
+                ));
+            }
+        };
+        
+        // Check if we should close the brace now
+        if self.peek_kind() == Some(TokenKind::RightBrace) {
+            self.tokens.next()?; // consume }
+            let end = self.previous_position();
+            
+            // Check if the expression is an array literal that should be a hash
+            // This happens when parse_comma creates an array from key => value pairs
+            if let NodeKind::ArrayLiteral { elements } = &first_expr.kind {
+                // Check if this looks like hash pairs (even number of elements)
+                if elements.len() % 2 == 0 && elements.len() > 0 {
+                    // Convert array elements to hash pairs
+                    let mut pairs = Vec::new();
+                    for i in (0..elements.len()).step_by(2) {
+                        pairs.push((elements[i].clone(), elements[i + 1].clone()));
+                    }
+                    
+                    return Ok(Node::new(
+                        NodeKind::HashLiteral { pairs },
+                        SourceLocation { start, end }
+                    ));
+                }
+            }
+            
+            // Otherwise it's a block with a single expression
+            return Ok(Node::new(
+                NodeKind::Block { statements: vec![first_expr] },
+                SourceLocation { start, end }
+            ));
         }
         
-        self.expect(TokenKind::RightBrace)?;
-        let end = self.previous_position();
+        // If there's more content, we need to determine if it's hash pairs or block statements
+        let mut pairs = Vec::new();
+        let mut is_hash = false;
         
-        Ok(Node::new(
-            NodeKind::Block { statements },
-            SourceLocation { start, end }
-        ))
+        // Check if next token is => or ,
+        let next_kind = self.peek_kind();
+        
+        // Parse as hash if we see => or comma-separated pairs
+        if next_kind == Some(TokenKind::FatArrow) || next_kind == Some(TokenKind::Comma) {
+            // Parse as hash
+            is_hash = true;
+            
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                // key => value pattern
+                self.tokens.next()?; // consume =>
+                let value = self.parse_expression()?;
+                pairs.push((first_expr, value));
+            } else if self.peek_kind() == Some(TokenKind::Comma) {
+                // comma-separated pattern: key, value, key2, value2
+                self.tokens.next()?; // consume comma
+                
+                if self.peek_kind() != Some(TokenKind::RightBrace) {
+                    let second = self.parse_expression()?;
+                    pairs.push((first_expr, second));
+                } else {
+                    // Trailing comma - treat as single element hash with undef value
+                    let undef = Node::new(
+                        NodeKind::Identifier { name: "undef".to_string() },
+                        SourceLocation { start: self.current_position(), end: self.current_position() }
+                    );
+                    pairs.push((first_expr, undef));
+                }
+            }
+            
+            // Parse remaining pairs
+            while self.peek_kind() == Some(TokenKind::Comma) || self.peek_kind() == Some(TokenKind::FatArrow) {
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.tokens.next()?; // consume comma
+                }
+                
+                if self.peek_kind() == Some(TokenKind::RightBrace) {
+                    break;
+                }
+                
+                let key = self.parse_expression()?;
+                
+                // Check for => or comma after key
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.tokens.next()?; // consume =>
+                    let value = self.parse_expression()?;
+                    pairs.push((key, value));
+                } else if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.tokens.next()?; // consume comma
+                    
+                    if self.peek_kind() == Some(TokenKind::RightBrace) {
+                        // Odd number of elements - last one becomes undef value
+                        let undef = Node::new(
+                            NodeKind::Identifier { name: "undef".to_string() },
+                            SourceLocation { start: self.current_position(), end: self.current_position() }
+                        );
+                        pairs.push((key, undef));
+                        break;
+                    }
+                    
+                    let value = self.parse_expression()?;
+                    pairs.push((key, value));
+                } else if self.peek_kind() == Some(TokenKind::RightBrace) {
+                    // Key without value at end - add undef
+                    let undef = Node::new(
+                        NodeKind::Identifier { name: "undef".to_string() },
+                        SourceLocation { start: self.current_position(), end: self.current_position() }
+                    );
+                    pairs.push((key, undef));
+                    break;
+                } else {
+                    // No comma or => after key - might be missing
+                    let value = self.parse_expression()?;
+                    pairs.push((key, value));
+                }
+            }
+            
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+            
+            Ok(Node::new(
+                NodeKind::HashLiteral { pairs },
+                SourceLocation { start, end }
+            ))
+        } else {
+            // Not a hash - parse as block
+            if self.peek_kind() == Some(TokenKind::RightBrace) {
+                // Single expression block
+                self.tokens.next()?; // consume }
+                let end = self.previous_position();
+                
+                return Ok(Node::new(
+                    NodeKind::Block { statements: vec![first_expr] },
+                    SourceLocation { start, end }
+                ));
+            }
+            
+            // Multiple statement block
+            let mut statements = vec![first_expr];
+            
+            // Might need a semicolon
+            if self.peek_kind() == Some(TokenKind::Semicolon) {
+                self.tokens.next()?;
+            }
+            
+            while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
+                statements.push(self.parse_statement()?);
+            }
+            
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+            
+            Ok(Node::new(
+                NodeKind::Block { statements },
+                SourceLocation { start, end }
+            ))
+        }
     }
 }
 
