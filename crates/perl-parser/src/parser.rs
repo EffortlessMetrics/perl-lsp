@@ -338,7 +338,7 @@ impl<'a> Parser<'a> {
                     ("!".to_string(), token.end)
                 }
                 Some(TokenKind::Unknown) => {
-                    // Could be $?, $^, or other special
+                    // Could be $?, $^, $#, or other special
                     let token = self.tokens.peek()?;
                     match token.text.as_str() {
                         "?" => {
@@ -353,6 +353,17 @@ impl<'a> Parser<'a> {
                                 (format!("^{}", var_token.text), var_token.end)
                             } else {
                                 ("^".to_string(), token.end)
+                            }
+                        }
+                        "#" => {
+                            // Handle $# (array length) 
+                            let token = self.tokens.next()?;
+                            if self.peek_kind() == Some(TokenKind::Identifier) {
+                                let var_token = self.tokens.next()?;
+                                (format!("#{}", var_token.text), var_token.end)
+                            } else {
+                                // Just $# by itself
+                                ("#".to_string(), token.end)
                             }
                         }
                         _ => {
@@ -734,43 +745,56 @@ impl<'a> Parser<'a> {
         while self.peek_kind() == Some(TokenKind::Colon) {
             self.tokens.next()?; // consume colon
             
-            // Attributes can be identifiers or keywords like 'method', 'lvalue', etc.
-            let attr_token = match self.peek_kind() {
-                Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
-                    self.tokens.next()?
-                }
-                _ => {
-                    return Err(ParseError::syntax("Expected attribute name after :", self.current_position()));
-                }
-            };
-            
-            let mut attr_name = attr_token.text.clone();
-            
-            // Check if attribute has a value in parentheses (like :prototype($))
-            if self.peek_kind() == Some(TokenKind::LeftParen) {
-                self.tokens.next()?; // consume (
-                attr_name.push('(');
+            // Parse one or more space-separated attributes after the colon
+            loop {
+                // Attributes can be identifiers or certain keywords
+                let attr_token = match self.peek_kind() {
+                    Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
+                        self.tokens.next()?
+                    }
+                    _ => {
+                        // If it's not an attribute name, we're done with this attribute list
+                        break;
+                    }
+                };
                 
-                // Collect tokens until matching )
-                let mut paren_depth = 1;
-                while paren_depth > 0 && !self.tokens.is_eof() {
-                    let token = self.tokens.next()?;
-                    attr_name.push_str(&token.text);
+                let mut attr_name = attr_token.text.clone();
+                
+                // Check if attribute has a value in parentheses (like :prototype($))
+                if self.peek_kind() == Some(TokenKind::LeftParen) {
+                    self.tokens.next()?; // consume (
+                    attr_name.push('(');
                     
-                    match token.kind {
-                        TokenKind::LeftParen => paren_depth += 1,
-                        TokenKind::RightParen => {
-                            paren_depth -= 1;
-                            if paren_depth == 0 {
-                                attr_name.push(')');
+                    // Collect tokens until matching )
+                    let mut paren_depth = 1;
+                    while paren_depth > 0 && !self.tokens.is_eof() {
+                        let token = self.tokens.next()?;
+                        attr_name.push_str(&token.text);
+                        
+                        match token.kind {
+                            TokenKind::LeftParen => paren_depth += 1,
+                            TokenKind::RightParen => {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    attr_name.push(')');
+                                }
                             }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
+                
+                attributes.push(attr_name);
+                
+                // Check if there's another attribute (not preceded by colon)
+                match self.peek_kind() {
+                    Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
+                        // Continue parsing more attributes
+                        continue;
+                    }
+                    _ => break,
+                }
             }
-            
-            attributes.push(attr_name);
         }
         
         // Parse optional signature after attributes
@@ -1991,13 +2015,36 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
     
+    /// Parse range expression
+    fn parse_range(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_equality()?;
+        
+        while self.peek_kind() == Some(TokenKind::Range) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_equality()?;
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
     /// Parse bitwise AND expression
     fn parse_bitwise_and(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_equality()?;
+        let mut expr = self.parse_range()?;
         
         while self.peek_kind() == Some(TokenKind::BitwiseAnd) {
             let op_token = self.tokens.next()?;
-            let right = self.parse_equality()?;
+            let right = self.parse_range()?;
             let start = expr.location.start;
             let end = right.location.end;
             
