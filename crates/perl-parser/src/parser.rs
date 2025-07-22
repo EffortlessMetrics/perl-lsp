@@ -783,7 +783,7 @@ impl<'a> Parser<'a> {
     
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_or()?;
+        let mut expr = self.parse_ternary()?;
         
         if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
@@ -795,6 +795,32 @@ impl<'a> Parser<'a> {
                 NodeKind::Assignment {
                     lhs: Box::new(expr),
                     rhs: Box::new(rhs),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse ternary conditional expression
+    fn parse_ternary(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_or()?;
+        
+        if self.peek_kind() == Some(TokenKind::Question) {
+            self.tokens.next()?; // consume ?
+            let then_expr = self.parse_or()?;
+            self.expect(TokenKind::Colon)?;
+            let else_expr = self.parse_ternary()?;
+            
+            let start = expr.location.start;
+            let end = else_expr.location.end;
+            
+            expr = Node::new(
+                NodeKind::Ternary {
+                    condition: Box::new(expr),
+                    then_expr: Box::new(then_expr),
+                    else_expr: Box::new(else_expr),
                 },
                 SourceLocation { start, end }
             );
@@ -966,7 +992,53 @@ impl<'a> Parser<'a> {
     fn parse_unary(&mut self) -> ParseResult<Node> {
         if let Some(kind) = self.peek_kind() {
             match kind {
-                TokenKind::Minus | TokenKind::Not => {
+                TokenKind::Minus => {
+                    let op_token = self.tokens.next()?;
+                    let start = op_token.start;
+                    
+                    // Check for file test operators (-e, -f, -d, etc.)
+                    if let Some(TokenKind::Identifier) = self.peek_kind() {
+                        let next_token = self.tokens.peek()?;
+                        if next_token.text.len() == 1 {
+                            // It's a file test operator
+                            let test_token = self.tokens.next()?;
+                            let file_test = format!("-{}", test_token.text);
+                            
+                            // File test can be used without operand (tests $_)
+                            let operand = if self.is_at_statement_end() {
+                                // No operand, test $_
+                                Node::new(
+                                    NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+                                    SourceLocation { start: test_token.end, end: test_token.end }
+                                )
+                            } else {
+                                self.parse_unary()?
+                            };
+                            
+                            let end = operand.location.end;
+                            return Ok(Node::new(
+                                NodeKind::Unary {
+                                    op: file_test,
+                                    operand: Box::new(operand),
+                                },
+                                SourceLocation { start, end }
+                            ));
+                        }
+                    }
+                    
+                    // Regular unary minus
+                    let operand = self.parse_unary()?;
+                    let end = operand.location.end;
+                    
+                    return Ok(Node::new(
+                        NodeKind::Unary {
+                            op: op_token.text.clone(),
+                            operand: Box::new(operand),
+                        },
+                        SourceLocation { start, end }
+                    ));
+                }
+                TokenKind::Not => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     let operand = self.parse_unary()?;
@@ -1326,6 +1398,20 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next()?;
         self.last_end_position = token.end;
         Ok(token)
+    }
+    
+    /// Check if we're at a statement boundary
+    fn is_at_statement_end(&mut self) -> bool {
+        match self.peek_kind() {
+            None => true,
+            Some(TokenKind::Semicolon) => true,
+            Some(TokenKind::RightParen) => true,
+            Some(TokenKind::RightBrace) => true,
+            Some(TokenKind::RightBracket) => true,
+            Some(TokenKind::Comma) => true,
+            Some(TokenKind::Eof) => true,
+            _ => false,
+        }
     }
     
     /// Parse qw() word list
