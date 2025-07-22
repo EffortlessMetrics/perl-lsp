@@ -36,6 +36,11 @@ pub enum TokenKind {
     Package,
     Use,
     No,
+    Begin,
+    End,
+    Check,
+    Init,
+    Unitcheck,
     
     // Operators
     Assign,
@@ -175,6 +180,12 @@ impl<'a> TokenStream<'a> {
                 "package" => TokenKind::Package,
                 "use" => TokenKind::Use,
                 "no" => TokenKind::No,
+                "BEGIN" => TokenKind::Begin,
+                "END" => TokenKind::End,
+                "CHECK" => TokenKind::Check,
+                "INIT" => TokenKind::Init,
+                "UNITCHECK" => TokenKind::Unitcheck,
+                "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
                 _ => TokenKind::Identifier,
             },
             
