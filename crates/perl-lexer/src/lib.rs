@@ -1159,9 +1159,9 @@ const KEYWORDS: &[&str] = &[
     // 4 letters
     "else", "when", "next", "last", "redo", "goto", "eval", "warn", "INIT",
     // 5 letters
-    "elsif", "while", "until", "local", "state", "given", "break", "print", "catch", "BEGIN", "CHECK",
+    "elsif", "while", "until", "local", "state", "given", "break", "print", "catch", "BEGIN", "CHECK", "class",
     // 6+ letters
-    "unless", "return", "require", "package", "default", "foreach", "finally", "continue", "UNITCHECK",
+    "unless", "return", "require", "package", "default", "foreach", "finally", "continue", "UNITCHECK", "method",
 ];
 
 #[inline]
@@ -1171,8 +1171,8 @@ fn is_keyword(word: &str) -> bool {
         2 => matches!(word, "if" | "do" | "my" | "or"),
         3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "try" | "END"),
         4 => matches!(word, "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"),
-        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK"),
-        6 => matches!(word, "unless" | "return"),
+        5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK" | "class"),
+        6 => matches!(word, "unless" | "return" | "method"),
         7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
         8 => word == "continue",
         9 => word == "UNITCHECK",

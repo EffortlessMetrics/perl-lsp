@@ -50,6 +50,8 @@ pub enum TokenKind {
     Catch,
     Finally,
     Continue,
+    Class,
+    Method,
     
     // Operators
     Assign,
@@ -262,6 +264,8 @@ impl<'a> TokenStream<'a> {
                 "catch" => TokenKind::Catch,
                 "finally" => TokenKind::Finally,
                 "continue" => TokenKind::Continue,
+                "class" => TokenKind::Class,
+                "method" => TokenKind::Method,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,
