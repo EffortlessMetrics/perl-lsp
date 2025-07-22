@@ -1,0 +1,1 @@
+sort { $b cmp $a } @list
