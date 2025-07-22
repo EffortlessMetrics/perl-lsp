@@ -250,7 +250,10 @@ impl<'a> Parser<'a> {
     /// Parse a variable when we have a sigil token first
     fn parse_variable_from_sigil(&mut self) -> ParseResult<Node> {
         let sigil_token = self.consume_token()?;
-        let sigil = sigil_token.text.clone();
+        let sigil = match sigil_token.kind {
+            TokenKind::BitwiseAnd => "&".to_string(), // Handle & as sigil
+            _ => sigil_token.text.clone(),
+        };
         let start = sigil_token.start;
         
         // Check if next token is an identifier or a keyword that should be treated as identifier
@@ -341,10 +344,40 @@ impl<'a> Parser<'a> {
             }
         };
         
-        Ok(Node::new(
-            NodeKind::Variable { sigil, name },
-            SourceLocation { start, end }
-        ))
+        // Special handling for & sigil - it's a function call
+        if sigil == "&" {
+            // Check if there are parentheses for arguments
+            let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.tokens.next()?; // consume (
+                let mut args = vec![];
+                
+                while self.peek_kind() != Some(TokenKind::RightParen) {
+                    args.push(self.parse_expression()?);
+                    
+                    if self.peek_kind() == Some(TokenKind::Comma) {
+                        self.tokens.next()?; // consume comma
+                    } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                        return Err(ParseError::syntax("Expected comma or right parenthesis", self.current_position()));
+                    }
+                }
+                
+                let right_paren = self.expect(TokenKind::RightParen)?;
+                let end = right_paren.end;
+                args
+            } else {
+                vec![]
+            };
+            
+            Ok(Node::new(
+                NodeKind::FunctionCall { name, args },
+                SourceLocation { start, end }
+            ))
+        } else {
+            Ok(Node::new(
+                NodeKind::Variable { sigil, name },
+                SourceLocation { start, end }
+            ))
+        }
     }
     
     /// Parse if statement
@@ -1641,9 +1674,78 @@ impl<'a> Parser<'a> {
     
     /// Parse logical AND expression
     fn parse_and(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_equality()?;
+        let mut expr = self.parse_bitwise_or()?;
         
         while self.peek_kind() == Some(TokenKind::And) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_bitwise_or()?;
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse bitwise OR expression
+    fn parse_bitwise_or(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_bitwise_xor()?;
+        
+        while self.peek_kind() == Some(TokenKind::BitwiseOr) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_bitwise_xor()?;
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse bitwise XOR expression
+    fn parse_bitwise_xor(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_bitwise_and()?;
+        
+        while self.peek_kind() == Some(TokenKind::BitwiseXor) {
+            let op_token = self.tokens.next()?;
+            let right = self.parse_bitwise_and()?;
+            let start = expr.location.start;
+            let end = right.location.end;
+            
+            expr = Node::new(
+                NodeKind::Binary {
+                    op: op_token.text.clone(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                },
+                SourceLocation { start, end }
+            );
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse bitwise AND expression
+    fn parse_bitwise_and(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_equality()?;
+        
+        while self.peek_kind() == Some(TokenKind::BitwiseAnd) {
             let op_token = self.tokens.next()?;
             let right = self.parse_equality()?;
             let start = expr.location.start;
@@ -1746,13 +1848,41 @@ impl<'a> Parser<'a> {
     
     /// Parse relational expression
     fn parse_relational(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_additive()?;
+        let mut expr = self.parse_shift()?;
         
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Less | TokenKind::Greater | 
                 TokenKind::LessEqual | TokenKind::GreaterEqual |
                 TokenKind::Spaceship => {
+                    let op_token = self.tokens.next()?;
+                    let right = self.parse_shift()?;
+                    let start = expr.location.start;
+                    let end = right.location.end;
+                    
+                    expr = Node::new(
+                        NodeKind::Binary {
+                            op: op_token.text.clone(),
+                            left: Box::new(expr),
+                            right: Box::new(right),
+                        },
+                        SourceLocation { start, end }
+                    );
+                }
+                _ => break,
+            }
+        }
+        
+        Ok(expr)
+    }
+    
+    /// Parse shift expression
+    fn parse_shift(&mut self) -> ParseResult<Node> {
+        let mut expr = self.parse_additive()?;
+        
+        while let Some(kind) = self.peek_kind() {
+            match kind {
+                TokenKind::LeftShift | TokenKind::RightShift => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_additive()?;
                     let start = expr.location.start;
@@ -1780,7 +1910,7 @@ impl<'a> Parser<'a> {
         
         while let Some(kind) = self.peek_kind() {
             match kind {
-                TokenKind::Plus | TokenKind::Minus => {
+                TokenKind::Plus | TokenKind::Minus | TokenKind::Dot => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_multiplicative()?;
                     let start = expr.location.start;
@@ -1903,7 +2033,7 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end }
                     ));
                 }
-                TokenKind::Plus | TokenKind::Not | TokenKind::Backslash => {
+                TokenKind::Plus | TokenKind::Not | TokenKind::Backslash | TokenKind::BitwiseNot => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     let operand = self.parse_unary()?;
@@ -2576,10 +2706,25 @@ impl<'a> Parser<'a> {
                 ))
             }
             
+            // Handle & as sigil when at primary position
+            TokenKind::BitwiseAnd => {
+                // This is a subroutine call or code dereference
+                // Convert to SubSigil behavior
+                self.parse_variable_from_sigil()
+            }
+            
             TokenKind::LeftBrace => {
                 // Could be hash literal or block
                 // Try to parse as hash literal first
                 self.parse_hash_or_block()
+            }
+            
+            TokenKind::Ellipsis => {
+                let token = self.tokens.next()?;
+                Ok(Node::new(
+                    NodeKind::Ellipsis,
+                    SourceLocation { start: token.start, end: token.end }
+                ))
             }
             
             _ => {
