@@ -114,14 +114,9 @@ impl<'a> Parser<'a> {
             
             // Expression statement
             _ => {
-                // Special case: check if this might be a labeled statement
-                // Only do this for identifiers to avoid breaking other expressions
-                if token.kind == TokenKind::Identifier {
-                    // Try to detect LABEL: pattern more carefully
-                    // We'll parse it as an expression statement but check for labels in specific contexts
-                    
-                    // For now, parse as regular expression statement
-                    // TODO: Implement proper label detection with lookahead
+                // Check if this might be a labeled statement
+                if self.is_label_start() {
+                    return self.parse_labeled_statement();
                 }
                 self.parse_expression_statement()
             }
@@ -3020,6 +3015,41 @@ impl<'a> Parser<'a> {
     /// Peek at the next token without consuming it
     fn peek_token(&mut self) -> ParseResult<&Token> {
         self.tokens.peek()
+    }
+    
+    /// Check if we're at the start of a labeled statement (LABEL: ...)
+    fn is_label_start(&mut self) -> bool {
+        // We need an identifier followed by a colon
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return false;
+        }
+        
+        // Check if the second token is a colon
+        match self.tokens.peek_second() {
+            Ok(token) => token.kind == TokenKind::Colon,
+            Err(_) => false,
+        }
+    }
+    
+    /// Parse a labeled statement (LABEL: statement)
+    fn parse_labeled_statement(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        
+        // Parse the label
+        let label_token = self.expect(TokenKind::Identifier)?;
+        let label = label_token.text.clone();
+        
+        // Consume the colon
+        self.expect(TokenKind::Colon)?;
+        
+        // Parse the statement after the label
+        let statement = Box::new(self.parse_statement()?);
+        
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::LabeledStatement { label, statement },
+            SourceLocation { start, end }
+        ))
     }
     
     /// Check if the next token starts a variable
