@@ -107,6 +107,10 @@ pub enum TokenKind {
     Number,
     String,
     Regex,
+    Substitution,
+    Transliteration,
+    HeredocStart,
+    HeredocBody,
     
     // Identifiers and variables
     Identifier,
@@ -286,6 +290,10 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::StringLiteral | 
             LexerTokenType::InterpolatedString(_) => TokenKind::String,
             LexerTokenType::RegexMatch | LexerTokenType::QuoteRegex => TokenKind::Regex,
+            LexerTokenType::Substitution => TokenKind::Substitution,
+            LexerTokenType::Transliteration => TokenKind::Transliteration,
+            LexerTokenType::HeredocStart => TokenKind::HeredocStart,
+            LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
             
             // Variables - detect sigils from operators
             LexerTokenType::Operator(op) if op.as_ref() == "$" => TokenKind::ScalarSigil,

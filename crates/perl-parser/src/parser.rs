@@ -982,14 +982,68 @@ impl<'a> Parser<'a> {
                     let start = expr.location.start;
                     let end = right.location.end;
                     
-                    expr = Node::new(
-                        NodeKind::Binary {
-                            op: op_token.text.clone(),
-                            left: Box::new(expr),
-                            right: Box::new(right),
-                        },
-                        SourceLocation { start, end }
-                    );
+                    // Special handling for match operators with substitution/transliteration
+                    if matches!(op_token.kind, TokenKind::Match | TokenKind::NotMatch) {
+                        if let NodeKind::Regex { pattern, .. } = &right.kind {
+                            if pattern.starts_with("s/") || pattern.starts_with("s|") || pattern.starts_with("s{") || pattern.starts_with("s[") {
+                                // Parse as substitution
+                                let parts = parse_substitution_parts(pattern);
+                                expr = Node::new(
+                                    NodeKind::Substitution {
+                                        expr: Box::new(expr),
+                                        pattern: parts.0,
+                                        replacement: parts.1,
+                                        modifiers: parts.2,
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            } else if pattern.starts_with("tr/") || pattern.starts_with("y/") || 
+                                     pattern.starts_with("tr{") || pattern.starts_with("y{") ||
+                                     pattern.starts_with("tr[") || pattern.starts_with("y[") {
+                                // Parse as transliteration
+                                let parts = parse_transliteration_parts(pattern);
+                                expr = Node::new(
+                                    NodeKind::Transliteration {
+                                        expr: Box::new(expr),
+                                        search: parts.0,
+                                        replace: parts.1,
+                                        modifiers: parts.2,
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            } else {
+                                // Regular match
+                                expr = Node::new(
+                                    NodeKind::Match {
+                                        expr: Box::new(expr),
+                                        pattern: pattern.clone(),
+                                        modifiers: String::new(),
+                                    },
+                                    SourceLocation { start, end }
+                                );
+                            }
+                        } else {
+                            // Normal binary operation
+                            expr = Node::new(
+                                NodeKind::Binary {
+                                    op: op_token.text.clone(),
+                                    left: Box::new(expr),
+                                    right: Box::new(right),
+                                },
+                                SourceLocation { start, end }
+                            );
+                        }
+                    } else {
+                        // Normal binary operation for == and !=
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: op_token.text.clone(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end }
+                        );
+                    }
                 }
                 _ => break,
             }
@@ -1336,6 +1390,52 @@ impl<'a> Parser<'a> {
                 ))
             }
             
+            TokenKind::Substitution => {
+                let token = self.tokens.next()?;
+                // For now, parse as a standalone substitution node
+                // In a complete implementation, this would parse the pattern and replacement
+                Ok(Node::new(
+                    NodeKind::Regex { 
+                        pattern: token.text.clone(),
+                        modifiers: String::new(),
+                    },
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
+            
+            TokenKind::Transliteration => {
+                let token = self.tokens.next()?;
+                // For now, parse as a standalone transliteration node
+                // In a complete implementation, this would parse the search and replace lists
+                Ok(Node::new(
+                    NodeKind::Regex { 
+                        pattern: token.text.clone(),
+                        modifiers: String::new(),
+                    },
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
+            
+            TokenKind::HeredocStart => {
+                let token = self.tokens.next()?;
+                let text = &token.text;
+                
+                // Parse heredoc delimiter from the token text
+                let (delimiter, interpolated, indented) = parse_heredoc_delimiter(text);
+                
+                // For now, create a placeholder heredoc with empty content
+                // In a real implementation, we'd need to collect the heredoc body
+                Ok(Node::new(
+                    NodeKind::Heredoc {
+                        delimiter: delimiter.to_string(),
+                        content: String::new(), // TODO: Collect actual heredoc content
+                        interpolated,
+                        indented,
+                    },
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
+            
             TokenKind::Identifier => {
                 // Check if it's a variable (starts with sigil)
                 let token = self.tokens.peek()?;
@@ -1591,6 +1691,246 @@ impl<'a> Parser<'a> {
             SourceLocation { start, end }
         ))
     }
+}
+
+/// Parse substitution parts from a string like "s/pattern/replacement/flags"
+fn parse_substitution_parts(s: &str) -> (String, String, String) {
+    // Skip 's' and first delimiter
+    let mut chars = s.chars();
+    chars.next(); // skip 's'
+    let delimiter = chars.next().unwrap_or('/');
+    
+    let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
+    let closing = match delimiter {
+        '{' => '}',
+        '[' => ']',
+        '(' => ')',
+        '<' => '>',
+        _ => delimiter,
+    };
+    
+    let mut pattern = String::new();
+    let mut replacement = String::new();
+    let mut modifiers = String::new();
+    let mut in_escape = false;
+    let mut phase = 0; // 0 = pattern, 1 = replacement, 2 = modifiers
+    let mut depth = if is_paired { 1 } else { 0 };
+    
+    for ch in chars {
+        if phase == 2 {
+            modifiers.push(ch);
+            continue;
+        }
+        
+        if in_escape {
+            if phase == 0 {
+                pattern.push('\\');
+                pattern.push(ch);
+            } else {
+                replacement.push('\\');
+                replacement.push(ch);
+            }
+            in_escape = false;
+            continue;
+        }
+        
+        if ch == '\\' {
+            in_escape = true;
+            continue;
+        }
+        
+        if is_paired {
+            if ch == delimiter {
+                depth += 1;
+                if phase == 0 {
+                    pattern.push(ch);
+                } else {
+                    replacement.push(ch);
+                }
+            } else if ch == closing {
+                depth -= 1;
+                if depth == 0 {
+                    if phase == 0 {
+                        phase = 1;
+                        // Skip whitespace and expect opening delimiter for replacement
+                        continue;
+                    } else {
+                        phase = 2;
+                        continue;
+                    }
+                } else {
+                    if phase == 0 {
+                        pattern.push(ch);
+                    } else {
+                        replacement.push(ch);
+                    }
+                }
+            } else if phase == 1 && depth == 0 && ch == delimiter {
+                // Start of replacement part in paired delimiters
+                depth = 1;
+            } else if phase == 1 && depth == 0 && ch.is_whitespace() {
+                // Skip whitespace between paired delimiters
+                continue;
+            } else {
+                if phase == 0 {
+                    pattern.push(ch);
+                } else if phase == 1 && depth > 0 {
+                    replacement.push(ch);
+                }
+            }
+        } else {
+            if ch == delimiter {
+                phase += 1;
+            } else {
+                if phase == 0 {
+                    pattern.push(ch);
+                } else if phase == 1 {
+                    replacement.push(ch);
+                }
+            }
+        }
+    }
+    
+    (pattern, replacement, modifiers)
+}
+
+/// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF"
+fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
+    let mut chars = s.chars();
+    
+    // Skip <<
+    chars.next();
+    chars.next();
+    
+    // Check for indented heredoc
+    let indented = if chars.as_str().starts_with('~') {
+        chars.next();
+        true
+    } else {
+        false
+    };
+    
+    let rest = chars.as_str().trim();
+    
+    // Check quoting to determine interpolation
+    let (delimiter, interpolated) = if rest.starts_with('"') && rest.ends_with('"') {
+        // Double-quoted: interpolated
+        (&rest[1..rest.len()-1], true)
+    } else if rest.starts_with('\'') && rest.ends_with('\'') {
+        // Single-quoted: not interpolated
+        (&rest[1..rest.len()-1], false)
+    } else {
+        // Bare word: interpolated
+        (rest, true)
+    };
+    
+    (delimiter, interpolated, indented)
+}
+
+/// Parse transliteration parts from a string like "tr/search/replace/flags"
+fn parse_transliteration_parts(s: &str) -> (String, String, String) {
+    // Skip 'tr' or 'y' and first delimiter
+    let mut chars = s.chars();
+    if s.starts_with("tr") {
+        chars.next(); // skip 't'
+        chars.next(); // skip 'r'
+    } else {
+        chars.next(); // skip 'y'
+    }
+    let delimiter = chars.next().unwrap_or('/');
+    
+    let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
+    let closing = match delimiter {
+        '{' => '}',
+        '[' => ']',
+        '(' => ')',
+        '<' => '>',
+        _ => delimiter,
+    };
+    
+    let mut search = String::new();
+    let mut replace = String::new();
+    let mut modifiers = String::new();
+    let mut in_escape = false;
+    let mut phase = 0; // 0 = search, 1 = replace, 2 = modifiers
+    let mut depth = if is_paired { 1 } else { 0 };
+    
+    for ch in chars {
+        if phase == 2 {
+            modifiers.push(ch);
+            continue;
+        }
+        
+        if in_escape {
+            if phase == 0 {
+                search.push('\\');
+                search.push(ch);
+            } else {
+                replace.push('\\');
+                replace.push(ch);
+            }
+            in_escape = false;
+            continue;
+        }
+        
+        if ch == '\\' {
+            in_escape = true;
+            continue;
+        }
+        
+        if is_paired {
+            if ch == delimiter {
+                depth += 1;
+                if phase == 0 {
+                    search.push(ch);
+                } else {
+                    replace.push(ch);
+                }
+            } else if ch == closing {
+                depth -= 1;
+                if depth == 0 {
+                    if phase == 0 {
+                        phase = 1;
+                        // Skip whitespace and expect opening delimiter for replacement
+                        continue;
+                    } else {
+                        phase = 2;
+                        continue;
+                    }
+                } else {
+                    if phase == 0 {
+                        search.push(ch);
+                    } else {
+                        replace.push(ch);
+                    }
+                }
+            } else if phase == 1 && depth == 0 && ch == delimiter {
+                // Start of replace part in paired delimiters
+                depth = 1;
+            } else if phase == 1 && depth == 0 && ch.is_whitespace() {
+                // Skip whitespace between paired delimiters
+                continue;
+            } else {
+                if phase == 0 {
+                    search.push(ch);
+                } else if phase == 1 && depth > 0 {
+                    replace.push(ch);
+                }
+            }
+        } else {
+            if ch == delimiter {
+                phase += 1;
+            } else {
+                if phase == 0 {
+                    search.push(ch);
+                } else if phase == 1 {
+                    replace.push(ch);
+                }
+            }
+        }
+    }
+    
+    (search, replace, modifiers)
 }
 
 #[cfg(test)]

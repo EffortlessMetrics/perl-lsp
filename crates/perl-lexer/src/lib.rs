@@ -269,13 +269,91 @@ impl<'a> PerlLexer<'a> {
     }
     
     fn try_heredoc(&mut self) -> Option<Token> {
-        // Simplified heredoc detection - full implementation would go here
-        if self.position + 2 < self.input.len() && &self.input[self.position..self.position + 2] == "<<" {
-            // This is a placeholder - real implementation would parse heredoc
-            None
-        } else {
-            None
+        // Check for heredoc start
+        if self.position + 2 > self.input.len() || &self.input[self.position..self.position + 2] != "<<" {
+            return None;
         }
+        
+        let start = self.position;
+        self.position += 2; // Skip <<
+        
+        // Check for indented heredoc (~)
+        let indented = if self.position < self.input.len() && self.input.chars().nth(self.position) == Some('~') {
+            self.position += 1;
+            true
+        } else {
+            false
+        };
+        
+        // Skip whitespace
+        while self.position < self.input.len() && self.input.chars().nth(self.position).map_or(false, |c| c == ' ' || c == '\t') {
+            self.position += 1;
+        }
+        
+        // Parse delimiter
+        let delimiter_start = self.position;
+        let delimiter = if self.position < self.input.len() {
+            match self.input.chars().nth(self.position) {
+                Some('"') => {
+                    // Double-quoted delimiter
+                    self.position += 1;
+                    let delim_start = self.position;
+                    while self.position < self.input.len() {
+                        if self.input.chars().nth(self.position) == Some('"') {
+                            let delim = self.input[delim_start..self.position].to_string();
+                            self.position += 1;
+                            break;
+                        }
+                        self.position += 1;
+                    }
+                    self.input[delim_start..self.position-1].to_string()
+                }
+                Some('\'') => {
+                    // Single-quoted delimiter
+                    self.position += 1;
+                    let delim_start = self.position;
+                    while self.position < self.input.len() {
+                        if self.input.chars().nth(self.position) == Some('\'') {
+                            let delim = self.input[delim_start..self.position].to_string();
+                            self.position += 1;
+                            break;
+                        }
+                        self.position += 1;
+                    }
+                    self.input[delim_start..self.position-1].to_string()
+                }
+                Some(c) if c.is_alphabetic() || c == '_' => {
+                    // Bare word delimiter
+                    while self.position < self.input.len() {
+                        if let Some(c) = self.input.chars().nth(self.position) {
+                            if c.is_alphanumeric() || c == '_' {
+                                self.position += 1;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    self.input[delimiter_start..self.position].to_string()
+                }
+                _ => return None,
+            }
+        } else {
+            return None;
+        };
+        
+        // For now, return a placeholder token
+        // The actual heredoc body would be parsed later when we encounter it
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectOperator;
+        
+        Some(Token {
+            token_type: TokenType::HeredocStart,
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
     }
     
     fn try_string(&mut self) -> Option<Token> {
@@ -378,6 +456,25 @@ impl<'a> PerlLexer<'a> {
             }
             
             let text = &self.input[start..self.position];
+            
+            // Check for substitution/transliteration operators
+            if matches!(text, "s" | "tr" | "y") {
+                if let Some(next) = self.current_char() {
+                    // Check if followed by a delimiter
+                    if matches!(next, '/' | '|' | '{' | '[' | '(' | '<' | '!' | '#' | '@' | '$' | '%' | '^' | '&' | '*' | '+' | '=' | '~' | '`') {
+                        match text {
+                            "s" => {
+                                return self.parse_substitution(start);
+                            }
+                            "tr" | "y" => {
+                                return self.parse_transliteration(start);
+                            }
+                            _ => unreachable!()
+                        }
+                    }
+                }
+            }
+            
             let token_type = if is_keyword(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
@@ -674,6 +771,222 @@ impl<'a> PerlLexer<'a> {
     fn parse_q_string(&mut self, _start: usize) -> Option<Token> {
         // Simplified q-string parsing
         None
+    }
+    
+    fn parse_substitution(&mut self, start: usize) -> Option<Token> {
+        // We've already consumed 's'
+        let delimiter = self.current_char()?;
+        self.advance(); // Skip delimiter
+        
+        // Parse pattern
+        let mut depth = 1;
+        let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
+        let closing = match delimiter {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delimiter,
+        };
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ if ch == delimiter && is_paired => {
+                    depth += 1;
+                    self.advance();
+                }
+                _ if ch == closing => {
+                    self.advance();
+                    if is_paired {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Parse replacement - same delimiter handling
+        if is_paired {
+            // Skip whitespace between pattern and replacement for paired delimiters
+            while let Some(ch) = self.current_char() {
+                if ch.is_whitespace() {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            
+            // Expect opening delimiter for replacement
+            if self.current_char() == Some(delimiter) {
+                self.advance();
+                depth = 1;
+            }
+        }
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ if ch == delimiter && is_paired => {
+                    depth += 1;
+                    self.advance();
+                }
+                _ if ch == closing => {
+                    self.advance();
+                    if is_paired {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Parse modifiers
+        while let Some(ch) = self.current_char() {
+            if ch.is_alphabetic() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectOperator;
+        
+        Some(Token {
+            token_type: TokenType::Substitution,
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
+    }
+    
+    fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
+        // We've already consumed 'tr' or 'y'
+        let delimiter = self.current_char()?;
+        self.advance(); // Skip delimiter
+        
+        // Parse search list
+        let mut depth = 1;
+        let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
+        let closing = match delimiter {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delimiter,
+        };
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ if ch == delimiter && is_paired => {
+                    depth += 1;
+                    self.advance();
+                }
+                _ if ch == closing => {
+                    self.advance();
+                    if is_paired {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Parse replacement list - same delimiter handling
+        if is_paired {
+            // Skip whitespace between search and replace for paired delimiters
+            while let Some(ch) = self.current_char() {
+                if ch.is_whitespace() {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            
+            // Expect opening delimiter for replacement
+            if self.current_char() == Some(delimiter) {
+                self.advance();
+                depth = 1;
+            }
+        }
+        
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                _ if ch == delimiter && is_paired => {
+                    depth += 1;
+                    self.advance();
+                }
+                _ if ch == closing => {
+                    self.advance();
+                    if is_paired {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+        
+        // Parse modifiers
+        while let Some(ch) = self.current_char() {
+            if ch.is_alphabetic() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectOperator;
+        
+        Some(Token {
+            token_type: TokenType::Transliteration,
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
     }
     
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
