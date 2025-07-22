@@ -88,6 +88,7 @@ impl<'a> Parser<'a> {
             TokenKind::Until => self.parse_until_statement(),
             TokenKind::For => self.parse_for_statement(),
             TokenKind::Foreach => self.parse_foreach_statement(),
+            TokenKind::Given => self.parse_given_statement(),
             
             // Subroutines
             TokenKind::Sub => self.parse_subroutine(),
@@ -726,6 +727,147 @@ impl<'a> Parser<'a> {
         ))
     }
     
+    /// Parse eval expression/block
+    fn parse_eval(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'eval'
+        
+        // Eval can take either a block or a string expression
+        if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            // eval { ... }
+            let block = self.parse_block()?;
+            let end = block.location.end;
+            Ok(Node::new(
+                NodeKind::Eval { block: Box::new(block) },
+                SourceLocation { start, end }
+            ))
+        } else {
+            // eval "string" or eval $expr
+            let expr = self.parse_expression()?;
+            let end = expr.location.end;
+            Ok(Node::new(
+                NodeKind::Eval { block: Box::new(expr) },
+                SourceLocation { start, end }
+            ))
+        }
+    }
+    
+    /// Parse do expression/block
+    fn parse_do(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'do'
+        
+        // Do can take either a block or a string (filename)
+        if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            // do { ... }
+            let block = self.parse_block()?;
+            let end = block.location.end;
+            Ok(Node::new(
+                NodeKind::Do { block: Box::new(block) },
+                SourceLocation { start, end }
+            ))
+        } else {
+            // do "filename" or do $expr
+            let expr = self.parse_expression()?;
+            let end = expr.location.end;
+            Ok(Node::new(
+                NodeKind::Do { block: Box::new(expr) },
+                SourceLocation { start, end }
+            ))
+        }
+    }
+    
+    /// Parse given statement
+    fn parse_given_statement(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'given'
+        
+        // Parse the expression in parentheses
+        self.expect(TokenKind::LeftParen)?;
+        let expr = self.parse_expression()?;
+        self.expect(TokenKind::RightParen)?;
+        
+        // Parse the body block
+        let body = self.parse_given_block()?;
+        let end = body.location.end;
+        
+        Ok(Node::new(
+            NodeKind::Given {
+                expr: Box::new(expr),
+                body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse given block (which contains when/default statements)
+    fn parse_given_block(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.expect(TokenKind::LeftBrace)?;
+        
+        let mut statements = Vec::new();
+        
+        while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
+            match self.peek_kind() {
+                Some(TokenKind::When) => {
+                    statements.push(self.parse_when_statement()?);
+                }
+                Some(TokenKind::Default) => {
+                    statements.push(self.parse_default_statement()?);
+                }
+                _ => {
+                    return Err(ParseError::syntax(
+                        "Expected 'when' or 'default' in given block",
+                        self.current_position()
+                    ));
+                }
+            }
+        }
+        
+        self.expect(TokenKind::RightBrace)?;
+        let end = self.previous_position();
+        
+        Ok(Node::new(
+            NodeKind::Block { statements },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse when statement
+    fn parse_when_statement(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'when'
+        
+        // Parse the condition in parentheses
+        self.expect(TokenKind::LeftParen)?;
+        let condition = self.parse_expression()?;
+        self.expect(TokenKind::RightParen)?;
+        
+        // Parse the body block
+        let body = self.parse_block()?;
+        let end = body.location.end;
+        
+        Ok(Node::new(
+            NodeKind::When {
+                condition: Box::new(condition),
+                body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Parse default statement
+    fn parse_default_statement(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'default'
+        
+        // Parse the body block
+        let body = self.parse_block()?;
+        let end = body.location.end;
+        
+        Ok(Node::new(
+            NodeKind::Default {
+                body: Box::new(body),
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -976,7 +1118,7 @@ impl<'a> Parser<'a> {
         
         while let Some(kind) = self.peek_kind() {
             match kind {
-                TokenKind::Equal | TokenKind::NotEqual | TokenKind::Match | TokenKind::NotMatch => {
+                TokenKind::Equal | TokenKind::NotEqual | TokenKind::Match | TokenKind::NotMatch | TokenKind::SmartMatch => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_relational()?;
                     let start = expr.location.start;
@@ -1434,6 +1576,14 @@ impl<'a> Parser<'a> {
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
+            }
+            
+            TokenKind::Eval => {
+                self.parse_eval()
+            }
+            
+            TokenKind::Do => {
+                self.parse_do()
             }
             
             TokenKind::Identifier => {

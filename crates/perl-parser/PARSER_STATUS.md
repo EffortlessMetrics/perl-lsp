@@ -59,6 +59,12 @@ This document tracks the current capabilities of the perl-parser implementation.
 - Ternary operator: `$x ? $y : $z`
 - Function calls without parentheses: `print "hello"`, `die "error"`
 - Bare regex in conditionals: `if (/pattern/) { }`
+- Substitution operators: `s///`, `tr///`, `y///` with various delimiters
+- Heredocs: Basic support for `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<~EOF`
+- Eval blocks: `eval { ... }` and eval strings
+- Do blocks: `do { ... }` and do files
+- Given/when control flow with smart match
+- Smart match operator: `~~`
 
 ## 🚧 Partially Implemented
 
@@ -71,17 +77,12 @@ This document tracks the current capabilities of the perl-parser implementation.
 ### Language Features
 - `qw()` operator for word lists
 - BEGIN/END/CHECK/INIT blocks
-- Substitution operators: `s///`, `tr///`, `y///`
 - Bare regex in conditionals: `if (/pattern/) { }`
 - Function calls without parentheses: `print "hello"`
 - Prototypes and signatures
-- Heredocs
-- Format strings
 - POD documentation
 - Labels and goto
-- eval blocks
-- do blocks
-- given/when (smart match)
+- Format strings
 
 ### Advanced Features
 - Typeglobs and symbol table manipulation
