@@ -75,6 +75,9 @@ impl<'a> Parser<'a> {
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         let token = self.tokens.peek()?;
         
+        // Don't check for labels here - it breaks regular identifier parsing
+        // Labels will be handled differently
+        
         match token.kind {
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
@@ -111,6 +114,15 @@ impl<'a> Parser<'a> {
             
             // Expression statement
             _ => {
+                // Special case: check if this might be a labeled statement
+                // Only do this for identifiers to avoid breaking other expressions
+                if token.kind == TokenKind::Identifier {
+                    // Try to detect LABEL: pattern more carefully
+                    // We'll parse it as an expression statement but check for labels in specific contexts
+                    
+                    // For now, parse as regular expression statement
+                    // TODO: Implement proper label detection with lookahead
+                }
                 self.parse_expression_statement()
             }
         }
@@ -1323,6 +1335,30 @@ impl<'a> Parser<'a> {
             },
             SourceLocation { start, end }
         ))
+    }
+    
+    /// Parse expression statement starting from an already-parsed identifier
+    fn parse_expression_statement_from_identifier(&mut self, ident: Node) -> ParseResult<Node> {
+        // For simplicity, just treat this identifier as a complete expression
+        // and check for statement modifiers
+        let mut expr = ident;
+        
+        // Check for statement modifiers
+        expr = match self.peek_kind() {
+            Some(TokenKind::If) | Some(TokenKind::Unless) | 
+            Some(TokenKind::While) | Some(TokenKind::Until) | 
+            Some(TokenKind::For) | Some(TokenKind::Foreach) => {
+                self.parse_statement_modifier(expr)?
+            }
+            _ => expr
+        };
+        
+        // Consume optional semicolon
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        }
+        
+        Ok(expr)
     }
     
     /// Parse expression statement (which may have modifiers)
@@ -2734,10 +2770,8 @@ impl<'a> Parser<'a> {
                 self.parse_do()
             }
             
-            TokenKind::Sub => {
-                // Anonymous subroutine
-                self.parse_subroutine()
-            }
+            // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
+            // This allows 'sub' to be used as a hash key or identifier in expressions
             
             TokenKind::Try => {
                 self.parse_try()
