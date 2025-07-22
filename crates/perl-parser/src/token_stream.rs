@@ -244,9 +244,7 @@ impl<'a> TokenStream<'a> {
                 "=" => TokenKind::Assign,
                 "+" => TokenKind::Plus,
                 "-" => TokenKind::Minus,
-                "*" => TokenKind::Star,
                 "/" => TokenKind::Slash,
-                "%" => TokenKind::Percent,
                 "**" => TokenKind::Power,
                 // Compound assignments
                 "+=" => TokenKind::PlusAssign,
@@ -286,6 +284,12 @@ impl<'a> TokenStream<'a> {
                 "::" => TokenKind::DoubleColon,
                 "?" => TokenKind::Question,
                 ":" => TokenKind::Colon,
+                // Sigils (when used as operators in certain contexts)
+                "$" => TokenKind::ScalarSigil,
+                "@" => TokenKind::ArraySigil,
+                "%" => TokenKind::HashSigil,
+                "&" => TokenKind::SubSigil,
+                "*" => TokenKind::Star,  // Can be multiplication or glob sigil depending on context
                 _ => TokenKind::Unknown,
             },
             
@@ -313,12 +317,6 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::HeredocStart => TokenKind::HeredocStart,
             LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
             
-            // Variables - detect sigils from operators
-            LexerTokenType::Operator(op) if op.as_ref() == "$" => TokenKind::ScalarSigil,
-            LexerTokenType::Operator(op) if op.as_ref() == "@" => TokenKind::ArraySigil,
-            LexerTokenType::Operator(op) if op.as_ref() == "%" => TokenKind::HashSigil,
-            LexerTokenType::Operator(op) if op.as_ref() == "&" => TokenKind::SubSigil,
-            LexerTokenType::Operator(op) if op.as_ref() == "*" => TokenKind::GlobSigil,
             
             // Identifiers
             LexerTokenType::Identifier(text) => {
