@@ -19,7 +19,7 @@ This project provides a Pure Rust parser for Perl, achieving ~99.995% syntax cov
 ## 🚀 Features
 
 - **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
-- **Well Tested**: Comprehensive test suite with 16+ test files, 100% edge case coverage (15/15)
+- **Well Tested**: Comprehensive test suite with 16+ test files, 94.5% edge case coverage (improved from 82.8%)
 - **Pure Rust Implementation**: Built with Pest parser generator, zero C dependencies
 - **Tree-sitter Compatible**: Outputs standard S-expressions for seamless IDE integration  
 - **Comprehensive Perl 5 Support**:
@@ -53,9 +53,9 @@ The Pure Rust Pest parser provides excellent performance for real-world Perl cod
 | Large File | 12KB | ~1.0 ms | ~2.0 ms | Linear scaling |
 | **Throughput** | **-** | **-** | **~180-200 µs/KB** | **Pure parsing speed** |
 
-### **Test Results (v0.1.0)**
-- ✅ **15/15 edge case tests passing** (100% coverage)
-- ✅ **All new features tested** (reference operator, octal formats, ellipsis, Unicode)
+### **Test Results (v0.2.0)**
+- ✅ **94.5% edge case coverage** (improved from 82.8%)
+- ✅ **New edge cases fixed**: Deep dereference chains, double quoted string interpolation (qq{}), postfix code dereference, keywords as identifiers
 - ✅ **Tree-sitter compatibility** verified
 - ✅ **Performance benchmarks** confirmed
 
@@ -225,10 +225,12 @@ The Pure Rust Perl Parser achieves **~99.5% coverage** of real-world Perl 5 code
 
 ### Recent Improvements (v0.2.0)
 
-✅ **Bareword qualified names** now work: `my $x = Foo::Bar->new()`  
+✅ **Deep dereference chains** now work: `$hash->{key}->[0]->{sub}`  
+✅ **Double quoted string interpolation**: `qq{hello $world}` with proper variable detection  
+✅ **Postfix code dereference**: `$ref->&*` for dereferencing code references  
+✅ **Keywords as identifiers**: Reserved words can be used as method names and in expressions  
+✅ **Bareword qualified names**: `my $x = Foo::Bar->new()`  
 ✅ **User-defined functions without parens**: `my_func arg1, arg2`  
-✅ **Reserved words in interpolation**: `"Name: $first $last"`  
-✅ **Method names can be reserved words**: `Test::Module->method()`  
 
 ### Known Limitations (~0.06%)
 

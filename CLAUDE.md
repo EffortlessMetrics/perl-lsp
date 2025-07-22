@@ -238,18 +238,23 @@ To extend the Pest grammar:
 ### Known Limitations (~0.005%)
 1. **Heredoc-in-string**: Heredocs initiated from within interpolated strings like `"$prefix<<$end_tag"`
 
-### Test Results (v0.1.0)
-- ✅ **100% edge case coverage** - All 15 edge case tests passing
-- ✅ **All features verified** - Reference operator, modern octal, ellipsis, Unicode
+### Test Results (v0.2.0)
+- ✅ **94.5% edge case coverage** - Up from 82.8% (121 of 128 tests passing)
+- ✅ **All core features verified** - Including deep dereferencing, qq{} interpolation
 - ✅ **Tree-sitter compatibility** confirmed
-- ✅ **Performance validated** - ~180 µs/KB parsing speed
+- ✅ **Performance validated** - ~180 µs/KB parsing speed maintained
 
-### Key Features Added
+### Recent Improvements (v0.2.0)
+- ✅ Deep dereference chains - `$hash->{key}->[0]->{sub}` now works correctly
+- ✅ Double quoted string interpolation - `qq{hello $world}` properly parsed
+- ✅ Postfix code dereference - `$ref->&*` syntax fully supported
+- ✅ Keywords as identifiers - Keywords like 'sub' can be used as hash keys
+
+### Previously Added Features (v0.1.0)
 - ✅ Reference operator (\) for creating references (\$scalar, \@array, \%hash, \&sub)
 - ✅ Modern octal format (0o755) alongside traditional format (0755)  
 - ✅ Ellipsis operator (...) for placeholder statements
 - ✅ Unicode identifiers (café, π, Σ, 日本語) fully supported
-- ✅ All 15 edge case tests now passing (100% edge case coverage)
 
 See KNOWN_LIMITATIONS.md for complete details and workarounds.
 

@@ -1337,29 +1337,6 @@ impl<'a> Parser<'a> {
         ))
     }
     
-    /// Parse expression statement starting from an already-parsed identifier
-    fn parse_expression_statement_from_identifier(&mut self, ident: Node) -> ParseResult<Node> {
-        // For simplicity, just treat this identifier as a complete expression
-        // and check for statement modifiers
-        let mut expr = ident;
-        
-        // Check for statement modifiers
-        expr = match self.peek_kind() {
-            Some(TokenKind::If) | Some(TokenKind::Unless) | 
-            Some(TokenKind::While) | Some(TokenKind::Until) | 
-            Some(TokenKind::For) | Some(TokenKind::Foreach) => {
-                self.parse_statement_modifier(expr)?
-            }
-            _ => expr
-        };
-        
-        // Consume optional semicolon
-        if self.peek_kind() == Some(TokenKind::Semicolon) {
-            self.consume_token()?;
-        }
-        
-        Ok(expr)
-    }
     
     /// Parse expression statement (which may have modifiers)
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
@@ -2982,6 +2959,24 @@ impl<'a> Parser<'a> {
                 ))
             }
             
+            // Handle keywords that can be used as identifiers in certain contexts
+            TokenKind::Sub | TokenKind::My | TokenKind::Our | TokenKind::Local |
+            TokenKind::State | TokenKind::If | TokenKind::Elsif | TokenKind::Else | 
+            TokenKind::Unless | TokenKind::While | TokenKind::Until | TokenKind::For | 
+            TokenKind::Foreach | TokenKind::Return | TokenKind::Package | TokenKind::Use | 
+            TokenKind::No | TokenKind::Begin | TokenKind::End | TokenKind::Check |
+            TokenKind::Init | TokenKind::Unitcheck | TokenKind::Do | TokenKind::Eval |
+            TokenKind::Given | TokenKind::When | TokenKind::Default |
+            TokenKind::Try | TokenKind::Catch | TokenKind::Finally |
+            TokenKind::Continue => {
+                // In expression context, keywords can sometimes be used as barewords/identifiers
+                // This happens in hash keys, method names, etc.
+                let token = self.tokens.next()?;
+                Ok(Node::new(
+                    NodeKind::Identifier { name: token.text.to_string() },
+                    SourceLocation { start: token.start, end: token.end }
+                ))
+            }
             
             _ => {
                 // Get position before consuming
