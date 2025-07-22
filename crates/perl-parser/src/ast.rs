@@ -51,6 +51,10 @@ impl Node {
                 format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
             }
             
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                format!("(ternary {} {} {})", condition.to_sexp(), then_expr.to_sexp(), else_expr.to_sexp())
+            }
+            
             NodeKind::Unary { op, operand } => {
                 format!("(unary_{} {})", op, operand.to_sexp())
             }
@@ -249,6 +253,12 @@ pub enum NodeKind {
         op: String,
         left: Box<Node>,
         right: Box<Node>,
+    },
+    
+    Ternary {
+        condition: Box<Node>,
+        then_expr: Box<Node>,
+        else_expr: Box<Node>,
     },
     
     Unary {

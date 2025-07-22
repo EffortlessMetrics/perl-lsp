@@ -50,6 +50,10 @@ This document tracks the current capabilities of the perl-parser implementation.
 - Word lists: `qw(word1 word2 word3)`
 - Phase blocks: `BEGIN { }`, `END { }`, `CHECK { }`, `INIT { }`, `UNITCHECK { }`
 - Comments: `# single line comments`
+- File test operators: `-e`, `-f`, `-d`, `-r`, `-w`, `-x`, `-s`, etc.
+- Ternary operator: `$x ? $y : $z`
+- Function calls without parentheses: `print "hello"`, `die "error"`
+- Bare regex in conditionals: `if (/pattern/) { }`
 
 ## 🚧 Partially Implemented
 

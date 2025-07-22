@@ -67,6 +67,8 @@ pub enum TokenKind {
     Increment,
     Decrement,
     DoubleColon,
+    Question,
+    Colon,
     
     // Delimiters
     LeftParen,
@@ -215,6 +217,8 @@ impl<'a> TokenStream<'a> {
                 "++" => TokenKind::Increment,
                 "--" => TokenKind::Decrement,
                 "::" => TokenKind::DoubleColon,
+                "?" => TokenKind::Question,
+                ":" => TokenKind::Colon,
                 _ => TokenKind::Unknown,
             },
             
