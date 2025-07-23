@@ -793,12 +793,19 @@ impl<'a> PerlLexer<'a> {
             }
             
             // Not a terminator, consume the character
-            let ch = self.current_char()?;
-            body.push(ch);
-            self.advance();
-            
-            // Track if we're at the start of a line
-            line_start = ch == '\n';
+            match self.current_char() {
+                Some(ch) => {
+                    body.push(ch);
+                    self.advance();
+                    
+                    // Track if we're at the start of a line
+                    line_start = ch == '\n';
+                }
+                None => {
+                    // Reached EOF without finding terminator
+                    break;
+                }
+            }
         }
         
         // If we reach here, we didn't find a terminator
@@ -1516,6 +1523,9 @@ fn is_compound_operator(first: char, second: char) -> bool {
         )
     }
 }
+
+#[cfg(test)]
+mod test_format_debug;
 
 #[cfg(test)]
 mod tests {
