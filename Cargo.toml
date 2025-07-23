@@ -5,7 +5,11 @@ members = [
     "crates/perl-parser",
     "crates/tree-sitter-perl-rs",
     "crates/tree-sitter-perl-c",
+    "crates/parser-benchmarks",
     "xtask",
+]
+exclude = [
+    "tree-sitter-perl",
 ]
 
 [workspace.dependencies]
