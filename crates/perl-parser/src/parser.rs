@@ -2207,6 +2207,26 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end }
                     );
                 }
+                TokenKind::Identifier => {
+                    // Check if it's ISA operator
+                    if self.tokens.peek()?.text == "ISA" {
+                        let op_token = self.tokens.next()?;
+                        let right = self.parse_shift()?;
+                        let start = expr.location.start;
+                        let end = right.location.end;
+                        
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: "ISA".to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end }
+                        );
+                    } else {
+                        break;
+                    }
+                }
                 _ => break,
             }
         }
