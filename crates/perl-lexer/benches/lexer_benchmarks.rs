@@ -2,11 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use perl_lexer::{PerlLexer, Token};
 
 fn collect_all_tokens(mut lexer: PerlLexer) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next_token() {
-        tokens.push(token);
-    }
-    tokens
+    lexer.collect_tokens()
 }
 
 fn bench_simple_tokens(c: &mut Criterion) {
