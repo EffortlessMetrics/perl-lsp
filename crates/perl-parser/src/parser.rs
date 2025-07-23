@@ -2082,7 +2082,40 @@ impl<'a> Parser<'a> {
                     
                     // Special handling for match operators with substitution/transliteration
                     if matches!(op_token.kind, TokenKind::Match | TokenKind::NotMatch) {
-                        if let NodeKind::Regex { pattern, .. } = &right.kind {
+                        // Check if right side is already a substitution or transliteration
+                        if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &right.kind {
+                            // Update the expression in the substitution
+                            expr = Node::new(
+                                NodeKind::Substitution {
+                                    expr: Box::new(expr),
+                                    pattern: pattern.clone(),
+                                    replacement: replacement.clone(),
+                                    modifiers: modifiers.clone(),
+                                },
+                                SourceLocation { start, end }
+                            );
+                        } else if let NodeKind::Transliteration { search, replace, modifiers, .. } = &right.kind {
+                            // Update the expression in the transliteration
+                            expr = Node::new(
+                                NodeKind::Transliteration {
+                                    expr: Box::new(expr),
+                                    search: search.clone(),
+                                    replace: replace.clone(),
+                                    modifiers: modifiers.clone(),
+                                },
+                                SourceLocation { start, end }
+                            );
+                        } else if let NodeKind::Regex { pattern, modifiers } = &right.kind {
+                            // Create a Match node
+                            expr = Node::new(
+                                NodeKind::Match {
+                                    expr: Box::new(expr),
+                                    pattern: pattern.clone(),
+                                    modifiers: modifiers.clone(),
+                                },
+                                SourceLocation { start, end }
+                            );
+                        } else if let NodeKind::Regex { pattern, .. } = &right.kind {
                             if pattern.starts_with("s/") || pattern.starts_with("s|") || pattern.starts_with("s{") || pattern.starts_with("s[") {
                                 // Parse as substitution
                                 let parts = parse_substitution_parts(pattern);
@@ -2110,12 +2143,13 @@ impl<'a> Parser<'a> {
                                     SourceLocation { start, end }
                                 );
                             } else {
-                                // Regular match
+                                // Regular match - extract modifiers
+                                let (pattern_with_delims, modifiers) = extract_regex_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Match {
                                         expr: Box::new(expr),
-                                        pattern: pattern.clone(),
-                                        modifiers: String::new(),
+                                        pattern: pattern_with_delims,
+                                        modifiers,
                                     },
                                     SourceLocation { start, end }
                                 );
@@ -2981,8 +3015,8 @@ impl<'a> Parser<'a> {
                 // Regular expression
                 Ok(Node::new(
                     NodeKind::Regex {
-                        pattern: format!("/{}/", content),
-                        modifiers: String::new(), // TODO: Parse modifiers after closing delimiter
+                        pattern: format!("{}{}{}", opening_delim, content, closing_delim),
+                        modifiers,
                     },
                     SourceLocation { start, end }
                 ))
@@ -3101,10 +3135,11 @@ impl<'a> Parser<'a> {
             
             TokenKind::Regex => {
                 let token = self.tokens.next()?;
+                let (pattern, modifiers) = extract_regex_parts(&token.text);
                 Ok(Node::new(
                     NodeKind::Regex { 
-                        pattern: token.text.clone(),
-                        modifiers: String::new(), // TODO: Parse modifiers
+                        pattern,
+                        modifiers,
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
@@ -3112,12 +3147,18 @@ impl<'a> Parser<'a> {
             
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
-                // For now, parse as a standalone substitution node
-                // In a complete implementation, this would parse the pattern and replacement
+                let (pattern, replacement, modifiers) = parse_substitution_parts(&token.text);
+                
+                // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
-                    NodeKind::Regex { 
-                        pattern: token.text.clone(),
-                        modifiers: String::new(),
+                    NodeKind::Substitution { 
+                        expr: Box::new(Node::new(
+                            NodeKind::Identifier { name: String::from("$_") },
+                            SourceLocation { start: token.start, end: token.start }
+                        )),
+                        pattern,
+                        replacement,
+                        modifiers,
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
@@ -3125,34 +3166,56 @@ impl<'a> Parser<'a> {
             
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
-                // For now, parse as a standalone transliteration node
-                // In a complete implementation, this would parse the search and replace lists
+                let (search, replace, modifiers) = parse_transliteration_parts(&token.text);
+                
+                // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
-                    NodeKind::Regex { 
-                        pattern: token.text.clone(),
-                        modifiers: String::new(),
+                    NodeKind::Transliteration { 
+                        expr: Box::new(Node::new(
+                            NodeKind::Identifier { name: String::from("$_") },
+                            SourceLocation { start: token.start, end: token.start }
+                        )),
+                        search,
+                        replace,
+                        modifiers,
                     },
                     SourceLocation { start: token.start, end: token.end }
                 ))
             }
             
             TokenKind::HeredocStart => {
-                let token = self.tokens.next()?;
-                let text = &token.text;
+                let start_token = self.tokens.next()?;
+                let text = &start_token.text;
+                let start = start_token.start;
                 
                 // Parse heredoc delimiter from the token text
                 let (delimiter, interpolated, indented) = parse_heredoc_delimiter(text);
                 
-                // For now, create a placeholder heredoc with empty content
-                // In a real implementation, we'd need to collect the heredoc body
+                // Collect heredoc body content
+                let mut content = String::new();
+                let mut end = start_token.end;
+                
+                // Look for HeredocBody tokens
+                while let Ok(token) = self.tokens.peek() {
+                    if token.kind == TokenKind::HeredocBody {
+                        let body_token = self.tokens.next()?;
+                        // Extract content from the token text
+                        // The lexer includes the content in the token text
+                        content.push_str(&body_token.text);
+                        end = body_token.end;
+                    } else {
+                        break;
+                    }
+                }
+                
                 Ok(Node::new(
                     NodeKind::Heredoc {
                         delimiter: delimiter.to_string(),
-                        content: String::new(), // TODO: Collect actual heredoc content
+                        content,
                         interpolated,
                         indented,
                     },
-                    SourceLocation { start: token.start, end: token.end }
+                    SourceLocation { start, end }
                 ))
             }
             
@@ -3882,6 +3945,57 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
     };
     
     (delimiter, interpolated, indented)
+}
+
+/// Extract pattern and modifiers from a regex string like "/pattern/modifiers"
+fn extract_regex_parts(s: &str) -> (String, String) {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.is_empty() {
+        return (s.to_string(), String::new());
+    }
+    
+    // Get the delimiter
+    let delimiter = chars[0];
+    let closing = match delimiter {
+        '{' => '}',
+        '[' => ']',
+        '(' => ')',
+        '<' => '>',
+        _ => delimiter,
+    };
+    
+    // Find the closing delimiter
+    let mut i = 1;
+    let mut escaped = false;
+    let mut depth = 1;
+    let is_paired = delimiter != closing;
+    
+    while i < chars.len() {
+        if !escaped {
+            if chars[i] == delimiter && is_paired {
+                depth += 1;
+            } else if chars[i] == closing {
+                if is_paired {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        escaped = !escaped && chars[i] == '\\';
+        i += 1;
+    }
+    
+    if i < chars.len() {
+        let pattern = chars[0..=i].iter().collect();
+        let modifiers = chars[i+1..].iter().collect();
+        (pattern, modifiers)
+    } else {
+        (s.to_string(), String::new())
+    }
 }
 
 /// Parse transliteration parts from a string like "tr/search/replace/flags"
