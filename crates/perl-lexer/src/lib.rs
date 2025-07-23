@@ -509,6 +509,23 @@ impl<'a> PerlLexer<'a> {
             '$' | '@' | '%' | '*' => {
                 self.advance();
                 
+                // Special case: After ->, sigils followed by { or [ should be tokenized separately
+                // This is for postfix dereference like ->@*, ->%{}, ->@[]
+                if self.position >= 3 && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)] == "->" {
+                    if matches!(self.current_char(), Some('{') | Some('[') | Some('*')) {
+                        // Just return the sigil
+                        let text = &self.input[start..self.position];
+                        self.mode = LexerMode::ExpectOperator;
+                        
+                        return Some(Token {
+                            token_type: TokenType::Identifier(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        });
+                    }
+                }
+                
                 // Check for $# (array length operator)
                 if sigil == '$' && self.current_char() == Some('#') {
                     self.advance(); // consume #
