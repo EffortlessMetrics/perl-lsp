@@ -135,6 +135,7 @@ pub enum TokenKind {
     Transliteration,
     HeredocStart,
     HeredocBody,
+    FormatBody,
     
     // Identifiers and variables
     Identifier,
@@ -203,6 +204,11 @@ impl<'a> TokenStream<'a> {
         }
         
         Ok(self.peeked_second.as_ref().unwrap())
+    }
+    
+    /// Enter format body parsing mode in the lexer
+    pub fn enter_format_mode(&mut self) {
+        self.lexer.enter_format_mode();
     }
     
     /// Get the next token from the lexer
@@ -367,6 +373,7 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::Transliteration => TokenKind::Transliteration,
             LexerTokenType::HeredocStart => TokenKind::HeredocStart,
             LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
+            LexerTokenType::FormatBody(_) => TokenKind::FormatBody,
             
             
             // Identifiers

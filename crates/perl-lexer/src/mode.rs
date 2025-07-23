@@ -9,6 +9,8 @@ pub enum LexerMode {
     ExpectOperator,
     /// Expecting a delimiter for quote-like operators - # is not a comment
     ExpectDelimiter,
+    /// Inside a format declaration body - consume until single dot on a line
+    InFormatBody,
 }
 
 impl LexerMode {

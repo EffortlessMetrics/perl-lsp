@@ -54,6 +54,10 @@ pub enum TokenType {
     /// Heredoc body content
     HeredocBody(Arc<str>),
     
+    // Format declarations
+    /// Format body content
+    FormatBody(Arc<str>),
+    
     // Version strings
     /// Version string: v5.32.0
     Version(Arc<str>),

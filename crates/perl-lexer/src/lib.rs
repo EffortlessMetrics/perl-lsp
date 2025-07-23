@@ -73,6 +73,11 @@ impl<'a> PerlLexer<'a> {
 
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Option<Token> {
+        // Handle format body parsing if we're in that mode
+        if matches!(self.mode, LexerMode::InFormatBody) {
+            return self.parse_format_body();
+        }
+        
         self.skip_whitespace_and_comments()?;
         
         if self.position >= self.input.len() {
@@ -164,6 +169,11 @@ impl<'a> PerlLexer<'a> {
         self.delimiter_stack.clear();
         self.in_prototype = false;
         self.prototype_depth = 0;
+    }
+    
+    /// Switch lexer to format body parsing mode
+    pub fn enter_format_mode(&mut self) {
+        self.mode = LexerMode::InFormatBody;
     }
 
     // Internal helper methods
@@ -714,6 +724,11 @@ impl<'a> PerlLexer<'a> {
                     "q" | "qq" | "qw" | "qr" | "qx" | "m" => {
                         self.mode = LexerMode::ExpectDelimiter;
                     }
+                    // Format declarations need special handling
+                    "format" => {
+                        // We'll need to check for the = after the format name
+                        // For now, just mark that we saw format
+                    }
                     _ => {}
                 }
                 TokenType::Keyword(Arc::from(text))
@@ -731,6 +746,69 @@ impl<'a> PerlLexer<'a> {
         } else {
             None
         }
+    }
+    
+    /// Parse format body - consumes until a line with just a dot
+    fn parse_format_body(&mut self) -> Option<Token> {
+        let start = self.position;
+        let mut body = String::new();
+        let mut line_start = true;
+        
+        while self.position < self.input.len() {
+            // Check if we're at the start of a line and the next char is a dot
+            if line_start && self.current_char() == Some('.') {
+                // Check if this line contains only a dot
+                let mut peek_pos = self.position + 1;
+                let mut found_terminator = true;
+                
+                // Skip any trailing whitespace on the dot line
+                while peek_pos < self.input.len() {
+                    match self.input_bytes[peek_pos] {
+                        b' ' | b'\t' | b'\r' => peek_pos += 1,
+                        b'\n' => break,
+                        _ => {
+                            found_terminator = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if found_terminator {
+                    // We found the terminating dot, consume it
+                    self.position = peek_pos;
+                    if self.position < self.input.len() && self.input_bytes[self.position] == b'\n' {
+                        self.position += 1;
+                    }
+                    
+                    // Switch back to normal mode
+                    self.mode = LexerMode::ExpectTerm;
+                    
+                    return Some(Token {
+                        token_type: TokenType::FormatBody(Arc::from(body.clone())),
+                        text: Arc::from(body),
+                        start,
+                        end: self.position,
+                    });
+                }
+            }
+            
+            // Not a terminator, consume the character
+            let ch = self.current_char()?;
+            body.push(ch);
+            self.advance();
+            
+            // Track if we're at the start of a line
+            line_start = ch == '\n';
+        }
+        
+        // If we reach here, we didn't find a terminator
+        self.mode = LexerMode::ExpectTerm;
+        Some(Token {
+            token_type: TokenType::Error(Arc::from("Unterminated format body")),
+            text: Arc::from(body),
+            start,
+            end: self.position,
+        })
     }
     
     fn try_operator(&mut self) -> Option<Token> {

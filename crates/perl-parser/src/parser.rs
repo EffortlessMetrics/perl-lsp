@@ -878,13 +878,20 @@ impl<'a> Parser<'a> {
         // Expect =
         self.expect(TokenKind::Assign)?;
         
-        // For format declarations, we need to consume the body until a line with just a dot
-        // Since the lexer filters out newlines, we'll create a placeholder for now
-        // A full implementation would require special lexer support for format blocks
-        let body = String::from("<format body>");
+        // Tell the lexer to enter format body mode
+        self.tokens.enter_format_mode();
         
-        // Note: In a complete implementation, the lexer would need to recognize format blocks
-        // and treat them specially, similar to how heredocs are handled
+        // Get the format body
+        let body_token = self.tokens.next()?;
+        let body = if body_token.kind == TokenKind::FormatBody {
+            body_token.text
+        } else {
+            return Err(ParseError::UnexpectedToken {
+                expected: "format body".to_string(),
+                found: format!("{:?}", body_token.kind),
+                location: body_token.start,
+            });
+        };
         
         let end = self.previous_position();
         Ok(Node::new(
