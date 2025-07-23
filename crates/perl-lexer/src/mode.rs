@@ -7,6 +7,8 @@ pub enum LexerMode {
     ExpectTerm,
     /// Expecting an operator - slash is division
     ExpectOperator,
+    /// Expecting a delimiter for quote-like operators - # is not a comment
+    ExpectDelimiter,
 }
 
 impl LexerMode {
