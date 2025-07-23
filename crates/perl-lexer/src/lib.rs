@@ -963,7 +963,7 @@ impl<'a> PerlLexer<'a> {
                     // Reset mode after consuming delimiter
                     self.mode = LexerMode::ExpectTerm;
                     Some(Token {
-                        token_type: TokenType::Other(Arc::from("#")),
+                        token_type: TokenType::Operator(Arc::from("#")),
                         text: Arc::from("#"),
                         start,
                         end: self.position,
@@ -1387,7 +1387,8 @@ const KEYWORDS: &[&str] = &[
 fn is_keyword(word: &str) -> bool {
     // Fast length check first
     match word.len() {
-        2 => matches!(word, "if" | "do" | "my" | "or"),
+        1 => matches!(word, "q" | "m"),
+        2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
         3 => matches!(word, "sub" | "our" | "use" | "and" | "not" | "xor" | "die" | "say" | "for" | "try" | "END" | "cmp"),
         4 => matches!(word, "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"),
         5 => matches!(word, "elsif" | "while" | "until" | "local" | "state" | "given" | "break" | "print" | "catch" | "BEGIN" | "CHECK" | "class" | "undef"),
