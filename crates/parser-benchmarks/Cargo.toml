@@ -7,18 +7,24 @@ edition = "2021"
 perl-lexer = { path = "../perl-lexer" }
 perl-parser = { path = "../perl-parser" }
 tree-sitter-perl = { path = "../tree-sitter-perl-rs", optional = true }
-tree-sitter-perl-c = { path = "../tree-sitter-perl-c", optional = true }
+tree-sitter-perl-c = { path = "../tree-sitter-perl-c" }
 tree-sitter = { version = "0.20", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [features]
-default = ["all"]
-all = ["tree-sitter-perl-rs", "tree-sitter-perl-c"]
+default = []
 tree-sitter-perl-rs = ["tree-sitter-perl", "tree-sitter-perl/pure-rust"]
-tree-sitter-perl-c = ["dep:tree-sitter-perl-c", "dep:tree-sitter"]
 
 [[bench]]
 name = "compare_parsers"
+harness = false
+
+[[bench]]
+name = "simple_compare"
+harness = false
+
+[[bench]]
+name = "comprehensive_patterns"
 harness = false
