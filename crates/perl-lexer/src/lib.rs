@@ -246,6 +246,11 @@ impl<'a> PerlLexer<'a> {
                     // Newlines can affect parsing context
                 }
                 b'#' => {
+                    // In ExpectDelimiter mode, '#' is a delimiter, not a comment
+                    if matches!(self.mode, LexerMode::ExpectDelimiter) {
+                        break;
+                    }
+                    
                     // Skip line comment using byte-level operations
                     self.advance();
                     while self.position < self.input_bytes.len() {
@@ -382,22 +387,54 @@ impl<'a> PerlLexer<'a> {
         
         // Fast byte check for digits
         if self.position < self.input_bytes.len() && self.input_bytes[self.position].is_ascii_digit() {
-            // Use byte-level parsing for numbers
+            // Consume initial digits
             while self.position < self.input_bytes.len() {
-                let byte = self.input_bytes[self.position];
-                match byte {
-                    b'0'..=b'9' | b'.' | b'_' => self.position += 1,
-                    b'e' | b'E' => {
-                        // Handle scientific notation
-                        self.advance();
-                        if self.position < self.input_bytes.len() {
-                            let next = self.input_bytes[self.position];
-                            if next == b'+' || next == b'-' {
-                                self.advance();
-                            }
+                match self.input_bytes[self.position] {
+                    b'0'..=b'9' | b'_' => self.position += 1,
+                    _ => break,
+                }
+            }
+            
+            // Check for decimal point
+            if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'.' {
+                // Only consume the dot if it's followed by a digit
+                if self.position + 1 < self.input_bytes.len() && self.input_bytes[self.position + 1].is_ascii_digit() {
+                    self.position += 1; // consume the dot
+                    // Consume fractional digits
+                    while self.position < self.input_bytes.len() {
+                        match self.input_bytes[self.position] {
+                            b'0'..=b'9' | b'_' => self.position += 1,
+                            _ => break,
                         }
                     }
-                    _ => break,
+                }
+            }
+            
+            // Check for exponent
+            if self.position < self.input_bytes.len() {
+                let byte = self.input_bytes[self.position];
+                if byte == b'e' || byte == b'E' {
+                    let exp_start = self.position;
+                    self.position += 1; // consume 'e' or 'E'
+                    
+                    // Check for optional sign
+                    if self.position < self.input_bytes.len() {
+                        let next = self.input_bytes[self.position];
+                        if next == b'+' || next == b'-' {
+                            self.position += 1;
+                        }
+                    }
+                    
+                    // Must have at least one digit after exponent
+                    let digit_start = self.position;
+                    while self.position < self.input_bytes.len() && self.input_bytes[self.position].is_ascii_digit() {
+                        self.position += 1;
+                    }
+                    
+                    // If no digits after exponent, backtrack
+                    if self.position == digit_start {
+                        self.position = exp_start;
+                    }
                 }
             }
             
@@ -673,6 +710,10 @@ impl<'a> PerlLexer<'a> {
                     "sub" => {
                         self.in_prototype = true;
                     }
+                    // Quote operators expect a delimiter next
+                    "q" | "qq" | "qw" | "qr" | "qx" | "m" => {
+                        self.mode = LexerMode::ExpectDelimiter;
+                    }
                     _ => {}
                 }
                 TokenType::Keyword(Arc::from(text))
@@ -914,6 +955,22 @@ impl<'a> PerlLexer<'a> {
                     start,
                     end: self.position,
                 })
+            }
+            '#' => {
+                // Only treat as delimiter in ExpectDelimiter mode
+                if matches!(self.mode, LexerMode::ExpectDelimiter) {
+                    self.advance();
+                    // Reset mode after consuming delimiter
+                    self.mode = LexerMode::ExpectTerm;
+                    Some(Token {
+                        token_type: TokenType::Other(Arc::from("#")),
+                        text: Arc::from("#"),
+                        start,
+                        end: self.position,
+                    })
+                } else {
+                    None
+                }
             }
             _ => None,
         }
