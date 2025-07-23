@@ -10,6 +10,11 @@ fn debug_simple_tokens() {
         println!("Token {}: {:?}", count, token);
         count += 1;
         
+        // Check for EOF
+        if token.token_type == TokenType::EOF {
+            break;
+        }
+        
         // Safety check
         if count > 100 {
             panic!("Too many tokens - possible infinite loop");
