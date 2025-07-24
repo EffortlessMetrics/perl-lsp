@@ -1,0 +1,1 @@
+my $anon = sub { return "anonymous"; };

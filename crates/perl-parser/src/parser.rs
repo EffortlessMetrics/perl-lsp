@@ -734,10 +734,18 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'sub'
         
-        let name = if self.peek_kind() == Some(TokenKind::Identifier) {
-            Some(self.tokens.next()?.text.clone())
-        } else {
-            None
+        let name = match self.peek_kind() {
+            // Regular identifier
+            Some(TokenKind::Identifier) => Some(self.tokens.next()?.text.clone()),
+            // Keywords that can be used as subroutine names
+            Some(TokenKind::Method) | Some(TokenKind::Class) |
+            Some(TokenKind::Try) | Some(TokenKind::Catch) | Some(TokenKind::Finally) |
+            Some(TokenKind::Given) | Some(TokenKind::When) | Some(TokenKind::Default) |
+            Some(TokenKind::Continue) | Some(TokenKind::Format) => {
+                Some(self.tokens.next()?.text.clone())
+            }
+            // No name - anonymous subroutine
+            _ => None
         };
         
         // Parse optional attributes first (they come before signature in modern Perl)
@@ -3467,8 +3475,25 @@ impl<'a> Parser<'a> {
                 ))
             }
             
+            // Handle 'sub' specially - it might be an anonymous subroutine
+            TokenKind::Sub => {
+                // Check if this is an anonymous subroutine
+                let next = self.peek_kind();
+                if matches!(next, Some(TokenKind::LeftBrace) | Some(TokenKind::LeftParen)) {
+                    // It's an anonymous subroutine
+                    self.parse_subroutine()
+                } else {
+                    // It's used as an identifier
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end }
+                    ))
+                }
+            }
+            
             // Handle keywords that can be used as identifiers in certain contexts
-            TokenKind::Sub | TokenKind::My | TokenKind::Our | TokenKind::Local |
+            TokenKind::My | TokenKind::Our | TokenKind::Local |
             TokenKind::State | TokenKind::If | TokenKind::Elsif | TokenKind::Else | 
             TokenKind::Unless | TokenKind::While | TokenKind::Until | TokenKind::For | 
             TokenKind::Foreach | TokenKind::Return | TokenKind::Package | TokenKind::Use | 

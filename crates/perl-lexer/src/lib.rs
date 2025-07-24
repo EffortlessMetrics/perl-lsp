@@ -507,6 +507,10 @@ impl<'a> PerlLexer<'a> {
         
         match sigil {
             '$' | '@' | '%' | '*' => {
+                // In ExpectOperator mode, * should be treated as multiplication, not a glob sigil
+                if sigil == '*' && self.mode == LexerMode::ExpectOperator {
+                    return None;
+                }
                 self.advance();
                 
                 // Special case: After ->, sigils followed by { or [ should be tokenized separately
