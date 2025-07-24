@@ -609,7 +609,8 @@ qq_nested_angles = { "<" ~ qq_angle_content ~ ">" }
 
 // For non-paired delimiters
 qq_delimiter = @{ !("(" | "[" | "{" | "<" | ASCII_ALPHANUMERIC | WHITESPACE) ~ ANY }
-qq_delimited_content = @{ (!qq_delimiter ~ (qq_escape_sequence | ANY))* }
+qq_delimited_content = { qq_delimited_part* }
+qq_delimited_part = { interpolation | qq_escape_sequence | (!qq_delimiter ~ !("\\" | "$" | "@") ~ ANY) | "$" ~ !(ASCII_ALPHANUMERIC | "_" | "{") | "@" ~ !(ASCII_ALPHANUMERIC | "_" | "{") }
 qq_escape_sequence = @{ "\\" ~ ANY }
 
 // Content rules for qx strings (command execution, with interpolation and nesting)
