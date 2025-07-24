@@ -807,8 +807,9 @@ impl<'a> Parser<'a> {
         
         // Parse optional prototype or signature after attributes
         let (params, prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
-            // Check if this is an old-style prototype or a modern signature
-            if self.is_prototype() {
+            // Look ahead to determine if this is a prototype or signature
+            if self.is_likely_prototype()? {
+                // Parse as prototype
                 let proto = self.parse_prototype()?;
                 // Store prototype as an attribute
                 attributes.push(format!("prototype({})", proto));
@@ -3911,27 +3912,62 @@ impl<'a> Parser<'a> {
         }
     }
     
+    /// Check if the parentheses likely contain a prototype rather than a signature
+    fn is_likely_prototype(&mut self) -> ParseResult<bool> {
+        // We need to peek past the opening paren without consuming
+        // First, ensure we're at a left paren
+        if self.tokens.peek()?.kind != TokenKind::LeftParen {
+            return Ok(false);
+        }
+        
+        // Use peek_second to look at the token after the paren
+        match self.tokens.peek_second() {
+            Ok(token) => {
+                Ok(match token.kind {
+                    // These are definitely prototype sigils
+                    TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil | 
+                    TokenKind::Star | TokenKind::Backslash | TokenKind::Semicolon |
+                    TokenKind::BitwiseAnd | TokenKind::GlobSigil => true,
+                    // Empty prototype
+                    TokenKind::RightParen => true,
+                    // Colon indicates named parameter (:$foo), so it's a signature
+                    TokenKind::Colon => false,
+                    // Identifiers usually mean signature, but could be a special case
+                    TokenKind::Identifier => {
+                        // Check if it's a sigil-only identifier like "$" or "@"
+                        token.text.chars().all(|c| matches!(c, '$' | '@' | '%' | '*' | '&'))
+                    }
+                    // Anything else suggests a signature
+                    _ => false,
+                })
+            }
+            Err(_) => Ok(false),
+        }
+    }
+    
     /// Parse old-style prototype
     fn parse_prototype(&mut self) -> ParseResult<String> {
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut prototype = String::new();
-        let mut paren_depth = 1;
         
-        while paren_depth > 0 && !self.tokens.is_eof() {
+        while !self.tokens.is_eof() {
             let token = self.tokens.next()?;
             
             match token.kind {
                 TokenKind::RightParen => {
-                    paren_depth -= 1;
-                    if paren_depth > 0 {
-                        prototype.push(')');
-                    }
+                    // End of prototype
+                    break;
                 }
-                TokenKind::LeftParen => {
-                    paren_depth += 1;
-                    prototype.push('(');
-                }
+                TokenKind::ScalarSigil => prototype.push('$'),
+                TokenKind::ArraySigil => prototype.push('@'),
+                TokenKind::HashSigil => prototype.push('%'),
+                TokenKind::GlobSigil | TokenKind::Star => prototype.push('*'),
+                TokenKind::SubSigil | TokenKind::BitwiseAnd => prototype.push('&'),
+                TokenKind::Semicolon => prototype.push(';'),
+                TokenKind::Backslash => prototype.push('\\'),
                 _ => {
+                    // For any other token, just add its text
+                    // This handles cases where sigils might be parsed differently
                     prototype.push_str(&token.text);
                 }
             }
