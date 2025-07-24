@@ -805,11 +805,19 @@ impl<'a> Parser<'a> {
             }
         }
         
-        // Parse optional signature after attributes
-        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.parse_signature()?
+        // Parse optional prototype or signature after attributes
+        let (params, prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            // Check if this is an old-style prototype or a modern signature
+            if self.is_prototype() {
+                let proto = self.parse_prototype()?;
+                // Store prototype as an attribute
+                attributes.push(format!("prototype({})", proto));
+                (Vec::new(), Some(proto))
+            } else {
+                (self.parse_signature()?, None)
+            }
         } else {
-            Vec::new()
+            (Vec::new(), None)
         };
         
         let body = self.parse_block()?;
@@ -1035,9 +1043,36 @@ impl<'a> Parser<'a> {
             }
         }
         
-        // Check for optional version number
+        // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
             Some(self.tokens.next()?.text.clone())
+        } else if let Some(TokenKind::Identifier) = self.peek_kind() {
+            // Check if it's a v-string version
+            if let Ok(token) = self.tokens.peek() {
+                if token.text.starts_with('v') && token.text.len() > 1 {
+                    // It's a v-string like v1 or v5
+                    let mut version_str = self.tokens.next()?.text.clone();
+                    
+                    // Collect the rest of the v-string (e.g., .2.3)
+                    while let Some(TokenKind::Number) = self.peek_kind() {
+                        if let Ok(num_token) = self.tokens.peek() {
+                            if num_token.text.starts_with('.') {
+                                version_str.push_str(&self.tokens.next()?.text);
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    Some(version_str)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -3855,6 +3890,54 @@ impl<'a> Parser<'a> {
                 SourceLocation { start, end }
             ))
         }
+    }
+    
+    /// Check if the parenthesized content after sub name is a prototype (not a signature)
+    fn is_prototype(&mut self) -> bool {
+        // Peek at the next token after (
+        match self.tokens.peek_second() {
+            Ok(token) => {
+                // Check if it starts with prototype characters or looks like a prototype
+                matches!(token.kind, 
+                    TokenKind::ScalarSigil | TokenKind::ArraySigil | 
+                    TokenKind::HashSigil | TokenKind::SubSigil |
+                    TokenKind::Star | TokenKind::Semicolon |
+                    TokenKind::Backslash) ||
+                // Check for special vars that look like prototypes ($$, $#, etc)
+                (token.kind == TokenKind::Identifier && 
+                 token.text.chars().all(|c| matches!(c, '$' | '@' | '%' | '*' | '&' | ';' | '\\')))
+            }
+            Err(_) => false,
+        }
+    }
+    
+    /// Parse old-style prototype
+    fn parse_prototype(&mut self) -> ParseResult<String> {
+        self.expect(TokenKind::LeftParen)?; // consume (
+        let mut prototype = String::new();
+        let mut paren_depth = 1;
+        
+        while paren_depth > 0 && !self.tokens.is_eof() {
+            let token = self.tokens.next()?;
+            
+            match token.kind {
+                TokenKind::RightParen => {
+                    paren_depth -= 1;
+                    if paren_depth > 0 {
+                        prototype.push(')');
+                    }
+                }
+                TokenKind::LeftParen => {
+                    paren_depth += 1;
+                    prototype.push('(');
+                }
+                _ => {
+                    prototype.push_str(&token.text);
+                }
+            }
+        }
+        
+        Ok(prototype)
     }
 }
 
