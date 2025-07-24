@@ -1,7 +1,35 @@
 //! Test anonymous subroutines
 use perl_parser::Parser;
+use perl_lexer::PerlLexer;
 
 fn main() {
+    // Test the specific failing case
+    let input = r#"my $anon = sub { return "anonymous"; };"#;
+    println!("=== Testing: {} ===", input);
+    
+    // First check lexer output
+    println!("\nLexer output:");
+    let mut lexer = PerlLexer::new(input);
+    while let Some(token) = lexer.next_token() {
+        println!("  {:?}", token);
+        if matches!(token.token_type, perl_lexer::TokenType::EOF) {
+            break;
+        }
+    }
+    
+    // Then try parser
+    println!("\nParser output:");
+    let mut parser = Parser::new(input);
+    match parser.parse() {
+        Ok(ast) => {
+            println!("  Success! AST: {:?}", ast);
+            println!("  S-expr: {}", ast.to_sexp());
+        }
+        Err(e) => {
+            println!("  Error: {}", e);
+        }
+    }
+    
     let tests = vec![
         // Basic anonymous subs
         "sub { }",
