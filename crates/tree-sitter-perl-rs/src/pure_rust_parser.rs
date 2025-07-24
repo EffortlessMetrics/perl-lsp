@@ -1777,6 +1777,12 @@ impl PureRustPerlParser {
                 let mut condition = None;
                 let mut update = None;
                 let mut block = None;
+                let mut variable = None;
+                let mut list = None;
+                let mut declarator = None;
+                
+                // Determine if this is a C-style or foreach-style for loop
+                let is_c_style = inner.clone().any(|p| p.as_rule() == Rule::for_init);
                 
                 // Parse for loop components
                 for p in inner {
@@ -1787,27 +1793,74 @@ impl PureRustPerlParser {
                         Rule::for_init => {
                             init = self.build_node(p)?.map(Box::new);
                         }
-                        Rule::expression => {
-                            if condition.is_none() {
-                                condition = self.build_node(p)?.map(Box::new);
-                            } else if update.is_none() {
-                                update = self.build_node(p)?.map(Box::new);
+                        Rule::assignment_expression => {
+                            // For C-style initialization without for_init wrapper
+                            if init.is_none() && condition.is_none() {
+                                init = self.build_node(p)?.map(Box::new);
                             }
+                        }
+                        Rule::expression => {
+                            if is_c_style {
+                                // C-style: condition and update
+                                if condition.is_none() {
+                                    condition = self.build_node(p)?.map(Box::new);
+                                } else if update.is_none() {
+                                    update = self.build_node(p)?.map(Box::new);
+                                }
+                            } else {
+                                // foreach-style: list expression
+                                list = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
+                            }
+                        }
+                        Rule::variable => {
+                            variable = Some(Box::new(self.build_node(p)?.unwrap_or(AstNode::EmptyExpression)));
                         }
                         Rule::block => {
                             block = self.build_node(p)?.map(Box::new);
                         }
-                        _ => {}
+                        _ => {
+                            // Check for declarators (my, our, local, state)
+                            let text = p.as_str();
+                            if matches!(text, "my" | "our" | "local" | "state") {
+                                declarator = Some(Arc::from(text));
+                            }
+                        }
                     }
                 }
                 
-                Ok(Some(AstNode::ForStatement {
-                    label,
-                    init,
-                    condition,
-                    update,
-                    block: block.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
-                }))
+                if is_c_style || init.is_some() || condition.is_some() || update.is_some() {
+                    // C-style for loop
+                    Ok(Some(AstNode::ForStatement {
+                        label,
+                        init,
+                        condition,
+                        update,
+                        block: block.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
+                    }))
+                } else {
+                    // foreach-style for loop - use ForeachStatement AST node
+                    // If there's a declarator, wrap the variable in a declaration
+                    let final_variable = if let Some(decl) = declarator {
+                        if let Some(var) = variable {
+                            Some(Box::new(AstNode::VariableDeclaration {
+                                scope: decl,
+                                variables: vec![*var],
+                                initializer: None,
+                            }))
+                        } else {
+                            None
+                        }
+                    } else {
+                        variable
+                    };
+                    
+                    Ok(Some(AstNode::ForeachStatement {
+                        label,
+                        variable: final_variable,
+                        list: list.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
+                        block: block.unwrap_or_else(|| Box::new(AstNode::Block(vec![]))),
+                    }))
+                }
             }
             Rule::package_declaration => {
                 let inner = pair.into_inner();
