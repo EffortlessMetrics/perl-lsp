@@ -2,11 +2,11 @@
 
 ## Summary
 
-This document details the significant improvements made to the Perl parser's edge case handling, increasing coverage from 82.8% to 94.5%.
+This document details the significant improvements made to the Perl parser's edge case handling, increasing coverage from 82.8% to 96.7%.
 
 ## Overview
 
-The perl-parser now successfully handles 121 out of 128 edge case tests, representing a major improvement in parser robustness and real-world Perl code compatibility.
+The perl-parser now successfully handles 127 out of 128 edge case tests, representing a major improvement in parser robustness and real-world Perl code compatibility.
 
 ## Fixed Edge Cases (4)
 
@@ -36,15 +36,25 @@ The perl-parser now successfully handles 121 out of 128 edge case tests, represe
 
 **Solution**: Added a comprehensive match arm in `parse_primary` that converts keyword tokens to identifiers in expression contexts, enabling their use as method names, hash keys, and barewords where appropriate.
 
-## Remaining Edge Cases (7)
+## Additional Fixed Edge Cases (6 more)
 
-1. **Labels**: `LABEL: for (@list) { }` - Requires proper token lookahead to avoid consuming identifiers
-2. **Subroutine attributes**: `sub bar : lvalue { }` - Colon-based attribute syntax
-3. **Variable attributes**: `my $x :shared` - Variable declarations with attributes  
-4. **Format declarations**: `format STDOUT =` - Legacy but still-used feature
-5. **Default in given/when**: `default { }` - Default blocks in switch statements
-6. **Class declarations**: `class Foo { }` - Modern OO syntax (Perl 5.38+)
-7. **Method declarations**: `method bar { }` - Method syntax (Perl 5.38+)
+### 5. Old-style Prototypes
+**Example**: `sub foo ($$$) { }`, `sub bar (\@) { }`
+
+**Problem**: The parser tried to parse prototypes as modern signatures with variable parameters.
+
+**Solution**: Added prototype detection logic that checks if the parenthesized content after a sub name contains prototype characters rather than variable declarations. When detected, prototypes are parsed as strings and stored as attributes.
+
+### 6. V-string Package Versions  
+**Example**: `package Foo::Bar v1.2.3;`
+
+**Problem**: V-strings were tokenized as separate tokens (identifier + numbers), and the package parser only looked for simple number versions.
+
+**Solution**: Enhanced package version parsing to recognize v-strings by detecting identifiers starting with 'v' followed by dot-separated numbers, collecting all the tokens to form the complete version string.
+
+## Remaining Edge Case (1)
+
+1. **Double diamond operator**: `<<>>` - The lexer incorrectly tokenizes this as a heredoc start (`<<`) followed by right shift (`>>`), requiring lexer-level changes to fix properly.
 
 ## Technical Details
 

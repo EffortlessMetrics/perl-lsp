@@ -2,7 +2,7 @@
 
 This document tracks the current capabilities of the perl-parser implementation.
 
-## ✅ Completed Features (94.5% edge case coverage, improved from 82.8%)
+## ✅ Completed Features (96.7% edge case coverage, improved from 82.8%)
 
 ### Variables
 - Variable declarations: `my`, `our`, `local`, `state`
@@ -78,16 +78,21 @@ This document tracks the current capabilities of the perl-parser implementation.
 - Comma operator works but creates array literals
 - Hash literals with pairs not fully implemented
 
-## ❌ Not Yet Implemented (7 Remaining Edge Cases)
+## ❌ Not Yet Implemented (1 Remaining Edge Case)
 
 ### Edge Cases Still Requiring Implementation
-1. **Labels**: `LABEL: for (@list) { }` - Requires proper lookahead to distinguish from expressions
-2. **Subroutine attributes**: `sub bar : lvalue { }` - Colon-based attribute syntax
-3. **Variable attributes**: `my $x :shared` - Variable declarations with attributes
-4. **Format declarations**: `format STDOUT =` - Legacy format syntax
-5. **Default in given/when**: `default { }` - Default blocks in switch statements
-6. **Class declarations**: `class Foo { }` - Modern OO syntax (Perl 5.38+)
-7. **Method declarations**: `method bar { }` - Method syntax (Perl 5.38+)
+1. **Double diamond operator**: `<<>>` - Currently tokenized incorrectly as heredoc start followed by `>>` (requires lexer enhancement)
+
+### Recently Fixed Edge Cases
+- ✅ **Labels**: `LABEL: for (@list) { }` - Now properly parsed
+- ✅ **Subroutine attributes**: `sub bar : lvalue { }` - Attribute syntax fully supported
+- ✅ **Variable attributes**: `my $x :shared` - Variable attributes working
+- ✅ **Format declarations**: `format STDOUT =` - Format syntax implemented
+- ✅ **Default in given/when**: `default { }` - Default blocks now parse correctly
+- ✅ **Class declarations**: `class Foo { }` - Modern OO syntax supported (Perl 5.38+)
+- ✅ **Method declarations**: `method bar { }` - Method syntax working (Perl 5.38+)
+- ✅ **Old-style prototypes**: `sub foo ($$$) { }` - Prototypes vs signatures properly distinguished
+- ✅ **V-string versions**: `package Foo v1.2.3;` - V-string version numbers in package declarations
 
 ### Other Features Not Yet Implemented
 - Prototypes and signatures
@@ -108,6 +113,8 @@ This document tracks the current capabilities of the perl-parser implementation.
 3. **String Interpolation**: While interpolated strings are detected, the actual interpolation parsing is not implemented
 
 4. **Regex Parsing**: Regex patterns are stored as strings, not parsed into their components
+
+5. **Double Diamond Operator**: The `<<>>` operator (introduced in Perl 5.22) is not correctly parsed due to lexer limitations. The lexer treats `<<` as the start of a heredoc, leaving `>>` as a separate token. This requires changes at the lexer level to recognize `<<>>` as a single operator before heredoc detection
 
 ## Usage Examples
 
