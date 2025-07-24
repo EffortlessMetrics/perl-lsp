@@ -6,6 +6,7 @@ members = [
     "crates/tree-sitter-perl-rs",
     "crates/tree-sitter-perl-c",
     "crates/parser-benchmarks",
+    "crates/parser-tests",
     "xtask",
 ]
 exclude = [
