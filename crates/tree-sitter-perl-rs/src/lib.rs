@@ -203,6 +203,15 @@ pub mod streaming_parser;
 pub mod error_recovery;
 
 #[cfg(feature = "pure-rust")]
+pub mod incremental_parser;
+
+// #[cfg(feature = "pure-rust")]
+// pub mod language_binding;
+
+#[cfg(feature = "pure-rust")]
+pub mod lsp_server;
+
+#[cfg(feature = "pure-rust")]
 mod statement_tracker;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
