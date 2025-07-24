@@ -409,7 +409,7 @@ decrement = { "--" }
 
 primary_expression = {
     class_method_call
-    | user_function_call
+    | indirect_object_call
     | qualified_name_or_identifier
     | literal
     | reference
@@ -429,6 +429,7 @@ primary_expression = {
     | readline
     | qw_list
     | builtin_list_op
+    | user_function_call
 }
 
 // User-defined function calls (with optional arguments)
@@ -437,6 +438,11 @@ user_function_call = {
 }
 
 class_method_call = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ method_name ~ function_args? }
+
+indirect_object_call = {
+    identifier ~ variable ~ list_op_args?
+}
+
 qualified_name_or_identifier = { identifier ~ ("::" ~ identifier)* }
 
 // References to variables
@@ -716,10 +722,24 @@ bareword = { identifier }
 // Regular Expressions
 regex = {
     match_regex
+    | m_regex
     | qr_regex
 }
 
 match_regex = { "/" ~ match_regex_pattern ~ "/" ~ regex_flags? }
+
+m_regex = {
+    "m" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+        "/" ~ match_regex_pattern ~ "/" |
+        "!" ~ m_exclaim_pattern ~ "!" |
+        "#" ~ m_hash_pattern ~ "#" |
+        "(" ~ m_paren_pattern ~ ")" |
+        "[" ~ m_bracket_pattern ~ "]" |
+        "{" ~ m_brace_pattern ~ "}" |
+        "<" ~ m_angle_pattern ~ ">" |
+        regex_delimiter ~ m_delimited_pattern ~ regex_delimiter
+    ) ~ regex_flags?
+}
 qr_regex = { 
     ("_QR_" ~ (
         "/" ~ qr_slash_pattern ~ "/" |
@@ -765,6 +785,29 @@ qr_nested_angles = { "<" ~ qr_angle_pattern ~ ">" }
 
 match_regex_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
 qr_regex_pattern = @{ (!regex_delimiter ~ (regex_escape | regex_group | ANY))* }
+
+// m// patterns
+m_exclaim_pattern = @{ (!"!" ~ (regex_escape | regex_group | ANY))* }
+m_hash_pattern = @{ (!"#" ~ (regex_escape | regex_group | ANY))* }
+
+// m patterns for paired delimiters with nesting support
+m_paren_pattern = { m_paren_part* }
+m_paren_part = { regex_escape | regex_group | m_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+m_nested_parens = { "(" ~ m_paren_pattern ~ ")" }
+
+m_bracket_pattern = { m_bracket_part* }
+m_bracket_part = { regex_escape | regex_group | m_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+m_nested_brackets = { "[" ~ m_bracket_pattern ~ "]" }
+
+m_brace_pattern = { m_brace_part* }
+m_brace_part = { regex_escape | regex_group | m_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+m_nested_braces = { "{" ~ m_brace_pattern ~ "}" }
+
+m_angle_pattern = { m_angle_part* }
+m_angle_part = { regex_escape | regex_group | m_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+m_nested_angles = { "<" ~ m_angle_pattern ~ ">" }
+
+m_delimited_pattern = @{ (!regex_delimiter ~ (regex_escape | regex_group | ANY))* }
 
 // Regex components
 regex_escape = { "\\" ~ ANY }

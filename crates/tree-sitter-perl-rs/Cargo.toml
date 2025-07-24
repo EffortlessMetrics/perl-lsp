@@ -152,6 +152,16 @@ name = "test_qq_edge_case"
 path = "examples/test_qq_edge_case.rs"
 required-features = ["pure-rust"]
 
+[[example]]
+name = "test_regex_delimiters"
+path = "examples/test_regex_delimiters.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_indirect_object"
+path = "examples/test_indirect_object.rs"
+required-features = ["pure-rust"]
+
 
 [[bench]]
 name = "scanner_benchmarks"
