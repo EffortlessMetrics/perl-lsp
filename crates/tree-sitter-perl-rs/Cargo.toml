@@ -35,6 +35,7 @@ test-case = "3.3"
 [features]
 default = ["pure-rust"]
 pure-rust = []
+pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
 token-parser = []
 test-utils = []
 # Legacy features (for benchmarking only)

@@ -15,7 +15,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 
 [features]
 default = []
-tree-sitter-perl-rs = ["tree-sitter-perl", "tree-sitter-perl/pure-rust"]
+tree-sitter-perl-rs = ["tree-sitter-perl", "tree-sitter-perl/pure-rust-standalone"]
 
 [[bench]]
 name = "compare_parsers"
