@@ -63,6 +63,8 @@ pub mod working_parser;
 pub mod pure_rust_parser;
 #[cfg(feature = "pure-rust")]
 pub mod benchmark_parser;
+#[cfg(feature = "pure-rust-standalone")]
+pub mod pest_only;
 #[cfg(feature = "pure-rust")]
 pub mod perl_lexer;
 
@@ -107,7 +109,7 @@ pub mod demo_token_parser;
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::PureRustPerlParser;
 #[cfg(feature = "pure-rust-standalone")]
-pub use benchmark_parser::BenchmarkPureRustParser as PureRustParser;  // Immutable wrapper for benchmarks
+pub use pest_only::PestOnlyParser as PureRustParser;  // Clean Pest-only parser for benchmarks
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 pub use pure_rust_parser::PureRustPerlParser as PureRustParser;  // Original for non-benchmark use
 #[cfg(feature = "pure-rust")]
