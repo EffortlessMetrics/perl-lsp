@@ -1,4 +1,4 @@
-use perl_lexer::{PerlLexer, TokenKind};
+use perl_lexer::PerlLexer;
 
 fn main() {
     let test_cases = vec![
@@ -17,15 +17,15 @@ fn main() {
         println!("Tokens in prototype:");
         
         while let Some(token) = lexer.next_token() {
-            if token.kind == TokenKind::LeftParen {
+            if token.text.as_ref() == "(" {
                 in_prototype = true;
                 continue;
             }
-            if token.kind == TokenKind::RightParen {
+            if token.text.as_ref() == ")" {
                 break;
             }
             if in_prototype {
-                println!("  {:?}: '{}'", token.kind, token.text);
+                println!("  {:?}: '{}'", token.token_type, token.text);
             }
         }
     }
