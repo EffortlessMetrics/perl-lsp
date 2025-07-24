@@ -194,6 +194,15 @@ pub mod enhanced_heredoc_lexer;
 pub mod enhanced_full_parser;
 
 #[cfg(feature = "pure-rust")]
+pub mod sexp_formatter;
+
+#[cfg(feature = "pure-rust")]
+pub mod streaming_parser;
+
+#[cfg(feature = "pure-rust")]
+pub mod error_recovery;
+
+#[cfg(feature = "pure-rust")]
 mod statement_tracker;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]

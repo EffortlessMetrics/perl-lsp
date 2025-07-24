@@ -356,6 +356,9 @@ impl FullPerlParser {
             AstNode::RoleDeclaration { body, .. } => {
                 self.restore_node_content_with_depth(body, placeholder_map, next_depth);
             }
+            AstNode::ErrorNode { .. } => {
+                // Error nodes don't need content restoration
+            }
         }
     }
 }

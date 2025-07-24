@@ -280,6 +280,12 @@ pub enum AstNode {
         finally_block: Option<Box<AstNode>>,
     },
     DeferStatement(Box<AstNode>),
+    
+    // Error recovery
+    ErrorNode {
+        message: Arc<str>,
+        content: Arc<str>,
+    },
     ClassDeclaration {
         name: Arc<str>,
         version: Option<Arc<str>>,
