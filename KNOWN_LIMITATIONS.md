@@ -1,278 +1,156 @@
-# Pure Rust Perl Parser - Known Limitations
+# Tree-sitter Perl Parsers - Known Limitations
 
-This document provides a definitive list of parsing limitations in the Pure Rust Perl Parser, organized by category and impact.
+This document provides a comprehensive list of parsing limitations across all three parser implementations.
 
 ## Summary
 
-The parser achieves **~99.995% coverage** of real-world Perl 5 code with the following categories of limitations:
+| Parser | Coverage | Status | Main Limitations |
+|--------|----------|--------|------------------|
+| **v3: Native** | ~100% | Production Ready | 4 minor edge cases (2% of edge case tests) |
+| **v2: Pest** | ~99.995% | Production Ready | Cannot handle m!pattern!, indirect object syntax |
+| **v1: C** | ~95% | Legacy | Limited modern Perl support, edge cases |
 
-1. **Minor Edge Cases** (~0.005% impact) - Mainly heredoc-in-string pattern
-2. **Theoretical Limitations** (~0.001% impact) - Constructs requiring runtime execution
+## v3: Native Parser (perl-lexer + perl-parser) - RECOMMENDED
 
-## Test Results (v0.3.0)
+### Coverage: ~100% (98% of comprehensive edge cases)
 
-### Edge Case Tests: 15/15 PASSING (100% Coverage)
-All edge case tests confirmed passing with 0 errors per test:
+**Successfully handles:**
+- ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, `s|old|new|`)
+- ✅ Most indirect object syntax (`print $fh "Hello"`)
+- ✅ Quote operators with custom delimiters (`q!text!`, `qq#text#`)
+- ✅ All modern Perl features (class, method, try/catch, etc.)
+- ✅ Complex dereferencing chains
+- ✅ Unicode identifiers (including Greek letters)
 
-| Edge Case | Tokens | Errors | Status |
-|-----------|--------|--------|--------|
-| Format strings | 15 | 0 | ✅ PASS |
-| V-strings | 5 | 0 | ✅ PASS |
-| Encoding pragmas | 7 | 0 | ✅ PASS |
-| Typeglobs | 12 | 0 | ✅ PASS |
-| Indirect object syntax | 8 | 0 | ✅ PASS |
-| Lvalue subroutines | 7 | 0 | ✅ PASS |
-| Hash/array slices | 7 | 0 | ✅ PASS |
-| Regex code assertions | 4 | 0 | ✅ PASS |
-| __DATA__ section | 4 | 0 | ✅ PASS |
-| Source filters | 3 | 0 | ✅ PASS |
-| Operator overloading | 8 | 0 | ✅ PASS |
-| Stacked file tests | 4 | 0 | ✅ PASS |
-| Underscore filehandle | 5 | 0 | ✅ PASS |
-| Symbolic references | 9 | 0 | ✅ PASS |
-| Multi-char delimiters | 2 | 0 | ✅ PASS |
+**Known Limitations (2% of edge cases):**
+1. **Complex prototypes**: `sub mygrep(&@) { }` - Block and list prototype combination
+2. **Emoji identifiers**: `my $♥ = 'love'` - Emoji characters as variable names
+3. **Format declarations**: `format STDOUT = ...` - Legacy Perl 4 format syntax
+4. **Decimal without trailing digits**: `5.` - Edge case number syntax
 
-### Features Verified:
-- ✅ Format strings (format FOO = ...)
-- ✅ V-strings (v1.2.3)
-- ✅ Stacked file tests (-f -w -x)
-- ✅ Array/hash slices (@array[1,2], @hash{qw/a b/})
-- ✅ Complex regex features ((?{ code }), (?!pattern))  
-- ✅ Encoding pragmas (use encoding 'utf8')
-- ✅ Multi-character regex delimiters (s### ###)
-- ✅ Symbolic references ($$ref, *{$glob})
-- ✅ __DATA__ section handling
-- ✅ Indirect object syntax (new Class @args)
-- ✅ Reference operator (\$scalar, \@array, \%hash, \&sub)
-- ✅ Underscore special filehandle (_)
-- ✅ Operator overloading (use overload '+' => \&add)
-- ✅ Typeglob slots (*foo{SCALAR})
-- ✅ __AUTOLOAD__ method
-- ✅ Modern octal format (0o755)
-- ✅ Ellipsis operator (...)
-- ✅ Unicode identifiers (café, π, Σ, 日本語)
+## v2: Pest-based Parser
 
-## 1. Fixed Issues ✅
+### Coverage: ~99.995%
 
-These grammar issues have been fixed:
+**Successfully handles:**
+- ✅ All core Perl 5 features
+- ✅ Modern Perl features (class, method, try/catch, signatures)
+- ✅ Standard regex forms (`/pattern/`, `s/old/new/`)
+- ✅ Heredocs (all variants)
+- ✅ Unicode identifiers
+- ✅ Complex dereferencing
 
-### 1.1 Use/Require Statements ✅
-**Previously affected ~3% of code**
+**Known Limitations (~0.005%):**
 
-```perl
-# NOW WORKS:
-use strict;
-use warnings;
-use Data::Dumper;
-require Module;
-```
+1. **Regex with arbitrary delimiters**
+   ```perl
+   # NOT SUPPORTED:
+   $text =~ m!pattern!;      # Using ! as delimiter
+   $text =~ m{pattern};      # Using {} as delimiter  
+   $text =~ s|old|new|g;     # Using | for substitution
+   
+   # SUPPORTED:
+   $text =~ /pattern/;       # Standard slash delimiters
+   $text =~ s/old/new/g;     # Standard substitution
+   ```
+   **Reason**: PEG grammars cannot distinguish `m` as function vs regex operator without extensive lookahead.
 
-**Fix Applied**: Updated module_name to accept simple identifiers
+2. **Indirect object syntax**
+   ```perl
+   # NOT SUPPORTED:
+   method $object @args;     # Indirect object call
+   print $fh "Hello";        # Indirect filehandle
+   
+   # SUPPORTED:
+   $object->method(@args);   # Arrow notation
+   print($fh, "Hello");      # Parentheses
+   ```
+   **Reason**: Requires semantic analysis to distinguish from function calls.
 
-### 1.2 Package Block Syntax ✅  
-**Previously affected ~0.5% of code**
+3. **Heredoc-in-string**: `"$prefix<<$end_tag"`
 
-```perl
-# NOW WORKS:
-package Foo {
-    sub new { }
-}
-```
+## v1: C-based Parser
 
-**Fix Applied**: Updated package_name to accept simple identifiers
+### Coverage: ~95%
 
-### 1.3 Builtin Functions Without Parentheses ✅
-**Previously affected ~0.5% of code**
+**Successfully handles:**
+- ✅ Basic Perl 5 features
+- ✅ Standard syntax forms
+- ✅ Tree-sitter integration
 
-```perl
-# NOW WORKS - 70+ builtins added:
-print "Hello", "World";
-length "string";
-uc "hello";
-join ',', @array;
-sort @list;
-# ... and many more
+**Major Limitations:**
+- ❌ Limited modern Perl support (no class/method, try/catch)
+- ❌ No regex with custom delimiters
+- ❌ No indirect object syntax
+- ❌ Limited edge case handling
+- ❌ Heredoc support is incomplete
 
-# STILL REQUIRES PARENTHESES:
-user_defined_function arg1, arg2;  # Use: user_defined_function(arg1, arg2);
-```
+**Status**: Legacy implementation, kept for benchmarking and compatibility
 
-**Fix Applied**: Added 70+ common Perl builtins to list operator grammar
+## Common Limitations Across All Parsers
 
-### 1.4 ISA Operator with Qualified Names ✅
-**Previously affected ~0.2% of code**
+### Theoretical Limitations (Require Runtime Execution)
 
-```perl  
-# NOW WORKS:
-$obj isa Foo::Bar
-$obj isa My::Class::Name
+These constructs cannot be parsed statically and would require a Perl interpreter:
 
-# Always worked:
-$obj isa "Foo::Bar"  # quoted version
-```
+1. **Source Filters** - Code that modifies source before parsing
+   ```perl
+   use Filter::Simple;
+   ```
 
-**Fix Applied**: Updated isa_expression to accept qualified names
+2. **Runtime Code Generation** - Dynamic eval constructs
+   ```perl
+   eval "print <<EOF;\n" . $content . "\nEOF";
+   ```
 
-## 2. Minor Edge Cases (~0.005% of Real-World Code)
+3. **Tied Filehandles** - Custom I/O behavior
+   ```perl
+   tie *FH, 'Package';
+   ```
 
-These edge cases are documented but have minimal impact on practical Perl parsing:
+## Parser Comparison
 
-### 2.1 Regex with Arbitrary Delimiters
-**Impact: ~0.002% of code**
-
-```perl
-# NOT SUPPORTED:
-$text =~ m!pattern!;      # Using ! as delimiter
-$text =~ m{pattern};      # Using {} as delimiter  
-$text =~ s|old|new|g;     # Using | for substitution
-tr{a-z}{A-Z};            # Using {} for transliteration
-
-# SUPPORTED:
-$text =~ /pattern/;       # Standard slash delimiters
-$text =~ s/old/new/g;     # Standard substitution
-tr/a-z/A-Z/;             # Standard transliteration
-```
-
-**Reason**: The `m` operator is ambiguous with function calls. Perl determines meaning based on lookahead, which PEG grammars cannot express.
-
-### 2.2 Indirect Object Syntax Without Parentheses
-**Impact: ~0.002% of code**
-
-```perl
-# NOT SUPPORTED:
-method $object @args;     # Indirect object call
-print $fh "Hello";        # Indirect filehandle
-new Class @args;          # Indirect constructor
-
-# SUPPORTED:
-$object->method(@args);   # Arrow notation
-print($fh, "Hello");      # Parentheses
-Class->new(@args);        # Arrow constructor
-```
-
-**Reason**: Without semantic analysis, the parser cannot distinguish between function calls and indirect method calls.
-
-### 2.3 Legacy Format Declarations
-**Impact: ~0.001% of code**
-
-```perl
-# NOT SUPPORTED:
-format STDOUT =
-@<<<<<<   @||||||   @>>>>>>
-$name,    $price,   $quantity
-.
-
-# SUPPORTED:
-printf "%-8s %8s %8s\n", $name, $price, $quantity;
-```
-
-**Reason**: Format blocks are a deprecated Perl 4 feature with unique parsing requirements, rarely used in modern code.
-
-## 3. Heredoc Edge Cases
-
-The parser handles **99.99% of heredocs** correctly. The parser successfully handles:
-
-- ✅ Standard heredocs (<<EOF, <<"EOF", <<'EOF')
-- ✅ Indented heredocs (<<~EOF)
-- ✅ Dynamic delimiters with variables (`<<$var`)
-- ✅ Array element heredocs (`$array[1] = <<EOF`)
-- ✅ Package variable heredocs (`$Package::var = <<EOF`)
-- ✅ Nested expression heredocs (`${${var}} = <<EOF`)
-- ✅ Special variable heredocs (`$$ = <<EOF`, `$! = <<EOF`)
-- ✅ BEGIN/END block heredocs
-- ✅ Complex recovery scenarios
-
-### 3.1 Remaining Limitation: Heredoc-in-String (~0.001%)
-```perl
-# Pattern where heredoc is initiated from within an interpolated string
-$result = "$prefix<<$end_tag";
-content here
-EOF
-```
-
-This extremely rare pattern requires the parser to recognize heredoc operators within string interpolation contexts, which conflicts with normal string parsing rules.
-
-## 4. Theoretical Limitations
-
-These would require a full Perl interpreter, not just a parser:
-
-### 4.1 Source Filters (~0.001%)
-```perl
-use Filter::Simple;
-# Code that modifies source before parsing
-```
-
-### 4.2 Tied Filehandles (~0.001%)
-```perl
-tie *FH, 'Package';
-print FH <<EOF;
-# Custom filehandle behavior
-EOF
-```
-
-### 4.3 Runtime Code Generation (~0.001%)
-```perl
-eval "print <<EOF;\n" . $content . "\nEOF";
-```
-
-## Impact Analysis
-
-| Category | Status | Previous Impact | Current Impact |
-|----------|--------|----------------|----------------|
-| Use/require statements | ✅ FIXED | ~3% | 0% |
-| Package blocks | ✅ FIXED | ~0.5% | 0% |
-| Builtin functions | ✅ FIXED | ~0.5% | 0% |
-| ISA qualified | ✅ FIXED | ~0.2% | 0% |
-| Bareword qualified names | ✅ FIXED | ~0.2% | 0% |
-| User-defined functions | ✅ FIXED | ~0.2% | 0% |
-| Complex interpolation | ✅ FIXED | ~0.05% | ~0.001% |
-| Heredoc edge cases | ❌ | ~0.1% | ~0.01% |
-| **Total** | | **~5%** | **~0.01%** |
+| Feature | v1 (C) | v2 (Pest) | v3 (Native) |
+|---------|--------|-----------|-------------|
+| **Core Perl 5** | 95% | 99.995% | 100% |
+| **Modern Perl** | ❌ | ✅ | ✅ |
+| **Regex Delimiters** | ❌ | ❌ | ✅ |
+| **Indirect Object** | ❌ | ❌ | ✅ (partial) |
+| **Edge Cases** | ~60% | ~95% | ~98% |
+| **Performance** | Fast | Good | Fastest |
+| **Maintainability** | Low | High | High |
 
 ## Recommendations
 
-### Completed Fixes ✅:
-1. **Use/require statements** - Fixed with simple grammar update
-2. **Package blocks** - Now supports modern Perl style  
-3. **Builtin list operators** - All common functions work
-4. **Bareword qualified names** - Full support for Foo::Bar->new()
-5. **User-defined functions** - Work without parentheses
-6. **String interpolation** - Handles reserved words and multiple variables
+### For Production Use
+- **Use v3 (Native Parser)** - Best performance and coverage
+- Fallback to v2 (Pest) if you don't need edge cases
+- Avoid v1 (C) unless you need legacy compatibility
 
-### Remaining Minor Issues:
-1. **Heredoc-in-string** (~0.01%) - Pattern like `"$prefix<<$end_tag"` where heredoc is initiated from within an interpolated string
+### For Development
+- **v3**: Best for performance-critical applications
+- **v2**: Best for grammar experimentation (PEG is easier to modify)
+- **v1**: Only for benchmarking comparisons
 
-### Won't Fix (Theoretical):
-1. **Source filters** - Requires preprocessor
-2. **Runtime generation** - Requires interpreter  
-3. **Tied filehandles** - Requires runtime emulation
+## Testing Parser Limitations
 
-## Unicode Edge Cases
-
-### Mathematical Symbols as Identifiers
-**Correctly Rejected**
-
-The parser correctly rejects Unicode mathematical symbols as identifiers, matching Perl's behavior:
-
-```perl
-# INVALID - Mathematical symbols not allowed:
-sub ∑ { }      # U+2211 (N-ARY SUMMATION)
-my $Σ = 42;    # U+03A3 (GREEK CAPITAL LETTER SIGMA) 
-package ∏::Utils;  # U+220F (N-ARY PRODUCT)
-
-# VALID - Unicode letters are allowed:
-sub été { }    # French accented letters
-my $café = 5;  # Accented characters
-package π::Math;  # Greek letter pi (U+03C0)
-```
-
-**Note**: While Rust's `is_alphabetic()` returns `false` for mathematical symbols like ∑, it returns `true` for actual Unicode letters. The parser correctly distinguishes between these categories, allowing only true Unicode letters as identifiers.
-
-## Testing These Limitations
-
-Run the limitation tests:
+### v3 Native Parser
 ```bash
-cargo test test_known_limitations -- --nocapture
+# Test edge cases
+cargo run -p perl-parser --example test_edge_cases
+cargo run -p perl-parser --example test_more_edge_cases
+cargo run -p perl-parser --example test_remaining_edge_cases
 ```
 
-This will verify each limitation and its workaround.
+### v2 Pest Parser
+```bash
+# Test edge cases
+cargo test --features pure-rust test_edge_cases
+cargo xtask test-edge-cases
+```
+
+### Compare All Parsers
+```bash
+cargo xtask compare
+cargo bench
+```
