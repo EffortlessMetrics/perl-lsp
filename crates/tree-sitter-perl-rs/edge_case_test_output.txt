@@ -1,0 +1,54 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/steven/code/tree-sitter-perl/crates/perl-lexer/Cargo.toml
+workspace: /home/steven/code/tree-sitter-perl/Cargo.toml
+warning: unused variable: `indented`
+   --> crates/perl-lexer/src/lib.rs:300:13
+    |
+300 |         let indented = if self.current_char() == Some('~') {
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_indented`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `delimiter`
+   --> crates/perl-lexer/src/lib.rs:318:13
+    |
+318 |         let delimiter = if self.position < self.input.len() {
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_delimiter`
+
+warning: unused variable: `delim`
+   --> crates/perl-lexer/src/lib.rs:326:33
+    |
+326 | ...                   let delim = self.input[delim_start..self.position].to_string();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_delim`
+
+warning: unused variable: `delim`
+   --> crates/perl-lexer/src/lib.rs:340:33
+    |
+340 | ...                   let delim = self.input[delim_start..self.position].to_string();
+    |                           ^^^^^ help: if this is intentional, prefix it with an underscore: `_delim`
+
+warning: method `matches_bytes` is never used
+   --> crates/perl-lexer/src/lib.rs:240:8
+    |
+54  | impl<'a> PerlLexer<'a> {
+    | ---------------------- method in this implementation
+...
+240 |     fn matches_bytes(&self, pattern: &[u8]) -> bool {
+    |        ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `KEYWORDS` is never used
+    --> crates/perl-lexer/src/lib.rs:1479:7
+     |
+1479 | const KEYWORDS: &[&str] = &[
+     |       ^^^^^^^^
+
+warning: constant `COMPOUND_SECOND_CHARS` is never used
+    --> crates/perl-lexer/src/lib.rs:1510:7
+     |
+1510 | const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
+     |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `perl-lexer` (lib) generated 7 warnings
+   Compiling tree-sitter-perl v0.1.0 (/home/steven/code/tree-sitter-perl/crates/tree-sitter-perl-rs)
