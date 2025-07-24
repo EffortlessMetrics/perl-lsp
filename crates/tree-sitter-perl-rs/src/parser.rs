@@ -633,13 +633,14 @@ impl<'a> Parser<'a> {
                         );
                     } else {
                         // Property access
+                        let start_loc = expr.location.start;
                         expr = Node::new(
                             NodeKind::MethodCall {
                                 object: Box::new(expr),
                                 method,
                                 args: Vec::new(),
                             },
-                            self.span_locations(&expr, &self.previous_location())
+                            SourceLocation { start: start_loc, end: self.previous_location() }
                         );
                     }
                 } else if self.match_token(&TokenType::LeftBracket) {
@@ -676,12 +677,13 @@ impl<'a> Parser<'a> {
                 let index = Box::new(self.parse_expression()?);
                 self.expect_token(&TokenType::RightBracket)?;
                 
+                let start_loc = expr.location.start;
                 expr = Node::new(
                     NodeKind::ArrayAccess {
                         array: Box::new(expr),
                         index,
                     },
-                    self.span_locations(&expr, &self.previous_location())
+                    SourceLocation { start: start_loc, end: self.previous_location() }
                 );
             } else if self.match_token(&TokenType::LeftBrace) && 
                       matches!(&expr.kind, NodeKind::Variable { .. }) {
@@ -689,12 +691,13 @@ impl<'a> Parser<'a> {
                 let key = Box::new(self.parse_expression()?);
                 self.expect_token(&TokenType::RightBrace)?;
                 
+                let start_loc = expr.location.start;
                 expr = Node::new(
                     NodeKind::HashAccess {
                         hash: Box::new(expr),
                         key,
                     },
-                    self.span_locations(&expr, &self.previous_location())
+                    SourceLocation { start: start_loc, end: self.previous_location() }
                 );
             } else {
                 break;

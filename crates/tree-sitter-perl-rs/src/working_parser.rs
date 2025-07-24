@@ -19,12 +19,11 @@ impl WorkingParser {
         let mut tokens = Vec::new();
         
         while let Some(perl_token) = lexer.next_token() {
-            if matches!(perl_token.token_type, PLTokenType::Eof) {
+            if matches!(perl_token.token_type, PLTokenType::EOF) {
                 break;
             }
-            if let Some(token) = from_perl_lexer_token(&perl_token) {
-                tokens.push(token);
-            }
+            let token = from_perl_lexer_token(&perl_token);
+            tokens.push(token);
         }
         
         WorkingParser {

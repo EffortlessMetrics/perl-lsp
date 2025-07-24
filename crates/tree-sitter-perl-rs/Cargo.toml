@@ -77,6 +77,51 @@ name = "parse-rust"
 path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust"]
 
+[[example]]
+name = "test_format"
+path = "examples/test_format.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "showcase_features"
+path = "examples/showcase_features.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "final_demo"
+path = "examples/final_demo.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "advanced_features"
+path = "examples/advanced_features.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "comprehensive_demo"
+path = "examples/comprehensive_demo.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "edge_case_tests"
+path = "examples/edge_case_tests.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "supported_edge_cases"
+path = "examples/supported_edge_cases.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "heredoc_edge_cases"
+path = "examples/heredoc_edge_cases.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "debug_heredoc"
+path = "examples/debug_heredoc.rs"
+required-features = ["pure-rust"]
+
 
 [[bench]]
 name = "scanner_benchmarks"
