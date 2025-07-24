@@ -137,6 +137,21 @@ name = "test_for_loop"
 path = "examples/test_for_loop.rs"
 required-features = ["pure-rust"]
 
+[[example]]
+name = "test_statement_modifiers"
+path = "examples/test_statement_modifiers.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_qq_operators"
+path = "examples/test_qq_operators.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_qq_edge_case"
+path = "examples/test_qq_edge_case.rs"
+required-features = ["pure-rust"]
+
 
 [[bench]]
 name = "scanner_benchmarks"
