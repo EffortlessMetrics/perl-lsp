@@ -9,7 +9,7 @@ The parser achieves **~99.995% coverage** of real-world Perl 5 code with the fol
 1. **Minor Edge Cases** (~0.005% impact) - Mainly heredoc-in-string pattern
 2. **Theoretical Limitations** (~0.001% impact) - Constructs requiring runtime execution
 
-## Test Results (v0.1.0)
+## Test Results (v0.3.0)
 
 ### Edge Case Tests: 15/15 PASSING (100% Coverage)
 All edge case tests confirmed passing with 0 errors per test:
