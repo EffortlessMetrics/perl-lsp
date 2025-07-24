@@ -122,6 +122,21 @@ name = "debug_heredoc"
 path = "examples/debug_heredoc.rs"
 required-features = ["pure-rust"]
 
+[[example]]
+name = "test_code_ref"
+path = "examples/test_code_ref.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_deref"
+path = "examples/test_deref.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_for_loop"
+path = "examples/test_for_loop.rs"
+required-features = ["pure-rust"]
+
 
 [[bench]]
 name = "scanner_benchmarks"

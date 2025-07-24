@@ -195,8 +195,8 @@ for_statement = {
     label? ~ "for" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
         // C-style for loop
         ("(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block) |
-        // foreach-style for loop with variable
-        (variable ~ "(" ~ expression ~ ")" ~ block) |
+        // foreach-style for loop with variable declaration
+        (("my" | "our" | "local" | "state")? ~ variable ~ "(" ~ expression ~ ")" ~ block) |
         // foreach-style for loop without variable (uses $_)
         ("(" ~ expression ~ ")" ~ block)
     )
@@ -413,6 +413,7 @@ primary_expression = {
     | qualified_name_or_identifier
     | literal
     | reference
+    | dereference
     | variable
     | array_ref
     | hash_ref
@@ -450,8 +451,23 @@ reference = {
 scalar_reference = @{ "\\" ~ (scalar_variable | ("${" ~ expression ~ "}")) }
 array_reference = @{ "\\" ~ (array_variable | ("@{" ~ expression ~ "}")) }
 hash_reference = @{ "\\" ~ (hash_variable | ("%{" ~ expression ~ "}")) }
-subroutine_reference = @{ "\\" ~ "&" ~ qualified_name }
+subroutine_reference = @{ "\\" ~ "&" ~ qualified_name_or_identifier }
 glob_reference = @{ "\\" ~ "*" ~ identifier }
+
+// Dereference expressions
+dereference = {
+    scalar_dereference
+    | array_dereference
+    | hash_dereference
+    | code_dereference
+    | glob_dereference
+}
+
+scalar_dereference = { "${" ~ expression ~ "}" | "$$" ~ variable_name }
+array_dereference = { "@{" ~ expression ~ "}" | "@$" ~ variable_name }
+hash_dereference = { "%{" ~ expression ~ "}" | "%$" ~ variable_name }
+code_dereference = { "&{" ~ expression ~ "}" | "&$" ~ variable_name }
+glob_dereference = { "*{" ~ expression ~ "}" | "*$" ~ variable_name }
 
 // Anonymous references
 array_ref = { "[" ~ list_elements? ~ "]" }
