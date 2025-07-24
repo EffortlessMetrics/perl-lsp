@@ -188,6 +188,12 @@ pub mod heredoc_parser;
 pub mod full_parser;
 
 #[cfg(feature = "pure-rust")]
+pub mod enhanced_heredoc_lexer;
+
+#[cfg(feature = "pure-rust")]
+pub mod enhanced_full_parser;
+
+#[cfg(feature = "pure-rust")]
 mod statement_tracker;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
@@ -253,6 +259,9 @@ pub use enhanced_parser::EnhancedPerlParser;
 
 #[cfg(feature = "pure-rust")]
 pub use full_parser::FullPerlParser;
+
+#[cfg(feature = "pure-rust")]
+pub use enhanced_full_parser::EnhancedFullParser;
 
 #[cfg(test)]
 mod test {
