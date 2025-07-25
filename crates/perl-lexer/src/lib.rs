@@ -9,10 +9,13 @@ use std::sync::Arc;
 pub mod token;
 pub mod mode;
 pub mod error;
+mod unicode;
 
 pub use token::{Token, TokenType, StringPart};
 pub use mode::LexerMode;
 pub use error::{LexerError, Result};
+
+use unicode::{is_perl_identifier_start, is_perl_identifier_continue};
 
 /// Configuration for the lexer
 #[derive(Debug, Clone)]
@@ -345,11 +348,11 @@ impl<'a> PerlLexer<'a> {
                     }
                     self.input[delim_start..self.position-1].to_string()
                 }
-                Some(c) if c.is_alphabetic() || c == '_' => {
+                Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
                     while self.position < self.input.len() {
                         if let Some(c) = self.current_char() {
-                            if c.is_alphanumeric() || c == '_' {
+                            if is_perl_identifier_continue(c) {
                                 self.advance();
                             } else {
                                 break;
@@ -535,7 +538,7 @@ impl<'a> PerlLexer<'a> {
                     self.advance(); // consume #
                     // Now parse the array name
                     while let Some(ch) = self.current_char() {
-                        if ch.is_alphanumeric() || ch == '_' {
+                        if is_perl_identifier_continue(ch) {
                             self.advance();
                         } else if ch == ':' && self.peek_char(1) == Some(':') {
                             // Package-qualified array name
@@ -569,7 +572,7 @@ impl<'a> PerlLexer<'a> {
                             if ch == '}' {
                                 self.advance(); // consume }
                                 break;
-                            } else if ch.is_alphanumeric() || ch == '_' {
+                            } else if is_perl_identifier_continue(ch) {
                                 self.advance();
                             } else {
                                 break;
@@ -592,7 +595,7 @@ impl<'a> PerlLexer<'a> {
                                     self.advance(); // consume closing } of ${...}
                                 }
                                 break;
-                            } else if ch.is_alphanumeric() || ch == '_' {
+                            } else if is_perl_identifier_continue(ch) {
                                 self.advance();
                             } else {
                                 break;
@@ -639,7 +642,7 @@ impl<'a> PerlLexer<'a> {
                                 if ch == '}' {
                                     self.advance(); // consume }
                                     break;
-                                } else if ch.is_alphanumeric() || ch == '_' {
+                                } else if is_perl_identifier_continue(ch) {
                                     self.advance();
                                 } else {
                                     break;
@@ -650,9 +653,9 @@ impl<'a> PerlLexer<'a> {
                 }
                 // Parse regular variable name
                 else if let Some(ch) = self.current_char() {
-                    if ch.is_alphabetic() || ch == '_' {
+                    if is_perl_identifier_start(ch) {
                         while let Some(ch) = self.current_char() {
-                            if ch.is_alphanumeric() || ch == '_' {
+                            if is_perl_identifier_continue(ch) {
                                 self.advance();
                             } else {
                                 break;
@@ -673,7 +676,7 @@ impl<'a> PerlLexer<'a> {
                         self.advance(); // consume second :
                         // Now parse the rest like a normal identifier
                         while let Some(ch) = self.current_char() {
-                            if ch.is_alphanumeric() || ch == '_' {
+                            if is_perl_identifier_continue(ch) {
                                 self.advance();
                             } else if ch == ':' && self.peek_char(1) == Some(':') {
                                 self.advance();
@@ -703,9 +706,9 @@ impl<'a> PerlLexer<'a> {
         let start = self.position;
         let ch = self.current_char()?;
         
-        if ch.is_alphabetic() || ch == '_' {
+        if is_perl_identifier_start(ch) {
             while let Some(ch) = self.current_char() {
-                if ch.is_alphanumeric() || ch == '_' {
+                if is_perl_identifier_continue(ch) {
                     self.advance();
                 } else {
                     break;
@@ -1128,7 +1131,7 @@ impl<'a> PerlLexer<'a> {
                     self.advance();
                     let var_start = self.position;
                     while let Some(ch) = self.current_char() {
-                        if ch.is_alphanumeric() || ch == '_' {
+                        if is_perl_identifier_continue(ch) {
                             self.advance();
                         } else {
                             break;
