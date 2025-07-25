@@ -410,10 +410,35 @@ impl<'a> PerlLexer<'a> {
             
             // Check for decimal point
             if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'.' {
-                // Only consume the dot if it's followed by a digit
-                if self.position + 1 < self.input_bytes.len() && self.input_bytes[self.position + 1].is_ascii_digit() {
+                // Peek ahead to see what follows the dot
+                let followed_by_digit = self.position + 1 < self.input_bytes.len() && 
+                    self.input_bytes[self.position + 1].is_ascii_digit();
+                
+                // In Perl, "5." is a valid decimal number (5.0)
+                // We consume the dot if:
+                // 1. It's followed by a digit (5.123)
+                // 2. OR it's followed by whitespace, operator, or end of input (5.)
+                let should_consume_dot = if followed_by_digit {
+                    true
+                } else if self.position + 1 >= self.input_bytes.len() {
+                    // End of input after dot
+                    true
+                } else {
+                    // Check if followed by something that would end a number
+                    let next_byte = self.input_bytes[self.position + 1];
+                    // Also check for 'e' or 'E' for scientific notation
+                    matches!(next_byte, 
+                        b' ' | b'\t' | b'\n' | b'\r' |  // whitespace
+                        b';' | b',' | b')' | b'}' | b']' |  // delimiters
+                        b'+' | b'-' | b'*' | b'/' | b'%' |  // operators
+                        b'=' | b'<' | b'>' | b'!' | b'&' | b'|' | b'^' | b'~' |
+                        b'e' | b'E'  // scientific notation
+                    )
+                };
+                
+                if should_consume_dot {
                     self.position += 1; // consume the dot
-                    // Consume fractional digits
+                    // Consume fractional digits if any
                     while self.position < self.input_bytes.len() {
                         match self.input_bytes[self.position] {
                             b'0'..=b'9' | b'_' => self.position += 1,

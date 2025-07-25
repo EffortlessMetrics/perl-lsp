@@ -888,9 +888,15 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'format'
         
-        // Parse format name
-        let name_token = self.expect(TokenKind::Identifier)?;
-        let name = name_token.text.clone();
+        // Parse format name (optional - can be anonymous)
+        let name = if self.peek_kind() == Some(TokenKind::Assign) {
+            // Anonymous format
+            String::new()
+        } else {
+            // Named format
+            let name_token = self.expect(TokenKind::Identifier)?;
+            name_token.text.clone()
+        };
         
         // Expect =
         self.expect(TokenKind::Assign)?;
