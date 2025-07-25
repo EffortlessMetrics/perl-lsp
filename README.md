@@ -63,7 +63,7 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
 
 | Parser | Simple (1KB) | Medium (5KB) | Large (20KB) | Coverage | Edge Cases |
 |--------|--------------|--------------|--------------|----------|------------|
-| **v3: Native** ⭐ | **~1.1 µs** | **~50 µs** | **~150 µs** | **~100%** | **98%** |
+| **v3: Native** ⭐ | **~1.1 µs** | **~50 µs** | **~150 µs** | **~100%** | **100%** |
 | v1: C-based | ~12 µs | ~35 µs | ~68 µs | ~95% | Limited |
 | v2: Pest | ~200 µs | ~450 µs | ~1800 µs | ~99.995% | 95% |
 
@@ -75,7 +75,7 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
 - **Zero dependencies** for maximum portability
 
 ### Test Results
-- **v3**: 98% edge case coverage (126/128 tests passing)
+- **v3**: 100% edge case coverage (141/141 tests passing)
 - **v2**: 100% coverage for supported features (but can't handle some edge cases)
 - **v1**: Limited edge case support
 

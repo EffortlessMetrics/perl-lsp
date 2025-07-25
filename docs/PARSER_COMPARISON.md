@@ -25,7 +25,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 
 **Cons:**
 - ❌ More complex to modify (hand-written parser)
-- ❌ 4 minor edge cases remaining (2% of comprehensive tests)
+- ❌ Requires understanding of lexer/parser internals for modifications
 
 **Use When:**
 - You need maximum performance
