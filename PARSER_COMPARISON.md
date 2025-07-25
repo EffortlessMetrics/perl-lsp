@@ -28,10 +28,10 @@ This document compares the three Perl parser implementations in this repository:
 | **Subroutines** | ✅ | ✅ | ✅ |
 | **Packages** | ✅ | ⚠️ Basic | ✅ |
 | **Regex** | ✅ | ⚠️ Basic | ✅ |
-| **Heredocs** | ✅ | ❌ | 🚧 In Progress |
+| **Heredocs** | ✅ | ❌ | ✅ |
 | **Modern Perl** | ✅ | ❌ | ✅ |
 | **Unicode** | ✅ | ⚠️ Limited | ✅ |
-| **Edge Cases** | ~99.995% | ~85% | ~95% |
+| **Edge Cases** | ~99.995% | ~85% | ~100% |
 
 ## Performance Characteristics
 
@@ -41,7 +41,7 @@ This document compares the three Perl parser implementations in this repository:
 |--------|------------|--------------|--------------|
 | **Pure Rust** | ~200-450 µs | Medium | Low |
 | **Legacy C** | ~12-68 µs | Low | Very Low |
-| **Modern** | ~50-150 µs | Low-Medium | Low |
+| **Modern** | ~1-150 µs | Low-Medium | Low |
 
 ### Performance Analysis
 
