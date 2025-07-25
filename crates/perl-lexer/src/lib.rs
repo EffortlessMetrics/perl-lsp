@@ -587,6 +587,26 @@ impl<'a> PerlLexer<'a> {
                 
                 // Check for special cases like ${^MATCH} or ${::{foo}} or *{$glob}
                 if self.current_char() == Some('{') {
+                    // Peek ahead to decide if we should consume the brace
+                    let next_char = self.peek_char(1);
+                    
+                    // Check if this is a dereference like @{$ref} or @{[...]}
+                    // If the next char suggests dereference, don't consume the brace
+                    if sigil != '*' && matches!(next_char, 
+                        Some('$') | Some('@') | Some('%') | Some('*') | Some('&') |
+                        Some('[') | Some(' ') | Some('\t') | Some('\n') | Some('\r')) {
+                        // This is a dereference, don't consume the brace
+                        let text = &self.input[start..self.position];
+                        self.mode = LexerMode::ExpectOperator;
+                        
+                        return Some(Token {
+                            token_type: TokenType::Identifier(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        });
+                    }
+                    
                     self.advance(); // consume {
                     
                     // Handle special variables with caret
@@ -629,10 +649,12 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Regular braced variable like ${foo} or glob like *{$glob}
                     else {
-                        // Check if this is a dereference like ${$ref} or @{$ref}
-                        // If the next char is a sigil, we should stop here and let the parser handle it
+                        // Check if this is a dereference like ${$ref} or @{$ref} or @{[...]}
+                        // If the next char is a sigil or other expression starter, we should stop here and let the parser handle it
                         // EXCEPT for globs - *{$glob} should be parsed as one token
-                        if sigil != '*' && matches!(self.current_char(), Some('$') | Some('@') | Some('%') | Some('*') | Some('&')) {
+                        if sigil != '*' && matches!(self.current_char(), 
+                            Some('$') | Some('@') | Some('%') | Some('*') | Some('&') |
+                            Some('[') | Some(' ') | Some('\t') | Some('\n') | Some('\r')) {
                             // This is a dereference, backtrack
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
