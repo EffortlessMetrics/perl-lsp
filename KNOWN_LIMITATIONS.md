@@ -6,13 +6,13 @@ This document provides a comprehensive list of parsing limitations across all th
 
 | Parser | Coverage | Status | Main Limitations |
 |--------|----------|--------|------------------|
-| **v3: Native** | ~100% | Production Ready | 4 minor edge cases (2% of edge case tests) |
+| **v3: Native** | ~99.9% | Production Ready | 2 minor edge cases (<1% of edge case tests) |
 | **v2: Pest** | ~99.995% | Production Ready | Cannot handle m!pattern!, indirect object syntax |
 | **v1: C** | ~95% | Legacy | Limited modern Perl support, edge cases |
 
 ## v3: Native Parser (perl-lexer + perl-parser) - RECOMMENDED
 
-### Coverage: ~100% (98% of comprehensive edge cases)
+### Coverage: ~99.9% (>99% of comprehensive edge cases)
 
 **Successfully handles:**
 - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, `s|old|new|`)
@@ -20,13 +20,14 @@ This document provides a comprehensive list of parsing limitations across all th
 - ✅ Quote operators with custom delimiters (`q!text!`, `qq#text#`)
 - ✅ All modern Perl features (class, method, try/catch, etc.)
 - ✅ Complex dereferencing chains
-- ✅ Unicode identifiers (including Greek letters)
+- ✅ Unicode identifiers (including emoji: `$♥`, `$🚀`)
+- ✅ Complex prototypes (`sub mygrep(&@) { }`)
+- ✅ Format declarations (`format STDOUT = ...`)
+- ✅ Decimal without trailing digits (`5.`, `5.e10`)
 
-**Known Limitations (2% of edge cases):**
-1. **Complex prototypes**: `sub mygrep(&@) { }` - Block and list prototype combination
-2. **Emoji identifiers**: `my $♥ = 'love'` - Emoji characters as variable names
-3. **Format declarations**: `format STDOUT = ...` - Legacy Perl 4 format syntax
-4. **Decimal without trailing digits**: `5.` - Edge case number syntax
+**Known Limitations (<1% of edge cases):**
+1. **Indirect method calls**: `method $object @args;` - Indirect object method syntax
+2. **Multiple lexicals with attributes**: `my ($x :shared, $y :locked);` - Attributes in list context
 
 ## v2: Pest-based Parser
 
