@@ -231,6 +231,28 @@ impl<'a> Parser<'a> {
         // The lexer returns variables as identifiers like "$x", "@array", etc.
         // We need to split the sigil from the name
         let text = &token.text;
+        
+        // Special handling for @{ and %{ (array/hash dereference)
+        if text == "@{" || text == "%{" {
+            let sigil = text.chars().next().unwrap().to_string();
+            let start = token.start;
+            
+            // Parse the expression inside the braces
+            let expr = self.parse_expression()?;
+            
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+            
+            let op = format!("{}{{}}", sigil);
+            return Ok(Node::new(
+                NodeKind::Unary {
+                    op,
+                    operand: Box::new(expr),
+                },
+                SourceLocation { start, end }
+            ));
+        }
+        
         let (sigil, name) = if let Some(rest) = text.strip_prefix('$') {
             ("$".to_string(), rest.to_string())
         } else if let Some(rest) = text.strip_prefix('@') {
@@ -385,6 +407,26 @@ impl<'a> Parser<'a> {
                 }
             }
         };
+        
+        // Special handling for @ or % sigil followed by { - array/hash dereference
+        if (sigil == "@" || sigil == "%") && self.peek_kind() == Some(TokenKind::LeftBrace) {
+            self.tokens.next()?; // consume {
+            
+            // Parse the expression inside the braces
+            let expr = self.parse_expression()?;
+            
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+            
+            let op = format!("{}{{}}", sigil);
+            return Ok(Node::new(
+                NodeKind::Unary {
+                    op,
+                    operand: Box::new(expr),
+                },
+                SourceLocation { start, end }
+            ));
+        }
         
         // Special handling for & sigil - it's a function call
         if sigil == "&" {
@@ -1167,10 +1209,33 @@ impl<'a> Parser<'a> {
         // Parse optional import list
         let mut args = Vec::new();
         
+        // Handle hash syntax for pragmas like: use constant { FOO => 42, BAR => 43 }
+        if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            // Just consume the entire hash expression as args
+            let mut depth = 0;
+            while !self.tokens.is_eof() {
+                match self.peek_kind() {
+                    Some(TokenKind::LeftBrace) => {
+                        depth += 1;
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                    Some(TokenKind::RightBrace) => {
+                        args.push(self.tokens.next()?.text.clone());
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {
+                        args.push(self.tokens.next()?.text.clone());
+                    }
+                }
+            }
+        }
         // Handle bare arguments (no parentheses)
-        if matches!(self.peek_kind(), Some(TokenKind::String) | Some(TokenKind::Identifier)) &&
+        else if matches!(self.peek_kind(), Some(TokenKind::String) | Some(TokenKind::Identifier)) &&
            !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
-            // Parse bare arguments like: use warnings 'void'
+            // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
             loop {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
@@ -1190,7 +1255,29 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Some(TokenKind::Identifier) => {
-                        args.push(self.tokens.next()?.text.clone());
+                        // Check if this might be a constant declaration
+                        let ident = self.tokens.next()?;
+                        args.push(ident.text.clone());
+                        
+                        // If we see a fat arrow after an identifier, parse the value
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.tokens.next()?; // consume =>
+                            // Parse the value as a simple expression
+                            match self.peek_kind() {
+                                Some(TokenKind::Number) | Some(TokenKind::String) => {
+                                    args.push(self.tokens.next()?.text.clone());
+                                }
+                                Some(TokenKind::Identifier) => {
+                                    args.push(self.tokens.next()?.text.clone());
+                                }
+                                _ => {
+                                    // For more complex expressions, just consume tokens until semicolon
+                                    while !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) {
+                                        args.push(self.tokens.next()?.text.clone());
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => break,
                 }
@@ -1984,7 +2071,7 @@ impl<'a> Parser<'a> {
     fn parse_or(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_and()?;
         
-        while self.peek_kind() == Some(TokenKind::Or) {
+        while matches!(self.peek_kind(), Some(TokenKind::Or) | Some(TokenKind::DefinedOr)) {
             let op_token = self.tokens.next()?;
             let right = self.parse_and()?;
             let start = expr.location.start;
@@ -2441,7 +2528,7 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end }
                     ));
                 }
-                TokenKind::Plus | TokenKind::Not | TokenKind::Backslash | TokenKind::BitwiseNot => {
+                TokenKind::Plus | TokenKind::Not | TokenKind::Backslash | TokenKind::BitwiseNot | TokenKind::Star => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
                     
@@ -3941,6 +4028,8 @@ impl<'a> Parser<'a> {
                     // Identifiers usually mean signature, but could be a special case
                     TokenKind::Identifier => {
                         // Check if it's a sigil-only identifier like "$" or "@"
+                        // or the special underscore prototype
+                        token.text == "_" || 
                         token.text.chars().all(|c| matches!(c, '$' | '@' | '%' | '*' | '&'))
                     }
                     // Anything else suggests a signature
