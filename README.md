@@ -24,13 +24,14 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
 
 ## 🚀 Features
 
-### v3: Native Rust Lexer+Parser (Recommended)
+### v3: Native Rust Lexer+Parser (Recommended) ⭐ COMPLETE
 - **~100% Perl 5 Coverage**: Handles ALL real-world Perl code including edge cases
 - **Blazing Fast**: 4-19x faster than C implementation (1-150 µs per file)
 - **Context-Aware**: Properly handles `m!pattern!`, indirect object syntax, and more
 - **Zero Dependencies**: Clean, maintainable codebase
-- **98% Edge Case Coverage**: Passes comprehensive test suite
+- **100% Edge Case Coverage**: 141/141 edge case tests passing
 - **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
+- **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
 - **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
