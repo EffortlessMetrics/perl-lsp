@@ -1,7 +1,7 @@
 use perl_parser::{Parser, TokenStream};
 
 fn main() {
-    let code = "@{ [ 1, 2, 3 ] }";
+    let code = r#"print STDOUT "hello";"#;
     println!("Code: {}", code);
     println!("\nTokens:");
     

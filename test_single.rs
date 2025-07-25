@@ -2,9 +2,10 @@ use perl_parser::Parser;
 
 fn main() {
     let test_cases = vec![
-        "sub test(_) { }",
-        "$x // $y",
-        "my $x = $a // $b;",
+        r#"print STDOUT "hello";"#,
+        r#"print $fh "world";"#,
+        "new Class::Name;",
+        "new Class::Name $x, $y;",
     ];
     
     for code in test_cases {

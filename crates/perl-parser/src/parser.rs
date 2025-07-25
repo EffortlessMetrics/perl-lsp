@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
     }
     
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
-        let token = self.tokens.peek()?;
+        let token = self.tokens.peek()?.clone();
         
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
@@ -124,9 +124,108 @@ impl<'a> Parser<'a> {
                 if self.is_label_start() {
                     return self.parse_labeled_statement();
                 }
+                
+                // Check for indirect object syntax (print STDOUT "hello")
+                if let TokenKind::Identifier = token.kind {
+                    if self.is_indirect_call_pattern(&token.text) {
+                        return self.parse_indirect_call();
+                    }
+                }
+                
                 self.parse_expression_statement()
             }
         }
+    }
+    
+    /// Check if this might be an indirect call pattern
+    fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
+        // Known builtins that commonly use indirect object syntax
+        let indirect_builtins = [
+            "print", "printf", "say", "open", "close", "pipe", "sysopen",
+            "sysread", "syswrite", "truncate", "fcntl", "ioctl", "flock",
+            "seek", "tell", "select", "binmode", "exec", "system"
+        ];
+        
+        // Check if it's a known builtin
+        if indirect_builtins.contains(&name) {
+            // Peek at the next token (not second - we're already at the first)
+            if let Ok(next) = self.tokens.peek() {
+                match next.kind {
+                    // print STDOUT ...
+                    TokenKind::Identifier => {
+                        // Check if it's uppercase (likely a filehandle)
+                        if next.text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                            return true;
+                        }
+                    }
+                    // print $fh ...
+                    _ if next.text.starts_with('$') => return true,
+                    _ => {}
+                }
+            }
+        }
+        
+        // Check for "new ClassName" pattern
+        if name == "new" {
+            if let Ok(next) = self.tokens.peek() {
+                if let TokenKind::Identifier = next.kind {
+                    // Uppercase identifier after "new" suggests constructor
+                    if next.text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// Parse indirect object/method call
+    fn parse_indirect_call(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let method_token = self.consume_token()?; // consume method name
+        let method = method_token.text.clone();
+        
+        // Parse the object/filehandle
+        let object = self.parse_primary()?;
+        
+        // Parse remaining arguments
+        let mut args = vec![];
+        
+        // Continue parsing arguments until we hit a statement terminator
+        while !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) &&
+              !self.is_statement_modifier_keyword() {
+            args.push(self.parse_expression()?);
+            
+            // Check if we should continue (comma is optional in indirect syntax)
+            if self.peek_kind() == Some(TokenKind::Comma) {
+                self.tokens.next()?; // consume comma
+            } else if matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None) ||
+                      self.is_statement_modifier_keyword() {
+                break;
+            }
+        }
+        
+        let end = self.previous_position();
+        
+        // Return as an indirect call node (using MethodCall with a flag or separate node)
+        Ok(Node::new(
+            NodeKind::IndirectCall {
+                method,
+                object: Box::new(object),
+                args,
+            },
+            SourceLocation { start, end }
+        ))
+    }
+    
+    /// Check if current token is a statement modifier keyword
+    fn is_statement_modifier_keyword(&mut self) -> bool {
+        matches!(self.peek_kind(), 
+            Some(TokenKind::If) | Some(TokenKind::Unless) | 
+            Some(TokenKind::While) | Some(TokenKind::Until) |
+            Some(TokenKind::For) | Some(TokenKind::When)
+        )
     }
     
     /// Parse variable declaration (my, our, local, state)
@@ -141,9 +240,34 @@ impl<'a> Parser<'a> {
             
             let mut variables = Vec::new();
             
-            // Parse comma-separated list of variables
+            // Parse comma-separated list of variables with their individual attributes
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                variables.push(self.parse_variable()?);
+                let var = self.parse_variable()?;
+                
+                // Parse optional attributes for this specific variable
+                let mut var_attributes = Vec::new();
+                while self.peek_kind() == Some(TokenKind::Colon) {
+                    self.tokens.next()?; // consume colon
+                    let attr_token = self.expect(TokenKind::Identifier)?;
+                    var_attributes.push(attr_token.text.clone());
+                }
+                
+                // Create a node that includes both the variable and its attributes
+                let var_with_attrs = if var_attributes.is_empty() {
+                    var
+                } else {
+                    let start = var.location.start;
+                    let end = self.previous_position();
+                    Node::new(
+                        NodeKind::VariableWithAttributes {
+                            variable: Box::new(var),
+                            attributes: var_attributes,
+                        },
+                        SourceLocation { start, end }
+                    )
+                };
+                
+                variables.push(var_with_attrs);
                 
                 if self.peek_kind() == Some(TokenKind::Comma) {
                     self.consume_token()?; // consume comma
@@ -157,13 +281,8 @@ impl<'a> Parser<'a> {
             
             self.expect(TokenKind::RightParen)?; // consume )
             
-            // Parse optional attributes
-            let mut attributes = Vec::new();
-            while self.peek_kind() == Some(TokenKind::Colon) {
-                self.tokens.next()?; // consume colon
-                let attr_token = self.expect(TokenKind::Identifier)?;
-                attributes.push(attr_token.text.clone());
-            }
+            // No longer parse attributes here - they're parsed per variable above
+            let attributes = Vec::new();
             
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
                 self.tokens.next()?; // consume =

@@ -66,6 +66,11 @@ impl Node {
                 format!("(variable {} {})", sigil, name)
             }
             
+            NodeKind::VariableWithAttributes { variable, attributes } => {
+                let attrs = attributes.join(" ");
+                format!("({} (attributes {}))", variable.to_sexp(), attrs)
+            }
+            
             NodeKind::Assignment { lhs, rhs, op } => {
                 format!("(assignment_{} {} {})", op.replace("=", "assign"), lhs.to_sexp(), rhs.to_sexp())
             }
@@ -280,6 +285,15 @@ impl Node {
                 format!("(call {} ({}))", name, args_str)
             }
             
+            NodeKind::IndirectCall { method, object, args } => {
+                let args_str = args
+                    .iter()
+                    .map(|a| a.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
+            }
+            
             NodeKind::Regex { pattern, modifiers } => {
                 format!("(regex {:?} {:?})", pattern, modifiers)
             }
@@ -382,6 +396,11 @@ pub enum NodeKind {
     Variable {
         sigil: String, // $, @, %, &, *
         name: String,
+    },
+    
+    VariableWithAttributes {
+        variable: Box<Node>,
+        attributes: Vec<String>,
     },
     
     Assignment {
@@ -539,6 +558,12 @@ pub enum NodeKind {
     
     FunctionCall {
         name: String,
+        args: Vec<Node>,
+    },
+    
+    IndirectCall {
+        method: String,
+        object: Box<Node>,
         args: Vec<Node>,
     },
     
