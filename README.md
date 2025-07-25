@@ -30,6 +30,7 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
 - **Context-Aware**: Properly handles `m!pattern!`, indirect object syntax, and more
 - **Zero Dependencies**: Clean, maintainable codebase
 - **98% Edge Case Coverage**: Passes comprehensive test suite
+- **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
 
 ### v2: Pest-based Pure Rust Parser
 - **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
