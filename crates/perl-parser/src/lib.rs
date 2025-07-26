@@ -42,12 +42,16 @@ pub mod position;
 pub mod recovery_parser;
 pub mod token_stream;
 pub mod token_wrapper;
+pub mod trivia;
+pub mod trivia_parser;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
 pub use parser::Parser;
 pub use recovery_parser::RecoveryParser;
 pub use token_stream::{Token, TokenKind, TokenStream};
+pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
+pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 
 #[cfg(test)]
 mod tests {
