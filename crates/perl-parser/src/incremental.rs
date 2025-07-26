@@ -6,7 +6,7 @@
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
     edit::{Edit, EditSet},
-    error::ParseResult,
+    error::{ParseError, ParseResult},
     parser::Parser,
     position::Range,
 };
@@ -419,15 +419,138 @@ impl IncrementalParser {
     }
     
     /// Reparse affected regions and merge with existing tree
-    fn reparse_and_merge(&mut self, source: &str, _last_tree: &Tree, _regions: &[ReparseRegion]) -> ParseResult<Tree> {
-        // For now, implement a simple version that reparses the whole file
-        // In a full implementation, we would:
-        // 1. Extract source for each region
-        // 2. Parse each region as an expression/statement
-        // 3. Replace nodes in the tree
+    fn reparse_and_merge(&mut self, source: &str, last_tree: &Tree, regions: &[ReparseRegion]) -> ParseResult<Tree> {
+        // Clone the existing tree structure
+        let mut new_root = last_tree.root.clone();
+        let mut total_reparsed = 0;
         
-        // This is a placeholder that demonstrates the concept
-        self.parse_full(source)
+        // For each affected region, try to reparse just that part
+        for region in regions {
+            // Determine the type of node we're replacing
+            match &region.node.kind {
+                // For simple expressions, we can reparse just that expression
+                NodeKind::Number { .. } |
+                NodeKind::String { .. } |
+                NodeKind::Variable { .. } |
+                NodeKind::Binary { .. } |
+                NodeKind::Unary { .. } => {
+                    // Extract the source for this region (with some context)
+                    let region_start = region.start_byte.saturating_sub(10); // Add context
+                    let region_end = (region.end_byte + 10).min(source.len());
+                    let region_source = &source[region_start..region_end];
+                    
+                    // Try to parse this region as an expression
+                    match self.parse_region_as_expression(region_source, region_start) {
+                        Ok(new_node) => {
+                            // Successfully parsed - replace the node in the tree
+                            self.replace_node_in_tree(&mut new_root, region.node, new_node);
+                            total_reparsed += self.count_nodes(&new_root);
+                        }
+                        Err(_) => {
+                            // Failed to parse region - fall back to full parse
+                            return self.parse_full(source);
+                        }
+                    }
+                }
+                
+                // For statements and structural nodes, we need more context
+                NodeKind::VariableDeclaration { .. } |
+                NodeKind::FunctionCall { .. } => {
+                    // Find the containing statement
+                    let stmt_start = self.find_statement_start(source, region.start_byte);
+                    let stmt_end = self.find_statement_end(source, region.end_byte);
+                    let stmt_source = &source[stmt_start..stmt_end];
+                    
+                    // Parse as a statement
+                    match self.parse_region_as_statement(stmt_source, stmt_start) {
+                        Ok(new_node) => {
+                            self.replace_node_in_tree(&mut new_root, region.node, new_node);
+                            total_reparsed += self.count_nodes(&new_root);
+                        }
+                        Err(_) => {
+                            return self.parse_full(source);
+                        }
+                    }
+                }
+                
+                // For structural changes, fall back to full parse
+                _ => return self.parse_full(source),
+            }
+        }
+        
+        self.reparsed_nodes = total_reparsed;
+        self.reused_nodes = self.count_nodes(&new_root) - total_reparsed;
+        
+        Ok(Tree::new(new_root, source.to_string()))
+    }
+    
+    /// Parse a region of source as an expression
+    fn parse_region_as_expression(&self, source: &str, offset: usize) -> ParseResult<Node> {
+        let _parser = Parser::new(source);
+        // This is a simplified approach - in reality we'd need to:
+        // 1. Set up the parser with the right context
+        // 2. Handle the offset for position tracking
+        // 3. Parse just the expression we need
+        
+        // For now, fall back to full parse to avoid complexity
+        Err(ParseError::UnexpectedToken { 
+            expected: "expression".to_string(),
+            found: "region".to_string(),
+            location: offset,
+        })
+    }
+    
+    /// Parse a region of source as a statement
+    fn parse_region_as_statement(&self, source: &str, offset: usize) -> ParseResult<Node> {
+        let _parser = Parser::new(source);
+        // Similar limitations as parse_region_as_expression
+        Err(ParseError::UnexpectedToken {
+            expected: "statement".to_string(),
+            found: "region".to_string(),
+            location: offset,
+        })
+    }
+    
+    /// Find the start of a statement containing the given position
+    fn find_statement_start(&self, source: &str, pos: usize) -> usize {
+        // Simple heuristic: go back to previous semicolon or newline
+        let bytes = source.as_bytes();
+        let mut i = pos.saturating_sub(1);
+        
+        while i > 0 {
+            if bytes[i] == b';' || bytes[i] == b'\n' {
+                return i + 1;
+            }
+            i -= 1;
+        }
+        
+        0
+    }
+    
+    /// Find the end of a statement containing the given position
+    fn find_statement_end(&self, source: &str, pos: usize) -> usize {
+        // Simple heuristic: go forward to next semicolon or newline
+        let bytes = source.as_bytes();
+        let mut i = pos;
+        
+        while i < bytes.len() {
+            if bytes[i] == b';' || bytes[i] == b'\n' {
+                return i + 1;
+            }
+            i += 1;
+        }
+        
+        bytes.len()
+    }
+    
+    /// Replace a node in the tree with a new node
+    fn replace_node_in_tree(&self, _root: &mut Node, _old_node: &Node, _new_node: Node) {
+        // This is a simplified implementation
+        // In reality, we'd need to traverse the tree and find the exact node to replace
+        // For now, we'll just mark this as needing implementation
+        
+        // The challenge is that we need to maintain parent-child relationships
+        // and ensure the tree structure remains valid
     }
     
     /// Get statistics about the last parse
