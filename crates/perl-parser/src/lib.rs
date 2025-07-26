@@ -34,6 +34,7 @@ pub mod edit;
 pub mod error;
 pub mod error_recovery;
 pub mod incremental;
+pub mod incremental_checkpoint;
 pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod parser;
@@ -52,6 +53,7 @@ pub use recovery_parser::RecoveryParser;
 pub use token_stream::{Token, TokenKind, TokenStream};
 pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
+pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
 
 #[cfg(test)]
 mod tests {

@@ -10,12 +10,14 @@ pub mod token;
 pub mod mode;
 pub mod error;
 pub mod position;
+pub mod checkpoint;
 mod unicode;
 
 pub use token::{Token, TokenType, StringPart};
 pub use mode::LexerMode;
 pub use error::{LexerError, Result};
 pub use position::Position;
+pub use checkpoint::{LexerCheckpoint, Checkpointable, CheckpointCache};
 
 use unicode::{is_perl_identifier_start, is_perl_identifier_continue};
 
@@ -1601,6 +1603,65 @@ fn is_compound_operator(first: char, second: char) -> bool {
             ('!', '~') | ('+', '+') | ('-', '-') | ('&', '&') | ('|', '|') |
             ('-', '>') | ('=', '>') | ('.', '.') | ('.', '=') | ('~', '~')
         )
+    }
+}
+
+// Checkpoint support for incremental parsing
+impl<'a> Checkpointable for PerlLexer<'a> {
+    fn checkpoint(&self) -> LexerCheckpoint {
+        use checkpoint::CheckpointContext;
+        
+        // Determine the checkpoint context based on current state
+        let context = if matches!(self.mode, LexerMode::InFormatBody) {
+            CheckpointContext::Format {
+                start_position: self.position.saturating_sub(100), // Approximate
+            }
+        } else if !self.delimiter_stack.is_empty() {
+            // We're in some kind of quote-like construct
+            CheckpointContext::QuoteLike {
+                operator: String::new(), // Would need to track this
+                delimiter: self.delimiter_stack.last().copied().unwrap_or('\0'),
+                is_paired: true,
+            }
+        } else {
+            CheckpointContext::Normal
+        };
+        
+        LexerCheckpoint {
+            position: self.position,
+            mode: self.mode,
+            delimiter_stack: self.delimiter_stack.clone(),
+            in_prototype: self.in_prototype,
+            prototype_depth: self.prototype_depth,
+            current_pos: self.current_pos.clone(),
+            context,
+        }
+    }
+    
+    fn restore(&mut self, checkpoint: &LexerCheckpoint) {
+        self.position = checkpoint.position;
+        self.mode = checkpoint.mode;
+        self.delimiter_stack = checkpoint.delimiter_stack.clone();
+        self.in_prototype = checkpoint.in_prototype;
+        self.prototype_depth = checkpoint.prototype_depth;
+        self.current_pos = checkpoint.current_pos.clone();
+        
+        // Handle special contexts
+        use checkpoint::CheckpointContext;
+        match &checkpoint.context {
+            CheckpointContext::Format { .. } => {
+                // Ensure we're in format body mode
+                if !matches!(self.mode, LexerMode::InFormatBody) {
+                    self.mode = LexerMode::InFormatBody;
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    fn can_restore(&self, checkpoint: &LexerCheckpoint) -> bool {
+        // Can restore if the position is valid for our input
+        checkpoint.position <= self.input.len()
     }
 }
 
