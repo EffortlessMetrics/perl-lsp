@@ -1862,9 +1862,19 @@ impl<'a> Parser<'a> {
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {
-            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" | "tie" => {
+            "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" | "tie" |
+            "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite" | "truncate" |
+            "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select" | "binmode" | "exec" | "system" => {
                 let start = token.start;
-                let func_name = self.consume_token()?.text;
+                let func_name = token.text.clone();
+                
+                // Check for indirect object syntax before consuming the token
+                if self.is_indirect_call_pattern(&func_name) {
+                    return self.parse_indirect_call();
+                }
+                
+                // Consume the function name token
+                self.consume_token()?;
                 
                 // Check if there are arguments (not followed by semicolon or modifier)
                 match self.peek_kind() {
@@ -1919,6 +1929,18 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
+                "new" => {
+                    // Check for indirect constructor syntax
+                    let start = token.start;
+                    let func_name = token.text.clone();
+                    
+                    if self.is_indirect_call_pattern(&func_name) {
+                        return self.parse_indirect_call();
+                    }
+                    
+                    // Otherwise parse as regular expression
+                    self.parse_expression()
+                }
                 _ => {
                     // Regular expression
                     self.parse_expression()
