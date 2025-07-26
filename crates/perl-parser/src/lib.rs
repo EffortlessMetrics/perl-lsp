@@ -29,9 +29,14 @@
 //! ```
 
 pub mod ast;
+pub mod ast_v2;
+pub mod edit;
 pub mod error;
+pub mod incremental;
 pub mod parser;
+pub mod position;
 pub mod token_stream;
+pub mod token_wrapper;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};

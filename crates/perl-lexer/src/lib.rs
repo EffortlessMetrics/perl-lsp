@@ -9,11 +9,13 @@ use std::sync::Arc;
 pub mod token;
 pub mod mode;
 pub mod error;
+pub mod position;
 mod unicode;
 
 pub use token::{Token, TokenType, StringPart};
 pub use mode::LexerMode;
 pub use error::{LexerError, Result};
+pub use position::Position;
 
 use unicode::{is_perl_identifier_start, is_perl_identifier_continue};
 
@@ -52,6 +54,9 @@ pub struct PerlLexer<'a> {
     in_prototype: bool,
     /// Paren depth to track when we exit prototype
     prototype_depth: usize,
+    /// Current position with line/column tracking
+    #[allow(dead_code)]
+    current_pos: Position,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -71,6 +76,7 @@ impl<'a> PerlLexer<'a> {
             delimiter_stack: Vec::new(),
             in_prototype: false,
             prototype_depth: 0,
+            current_pos: Position::start(),
         }
     }
 
