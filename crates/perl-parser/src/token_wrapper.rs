@@ -41,6 +41,11 @@ impl TokenWithPosition {
     pub fn byte_range(&self) -> (usize, usize) {
         (self.token.start, self.token.end)
     }
+    
+    /// Get the position range
+    pub fn range(&self) -> crate::position::Range {
+        crate::position::Range::new(self.start_pos.clone(), self.end_pos.clone())
+    }
 }
 
 /// Position tracker for converting byte offsets to line/column

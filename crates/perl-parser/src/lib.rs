@@ -32,17 +32,21 @@ pub mod ast;
 pub mod ast_v2;
 pub mod edit;
 pub mod error;
+pub mod error_recovery;
 pub mod incremental;
 pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod parser;
+pub mod parser_context;
 pub mod position;
+pub mod recovery_parser;
 pub mod token_stream;
 pub mod token_wrapper;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
 pub use parser::Parser;
+pub use recovery_parser::RecoveryParser;
 pub use token_stream::{Token, TokenKind, TokenStream};
 
 #[cfg(test)]
