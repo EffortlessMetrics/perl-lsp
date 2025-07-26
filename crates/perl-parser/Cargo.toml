@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Steven <steven@example.com>"]
 description = "A modern, modular Perl parser built on perl-lexer"
@@ -10,8 +10,17 @@ keywords = ["perl", "parser", "ast", "syntax-tree"]
 categories = ["parser-implementations", "development-tools"]
 
 [dependencies]
-perl-lexer = { path = "../perl-lexer" }
+perl-lexer = { version = "0.4.0", path = "../perl-lexer" }
 thiserror = "1.0"
+serde_json = { version = "1.0", optional = true }
+
+[[bin]]
+name = "perl-parse"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = ["serde_json"]
 
 [dev-dependencies]
 criterion = "0.5"
