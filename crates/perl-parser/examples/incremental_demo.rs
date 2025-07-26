@@ -142,6 +142,8 @@ fn demo_incremental_parsing() {
             println!("\nIncremental parser stats:");
             println!("  Has cached tree: {}", stats.has_tree);
             println!("  Pending edits: {}", stats.pending_edits);
+            println!("  Reused nodes: {}", stats.reused_nodes);
+            println!("  Reparsed nodes: {}", stats.reparsed_nodes);
         }
         Err(e) => {
             println!("Parse error: {}", e);
@@ -151,7 +153,3 @@ fn demo_incremental_parsing() {
     println!("\n");
 }
 
-// Example output formatting
-fn format_position(pos: &Position) -> String {
-    format!("{}:{} (byte {})", pos.line, pos.column, pos.byte)
-}

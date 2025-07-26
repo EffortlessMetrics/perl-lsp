@@ -143,6 +143,16 @@ impl EditSet {
             .map(|edit| edit.byte_shift())
             .sum()
     }
+    
+    /// Get all ranges affected by the edits
+    pub fn affected_ranges(&self) -> Vec<Range> {
+        self.edits.iter()
+            .map(|edit| Range::new(
+                edit.start_position,
+                edit.old_end_position,
+            ))
+            .collect()
+    }
 }
 
 #[cfg(test)]
