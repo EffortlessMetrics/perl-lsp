@@ -30,6 +30,9 @@
 
 pub mod ast;
 pub mod ast_v2;
+pub mod code_actions;
+pub mod completion;
+pub mod diagnostics;
 pub mod edit;
 pub mod error;
 pub mod error_recovery;
@@ -37,10 +40,16 @@ pub mod incremental;
 pub mod incremental_checkpoint;
 pub mod incremental_simple;
 pub mod incremental_v2;
+pub mod lsp;
+pub mod lsp_server;
 pub mod parser;
 pub mod parser_context;
 pub mod position;
 pub mod recovery_parser;
+pub mod rename;
+pub mod semantic;
+pub mod signature_help;
+pub mod symbol;
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
@@ -54,6 +63,17 @@ pub use token_stream::{Token, TokenKind, TokenStream};
 pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
+
+// IDE feature exports
+pub use symbol::{Symbol, SymbolKind, SymbolTable, SymbolExtractor, SymbolReference};
+pub use semantic::{SemanticAnalyzer, SemanticToken, SemanticTokenType, SemanticTokenModifier, HoverInfo};
+pub use lsp::{LanguageServer, Document};
+pub use completion::{CompletionProvider, CompletionItem, CompletionItemKind, CompletionContext};
+pub use signature_help::{SignatureHelpProvider, SignatureHelp, SignatureInfo, ParameterInfo};
+pub use rename::{RenameProvider, RenameResult, RenameOptions, TextEdit, apply_rename_edits};
+pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
+pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActionEdit};
+pub use lsp_server::LspServer;
 
 #[cfg(test)]
 mod tests {
