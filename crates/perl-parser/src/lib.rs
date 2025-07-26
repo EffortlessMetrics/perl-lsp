@@ -33,6 +33,7 @@ pub mod ast_v2;
 pub mod edit;
 pub mod error;
 pub mod incremental;
+pub mod incremental_simple;
 pub mod parser;
 pub mod position;
 pub mod token_stream;
