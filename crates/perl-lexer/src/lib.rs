@@ -240,6 +240,7 @@ impl<'a> PerlLexer<'a> {
     
     /// Check if the next bytes match a pattern (ASCII only)
     #[inline]
+    #[allow(dead_code)]
     fn matches_bytes(&self, pattern: &[u8]) -> bool {
         let end = self.position + pattern.len();
         if end <= self.input_bytes.len() {
@@ -300,7 +301,7 @@ impl<'a> PerlLexer<'a> {
         self.position += 2; // Skip <<
         
         // Check for indented heredoc (~)
-        let indented = if self.current_char() == Some('~') {
+        let _indented = if self.current_char() == Some('~') {
             self.advance();
             true
         } else {
@@ -318,7 +319,7 @@ impl<'a> PerlLexer<'a> {
         
         // Parse delimiter
         let delimiter_start = self.position;
-        let delimiter = if self.position < self.input.len() {
+        let _delimiter = if self.position < self.input.len() {
             match self.current_char() {
                 Some('"') => {
                     // Double-quoted delimiter
@@ -326,7 +327,7 @@ impl<'a> PerlLexer<'a> {
                     let delim_start = self.position;
                     while self.position < self.input.len() {
                         if self.current_char() == Some('"') {
-                            let delim = self.input[delim_start..self.position].to_string();
+                            let _delim = self.input[delim_start..self.position].to_string();
                             self.advance();
                             break;
                         }
@@ -340,7 +341,7 @@ impl<'a> PerlLexer<'a> {
                     let delim_start = self.position;
                     while self.position < self.input.len() {
                         if self.current_char() == Some('\'') {
-                            let delim = self.input[delim_start..self.position].to_string();
+                            let _delim = self.input[delim_start..self.position].to_string();
                             self.advance();
                             break;
                         }
@@ -1526,6 +1527,7 @@ impl<'a> PerlLexer<'a> {
 }
 
 /// Perl keywords sorted by length for faster rejection
+#[allow(dead_code)]
 const KEYWORDS: &[&str] = &[
     // 2 letters
     "if", "do", "my", "or",
@@ -1557,6 +1559,7 @@ fn is_keyword(word: &str) -> bool {
 }
 
 /// Fast lookup table for compound operator second characters
+#[allow(dead_code)]
 const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
 
 #[inline]
