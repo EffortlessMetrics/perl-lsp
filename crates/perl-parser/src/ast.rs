@@ -644,7 +644,7 @@ pub enum NodeKind {
 }
 
 /// Source location information
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceLocation {
     pub start: usize,
     pub end: usize,
