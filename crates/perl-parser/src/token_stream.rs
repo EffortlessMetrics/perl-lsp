@@ -344,9 +344,9 @@ impl<'a> TokenStream<'a> {
                 // Sigils (when used as operators in certain contexts)
                 "$" => TokenKind::ScalarSigil,
                 "@" => TokenKind::ArraySigil,
-                "%" => TokenKind::HashSigil,
-                "&" => TokenKind::SubSigil,
-                "*" => TokenKind::Star,  // Can be multiplication or glob sigil depending on context
+                // % is already handled as Percent above
+                // & is already handled as BitwiseAnd above
+                // * is already handled as Star above
                 _ => TokenKind::Unknown,
             },
             
@@ -391,7 +391,7 @@ impl<'a> TokenStream<'a> {
             }
             
             // Handle error tokens that might be valid syntax
-            LexerTokenType::Error(msg) => {
+            LexerTokenType::Error(_msg) => {
                 // Check if it's a brace that the lexer couldn't recognize
                 match token.text.as_ref() {
                     "{" => TokenKind::LeftBrace,

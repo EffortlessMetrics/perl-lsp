@@ -565,7 +565,7 @@ impl<'a> Parser<'a> {
                 }
                 
                 let right_paren = self.expect(TokenKind::RightParen)?;
-                let end = right_paren.end;
+                let _end = right_paren.end;
                 args
             } else {
                 vec![]
@@ -967,7 +967,7 @@ impl<'a> Parser<'a> {
         }
         
         // Parse optional prototype or signature after attributes
-        let (params, prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
+        let (params, _prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
@@ -1931,7 +1931,7 @@ impl<'a> Parser<'a> {
             }
                 "new" => {
                     // Check for indirect constructor syntax
-                    let start = token.start;
+                    let _start = token.start;
                     let func_name = token.text.clone();
                     
                     if self.is_indirect_call_pattern(&func_name) {
@@ -2488,7 +2488,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Identifier => {
                     // Check if it's ISA operator
                     if self.tokens.peek()?.text == "ISA" {
-                        let op_token = self.tokens.next()?;
+                        let _op_token = self.tokens.next()?;
                         let right = self.parse_shift()?;
                         let start = expr.location.start;
                         let end = right.location.end;
@@ -3768,9 +3768,9 @@ impl<'a> Parser<'a> {
             TokenKind::Unless | TokenKind::While | TokenKind::Until | TokenKind::For | 
             TokenKind::Foreach | TokenKind::Return | TokenKind::Package | TokenKind::Use | 
             TokenKind::No | TokenKind::Begin | TokenKind::End | TokenKind::Check |
-            TokenKind::Init | TokenKind::Unitcheck | TokenKind::Do | TokenKind::Eval |
+            TokenKind::Init | TokenKind::Unitcheck |
             TokenKind::Given | TokenKind::When | TokenKind::Default |
-            TokenKind::Try | TokenKind::Catch | TokenKind::Finally |
+            TokenKind::Catch | TokenKind::Finally |
             TokenKind::Continue | TokenKind::Class | TokenKind::Method | TokenKind::Format => {
                 // In expression context, keywords can sometimes be used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
@@ -3826,6 +3826,7 @@ impl<'a> Parser<'a> {
     }
     
     /// Peek at the next token without consuming it
+    #[allow(dead_code)]
     fn peek_token(&mut self) -> ParseResult<&Token> {
         self.tokens.peek()
     }
@@ -3952,7 +3953,7 @@ impl<'a> Parser<'a> {
         
         // For non-empty braces, we need to check if it contains hash-like content
         // Save position to potentially backtrack
-        let saved_pos = self.current_position();
+        let _saved_pos = self.current_position();
         
         // Try to parse as expression (which might be hash contents)
         let first_expr = match self.parse_expression() {
@@ -4006,7 +4007,7 @@ impl<'a> Parser<'a> {
         
         // If there's more content, we need to determine if it's hash pairs or block statements
         let mut pairs = Vec::new();
-        let mut is_hash = false;
+        let mut _is_hash = false;
         
         // Check if next token is => or ,
         let next_kind = self.peek_kind();
@@ -4014,7 +4015,7 @@ impl<'a> Parser<'a> {
         // Parse as hash if we see => or comma-separated pairs
         if next_kind == Some(TokenKind::FatArrow) || next_kind == Some(TokenKind::Comma) {
             // Parse as hash
-            is_hash = true;
+            _is_hash = true;
             
             if self.peek_kind() == Some(TokenKind::FatArrow) {
                 // key => value pattern
@@ -4128,6 +4129,7 @@ impl<'a> Parser<'a> {
     }
     
     /// Check if the parenthesized content after sub name is a prototype (not a signature)
+    #[allow(dead_code)]
     fn is_prototype(&mut self) -> bool {
         // Peek at the next token after (
         match self.tokens.peek_second() {
