@@ -4,7 +4,6 @@ use perl_parser::LspServer;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 
 /// Helper to create LSP messages
@@ -107,8 +106,8 @@ fn test_lsp_initialize() {
     // We need to refactor it to accept generic Read/Write traits for testing
     
     // For now, just verify the server can be created
-    let server = LspServer::new();
-    assert!(!server.documents.lock().unwrap().is_empty() || true); // Server exists
+    let _server = LspServer::new();
+    // Server successfully created
 }
 
 #[test]

@@ -35,7 +35,8 @@ EOF"#;
     let result = parser.parse(input);
     assert!(result.is_ok(), "Failed to parse basic heredoc");
     
-    let sexp = parser.parse_to_sexp(input).unwrap();
+    let ast = parser.parse(input).unwrap();
+    let sexp = parser.to_sexp(&ast);
     assert!(sexp.contains("This is a heredoc\nWith multiple lines"));
 }
 
@@ -64,7 +65,8 @@ fn test_indented_heredoc() {
     let result = parser.parse(input);
     assert!(result.is_ok(), "Failed to parse indented heredoc");
     
-    let sexp = parser.parse_to_sexp(input).unwrap();
+    let ast = parser.parse(input).unwrap();
+    let sexp = parser.to_sexp(&ast);
     // Verify indentation is removed
     assert!(sexp.contains("This is indented\ncontent with spaces"));
     assert!(!sexp.contains("    This is indented"));
@@ -83,7 +85,8 @@ SECOND"#;
     let result = parser.parse(input);
     assert!(result.is_ok(), "Failed to parse multiple heredocs");
     
-    let sexp = parser.parse_to_sexp(input).unwrap();
+    let ast = parser.parse(input).unwrap();
+    let sexp = parser.to_sexp(&ast);
     assert!(sexp.contains("First content"));
     assert!(sexp.contains("Second content"));
 }
@@ -100,7 +103,8 @@ EOF"#;
     let result = parser.parse(input);
     assert!(result.is_ok(), "Failed to parse heredoc with Unicode");
     
-    let sexp = parser.parse_to_sexp(input).unwrap();
+    let ast = parser.parse(input).unwrap();
+    let sexp = parser.to_sexp(&ast);
     assert!(sexp.contains("Unicode heredoc ✅"));
     assert!(sexp.contains("With emojis 🎉"));
 }
@@ -158,7 +162,8 @@ my $x = 10 / 2;"#;
     let result = parser.parse(input);
     assert!(result.is_ok(), "Failed to parse heredoc with slashes");
     
-    let sexp = parser.parse_to_sexp(input).unwrap();
+    let ast = parser.parse(input).unwrap();
+    let sexp = parser.to_sexp(&ast);
     // The parser uses placeholders for heredocs in the S-expression output
     // We just need to verify it parses correctly and the structure is right
     assert!(sexp.contains("__HEREDOC_"), "Expected heredoc placeholder in output");
