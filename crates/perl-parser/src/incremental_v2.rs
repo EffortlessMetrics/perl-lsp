@@ -117,6 +117,7 @@ pub struct IncrementalParserV2 {
     pub reparsed_nodes: usize,
 }
 
+#[allow(dead_code)]
 impl IncrementalParserV2 {
     pub fn new() -> Self {
         IncrementalParserV2 {

@@ -86,7 +86,7 @@ pub struct TriviaLexer {
     /// Current position for trivia tracking
     position: usize,
     /// Buffered trivia tokens
-    trivia_buffer: Vec<TriviaToken>,
+    _trivia_buffer: Vec<TriviaToken>,
 }
 
 impl TriviaLexer {
@@ -100,7 +100,7 @@ impl TriviaLexer {
             lexer: perl_lexer::PerlLexer::new(source_ref),
             source,
             position: 0,
-            trivia_buffer: Vec::new(),
+            _trivia_buffer: Vec::new(),
         }
     }
     

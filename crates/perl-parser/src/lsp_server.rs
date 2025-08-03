@@ -29,7 +29,7 @@ struct DocumentState {
     /// Document content
     content: String,
     /// Version number
-    version: i32,
+    _version: i32,
     /// Parsed AST (cached)
     ast: Option<crate::ast::Node>,
     /// Parse errors
@@ -39,7 +39,7 @@ struct DocumentState {
 /// JSON-RPC request
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
-    jsonrpc: String,
+    _jsonrpc: String,
     id: Option<Value>,
     method: String,
     params: Option<Value>,
@@ -237,7 +237,7 @@ impl LspServer {
                 uri.to_string(),
                 DocumentState {
                     content: text.to_string(),
-                    version,
+                    _version: version,
                     ast,
                     parse_errors: errors,
                 },
@@ -274,7 +274,7 @@ impl LspServer {
                         uri.to_string(),
                         DocumentState {
                             content: text.to_string(),
-                            version,
+                            _version: version,
                             ast,
                             parse_errors: errors,
                         },

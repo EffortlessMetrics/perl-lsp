@@ -25,37 +25,38 @@ pub struct ParserContext {
     /// Source text
     source: String,
     /// Current position tracker
-    position_tracker: PositionTracker,
+    _position_tracker: PositionTracker,
 }
 
 /// Tracks current position in the source
 struct PositionTracker {
-    byte_offset: usize,
-    line: usize,
-    column: usize,
+    _byte_offset: usize,
+    _line: usize,
+    _column: usize,
 }
 
+#[allow(dead_code)]
 impl PositionTracker {
     fn new() -> Self {
         PositionTracker {
-            byte_offset: 0,
-            line: 1,
-            column: 1,
+            _byte_offset: 0,
+            _line: 1,
+            _column: 1,
         }
     }
     
     fn current_position(&self) -> Position {
-        Position::new(self.byte_offset, self.line as u32, self.column as u32)
+        Position::new(self._byte_offset, self._line as u32, self._column as u32)
     }
     
     fn advance(&mut self, text: &str) {
         for ch in text.chars() {
-            self.byte_offset += ch.len_utf8();
+            self._byte_offset += ch.len_utf8();
             if ch == '\n' {
-                self.line += 1;
-                self.column = 1;
+                self._line += 1;
+                self._column = 1;
             } else {
-                self.column += 1;
+                self._column += 1;
             }
         }
     }
@@ -96,7 +97,7 @@ impl ParserContext {
             id_generator: NodeIdGenerator::new(),
             errors: Vec::new(),
             source,
-            position_tracker: PositionTracker::new(),
+            _position_tracker: PositionTracker::new(),
         }
     }
     

@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 
 /// Token with trivia information
 #[derive(Debug, Clone)]
-struct TokenWithTrivia {
+pub(crate) struct TokenWithTrivia {
     /// The actual token
     token: Token,
     /// Leading trivia (comments/whitespace before this token)
@@ -25,7 +25,7 @@ struct TokenWithTrivia {
 /// Parser context that preserves trivia
 pub struct TriviaParserContext {
     /// Source text
-    source: String,
+    _source: String,
     /// Tokens with trivia
     tokens: VecDeque<TokenWithTrivia>,
     /// Current token index
@@ -118,7 +118,7 @@ impl TriviaParserContext {
         }
         
         TriviaParserContext {
-            source,
+            _source: source,
             tokens,
             current: 0,
             id_generator: NodeIdGenerator::new(),
@@ -268,12 +268,12 @@ impl TriviaParserContext {
     }
     
     /// Get current token with trivia
-    pub fn current_token(&self) -> Option<&TokenWithTrivia> {
+    pub(crate) fn current_token(&self) -> Option<&TokenWithTrivia> {
         self.tokens.get(self.current)
     }
     
     /// Advance to next token
-    pub fn advance(&mut self) -> Option<&TokenWithTrivia> {
+    pub(crate) fn advance(&mut self) -> Option<&TokenWithTrivia> {
         if self.current < self.tokens.len() {
             self.current += 1;
         }
@@ -338,7 +338,7 @@ impl TriviaPreservingParser {
     
     /// Parse a statement with trivia
     fn parse_statement(&mut self) -> Option<NodeWithTrivia> {
-        let (token, leading_trivia, token_range) = {
+        let (token, leading_trivia, _token_range) = {
             let token_with_trivia = self.context.current_token()?;
             (
                 token_with_trivia.token.clone(),

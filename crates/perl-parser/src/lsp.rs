@@ -157,10 +157,10 @@ impl LanguageServer {
         let offset = doc.offset_at_position(position)?;
         
         // Find the node at this position
-        let location = SourceLocation { start: offset, end: offset + 1 };
+        let _location = SourceLocation { start: offset, end: offset + 1 };
         
         // Look for a symbol at this location
-        for (name, symbols) in &analyzer.symbol_table().symbols {
+        for (_name, symbols) in &analyzer.symbol_table().symbols {
             for symbol in symbols {
                 if symbol.location.start <= offset && symbol.location.end >= offset {
                     // This is a definition, not a reference
@@ -170,7 +170,7 @@ impl LanguageServer {
         }
         
         // Look for a reference at this location
-        for (name, refs) in &analyzer.symbol_table().references {
+        for (_name, refs) in &analyzer.symbol_table().references {
             for reference in refs {
                 if reference.location.start <= offset && reference.location.end >= offset {
                     // Find the definition of this reference
