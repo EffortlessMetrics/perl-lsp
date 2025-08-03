@@ -268,7 +268,7 @@ impl SignatureHelpProvider {
         let arg_text = &source[context.call_start + 1..context.position];
         
         // Count commas to determine parameter index
-        let comma_count = arg_text.chars().filter(|&c| c == ',').count();
+        let _comma_count = arg_text.chars().filter(|&c| c == ',').count();
         
         // Also need to handle nested parentheses
         let mut paren_depth: usize = 0;

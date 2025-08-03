@@ -4,7 +4,7 @@
 //! actual tree reuse, though in a simplified manner.
 
 use crate::{
-    ast::{Node, NodeKind, SourceLocation},
+    ast::{Node, NodeKind},
     edit::{Edit, EditSet},
     error::ParseResult,
     parser::Parser,

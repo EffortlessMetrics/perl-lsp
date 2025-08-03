@@ -43,7 +43,7 @@ pub enum DiagnosticTag {
 /// Diagnostics provider
 pub struct DiagnosticsProvider {
     symbol_table: SymbolTable,
-    source: String,
+    _source: String,
 }
 
 impl DiagnosticsProvider {
@@ -54,7 +54,7 @@ impl DiagnosticsProvider {
         
         Self {
             symbol_table,
-            source,
+            _source: source,
         }
     }
     

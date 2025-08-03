@@ -332,7 +332,7 @@ impl SemanticAnalyzer {
                 }
             }
             
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String { value: _, interpolated: _ } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location.clone(),
                     token_type: SemanticTokenType::String,
@@ -340,7 +340,7 @@ impl SemanticAnalyzer {
                 });
             }
             
-            NodeKind::Number { value } => {
+            NodeKind::Number { value: _ } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location.clone(),
                     token_type: SemanticTokenType::Number,
@@ -348,8 +348,8 @@ impl SemanticAnalyzer {
                 });
             }
             
-            NodeKind::Regex { pattern, modifiers } |
-            NodeKind::Match { pattern, modifiers, .. } => {
+            NodeKind::Regex { pattern: _, modifiers: _ } |
+            NodeKind::Match { pattern: _, modifiers: _, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location.clone(),
                     token_type: SemanticTokenType::Regex,
@@ -357,7 +357,7 @@ impl SemanticAnalyzer {
                 });
             }
             
-            NodeKind::LabeledStatement { label, statement } => {
+            NodeKind::LabeledStatement { label: _, statement } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location.clone(),
                     token_type: SemanticTokenType::Label,
@@ -370,7 +370,7 @@ impl SemanticAnalyzer {
             }
             
             // Control flow keywords
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_branch, scope_id);
                 if let Some(else_node) = else_branch {
@@ -378,7 +378,7 @@ impl SemanticAnalyzer {
                 }
             }
             
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While { condition, body, continue_block: _ } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(body, scope_id);
             }

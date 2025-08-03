@@ -304,7 +304,7 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
             }
             
-            NodeKind::Subroutine { name, params, attributes, body } => {
+            NodeKind::Subroutine { name, params: _, attributes, body } => {
                 let sub_name = name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
                 
                 if name.is_some() {
@@ -372,7 +372,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
             
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
                 self.visit_node(condition);
                 
                 self.table.push_scope(ScopeKind::Block, then_branch.location.clone());
@@ -386,7 +386,7 @@ impl SymbolExtractor {
                 }
             }
             
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While { condition, body, continue_block: _ } => {
                 self.visit_node(condition);
                 
                 self.table.push_scope(ScopeKind::Block, body.location.clone());
@@ -439,14 +439,14 @@ impl SymbolExtractor {
                 self.visit_node(operand);
             }
             
-            NodeKind::FunctionCall { name, args } => {
+            NodeKind::FunctionCall { name: _, args } => {
                 // Function name is a string, not a node
                 for arg in args {
                     self.visit_node(arg);
                 }
             }
             
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall { object, method: _, args } => {
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
