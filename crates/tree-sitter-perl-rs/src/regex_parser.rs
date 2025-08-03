@@ -19,7 +19,7 @@ pub enum QuoteOperator {
 }
 
 /// Result of parsing a quote-like construct
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct QuoteConstruct {
     pub operator: QuoteOperator,
     pub delimiter: char,
