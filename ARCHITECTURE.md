@@ -1,51 +1,79 @@
 # Architecture Guide
 
-This document provides a comprehensive overview of the Production-Ready Pure Rust Perl Parser architecture.
+This document provides a comprehensive overview of the tree-sitter-perl project architecture, including three parser implementations and a full LSP server.
 
 ## 🏗️ System Overview
 
-The tree-sitter-perl project is a **Pure Rust Parser** achieving ~95% Perl 5 syntax coverage:
+The tree-sitter-perl project provides **multiple parser implementations** and **IDE integration**:
 
-1. **Pest Parser**: Grammar-driven parsing with zero C dependencies
-2. **Tree-sitter Output**: 100% compatible S-expression format for IDE integration
-3. **~95% Coverage**: Handles most real-world Perl code
-4. **Performance**: ~180 µs/KB parsing speed with efficient memory usage
-5. **Full Unicode Support**: Including identifiers and strings
-6. **Comprehensive Testing**: 16+ test files with edge case coverage
+1. **v1: C-based Parser**: Original tree-sitter implementation (~95% coverage)
+2. **v2: Pest Parser**: Pure Rust with PEG grammar (~99.995% coverage)
+3. **v3: Native Parser**: Hand-written lexer+parser (~100% coverage) ⭐
+4. **LSP Server**: Full Language Server Protocol implementation
+5. **Tree-sitter Output**: All parsers produce compatible S-expressions
+6. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs)
 
 ## 📐 Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                 Pure Rust Perl Parser                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   Pest Grammar  │  │   AST Builder   │  │  S-Expression   │  │
-│  │ (grammar.pest)  │  │ (PureRustPerl   │  │   Generator     │  │
-│  │                 │  │    Parser)      │  │  (to_sexp)      │  │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  │
-│           │                     │                     │          │
-│           ▼                     ▼                     ▼          │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                    Parse Pipeline                           │  │
-│  │  Input → Tokenize → Parse → Build AST → Output S-exp       │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                 Edge Case System                            │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐      │  │
-│  │  │   Heredoc    │  │   Phase     │  │   Dynamic       │      │  │
-│  │  │   Handler    │  │   Aware     │  │   Recovery      │      │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────────┘      │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     tree-sitter-perl Project                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐  │
+│  │ v1: C Parser │  │ v2: Pest    │  │ v3: Native   │  │  LSP   │  │
+│  │   (Legacy)   │  │   Parser     │  │Parser ⭐     │  │ Server │  │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └───┬────┘  │
+│         │                  │                  │              │       │
+│         ▼                  ▼                  ▼              ▼       │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │              Common S-Expression Output Format                │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                    v3: Native Parser Detail                   │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐      │  │
+│  │  │ perl-lexer  │→ │ perl-parser │→ │ Tree-sitter AST   │      │  │
+│  │  │ (Tokenizer) │  │ (RD Parser) │  │ (S-expressions)   │      │  │
+│  │  └─────────────┘  └─────────────┘  └───────────────────┘      │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                    LSP Server Architecture                    │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐      │  │
+│  │  │  JSON-RPC   │  │  Document   │  │ Language Services │      │  │
+│  │  │  Handler    │  │  Manager    │  │ (Diagnostics,     │      │  │
+│  │  │             │  │             │  │  Symbols, etc.)   │      │  │
+│  │  └─────────────┘  └─────────────┘  └───────────────────┘      │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🔧 Core Components
 
-### 1. Pest Grammar (`src/grammar.pest`)
+### 1. v3: Native Parser (Recommended)
 
-**Purpose**: Complete PEG grammar defining Perl 5 syntax
+#### perl-lexer (`/crates/perl-lexer/`)
+**Purpose**: Context-aware tokenization with mode tracking
+
+**Key Features**:
+- Mode-based lexing (ExpectTerm, ExpectOperator)
+- Handles slash disambiguation (/ as division vs regex)
+- Zero dependencies
+- Checkpoint/restore for backtracking
+
+#### perl-parser (`/crates/perl-parser/`)
+**Purpose**: Recursive descent parser with operator precedence
+
+**Key Features**:
+- Consumes tokens from perl-lexer
+- Pratt parsing for operators
+- 100% edge case coverage
+- Tree-sitter compatible AST
+
+### 2. v2: Pest Grammar (`/crates/tree-sitter-perl-rs/src/grammar.pest`)
+
+**Purpose**: PEG grammar defining Perl 5 syntax
 
 **Key Features**:
 - **Comprehensive Coverage**: All Perl constructs including edge cases
@@ -117,6 +145,42 @@ pub enum AstNode {
 - Detects runtime-determined delimiters
 - Multiple recovery strategies
 - Clear diagnostics for unparseable cases
+
+### 5. LSP Server (`/crates/perl-parser/src/lsp_server.rs`)
+
+**Purpose**: Language Server Protocol implementation for IDE integration
+
+**Architecture**:
+
+```
+LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
+                                        ↓
+                                 Document Manager
+                                        ↓
+                                 Parser (v3) → AST
+                                        ↓
+                                 Language Services
+```
+
+**Key Components**:
+
+#### JSON-RPC Handler
+- Processes LSP requests/responses
+- Manages client-server communication
+- Handles lifecycle (initialize, shutdown)
+
+#### Document Manager
+- Tracks open documents
+- Caches parsed ASTs
+- Manages document versions
+
+#### Language Services
+- **DiagnosticsProvider**: Syntax error detection
+- **DocumentSymbolProvider**: Outline generation
+- **DefinitionProvider**: Go to definition
+- **ReferencesProvider**: Find all references
+- **SignatureHelpProvider**: Parameter hints
+- **SemanticTokensProvider**: Enhanced highlighting
 
 ## 🔍 Parser Pipeline
 

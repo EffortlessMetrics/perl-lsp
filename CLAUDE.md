@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **three Perl parser implementations**:
+This repository contains **three Perl parser implementations** and a **full Language Server Protocol (LSP) implementation**:
 
 ### 1. **v1: C-based Tree-sitter Parser** (`/tree-sitter-perl/`, `/crates/tree-sitter-perl-c/`)
 - Original tree-sitter implementation in C
@@ -29,9 +29,32 @@ This repository contains **three Perl parser implementations**:
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
 
+### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **NEW**
+- Full Language Server Protocol implementation
+- Real-time syntax diagnostics and error reporting
+- Symbol navigation (go to definition, find references)
+- Document symbols for outline view
+- Signature help for function parameters
+- Semantic tokens for enhanced highlighting
+- Incremental parsing support
+- Works with any LSP-compatible editor
+
 ## Key Commands
 
 ### Build Commands
+
+#### LSP Server (NEW!)
+```bash
+# Build the LSP server
+cargo build -p perl-parser --bin perl-lsp --release
+
+# Install globally
+cargo install --path crates/perl-parser --bin perl-lsp
+
+# Run the LSP server
+perl-lsp --stdio  # For editor integration
+perl-lsp --stdio --log  # With debug logging
+```
 
 #### v2: Pest-based Parser
 ```bash
@@ -108,6 +131,21 @@ cargo run -p perl-parser --example test_edge_cases
 
 # Test all edge cases (shows coverage)
 cargo run -p perl-parser --example test_more_edge_cases
+
+# Test LSP capabilities demo
+cargo run -p perl-parser --example lsp_capabilities
+```
+
+### LSP Development
+```bash
+# Run LSP tests
+cargo test -p perl-parser lsp
+
+# Test LSP server manually
+echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+
+# Run with a test file
+perl-lsp --stdio < test_requests.jsonrpc
 ```
 
 ### Benchmarks

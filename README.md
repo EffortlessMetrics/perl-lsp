@@ -10,15 +10,16 @@ rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **High-Performance Perl Parsers - Three implementations with up to ~100% Perl 5 syntax coverage**
+> **High-Performance Perl Parsers with Full LSP Support - Three implementations with up to ~100% Perl 5 syntax coverage**
 
-This project provides **three Perl parser implementations**:
+This project provides **three Perl parser implementations** and a **full-featured Language Server**:
 
 1. **v1: C-based tree-sitter parser** - Original implementation (~95% coverage)
 2. **v2: Pest-based Pure Rust parser** - PEG grammar approach (~99.995% coverage)
 3. **v3: Native Rust lexer+parser** ⭐ - Hand-written for maximum performance (~100% coverage)
+4. **LSP Server** 🚀 - Professional IDE support for any LSP-compatible editor
 
-All parsers output tree-sitter compatible S-expressions for seamless IDE integration.
+All parsers output tree-sitter compatible S-expressions for seamless integration.
 
 ---
 
@@ -55,6 +56,39 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
   - Full Unicode support including identifiers
 - **Production Ready**: Comprehensive testing, memory efficient
 - **Cross-Platform**: Linux, macOS, and Windows support
+
+---
+
+## 🚀 Quick Start
+
+### Install the LSP Server (Recommended)
+
+```bash
+# Install the Perl Language Server globally
+cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+
+# Or build from source
+git clone https://github.com/EffortlessSteven/tree-sitter-perl
+cd tree-sitter-perl
+cargo build -p perl-parser --bin perl-lsp --release
+```
+
+### Use the Parser Library
+
+```toml
+# In your Cargo.toml
+[dependencies]
+perl-parser = "0.5"
+```
+
+```rust
+use perl_parser::Parser;
+
+let source = "my $x = 42;";
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+println!("AST: {:?}", ast);
+```
 
 ---
 
@@ -116,6 +150,27 @@ Example VSCode configuration:
 - **v1**: Limited edge case support
 
 **Recommendation**: Use v3 (perl-lexer + perl-parser) for production applications requiring maximum performance and compatibility.
+
+---
+
+## 📈 Project Status
+
+### ✅ Completed
+- **v3 Native Parser**: 100% complete with all edge cases handled
+- **LSP Server**: Full implementation with 8 core features
+- **Performance**: Achieved 4-19x speedup over C implementation
+- **Test Coverage**: 141/141 edge case tests passing
+- **Documentation**: Comprehensive guides for users and contributors
+
+### 🚧 In Progress
+- **Release v0.5.0**: Preparing release with LSP support
+- **Editor Plugins**: Creating specific plugins for VSCode, Neovim, Emacs
+- **WASM Build**: Compiling to WebAssembly for browser use
+
+### 📅 Future Plans
+- **Incremental Parsing**: True incremental updates (currently does full parse)
+- **Multi-file Analysis**: Cross-file symbol resolution
+- **Perl 7 Support**: Ready for future Perl versions
 
 ---
 
