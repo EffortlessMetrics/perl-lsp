@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated documentation to reflect LSP capabilities
 - Enhanced incremental parsing with better tree reuse
 - Improved parser context management
+- Comprehensive documentation updates:
+  - Added LSP_DOCUMENTATION.md with complete guide
+  - Updated README.md with LSP quick start
+  - Enhanced CLAUDE.md with LSP commands
+  - Updated ARCHITECTURE.md with v3 parser and LSP details
+  - Created QUICK_REFERENCE.md for easy lookup
+  - Added LSP contribution guidelines to CONTRIBUTING.md
 
 ## [0.4.0] - 2025-01-25
 

@@ -7,16 +7,22 @@ This guide helps you find the right documentation for your needs.
 ### For Users
 
 1. **[README.md](../README.md)** - Project overview, quick start, features
-2. **[EDGE_CASES.md](EDGE_CASES.md)** - Comprehensive edge case handling guide
-3. **[CLAUDE.md](../CLAUDE.md)** - Development commands and architecture
+2. **[LSP_DOCUMENTATION.md](LSP_DOCUMENTATION.md)** 🚀 - Language Server Protocol guide
+3. **[EDGE_CASES.md](EDGE_CASES.md)** - Comprehensive edge case handling guide
+4. **[CLAUDE.md](../CLAUDE.md)** - Development commands and architecture
 
 ### For Contributors
 
 1. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines
 2. **[DEVELOPMENT.md](../DEVELOPMENT.md)** - Development setup and workflow
-3. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - System architecture details
+3. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - System architecture details (updated)
 
 ## Specialized Documentation
+
+### LSP Implementation
+- **[LSP_DOCUMENTATION.md](LSP_DOCUMENTATION.md)** - Complete LSP guide
+- **[../crates/perl-parser/README_LSP.md](../crates/perl-parser/README_LSP.md)** - Quick LSP reference
+- **[../crates/perl-parser/examples/](../crates/perl-parser/examples/)** - LSP demos and examples
 
 ### Heredoc Implementation
 - **[HEREDOC_IMPLEMENTATION.md](HEREDOC_IMPLEMENTATION.md)** - Core heredoc parsing
@@ -39,13 +45,15 @@ This guide helps you find the right documentation for your needs.
 ## Documentation Status
 
 ### Active (Current)
-- README.md
-- CLAUDE.md
+- README.md (updated with LSP)
+- CLAUDE.md (updated with LSP commands)
+- LSP_DOCUMENTATION.md (NEW)
 - EDGE_CASES.md (consolidated)
 - HEREDOC_IMPLEMENTATION.md
 - SLASH_DISAMBIGUATION.md
-- ARCHITECTURE.md
+- ARCHITECTURE.md (updated with v3 parser and LSP)
 - CONTRIBUTING.md
+- ROADMAP.md (updated with current status)
 
 ### Historical (Reference Only)
 - Individual edge case files (superseded by EDGE_CASES.md)

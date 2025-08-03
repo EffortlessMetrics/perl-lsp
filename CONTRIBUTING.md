@@ -215,6 +215,45 @@ fn test_exponentiation() {
 }
 ```
 
+## LSP Development
+
+### Adding LSP Features
+
+To add new LSP capabilities:
+
+1. **Implement the trait** in `crates/perl-parser/src/lsp.rs`:
+   ```rust
+   impl YourProvider for LanguageService {
+       fn your_method(&self, params: YourParams) -> Result<YourResponse> {
+           // Implementation
+       }
+   }
+   ```
+
+2. **Add the handler** in `crates/perl-parser/src/lsp_server.rs`:
+   ```rust
+   "textDocument/yourMethod" => {
+       self.handle_your_method(request.params)
+   }
+   ```
+
+3. **Update capabilities** in the initialize response
+
+4. **Add tests** in `crates/perl-parser/tests/lsp_*_test.rs`
+
+### Testing LSP Features
+
+```bash
+# Run LSP tests
+cargo test -p perl-parser lsp
+
+# Test manually with logging
+RUST_LOG=debug perl-lsp --stdio --log
+
+# Use the capabilities demo
+cargo run -p perl-parser --example lsp_capabilities
+```
+
 ## Code Style
 
 ### Rust Code
