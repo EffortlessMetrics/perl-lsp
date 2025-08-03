@@ -278,6 +278,7 @@ pub mod recovery_patterns {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::position::Position;
     
     #[test]
     fn test_error_creation() {

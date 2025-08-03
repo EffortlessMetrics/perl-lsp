@@ -436,7 +436,7 @@ mod tests {
     fn test_missing_semicolon_recovery() {
         let source = "my $x = 42 my $y = 99".to_string();
         let parser = RecoveryParser::new(source);
-        let (ast, errors) = parser.parse();
+        let (ast, _errors) = parser.parse();
         
         // Should parse both statements
         match &ast.kind {

@@ -445,7 +445,7 @@ our $y;"#.to_string();
     #[test]
     fn test_whitespace_preservation() {
         let source = "  \t  my $x;".to_string();
-        let mut ctx = TriviaParserContext::new(source);
+        let ctx = TriviaParserContext::new(source);
         
         let first_token = ctx.current_token().unwrap();
         assert!(!first_token.leading_trivia.is_empty());
