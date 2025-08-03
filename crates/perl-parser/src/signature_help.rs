@@ -452,6 +452,7 @@ struct CallContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Parser;
     
     #[test]
     fn test_builtin_signature_help() {

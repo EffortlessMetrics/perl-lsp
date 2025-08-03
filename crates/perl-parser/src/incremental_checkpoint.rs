@@ -315,6 +315,7 @@ impl CheckpointedIncrementalParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NodeKind;
     
     #[test]
     fn test_checkpoint_incremental_parsing() {

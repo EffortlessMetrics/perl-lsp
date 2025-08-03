@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- 🚀 **Full Language Server Protocol (LSP) implementation**
+  - Syntax diagnostics with real-time error detection
+  - Symbol navigation (go to definition, find references)
+  - Document symbols for outline view
+  - Signature help for function parameters
+  - Semantic tokens for enhanced highlighting
+  - Incremental parsing for efficient updates
+- ✅ **Error recovery parser** for better IDE experience
+- ✅ **Trivia preservation** for comments and whitespace
+- ✅ **Code actions** and quick fixes
+- ✅ **Document formatting** capabilities
+
+### Fixed
+- Fixed compilation errors in test modules
+- Fixed `Position` type conflicts between crates
+- Resolved unused variable warnings
+
+### Changed
+- Updated documentation to reflect LSP capabilities
+- Enhanced incremental parsing with better tree reuse
+- Improved parser context management
+
 ## [0.4.0] - 2025-01-25
 
 ### 🎉 v3 Parser Complete - 100% Edge Case Coverage

@@ -234,7 +234,7 @@ mod tests {
         // First token should be 'my'
         assert!(matches!(
             ctx.current_token().map(|t| &t.token.token_type),
-            Some(TokenType::Keyword(k)) if k == "my"
+            Some(TokenType::Keyword(k)) if k.as_ref() == "my"
         ));
         
         // Advance to next token

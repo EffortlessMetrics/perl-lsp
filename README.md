@@ -58,6 +58,41 @@ All parsers output tree-sitter compatible S-expressions for seamless IDE integra
 
 ---
 
+## 🖥️ Language Server Protocol (LSP) Support
+
+The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
+
+### LSP Features
+- **Syntax Diagnostics**: Real-time error detection and reporting
+- **Symbol Navigation**: Go to definition, find references
+- **Document Symbols**: Outline view of subroutines, packages, and variables
+- **Signature Help**: Function parameter hints while typing
+- **Semantic Tokens**: Enhanced syntax highlighting
+- **Incremental Parsing**: Efficient updates on document changes
+
+### Using the LSP Server
+
+```bash
+# Run the LSP server
+cargo run -p perl-parser --bin perl-lsp
+
+# Or install it globally
+cargo install --path crates/perl-parser --bin perl-lsp
+```
+
+### Editor Integration
+Configure your editor to use `perl-lsp` as the language server for Perl files. The server communicates via stdin/stdout using the standard LSP protocol.
+
+Example VSCode configuration:
+```json
+{
+  "perl.lsp.path": "perl-lsp",
+  "perl.lsp.enabled": true
+}
+```
+
+---
+
 ## 📊 Performance
 
 ### Parser Performance Comparison
@@ -283,7 +318,7 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 | Indirect object syntax | ❌ | ❌ | ✅ |
 | Unicode identifiers | ✅ | ✅ | ✅ |
 | Heredocs | ⚠️ | ✅ | ✅ |
-| Edge cases | ~60% | ~95% | ~98% |
+| Edge cases | ~60% | ~95% | 100% |
 
 ### What Works in All Parsers
 - ✅ Variables, operators, control flow
@@ -293,16 +328,16 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 - ✅ References and dereferencing
 - ✅ Tree-sitter compatible output
 
-### Recent Improvements (v0.3.0)
+### Recent Improvements (v0.4.0)
 
-✅ **100% edge case coverage achieved**: All 128 edge case tests now passing!  
-✅ **Label statements**: `LABEL: for (@list) { next LABEL; }`  
-✅ **Subroutine attributes**: `sub foo : lvalue : method { }`  
-✅ **Variable attributes**: `my $x :shared;`  
-✅ **Default blocks**: `given ($x) { when (1) { } default { } }`  
-✅ **Class declarations**: `class Foo { }` (Perl 5.38+)  
-✅ **Method declarations**: `method bar { }` (Perl 5.38+)  
-✅ **Format declarations**: `format STDOUT =`
+✅ **v3 Native Parser Complete**: Hand-written lexer+parser with 100% edge case coverage (141/141 tests)  
+✅ **LSP Server Implementation**: Full Language Server Protocol support with diagnostics, symbols, and signature help  
+✅ **Custom Regex Delimiters**: `m!pattern!`, `m{pattern}`, `s|old|new|` now fully supported  
+✅ **Indirect Object Syntax**: `print $fh "text"`, `new Class`, `print STDOUT "hello"`  
+✅ **Performance Breakthrough**: 4-19x faster than C implementation (1-150 µs parsing)  
+✅ **Incremental Parsing**: Efficient document updates for IDE integration  
+✅ **Semantic Tokens**: Enhanced syntax highlighting via LSP  
+✅ **Symbol Extraction**: Navigate to subroutines, packages, and variables
 
 ### Previous Features (v0.2.0)
 ✅ Deep dereference chains: `$hash->{key}->[0]->{sub}`  
@@ -447,6 +482,17 @@ cargo xtask test-edge-cases --bench
 # Generate coverage report
 cargo xtask test-edge-cases --coverage
 ```
+
+### Current Test Status
+
+**v3 Parser (Native)**: ✅ 141/141 edge case tests passing (100% coverage)  
+**v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage)  
+**v1 Parser (C)**: ⚠️ Limited edge case support
+
+**Known Test Issues**:
+- `incremental_v2::tests::test_multiple_value_changes` - Assertion failure on reused nodes
+- Some example naming collisions between v2 and v3 parsers
+- Minor compiler warnings in test modules
 
 See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 

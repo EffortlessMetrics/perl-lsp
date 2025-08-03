@@ -309,7 +309,7 @@ mod tests {
         let source = "  # comment\n  my $x = 42;".to_string();
         let mut lexer = TriviaLexer::new(source);
         
-        let (token, trivia) = lexer.next_token_with_trivia().unwrap();
+        let (_token, trivia) = lexer.next_token_with_trivia().unwrap();
         
         // Should have whitespace and comment as trivia
         assert_eq!(trivia.len(), 3); // whitespace, comment, newline+whitespace
