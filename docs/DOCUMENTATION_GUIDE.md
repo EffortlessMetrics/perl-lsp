@@ -7,9 +7,12 @@ This guide helps you find the right documentation for your needs.
 ### For Users
 
 1. **[README.md](../README.md)** - Project overview, quick start, features
-2. **[LSP_DOCUMENTATION.md](LSP_DOCUMENTATION.md)** 🚀 - Language Server Protocol guide
-3. **[EDGE_CASES.md](EDGE_CASES.md)** - Comprehensive edge case handling guide
-4. **[CLAUDE.md](../CLAUDE.md)** - Development commands and architecture
+2. **[ROADMAP.md](../ROADMAP.md)** 🎯 - Current status and future vision
+3. **[FEATURE_ROADMAP.md](../FEATURE_ROADMAP.md)** 🚀 - Detailed feature plans
+4. **[ROADMAP_2025.md](../ROADMAP_2025.md)** 📅 - This year's focus areas
+5. **[LSP_DOCUMENTATION.md](LSP_DOCUMENTATION.md)** - Language Server Protocol guide
+6. **[EDGE_CASES.md](EDGE_CASES.md)** - Comprehensive edge case handling guide
+7. **[CLAUDE.md](../CLAUDE.md)** - Development commands and architecture
 
 ### For Contributors
 
@@ -46,6 +49,9 @@ This guide helps you find the right documentation for your needs.
 
 ### Active (Current)
 - README.md (updated with LSP)
+- ROADMAP.md (NEW - comprehensive future vision)
+- FEATURE_ROADMAP.md (NEW - detailed feature plans)
+- ROADMAP_2025.md (NEW - this year's focus)
 - CLAUDE.md (updated with LSP commands)
 - LSP_DOCUMENTATION.md (NEW)
 - EDGE_CASES.md (consolidated)
@@ -53,7 +59,7 @@ This guide helps you find the right documentation for your needs.
 - SLASH_DISAMBIGUATION.md
 - ARCHITECTURE.md (updated with v3 parser and LSP)
 - CONTRIBUTING.md
-- ROADMAP.md (updated with current status)
+- QUICK_REFERENCE.md (NEW - one-page guide)
 
 ### Historical (Reference Only)
 - Individual edge case files (superseded by EDGE_CASES.md)
