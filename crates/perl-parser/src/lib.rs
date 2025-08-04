@@ -36,6 +36,7 @@ pub mod diagnostics;
 pub mod edit;
 pub mod error;
 pub mod error_recovery;
+pub mod formatting;
 pub mod incremental;
 pub mod incremental_checkpoint;
 pub mod incremental_simple;
@@ -74,6 +75,7 @@ pub use rename::{RenameProvider, RenameResult, RenameOptions, TextEdit, apply_re
 pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
 pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActionEdit};
 pub use lsp_server::LspServer;
+pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
 
 #[cfg(test)]
 mod tests {
