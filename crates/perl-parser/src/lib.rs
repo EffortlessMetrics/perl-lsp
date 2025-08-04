@@ -42,7 +42,6 @@ pub mod refactoring;
 pub mod incremental_checkpoint;
 pub mod incremental_simple;
 pub mod incremental_v2;
-pub mod lsp;
 pub mod lsp_server;
 pub mod parser;
 pub mod parser_context;
@@ -56,6 +55,7 @@ pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
+pub mod workspace_symbols;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
@@ -77,6 +77,7 @@ pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, Diagn
 pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActionEdit};
 pub use lsp_server::{LspServer, JsonRpcRequest, JsonRpcResponse};
 pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
+pub use workspace_symbols::{WorkspaceSymbolsProvider, WorkspaceSymbol};
 
 #[cfg(test)]
 mod tests {

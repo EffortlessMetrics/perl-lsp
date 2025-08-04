@@ -6,10 +6,9 @@
 use crate::{
     ast::{Node, NodeKind},
     parser::Parser,
-    error::ParseError,
-    position::SourceLocation,
+    SourceLocation,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Refactoring provider
 pub struct RefactoringProvider {
@@ -67,13 +66,13 @@ impl RefactoringProvider {
         // Check what's selected
         if let Some(node) = self.find_node_in_range(&ast, start, end) {
             match &node.kind {
-                NodeKind::BinaryOp { .. } |
-                NodeKind::UnaryOp { .. } |
-                NodeKind::TernaryOp { .. } |
+                NodeKind::Binary { .. } |
+                NodeKind::Unary { .. } |
+                NodeKind::Ternary { .. } |
                 NodeKind::MethodCall { .. } |
                 NodeKind::FunctionCall { .. } |
-                NodeKind::ArrayAccess { .. } |
-                NodeKind::HashAccess { .. } => {
+                NodeKind::ArrayRef { .. } |
+                NodeKind::HashRef { .. } => {
                     // Can extract expression to variable
                     if let Some(action) = self.create_extract_variable_action(&node, start, end) {
                         actions.push(action);
@@ -147,23 +146,23 @@ impl RefactoringProvider {
         
         // Get the initialization value
         let init_value = match &declaration.kind {
-            NodeKind::VariableDeclaration { init, .. } => {
-                init.as_ref()
+            NodeKind::VariableDeclaration { initializer, .. } => {
+                initializer.as_ref()
                     .ok_or(RefactoringError::NoInitializer)?
             }
             _ => return Err(RefactoringError::InvalidNode),
         };
         
         // Find all usages of the variable after declaration
-        let usages = self.find_variable_usages(&ast, variable_name, declaration.span.end);
+        let usages = self.find_variable_usages(&ast, variable_name, declaration.location.end_offset);
         
         // Check if the variable is modified after initialization
-        if self.is_variable_modified(&ast, variable_name, declaration.span.end) {
+        if self.is_variable_modified(&ast, variable_name, declaration.location.end_offset) {
             return Err(RefactoringError::VariableModified);
         }
         
         // Extract the initialization expression
-        let init_text = &self.source[init_value.span.start..init_value.span.end];
+        let init_text = &self.source[init_value.location.start_offset..init_value.location.end_offset];
         
         let mut edits = Vec::new();
         
@@ -171,15 +170,15 @@ impl RefactoringProvider {
         for usage in usages.iter().rev() {
             edits.push(TextEdit {
                 range: Range {
-                    start: usage.span.start,
-                    end: usage.span.end,
+                    start: usage.location.start_offset,
+                    end: usage.location.end_offset,
                 },
                 new_text: init_text.to_string(),
             });
         }
         
         // Remove the declaration
-        let (line_start, line_end) = self.get_line_bounds(declaration.span.start);
+        let (line_start, line_end) = self.get_line_bounds(declaration.location.start_offset);
         edits.push(TextEdit {
             range: Range { start: line_start, end: line_end },
             new_text: String::new(),
