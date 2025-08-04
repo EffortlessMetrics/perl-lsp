@@ -4,13 +4,14 @@
 //! completion, signature help, rename, and more.
 
 use perl_parser::{
-    Parser,
+    Parser, ParseError,
     DiagnosticsProvider, DiagnosticSeverity,
     CodeActionsProvider, CodeActionKind,
     CompletionProvider,
     SignatureHelpProvider,
     RenameProvider, RenameOptions, apply_rename_edits,
-    LanguageServer, Document,
+    LanguageServer,
+    lsp::Position,
 };
 
 fn main() {
@@ -63,8 +64,14 @@ print "Process complete\n";
 
     // Parse the code
     let mut parser = Parser::new(source);
-    let ast = parser.parse();
-    let parse_errors = parser.errors().to_vec();
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            println!("Parse error: {:?}", e);
+            return;
+        }
+    };
+    let parse_errors: Vec<ParseError> = vec![];
     
     println!("✓ Successfully parsed the code");
     println!("  Parse errors: {}\n", parse_errors.len());
@@ -179,7 +186,7 @@ print "Process complete\n";
         if result.is_valid {
             println!("Rename successful! {} edits", result.edits.len());
             for edit in &result.edits {
-                println!("  Replace {:?} with '{}'", edit.range, edit.new_text);
+                println!("  Replace at {:?} with '{}'", edit.location, edit.new_text);
             }
             
             // Apply the rename
@@ -199,22 +206,25 @@ print "Process complete\n";
     println!("==================");
     
     let mut ls = LanguageServer::new();
-    let doc_id = ls.open_document("test.pl", source.to_string());
+    ls.open_document("file:///test.pl".to_string(), 1, source.to_string());
     
     // Get document symbols
-    let symbols = ls.document_symbols(doc_id);
+    let symbols = ls.document_symbols("file:///test.pl");
     println!("Document symbols: {}", symbols.len());
     for sym in symbols.iter().take(5) {
         println!("  - {} ({:?})", sym.name, sym.kind);
     }
     
     // Find definition
-    if let Some(def_loc) = ls.goto_definition(doc_id, old_name_pos) {
+    let old_name_line = source[..old_name_pos].lines().count() - 1;
+    let old_name_col = source[..old_name_pos].lines().last().map(|l| l.len()).unwrap_or(0);
+    let position = Position { line: old_name_line, character: old_name_col };
+    if let Some(def_loc) = ls.goto_definition("file:///test.pl", position) {
         println!("\nDefinition of $old_name at: {:?}", def_loc);
     }
     
     // Find references
-    let refs = ls.find_references(doc_id, old_name_pos, true);
+    let refs = ls.find_references("file:///test.pl", position, true);
     println!("\nReferences to $old_name: {}", refs.len());
     for r in &refs {
         println!("  - {:?}", r);
