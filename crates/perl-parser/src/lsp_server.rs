@@ -15,6 +15,8 @@ use crate::{
         SemanticTokensProvider, 
         encode_semantic_tokens
     },
+    call_hierarchy_provider::CallHierarchyProvider,
+    inlay_hints_provider::{InlayHintsProvider, InlayHintConfig},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -189,6 +191,10 @@ impl LspServer {
             "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens_full(request.params),
             "textDocument/semanticTokens/range" => self.handle_semantic_tokens_range(request.params),
+            "textDocument/prepareCallHierarchy" => self.handle_prepare_call_hierarchy(request.params),
+            "callHierarchy/incomingCalls" => self.handle_incoming_calls(request.params),
+            "callHierarchy/outgoingCalls" => self.handle_outgoing_calls(request.params),
+            "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -239,6 +245,10 @@ impl LspServer {
                     },
                     "full": true,
                     "range": true
+                },
+                "callHierarchyProvider": true,
+                "inlayHintProvider": {
+                    "resolveProvider": false
                 },
             },
             "serverInfo": {
@@ -836,6 +846,169 @@ impl LspServer {
         Ok(Some(json!({
             "data": []
         })))
+    }
+
+    /// Handle prepare call hierarchy request
+    fn handle_prepare_call_hierarchy(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+            
+            eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    if let Some(items) = provider.prepare(ast, line, character) {
+                        let json_items: Vec<_> = items.iter().map(|item| item.to_json()).collect();
+                        return Ok(Some(json!(json_items)));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!(null)))
+    }
+
+    /// Handle incoming calls request
+    fn handle_incoming_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let item = &params["item"];
+            let uri = item["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Reconstruct the CallHierarchyItem from JSON
+                    let ch_item = self.json_to_call_hierarchy_item(item)?;
+                    
+                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    let calls = provider.incoming_calls(ast, &ch_item);
+                    
+                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
+                    return Ok(Some(json!(json_calls)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle outgoing calls request
+    fn handle_outgoing_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let item = &params["item"];
+            let uri = item["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Reconstruct the CallHierarchyItem from JSON
+                    let ch_item = self.json_to_call_hierarchy_item(item)?;
+                    
+                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    let calls = provider.outgoing_calls(ast, &ch_item);
+                    
+                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
+                    return Ok(Some(json!(json_calls)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Convert JSON to CallHierarchyItem
+    fn json_to_call_hierarchy_item(&self, json: &Value) -> Result<crate::call_hierarchy_provider::CallHierarchyItem, JsonRpcError> {
+        use crate::call_hierarchy_provider::{CallHierarchyItem, Range, Position};
+        
+        let name = json["name"].as_str().unwrap_or("").to_string();
+        let kind = match json["kind"].as_u64().unwrap_or(12) {
+            6 => "method",
+            _ => "function",
+        }.to_string();
+        let uri = json["uri"].as_str().unwrap_or("").to_string();
+        
+        let range = Range {
+            start: Position {
+                line: json["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                character: json["range"]["start"]["character"].as_u64().unwrap_or(0) as u32,
+            },
+            end: Position {
+                line: json["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                character: json["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+            },
+        };
+        
+        let selection_range = Range {
+            start: Position {
+                line: json["selectionRange"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                character: json["selectionRange"]["start"]["character"].as_u64().unwrap_or(0) as u32,
+            },
+            end: Position {
+                line: json["selectionRange"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                character: json["selectionRange"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+            },
+        };
+        
+        let detail = json["detail"].as_str().map(|s| s.to_string());
+        
+        Ok(CallHierarchyItem {
+            name,
+            kind,
+            uri,
+            range,
+            selection_range,
+            detail,
+        })
+    }
+
+    /// Handle inlay hint request
+    fn handle_inlay_hint(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let range = &params["range"];
+            
+            eprintln!("Getting inlay hints for: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Configure inlay hints based on client settings
+                    let config = InlayHintConfig {
+                        parameter_hints: true,
+                        type_hints: true,
+                        chained_hints: false, // Disabled by default as it can be noisy
+                        max_length: 30,
+                    };
+                    
+                    let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
+                    let hints = provider.extract(ast);
+                    
+                    // Filter hints to the requested range if needed
+                    let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                    let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                    
+                    let filtered_hints: Vec<_> = hints.into_iter()
+                        .filter(|hint| hint.position.line >= start_line && hint.position.line <= end_line)
+                        .map(|hint| hint.to_json())
+                        .collect();
+                    
+                    eprintln!("Found {} inlay hints", filtered_hints.len());
+                    
+                    return Ok(Some(json!(filtered_hints)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
     }
 }
 

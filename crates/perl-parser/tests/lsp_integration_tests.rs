@@ -483,3 +483,318 @@ print $var3;
     assert!(data.len() > 0);
     assert!(data.len() < 30); // Should not include all tokens
 }
+
+#[test]
+fn test_call_hierarchy_prepare() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hierarchy.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"
+sub main {
+    helper();
+    process_data();
+}
+
+sub helper {
+    print "Helper\n";
+}
+
+sub process_data {
+    helper();
+    $obj->helper();
+}
+"#
+        }
+    })));
+    
+    // Prepare call hierarchy at "main" function
+    let result = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hierarchy.pl"
+        },
+        "position": {
+            "line": 1,
+            "character": 5
+        }
+    })));
+    
+    assert!(result.is_some());
+    let items = result.unwrap();
+    
+    // Should return array with one item (the "main" function)
+    assert!(items.is_array());
+    let items_array = items.as_array().unwrap();
+    assert_eq!(items_array.len(), 1);
+    
+    let main_item = &items_array[0];
+    assert_eq!(main_item["name"], "main");
+    assert_eq!(main_item["kind"], 12); // Function
+}
+
+#[test]
+fn test_call_hierarchy_incoming() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_incoming.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"
+sub caller1 {
+    target_func();
+}
+
+sub caller2 {
+    target_func();
+    target_func(); # called twice
+}
+
+sub target_func {
+    print "Target\n";
+}
+"#
+        }
+    })));
+    
+    // First prepare call hierarchy for target_func
+    let prepare_result = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_incoming.pl"
+        },
+        "position": {
+            "line": 10,
+            "character": 5
+        }
+    })));
+    
+    let prepare_value = prepare_result.unwrap();
+    let items = prepare_value.as_array().unwrap();
+    let target_item = &items[0];
+    
+    // Get incoming calls
+    let incoming_result = send_request(&mut server, "callHierarchy/incomingCalls", Some(json!({
+        "item": target_item
+    })));
+    
+    assert!(incoming_result.is_some());
+    let calls = incoming_result.unwrap();
+    
+    // Should have 2 callers
+    assert!(calls.is_array());
+    let calls_array = calls.as_array().unwrap();
+    assert_eq!(calls_array.len(), 2);
+    
+    // Check caller names
+    let caller_names: Vec<&str> = calls_array.iter()
+        .map(|c| c["from"]["name"].as_str().unwrap())
+        .collect();
+    assert!(caller_names.contains(&"caller1"));
+    assert!(caller_names.contains(&"caller2"));
+}
+
+#[test]
+fn test_call_hierarchy_outgoing() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_outgoing.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"
+sub main {
+    helper();
+    process_data();
+    $obj->method_call();
+}
+
+sub helper {
+    print "Helper\n";
+}
+"#
+        }
+    })));
+    
+    // First prepare call hierarchy for main
+    let prepare_result = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_outgoing.pl"
+        },
+        "position": {
+            "line": 1,
+            "character": 5
+        }
+    })));
+    
+    let prepare_value = prepare_result.unwrap();
+    let items = prepare_value.as_array().unwrap();
+    let main_item = &items[0];
+    
+    // Get outgoing calls
+    let outgoing_result = send_request(&mut server, "callHierarchy/outgoingCalls", Some(json!({
+        "item": main_item
+    })));
+    
+    assert!(outgoing_result.is_some());
+    let calls = outgoing_result.unwrap();
+    
+    // Should have 3 calls
+    assert!(calls.is_array());
+    let calls_array = calls.as_array().unwrap();
+    assert_eq!(calls_array.len(), 3);
+    
+    // Check called function names
+    let called_names: Vec<&str> = calls_array.iter()
+        .map(|c| c["to"]["name"].as_str().unwrap())
+        .collect();
+    assert!(called_names.contains(&"helper"));
+    assert!(called_names.contains(&"process_data"));
+    assert!(called_names.contains(&"method_call"));
+}
+
+#[test]
+fn test_inlay_hints() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document with function calls
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hints.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"
+push(@array, "value");
+substr($string, 0, 5);
+open(FH, "<", "file.txt");
+
+my $result = split(/,/, $input);
+my $hash = { key => "value" };
+"#
+        }
+    })));
+    
+    // Request inlay hints
+    let result = send_request(&mut server, "textDocument/inlayHint", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hints.pl"
+        },
+        "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 10, "character": 0 }
+        }
+    })));
+    
+    assert!(result.is_some());
+    let hints = result.unwrap();
+    
+    // Should be an array of hints
+    assert!(hints.is_array());
+    let hints_array = hints.as_array().unwrap();
+    
+    // Should have parameter hints and type hints
+    assert!(hints_array.len() > 0);
+    
+    // Check for parameter hints
+    let param_hints: Vec<_> = hints_array.iter()
+        .filter(|h| h["kind"] == 2) // Parameter
+        .collect();
+    assert!(param_hints.len() >= 3); // At least one per function call
+    
+    // Check for type hints
+    let type_hints: Vec<_> = hints_array.iter()
+        .filter(|h| h["kind"] == 1) // Type
+        .collect();
+    assert!(type_hints.len() >= 2); // For $result and $hash
+}
+
+#[test]
+fn test_inlay_hints_range() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hints_range.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"
+push(@array1, "value1");  # Line 1
+push(@array2, "value2");  # Line 2
+push(@array3, "value3");  # Line 3
+push(@array4, "value4");  # Line 4
+"#
+        }
+    })));
+    
+    // Request inlay hints for lines 2-3 only
+    let result = send_request(&mut server, "textDocument/inlayHint", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_hints_range.pl"
+        },
+        "range": {
+            "start": { "line": 2, "character": 0 },
+            "end": { "line": 3, "character": 0 }
+        }
+    })));
+    
+    assert!(result.is_some());
+    let hints = result.unwrap();
+    
+    // Should be an array of hints
+    assert!(hints.is_array());
+    let hints_array = hints.as_array().unwrap();
+    
+    // Should only have hints for lines 2-3
+    for hint in hints_array {
+        let line = hint["position"]["line"].as_u64().unwrap();
+        assert!(line >= 2 && line <= 3);
+    }
+}

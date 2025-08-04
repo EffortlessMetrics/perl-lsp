@@ -58,6 +58,9 @@ pub mod trivia_parser;
 pub mod workspace_symbols;
 pub mod code_lens_provider;
 pub mod semantic_tokens_provider;
+pub mod call_hierarchy_provider;
+pub mod inlay_hints_provider;
+pub mod test_runner;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
