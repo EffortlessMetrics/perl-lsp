@@ -11,6 +11,10 @@ use crate::{
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
+    semantic_tokens_provider::{
+        SemanticTokensProvider, 
+        encode_semantic_tokens
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -183,6 +187,8 @@ impl LspServer {
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
             "textDocument/codeLens" => self.handle_code_lens(request.params),
             "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
+            "textDocument/semanticTokens/full" => self.handle_semantic_tokens_full(request.params),
+            "textDocument/semanticTokens/range" => self.handle_semantic_tokens_range(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -225,6 +231,14 @@ impl LspServer {
                 "workspaceSymbolProvider": true,
                 "codeLensProvider": {
                     "resolveProvider": true
+                },
+                "semanticTokensProvider": {
+                    "legend": {
+                        "tokenTypes": ["namespace", "class", "function", "method", "variable", "parameter", "property", "keyword", "comment", "string", "number", "regexp", "operator", "macro"],
+                        "tokenModifiers": ["declaration", "definition", "reference", "modification", "static", "defaultLibrary", "async", "readonly", "deprecated"]
+                    },
+                    "full": true,
+                    "range": true
                 },
             },
             "serverInfo": {
@@ -757,6 +771,71 @@ impl LspServer {
             message: "Invalid parameters".to_string(),
             data: None,
         })
+    }
+
+    /// Handle semantic tokens full request
+    fn handle_semantic_tokens_full(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Getting semantic tokens for: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let mut provider = SemanticTokensProvider::new(doc.content.clone());
+                    let tokens = provider.extract(ast);
+                    let encoded = encode_semantic_tokens(&tokens);
+                    
+                    eprintln!("Found {} semantic tokens", tokens.len());
+                    
+                    return Ok(Some(json!({
+                        "data": encoded
+                    })));
+                }
+            }
+        }
+        
+        Ok(Some(json!({
+            "data": []
+        })))
+    }
+
+    /// Handle semantic tokens range request
+    fn handle_semantic_tokens_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let range = &params["range"];
+            let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+            let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+            
+            eprintln!("Getting semantic tokens for range: {} (lines {}-{})", uri, start_line, end_line);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let mut provider = SemanticTokensProvider::new(doc.content.clone());
+                    let all_tokens = provider.extract(ast);
+                    
+                    // Filter tokens to the requested range
+                    let range_tokens: Vec<_> = all_tokens.into_iter()
+                        .filter(|token| token.line >= start_line && token.line <= end_line)
+                        .collect();
+                    
+                    let encoded = encode_semantic_tokens(&range_tokens);
+                    
+                    eprintln!("Found {} semantic tokens in range", range_tokens.len());
+                    
+                    return Ok(Some(json!({
+                        "data": encoded
+                    })));
+                }
+            }
+        }
+        
+        Ok(Some(json!({
+            "data": []
+        })))
     }
 }
 

@@ -7,6 +7,7 @@ Advanced Perl language support powered by the tree-sitter-perl v3 parser with fu
 ### 🚀 Core Features
 
 - **Syntax Highlighting** - Enhanced TextMate grammar for accurate highlighting
+- **Semantic Tokens** - Rich semantic highlighting beyond syntax (NEW!)
 - **Real-time Diagnostics** - Instant syntax error detection and reporting
 - **Code Formatting** - Format your code with Perl::Tidy integration
 - **Auto-completion** - Context-aware completions for variables, functions, and keywords
@@ -14,6 +15,8 @@ Advanced Perl language support powered by the tree-sitter-perl v3 parser with fu
 - **Go to Definition** - Jump to variable and subroutine definitions
 - **Find References** - Find all usages of variables and subroutines
 - **Document Symbols** - Outline view of packages, subroutines, and variables
+- **Workspace Symbols** - Search symbols across your entire project (Ctrl+T) (NEW!)
+- **Code Lens** - Inline actions like "Run Test" and reference counts (NEW!)
 - **Code Actions** - Quick fixes for common issues
 - **Hover Information** - Documentation on hover
 - **Rename Symbol** - Safely rename variables across your codebase
@@ -26,6 +29,28 @@ This extension uses the **tree-sitter-perl v3 parser** which provides:
 - **4-19x faster** than traditional parsers
 - Support for modern Perl features (signatures, try/catch, class/method)
 - Accurate handling of complex syntax (regex delimiters, indirect object notation)
+
+### ✨ New in v0.5.0
+
+#### Semantic Tokens
+Experience enhanced syntax highlighting that understands your code's semantics:
+- Built-in functions highlighted differently from user functions
+- Variable declarations vs references are visually distinct
+- Parameter highlighting in function signatures
+- Namespace and module highlighting
+
+#### Workspace Symbols
+Search and navigate across your entire project:
+- Press `Ctrl+T` to search for any symbol
+- Fuzzy matching for quick access
+- Jump to packages, subroutines, or constants instantly
+
+#### Code Lens
+See inline actions and information:
+- "▶ Run Test" appears above test functions (test_*, Test*, *_test)
+- "X references" shows how many times a function is used
+- "▶ Run Script" for files with shebang
+- Click to execute actions directly
 
 ## Requirements
 
@@ -91,6 +116,8 @@ The extension automatically discovers and uses `.perltidyrc` files in your works
 - **Go to Definition**: `F12` or `Ctrl+Click`
 - **Find All References**: `Shift+F12`
 - **Symbol Search**: `Ctrl+Shift+O`
+- **Workspace Symbol Search**: `Ctrl+T` - Search across all files
+- **Code Lens Actions**: Click inline actions above functions
 
 ### Code Intelligence
 - **Hover**: Hover over any symbol for information

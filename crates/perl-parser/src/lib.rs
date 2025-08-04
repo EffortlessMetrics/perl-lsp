@@ -57,6 +57,7 @@ pub mod trivia;
 pub mod trivia_parser;
 pub mod workspace_symbols;
 pub mod code_lens_provider;
+pub mod semantic_tokens_provider;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
@@ -79,6 +80,11 @@ pub use lsp_server::{LspServer, JsonRpcRequest, JsonRpcResponse};
 pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
 pub use workspace_symbols::{WorkspaceSymbolsProvider, WorkspaceSymbol};
 pub use code_lens_provider::{CodeLensProvider, CodeLens, resolve_code_lens, get_shebang_lens};
+pub use semantic_tokens_provider::{
+    SemanticTokensProvider, SemanticToken as SemanticTokenV2, 
+    SemanticTokenType as SemanticTokenTypeV2, SemanticTokenModifier as SemanticTokenModifierV2,
+    encode_semantic_tokens
+};
 
 #[cfg(test)]
 mod tests {
