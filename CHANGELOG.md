@@ -7,35 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-01-28
+
+### 🚀 Major Release: Complete LSP Implementation with VSCode Extension
+
+This release delivers a production-ready Language Server Protocol implementation that transforms Perl development with modern IDE features.
+
 ### Added
+- 🎯 **Workspace Symbols** - Project-wide symbol search with fuzzy matching (Ctrl+T)
+  - Real-time indexing of all open documents
+  - Fuzzy search algorithm for quick navigation
+  - Support for packages, subroutines, constants, and variables
+- 🏃 **Code Lens** - Inline actions above code elements
+  - "▶ Run Test" for test functions (test_*, Test*, *_test patterns)
+  - "X references" for subroutines and packages
+  - "▶ Run Script" for files with shebang
+  - Lazy resolution for performance
+- 📦 **VSCode Extension** - One-click installation
+  - Complete language client implementation
+  - Enhanced TextMate grammar for syntax highlighting
+  - Bundled LSP binary (1.5MB)
+  - Cross-platform support (Windows, macOS, Linux)
+- 🧪 **Comprehensive Test Suite**
+  - 9 LSP integration tests
+  - Workspace symbols tests
+  - Code lens provider tests
+  - Multi-document handling tests
 - 🚀 **Full Language Server Protocol (LSP) implementation**
   - Syntax diagnostics with real-time error detection
   - Symbol navigation (go to definition, find references)
   - Document symbols for outline view
   - Signature help for function parameters
-  - Semantic tokens for enhanced highlighting
+  - Code completion with context awareness
+  - Hover information with type details
+  - Document formatting with Perl::Tidy
+  - Code actions and quick fixes
   - Incremental parsing for efficient updates
 - ✅ **Error recovery parser** for better IDE experience
 - ✅ **Trivia preservation** for comments and whitespace
-- ✅ **Code actions** and quick fixes
-- ✅ **Document formatting** capabilities
-
-### Fixed
-- Fixed compilation errors in test modules
-- Fixed `Position` type conflicts between crates
-- Resolved unused variable warnings
 
 ### Changed
-- Updated documentation to reflect LSP capabilities
-- Enhanced incremental parsing with better tree reuse
-- Improved parser context management
-- Comprehensive documentation updates:
-  - Added LSP_DOCUMENTATION.md with complete guide
-  - Updated README.md with LSP quick start
-  - Enhanced CLAUDE.md with LSP commands
-  - Updated ARCHITECTURE.md with v3 parser and LSP details
-  - Created QUICK_REFERENCE.md for easy lookup
-  - Added LSP contribution guidelines to CONTRIBUTING.md
+- Enhanced LSP server architecture with modular feature providers
+- Improved symbol extraction with better categorization
+- Optimized workspace indexing for large projects
+- Updated documentation to reflect new features:
+  - Added comprehensive LSP documentation suite
+  - Created feature roadmap (FEATURE_ROADMAP.md)
+  - Added LSP implementation examples
+  - Enhanced best practices guide
+  - Updated README with quick start guide
+
+### Fixed
+- Fixed compilation errors in refactoring module
+- Resolved symbol matching case sensitivity issues
+- Fixed code lens position calculations
+- Improved error handling in LSP request processing
+- Fixed private method visibility in workspace symbols
 
 ## [0.4.0] - 2025-01-25
 
