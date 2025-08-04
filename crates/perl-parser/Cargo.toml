@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 authors = ["Steven <steven@example.com>"]
 description = "A modern, modular Perl parser built on perl-lexer"
@@ -10,7 +10,7 @@ keywords = ["perl", "parser", "ast", "syntax-tree"]
 categories = ["parser-implementations", "development-tools"]
 
 [dependencies]
-perl-lexer = { version = "0.5.0", path = "../perl-lexer" }
+perl-lexer = { version = "0.6.0", path = "../perl-lexer" }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

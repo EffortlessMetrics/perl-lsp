@@ -92,7 +92,87 @@ impl WorkspaceSymbolsProvider {
         self.documents.remove(uri);
     }
     
+    /// Get all symbols (for indexing)
+    pub fn get_all_symbols(&self) -> Vec<WorkspaceSymbol> {
+        let mut all_symbols = Vec::new();
+        
+        for (uri, symbols) in &self.documents {
+            for symbol in symbols {
+                // Create a minimal workspace symbol for indexing
+                all_symbols.push(WorkspaceSymbol {
+                    name: symbol.name.clone(),
+                    kind: symbol_kind_to_lsp(&symbol.kind),
+                    location: Location {
+                        uri: uri.clone(),
+                        range: Range {
+                            start: Position { line: 0, character: 0 },
+                            end: Position { line: 0, character: 0 },
+                        },
+                    },
+                    container_name: symbol.container.clone(),
+                });
+            }
+        }
+        
+        all_symbols
+    }
+    
     /// Search for symbols matching a query
+    /// Search with pre-filtered candidate names for better performance
+    pub fn search_with_candidates(
+        &self, 
+        query: &str, 
+        source_map: &HashMap<String, String>, 
+        candidates: &[String]
+    ) -> Vec<WorkspaceSymbol> {
+        let query_lower = query.to_lowercase();
+        let mut results = Vec::new();
+        
+        // Create a set of candidate names for fast lookup
+        let candidate_set: std::collections::HashSet<_> = candidates.iter()
+            .map(|s| s.to_lowercase())
+            .collect();
+        
+        for (uri, symbols) in &self.documents {
+            // Get source for this document to convert offsets
+            let source = match source_map.get(uri) {
+                Some(s) => s,
+                None => continue,
+            };
+            
+            for symbol in symbols {
+                // Check if this symbol is in our candidate set
+                if candidate_set.contains(&symbol.name.to_lowercase()) 
+                    && self.matches_query(&symbol.name, &query_lower) {
+                    results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
+                }
+            }
+        }
+        
+        // Sort by relevance
+        results.sort_by(|a, b| {
+            let a_exact = a.name.to_lowercase() == query_lower;
+            let b_exact = b.name.to_lowercase() == query_lower;
+            
+            match (a_exact, b_exact) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => {
+                    let a_starts = a.name.to_lowercase().starts_with(&query_lower);
+                    let b_starts = b.name.to_lowercase().starts_with(&query_lower);
+                    
+                    match (a_starts, b_starts) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => a.name.cmp(&b.name),
+                    }
+                }
+            }
+        });
+        
+        results
+    }
+    
     pub fn search(&self, query: &str, source_map: &HashMap<String, String>) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
