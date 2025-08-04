@@ -5,7 +5,7 @@
   "version": "0.5.0",
   "publisher": "tree-sitter-perl",
   "license": "MIT",
-  "icon": "icon.svg",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/tree-sitter-perl/tree-sitter-perl"
@@ -24,11 +24,8 @@
     "linting"
   ],
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.75.0"
   },
-  "activationEvents": [
-    "onLanguage:perl"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
