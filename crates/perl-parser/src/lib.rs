@@ -74,7 +74,7 @@ pub use signature_help::{SignatureHelpProvider, SignatureHelp, SignatureInfo, Pa
 pub use rename::{RenameProvider, RenameResult, RenameOptions, TextEdit, apply_rename_edits};
 pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
 pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActionEdit};
-pub use lsp_server::LspServer;
+pub use lsp_server::{LspServer, JsonRpcRequest, JsonRpcResponse};
 pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
 
 #[cfg(test)]
