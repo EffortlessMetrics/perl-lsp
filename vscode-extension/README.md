@@ -52,6 +52,27 @@ See inline actions and information:
 - "▶ Run Script" for files with shebang
 - Click to execute actions directly
 
+#### Call Hierarchy
+Navigate through function call relationships:
+- Right-click any function and select "Show Call Hierarchy"
+- See all functions that call the selected function (incoming)
+- See all functions called by the selected function (outgoing)
+- Navigate through complex call chains easily
+
+#### Inlay Hints
+Get inline parameter and type information:
+- Parameter names shown inline for function calls
+- Type hints for variable declarations
+- Configurable hints for better code readability
+- Smart filtering to avoid cluttering clear code
+
+#### Test Runner (Coming Soon)
+Run your Perl tests directly from the editor:
+- Automatic test discovery for .t files and test functions
+- Run individual tests or entire test files
+- See test results inline with pass/fail indicators
+- Works with Test::More and standard Perl testing frameworks
+
 ## Requirements
 
 ### Required
