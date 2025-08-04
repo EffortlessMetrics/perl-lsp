@@ -42,28 +42,27 @@ lsp_test/
 
 ### 1. Publish to crates.io
 ```bash
-# First publish perl-lexer (dependency)
-cd crates/perl-lexer
-cargo publish
-
-# Wait a few minutes, then publish perl-parser
-cd ../perl-parser
-cargo publish
+# Publish both crates in order
+cargo xtask publish-crates
 ```
 
 ### 2. Publish VSCode Extension
 ```bash
-cd vscode-extension
-npx vsce publish
+# Requires VSCE_PAT environment variable
+cargo xtask publish-vscode
 ```
 
 ### 3. Create GitHub Release
-1. Tag the release: `git tag v0.6.0`
-2. Push tags: `git push --tags`
-3. Create release on GitHub with:
-   - Release notes from RELEASE_NOTES_v0.6.0.md
-   - Attach binaries (perl-lsp, perl-dap)
-   - Attach VSIX file
+```bash
+# Create release artifacts
+cargo xtask release 0.6.0
+
+# Tag and push
+git tag v0.6.0
+git push --tags
+```
+
+Then create release on GitHub with artifacts from `release/` directory
 
 ### 4. Announce
 - Reddit: r/perl, r/vscode

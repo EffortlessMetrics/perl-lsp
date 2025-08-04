@@ -183,7 +183,31 @@ Example configuration:
 - **Test Coverage**: 141/141 edge case tests passing
 - **Documentation**: Comprehensive guides for users and contributors
 
-### 🚧 In Progress
+### 🚧 Development
+
+This project uses cargo xtask for development automation:
+
+```bash
+# Build and test
+cargo xtask build --release
+cargo xtask test
+cargo xtask bench
+
+# Release management
+cargo xtask bump-version 0.6.1
+cargo xtask release 0.6.1
+cargo xtask publish-crates
+cargo xtask publish-vscode
+
+# LSP testing
+cargo xtask test-lsp
+
+# Code quality
+cargo xtask check --all
+cargo xtask fmt
+```
+
+**Current Work:**
 - **Release v0.6.0**: Ready with advanced LSP features and debugging
 - **Editor Plugins**: VSCode extension ready, Neovim and Emacs next
 - **WASM Build**: Compiling to WebAssembly for browser use

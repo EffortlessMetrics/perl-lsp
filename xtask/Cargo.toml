@@ -17,3 +17,4 @@ indicatif = "0.17"
 console = "0.15"
 chrono = { version = "0.4", features = ["serde"] }
 tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }
+regex = "1.10"
