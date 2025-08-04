@@ -376,3 +376,110 @@ fn test_error_handling() {
     let result = send_request(&mut server, "invalid/method", Some(json!({})));
     assert!(result.is_none());
 }
+
+#[test]
+fn test_semantic_tokens_full() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_semantic.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"package TestPkg;
+use strict;
+use warnings;
+
+my $global = 42;
+
+sub process_data {
+    my ($self, $data) = @_;
+    print "Processing: $data\n";
+    return $self->validate($data);
+}
+
+process_data($obj, $global);
+"#
+        }
+    })));
+    
+    // Request semantic tokens
+    let result = send_request(&mut server, "textDocument/semanticTokens/full", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_semantic.pl"
+        }
+    })));
+    
+    assert!(result.is_some());
+    let tokens = result.unwrap();
+    
+    // Check that we got data array
+    assert!(tokens["data"].is_array());
+    let data = tokens["data"].as_array().unwrap();
+    
+    // Should have tokens for package, modules, variables, functions
+    // Each token is 5 elements: deltaLine, deltaStartChar, length, tokenType, tokenModifiers
+    assert!(data.len() >= 25); // At least 5 tokens * 5 elements each
+}
+
+#[test] 
+fn test_semantic_tokens_range() {
+    let mut server = create_test_server();
+    
+    // Initialize server
+    send_request(&mut server, "initialize", Some(json!({
+        "processId": null,
+        "rootUri": null,
+        "capabilities": {}
+    })));
+    send_request(&mut server, "initialized", None);
+    
+    // Open a document
+    send_request(&mut server, "textDocument/didOpen", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_range.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": r#"my $var1 = 1;
+my $var2 = 2;
+my $var3 = 3;
+print $var1;
+print $var2;
+print $var3;
+"#
+        }
+    })));
+    
+    // Request semantic tokens for a range (lines 1-3)
+    let result = send_request(&mut server, "textDocument/semanticTokens/range", Some(json!({
+        "textDocument": {
+            "uri": "file:///test_range.pl"
+        },
+        "range": {
+            "start": { "line": 1, "character": 0 },
+            "end": { "line": 3, "character": 0 }
+        }
+    })));
+    
+    assert!(result.is_some());
+    let tokens = result.unwrap();
+    
+    // Check that we got data array
+    assert!(tokens["data"].is_array());
+    let data = tokens["data"].as_array().unwrap();
+    
+    // Should only have tokens from lines 1-3, not the print statements
+    // Line 1: $var2 declaration
+    // Line 2: $var3 declaration
+    assert!(data.len() > 0);
+    assert!(data.len() < 30); // Should not include all tokens
+}
