@@ -27,10 +27,6 @@
   "engines": {
     "vscode": "^1.75.0"
   },
-  "activationEvents": [
-    "onLanguage:perl",
-    "workspaceContains:**/*.{pl,pm,t,pod,plx}"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
