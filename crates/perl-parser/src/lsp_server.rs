@@ -111,7 +111,7 @@ pub struct JsonRpcResponse {
 
 /// JSON-RPC error
 #[derive(Debug, Serialize)]
-struct JsonRpcError {
+pub struct JsonRpcError {
     code: i32,
     message: String,
     data: Option<Value>,
