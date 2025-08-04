@@ -1,0 +1,143 @@
+{
+  "name": "perl-language-server",
+  "displayName": "Perl Language Server",
+  "description": "Perl language support powered by tree-sitter-perl v3 parser with full LSP features",
+  "version": "0.5.0",
+  "publisher": "tree-sitter-perl",
+  "license": "MIT",
+  "icon": "icon.svg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tree-sitter-perl/tree-sitter-perl"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters"
+  ],
+  "keywords": [
+    "perl",
+    "language-server",
+    "lsp",
+    "tree-sitter",
+    "formatting",
+    "linting"
+  ],
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "activationEvents": [
+    "onLanguage:perl"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "perl",
+        "aliases": [
+          "Perl",
+          "perl"
+        ],
+        "extensions": [
+          ".pl",
+          ".pm",
+          ".pod",
+          ".t",
+          ".plx"
+        ],
+        "firstLine": "^#!.*\\bperl\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "perl",
+        "scopeName": "source.perl",
+        "path": "./syntaxes/perl.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Perl Language Server",
+      "properties": {
+        "perl.lsp.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to perl-lsp executable. If not set, the bundled version will be used."
+        },
+        "perl.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Perl language server."
+        },
+        "perl.formatting.perltidyPath": {
+          "type": "string",
+          "default": "perltidy",
+          "description": "Path to perltidy executable for code formatting."
+        },
+        "perl.formatting.perltidyArgs": {
+          "type": "array",
+          "default": [],
+          "description": "Additional arguments to pass to perltidy."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "perl.restartServer",
+        "title": "Perl: Restart Language Server"
+      },
+      {
+        "command": "perl.showOutputChannel",
+        "title": "Perl: Show Language Server Output"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "editor.action.formatDocument",
+        "key": "shift+alt+f",
+        "when": "editorLangId == perl && editorTextFocus && !editorReadonly"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "perl",
+        "owner": "perl",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run bundle-lsp",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "bundle-lsp": "node scripts/bundle-lsp.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.0.0"
+  }
+}

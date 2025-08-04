@@ -139,6 +139,48 @@ impl CodeFormatter {
         }])
     }
 
+    /// Find perltidy command in various locations
+    fn find_perltidy_command(&self) -> String {
+        // First try the PATH
+        if self.command_exists("perltidy") {
+            return "perltidy".to_string();
+        }
+        
+        // Common locations to check
+        let common_paths = [
+            "/usr/bin/perltidy",
+            "/usr/local/bin/perltidy",
+            "/opt/local/bin/perltidy",  // MacPorts
+            "/usr/local/opt/perl/bin/perltidy",  // Homebrew
+        ];
+        
+        for path in &common_paths {
+            if Path::new(path).exists() {
+                return path.to_string();
+            }
+        }
+        
+        // Check perlbrew
+        if let Ok(home) = std::env::var("HOME") {
+            let perlbrew_path = format!("{}/.perlbrew/perls/current/bin/perltidy", home);
+            if Path::new(&perlbrew_path).exists() {
+                return perlbrew_path;
+            }
+        }
+        
+        // Default to perltidy and let it fail with helpful error
+        "perltidy".to_string()
+    }
+    
+    /// Check if a command exists
+    fn command_exists(&self, cmd: &str) -> bool {
+        Command::new("which")
+            .arg(cmd)
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+    
     /// Find .perltidyrc file in the workspace
     fn find_perltidyrc(&self, starting_path: Option<&Path>) -> Option<PathBuf> {
         let start = starting_path.unwrap_or(Path::new("."));
@@ -208,8 +250,11 @@ impl CodeFormatter {
             args.push(format!("-i={}", options.tab_size)); // Tab size
         }
         
+        // Try to find perltidy in various locations
+        let perltidy_cmd = self.find_perltidy_command();
+        
         // Try to run perltidy
-        let mut child = Command::new("perltidy")
+        let mut child = Command::new(&perltidy_cmd)
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -239,7 +284,7 @@ impl CodeFormatter {
 /// Formatting error
 #[derive(Debug, thiserror::Error)]
 pub enum FormatError {
-    #[error("perltidy not found: {0}")]
+    #[error("perltidy not found: {0}\n\nTo install perltidy:\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpan Perl::Tidy")]
     PerltidyNotFound(String),
     
     #[error("perltidy error: {0}")]

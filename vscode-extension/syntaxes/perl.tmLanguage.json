@@ -1,0 +1,287 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Perl",
+    "scopeName": "source.perl",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#pod"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#variables"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#functions"
+        },
+        {
+            "include": "#regex"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.number-sign.perl",
+                    "match": "#.*$"
+                }
+            ]
+        },
+        "pod": {
+            "patterns": [
+                {
+                    "name": "comment.block.documentation.perl",
+                    "begin": "^=\\w+",
+                    "end": "^=cut",
+                    "captures": {
+                        "0": {
+                            "name": "keyword.control.pod.perl"
+                        }
+                    }
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.perl",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\."
+                        },
+                        {
+                            "include": "#interpolation"
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.single.perl",
+                    "begin": "'",
+                    "end": "'",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\[\\\\']"
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.backtick.perl",
+                    "begin": "`",
+                    "end": "`",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\."
+                        },
+                        {
+                            "include": "#interpolation"
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.q.perl",
+                    "begin": "\\b(q[qwrx]?)\\s*([^\\s\\w])",
+                    "end": "\\2",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.other.perl"
+                        }
+                    }
+                }
+            ]
+        },
+        "interpolation": {
+            "patterns": [
+                {
+                    "name": "variable.interpolated.perl",
+                    "match": "(\\$#?|@|%)(\\w+|\\{[^}]+\\})"
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.hex.perl",
+                    "match": "\\b0x[0-9a-fA-F_]+\\b"
+                },
+                {
+                    "name": "constant.numeric.octal.perl",
+                    "match": "\\b0[0-7_]+\\b"
+                },
+                {
+                    "name": "constant.numeric.binary.perl",
+                    "match": "\\b0b[01_]+\\b"
+                },
+                {
+                    "name": "constant.numeric.float.perl",
+                    "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.perl",
+                    "match": "\\b\\d+\\b"
+                }
+            ]
+        },
+        "variables": {
+            "patterns": [
+                {
+                    "name": "variable.language.perl",
+                    "match": "\\$(\\d+|[$`&'+_@!])"
+                },
+                {
+                    "name": "variable.other.scalar.perl",
+                    "match": "\\$#?\\w+"
+                },
+                {
+                    "name": "variable.other.array.perl",
+                    "match": "@\\w+"
+                },
+                {
+                    "name": "variable.other.hash.perl",
+                    "match": "%\\w+"
+                },
+                {
+                    "name": "variable.other.glob.perl",
+                    "match": "\\*\\w+"
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.perl",
+                    "match": "\\b(if|unless|else|elsif|for|foreach|while|until|do|continue|last|next|redo|goto|given|when|default)\\b"
+                },
+                {
+                    "name": "keyword.other.perl",
+                    "match": "\\b(my|our|local|state|sub|package|use|no|require|BEGIN|END|INIT|CHECK|UNITCHECK)\\b"
+                },
+                {
+                    "name": "keyword.operator.logical.perl",
+                    "match": "\\b(and|or|not|xor)\\b"
+                },
+                {
+                    "name": "constant.language.perl",
+                    "match": "\\b(undef|__LINE__|__FILE__|__PACKAGE__|__SUB__)\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.comparison.perl",
+                    "match": "(==|!=|<=>|<=|>=|<|>|eq|ne|cmp|le|ge|lt|gt|~~)"
+                },
+                {
+                    "name": "keyword.operator.assignment.perl",
+                    "match": "(=|\\+=|-=|\\*=|/=|%=|\\*\\*=|&=|\\|=|\\^=|<<=|>>=|&&=|\\|\\|=|//=|\\.=)"
+                },
+                {
+                    "name": "keyword.operator.arithmetic.perl",
+                    "match": "(\\+|-|\\*|/|%|\\*\\*)"
+                },
+                {
+                    "name": "keyword.operator.string.perl",
+                    "match": "(\\.|\\.\\.|x)"
+                },
+                {
+                    "name": "keyword.operator.logical.perl",
+                    "match": "(&&|\\|\\||!|//)"
+                },
+                {
+                    "name": "keyword.operator.bitwise.perl",
+                    "match": "(&|\\||\\^|~|<<|>>)"
+                },
+                {
+                    "name": "keyword.operator.arrow.perl",
+                    "match": "->"
+                },
+                {
+                    "name": "keyword.operator.fat-comma.perl",
+                    "match": "=>"
+                }
+            ]
+        },
+        "functions": {
+            "patterns": [
+                {
+                    "name": "support.function.builtin.perl",
+                    "match": "\\b(abs|accept|alarm|atan2|bind|binmode|bless|caller|chdir|chmod|chomp|chop|chown|chr|chroot|close|closedir|connect|cos|crypt|dbmclose|dbmopen|defined|delete|die|dump|each|endgrent|endhostent|endnetent|endprotoent|endpwent|endservent|eof|eval|exec|exists|exit|exp|fcntl|fileno|flock|fork|format|formline|getc|getgrent|getgrgid|getgrnam|gethostbyaddr|gethostbyname|gethostent|getlogin|getnetbyaddr|getnetbyname|getnetent|getpeername|getpgrp|getppid|getpriority|getprotobyname|getprotobynumber|getprotoent|getpwent|getpwnam|getpwuid|getservbyname|getservbyport|getservent|getsockname|getsockopt|glob|gmtime|grep|hex|import|index|int|ioctl|join|keys|kill|lc|lcfirst|length|link|listen|local|localtime|log|lstat|map|mkdir|msgctl|msgget|msgrcv|msgsnd|oct|open|opendir|ord|pack|pipe|pop|pos|print|printf|prototype|push|quotemeta|rand|read|readdir|readline|readlink|readpipe|recv|ref|rename|require|reset|return|reverse|rewinddir|rindex|rmdir|say|scalar|seek|seekdir|select|semctl|semget|semop|send|setgrent|sethostent|setnetent|setpgrp|setpriority|setprotoent|setpwent|setservent|setsockopt|shift|shmctl|shmget|shmread|shmwrite|shutdown|sin|sleep|socket|socketpair|sort|splice|split|sprintf|sqrt|srand|stat|study|substr|symlink|syscall|sysopen|sysread|sysseek|system|syswrite|tell|telldir|tie|tied|time|times|truncate|uc|ucfirst|umask|undef|unlink|unpack|unshift|untie|use|utime|values|vec|wait|waitpid|wantarray|warn|write)\\b"
+                },
+                {
+                    "name": "entity.name.function.perl",
+                    "match": "\\bsub\\s+(\\w+)",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.perl"
+                        }
+                    }
+                }
+            ]
+        },
+        "regex": {
+            "patterns": [
+                {
+                    "name": "string.regexp.perl",
+                    "begin": "(?<=[=~!]\\s*)(/)(?![/*+{}?])",
+                    "end": "/[cgimosxpodualn]*",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.regexp.perl",
+                    "begin": "\\b(m|qr)\\s*([^\\s\\w])",
+                    "end": "\\2[cgimosxpodualn]*",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.other.perl"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.regexp.replace.perl",
+                    "begin": "\\b(s|tr|y)\\s*([^\\s\\w])",
+                    "end": "\\2[cgimosxpodualner]*",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.other.perl"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.perl",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
