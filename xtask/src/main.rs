@@ -279,6 +279,38 @@ enum Commands {
         #[arg(long)]
         cleanup: bool,
     },
+    
+    /// Bump version numbers across the project
+    BumpVersion {
+        /// New version to set
+        version: String,
+        
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
+    
+    /// Publish crates to crates.io
+    PublishCrates {
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+        
+        /// Dry run (don't actually publish)
+        #[arg(long)]
+        dry_run: bool,
+    },
+    
+    /// Publish VSCode extension to marketplace
+    PublishVscode {
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+        
+        /// PAT token for authentication
+        #[arg(long)]
+        token: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -345,6 +377,15 @@ fn main() -> Result<()> {
         },
         Commands::TestLsp { create_only, test, cleanup } => {
             test_lsp::run(create_only, test, cleanup)
+        },
+        Commands::BumpVersion { version, yes } => {
+            bump_version::run(version, yes)
+        },
+        Commands::PublishCrates { yes, dry_run } => {
+            publish::publish_crates(yes, dry_run)
+        },
+        Commands::PublishVscode { yes, token } => {
+            publish::publish_vscode(yes, token)
         },
     }
 }
