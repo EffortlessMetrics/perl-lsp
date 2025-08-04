@@ -4,7 +4,7 @@
 
 use crate::{
     ast::Node,
-    symbol::{SymbolExtractor, SymbolKind},
+    symbol::{Symbol, SymbolKind, SymbolExtractor},
     SourceLocation,
 };
 use std::collections::HashMap;
@@ -42,76 +42,46 @@ pub struct Position {
     pub character: u32,
 }
 
-/// Internal symbol info
-#[derive(Debug, Clone)]
-struct SymbolInfo {
-    name: String,
-    kind: SymbolKind,
-    location: SourceLocation,
-    container: Option<String>,
-}
-
 /// Workspace symbols provider
 pub struct WorkspaceSymbolsProvider {
     /// Map of file URI to symbols
-    documents: HashMap<String, Vec<SymbolInfo>>,
+    symbols: HashMap<String, Vec<Symbol>>,
 }
 
 impl WorkspaceSymbolsProvider {
     /// Create a new workspace symbols provider
     pub fn new() -> Self {
         Self {
-            documents: HashMap::new(),
+            symbols: HashMap::new(),
         }
     }
     
     /// Index a document's symbols
-    pub fn index_document(&mut self, uri: &str, ast: &Node, _source: &str) {
+    pub fn index_document(&mut self, uri: &str, ast: &Node) {
         let extractor = SymbolExtractor::new();
-        let table = extractor.extract(ast);
-        
-        let mut symbols = Vec::new();
-        
-        // Extract symbols from the symbol table
-        for (name, symbol_list) in &table.symbols {
-            for symbol in symbol_list {
-                symbols.push(SymbolInfo {
-                    name: name.clone(),
-                    kind: symbol.kind.clone(),
-                    location: symbol.location.clone(),
-                    container: None, // TODO: Track containing package/class
-                });
-            }
-        }
-        
-        self.documents.insert(uri.to_string(), symbols);
+        let symbols = extractor.extract(ast);
+        self.symbols.insert(uri.to_string(), symbols);
     }
     
     /// Remove a document from the index
     pub fn remove_document(&mut self, uri: &str) {
-        self.documents.remove(uri);
+        self.symbols.remove(uri);
     }
     
     /// Search for symbols matching a query
-    pub fn search(&self, query: &str, source_map: &HashMap<String, String>) -> Vec<WorkspaceSymbol> {
+    pub fn search(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
         
-        for (uri, symbols) in &self.documents {
-            // Get source for this document to convert offsets
-            let source = match source_map.get(uri) {
-                Some(s) => s,
-                None => continue,
-            };
-            
+        for (uri, symbols) in &self.symbols {
             for symbol in symbols {
                 if self.matches_query(&symbol.name, &query_lower) {
-                    results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
+                    results.push(self.symbol_to_workspace_symbol(uri, symbol));
                 }
             }
         }
         
-        // Sort by relevance
+        // Sort by relevance (exact matches first, then prefix matches, then contains)
         results.sort_by(|a, b| {
             let a_exact = a.name.to_lowercase() == query_lower;
             let b_exact = b.name.to_lowercase() == query_lower;
@@ -155,7 +125,7 @@ impl WorkspaceSymbolsProvider {
             return true;
         }
         
-        // Simple fuzzy match
+        // Fuzzy match (simple version - each query char appears in order)
         let mut query_chars = query.chars();
         let mut current_char = query_chars.next();
         
@@ -165,7 +135,7 @@ impl WorkspaceSymbolsProvider {
                     current_char = query_chars.next();
                 }
             } else {
-                return true;
+                return true; // All query chars found
             }
         }
         
@@ -173,67 +143,38 @@ impl WorkspaceSymbolsProvider {
     }
     
     /// Convert internal Symbol to LSP WorkspaceSymbol
-    fn symbol_to_workspace_symbol(&self, uri: &str, symbol: &SymbolInfo, source: &str) -> WorkspaceSymbol {
-        let (start_line, start_col) = offset_to_line_col(source, symbol.location.start);
-        let (end_line, end_col) = offset_to_line_col(source, symbol.location.end);
-        
+    fn symbol_to_workspace_symbol(&self, uri: &str, symbol: &Symbol) -> WorkspaceSymbol {
         WorkspaceSymbol {
             name: symbol.name.clone(),
-            kind: symbol_kind_to_lsp(&symbol.kind),
+            kind: self.symbol_kind_to_lsp(symbol.kind),
             location: Location {
                 uri: uri.to_string(),
                 range: Range {
                     start: Position {
-                        line: start_line as u32,
-                        character: start_col as u32,
+                        line: symbol.location.start_line.saturating_sub(1),
+                        character: symbol.location.start_column.saturating_sub(1),
                     },
                     end: Position {
-                        line: end_line as u32,
-                        character: end_col as u32,
+                        line: symbol.location.end_line.saturating_sub(1),
+                        character: symbol.location.end_column.saturating_sub(1),
                     },
                 },
             },
-            container_name: symbol.container.clone(),
+            container_name: None, // TODO: Add container tracking
         }
-    }
-}
-
-/// Convert internal SymbolKind to LSP symbol kind
-fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
-    match kind {
-        SymbolKind::Package => 4,           // Namespace
-        SymbolKind::Subroutine => 12,       // Function
-        SymbolKind::ScalarVariable => 13,   // Variable
-        SymbolKind::ArrayVariable => 13,    // Variable
-        SymbolKind::HashVariable => 13,     // Variable
-        SymbolKind::Constant => 14,         // Constant
-        SymbolKind::Label => 15,            // String
-        SymbolKind::Format => 23,           // Struct
-    }
-}
-
-/// Convert byte offset to line/column position
-fn offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
-    let mut line = 0;
-    let mut col = 0;
-    let mut byte_pos = 0;
-    
-    for ch in source.chars() {
-        if byte_pos >= offset {
-            break;
-        }
-        
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-        
-        byte_pos += ch.len_utf8();
     }
     
-    (line, col)
+    /// Convert internal SymbolKind to LSP symbol kind
+    fn symbol_kind_to_lsp(&self, kind: SymbolKind) -> i32 {
+        match kind {
+            SymbolKind::Package => 4,     // Namespace
+            SymbolKind::Subroutine => 12, // Function
+            SymbolKind::Variable => 13,   // Variable
+            SymbolKind::Constant => 14,   // Constant
+            SymbolKind::Class => 5,       // Class
+            SymbolKind::Method => 6,      // Method
+        }
+    }
 }
 
 #[cfg(test)]
@@ -244,10 +185,9 @@ mod tests {
     #[test]
     fn test_workspace_symbols_search() {
         let mut provider = WorkspaceSymbolsProvider::new();
-        let mut source_map = HashMap::new();
         
         // Index a test file
-        let source = r#"
+        let code = r#"
 package MyPackage;
 
 sub foo {
@@ -263,41 +203,59 @@ sub baz {
 }
 "#;
         
-        source_map.insert("file:///test.pl".to_string(), source.to_string());
-        
-        let mut parser = Parser::new(source);
+        let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         
-        provider.index_document("file:///test.pl", &ast, source);
+        provider.index_document("file:///test.pl", &ast);
         
         // Test exact match
-        let results = provider.search("foo", &source_map);
+        let results = provider.search("foo");
         assert_eq!(results.len(), 2); // foo and foobar
         assert_eq!(results[0].name, "foo"); // Exact match first
         
         // Test prefix match
-        let results = provider.search("fo", &source_map);
+        let results = provider.search("fo");
         assert_eq!(results.len(), 2);
         
         // Test contains match
-        let results = provider.search("bar", &source_map);
+        let results = provider.search("bar");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
         
         // Test fuzzy match
-        let results = provider.search("fb", &source_map);
+        let results = provider.search("fb");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        
+        // Test empty query (returns all)
+        let results = provider.search("");
+        assert!(results.len() >= 3); // At least package, foo, foobar, baz
     }
     
     #[test]
-    fn test_offset_to_line_col() {
-        let source = "hello\nworld\n123";
+    fn test_workspace_symbols_multiple_files() {
+        let mut provider = WorkspaceSymbolsProvider::new();
         
-        assert_eq!(offset_to_line_col(source, 0), (0, 0));   // 'h'
-        assert_eq!(offset_to_line_col(source, 5), (0, 5));   // '\n'
-        assert_eq!(offset_to_line_col(source, 6), (1, 0));   // 'w'
-        assert_eq!(offset_to_line_col(source, 11), (1, 5));  // '\n'
-        assert_eq!(offset_to_line_col(source, 12), (2, 0));  // '1'
+        // Index first file
+        let code1 = "sub test_one { }";
+        let mut parser1 = Parser::new(code1);
+        let ast1 = parser1.parse().unwrap();
+        provider.index_document("file:///test1.pl", &ast1);
+        
+        // Index second file
+        let code2 = "sub test_two { }";
+        let mut parser2 = Parser::new(code2);
+        let ast2 = parser2.parse().unwrap();
+        provider.index_document("file:///test2.pl", &ast2);
+        
+        // Search across both files
+        let results = provider.search("test");
+        assert_eq!(results.len(), 2);
+        
+        // Remove one file
+        provider.remove_document("file:///test1.pl");
+        let results = provider.search("test");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "test_two");
     }
 }
