@@ -2,8 +2,6 @@
 
 use perl_parser::LspServer;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 
 fn main() {
     println!("=== LSP Formatting Demo ===\n");

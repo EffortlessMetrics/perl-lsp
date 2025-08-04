@@ -39,22 +39,23 @@ struct DocumentState {
 
 /// JSON-RPC request
 #[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    _jsonrpc: String,
-    id: Option<Value>,
-    method: String,
-    params: Option<Value>,
+pub struct JsonRpcRequest {
+    #[serde(rename = "jsonrpc")]
+    pub _jsonrpc: String,
+    pub id: Option<Value>,
+    pub method: String,
+    pub params: Option<Value>,
 }
 
 /// JSON-RPC response
 #[derive(Debug, Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: Option<Value>,
+pub struct JsonRpcResponse {
+    pub jsonrpc: String,
+    pub id: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<Value>,
+    pub result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<JsonRpcError>,
+    pub error: Option<JsonRpcError>,
 }
 
 /// JSON-RPC error
@@ -146,7 +147,7 @@ impl LspServer {
     }
 
     /// Handle a JSON-RPC request
-    fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
+    pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = request.id.clone();
         
         let result = match request.method.as_str() {
