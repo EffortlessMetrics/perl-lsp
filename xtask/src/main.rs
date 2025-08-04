@@ -264,6 +264,21 @@ enum Commands {
         #[arg(long, default_value = "table")]
         format: String,
     },
+    
+    /// Test LSP features with demo scripts
+    TestLsp {
+        /// Create test files only (don't run tests)
+        #[arg(long)]
+        create_only: bool,
+        
+        /// Run specific test
+        #[arg(long)]
+        test: Option<String>,
+        
+        /// Clean up test files after running
+        #[arg(long)]
+        cleanup: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -327,6 +342,9 @@ fn main() -> Result<()> {
         },
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
+        },
+        Commands::TestLsp { create_only, test, cleanup } => {
+            test_lsp::run(create_only, test, cleanup)
         },
     }
 }

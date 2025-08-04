@@ -62,6 +62,7 @@ pub mod call_hierarchy_provider;
 pub mod inlay_hints_provider;
 pub mod test_runner;
 pub mod performance;
+pub mod debug_adapter;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
