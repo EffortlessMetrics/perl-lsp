@@ -8,6 +8,7 @@ use crate::{
     DiagnosticsProvider, DiagnosticSeverity as InternalDiagnosticSeverity,
     CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
     CompletionProvider, CompletionItemKind,
+    formatting::{CodeFormatter, FormattingOptions},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -171,6 +172,8 @@ impl LspServer {
             "textDocument/completion" => self.handle_completion(request.params),
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
+            "textDocument/formatting" => self.handle_formatting(request.params),
+            "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -208,6 +211,8 @@ impl LspServer {
                 },
                 "hoverProvider": true,
                 "codeActionProvider": true,
+                "documentFormattingProvider": true,
+                "documentRangeFormattingProvider": true,
             },
             "serverInfo": {
                 "name": "perl-language-server",
@@ -530,6 +535,127 @@ impl LspServer {
         }
         
         content.len()
+    }
+    
+    /// Handle textDocument/formatting request
+    fn handle_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let options: FormattingOptions = serde_json::from_value(params["options"].clone())
+                .unwrap_or(FormattingOptions {
+                    tab_size: 4,
+                    insert_spaces: true,
+                    trim_trailing_whitespace: None,
+                    insert_final_newline: None,
+                    trim_final_newlines: None,
+                });
+            
+            eprintln!("Formatting document: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                let formatter = CodeFormatter::new();
+                match formatter.format_document(&doc.content, &options) {
+                    Ok(edits) => {
+                        let lsp_edits: Vec<Value> = edits.into_iter()
+                            .map(|edit| json!({
+                                "range": {
+                                    "start": {
+                                        "line": edit.range.start.line,
+                                        "character": edit.range.start.character,
+                                    },
+                                    "end": {
+                                        "line": edit.range.end.line,
+                                        "character": edit.range.end.character,
+                                    },
+                                },
+                                "newText": edit.new_text,
+                            }))
+                            .collect();
+                        
+                        return Ok(Some(json!(lsp_edits)));
+                    }
+                    Err(e) => {
+                        eprintln!("Formatting error: {}", e);
+                        return Err(JsonRpcError {
+                            code: -32603,
+                            message: format!("Formatting failed: {}", e),
+                            data: None,
+                        });
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+    
+    /// Handle textDocument/rangeFormatting request
+    fn handle_range_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let options: FormattingOptions = serde_json::from_value(params["options"].clone())
+                .unwrap_or(FormattingOptions {
+                    tab_size: 4,
+                    insert_spaces: true,
+                    trim_trailing_whitespace: None,
+                    insert_final_newline: None,
+                    trim_final_newlines: None,
+                });
+            
+            let range = if let Some(range_value) = params.get("range") {
+                crate::formatting::Range {
+                    start: crate::formatting::Position {
+                        line: range_value["start"]["line"].as_u64().unwrap_or(0) as u32,
+                        character: range_value["start"]["character"].as_u64().unwrap_or(0) as u32,
+                    },
+                    end: crate::formatting::Position {
+                        line: range_value["end"]["line"].as_u64().unwrap_or(0) as u32,
+                        character: range_value["end"]["character"].as_u64().unwrap_or(0) as u32,
+                    },
+                }
+            } else {
+                return Ok(Some(json!([])));
+            };
+            
+            eprintln!("Formatting range in document: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                let formatter = CodeFormatter::new();
+                match formatter.format_range(&doc.content, &range, &options) {
+                    Ok(edits) => {
+                        let lsp_edits: Vec<Value> = edits.into_iter()
+                            .map(|edit| json!({
+                                "range": {
+                                    "start": {
+                                        "line": edit.range.start.line,
+                                        "character": edit.range.start.character,
+                                    },
+                                    "end": {
+                                        "line": edit.range.end.line,
+                                        "character": edit.range.end.character,
+                                    },
+                                },
+                                "newText": edit.new_text,
+                            }))
+                            .collect();
+                        
+                        return Ok(Some(json!(lsp_edits)));
+                    }
+                    Err(e) => {
+                        eprintln!("Range formatting error: {}", e);
+                        return Err(JsonRpcError {
+                            code: -32603,
+                            message: format!("Range formatting failed: {}", e),
+                            data: None,
+                        });
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
     }
 }
 
