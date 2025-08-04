@@ -172,6 +172,8 @@ Example VSCode configuration:
 - **Multi-file Analysis**: Cross-file symbol resolution
 - **Perl 7 Support**: Ready for future Perl versions
 
+See our comprehensive [**Feature Roadmap**](FEATURE_ROADMAP.md) and [**2025 Roadmap**](ROADMAP_2025.md) for detailed plans.
+
 ---
 
 ## 🌍 Unicode Support
