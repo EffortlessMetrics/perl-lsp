@@ -38,6 +38,7 @@ pub mod error;
 pub mod error_recovery;
 pub mod formatting;
 pub mod incremental;
+pub mod refactoring;
 pub mod incremental_checkpoint;
 pub mod incremental_simple;
 pub mod incremental_v2;
