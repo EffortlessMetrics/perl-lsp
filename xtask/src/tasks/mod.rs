@@ -16,3 +16,4 @@ pub mod highlight;
 pub mod parse_rust;
 pub mod release;
 pub mod test;
+pub mod test_lsp;

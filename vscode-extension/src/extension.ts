@@ -8,6 +8,7 @@ import {
     TransportKind
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
+import { activateDebugger } from './debugAdapter';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -66,6 +67,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize test adapter
     testAdapter = new PerlTestAdapter(client);
     context.subscriptions.push(testAdapter);
+    
+    // Initialize debug adapter
+    activateDebugger(context);
     
     // Register commands
     const restartCommand = vscode.commands.registerCommand('perl.restartServer', async () => {

@@ -23,6 +23,10 @@ required-features = ["cli"]
 name = "perl-lsp"
 path = "src/bin/perl-lsp.rs"
 
+[[bin]]
+name = "perl-dap"
+path = "src/bin/perl-dap.rs"
+
 [features]
 default = []
 cli = []

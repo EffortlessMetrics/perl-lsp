@@ -162,6 +162,99 @@
         "when": "editorLangId == perl && editorTextFocus && !editorReadonly"
       }
     ],
+    "debuggers": [
+      {
+        "type": "perl",
+        "label": "Perl Debug",
+        "program": "./out/debugAdapter.js",
+        "runtime": "node",
+        "languages": ["perl"],
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the Perl script to debug.",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command line arguments passed to the program.",
+                "default": []
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": false
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Current working directory.",
+                "default": "${workspaceFolder}"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables.",
+                "default": {}
+              },
+              "perlPath": {
+                "type": "string",
+                "description": "Path to the Perl interpreter.",
+                "default": "perl"
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "port": {
+                "type": "number",
+                "description": "Port to attach to.",
+                "default": 5000
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "perl",
+            "request": "launch",
+            "name": "Launch Perl Script",
+            "program": "${file}",
+            "stopOnEntry": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Perl: Launch Script",
+            "description": "Launch and debug a Perl script",
+            "body": {
+              "type": "perl",
+              "request": "launch",
+              "name": "Launch Perl Script",
+              "program": "^\"\\${file}\"",
+              "stopOnEntry": true,
+              "args": []
+            }
+          },
+          {
+            "label": "Perl: Launch Test",
+            "description": "Launch and debug a Perl test file",
+            "body": {
+              "type": "perl",
+              "request": "launch",
+              "name": "Debug Perl Test",
+              "program": "^\"\\${file}\"",
+              "stopOnEntry": false,
+              "args": [],
+              "env": {
+                "PERL_TEST_HARNESS_DUMP_TAP": "1"
+              }
+            }
+          }
+        ]
+      }
+    ],
     "problemMatchers": [
       {
         "name": "perl",

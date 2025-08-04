@@ -7,7 +7,7 @@ members = [
     "crates/tree-sitter-perl-c",
     "crates/parser-benchmarks",
     "crates/parser-tests",
-    # "xtask", # Temporarily disabled due to build issues
+    "xtask",
 ]
 exclude = [
     "tree-sitter-perl",
