@@ -18,6 +18,7 @@ use crate::{
     call_hierarchy_provider::CallHierarchyProvider,
     inlay_hints_provider::{InlayHintsProvider, InlayHintConfig},
     test_runner::{TestRunner, TestKind},
+    performance::{AstCache, SymbolIndex},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -33,6 +34,12 @@ pub struct LspServer {
     initialized: bool,
     /// Workspace symbols provider
     workspace_symbols: Arc<Mutex<WorkspaceSymbolsProvider>>,
+    /// AST cache for performance
+    ast_cache: Arc<AstCache>,
+    /// Symbol index for fast lookups
+    symbol_index: Arc<Mutex<SymbolIndex>>,
+    /// Server configuration
+    config: Arc<Mutex<ServerConfig>>,
 }
 
 /// State of a document
@@ -46,6 +53,39 @@ struct DocumentState {
     ast: Option<crate::ast::Node>,
     /// Parse errors
     parse_errors: Vec<crate::error::ParseError>,
+}
+
+/// Server configuration
+#[derive(Debug, Clone)]
+struct ServerConfig {
+    // Inlay hints configuration
+    inlay_hints_enabled: bool,
+    inlay_hints_parameter_hints: bool,
+    inlay_hints_type_hints: bool,
+    inlay_hints_chained_hints: bool,
+    inlay_hints_max_length: usize,
+    
+    // Test runner configuration
+    test_runner_enabled: bool,
+    test_runner_command: String,
+    test_runner_args: Vec<String>,
+    test_runner_timeout: u64,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            inlay_hints_enabled: true,
+            inlay_hints_parameter_hints: true,
+            inlay_hints_type_hints: true,
+            inlay_hints_chained_hints: false,
+            inlay_hints_max_length: 30,
+            test_runner_enabled: true,
+            test_runner_command: "perl".to_string(),
+            test_runner_args: vec![],
+            test_runner_timeout: 60000,
+        }
+    }
 }
 
 /// JSON-RPC request
@@ -84,6 +124,10 @@ impl LspServer {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
             workspace_symbols: Arc::new(Mutex::new(WorkspaceSymbolsProvider::new())),
+            // Cache up to 100 ASTs with 5 minute TTL
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
         }
     }
 
@@ -198,6 +242,7 @@ impl LspServer {
             "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
             "workspace/executeCommand" => self.handle_execute_command(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery(request.params),
+            "workspace/configuration" => self.handle_configuration(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -276,11 +321,21 @@ impl LspServer {
             
             eprintln!("Document opened: {}", uri);
             
-            // Parse the document
-            let mut parser = Parser::new(text);
-            let (ast, errors) = match parser.parse() {
-                Ok(ast) => (Some(ast), vec![]),
-                Err(e) => (None, vec![e]),
+            // Check cache first
+            let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
+                eprintln!("Using cached AST for {}", uri);
+                (Some((*cached_ast).clone()), vec![])
+            } else {
+                // Parse the document
+                let mut parser = Parser::new(text);
+                match parser.parse() {
+                    Ok(ast) => {
+                        let arc_ast = Arc::new(ast);
+                        self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
+                        (Some((*arc_ast).clone()), vec![])
+                    },
+                    Err(e) => (None, vec![e]),
+                }
             };
 
             // Store document state
@@ -298,6 +353,19 @@ impl LspServer {
             if let Some(ref ast) = ast {
                 self.workspace_symbols.lock().unwrap()
                     .index_document(uri, ast, text);
+                
+                // Also update the fast symbol index
+                let symbols = self.workspace_symbols.lock().unwrap()
+                    .get_all_symbols()
+                    .into_iter()
+                    .filter(|s| s.location.uri == uri)
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<_>>();
+                
+                let mut index = self.symbol_index.lock().unwrap();
+                for symbol in symbols {
+                    index.add_symbol(symbol);
+                }
             }
 
             // Send diagnostics
@@ -319,11 +387,21 @@ impl LspServer {
                     
                     eprintln!("Document changed: {}", uri);
                     
-                    // Parse the document
-                    let mut parser = Parser::new(text);
-                    let (ast, errors) = match parser.parse() {
-                        Ok(ast) => (Some(ast), vec![]),
-                        Err(e) => (None, vec![e]),
+                    // Check cache first
+                    let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
+                        eprintln!("Using cached AST for {}", uri);
+                        (Some((*cached_ast).clone()), vec![])
+                    } else {
+                        // Parse the document
+                        let mut parser = Parser::new(text);
+                        match parser.parse() {
+                            Ok(ast) => {
+                                let arc_ast = Arc::new(ast);
+                                self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
+                                (Some((*arc_ast).clone()), vec![])
+                            },
+                            Err(e) => (None, vec![e]),
+                        }
                     };
 
                     // Update document state
@@ -734,9 +812,25 @@ impl LspServer {
         }
         drop(documents);
         
-        // Search for symbols
-        let symbols = self.workspace_symbols.lock().unwrap()
-            .search(query, &source_map);
+        // Use fast symbol index for initial filtering
+        let candidate_names = if query.len() >= 2 {
+            // Use prefix search for short queries
+            self.symbol_index.lock().unwrap().search_prefix(query)
+        } else if !query.is_empty() {
+            // Use fuzzy search for longer queries
+            self.symbol_index.lock().unwrap().search_fuzzy(query)
+        } else {
+            vec![]
+        };
+        
+        // Search for symbols, prioritizing candidates from the index
+        let symbols = if !candidate_names.is_empty() {
+            self.workspace_symbols.lock().unwrap()
+                .search_with_candidates(query, &source_map, &candidate_names)
+        } else {
+            self.workspace_symbols.lock().unwrap()
+                .search(query, &source_map)
+        };
         
         eprintln!("Found {} symbols", symbols.len());
         
@@ -990,13 +1084,13 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    // Configure inlay hints based on client settings
-                    // TODO: Get these from client configuration when workspace/configuration is implemented
+                    // Configure inlay hints based on server settings
+                    let server_config = self.config.lock().unwrap();
                     let config = InlayHintConfig {
-                        parameter_hints: true, // perl.inlayHints.parameterHints
-                        type_hints: true,      // perl.inlayHints.typeHints
-                        chained_hints: false,  // perl.inlayHints.chainedHints
-                        max_length: 30,        // perl.inlayHints.maxLength
+                        parameter_hints: server_config.inlay_hints_parameter_hints,
+                        type_hints: server_config.inlay_hints_type_hints,
+                        chained_hints: server_config.inlay_hints_chained_hints,
+                        max_length: server_config.inlay_hints_max_length,
                     };
                     
                     let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
@@ -1194,6 +1288,41 @@ impl LspServer {
         }
         
         Ok(Some(json!({"status": "error", "message": "Document not found"})))
+    }
+    
+    /// Handle workspace/configuration request
+    fn handle_configuration(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(items) = params.as_array() {
+                let mut results = Vec::new();
+                
+                for item in items {
+                    if let Some(section) = item.get("section").and_then(|s| s.as_str()) {
+                        eprintln!("Configuration requested for section: {}", section);
+                        
+                        let config = self.config.lock().unwrap();
+                        let value = match section {
+                            "perl.inlayHints.enabled" => json!(config.inlay_hints_enabled),
+                            "perl.inlayHints.parameterHints" => json!(config.inlay_hints_parameter_hints),
+                            "perl.inlayHints.typeHints" => json!(config.inlay_hints_type_hints),
+                            "perl.inlayHints.chainedHints" => json!(config.inlay_hints_chained_hints),
+                            "perl.inlayHints.maxLength" => json!(config.inlay_hints_max_length),
+                            "perl.testRunner.enabled" => json!(config.test_runner_enabled),
+                            "perl.testRunner.testCommand" => json!(config.test_runner_command),
+                            "perl.testRunner.testArgs" => json!(config.test_runner_args),
+                            "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
+                            _ => json!(null),
+                        };
+                        
+                        results.push(value);
+                    }
+                }
+                
+                return Ok(Some(json!(results)));
+            }
+        }
+        
+        Ok(Some(json!([])))
     }
 }
 
