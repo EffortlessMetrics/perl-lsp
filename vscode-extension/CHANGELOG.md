@@ -40,11 +40,48 @@ All notable changes to the Perl Language Server extension will be documented in 
 - Formatting requires separate perltidy installation
 - Cross-platform binaries not yet included (build from source for non-native platforms)
 
+## [0.6.0] - 2025-01-29
+
+### Added
+- 🔍 **Call Hierarchy Support**
+  - View incoming calls (functions that call the selected function)
+  - View outgoing calls (functions called by the selected function)
+  - Navigate complex call chains with ease
+  - Right-click any function and select "Show Call Hierarchy"
+- 💡 **Inlay Hints**
+  - Parameter name hints for function calls
+  - Type hints for variable declarations
+  - Smart filtering to reduce visual clutter
+  - Fully configurable via settings
+- 🧪 **Test Explorer Integration**
+  - Automatic discovery of test files (.t) and test functions
+  - Visual test hierarchy in Testing panel
+  - Run individual tests or entire test files
+  - Real-time test results with pass/fail indicators
+  - TAP (Test Anything Protocol) support
+- ⚙️ **New Configuration Options**
+  - `perl.inlayHints.*` - Control inlay hint behavior
+  - `perl.testRunner.*` - Configure test execution
+- **New Commands**
+  - `perl.runTest` - Run a specific test
+  - `perl.runTestFile` - Run all tests in a file
+  - `perl.debugTest` - Debug a test (placeholder)
+
+### Enhanced
+- Added "Testing" category to extension capabilities
+- Improved activation events for test files
+- Better TypeScript types and error handling
+
+### Fixed
+- Improved handling of anonymous subroutines in navigation features
+- Better error recovery for malformed syntax
+- Fixed race conditions in document synchronization
+
 ## [Unreleased]
 
 ### Planned
 - Refactoring support (extract/inline variable)
-- Code lens features
-- Workspace symbols
 - Multi-root workspace support
 - Integrated perltidy (no separate installation needed)
+- Debugging support for tests
+- Performance profiling tools

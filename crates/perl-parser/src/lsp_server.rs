@@ -17,6 +17,7 @@ use crate::{
     },
     call_hierarchy_provider::CallHierarchyProvider,
     inlay_hints_provider::{InlayHintsProvider, InlayHintConfig},
+    test_runner::{TestRunner, TestKind},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -195,6 +196,8 @@ impl LspServer {
             "callHierarchy/incomingCalls" => self.handle_incoming_calls(request.params),
             "callHierarchy/outgoingCalls" => self.handle_outgoing_calls(request.params),
             "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
+            "workspace/executeCommand" => self.handle_execute_command(request.params),
+            "experimental/testDiscovery" => self.handle_test_discovery(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -250,6 +253,12 @@ impl LspServer {
                 "inlayHintProvider": {
                     "resolveProvider": false
                 },
+                "executeCommandProvider": {
+                    "commands": ["perl.runTest", "perl.runTestFile", "perl.debugTest"]
+                },
+                "experimental": {
+                    "testProvider": true
+                }
             },
             "serverInfo": {
                 "name": "perl-language-server",
@@ -982,11 +991,12 @@ impl LspServer {
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Configure inlay hints based on client settings
+                    // TODO: Get these from client configuration when workspace/configuration is implemented
                     let config = InlayHintConfig {
-                        parameter_hints: true,
-                        type_hints: true,
-                        chained_hints: false, // Disabled by default as it can be noisy
-                        max_length: 30,
+                        parameter_hints: true, // perl.inlayHints.parameterHints
+                        type_hints: true,      // perl.inlayHints.typeHints
+                        chained_hints: false,  // perl.inlayHints.chainedHints
+                        max_length: 30,        // perl.inlayHints.maxLength
                     };
                     
                     let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
@@ -1009,6 +1019,181 @@ impl LspServer {
         }
         
         Ok(Some(json!([])))
+    }
+
+    /// Handle test discovery request
+    fn handle_test_discovery(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Discovering tests for: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+                    let tests = runner.discover_tests(ast);
+                    
+                    // Convert test items to JSON
+                    let test_items: Vec<Value> = tests.into_iter()
+                        .map(|test| json!({
+                            "id": test.id,
+                            "label": test.label,
+                            "uri": test.uri,
+                            "range": {
+                                "start": {
+                                    "line": test.range.start_line,
+                                    "character": test.range.start_character
+                                },
+                                "end": {
+                                    "line": test.range.end_line,
+                                    "character": test.range.end_character
+                                }
+                            },
+                            "kind": match test.kind {
+                                TestKind::File => "file",
+                                TestKind::Suite => "suite",
+                                TestKind::Test => "test"
+                            },
+                            "children": test.children.into_iter()
+                                .map(|child| json!({
+                                    "id": child.id,
+                                    "label": child.label,
+                                    "uri": child.uri,
+                                    "range": {
+                                        "start": {
+                                            "line": child.range.start_line,
+                                            "character": child.range.start_character
+                                        },
+                                        "end": {
+                                            "line": child.range.end_line,
+                                            "character": child.range.end_character
+                                        }
+                                    },
+                                    "kind": match child.kind {
+                                        TestKind::File => "file",
+                                        TestKind::Suite => "suite",
+                                        TestKind::Test => "test"
+                                    },
+                                    "children": []
+                                }))
+                                .collect::<Vec<_>>()
+                        }))
+                        .collect();
+                    
+                    eprintln!("Found {} test items", test_items.len());
+                    
+                    return Ok(Some(json!(test_items)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle execute command request
+    fn handle_execute_command(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let command = params["command"].as_str().unwrap_or("");
+            let arguments = params["arguments"].as_array();
+            
+            eprintln!("Executing command: {}", command);
+            
+            match command {
+                "perl.runTest" => {
+                    if let Some(args) = arguments {
+                        if let Some(test_id) = args.get(0).and_then(|v| v.as_str()) {
+                            return self.run_test(test_id);
+                        }
+                    }
+                }
+                "perl.runTestFile" => {
+                    if let Some(args) = arguments {
+                        if let Some(file_uri) = args.get(0).and_then(|v| v.as_str()) {
+                            return self.run_test_file(file_uri);
+                        }
+                    }
+                }
+                "perl.debugTest" => {
+                    // TODO: Implement test debugging
+                    return Ok(Some(json!({"status": "not_implemented"})));
+                }
+                _ => {
+                    return Err(JsonRpcError {
+                        code: -32601,
+                        message: format!("Unknown command: {}", command),
+                        data: None,
+                    });
+                }
+            }
+        }
+        
+        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
+    }
+
+    /// Run a specific test
+    fn run_test(&self, test_id: &str) -> Result<Option<Value>, JsonRpcError> {
+        eprintln!("Running test: {}", test_id);
+        
+        // Parse test ID to get URI and test name
+        let parts: Vec<&str> = test_id.split("::").collect();
+        if parts.len() < 2 {
+            return Ok(Some(json!({"status": "error", "message": "Invalid test ID"})));
+        }
+        
+        let uri = parts[0];
+        let test_name = parts[1..].join("::");
+        
+        let documents = self.documents.lock().unwrap();
+        if let Some(doc) = documents.get(uri) {
+            let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+            let results = runner.run_test(&test_name);
+            
+            // Convert results to JSON
+            let json_results: Vec<Value> = results.into_iter()
+                .map(|result| json!({
+                    "testId": result.test_id,
+                    "status": result.status.as_str(),
+                    "message": result.message,
+                    "duration": result.duration
+                }))
+                .collect();
+            
+            return Ok(Some(json!({
+                "status": "success",
+                "results": json_results
+            })));
+        }
+        
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+    }
+
+    /// Run all tests in a file
+    fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
+        eprintln!("Running test file: {}", uri);
+        
+        let documents = self.documents.lock().unwrap();
+        if let Some(doc) = documents.get(uri) {
+            let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+            let results = runner.run_test(&uri.to_string());
+            
+            // Convert results to JSON
+            let json_results: Vec<Value> = results.into_iter()
+                .map(|result| json!({
+                    "testId": result.test_id,
+                    "status": result.status.as_str(),
+                    "message": result.message,
+                    "duration": result.duration
+                }))
+                .collect();
+            
+            return Ok(Some(json!({
+                "status": "success",
+                "results": json_results
+            })));
+        }
+        
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 }
 

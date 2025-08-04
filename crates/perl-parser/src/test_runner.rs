@@ -46,6 +46,18 @@ pub enum TestStatus {
     Errored,
 }
 
+impl TestStatus {
+    /// Convert to string for JSON serialization
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TestStatus::Passed => "passed",
+            TestStatus::Failed => "failed",
+            TestStatus::Skipped => "skipped",
+            TestStatus::Errored => "errored",
+        }
+    }
+}
+
 /// Test Runner for Perl tests
 pub struct TestRunner {
     source: String,
@@ -190,7 +202,7 @@ impl TestRunner {
                 }
             }
             
-            NodeKind::Subroutine { name, .. } => {
+            NodeKind::Subroutine { name, body, .. } => {
                 if let Some(func_name) = name {
                     if self.is_test_function(func_name) {
                         let test_item = TestItem {
