@@ -78,7 +78,7 @@ cargo build -p perl-parser --bin perl-lsp --release
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.5"
+perl-parser = "0.6"
 ```
 
 ```rust
@@ -96,13 +96,20 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features
+### LSP Features (v0.6.0)
 - **Syntax Diagnostics**: Real-time error detection and reporting
 - **Symbol Navigation**: Go to definition, find references
 - **Document Symbols**: Outline view of subroutines, packages, and variables
 - **Signature Help**: Function parameter hints while typing
 - **Semantic Tokens**: Enhanced syntax highlighting
 - **Incremental Parsing**: Efficient updates on document changes
+- **Call Hierarchy** 🔍: View incoming/outgoing function calls
+- **Inlay Hints** 💡: Parameter names and type hints inline
+- **Test Explorer** 🧪: Discover and run tests from the IDE
+- **Debugging** 🐛: Full DAP support with breakpoints and stepping
+- **Code Actions**: Quick fixes and refactoring suggestions
+- **Formatting**: Integration with Perl::Tidy
+- **Performance** ⚡: AST caching and symbol indexing for large projects
 
 ### Using the LSP Server
 
@@ -115,9 +122,23 @@ cargo install --path crates/perl-parser --bin perl-lsp
 ```
 
 ### Editor Integration
+
+#### VSCode Extension (Recommended)
+Install the official Perl Language Server extension from the marketplace:
+1. Open VSCode
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search for "Perl Language Server"
+4. Click Install
+
+Or install from VSIX:
+```bash
+code --install-extension perl-language-server-0.6.0.vsix
+```
+
+#### Manual Configuration
 Configure your editor to use `perl-lsp` as the language server for Perl files. The server communicates via stdin/stdout using the standard LSP protocol.
 
-Example VSCode configuration:
+Example configuration:
 ```json
 {
   "perl.lsp.path": "perl-lsp",
@@ -163,8 +184,8 @@ Example VSCode configuration:
 - **Documentation**: Comprehensive guides for users and contributors
 
 ### 🚧 In Progress
-- **Release v0.5.0**: Preparing release with LSP support
-- **Editor Plugins**: Creating specific plugins for VSCode, Neovim, Emacs
+- **Release v0.6.0**: Ready with advanced LSP features and debugging
+- **Editor Plugins**: VSCode extension ready, Neovim and Emacs next
 - **WASM Build**: Compiling to WebAssembly for browser use
 
 ### 📅 Future Plans
