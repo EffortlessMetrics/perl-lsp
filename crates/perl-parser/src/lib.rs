@@ -56,6 +56,7 @@ pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
 pub mod workspace_symbols;
+pub mod code_lens_provider;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
@@ -77,6 +78,7 @@ pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActi
 pub use lsp_server::{LspServer, JsonRpcRequest, JsonRpcResponse};
 pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
 pub use workspace_symbols::{WorkspaceSymbolsProvider, WorkspaceSymbol};
+pub use code_lens_provider::{CodeLensProvider, CodeLens, resolve_code_lens, get_shebang_lens};
 
 #[cfg(test)]
 mod tests {

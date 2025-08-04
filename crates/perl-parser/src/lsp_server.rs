@@ -9,6 +9,8 @@ use crate::{
     CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
     CompletionProvider, CompletionItemKind,
     formatting::{CodeFormatter, FormattingOptions},
+    workspace_symbols::WorkspaceSymbolsProvider,
+    code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -22,6 +24,8 @@ pub struct LspServer {
     documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
+    /// Workspace symbols provider
+    workspace_symbols: Arc<Mutex<WorkspaceSymbolsProvider>>,
 }
 
 /// State of a document
@@ -72,6 +76,7 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            workspace_symbols: Arc::new(Mutex::new(WorkspaceSymbolsProvider::new())),
         }
     }
 
@@ -175,6 +180,9 @@ impl LspServer {
             "textDocument/hover" => self.handle_hover(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
+            "workspace/symbol" => self.handle_workspace_symbols(request.params),
+            "textDocument/codeLens" => self.handle_code_lens(request.params),
+            "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -214,6 +222,10 @@ impl LspServer {
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
+                "workspaceSymbolProvider": true,
+                "codeLensProvider": {
+                    "resolveProvider": true
+                },
             },
             "serverInfo": {
                 "name": "perl-language-server",
@@ -244,10 +256,16 @@ impl LspServer {
                 DocumentState {
                     content: text.to_string(),
                     _version: version,
-                    ast,
+                    ast: ast.clone(),
                     parse_errors: errors,
                 },
             );
+
+            // Index symbols for workspace search
+            if let Some(ref ast) = ast {
+                self.workspace_symbols.lock().unwrap()
+                    .index_document(uri, ast, text);
+            }
 
             // Send diagnostics
             self.publish_diagnostics(uri);
@@ -281,10 +299,16 @@ impl LspServer {
                         DocumentState {
                             content: text.to_string(),
                             _version: version,
-                            ast,
+                            ast: ast.clone(),
                             parse_errors: errors,
                         },
                     );
+
+                    // Index symbols for workspace search
+                    if let Some(ref ast) = ast {
+                        self.workspace_symbols.lock().unwrap()
+                            .index_document(uri, ast, text);
+                    }
 
                     // Send diagnostics
                     self.publish_diagnostics(uri);
@@ -657,6 +681,82 @@ impl LspServer {
         }
         
         Ok(Some(json!([])))
+    }
+    
+    /// Handle workspace/symbol request
+    fn handle_workspace_symbols(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("");
+        
+        eprintln!("Workspace symbol search: '{}'", query);
+        
+        // Get all document sources for offset conversion
+        let documents = self.documents.lock().unwrap();
+        let mut source_map = HashMap::new();
+        for (uri, doc) in documents.iter() {
+            source_map.insert(uri.clone(), doc.content.clone());
+        }
+        drop(documents);
+        
+        // Search for symbols
+        let symbols = self.workspace_symbols.lock().unwrap()
+            .search(query, &source_map);
+        
+        eprintln!("Found {} symbols", symbols.len());
+        
+        Ok(Some(json!(symbols)))
+    }
+    
+    /// Handle textDocument/codeLens request
+    fn handle_code_lens(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Getting code lenses for: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let provider = CodeLensProvider::new(doc.content.clone());
+                    let mut lenses = provider.extract(ast);
+                    
+                    // Add shebang lens if applicable
+                    if let Some(shebang_lens) = get_shebang_lens(&doc.content) {
+                        lenses.insert(0, shebang_lens);
+                    }
+                    
+                    eprintln!("Found {} code lenses", lenses.len());
+                    
+                    return Ok(Some(json!(lenses)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+    
+    /// Handle codeLens/resolve request
+    fn handle_code_lens_resolve(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            // Parse the code lens
+            if let Ok(lens) = serde_json::from_value::<crate::code_lens_provider::CodeLens>(params.clone()) {
+                // For now, just resolve with a placeholder count
+                // In a real implementation, you'd count actual references
+                let reference_count = 0; // TODO: Count actual references
+                
+                let resolved = resolve_code_lens(lens, reference_count);
+                return Ok(Some(json!(resolved)));
+            }
+        }
+        
+        Err(JsonRpcError {
+            code: -32602,
+            message: "Invalid parameters".to_string(),
+            data: None,
+        })
     }
 }
 
