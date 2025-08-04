@@ -350,8 +350,14 @@ mod tests {
     #[test]
     fn test_ast_cache() {
         let cache = AstCache::new(2, 60);
-        let ast1 = Arc::new(Node::new_statement_list(vec![]));
-        let ast2 = Arc::new(Node::new_statement_list(vec![]));
+        let ast1 = Arc::new(Node::new(
+            crate::ast::NodeKind::Program { statements: vec![] },
+            crate::ast::SourceLocation { offset: 0, line: 1, column: 1 }
+        ));
+        let ast2 = Arc::new(Node::new(
+            crate::ast::NodeKind::Program { statements: vec![] },
+            crate::ast::SourceLocation { offset: 0, line: 1, column: 1 }
+        ));
         
         cache.put("file1.pl".to_string(), "content1", ast1.clone());
         cache.put("file2.pl".to_string(), "content2", ast2.clone());
@@ -363,7 +369,10 @@ mod tests {
         assert!(cache.get("file1.pl", "different").is_none());
         
         // Adding third item should evict oldest
-        let ast3 = Arc::new(Node::new_statement_list(vec![]));
+        let ast3 = Arc::new(Node::new(
+            crate::ast::NodeKind::Program { statements: vec![] },
+            crate::ast::SourceLocation { offset: 0, line: 1, column: 1 }
+        ));
         cache.put("file3.pl".to_string(), "content3", ast3);
         
         // file1 should be evicted (oldest)
