@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-01-29
+
+### 🎉 Advanced LSP Features Release
+
+This release adds cutting-edge IDE features that bring Perl development to parity with modern languages.
+
+### Added
+- 🔍 **Call Hierarchy** - Navigate function relationships
+  - View incoming calls (who calls this function)
+  - View outgoing calls (what this function calls)
+  - Support for both functions and methods
+  - Right-click context menu integration
+- 💡 **Inlay Hints** - Inline parameter and type information
+  - Parameter name hints for function calls
+  - Type hints for variable declarations
+  - Smart filtering to avoid clutter
+  - Fully configurable (enable/disable by type)
+- 🧪 **Test Runner Integration** - Run tests from VSCode
+  - Automatic test discovery for .t files
+  - Test Explorer panel integration
+  - Run individual tests or entire files
+  - TAP (Test Anything Protocol) support
+  - Real-time test results with pass/fail indicators
+- ⚙️ **Configuration Options**
+  - Inlay hints: enable/disable, parameter/type hints, max length
+  - Test runner: command, arguments, timeout settings
+  - All features configurable via VSCode settings
+
+### Performance
+- Parser improvements: 100% edge case coverage maintained
+- Efficient AST traversal for feature extraction
+- Optimized inlay hint filtering
+
 ## [0.5.0] - 2025-01-28
 
 ### 🚀 Major Release: Complete LSP Implementation with VSCode Extension

@@ -13,7 +13,8 @@
   "categories": [
     "Programming Languages",
     "Linters",
-    "Formatters"
+    "Formatters",
+    "Testing"
   ],
   "keywords": [
     "perl",
@@ -26,6 +27,10 @@
   "engines": {
     "vscode": "^1.75.0"
   },
+  "activationEvents": [
+    "onLanguage:perl",
+    "workspaceContains:**/*.{pl,pm,t,pod,plx}"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
@@ -81,6 +86,51 @@
           "type": "array",
           "default": [],
           "description": "Additional arguments to pass to perltidy."
+        },
+        "perl.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable inlay hints."
+        },
+        "perl.inlayHints.parameterHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show parameter hints for function calls."
+        },
+        "perl.inlayHints.typeHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show type hints for variable declarations."
+        },
+        "perl.inlayHints.chainedHints": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show hints for chained method calls."
+        },
+        "perl.inlayHints.maxLength": {
+          "type": "number",
+          "default": 30,
+          "description": "Maximum length of inlay hints."
+        },
+        "perl.testRunner.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable test runner integration."
+        },
+        "perl.testRunner.testCommand": {
+          "type": "string",
+          "default": "perl",
+          "description": "Command to run Perl tests."
+        },
+        "perl.testRunner.testArgs": {
+          "type": "array",
+          "default": [],
+          "description": "Additional arguments for test command."
+        },
+        "perl.testRunner.testTimeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Test execution timeout in milliseconds."
         }
       }
     },
@@ -92,6 +142,21 @@
       {
         "command": "perl.showOutputChannel",
         "title": "Perl: Show Language Server Output"
+      },
+      {
+        "command": "perl.runTest",
+        "title": "Perl: Run Test",
+        "icon": "$(play)"
+      },
+      {
+        "command": "perl.runTestFile",
+        "title": "Perl: Run Test File",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "perl.debugTest",
+        "title": "Perl: Debug Test",
+        "icon": "$(debug)"
       }
     ],
     "keybindings": [

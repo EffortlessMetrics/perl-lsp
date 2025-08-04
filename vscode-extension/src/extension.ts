@@ -7,9 +7,11 @@ import {
     ServerOptions,
     TransportKind
 } from 'vscode-languageclient/node';
+import { PerlTestAdapter } from './testAdapter';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
+let testAdapter: PerlTestAdapter | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -61,6 +63,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Start the client
     await client.start();
     
+    // Initialize test adapter
+    testAdapter = new PerlTestAdapter(client);
+    context.subscriptions.push(testAdapter);
+    
     // Register commands
     const restartCommand = vscode.commands.registerCommand('perl.restartServer', async () => {
         await restartServer(context);
@@ -76,6 +82,9 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
+    if (testAdapter) {
+        testAdapter.dispose();
+    }
     if (client) {
         await client.stop();
     }
