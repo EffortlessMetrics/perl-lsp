@@ -7,143 +7,227 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 0.1.0)'
+        description: 'Version to release (e.g., 0.6.0)'
         required: true
         type: string
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref_name }}
-        release_name: Release ${{ github.ref_name }}
-        draft: true
-        prerelease: false
-        body: |
-          ## Changes
-          
-          - TODO: Add release notes
-          
-          ## Installation
-          
-          ```bash
-          cargo add tree-sitter-perl
-          ```
-          
-          ## Features
-          
-          - Pure Rust parser option with `--features pure-rust`
-          - Full Perl syntax support
-          - Comprehensive test coverage
-
-  build-artifacts:
-    name: Build Release Artifacts
-    needs: create-release
+  build:
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: tree-sitter-perl-linux-amd64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: tree-sitter-perl-windows-amd64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: tree-sitter-perl-macos-amd64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: tree-sitter-perl-macos-arm64
-            
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-    - name: Build release binary
-      run: |
-        cargo build --release --target ${{ matrix.target }} --features pure-rust
-        cargo build --release --target ${{ matrix.target }}
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-    - name: Package artifacts (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        mkdir -p artifacts
-        cp target/${{ matrix.target }}/release/libTree_sitter_perl* artifacts/ || true
-        cp target/${{ matrix.target }}/release/tree_sitter_perl* artifacts/ || true
-        tar czf ${{ matrix.artifact_name }}.tar.gz -C artifacts .
+      - name: Build binaries
+        run: |
+          cargo build --release -p perl-parser --bin perl-lsp --target ${{ matrix.target }}
+          cargo build --release -p perl-parser --bin perl-dap --target ${{ matrix.target }}
 
-    - name: Package artifacts (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        mkdir artifacts
-        copy target\${{ matrix.target }}\release\*.dll artifacts\ 2>nul || echo "No DLLs found"
-        copy target\${{ matrix.target }}\release\*.lib artifacts\ 2>nul || echo "No libs found"
-        7z a ${{ matrix.artifact_name }}.zip artifacts\*
+      - name: Strip binaries (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          strip target/${{ matrix.target }}/release/perl-lsp
+          strip target/${{ matrix.target }}/release/perl-dap
 
-    - name: Upload Release Asset (Unix)
-      if: matrix.os != 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.artifact_name }}.tar.gz
-        asset_name: ${{ matrix.artifact_name }}.tar.gz
-        asset_content_type: application/gzip
+      - name: Package (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p dist
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../dist/perl-lsp-${{ github.event.inputs.version || github.ref_name }}-${{ matrix.target }}.tar.gz perl-lsp perl-dap
+          cd ../../../
+          sha256sum dist/*.tar.gz > dist/checksums-${{ matrix.target }}.txt
 
-    - name: Upload Release Asset (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.artifact_name }}.zip
-        asset_name: ${{ matrix.artifact_name }}.zip
-        asset_content_type: application/zip
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive -Path target\${{ matrix.target }}\release\perl-lsp.exe, target\${{ matrix.target }}\release\perl-dap.exe -DestinationPath dist\perl-lsp-${{ github.event.inputs.version || github.ref_name }}-${{ matrix.target }}.zip
+          Get-FileHash dist\*.zip | Format-Table -AutoSize | Out-File -FilePath dist\checksums-${{ matrix.target }}.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: dist/*
+
+  build-vscode:
+    name: Build VSCode Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Build extension
+        working-directory: vscode-extension
+        run: |
+          npm run compile
+          npx vsce package
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: vscode-extension/*.vsix
+
+  release:
+    name: Create Release
+    needs: [build, build-vscode]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          mv artifacts/binaries-*/* release/
+          mv artifacts/vscode-extension/*.vsix release/
+          cd release
+          cat checksums-*.txt > checksums.txt
+          rm checksums-*.txt
+          ls -la
+
+      - name: Create release notes
+        run: |
+          VERSION=${{ github.event.inputs.version || github.ref_name }}
+          cat > release-notes.md << EOF
+          # Perl Language Server ${VERSION}
+          
+          ## 🎉 Highlights
+          
+          - **Call Hierarchy**: Navigate incoming and outgoing function calls
+          - **Inlay Hints**: See parameter names and type hints inline
+          - **Test Explorer**: Discover and run Perl tests from your IDE
+          - **Debug Support**: Full DAP implementation with breakpoints and stepping
+          - **Performance**: AST caching and symbol indexing for large projects
+          
+          ## 📦 Installation
+          
+          ### Quick Install (Linux/macOS)
+          \`\`\`bash
+          curl -fsSL https://github.com/anthropics/perl-language-server/releases/download/${VERSION}/install.sh | bash
+          \`\`\`
+          
+          ### VSCode Extension
+          Install from the marketplace or download the VSIX file below.
+          
+          ### Manual Installation
+          Download the appropriate archive for your platform and extract to your PATH.
+          
+          ## 📋 Checksums
+          See \`checksums.txt\` for SHA256 hashes of all release files.
+          
+          ## 📚 Documentation
+          - [Getting Started](https://github.com/anthropics/perl-language-server#quick-start)
+          - [Configuration](https://github.com/anthropics/perl-language-server#configuration)
+          - [Contributing](https://github.com/anthropics/perl-language-server#contributing)
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: v${{ github.event.inputs.version || github.ref_name }}
+          body_path: release-notes.md
+          files: release/*
+          draft: false
+          prerelease: false
 
   publish-crates:
     name: Publish to crates.io
+    needs: release
     runs-on: ubuntu-latest
-    needs: build-artifacts
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Login to crates.io
-      run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish perl-lexer
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          cd crates/perl-lexer
+          cargo publish --no-verify
 
-    - name: Publish tree-sitter-perl
-      run: |
-        cd crates/tree-sitter-perl-rs
-        cargo publish --allow-dirty
+      - name: Wait for crates.io
+        run: sleep 30
+
+      - name: Publish perl-parser
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          cd crates/perl-parser
+          cargo publish --no-verify
+
+  publish-vscode:
+    name: Publish VSCode Extension
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Publish to marketplace
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish

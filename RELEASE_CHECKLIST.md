@@ -1,82 +1,119 @@
-# Release Checklist for v0.4.0
+# Pre-Release Testing Checklist
 
-## Pre-Release Verification
+## Version: 0.6.0
+Date: ___________
+Tested by: ___________
 
-### ✅ Code Quality
-- [x] All tests pass: `cargo test --all`
-- [x] Examples compile: `cargo build --examples`
-- [x] No critical warnings (only unused variables)
-- [x] Version numbers updated (0.4.0)
+## 🔧 Build Verification
 
-### ✅ Documentation
-- [x] README.md updated with current status
-- [x] CHANGELOG.md updated with v0.4.0 changes
-- [x] RELEASE_ANNOUNCEMENT.md created
-- [x] RELEASE_NOTES_v0.4.0.md created
-- [x] API documentation builds without errors
+- [ ] Clean build: `cargo clean && cargo build --all`
+- [ ] Release build: `cargo build --release -p perl-parser --all-targets`
+- [ ] No warnings in release mode
+- [ ] VSCode extension builds: `cd vscode-extension && npm run compile`
 
-### ✅ Features Completed
-- [x] CLI tool (perl-parse) with:
-  - [x] S-expression output
-  - [x] JSON output format
-  - [x] Statistics display
-  - [x] Help and version flags
-- [x] Integration examples:
-  - [x] basic_usage.rs
-  - [x] ast_visitor.rs
-  - [x] error_handling.rs
+## 🧪 Core Parser Tests
 
-### ✅ Binaries
-- [x] Release binary built and stripped
-- [x] Linux tarball created: perl-parse-v0.4.0-x86_64-unknown-linux-gnu.tar.gz (386K)
+- [ ] Unit tests pass: `cargo test -p perl-lexer -p perl-parser`
+- [ ] Integration tests pass: `cargo test --all`
+- [ ] Edge case tests pass: `cargo run -p perl-parser --example test_edge_cases`
+- [ ] Benchmark runs without errors: `cargo bench -p perl-parser`
 
-### ✅ Publishing Preparation
-- [x] Cargo.toml files updated with:
-  - [x] Version 0.4.0
-  - [x] Proper dependencies
-  - [x] Description and metadata
-  - [x] License information
-- [x] README files for both crates
-- [x] PUBLISHING.md guide created
+## 🚀 LSP Server Tests
 
-## Publishing Steps
+### Basic Functionality
+- [ ] Server starts: `perl-lsp --version`
+- [ ] Server accepts connections
+- [ ] Handles initialization handshake
 
-### 1. Final Git Commit
-```bash
-git add -A
-git commit -m "Release v0.4.0: 100% edge case coverage complete"
-git tag v0.4.0
-git push origin master --tags
-```
+### Feature Tests
+- [ ] Syntax diagnostics work on invalid code
+- [ ] Go to definition works for subroutines
+- [ ] Find references works
+- [ ] Document symbols show correct outline
+- [ ] Signature help shows for known functions
+- [ ] Semantic tokens provide highlighting
 
-### 2. Publish to crates.io
-```bash
-# First perl-lexer
-cd crates/perl-lexer
-cargo publish --dry-run
-cargo publish
+### Advanced Features (v0.6.0)
+- [ ] Call hierarchy shows incoming/outgoing calls
+- [ ] Inlay hints display for parameters
+- [ ] Test discovery finds .t files
+- [ ] Test runner executes tests correctly
 
-# Wait 5 minutes, then perl-parser
-cd ../perl-parser
-# Update Cargo.toml to remove path dependency
-cargo publish --dry-run
-cargo publish
-```
+## 🐛 Debug Adapter Tests
 
-### 3. GitHub Release
-1. Go to https://github.com/EffortlessSteven/tree-sitter-perl/releases/new
-2. Tag: v0.4.0
-3. Title: "v0.4.0 - 100% Complete Perl 5 Parser 🎉"
-4. Copy content from RELEASE_NOTES_v0.4.0.md
-5. Upload perl-parse-v0.4.0-x86_64-unknown-linux-gnu.tar.gz
+- [ ] DAP server starts: `perl-dap`
+- [ ] Can set breakpoints
+- [ ] Can step through code
+- [ ] Variable inspection works
+- [ ] Call stack is accurate
 
-### 4. Announcements
-- [ ] Reddit r/rust
-- [ ] Reddit r/perl
-- [ ] Twitter/X with #rustlang #perl
-- [ ] Perl community forums
+## 📦 VSCode Extension Tests
 
-## Post-Release
-- [ ] Update main README with crates.io badges
-- [ ] Monitor for issues/feedback
-- [ ] Plan next milestone from TODO.md
+### Installation
+- [ ] Extension installs from VSIX
+- [ ] No activation errors in developer console
+- [ ] Language server starts automatically
+
+### Features
+- [ ] Syntax highlighting works
+- [ ] Error squiggles appear for syntax errors
+- [ ] Go to definition (F12) works
+- [ ] Find all references (Shift+F12) works
+- [ ] Outline view shows symbols
+- [ ] Test explorer shows tests
+- [ ] Debugging configuration works
+
+### Commands
+- [ ] "Restart Language Server" command works
+- [ ] "Run Test" command executes
+- [ ] "Debug Test" command starts debugger
+
+## 🔍 Integration Tests
+
+- [ ] Run `./test_lsp_features.sh` - all tests pass
+- [ ] Test with a real Perl project (1000+ lines)
+- [ ] Memory usage stays reasonable over time
+- [ ] No crashes during 10-minute usage session
+
+## 📊 Performance Tests
+
+- [ ] Parse 10KB file < 100ms
+- [ ] Parse 100KB file < 1s
+- [ ] Workspace symbol search < 500ms (1000 files)
+- [ ] Go to definition < 50ms
+
+## 📝 Documentation
+
+- [ ] README.md reflects current features
+- [ ] CHANGELOG.md updated with all changes
+- [ ] Version numbers consistent across files
+- [ ] Installation instructions work
+
+## 🚢 Release Artifacts
+
+- [ ] Binary sizes reasonable (< 2MB for LSP)
+- [ ] Stripped binaries work correctly
+- [ ] VSIX package installs without errors
+- [ ] Checksums generated correctly
+
+## ✅ Final Checks
+
+- [ ] No hardcoded paths in code
+- [ ] No debug prints in release build
+- [ ] No experimental features enabled
+- [ ] All TODOs addressed or documented
+- [ ] Git repository is clean
+- [ ] Version tag created
+
+---
+
+## Sign-off
+
+All tests passed: ⬜ Yes ⬜ No
+
+Ready for release: ⬜ Yes ⬜ No
+
+Notes:
+_________________________________
+_________________________________
+_________________________________

@@ -1,70 +1,33 @@
 # perl-lexer
 
-A high-performance, context-aware lexer for Perl 5.
+A high-performance Perl lexer with context-aware tokenization.
 
 ## Features
 
-- 🚀 **Zero-copy tokenization** - Efficient memory usage
-- 🧠 **Context-aware** - Correctly handles `/` as division vs regex
-- 📝 **Full Perl 5 support** - Heredocs, quotes, interpolation, attributes
-- 🔧 **Mode-based lexing** - ExpectTerm vs ExpectOperator disambiguation
-- 🎯 **Production ready** - Extensive test coverage
-
-## Installation
-
-```toml
-[dependencies]
-perl-lexer = "0.4.0"
-```
+- **Context-aware tokenization**: Correctly handles Perl's complex syntax including regex vs division disambiguation
+- **Full Perl 5 support**: All operators, keywords, and constructs
+- **Unicode support**: Full Unicode identifier support
+- **Zero dependencies**: Core lexer has minimal dependencies
+- **Fast**: Optimized for speed with SIMD support
 
 ## Usage
 
 ```rust
-use perl_lexer::{PerlLexer, LexerMode};
+use perl_lexer::{Lexer, Token, TokenType};
 
 let input = "my $x = 42;";
-let mut lexer = PerlLexer::new(input);
+let lexer = Lexer::new(input);
 
-while let Some(token) = lexer.next_token() {
+for token in lexer {
     println!("{:?}", token);
 }
 ```
 
-## Token Types
-
-The lexer produces a comprehensive set of tokens including:
-
-- **Identifiers** - Variables, subroutines, packages
-- **Keywords** - All Perl 5 keywords including modern ones
-- **Operators** - All operators with proper precedence hints
-- **Literals** - Numbers, strings (with interpolation support)
-- **Delimiters** - Parentheses, brackets, braces
-- **Special** - Heredocs, POD, formats, attributes
-
-## Context-Aware Features
-
-### Slash Disambiguation
-
-```perl
-$x / $y;     # Division operator
-$x =~ /foo/; # Regex match
-```
-
-### Mode-Based Parsing
-
-The lexer tracks parser state to correctly tokenize:
-
-```rust
-lexer.set_mode(LexerMode::ExpectTerm);    // Next token is a term
-lexer.set_mode(LexerMode::ExpectOperator); // Next token is an operator
-```
-
-## Performance
-
-- Zero allocations for most tokens
-- SIMD optimizations available
-- ~1-2 µs per token on modern hardware
-
 ## License
 
-MIT OR Apache-2.0
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
