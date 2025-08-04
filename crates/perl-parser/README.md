@@ -1,79 +1,64 @@
 # perl-parser
 
-A modern, high-performance Perl 5 parser with 100% syntax coverage.
+A high-performance Perl parser with full Language Server Protocol support.
 
 ## Features
 
-- ✅ **100% Perl 5 syntax support** - Handles all edge cases including m!pattern!, indirect object syntax, and more
-- 🚀 **Blazing fast** - 4-19x faster than traditional parsers (1-150 µs per file)
-- 🌳 **Tree-sitter compatible** - Outputs standard S-expressions for tool integration
-- 🔧 **Zero dependencies** - Clean, maintainable implementation
-- 📦 **Production ready** - Extensive test coverage with 141/141 edge cases passing
+- **100% Perl 5 syntax coverage**: Handles all edge cases including `m!pattern!`, indirect object syntax, and more
+- **Language Server Protocol**: Full LSP implementation with advanced IDE features
+- **Debug Adapter Protocol**: Integrated debugging support
+- **Tree-sitter compatible**: Produces standard S-expression output
+- **Performance**: 4-19x faster than traditional parsers
 
-## Installation
+## Binaries
 
-### As a library
+This crate provides two binaries:
 
-```toml
-[dependencies]
-perl-parser = "0.4.0"
-```
-
-### CLI tool
-
-```bash
-cargo install perl-parser --features cli
-```
+- `perl-lsp`: Full-featured Language Server for Perl
+- `perl-dap`: Debug Adapter for Perl debugging
 
 ## Usage
 
-### Library
+### As a library
 
 ```rust
-use perl_parser::Parser;
+use perl_parser::{Parser, ParseOptions};
 
-let code = "my $x = 42; print $x;";
-let mut parser = Parser::new(code);
+let source = "my $x = 42;";
+let options = ParseOptions::default();
+let ast = Parser::parse(source, options)?;
 
-match parser.parse() {
-    Ok(ast) => println!("AST: {}", ast.to_sexp()),
-    Err(e) => eprintln!("Parse error: {}", e),
-}
+println!("{}", ast.to_sexp());
 ```
 
-### CLI
+### As a Language Server
 
 ```bash
-# Parse a file
-perl-parse script.pl
+# Install
+cargo install perl-parser
 
-# Parse from stdin
-echo 'print "Hello"' | perl-parse -
-
-# Output as JSON
-perl-parse -f json script.pl
-
-# Show statistics
-perl-parse -s script.pl
+# Run
+perl-lsp --stdio
 ```
 
-## Examples
+## LSP Features
 
-See the `examples/` directory for more usage examples:
-
-- `basic_usage.rs` - Simple parsing and AST traversal
-- `ast_visitor.rs` - Visitor pattern implementation
-- `error_handling.rs` - Graceful error handling
-
-## Parser Comparison
-
-| Feature | perl-parser (v3) | tree-sitter-perl (v1) | Pure Rust (v2) |
-|---------|-----------------|---------------------|----------------|
-| Coverage | ~100% | ~95% | ~99.995% |
-| Performance | 1-150 µs | 12-68 µs | 200-450 µs |
-| Edge cases | 141/141 ✅ | Limited | 134/141 |
-| Dependencies | 1 (perl-lexer) | C library | Multiple |
+- Syntax diagnostics
+- Go to definition
+- Find references
+- Document symbols
+- Signature help
+- Semantic tokens
+- Call hierarchy
+- Inlay hints
+- Test discovery and execution
+- Code formatting
 
 ## License
 
-MIT
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.

@@ -2,12 +2,14 @@
 name = "perl-parser"
 version = "0.6.0"
 edition = "2021"
-authors = ["Steven <steven@example.com>"]
-description = "A modern, modular Perl parser built on perl-lexer"
-license = "MIT"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl"
-keywords = ["perl", "parser", "ast", "syntax-tree"]
-categories = ["parser-implementations", "development-tools"]
+authors = ["Tree-sitter Perl Contributors"]
+description = "A high-performance Perl parser with full Language Server Protocol support"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/anthropics/perl-language-server"
+homepage = "https://github.com/anthropics/perl-language-server"
+documentation = "https://docs.rs/perl-parser"
+keywords = ["perl", "parser", "lsp", "language-server", "ast"]
+categories = ["parsing", "development-tools", "text-editors"]
 
 [dependencies]
 perl-lexer = { version = "0.6.0", path = "../perl-lexer" }
