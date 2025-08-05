@@ -1,0 +1,5 @@
+# Rust toolchain configuration for tree-sitter-perl
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
