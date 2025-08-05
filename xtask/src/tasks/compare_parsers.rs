@@ -2,10 +2,12 @@
 //! 
 //! Compares Pure Rust, Legacy C, and Modern parser implementations
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{bail, Result};
+use color_eyre::owo_colors::OwoColorize;
 use std::time::{Duration, Instant};
-use colored::Colorize;
 use serde_json;
+use tree_sitter_perl::PureRustPerlParser;
+use perl_parser::Parser as ModernParser;
 
 pub fn run_three_way(verbose: bool, format: &str) -> Result<()> {
     match format {
@@ -46,7 +48,7 @@ sub new {
     ];
     
     // Warm up
-    println!("\n{}", "Warming up parsers...".dim());
+    println!("\n{}", "Warming up parsers...".dimmed());
     for (_, code) in &test_cases {
         let _ = bench_pure_rust(code);
         let _ = bench_legacy_c(code);
@@ -59,7 +61,7 @@ sub new {
     
     for (name, code) in &test_cases {
         println!("\n{} {}", "Testing:".cyan(), name.bold());
-        println!("{}", format!("Code size: {} bytes", code.len()).dim());
+        println!("{}", format!("Code size: {} bytes", code.len()).dimmed());
         
         let pure_rust_time = bench_pure_rust(code)?;
         let legacy_c_time = bench_legacy_c(code)?;
@@ -79,11 +81,11 @@ sub new {
         
         println!("\n  {}", "Relative Performance:".underline());
         println!("  - Legacy C is {:.1}x {} than Pure Rust", c_vs_rust, 
-            if c_vs_rust > 1.0 { "faster".green() } else { "slower".red() });
+            if c_vs_rust > 1.0 { "faster" } else { "slower" });
         println!("  - Modern is {:.1}x {} than Pure Rust", modern_vs_rust,
-            if modern_vs_rust > 1.0 { "faster".green() } else { "slower".red() });
+            if modern_vs_rust > 1.0 { "faster" } else { "slower" });
         println!("  - Modern is {:.1}x {} than Legacy C", modern_vs_c,
-            if modern_vs_c < 1.0 { "faster".green() } else { "slower".red() });
+            if modern_vs_c < 1.0 { "faster" } else { "slower" });
     }
     
     // Summary
@@ -107,16 +109,14 @@ sub new {
 }
 
 fn bench_pure_rust(code: &str) -> Result<Duration> {
-    use tree_sitter_perl_rs::{parse_rust, ParserConfig};
-    
     const ITERATIONS: u32 = 100;
-    let config = ParserConfig::default();
     
     let start = Instant::now();
     for _ in 0..ITERATIONS {
-        let result = parse_rust(code, &config);
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(code);
         if result.is_err() {
-            return Err("Pure Rust parser failed".into());
+            bail!("Pure Rust parser failed");
         }
     }
     
@@ -131,12 +131,12 @@ fn bench_legacy_c(code: &str) -> Result<Duration> {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let mut parser = Parser::new();
-        parser.set_language(tree_sitter_perl::language())
-            .map_err(|_| "Failed to set language")?;
+        parser.set_language(&tree_sitter_perl::language())
+            .unwrap();
         
         let tree = parser.parse(code, None);
         if tree.is_none() {
-            return Err("Legacy C parser failed".into());
+            bail!("Legacy C parser failed");
         }
     }
     
@@ -144,16 +144,14 @@ fn bench_legacy_c(code: &str) -> Result<Duration> {
 }
 
 fn bench_modern(code: &str) -> Result<Duration> {
-    use perl_parser::Parser;
-    
     const ITERATIONS: u32 = 100;
     
     let start = Instant::now();
     for _ in 0..ITERATIONS {
-        let mut parser = Parser::new(code);
+        let mut parser = ModernParser::new(code);
         let result = parser.parse();
         if result.is_err() {
-            return Err("Modern parser failed".into());
+            bail!("Modern parser failed");
         }
     }
     
