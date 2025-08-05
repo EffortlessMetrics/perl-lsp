@@ -1,7 +1,7 @@
 [package]
 name = "perl-parser"
 version = "0.6.0"
-edition = "2021"
+edition = "2024"
 authors = ["Tree-sitter Perl Contributors"]
 description = "A high-performance Perl parser with full Language Server Protocol support"
 license = "MIT OR Apache-2.0"
