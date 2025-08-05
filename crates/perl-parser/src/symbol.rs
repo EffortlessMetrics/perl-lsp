@@ -6,6 +6,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::SourceLocation;
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
 /// Type of symbol (variable, function, package, etc.)
@@ -502,9 +503,16 @@ impl SymbolExtractor {
                 }
             }
             
+            // Handle interpolated strings specially to extract variable references
+            NodeKind::String { value, interpolated } => {
+                if *interpolated {
+                    // Extract variable references from interpolated strings
+                    self.extract_vars_from_string(value, node.location.clone());
+                }
+            }
+            
             // Leaf nodes - no children to visit
             NodeKind::Number { .. } |
-            NodeKind::String { .. } |
             NodeKind::Heredoc { .. } |
             NodeKind::Regex { .. } |
             NodeKind::Substitution { .. } |
@@ -562,6 +570,50 @@ impl SymbolExtractor {
         if let NodeKind::Variable { .. } = &node.kind {
             // The reference will be marked as write when we visit it
             // This would require passing context down through visit_node
+        }
+    }
+    
+    /// Extract variable references from an interpolated string
+    fn extract_vars_from_string(&mut self, value: &str, string_location: SourceLocation) {
+        // Simple regex to find scalar variables in strings
+        // This handles $var, ${var}, but not arrays/hashes for now
+        let scalar_re = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})").unwrap();
+        
+        // The value includes quotes, so strip them
+        let content = if value.len() >= 2 {
+            &value[1..value.len()-1]
+        } else {
+            value
+        };
+        
+        for cap in scalar_re.captures_iter(content) {
+            if let Some(m) = cap.get(0) {
+                let var_name = if m.as_str().starts_with("${") && m.as_str().ends_with("}") {
+                    // Handle ${var} format
+                    &m.as_str()[2..m.as_str().len()-1]
+                } else {
+                    // Handle $var format
+                    &m.as_str()[1..]
+                };
+                
+                // Calculate the location within the original string
+                // This is approximate - in the actual string location
+                let start_offset = string_location.start + 1 + m.start(); // +1 for opening quote
+                let end_offset = start_offset + m.len();
+                
+                let reference = SymbolReference {
+                    name: var_name.to_string(),
+                    kind: SymbolKind::ScalarVariable,
+                    location: SourceLocation {
+                        start: start_offset,
+                        end: end_offset,
+                    },
+                    scope_id: self.table.current_scope(),
+                    is_write: false,
+                };
+                
+                self.table.add_reference(reference);
+            }
         }
     }
 }

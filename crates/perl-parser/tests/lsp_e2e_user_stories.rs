@@ -281,11 +281,15 @@ print "Using config: $config_file\n";
     assert!(references.is_array());
     
     let refs = references.as_array().unwrap();
-    // We expect at least 2 references (the actual implementation may find more)
-    assert!(refs.len() >= 2, "Expected at least 2 references, got {}", refs.len());
-    
-    // Verify we found at least the declaration and one use
-    // TODO: The semantic analyzer should find all 4 references (declaration + 3 uses)
+    // We expect 5 references total: 1 declaration + 4 uses
+    // Note: We modified the test to use || instead of 'or' due to parser limitations
+    // The references are:
+    // 1. Declaration: my $config_file = ...
+    // 2. Use in open: open my $fh, '<', $config_file
+    // 3. Use in die string: "Cannot open $config_file: $!"
+    // 4. Use in backup string: "$config_file.bak"
+    // 5. Use in print: "Using config: $config_file\n"
+    assert_eq!(refs.len(), 5, "Expected 5 references (1 declaration + 4 uses)");
 }
 
 // ==================== USER STORY 5: HOVER INFORMATION ====================
