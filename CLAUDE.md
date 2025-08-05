@@ -39,6 +39,16 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Incremental parsing support
 - Works with any LSP-compatible editor
 
+## Default Build Configuration
+
+The project includes `.cargo/config.toml` which automatically configures:
+- Optimized dev builds (`opt-level = 1`) for parser testing
+- Full release optimization (`lto = true`) for benchmarks  
+- Automatic backtraces (`RUST_BACKTRACE=1`)
+- Sparse registry protocol for faster updates
+
+**AI tools can run bare `cargo build` and `cargo test` commands** - the configuration ensures correct behavior.
+
 ## Key Commands
 
 ### Build Commands
