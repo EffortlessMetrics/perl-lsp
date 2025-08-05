@@ -71,17 +71,17 @@ impl WorkingParser {
         }
         
         // Variable declarations
-        if self.match_token(&TokenType::My) {
+        if self.match_keyword("my") {
             return self.parse_variable_declaration();
         }
         
         // Control flow
-        if self.match_token(&TokenType::If) {
+        if self.match_keyword("if") {
             return self.parse_if_statement();
         }
         
         // Function definition
-        if self.match_token(&TokenType::Sub) {
+        if self.match_keyword("sub") {
             return self.parse_function();
         }
         
@@ -101,14 +101,15 @@ impl WorkingParser {
         let var = self.parse_primary()?;
         
         // Check for assignment
-        if self.match_token(&TokenType::Assign) {
+        if self.match_token(&TokenType::Equal) {
             let value = self.parse_expression()?;
             let end = self.previous_position();
             
             return Ok(Node::new(
-                NodeKind::VariableDeclaration {
-                    name: Box::new(var),
-                    value: Some(Box::new(value)),
+                NodeKind::Assignment {
+                    left: Box::new(var.clone()),
+                    op: TokenType::Equal,
+                    right: Box::new(value),
                 },
                 SourceLocation { start, end }
             ));
@@ -117,8 +118,8 @@ impl WorkingParser {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::VariableDeclaration {
-                name: Box::new(var),
-                value: None,
+                declarator: Arc::from("my"),
+                variables: vec![var],
             },
             SourceLocation { start, end }
         ))
@@ -140,7 +141,7 @@ impl WorkingParser {
         let then_block = self.parse_block()?;
         
         // Check for else
-        let else_block = if self.match_token(&TokenType::Else) {
+        let else_block = if self.match_keyword("else") {
             Some(Box::new(self.parse_block()?))
         } else {
             None
@@ -148,11 +149,11 @@ impl WorkingParser {
         
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::If {
+            NodeKind::IfStatement {
                 condition: Box::new(condition),
-                then_block: Box::new(then_block),
-                elsif_blocks: vec![],
-                else_block,
+                then_branch: Box::new(then_block),
+                elsif_branches: vec![],
+                else_branch: else_block,
             },
             SourceLocation { start, end }
         ))
@@ -174,9 +175,10 @@ impl WorkingParser {
         
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Function {
+            NodeKind::Subroutine {
                 name,
-                params: vec![],
+                prototype: None,
+                attributes: vec![],
                 body: Box::new(body),
             },
             SourceLocation { start, end }
@@ -209,7 +211,7 @@ impl WorkingParser {
     fn parse_assignment(&mut self) -> Result<Node, String> {
         let expr = self.parse_binary()?;
         
-        if self.match_token(&TokenType::Assign) {
+        if self.match_token(&TokenType::Equal) {
             let start = expr.location.start;
             let value = self.parse_assignment()?;
             let end = self.previous_position();
@@ -217,6 +219,7 @@ impl WorkingParser {
             return Ok(Node::new(
                 NodeKind::Assignment {
                     left: Box::new(expr),
+                    op: TokenType::Equal,
                     right: Box::new(value),
                 },
                 SourceLocation { start, end }
@@ -283,7 +286,9 @@ impl WorkingParser {
         }
         
         // Strings
-        if self.check_token(&TokenType::String) {
+        if self.check_token(&TokenType::SingleQuotedString) ||
+           self.check_token(&TokenType::DoubleQuotedString) ||
+           self.check_token(&TokenType::BacktickString) {
             let token = self.advance();
             let value = token.text.clone();
             return Ok(Node::new(
@@ -293,30 +298,25 @@ impl WorkingParser {
         }
         
         // Variables
-        if self.check_token(&TokenType::ScalarSigil) ||
-           self.check_token(&TokenType::ArraySigil) ||
-           self.check_token(&TokenType::HashSigil) {
-            let sigil_token = self.advance();
-            let sigil = sigil_token.text.clone();
+        if self.check_token(&TokenType::ScalarVariable) ||
+           self.check_token(&TokenType::ArrayVariable) ||
+           self.check_token(&TokenType::HashVariable) {
+            let token = self.advance();
+            let text = token.text.clone();
             
-            // Get variable name
-            if self.check_token(&TokenType::Identifier) {
-                let name_token = self.advance();
-                let name = name_token.text.clone();
-                
-                return Ok(Node::new(
-                    NodeKind::Variable { sigil, name },
-                    SourceLocation { start: sigil_token.start, end: name_token.end }
-                ));
-            }
+            // Variable node includes the sigil in the name
+            return Ok(Node::new(
+                NodeKind::Variable { name: text },
+                SourceLocation { start: token.start, end: token.end }
+            ));
         }
         
         // Identifiers (barewords)
         if self.check_token(&TokenType::Identifier) {
             let token = self.advance();
-            let name = token.text.clone();
+            let value = token.text.clone();
             return Ok(Node::new(
-                NodeKind::Identifier { name },
+                NodeKind::Bareword { value },
                 SourceLocation { start: token.start, end: token.end }
             ));
         }
@@ -337,7 +337,7 @@ impl WorkingParser {
             TokenType::Plus, TokenType::Minus, TokenType::Star, TokenType::Slash,
             TokenType::Equal, TokenType::NotEqual, TokenType::Less, TokenType::Greater,
             TokenType::LessEqual, TokenType::GreaterEqual,
-            TokenType::And, TokenType::Or,
+            TokenType::AndAnd, TokenType::OrOr,
         ] {
             if self.match_token(op) {
                 return Some(op.clone());
@@ -352,6 +352,25 @@ impl WorkingParser {
             true
         } else {
             false
+        }
+    }
+    
+    fn match_keyword(&mut self, keyword: &str) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        
+        // Check if current token is an identifier matching the keyword
+        match &self.peek().token_type {
+            TokenType::Identifier => {
+                if self.peek().text.as_ref() == keyword {
+                    self.advance();
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false
         }
     }
     
