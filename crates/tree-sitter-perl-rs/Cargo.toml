@@ -10,28 +10,28 @@ categories = ["parsing", "text-processing"]
 
 [dependencies]
 perl-lexer = { workspace = true }
-tree-sitter = "0.25"
-serde = { version = "1.0", features = ["derive"] }
-bincode = "2"
-proptest = "1.3"
-walkdir = "2.4"
-thiserror = "2.0"
-unicode-ident = "1.0"
-unicode-normalization = "0.1"
-pest = "2.8"
-pest_derive = "2.8"
-logos = "0.14"
-chumsky = "0.9"
-regex = "1.11"
-stacker = "0.1"
-encoding_rs = "0.8"
-serde_json = "1.0"
-once_cell = "1.20"
-lazy_static = "1.5"
+tree-sitter = "0.25.8"
+serde = { version = "1.0.219", features = ["derive"] }
+bincode = "2.0.1"
+proptest = "1.7.0"
+walkdir = "2.5.0"
+thiserror = "2.0.12"
+unicode-ident = "1.0.18"
+unicode-normalization = "0.1.24"
+pest = "2.8.1"
+pest_derive = "2.8.1"
+logos = "0.15.0"
+chumsky = "0.10.1"
+regex = "1.11.1"
+stacker = "0.1.21"
+encoding_rs = "0.8.35"
+serde_json = "1.0.142"
+once_cell = "1.21.3"
+lazy_static = "1.5.0"
 
 [dev-dependencies]
-criterion = "0.6"
-test-case = "3.3"
+criterion = "0.7.0"
+test-case = "3.3.1"
 
 [features]
 default = ["pure-rust"]
@@ -179,5 +179,5 @@ path = "../../benches/edge_case_benchmarks.rs"
 harness = false
 
 [build-dependencies]
-cc = "1.0"
-bindgen = "0.72" 
+cc = "1.2.31"
+bindgen = "0.72.0" 
