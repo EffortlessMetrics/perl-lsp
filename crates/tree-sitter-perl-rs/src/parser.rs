@@ -270,11 +270,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_assignment()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             return Ok(Node::new(
                 NodeKind::Assignment { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             ));
         }
         
@@ -290,11 +289,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_and()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         
@@ -310,11 +308,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_equality()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         
@@ -335,11 +332,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_relational()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         
@@ -364,11 +360,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_additive()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         
@@ -559,11 +554,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_multiplicative()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         
@@ -579,11 +573,10 @@ impl<'a> Parser<'a> {
             let right = Box::new(self.parse_unary()?);
             let left = Box::new(expr);
             
-            let left_ref = &left;
-            let right_ref = &right;
+            let location = self.span_locations(&left, &right);
             expr = Node::new(
                 NodeKind::Binary { left, op, right },
-                self.span_locations(left_ref, right_ref)
+                location
             );
         }
         

@@ -591,6 +591,8 @@ impl<'a> ParserV2<'a> {
             self.consume(&TokenType::Colon)?;
             self.skip_whitespace();
             let else_expr = Box::new(self.parse_expression()?);
+            let start = expr.location.start;
+            let end = else_expr.location.end;
             
             expr = Node::new(
                 NodeKind::Ternary {
@@ -598,10 +600,7 @@ impl<'a> ParserV2<'a> {
                     then_expr,
                     else_expr,
                 },
-                SourceLocation { 
-                    start: expr.location.start, 
-                    end: else_expr.location.end 
-                }
+                SourceLocation { start, end }
             );
         }
         
@@ -869,13 +868,14 @@ impl<'a> ParserV2<'a> {
                     let index = self.parse_expression()?;
                     self.consume(&TokenType::RightBracket)?;
                     
+                    let start = expr.location.start;
                     expr = Node::new(
                         NodeKind::ArrayAccess {
                             array: Box::new(expr),
                             index: Box::new(index),
                         },
                         SourceLocation {
-                            start: expr.location.start,
+                            start,
                             end: self.current_pos(),
                         }
                     );
@@ -885,13 +885,14 @@ impl<'a> ParserV2<'a> {
                     let key = self.parse_expression()?;
                     self.consume(&TokenType::RightBrace)?;
                     
+                    let start = expr.location.start;
                     expr = Node::new(
                         NodeKind::HashAccess {
                             hash: Box::new(expr),
                             key: Box::new(key),
                         },
                         SourceLocation {
-                            start: expr.location.start,
+                            start,
                             end: self.current_pos(),
                         }
                     );
@@ -917,6 +918,7 @@ impl<'a> ParserV2<'a> {
                         self.consume(&TokenType::RightParen)?;
                     }
                     
+                    let start = expr.location.start;
                     expr = Node::new(
                         NodeKind::MethodCall {
                             object: Box::new(expr),
@@ -924,22 +926,21 @@ impl<'a> ParserV2<'a> {
                             args,
                         },
                         SourceLocation {
-                            start: expr.location.start,
+                            start,
                             end: self.current_pos(),
                         }
                     );
                 } else {
                     // Scalar dereference
                     let deref = self.parse_unary()?;
+                    let start = expr.location.start;
+                    let end = deref.location.end;
                     expr = Node::new(
                         NodeKind::Dereference {
                             expr: Box::new(expr),
                             type_: Box::new(deref),
                         },
-                        SourceLocation {
-                            start: expr.location.start,
-                            end: deref.location.end,
-                        }
+                        SourceLocation { start, end }
                     );
                 }
             } else if self.check(&TokenType::LeftBracket) {
@@ -948,13 +949,14 @@ impl<'a> ParserV2<'a> {
                 let index = self.parse_expression()?;
                 self.consume(&TokenType::RightBracket)?;
                 
+                let start = expr.location.start;
                 expr = Node::new(
                     NodeKind::ArrayAccess {
                         array: Box::new(expr),
                         index: Box::new(index),
                     },
                     SourceLocation {
-                        start: expr.location.start,
+                        start,
                         end: self.current_pos(),
                     }
                 );
@@ -964,13 +966,14 @@ impl<'a> ParserV2<'a> {
                 let key = self.parse_expression()?;
                 self.consume(&TokenType::RightBrace)?;
                 
+                let start = expr.location.start;
                 expr = Node::new(
                     NodeKind::HashAccess {
                         hash: Box::new(expr),
                         key: Box::new(key),
                     },
                     SourceLocation {
-                        start: expr.location.start,
+                        start,
                         end: self.current_pos(),
                     }
                 );
@@ -978,13 +981,14 @@ impl<'a> ParserV2<'a> {
                 // Postfix increment/decrement
                 let op = self.previous().token_type.clone();
                 
+                let start = expr.location.start;
                 expr = Node::new(
                     NodeKind::PostfixUpdate {
                         op,
                         operand: Box::new(expr),
                     },
                     SourceLocation {
-                        start: expr.location.start,
+                        start,
                         end: self.current_pos(),
                     }
                 );
@@ -1038,7 +1042,7 @@ impl<'a> ParserV2<'a> {
         
         // Bareword or function call
         if self.check(&TokenType::Identifier) {
-            let id_token = self.advance();
+            let id_token = self.advance().clone();
             let name = id_token.text.clone();
             
             // Check for function call
@@ -1194,7 +1198,7 @@ impl<'a> ParserV2<'a> {
     // Helper parsing methods
     
     fn parse_variable_or_field(&mut self) -> Result<Node, ParseError> {
-        let var_token = self.advance();
+        let var_token = self.advance().clone();
         let var_name = var_token.text.clone();
         
         Ok(Node::new(
