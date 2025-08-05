@@ -25,8 +25,8 @@ cargo build -p perl-parser --bin perl-lsp --release
 ### 2. Build the Extension
 
 ```bash
-# From vscode-extension directory
-./build.sh
+# From project root
+cargo xtask release <version>
 ```
 
 Or manually:

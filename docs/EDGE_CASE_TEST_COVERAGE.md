@@ -92,7 +92,7 @@ test_encoding_aware_heredocs()
 
 ```bash
 # Generate coverage report
-./scripts/test_edge_cases.sh --coverage
+cargo xtask test-edge-cases --coverage
 ```
 
 Expected coverage:
@@ -116,13 +116,13 @@ Proves tree-sitter compatibility with edge cases.
 
 ```bash
 # Quick test
-./scripts/test_edge_cases.sh
+cargo xtask test-edge-cases
 
 # Full test with benchmarks
-./scripts/test_edge_cases.sh --bench
+cargo xtask test-edge-cases --bench
 
 # With coverage report
-./scripts/test_edge_cases.sh --coverage
+cargo xtask test-edge-cases --coverage
 ```
 
 ## Test Philosophy
@@ -138,13 +138,13 @@ The test suite is designed for CI integration:
 
 ```yaml
 - name: Test Edge Cases
-  run: ./scripts/test_edge_cases.sh
+  run: cargo xtask test-edge-cases
   
 - name: Benchmark Performance
-  run: ./scripts/test_edge_cases.sh --bench
+  run: cargo xtask test-edge-cases --bench
   
 - name: Check Coverage
-  run: ./scripts/test_edge_cases.sh --coverage
+  run: cargo xtask test-edge-cases --coverage
 ```
 
 ## Future Tests

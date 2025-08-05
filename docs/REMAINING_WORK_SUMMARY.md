@@ -23,8 +23,8 @@
 
 ### 1. Verify Stacker Integration
 ```bash
-# Run verification script
-./verify_stacker.sh
+# Run verification
+cargo xtask verify --stacker
 
 # Or manually test
 cargo test --features pure-rust test_stacker_with_deep_nesting
