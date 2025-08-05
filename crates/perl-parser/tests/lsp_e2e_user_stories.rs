@@ -187,7 +187,6 @@ pri  # Developer is typing 'print'
 // so that I can understand the code better.
 
 #[test]
-#[ignore = "textDocument/definition not yet implemented"]
 fn test_user_story_go_to_definition() {
     let mut server = create_test_server();
     initialize_server(&mut server);

@@ -136,6 +136,31 @@ impl SemanticAnalyzer {
         None
     }
     
+    /// Find the definition of a symbol at a given position
+    pub fn find_definition(&self, position: usize) -> Option<&Symbol> {
+        // First, find if there's a reference at this position
+        for refs in self.symbol_table.references.values() {
+            for reference in refs {
+                if reference.location.start <= position && reference.location.end >= position {
+                    // Found a reference, now find its definition
+                    let symbols = self.symbol_table.find_symbol(
+                        &reference.name,
+                        reference.scope_id,
+                        reference.kind
+                    );
+                    
+                    // Return the first matching definition
+                    if !symbols.is_empty() {
+                        return Some(symbols[0]);
+                    }
+                }
+            }
+        }
+        
+        // If no reference found, check if we're on a definition itself
+        self.symbol_at(SourceLocation { start: position, end: position })
+    }
+    
     /// Analyze a node and generate semantic information
     fn analyze_node(&mut self, node: &Node, scope_id: ScopeId) {
         match &node.kind {

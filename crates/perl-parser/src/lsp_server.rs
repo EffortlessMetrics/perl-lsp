@@ -229,6 +229,7 @@ impl LspServer {
             "textDocument/completion" => self.handle_completion(request.params),
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
+            "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -279,6 +280,7 @@ impl LspServer {
                     "triggerCharacters": ["$", "@", "%", "->"]
                 },
                 "hoverProvider": true,
+                "definitionProvider": true,
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -610,6 +612,51 @@ impl LspServer {
         }
 
         Ok(Some(json!(null)))
+    }
+    
+    /// Handle textDocument/definition request
+    fn handle_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            eprintln!("Definition request for {} at {}:{}", uri, line, character);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Create semantic analyzer
+                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                    
+                    // Find definition at the position
+                    if let Some(definition) = analyzer.find_definition(offset) {
+                        let (def_line, def_char) = self.offset_to_position(&doc.content, definition.location.start);
+                        
+                        eprintln!("Found definition at {}:{}", def_line, def_char);
+                        
+                        return Ok(Some(json!([{
+                            "uri": uri,
+                            "range": {
+                                "start": {
+                                    "line": def_line,
+                                    "character": def_char,
+                                },
+                                "end": {
+                                    "line": def_line,
+                                    "character": def_char + definition.name.len() as u32,
+                                },
+                            },
+                        }])));
+                    }
+                }
+            }
+        }
+        
+        eprintln!("No definition found");
+        Ok(Some(json!([])))
     }
 
     /// Get token at position (simple implementation)
