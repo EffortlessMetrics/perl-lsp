@@ -755,6 +755,116 @@ impl LspServer {
             "uc" => Some(("uc EXPR", vec!["EXPR"])),
             "lcfirst" => Some(("lcfirst EXPR", vec!["EXPR"])),
             "ucfirst" => Some(("ucfirst EXPR", vec!["EXPR"])),
+            
+            // File operations
+            "seek" => Some(("seek FILEHANDLE, POSITION, WHENCE", vec!["FILEHANDLE", "POSITION", "WHENCE"])),
+            "tell" => Some(("tell FILEHANDLE", vec!["FILEHANDLE"])),
+            "stat" => Some(("stat EXPR", vec!["EXPR"])),
+            "lstat" => Some(("lstat EXPR", vec!["EXPR"])),
+            "chmod" => Some(("chmod MODE, LIST", vec!["MODE", "LIST"])),
+            "chown" => Some(("chown UID, GID, LIST", vec!["UID", "GID", "LIST"])),
+            "unlink" => Some(("unlink LIST", vec!["LIST"])),
+            "rename" => Some(("rename OLDNAME, NEWNAME", vec!["OLDNAME", "NEWNAME"])),
+            "mkdir" => Some(("mkdir FILENAME, MODE", vec!["FILENAME", "MODE"])),
+            "rmdir" => Some(("rmdir FILENAME", vec!["FILENAME"])),
+            "opendir" => Some(("opendir DIRHANDLE, EXPR", vec!["DIRHANDLE", "EXPR"])),
+            "readdir" => Some(("readdir DIRHANDLE", vec!["DIRHANDLE"])),
+            "closedir" => Some(("closedir DIRHANDLE", vec!["DIRHANDLE"])),
+            "link" => Some(("link OLDFILE, NEWFILE", vec!["OLDFILE", "NEWFILE"])),
+            "symlink" => Some(("symlink OLDFILE, NEWFILE", vec!["OLDFILE", "NEWFILE"])),
+            "readlink" => Some(("readlink EXPR", vec!["EXPR"])),
+            "truncate" => Some(("truncate FILEHANDLE, LENGTH", vec!["FILEHANDLE", "LENGTH"])),
+            
+            // String/Data functions
+            "pack" => Some(("pack TEMPLATE, LIST", vec!["TEMPLATE", "LIST"])),
+            "unpack" => Some(("unpack TEMPLATE, EXPR", vec!["TEMPLATE", "EXPR"])),
+            "quotemeta" => Some(("quotemeta EXPR", vec!["EXPR"])),
+            "hex" => Some(("hex EXPR", vec!["EXPR"])),
+            "oct" => Some(("oct EXPR", vec!["EXPR"])),
+            "vec" => Some(("vec EXPR, OFFSET, BITS", vec!["EXPR", "OFFSET", "BITS"])),
+            "crypt" => Some(("crypt PLAINTEXT, SALT", vec!["PLAINTEXT", "SALT"])),
+            
+            // Array/List functions
+            "scalar" => Some(("scalar EXPR", vec!["EXPR"])),
+            "wantarray" => Some(("wantarray", vec![])),
+            
+            // Math functions
+            "abs" => Some(("abs VALUE", vec!["VALUE"])),
+            "int" => Some(("int EXPR", vec!["EXPR"])),
+            "sqrt" => Some(("sqrt EXPR", vec!["EXPR"])),
+            "exp" => Some(("exp EXPR", vec!["EXPR"])),
+            "log" => Some(("log EXPR", vec!["EXPR"])),
+            "sin" => Some(("sin EXPR", vec!["EXPR"])),
+            "cos" => Some(("cos EXPR", vec!["EXPR"])),
+            "tan" => Some(("tan EXPR", vec!["EXPR"])),
+            "atan2" => Some(("atan2 Y, X", vec!["Y", "X"])),
+            "rand" => Some(("rand EXPR", vec!["EXPR"])),
+            "srand" => Some(("srand EXPR", vec!["EXPR"])),
+            
+            // System/Process functions
+            "system" => Some(("system LIST", vec!["LIST"])),
+            "exec" => Some(("exec LIST", vec!["LIST"])),
+            "fork" => Some(("fork", vec![])),
+            "wait" => Some(("wait", vec![])),
+            "waitpid" => Some(("waitpid PID, FLAGS", vec!["PID", "FLAGS"])),
+            "kill" => Some(("kill SIGNAL, LIST", vec!["SIGNAL", "LIST"])),
+            "sleep" => Some(("sleep EXPR", vec!["EXPR"])),
+            "alarm" => Some(("alarm SECONDS", vec!["SECONDS"])),
+            "exit" => Some(("exit EXPR", vec!["EXPR"])),
+            "getpgrp" => Some(("getpgrp PID", vec!["PID"])),
+            "setpgrp" => Some(("setpgrp PID, PGRP", vec!["PID", "PGRP"])),
+            "getppid" => Some(("getppid", vec![])),
+            "getpriority" => Some(("getpriority WHICH, WHO", vec!["WHICH", "WHO"])),
+            "setpriority" => Some(("setpriority WHICH, WHO, PRIORITY", vec!["WHICH", "WHO", "PRIORITY"])),
+            
+            // Time functions
+            "time" => Some(("time", vec![])),
+            "localtime" => Some(("localtime EXPR", vec!["EXPR"])),
+            "gmtime" => Some(("gmtime EXPR", vec!["EXPR"])),
+            "times" => Some(("times", vec![])),
+            
+            // User/Group functions
+            "getpwuid" => Some(("getpwuid UID", vec!["UID"])),
+            "getpwnam" => Some(("getpwnam NAME", vec!["NAME"])),
+            "getgrgid" => Some(("getgrgid GID", vec!["GID"])),
+            "getgrnam" => Some(("getgrnam NAME", vec!["NAME"])),
+            "getlogin" => Some(("getlogin", vec![])),
+            
+            // Network functions
+            "socket" => Some(("socket SOCKET, DOMAIN, TYPE, PROTOCOL", vec!["SOCKET", "DOMAIN", "TYPE", "PROTOCOL"])),
+            "bind" => Some(("bind SOCKET, NAME", vec!["SOCKET", "NAME"])),
+            "listen" => Some(("listen SOCKET, QUEUESIZE", vec!["SOCKET", "QUEUESIZE"])),
+            "accept" => Some(("accept NEWSOCKET, GENERICSOCKET", vec!["NEWSOCKET", "GENERICSOCKET"])),
+            "connect" => Some(("connect SOCKET, NAME", vec!["SOCKET", "NAME"])),
+            "send" => Some(("send SOCKET, MSG, FLAGS, TO", vec!["SOCKET", "MSG", "FLAGS", "TO"])),
+            "recv" => Some(("recv SOCKET, SCALAR, LENGTH, FLAGS", vec!["SOCKET", "SCALAR", "LENGTH", "FLAGS"])),
+            "shutdown" => Some(("shutdown SOCKET, HOW", vec!["SOCKET", "HOW"])),
+            "getsockname" => Some(("getsockname SOCKET", vec!["SOCKET"])),
+            "getpeername" => Some(("getpeername SOCKET", vec!["SOCKET"])),
+            
+            // Control flow
+            "eval" => Some(("eval EXPR", vec!["EXPR"])),
+            "require" => Some(("require EXPR", vec!["EXPR"])),
+            "do" => Some(("do EXPR", vec!["EXPR"])),
+            "caller" => Some(("caller EXPR", vec!["EXPR"])),
+            "return" => Some(("return LIST", vec!["LIST"])),
+            "goto" => Some(("goto LABEL", vec!["LABEL"])),
+            "last" => Some(("last LABEL", vec!["LABEL"])),
+            "next" => Some(("next LABEL", vec!["LABEL"])),
+            "redo" => Some(("redo LABEL", vec!["LABEL"])),
+            
+            // Misc functions
+            "tie" => Some(("tie VARIABLE, CLASSNAME, LIST", vec!["VARIABLE", "CLASSNAME", "LIST"])),
+            "untie" => Some(("untie VARIABLE", vec!["VARIABLE"])),
+            "tied" => Some(("tied VARIABLE", vec!["VARIABLE"])),
+            "dbmopen" => Some(("dbmopen HASH, DBNAME, MODE", vec!["HASH", "DBNAME", "MODE"])),
+            "dbmclose" => Some(("dbmclose HASH", vec!["HASH"])),
+            "select" => Some(("select FILEHANDLE", vec!["FILEHANDLE"])),
+            "syscall" => Some(("syscall NUMBER, LIST", vec!["NUMBER", "LIST"])),
+            "dump" => Some(("dump LABEL", vec!["LABEL"])),
+            "prototype" => Some(("prototype FUNCTION", vec!["FUNCTION"])),
+            "lock" => Some(("lock THING", vec!["THING"])),
+            
             _ => None
         };
         
