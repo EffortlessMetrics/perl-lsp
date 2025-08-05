@@ -9,9 +9,9 @@ Run all heredoc tests:
 cargo xtask test-heredoc --release
 ```
 
-Or use the CI script:
+Or use cargo xtask:
 ```bash
-./ci/test_heredocs.sh
+cargo xtask test --suite heredoc
 ```
 
 ## Test Suites
@@ -108,8 +108,8 @@ The heredoc tests should be run in CI to prevent regression. Add to your CI work
   run: cargo xtask test-heredoc --release
 ```
 
-Or use the provided script:
+Or use cargo xtask:
 ```yaml
 - name: Test Heredocs
-  run: ./ci/test_heredocs.sh
+  run: cargo xtask test --suite heredoc
 ```

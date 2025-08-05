@@ -70,7 +70,7 @@ Tested by: ___________
 
 ## 🔍 Integration Tests
 
-- [ ] Run `./test_lsp_features.sh` - all tests pass
+- [ ] Run `cargo xtask test-lsp` - all tests pass
 - [ ] Test with a real Perl project (1000+ lines)
 - [ ] Memory usage stays reasonable over time
 - [ ] No crashes during 10-minute usage session

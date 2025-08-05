@@ -87,10 +87,10 @@ pub(crate) fn build_node(&mut self, pair: Pair<Rule>) -> Result<Option<AstNode>,
 3. `iterative_parser_tests.rs` - Equivalence testing
 4. Benchmark suite with automated comparison
 
-### Test Scripts
-- `scripts/profile_stack_overflow.sh` - Stack analysis
-- `scripts/test_iterative_parser.sh` - Comprehensive testing
-- `verify_stacker.sh` - Quick verification
+### Test Commands
+- `cargo xtask profile --stack-overflow` - Stack analysis
+- `cargo xtask test --comprehensive` - Comprehensive testing
+- `cargo xtask verify --stacker` - Quick verification
 
 ## Documentation
 

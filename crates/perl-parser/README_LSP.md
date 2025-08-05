@@ -159,7 +159,7 @@ Try out the LSP features with the included demo script:
 
 ```bash
 # Run the interactive demo
-./crates/perl-parser/examples/lsp_demo.sh
+cargo run -p perl-parser --example lsp_demo
 
 # Or test specific features
 cargo run -p perl-parser --example lsp_server

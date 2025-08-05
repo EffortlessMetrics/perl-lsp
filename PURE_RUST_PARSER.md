@@ -63,10 +63,10 @@ cargo run --features "pure-rust test-utils" --bin compare_parsers -- file.pl
 
 ```bash
 # Run comprehensive benchmarks
-./benchmark_all.sh
+cargo xtask bench
 
-# Three-level comparison (parser, bindings, CLI)
-./compare_all_levels.sh
+# Compare all parser implementations
+cargo xtask compare
 
 # Benchmark specific file
 cargo run --release --features "pure-rust test-utils" --bin compare_parsers -- file.pl 1000
