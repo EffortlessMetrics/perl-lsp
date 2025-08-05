@@ -282,8 +282,8 @@ impl DiagnosticsProvider {
     
     /// Check for assignment in condition (common mistake)
     fn check_assignment_in_condition(&self, condition: &Node, diagnostics: &mut Vec<Diagnostic>) {
-        if let NodeKind::Binary { op, .. } = &condition.kind {
-            if op == "=" {
+        match &condition.kind {
+            NodeKind::Binary { op, .. } if op == "=" => {
                 diagnostics.push(Diagnostic {
                     range: (condition.location.start, condition.location.end),
                     severity: DiagnosticSeverity::Warning,
@@ -293,6 +293,17 @@ impl DiagnosticsProvider {
                     tags: Vec::new(),
                 });
             }
+            NodeKind::Assignment { .. } => {
+                diagnostics.push(Diagnostic {
+                    range: (condition.location.start, condition.location.end),
+                    severity: DiagnosticSeverity::Warning,
+                    code: Some("assignment-in-condition".to_string()),
+                    message: "Assignment in condition - did you mean '=='?".to_string(),
+                    related_information: Vec::new(),
+                    tags: Vec::new(),
+                });
+            }
+            _ => {}
         }
     }
     

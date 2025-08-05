@@ -270,7 +270,7 @@ impl SymbolExtractor {
             }
             
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                self.handle_variable_declaration(declarator, variable, attributes, node.location.clone());
+                self.handle_variable_declaration(declarator, variable, attributes, variable.location.clone());
                 if let Some(init) = initializer {
                     self.visit_node(init);
                 }
@@ -439,8 +439,17 @@ impl SymbolExtractor {
                 self.visit_node(operand);
             }
             
-            NodeKind::FunctionCall { name: _, args } => {
-                // Function name is a string, not a node
+            NodeKind::FunctionCall { name, args } => {
+                // Track function call as a reference
+                let reference = SymbolReference {
+                    name: name.clone(),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location.clone(),
+                    scope_id: self.table.current_scope(),
+                    is_write: false,
+                };
+                self.table.add_reference(reference);
+                
                 for arg in args {
                     self.visit_node(arg);
                 }

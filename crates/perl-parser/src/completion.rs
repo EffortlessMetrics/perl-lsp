@@ -476,7 +476,21 @@ impl CompletionProvider {
     
     /// Check if prefix could be a function
     fn could_be_function(&self, prefix: &str) -> bool {
-        self.builtins.iter().any(|b| b.starts_with(prefix))
+        // Check builtins
+        if self.builtins.iter().any(|b| b.starts_with(prefix)) {
+            return true;
+        }
+        
+        // Check user-defined functions
+        for (name, symbols) in &self.symbol_table.symbols {
+            for symbol in symbols {
+                if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix) {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
     
     /// Simple heuristic to check if position is in a string

@@ -490,7 +490,7 @@ mod tests {
         let code = "push(@arr, split(',', ";
         let position = code.len() - 1;
         
-        let ast = Parser::new("").parse().unwrap();
+        let ast = Parser::new(code).parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
         
         let help = provider.get_signature_help(code, position);
