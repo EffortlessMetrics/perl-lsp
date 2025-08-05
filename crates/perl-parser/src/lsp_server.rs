@@ -232,6 +232,7 @@ impl LspServer {
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
+            "textDocument/rename" => self.handle_rename(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -287,6 +288,7 @@ impl LspServer {
                 "signatureHelpProvider": {
                     "triggerCharacters": ["(", ","]
                 },
+                "renameProvider": true,
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -863,6 +865,90 @@ impl LspServer {
         }
         
         Ok(Some(json!([])))
+    }
+    
+    /// Handle textDocument/rename request
+    fn handle_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let new_name = params["newName"].as_str().unwrap_or("");
+            
+            // Validate the new name
+            if !self.is_valid_identifier(new_name) {
+                return Err(JsonRpcError {
+                    code: -32602,
+                    message: format!("Invalid identifier: {}", new_name),
+                    data: None,
+                });
+            }
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Create semantic analyzer
+                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                    
+                    // Find all references (including definition)
+                    let references = analyzer.find_all_references(offset, true);
+                    
+                    if !references.is_empty() {
+                        // Create text edits for all references
+                        let mut edits = Vec::new();
+                        for location in references {
+                            let (start_line, start_char) = self.offset_to_position(&doc.content, location.start);
+                            let (end_line, end_char) = self.offset_to_position(&doc.content, location.end);
+                            
+                            edits.push(json!({
+                                "range": {
+                                    "start": { "line": start_line, "character": start_char },
+                                    "end": { "line": end_line, "character": end_char }
+                                },
+                                "newText": new_name
+                            }));
+                        }
+                        
+                        // Return WorkspaceEdit
+                        return Ok(Some(json!({
+                            "changes": {
+                                uri: edits
+                            }
+                        })));
+                    }
+                }
+            }
+        }
+        
+        // Return empty workspace edit if nothing to rename
+        Ok(Some(json!({
+            "changes": {}
+        })))
+    }
+    
+    /// Validate if a string is a valid Perl identifier
+    fn is_valid_identifier(&self, name: &str) -> bool {
+        if name.is_empty() {
+            return false;
+        }
+        
+        let chars: Vec<char> = name.chars().collect();
+        
+        // First character must be letter or underscore
+        if !chars[0].is_alphabetic() && chars[0] != '_' {
+            return false;
+        }
+        
+        // Rest must be alphanumeric or underscore
+        for ch in &chars[1..] {
+            if !ch.is_alphanumeric() && *ch != '_' {
+                return false;
+            }
+        }
+        
+        true
     }
 
     /// Get token at position (simple implementation)
