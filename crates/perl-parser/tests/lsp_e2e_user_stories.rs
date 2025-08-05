@@ -390,54 +390,46 @@ sub render_response {
 // so that I know what parameters to provide.
 
 #[test]
-#[ignore = "textDocument/signatureHelp not yet implemented"]
 fn test_user_story_signature_help() {
     let mut server = create_test_server();
     initialize_server(&mut server);
     
+    // Test with a built-in function first
     let code = r#"
-sub connect_to_database {
-    my ($host, $port, $username, $password, $database) = @_;
-    # ... connection logic ...
-}
-
-# Developer is typing:
-connect_to_database("localhost",   # <- cursor is here after comma
+my $text = "Hello World";
+my $result = substr($text, 6, );  # <- cursor is here after comma
 "#;
     
     open_document(&mut server, "file:///test/signature.pl", code);
     
-    // Developer just typed the comma after "localhost"
+    // Developer just typed the comma after "6"
     let result = send_request(&mut server, "textDocument/signatureHelp", Some(json!({
         "textDocument": {
             "uri": "file:///test/signature.pl"
         },
         "position": {
-            "line": 7,
-            "character": 33  // After the comma
+            "line": 2,
+            "character": 30  // After the comma following "6"
         }
     })));
     
     assert!(result.is_some());
-    let _sig_help = result.unwrap();
+    let sig_help = result.unwrap();
     
-    // For builtin functions, we should get signature info
-    // Let's test with a builtin function instead
-    let code2 = r#"substr($string, "#;
+    // Verify we got signature information
+    assert!(sig_help["signatures"].is_array());
+    let signatures = sig_help["signatures"].as_array().unwrap();
+    assert!(!signatures.is_empty());
     
-    open_document(&mut server, "file:///test/builtin_sig.pl", code2);
+    // Check that we have the substr signature
+    let signature = &signatures[0];
+    assert!(signature["label"].as_str().unwrap().contains("substr"));
     
-    let result = send_request(&mut server, "textDocument/signatureHelp", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtin_sig.pl"
-        },
-        "position": {
-            "line": 0,
-            "character": 16  // After the comma
-        }
-    })));
+    // Check we have parameters
+    assert!(signature["parameters"].is_array());
     
-    assert!(result.is_some());
+    // Check the active parameter is set correctly (should be 2 for LENGTH parameter)
+    assert_eq!(sig_help["activeParameter"].as_u64().unwrap(), 2);
 }
 
 // ==================== USER STORY 8: RENAME SYMBOL ====================

@@ -229,6 +229,7 @@ impl LspServer {
             "textDocument/completion" => self.handle_completion(request.params),
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
+            "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
@@ -283,6 +284,9 @@ impl LspServer {
                 "hoverProvider": true,
                 "definitionProvider": true,
                 "referencesProvider": true,
+                "signatureHelpProvider": {
+                    "triggerCharacters": ["(", ","]
+                },
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -616,6 +620,156 @@ impl LspServer {
         }
 
         Ok(Some(json!(null)))
+    }
+    
+    /// Handle textDocument/signatureHelp request
+    fn handle_signature_help(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref _ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Find the function call context at this position
+                    if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
+                        // Get signature for the function
+                        if let Some(signature) = self.get_function_signature(&function_name) {
+                            return Ok(Some(json!({
+                                "signatures": [signature],
+                                "activeSignature": 0,
+                                "activeParameter": active_param
+                            })));
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    /// Find function context at position (returns function name and active parameter index)
+    fn find_function_context(&self, content: &str, offset: usize) -> Option<(String, usize)> {
+        // Work backwards to find the opening parenthesis and function name
+        let chars: Vec<char> = content.chars().collect();
+        if offset > chars.len() {
+            return None;
+        }
+        
+        let mut paren_depth = 0;
+        let mut comma_count = 0;
+        let mut i = offset.saturating_sub(1);
+        
+        // First, check if we're inside a function call
+        while i > 0 {
+            match chars[i] {
+                ')' => paren_depth += 1,
+                '(' => {
+                    if paren_depth == 0 {
+                        // Found the opening paren, now get the function name
+                        let mut j = i.saturating_sub(1);
+                        
+                        // Skip whitespace
+                        while j > 0 && chars[j].is_whitespace() {
+                            j -= 1;
+                        }
+                        
+                        // Get the function name
+                        let end = j + 1;
+                        while j > 0 && (chars[j].is_alphanumeric() || chars[j] == '_') {
+                            j -= 1;
+                        }
+                        if !chars[j].is_alphanumeric() && chars[j] != '_' {
+                            j += 1;
+                        }
+                        
+                        let func_name: String = chars[j..end].iter().collect();
+                        if !func_name.is_empty() {
+                            return Some((func_name, comma_count));
+                        }
+                        return None;
+                    }
+                    paren_depth -= 1;
+                },
+                ',' if paren_depth == 0 => comma_count += 1,
+                _ => {}
+            }
+            
+            if i == 0 {
+                break;
+            }
+            i -= 1;
+        }
+        
+        None
+    }
+    
+    /// Get function signature information
+    fn get_function_signature(&self, function_name: &str) -> Option<Value> {
+        // Define signatures for common Perl built-in functions
+        let signature = match function_name {
+            "print" => Some(("print LIST", vec!["LIST"])),
+            "printf" => Some(("printf FORMAT, LIST", vec!["FORMAT", "LIST"])),
+            "open" => Some(("open FILEHANDLE, MODE, EXPR", vec!["FILEHANDLE", "MODE", "EXPR"])),
+            "close" => Some(("close FILEHANDLE", vec!["FILEHANDLE"])),
+            "read" => Some(("read FILEHANDLE, SCALAR, LENGTH, OFFSET", vec!["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"])),
+            "write" => Some(("write FILEHANDLE", vec!["FILEHANDLE"])),
+            "die" => Some(("die LIST", vec!["LIST"])),
+            "warn" => Some(("warn LIST", vec!["LIST"])),
+            "substr" => Some(("substr EXPR, OFFSET, LENGTH, REPLACEMENT", vec!["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"])),
+            "length" => Some(("length EXPR", vec!["EXPR"])),
+            "index" => Some(("index STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
+            "rindex" => Some(("rindex STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
+            "sprintf" => Some(("sprintf FORMAT, LIST", vec!["FORMAT", "LIST"])),
+            "join" => Some(("join EXPR, LIST", vec!["EXPR", "LIST"])),
+            "split" => Some(("split /PATTERN/, EXPR, LIMIT", vec!["/PATTERN/", "EXPR", "LIMIT"])),
+            "push" => Some(("push ARRAY, LIST", vec!["ARRAY", "LIST"])),
+            "pop" => Some(("pop ARRAY", vec!["ARRAY"])),
+            "shift" => Some(("shift ARRAY", vec!["ARRAY"])),
+            "unshift" => Some(("unshift ARRAY, LIST", vec!["ARRAY", "LIST"])),
+            "splice" => Some(("splice ARRAY, OFFSET, LENGTH, LIST", vec!["ARRAY", "OFFSET", "LENGTH", "LIST"])),
+            "grep" => Some(("grep BLOCK LIST", vec!["BLOCK", "LIST"])),
+            "map" => Some(("map BLOCK LIST", vec!["BLOCK", "LIST"])),
+            "sort" => Some(("sort BLOCK LIST", vec!["BLOCK", "LIST"])),
+            "reverse" => Some(("reverse LIST", vec!["LIST"])),
+            "keys" => Some(("keys HASH", vec!["HASH"])),
+            "values" => Some(("values HASH", vec!["HASH"])),
+            "each" => Some(("each HASH", vec!["HASH"])),
+            "exists" => Some(("exists EXPR", vec!["EXPR"])),
+            "delete" => Some(("delete EXPR", vec!["EXPR"])),
+            "defined" => Some(("defined EXPR", vec!["EXPR"])),
+            "undef" => Some(("undef EXPR", vec!["EXPR"])),
+            "ref" => Some(("ref EXPR", vec!["EXPR"])),
+            "bless" => Some(("bless REF, CLASSNAME", vec!["REF", "CLASSNAME"])),
+            "chomp" => Some(("chomp VARIABLE", vec!["VARIABLE"])),
+            "chop" => Some(("chop VARIABLE", vec!["VARIABLE"])),
+            "chr" => Some(("chr NUMBER", vec!["NUMBER"])),
+            "ord" => Some(("ord EXPR", vec!["EXPR"])),
+            "lc" => Some(("lc EXPR", vec!["EXPR"])),
+            "uc" => Some(("uc EXPR", vec!["EXPR"])),
+            "lcfirst" => Some(("lcfirst EXPR", vec!["EXPR"])),
+            "ucfirst" => Some(("ucfirst EXPR", vec!["EXPR"])),
+            _ => None
+        };
+        
+        if let Some((label, params)) = signature {
+            let parameters: Vec<Value> = params.iter().map(|p| {
+                json!({
+                    "label": p.to_string()
+                })
+            }).collect();
+            
+            Some(json!({
+                "label": label,
+                "parameters": parameters
+            }))
+        } else {
+            None
+        }
     }
     
     /// Handle textDocument/definition request
