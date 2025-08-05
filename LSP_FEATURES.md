@@ -44,7 +44,7 @@ Display documentation and type information.
 Show function parameters while typing.
 - Active parameter highlighting
 - Parameter names and descriptions
-- Support for 40+ built-in functions
+- Support for 114 built-in functions
 - Triggers on `(` and `,`
 
 ### 7. **Document Symbols**
@@ -87,7 +87,7 @@ End-to-end integration testing ensures all features work together seamlessly.
 | Definition | ✅ Complete | <5ms | Single-file support |
 | References | ✅ Complete | <10ms | Includes interpolation |
 | Hover | ✅ Complete | <5ms | Rich documentation |
-| Signature Help | ✅ Complete | <5ms | 40+ built-ins |
+| Signature Help | ✅ Complete | <5ms | 114 built-ins |
 | Document Symbols | ✅ Complete | <10ms | Full hierarchy |
 | Code Actions | ✅ Complete | <5ms | Basic fixes |
 | Incremental Parsing | ✅ Complete | <1ms | Efficient updates |
