@@ -230,6 +230,7 @@ impl LspServer {
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
+            "textDocument/references" => self.handle_references(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -281,6 +282,7 @@ impl LspServer {
                 },
                 "hoverProvider": true,
                 "definitionProvider": true,
+                "referencesProvider": true,
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -321,7 +323,8 @@ impl LspServer {
             let text = params["textDocument"]["text"].as_str().unwrap_or("");
             let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
             
-            eprintln!("Document opened: {}", uri);
+            eprintln!("Document opened: {} with {} bytes of text", uri, text.len());
+            eprintln!("First 100 chars: {:?}", &text[..text.len().min(100)]);
             
             // Check cache first
             let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
@@ -330,13 +333,18 @@ impl LspServer {
             } else {
                 // Parse the document
                 let mut parser = Parser::new(text);
+                eprintln!("Parsing document...");
                 match parser.parse() {
                     Ok(ast) => {
+                        eprintln!("Parse successful!");
                         let arc_ast = Arc::new(ast);
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), vec![])
                     },
-                    Err(e) => (None, vec![e]),
+                    Err(e) => {
+                        eprintln!("Parse failed: {:?}", e);
+                        (None, vec![e])
+                    },
                 }
             };
 
@@ -656,6 +664,69 @@ impl LspServer {
         }
         
         eprintln!("No definition found");
+        Ok(Some(json!([])))
+    }
+    
+    /// Handle textDocument/references request
+    fn handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let include_declaration = if let Some(context) = params.get("context") {
+                context["includeDeclaration"].as_bool().unwrap_or(true)
+            } else {
+                true
+            };
+            
+            eprintln!("References request for {} at {}:{} (includeDeclaration: {})", 
+                     uri, line, character, include_declaration);
+            
+            let documents = self.documents.lock().unwrap();
+            eprintln!("Looking for document: {}", uri);
+            if let Some(doc) = documents.get(uri) {
+                eprintln!("Document found, has_ast: {}", doc.ast.is_some());
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    eprintln!("Calculated offset {} for line {} char {}", offset, line, character);
+                    eprintln!("Content at offset: {:?}", &doc.content[offset..offset.min(offset+20).min(doc.content.len())]);
+                    
+                    // Create semantic analyzer
+                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                    
+                    // Find all references at the position
+                    let references = analyzer.find_all_references(offset, include_declaration);
+                    
+                    eprintln!("Found {} references at offset {}", references.len(), offset);
+                    
+                    if !references.is_empty() {
+                        let locations: Vec<Value> = references.iter().map(|loc| {
+                            let (start_line, start_char) = self.offset_to_position(&doc.content, loc.start);
+                            let (end_line, end_char) = self.offset_to_position(&doc.content, loc.end);
+                            
+                            json!({
+                                "uri": uri,
+                                "range": {
+                                    "start": {
+                                        "line": start_line,
+                                        "character": start_char,
+                                    },
+                                    "end": {
+                                        "line": end_line,
+                                        "character": end_char,
+                                    },
+                                },
+                            })
+                        }).collect();
+                        
+                        eprintln!("Found {} references", locations.len());
+                        return Ok(Some(json!(locations)));
+                    }
+                }
+            }
+        }
+        
+        eprintln!("No references found");
         Ok(Some(json!([])))
     }
 
