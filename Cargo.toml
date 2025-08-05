@@ -18,4 +18,4 @@ perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
-tree-sitter = "0.25"
+tree-sitter = "0.25.8"

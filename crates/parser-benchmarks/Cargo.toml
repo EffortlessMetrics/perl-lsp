@@ -8,10 +8,10 @@ perl-lexer = { path = "../perl-lexer" }
 perl-parser = { path = "../perl-parser" }
 tree-sitter-perl = { path = "../tree-sitter-perl-rs", optional = true }
 tree-sitter-perl-c = { path = "../tree-sitter-perl-c" }
-tree-sitter = { version = "0.20", optional = true }
+tree-sitter = { version = "0.25.8", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7.0", features = ["html_reports"] }
 
 [features]
 default = []
