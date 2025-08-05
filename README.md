@@ -96,20 +96,20 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features (v0.6.0)
-- **Syntax Diagnostics**: Real-time error detection and reporting
-- **Symbol Navigation**: Go to definition, find references
-- **Document Symbols**: Outline view of subroutines, packages, and variables
-- **Signature Help**: Function parameter hints while typing
-- **Semantic Tokens**: Enhanced syntax highlighting
-- **Incremental Parsing**: Efficient updates on document changes
-- **Call Hierarchy** 🔍: View incoming/outgoing function calls
-- **Inlay Hints** 💡: Parameter names and type hints inline
-- **Test Explorer** 🧪: Discover and run tests from the IDE
-- **Debugging** 🐛: Full DAP support with breakpoints and stepping
-- **Code Actions**: Quick fixes and refactoring suggestions
-- **Formatting**: Integration with Perl::Tidy
-- **Performance** ⚡: AST caching and symbol indexing for large projects
+### LSP Features (11/11 Core Features Complete) ✅
+- ✅ **Real-time Diagnostics**: Live syntax checking as you type
+- ✅ **Code Completion**: Context-aware suggestions for variables and functions
+- ✅ **Go to Definition**: Jump to symbol definitions
+- ✅ **Find References**: Locate all uses of a symbol (including string interpolation)
+- ✅ **Hover Information**: Display documentation and type information
+- ✅ **Signature Help**: Function parameter hints while typing (40+ built-ins)
+- ✅ **Document Symbols**: Outline view of subroutines, packages, and variables
+- ✅ **Code Actions**: Quick fixes for common errors
+- ✅ **Incremental Parsing**: Efficient updates on document changes
+- ✅ **Rename Symbol**: Safe renaming across all references
+- ✅ **Complete Workflow**: All features work together seamlessly
+
+See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 
 ### Using the LSP Server
 
@@ -123,27 +123,31 @@ cargo install --path crates/perl-parser --bin perl-lsp
 
 ### Editor Integration
 
-#### VSCode Extension (Recommended)
-Install the official Perl Language Server extension from the marketplace:
-1. Open VSCode
-2. Go to Extensions (Ctrl+Shift+X)
-3. Search for "Perl Language Server"
-4. Click Install
-
-Or install from VSIX:
-```bash
-code --install-extension perl-language-server-0.6.0.vsix
-```
-
-#### Manual Configuration
-Configure your editor to use `perl-lsp` as the language server for Perl files. The server communicates via stdin/stdout using the standard LSP protocol.
-
-Example configuration:
+#### VSCode
+Configure in `.vscode/settings.json`:
 ```json
 {
-  "perl.lsp.path": "perl-lsp",
-  "perl.lsp.enabled": true
+  "perl.languageServer.path": "perl-lsp",
+  "perl.languageServer.args": ["--stdio"]
 }
+```
+
+#### Neovim
+With nvim-lspconfig:
+```lua
+require'lspconfig'.perl_lsp.setup{
+  cmd = {'perl-lsp', '--stdio'},
+  filetypes = {'perl'},
+}
+```
+
+#### Emacs
+With lsp-mode:
+```elisp
+(lsp-register-client
+ (make-lsp-client :new-connection (lsp-stdio-connection "perl-lsp --stdio")
+                  :major-modes '(perl-mode cperl-mode)
+                  :server-id 'perl-lsp))
 ```
 
 ---
