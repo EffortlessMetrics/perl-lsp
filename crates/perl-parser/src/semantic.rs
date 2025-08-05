@@ -161,6 +161,91 @@ impl SemanticAnalyzer {
         self.symbol_at(SourceLocation { start: position, end: position })
     }
     
+    /// Find all references to a symbol at a given position
+    pub fn find_all_references(&self, position: usize, include_declaration: bool) -> Vec<SourceLocation> {
+        // First find the symbol at this position (either definition or reference)
+        let symbol = if let Some(def) = self.find_definition(position) {
+            Some(def)
+        } else {
+            // Check if we're on a reference
+            for refs in self.symbol_table.references.values() {
+                for reference in refs {
+                    if reference.location.start <= position && reference.location.end >= position {
+                        // Found a reference, get its definition to get the symbol ID
+                        let symbols = self.symbol_table.find_symbol(
+                            &reference.name,
+                            reference.scope_id,
+                            reference.kind
+                        );
+                        if !symbols.is_empty() {
+                            return self.find_all_references_for_symbol(symbols[0], include_declaration);
+                        }
+                    }
+                }
+            }
+            None
+        };
+        
+        if let Some(symbol) = symbol {
+            return self.find_all_references_for_symbol(symbol, include_declaration);
+        }
+        
+        Vec::new()
+    }
+    
+    /// Find all references for a specific symbol
+    fn find_all_references_for_symbol(&self, symbol: &Symbol, include_declaration: bool) -> Vec<SourceLocation> {
+        let mut locations = Vec::new();
+        
+        // Include the declaration if requested
+        if include_declaration {
+            locations.push(symbol.location);
+        }
+        
+        // Find all references to this symbol by name
+        if let Some(refs) = self.symbol_table.references.get(&symbol.name) {
+            for reference in refs {
+                // Only include references of the same kind and in scope where the symbol is visible
+                if reference.kind == symbol.kind {
+                    // Check if the symbol is visible from this reference's scope
+                    if self.is_symbol_visible(symbol, reference.scope_id) {
+                        locations.push(reference.location);
+                    }
+                }
+            }
+        }
+        
+        locations
+    }
+    
+    /// Check if a symbol is visible from a given scope
+    fn is_symbol_visible(&self, symbol: &Symbol, scope_id: ScopeId) -> bool {
+        // For now, simple visibility check:
+        // - Symbols in the same scope are visible
+        // - Symbols in parent scopes are visible
+        // - Package-level symbols are visible from package scopes
+        
+        if symbol.scope_id == scope_id {
+            return true;
+        }
+        
+        // Check if scope_id is a descendant of symbol.scope_id
+        let mut current_scope = scope_id;
+        while let Some(scope) = self.symbol_table.scopes.get(&current_scope) {
+            if scope.parent == Some(symbol.scope_id) {
+                return true;
+            }
+            if let Some(parent) = scope.parent {
+                current_scope = parent;
+            } else {
+                break;
+            }
+        }
+        
+        // For package-level symbols (scope_id 0), always visible
+        symbol.scope_id == 0
+    }
+    
     /// Analyze a node and generate semantic information
     fn analyze_node(&mut self, node: &Node, scope_id: ScopeId) {
         match &node.kind {
