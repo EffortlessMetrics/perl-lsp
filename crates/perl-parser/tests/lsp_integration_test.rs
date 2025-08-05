@@ -113,19 +113,23 @@ fn test_lsp_initialize() {
 #[test]
 fn test_lsp_message_format() {
     // Test message formatting
-    let message = create_lsp_message(r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#);
-    let expected = b"Content-Length: 41\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\"}";
-    assert_eq!(&message[..], expected);
+    let content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    let message = create_lsp_message(content);
+    let expected_header = format!("Content-Length: {}\r\n\r\n", content.len());
+    let expected = [expected_header.as_bytes(), content.as_bytes()].concat();
+    assert_eq!(&message[..], &expected[..]);
 }
 
 #[test]
 fn test_lsp_response_parsing() {
-    // Test response parsing
-    let response = b"Content-Length: 50\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"test\":true}}";
+    // Test response parsing - verify content length
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"result":{"test":true}}"#;
+    let header = format!("Content-Length: {}\r\n\r\n", json_content.len());
+    let response = [header.as_bytes(), json_content.as_bytes()].concat();
     let mut reader = BufReader::new(&response[..]);
     
     let parsed = read_lsp_response(&mut reader);
-    assert!(parsed.is_some());
+    assert!(parsed.is_some(), "Failed to parse LSP response");
     
     let value = parsed.unwrap();
     assert_eq!(value["jsonrpc"], "2.0");
