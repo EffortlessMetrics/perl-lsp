@@ -202,10 +202,14 @@ impl CheckpointCache {
         // Trim to max size
         if self.checkpoints.len() > self.max_checkpoints {
             // Keep checkpoints evenly distributed
-            let step = self.checkpoints.len() / self.max_checkpoints;
+            let total = self.checkpoints.len();
+            let step = total as f64 / self.max_checkpoints as f64;
             let mut kept = Vec::new();
-            for i in (0..self.checkpoints.len()).step_by(step.max(1)) {
-                kept.push(self.checkpoints[i].clone());
+            for i in 0..self.max_checkpoints {
+                let idx = (i as f64 * step) as usize;
+                if idx < total {
+                    kept.push(self.checkpoints[idx].clone());
+                }
             }
             self.checkpoints = kept;
         }

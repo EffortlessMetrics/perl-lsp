@@ -1,6 +1,7 @@
 //! Demo showing how to add workspace symbols to the LSP server
 
-use perl_parser::{LspServer, JsonRpcRequest, JsonRpcResponse, WorkspaceSymbolsProvider};
+use perl_parser::{JsonRpcRequest, JsonRpcResponse, WorkspaceSymbolsProvider};
+use std::collections::HashMap;
 use serde_json::json;
 
 fn main() {
@@ -72,7 +73,7 @@ main();
         println!("Indexing: {}", uri);
         let mut parser = perl_parser::Parser::new(content);
         if let Ok(ast) = parser.parse() {
-            workspace_symbols.index_document(uri, &ast);
+            workspace_symbols.index_document(uri, &ast, content);
         }
     }
     
@@ -87,9 +88,14 @@ main();
         ("Utils", "Package name"),
     ];
     
+    // Create source map for search
+    let source_map: HashMap<String, String> = files.iter()
+        .map(|(uri, content)| (uri.to_string(), content.to_string()))
+        .collect();
+    
     for (query, description) in searches {
         println!("Search '{}' ({})", query, description);
-        let results = workspace_symbols.search(query);
+        let results = workspace_symbols.search(query, &source_map);
         for symbol in &results {
             println!("  - {} ({})", symbol.name, symbol.location.uri);
         }
@@ -111,7 +117,7 @@ main();
     // In a real implementation, add this to LspServer::handle_request:
     // "workspace/symbol" => self.handle_workspace_symbols(request.params),
     
-    let response = handle_workspace_symbols(&workspace_symbols, request.params);
+    let response = handle_workspace_symbols(&workspace_symbols, request.params, &source_map);
     println!("Request: workspace/symbol with query 'connect'");
     println!("Response: {}", serde_json::to_string_pretty(&response).unwrap());
 }
@@ -119,13 +125,15 @@ main();
 fn handle_workspace_symbols(
     provider: &WorkspaceSymbolsProvider,
     params: Option<serde_json::Value>,
+    source_map: &HashMap<String, String>,
 ) -> JsonRpcResponse {
     let query = params
+        .as_ref()
         .and_then(|p| p.get("query"))
         .and_then(|q| q.as_str())
         .unwrap_or("");
     
-    let symbols = provider.search(query);
+    let symbols = provider.search(query, source_map);
     
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
