@@ -3,7 +3,7 @@
 //! This example demonstrates how to build a basic Language Server Protocol
 //! implementation for Perl using the perl-parser's IDE features.
 
-use perl_parser::{LanguageServer, lsp};
+use perl_parser::LspServer;
 use std::io::{self, BufRead, Write};
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
     println!("  quit - Exit");
     println!();
 
-    let mut server = LanguageServer::new();
+    let mut server = LspServer::new();
     let mut current_file = None;
     
     // Demo file content
