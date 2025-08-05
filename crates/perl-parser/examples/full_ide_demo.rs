@@ -4,14 +4,14 @@
 //! completion, signature help, rename, and more.
 
 use perl_parser::{
-    Parser, ParseError,
+    Parser,
     DiagnosticsProvider, DiagnosticSeverity,
     CodeActionsProvider, CodeActionKind,
     CompletionProvider,
-    SignatureHelpProvider,
-    RenameProvider, RenameOptions, apply_rename_edits,
-    LanguageServer,
-    lsp::Position,
+    signature_help::SignatureHelpProvider,
+    rename::{RenameProvider, RenameOptions, apply_rename_edits},
+    LspServer,
+    position::Position,
 };
 
 fn main() {
