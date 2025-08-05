@@ -134,21 +134,37 @@ fn normalize_sexp(s: &str) -> String {
 /// Run a single corpus test case
 fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
     // Parse the source code using tree-sitter-perl
-    let tree = match scanner {
+    let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // TODO: Implement C scanner parsing when C scanner is available
-            // For now, use the default (Rust scanner)
-            tree_sitter_perl::parse(&test_case.source)?
+            // Use the C-based tree-sitter parser
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
         }
-        Some(ScannerType::Rust) => tree_sitter_perl::parse(&test_case.source)?,
+        Some(ScannerType::Rust) => {
+            // Use the pure-rust parser
+            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
+            match parser.parse(&test_case.source) {
+                Ok(ast) => parser.to_sexp(&ast),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // TODO: Test both scanners and compare results
-            tree_sitter_perl::parse(&test_case.source)?
+            // For now, use the C scanner
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
         }
-        None => tree_sitter_perl::parse(&test_case.source)?,
+        None => {
+            // Default to C scanner
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
+        }
     };
 
-    let actual = normalize_sexp(&tree.root_node().to_sexp());
+    let actual = normalize_sexp(&actual_sexp);
     let expected = normalize_sexp(test_case.expected.trim());
 
     if actual == expected {
@@ -175,17 +191,36 @@ fn diagnose_parse_differences(
     println!("```");
 
     // Parse with current parser
-    let tree = match scanner {
+    let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // TODO: Implement C scanner parsing when available
-            tree_sitter_perl::parse(&test_case.source)?
+            // Use the C-based tree-sitter parser
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
         }
-        Some(ScannerType::Rust) => tree_sitter_perl::parse(&test_case.source)?,
-        Some(ScannerType::Both) => tree_sitter_perl::parse(&test_case.source)?,
-        None => tree_sitter_perl::parse(&test_case.source)?,
+        Some(ScannerType::Rust) => {
+            // Use the pure-rust parser
+            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
+            match parser.parse(&test_case.source) {
+                Ok(ast) => parser.to_sexp(&ast),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
+        Some(ScannerType::Both) => {
+            // Default to C scanner for now
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
+        }
+        None => {
+            // Default to C scanner
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            tree.root_node().to_sexp()
+        }
     };
 
-    let actual = normalize_sexp(&tree.root_node().to_sexp());
+    let actual = normalize_sexp(&actual_sexp);
     let expected = normalize_sexp(test_case.expected.trim());
 
     println!("\n📊 COMPARISON:");
