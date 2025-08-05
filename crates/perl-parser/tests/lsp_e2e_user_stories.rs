@@ -437,7 +437,6 @@ my $result = substr($text, 6, );  # <- cursor is here after comma
 // so that I can refactor safely without manual find-and-replace.
 
 #[test]
-#[ignore = "textDocument/rename not yet implemented"]
 fn test_user_story_rename_symbol() {
     let mut server = create_test_server();
     initialize_server(&mut server);
