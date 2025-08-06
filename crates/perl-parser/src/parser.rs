@@ -1839,6 +1839,9 @@ impl<'a> Parser<'a> {
         // First, try to parse the initial part as a simple statement
         let mut expr = self.parse_simple_statement()?;
         
+        // Check for word operators (or, and, xor) which have very low precedence
+        expr = self.parse_word_or_expr(expr)?;
+        
         // Check for statement modifiers
         expr = match self.peek_kind() {
             Some(TokenKind::If) | Some(TokenKind::Unless) | 
@@ -2007,9 +2010,9 @@ impl<'a> Parser<'a> {
         result
     }
     
-    /// Parse comma operator (lowest precedence)
+    /// Parse comma operator (lowest precedence except for word operators)
     fn parse_comma(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_word_or()?;
+        let mut expr = self.parse_assignment()?;
         
         // In scalar context, comma creates a list
         // For now, we'll just parse it as sequential expressions
@@ -2063,18 +2066,27 @@ impl<'a> Parser<'a> {
             );
         }
         
+        // Now handle word operators (or, xor, and, not) which have the lowest precedence
+        expr = self.parse_word_or_expr(expr)?;
+        
         Ok(expr)
     }
     
-    /// Parse word or expression (or, xor)
-    fn parse_word_or(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_word_and()?;
+    /// Parse word or expression (or, xor) - takes an existing expr and applies word operators
+    fn parse_word_or_expr(&mut self, mut expr: Node) -> ParseResult<Node> {
+        // First handle 'and' which has higher precedence than 'or'/'xor'
+        expr = self.parse_word_and_expr_with(expr)?;
         
+        // Then handle 'or' and 'xor' which have lowest precedence
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::WordOr | TokenKind::WordXor => {
                     let op_token = self.tokens.next()?;
-                    let right = self.parse_word_and()?;
+                    // Parse the right side as a full expression starting with assignment
+                    let right = self.parse_assignment()?;
+                    // Apply any 'and' operators to the right side
+                    let right = self.parse_word_and_expr_with(right)?;
+                    
                     let start = expr.location.start;
                     let end = right.location.end;
                     
@@ -2094,13 +2106,12 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
     
-    /// Parse word and expression
-    fn parse_word_and(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_word_not()?;
-        
+    /// Parse word and expression with existing left side
+    fn parse_word_and_expr_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::WordAnd) {
             let op_token = self.tokens.next()?;
-            let right = self.parse_word_not()?;
+            // Parse right side as a 'not' expression or assignment
+            let right = self.parse_word_not_expr()?;
             let start = expr.location.start;
             let end = right.location.end;
             
@@ -2117,12 +2128,12 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
     
-    /// Parse word not expression
-    fn parse_word_not(&mut self) -> ParseResult<Node> {
+    /// Parse word not expression - handles 'not' operator
+    fn parse_word_not_expr(&mut self) -> ParseResult<Node> {
         if self.peek_kind() == Some(TokenKind::WordNot) {
             let op_token = self.tokens.next()?;
             let start = op_token.start;
-            let operand = self.parse_word_not()?;
+            let operand = self.parse_word_not_expr()?;
             let end = operand.location.end;
             
             return Ok(Node::new(
@@ -2134,11 +2145,17 @@ impl<'a> Parser<'a> {
             ));
         }
         
+        // The right side of a word operator should be a full expression
         self.parse_assignment()
     }
     
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
+        // Check if we have a 'not' operator first
+        if self.peek_kind() == Some(TokenKind::WordNot) {
+            return self.parse_word_not_expr();
+        }
+        
         let mut expr = self.parse_ternary()?;
         
         // Check for assignment operators
@@ -2165,7 +2182,12 @@ impl<'a> Parser<'a> {
             
             if let Some(op) = op {
                 self.tokens.next()?; // consume operator
-                let rhs = self.parse_assignment()?;
+                // The RHS can be a 'not' expression
+                let rhs = if self.peek_kind() == Some(TokenKind::WordNot) {
+                    self.parse_word_not_expr()?
+                } else {
+                    self.parse_assignment()?
+                };
                 let start = expr.location.start;
                 let end = rhs.location.end;
                 
