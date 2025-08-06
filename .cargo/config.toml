@@ -15,33 +15,7 @@ target-dir = "target"
 # Enable backtrace for better debugging
 RUST_BACKTRACE = "1"
 
-# Profile configurations
-[profile.dev]
-# Slightly optimize dev builds for parser performance testing
-opt-level = 1
-# Keep debug info for better error messages
-debug = true
-
-[profile.release]
-# Maximum optimization for benchmarking
-lto = true
-codegen-units = 1
-opt-level = 3
-# Strip symbols for smaller binaries
-strip = true
-
-[profile.bench]
-# Ensure benchmarks use maximum optimization
-lto = true
-codegen-units = 1
-opt-level = 3
-debug = false
-
-# Custom profile for testing parser performance without full release optimization
-[profile.test-perf]
-inherits = "release"
-lto = false  # Faster compilation for iterative testing
-strip = false  # Keep symbols for profiling
+# Profile configurations are now in workspace Cargo.toml to avoid conflicts
 
 # Cargo configuration
 [term]

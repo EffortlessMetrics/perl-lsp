@@ -1616,15 +1616,18 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'return'
         
-        // Check if we have a value to return - only stop at clear ends
+        // Check if we have a value to return - only stop at clear ends or statement modifiers
         let value = if matches!(self.peek_kind(), 
             Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace) | 
-            Some(TokenKind::Eof) | None
+            Some(TokenKind::Eof) | None |
+            // Statement modifiers - these will be handled at statement level
+            Some(TokenKind::If) | Some(TokenKind::Unless) |
+            Some(TokenKind::While) | Some(TokenKind::Until) |
+            Some(TokenKind::For) | Some(TokenKind::Foreach)
         ) {
             None
         } else {
-            // For now, just parse an expression and let statement-level handle modifiers
-            // This is a temporary workaround for the TokenKind::If matching issue
+            // Parse the return value
             Some(Box::new(self.parse_expression()?))
         };
         
