@@ -1864,7 +1864,8 @@ impl<'a> Parser<'a> {
             match token.text.as_ref() {
             "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open" | "tie" |
             "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite" | "truncate" |
-            "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select" | "binmode" | "exec" | "system" => {
+            "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select" | "binmode" | "exec" | "system" |
+            "bless" | "ref" | "defined" | "undef" => {
                 let start = token.start;
                 let func_name = token.text.clone();
                 
@@ -3400,7 +3401,8 @@ impl<'a> Parser<'a> {
             "grep" | "keys" | "values" | "each" | "delete" | "exists" |
             "open" | "close" | "read" | "write" | "printf" | "sprintf" |
             "exit" | "next" | "last" | "redo" | "goto" | "dump" | 
-            "caller" | "import" | "unimport" | "require"
+            "caller" | "import" | "unimport" | "require" | "bless" |
+            "tie" | "tied" | "untie" | "scalar" | "wantarray"
         )
     }
     
