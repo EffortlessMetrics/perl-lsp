@@ -333,11 +333,15 @@ impl CodeActionsProvider {
     fn get_refactoring_actions(&self, ast: &Node, range: (usize, usize)) -> Vec<CodeAction> {
         let mut actions = Vec::new();
         
-        // Find the node at the cursor position
+        // Use the enhanced provider for better refactorings
+        let enhanced_provider = crate::code_actions_enhanced::EnhancedCodeActionsProvider::new(self.source.clone());
+        actions.extend(enhanced_provider.get_enhanced_refactoring_actions(ast, range));
+        
+        // Keep basic refactorings as fallback
         if let Some(node) = self.find_node_at_range(ast, range) {
             match &node.kind {
-                // Extract variable
-                NodeKind::FunctionCall { .. } | NodeKind::Binary { .. } => {
+                // Extract variable (basic version, enhanced version is better)
+                NodeKind::FunctionCall { .. } | NodeKind::Binary { .. } if actions.is_empty() => {
                     actions.push(CodeAction {
                         title: "Extract to variable".to_string(),
                         kind: CodeActionKind::RefactorExtract,
@@ -347,8 +351,8 @@ impl CodeActionsProvider {
                     });
                 }
                 
-                // Extract function
-                NodeKind::Block { .. } => {
+                // Extract function (basic version)
+                NodeKind::Block { .. } if actions.is_empty() => {
                     actions.push(CodeAction {
                         title: "Extract to function".to_string(),
                         kind: CodeActionKind::RefactorExtract,
