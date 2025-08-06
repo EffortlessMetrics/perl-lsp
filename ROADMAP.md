@@ -4,7 +4,7 @@
 
 ---
 
-## 🎉 Current State (v0.5.0 - January 2025)
+## 🎉 Current State (v0.7.1 - January 2025)
 
 We've built the most comprehensive Perl parsing solution available:
 
@@ -49,14 +49,19 @@ We've built the most comprehensive Perl parsing solution available:
 
 ## 🚀 Future Roadmap
 
-### Q1 2025: v0.6.0 - Polish & Distribution
+### Q1 2025: Polish & Distribution
 **Goal**: Production deployment and distribution
+
+#### Recent Accomplishments (v0.7.1)
+- ✅ **Fixed `bless {}` parsing** - Now correctly handles empty hash argument
+- ✅ **Fixed `sort {}`, `map {}`, `grep {}` parsing** - Properly handles empty blocks
+- ✅ **Enhanced LSP features** - Added textDocument/references and textDocument/definition
+- ✅ **Comprehensive test coverage** - 63+ user story tests, 141 edge case tests
 
 #### Immediate Tasks
 - [ ] **Parser Improvements**
   - [ ] Fix `or`/`and`/`not` operator precedence
   - [ ] Complete built-in function signatures
-  - [ ] Handle indirect object syntax edge cases
 - [ ] **LSP Polish**
   - [ ] Multi-file support (cross-file references)
   - [ ] Performance optimization for large files
