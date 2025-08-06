@@ -233,6 +233,7 @@ impl LspServer {
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
+            "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -289,6 +290,7 @@ impl LspServer {
                     "triggerCharacters": ["(", ","]
                 },
                 "renameProvider": true,
+                "documentSymbolProvider": true,
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -1036,6 +1038,132 @@ impl LspServer {
         Ok(Some(json!({
             "changes": {}
         })))
+    }
+    
+    /// Handle textDocument/documentSymbol request
+    fn handle_document_symbol(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Extract symbols from AST
+                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let symbol_table = extractor.extract(ast);
+                    
+                    // Convert to DocumentSymbol format
+                    let mut document_symbols = Vec::new();
+                    
+                    // Group symbols by scope and kind
+                    let mut symbols_by_scope: std::collections::HashMap<crate::symbol::ScopeId, Vec<crate::symbol::Symbol>> = std::collections::HashMap::new();
+                    for symbols in symbol_table.symbols.values() {
+                        for symbol in symbols {
+                            symbols_by_scope.entry(symbol.scope_id).or_default().push(symbol.clone());
+                        }
+                    }
+                    
+                    // Build hierarchical structure starting from global scope
+                    let empty_vec = Vec::new();
+                    let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
+                    
+                    for symbol in global_symbols {
+                        let (start_line, start_char) = self.offset_to_position(&doc.content, symbol.location.start);
+                        let (end_line, end_char) = self.offset_to_position(&doc.content, symbol.location.end);
+                        
+                        // Map symbol kind to LSP SymbolKind
+                        let symbol_kind = match symbol.kind {
+                            crate::symbol::SymbolKind::Package => 4,  // Module
+                            crate::symbol::SymbolKind::Subroutine => 12, // Function
+                            crate::symbol::SymbolKind::ScalarVariable => 13, // Variable
+                            crate::symbol::SymbolKind::ArrayVariable => 18, // Array
+                            crate::symbol::SymbolKind::HashVariable => 19, // Object (closest match)
+                            crate::symbol::SymbolKind::Constant => 14, // Constant
+                            crate::symbol::SymbolKind::Label => 16, // String (closest match)
+                            crate::symbol::SymbolKind::Format => 12, // Function
+                        };
+                        
+                        // Create display name with sigil if applicable
+                        let display_name = if let Some(sigil) = symbol.kind.sigil() {
+                            format!("{}{}", sigil, symbol.name)
+                        } else {
+                            symbol.name.clone()
+                        };
+                        
+                        // Find child symbols for this scope (if it's a package or subroutine)
+                        let mut children = Vec::new();
+                        if symbol.kind == crate::symbol::SymbolKind::Package || symbol.kind == crate::symbol::SymbolKind::Subroutine {
+                            // Find scope ID for this symbol
+                            for (scope_id, scope) in &symbol_table.scopes {
+                                if scope.location.start == symbol.location.start {
+                                    // Get symbols in this scope
+                                    if let Some(child_symbols) = symbols_by_scope.get(scope_id) {
+                                        for child in child_symbols {
+                                            let (child_start_line, child_start_char) = self.offset_to_position(&doc.content, child.location.start);
+                                            let (child_end_line, child_end_char) = self.offset_to_position(&doc.content, child.location.end);
+                                            
+                                            let child_kind = match child.kind {
+                                                crate::symbol::SymbolKind::Package => 4,
+                                                crate::symbol::SymbolKind::Subroutine => 12,
+                                                crate::symbol::SymbolKind::ScalarVariable => 13,
+                                                crate::symbol::SymbolKind::ArrayVariable => 18,
+                                                crate::symbol::SymbolKind::HashVariable => 19,
+                                                crate::symbol::SymbolKind::Constant => 14,
+                                                crate::symbol::SymbolKind::Label => 16,
+                                                crate::symbol::SymbolKind::Format => 12,
+                                            };
+                                            
+                                            let child_display_name = if let Some(sigil) = child.kind.sigil() {
+                                                format!("{}{}", sigil, child.name)
+                                            } else {
+                                                child.name.clone()
+                                            };
+                                            
+                                            children.push(json!({
+                                                "name": child_display_name,
+                                                "detail": child.declaration.as_deref().unwrap_or(""),
+                                                "kind": child_kind,
+                                                "range": {
+                                                    "start": { "line": child_start_line, "character": child_start_char },
+                                                    "end": { "line": child_end_line, "character": child_end_char }
+                                                },
+                                                "selectionRange": {
+                                                    "start": { "line": child_start_line, "character": child_start_char },
+                                                    "end": { "line": child_end_line, "character": child_end_char }
+                                                },
+                                                "children": []
+                                            }));
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        let symbol_info = json!({
+                            "name": display_name,
+                            "detail": symbol.declaration.as_deref().unwrap_or(""),
+                            "kind": symbol_kind,
+                            "range": {
+                                "start": { "line": start_line, "character": start_char },
+                                "end": { "line": end_line, "character": end_char }
+                            },
+                            "selectionRange": {
+                                "start": { "line": start_line, "character": start_char },
+                                "end": { "line": end_line, "character": end_char }
+                            },
+                            "children": children
+                        });
+                        
+                        document_symbols.push(symbol_info);
+                    }
+                    
+                    return Ok(Some(json!(document_symbols)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
     }
     
     /// Validate if a string is a valid Perl identifier
