@@ -14,6 +14,11 @@ This document provides a comprehensive list of parsing limitations across all th
 
 ### Coverage: ~100% (98% of comprehensive edge cases)
 
+**Recent fixes (v0.7.1):**
+- ✅ Fixed `bless {}` parsing (now correctly parsed as function call with empty hash)
+- ✅ Fixed `sort {}`, `map {}`, `grep {}` empty block parsing
+- ✅ Enhanced builtin function argument handling
+
 **Successfully handles:**
 - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, `s|old|new|`)
 - ✅ Indirect object syntax (`print $fh "Hello"`, `print STDOUT "msg"`, `new Class::Name`)

@@ -28,6 +28,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Successfully handles m!pattern!, indirect object syntax, and more
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
+- **v0.7.1**: Fixed `bless {}`, `sort {}`, `map {}`, `grep {}` parsing
 
 ### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
 - **20+ Professional IDE Features** implemented
@@ -445,10 +446,14 @@ To extend the Pest grammar:
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED**
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.7.1)
 - **Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Status**: Production ready, feature complete
+- **Latest fixes (v0.7.1)**:
+  - ✅ Fixed `bless {}` parsing (now correctly parsed as function call with hash)
+  - ✅ Fixed `sort {}`, `map {}`, `grep {}` empty block parsing
+  - ✅ Enhanced builtin function argument handling
 - **Successfully handles ALL edge cases**:
   - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, etc.)
   - ✅ Indirect object syntax (`print $fh "Hello"`, `print STDOUT "msg"`, `new Class`)

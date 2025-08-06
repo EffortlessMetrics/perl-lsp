@@ -1,6 +1,14 @@
 # TODO: Tree-sitter Perl v3 Parser Improvements
 
+**Last Updated: v0.7.1 (January 2025)**
+
 While the v3 parser achieves 100% edge case coverage and is production-ready, here are prioritized improvements that would enhance its value:
+
+## ✅ Recently Completed (v0.7.1)
+- Fixed `bless {}` parsing (now correctly handled as function call)
+- Fixed `sort {}`, `map {}`, `grep {}` empty block parsing
+- Enhanced builtin function argument handling
+- Added 25+ test cases for edge cases
 
 ## 🔴 High Priority - Essential for IDE Integration
 

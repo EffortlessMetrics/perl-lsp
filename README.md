@@ -23,6 +23,13 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
+## 📦 Latest Release: v0.7.1
+
+- **Fixed** `bless {}` parsing - Now correctly recognized as function call with empty hash
+- **Fixed** `sort {}`, `map {}`, `grep {}` empty block handling
+- **Enhanced** builtin function argument parsing
+- **Added** 25+ new test cases for edge cases
+
 ## 🚀 Features
 
 ### v3: Native Rust Lexer+Parser (Recommended) ⭐ COMPLETE
@@ -78,7 +85,7 @@ cargo build -p perl-parser --bin perl-lsp --release
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.6"
+perl-parser = "0.7"
 ```
 
 ```rust
