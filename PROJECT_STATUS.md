@@ -1,11 +1,12 @@
 # Perl Parser & LSP Project Status
-*Last Updated: January 2025*
+*Last Updated: January 2025 - v0.7.1*
 
 ## 🎉 Major Achievements
 
 ### Parser Implementation (v3 - Native) 
 - **100% Perl 5 syntax coverage** with all edge cases handled
 - **4-19x faster** than the original C implementation
+- **v0.7.1 fixes**: `bless {}`, `sort {}`, `map {}`, `grep {}` parsing
 - Successfully handles complex features:
   - Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`)
   - Indirect object syntax
