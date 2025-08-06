@@ -30,6 +30,7 @@
 
 pub mod ast;
 pub mod ast_v2;
+pub mod builtin_signatures;
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod completion;

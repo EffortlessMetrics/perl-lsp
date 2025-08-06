@@ -5,6 +5,7 @@
 
 use crate::ast::Node;
 use crate::symbol::{SymbolTable, SymbolKind, SymbolExtractor};
+use crate::builtin_signatures::{create_builtin_signatures, BuiltinSignature as ImportedBuiltinSignature};
 use std::collections::HashMap;
 
 /// Information about a function parameter
@@ -40,23 +41,17 @@ pub struct SignatureHelp {
     pub active_parameter: Option<usize>,
 }
 
-/// Built-in function signature
-struct BuiltinSignature {
-    signatures: Vec<&'static str>,
-    documentation: &'static str,
-}
-
 /// Signature help provider
 pub struct SignatureHelpProvider {
     symbol_table: SymbolTable,
-    builtin_signatures: HashMap<&'static str, BuiltinSignature>,
+    builtin_signatures: HashMap<&'static str, ImportedBuiltinSignature>,
 }
 
 impl SignatureHelpProvider {
     /// Create a new signature help provider
     pub fn new(ast: &Node) -> Self {
         let symbol_table = SymbolExtractor::new().extract(ast);
-        let builtin_signatures = Self::create_builtin_signatures();
+        let builtin_signatures = create_builtin_signatures();
         
         SignatureHelpProvider {
             symbol_table,
@@ -265,10 +260,12 @@ impl SignatureHelpProvider {
     
     /// Calculate which parameter is active
     fn calculate_active_parameter(&self, source: &str, context: &CallContext) -> usize {
-        let arg_text = &source[context.call_start + 1..context.position];
+        // Handle edge case where cursor is right at the opening paren
+        if context.position <= context.call_start + 1 {
+            return 0;
+        }
         
-        // Count commas to determine parameter index
-        let _comma_count = arg_text.chars().filter(|&c| c == ',').count();
+        let arg_text = &source[context.call_start + 1..context.position];
         
         // Also need to handle nested parentheses
         let mut paren_depth: usize = 0;
@@ -286,156 +283,6 @@ impl SignatureHelpProvider {
         actual_comma_count
     }
     
-    /// Create built-in function signatures
-    fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
-        let mut signatures = HashMap::new();
-        
-        // I/O functions
-        signatures.insert("print", BuiltinSignature {
-            signatures: vec![
-                "print FILEHANDLE LIST",
-                "print FILEHANDLE",
-                "print LIST",
-                "print",
-            ],
-            documentation: "Prints a string or list of strings",
-        });
-        
-        signatures.insert("printf", BuiltinSignature {
-            signatures: vec![
-                "printf FILEHANDLE FORMAT, LIST",
-                "printf FORMAT, LIST",
-            ],
-            documentation: "Prints a formatted string",
-        });
-        
-        signatures.insert("open", BuiltinSignature {
-            signatures: vec![
-                "open FILEHANDLE, MODE, FILENAME",
-                "open FILEHANDLE, EXPR",
-                "open FILEHANDLE",
-            ],
-            documentation: "Opens a file",
-        });
-        
-        // String functions
-        signatures.insert("substr", BuiltinSignature {
-            signatures: vec![
-                "substr EXPR, OFFSET, LENGTH, REPLACEMENT",
-                "substr EXPR, OFFSET, LENGTH",
-                "substr EXPR, OFFSET",
-            ],
-            documentation: "Extracts a substring",
-        });
-        
-        signatures.insert("split", BuiltinSignature {
-            signatures: vec![
-                "split /PATTERN/, EXPR, LIMIT",
-                "split /PATTERN/, EXPR",
-                "split /PATTERN/",
-            ],
-            documentation: "Splits a string into a list",
-        });
-        
-        signatures.insert("join", BuiltinSignature {
-            signatures: vec![
-                "join EXPR, LIST",
-            ],
-            documentation: "Joins a list into a string",
-        });
-        
-        // Array functions
-        signatures.insert("push", BuiltinSignature {
-            signatures: vec![
-                "push ARRAY, LIST",
-            ],
-            documentation: "Appends values to an array",
-        });
-        
-        signatures.insert("pop", BuiltinSignature {
-            signatures: vec![
-                "pop ARRAY",
-                "pop",
-            ],
-            documentation: "Removes and returns the last element",
-        });
-        
-        signatures.insert("map", BuiltinSignature {
-            signatures: vec![
-                "map BLOCK LIST",
-                "map EXPR, LIST",
-            ],
-            documentation: "Transforms a list",
-        });
-        
-        signatures.insert("grep", BuiltinSignature {
-            signatures: vec![
-                "grep BLOCK LIST",
-                "grep EXPR, LIST",
-            ],
-            documentation: "Filters a list",
-        });
-        
-        signatures.insert("sort", BuiltinSignature {
-            signatures: vec![
-                "sort BLOCK LIST",
-                "sort SUBNAME LIST",
-                "sort LIST",
-            ],
-            documentation: "Sorts a list",
-        });
-        
-        // Hash functions
-        signatures.insert("exists", BuiltinSignature {
-            signatures: vec![
-                "exists EXPR",
-            ],
-            documentation: "Tests whether a hash key exists",
-        });
-        
-        signatures.insert("delete", BuiltinSignature {
-            signatures: vec![
-                "delete EXPR",
-            ],
-            documentation: "Deletes a hash element",
-        });
-        
-        // System functions
-        signatures.insert("system", BuiltinSignature {
-            signatures: vec![
-                "system LIST",
-                "system PROGRAM LIST",
-            ],
-            documentation: "Executes a system command",
-        });
-        
-        signatures.insert("exec", BuiltinSignature {
-            signatures: vec![
-                "exec LIST",
-                "exec PROGRAM LIST",
-            ],
-            documentation: "Executes a system command (never returns)",
-        });
-        
-        // Reference functions
-        signatures.insert("bless", BuiltinSignature {
-            signatures: vec![
-                "bless REF, CLASSNAME",
-                "bless REF",
-            ],
-            documentation: "Blesses a reference into a class",
-        });
-        
-        signatures.insert("ref", BuiltinSignature {
-            signatures: vec![
-                "ref EXPR",
-                "ref",
-            ],
-            documentation: "Returns the type of reference",
-        });
-        
-        signatures
-    }
 }
 
 /// Context of a function call
