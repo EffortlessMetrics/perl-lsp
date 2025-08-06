@@ -23,7 +23,7 @@ fn test_signature_at_various_positions() {
         let provider = SignatureHelpProvider::new(&ast);
         
         if let Some(help) = provider.get_signature_help(code, position) {
-            assert_eq!(help.active_parameter, expected_param,
+            assert_eq!(help.active_parameter, Some(expected_param),
                       "Wrong active parameter for '{}' at position {}", code, position);
         }
     }
@@ -130,7 +130,7 @@ fn test_special_variables_in_signatures() {
         
         if let Some(sig) = provider.get_builtin_signature(func) {
             let has_no_arg_form = sig.signatures.iter()
-                .any(|s| s.contains(&format!("{} ", func)) || s == func);
+                .any(|s| s.contains(&format!("{} ", func)) || *s == func);
             
             if should_have_default {
                 assert!(has_no_arg_form,
@@ -199,7 +199,7 @@ fn test_regex_related_functions() {
         ("reset", "reset EXPR"),
     ];
     
-    for (func, expected) in regex_funcs {
+    for (func, _expected) in regex_funcs {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
         
@@ -240,7 +240,7 @@ fn test_tie_related_functions() {
         ("untie", "untie VARIABLE"),
     ];
     
-    for (func, expected_sig) in tie_funcs {
+    for (func, _expected_sig) in tie_funcs {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
         
@@ -306,7 +306,7 @@ fn test_context_functions() {
         ("scalar", "scalar EXPR"),
     ];
     
-    for (func, sig) in context_funcs {
+    for (func, _sig) in context_funcs {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
         

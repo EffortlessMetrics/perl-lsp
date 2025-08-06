@@ -364,6 +364,9 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::Semicolon => TokenKind::Semicolon,
             LexerTokenType::Comma => TokenKind::Comma,
             
+            // Division operator (important to handle before other tokens)
+            LexerTokenType::Division => TokenKind::Slash,
+            
             // Literals
             LexerTokenType::Number(_) => TokenKind::Number,
             LexerTokenType::StringLiteral | 

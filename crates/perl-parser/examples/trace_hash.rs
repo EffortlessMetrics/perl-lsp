@@ -1,7 +1,9 @@
 use perl_parser::Parser;
 
 fn main() {
-    std::env::set_var("RUST_LOG", "debug");
+    unsafe {
+        std::env::set_var("RUST_LOG", "debug");
+    }
     
     let code = "{ key => 'value' }";
     println!("Parsing: {}", code);
