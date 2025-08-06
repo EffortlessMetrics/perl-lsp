@@ -608,7 +608,7 @@ fn test_invalid_capability_request() {
 }
 
 #[test]
-fn test_unicode_edge_cases() {
+fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
     
