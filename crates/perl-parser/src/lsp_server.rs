@@ -234,6 +234,7 @@ impl LspServer {
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
             "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
+            "textDocument/foldingRange" => self.handle_folding_range(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -291,6 +292,7 @@ impl LspServer {
                 },
                 "renameProvider": true,
                 "documentSymbolProvider": true,
+                "foldingRangeProvider": true,
                 "codeActionProvider": true,
                 "documentFormattingProvider": true,
                 "documentRangeFormattingProvider": true,
@@ -1164,6 +1166,59 @@ impl LspServer {
         }
         
         Ok(Some(json!([])))
+    }
+    
+    /// Handle textDocument/foldingRange request
+    fn handle_folding_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Extract folding ranges from AST
+                    let mut extractor = crate::folding::FoldingRangeExtractor::new();
+                    let ranges = extractor.extract(ast);
+                    
+                    // Convert to LSP JSON format with proper line offsets
+                    let mut lsp_ranges = Vec::new();
+                    for range in ranges {
+                        // Calculate actual line numbers from document content
+                        let start_line = self.offset_to_line(&doc.content, range.start_offset);
+                        let end_line = self.offset_to_line(&doc.content, range.end_offset);
+                        
+                        if end_line > start_line {
+                            let mut lsp_range = json!({
+                                "startLine": start_line,
+                                "endLine": end_line - 1,  // LSP folding ranges are inclusive
+                            });
+                            
+                            if let Some(ref kind) = range.kind {
+                                lsp_range["kind"] = match kind {
+                                    crate::folding::FoldingRangeKind::Comment => json!("comment"),
+                                    crate::folding::FoldingRangeKind::Imports => json!("imports"),
+                                    crate::folding::FoldingRangeKind::Region => json!("region"),
+                                };
+                            }
+                            
+                            lsp_ranges.push(lsp_range);
+                        }
+                    }
+                    
+                    return Ok(Some(json!(lsp_ranges)));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+    
+    /// Helper function to convert offset to line number
+    fn offset_to_line(&self, content: &str, offset: usize) -> usize {
+        content[..offset.min(content.len())]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
     }
     
     /// Validate if a string is a valid Perl identifier
