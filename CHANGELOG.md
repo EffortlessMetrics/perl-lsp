@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Now correctly parses `bless {}` as `(call bless ((hash)))`
   - Fixes work in all contexts: statements, returns, nested in subroutines
   - Added comprehensive test coverage for all `bless` variations
+- **Parser**: Fixed parsing of empty blocks in `sort {}`, `map {}`, and `grep {}`
+  - Previously failed on empty blocks, now correctly parses as `(call sort ((block)))`
+  - Added support for both empty blocks and blocks with expressions
+  - Added 15 new test cases covering various builtin functions with empty arguments
 
 ## [0.7.0] - TBD
 

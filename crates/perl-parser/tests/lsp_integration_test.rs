@@ -50,10 +50,11 @@ fn read_lsp_response(reader: &mut impl BufRead) -> Option<Value> {
 #[test]
 fn test_lsp_initialize() {
     // Create channels for communication
-    let (tx_in, rx_in) = mpsc::channel::<Vec<u8>>();
-    let (tx_out, rx_out) = mpsc::channel::<Vec<u8>>();
+    let (tx_in, _rx_in) = mpsc::channel::<Vec<u8>>();
+    let (_tx_out, rx_out) = mpsc::channel::<Vec<u8>>();
     
     // Mock stdin/stdout
+    #[allow(dead_code)]
     struct MockIO {
         input: mpsc::Receiver<Vec<u8>>,
         output: mpsc::Sender<Vec<u8>>,

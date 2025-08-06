@@ -38,6 +38,7 @@ fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
     server.handle_request(request);
 }
 
+#[allow(dead_code)]
 fn get_diagnostics(server: &mut LspServer, uri: &str) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
