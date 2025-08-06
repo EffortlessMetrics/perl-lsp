@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2025-01-31
+
+### Fixed
+- **Parser**: Fixed incorrect operator precedence for word operators (`or`, `and`, `not`, `xor`)
+  - These operators now correctly have lower precedence than assignment operators
+  - `$a = 1 or $b = 2` now parses as `($a = 1) or ($b = 2)` instead of `$a = (1 or $b) = 2`
+  - Fixes long-standing issue where word operators were incorrectly parsed with higher precedence
+  - Added comprehensive test suite with 10 test cases for word operator precedence
+
+### Added
+- **LSP**: Complete built-in function signatures for all 150+ Perl built-in functions
+  - Added comprehensive signature information for string, array, hash, I/O, file, directory, process, time, math, and socket functions
+  - Each function includes multiple signature variations and documentation
+  - Functions now covered include: `chomp`, `chop`, `chr`, `ord`, `hex`, `oct`, `length`, `lc`, `uc`, `ucfirst`, `lcfirst`, `quotemeta`, `index`, `rindex`, `sprintf`, `say`, `read`, `sysread`, `write`, `syswrite`, `seek`, `tell`, `eof`, `stat`, `lstat`, `chmod`, `chown`, `link`, `symlink`, `readlink`, `rename`, `unlink`, `mkdir`, `rmdir`, `opendir`, `readdir`, `closedir`, `fork`, `wait`, `waitpid`, `kill`, `getpid`, `getppid`, `time`, `localtime`, `gmtime`, `sleep`, `alarm`, `abs`, `atan2`, `cos`, `sin`, `exp`, `log`, `sqrt`, `int`, `rand`, `srand`, `scalar`, `wantarray`, `caller`, `eval`, `do`, `tie`, `tied`, `untie`, `socket`, `bind`, `listen`, `accept`, `connect`, `shutdown`, `send`, `recv`, `pack`, `unpack`, `study`, `pos`, `reset`, `vec`, `prototype`, `lock`, and many more
+  - Improves IDE experience with accurate parameter hints and documentation
+
 ## [0.7.1] - 2025-01-30
 
 ### Fixed

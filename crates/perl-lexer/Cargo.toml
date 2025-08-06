@@ -1,6 +1,6 @@
 [package]
 name = "perl-lexer"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2024"
 authors = ["Tree-sitter Perl Contributors"]
 description = "High-performance Perl lexer with context-aware tokenization"
