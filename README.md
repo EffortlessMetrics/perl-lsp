@@ -789,6 +789,26 @@ parser_config.perl = {
 
 ---
 
+## 📑 Cite this work
+
+If you use `tree-sitter-perl-rs` in academic work, please cite:
+
+Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Performance Perl Parser in Rust*. EffortlessMetrics. https://github.com/EffortlessSteven/tree-sitter-perl-rs, v0.6.0, 2025.
+
+**BibTeX:**
+```bibtex
+@misc{zimmerman2025treesitterperl,
+  author = {Zimmerman, Steven and The tree-sitter-perl-rs Team},
+  title = {tree-sitter-perl-rs: High-Performance Perl Parser in Rust},
+  year = {2025},
+  publisher = {EffortlessMetrics},
+  howpublished = {\url{https://github.com/EffortlessSteven/tree-sitter-perl-rs}},
+  note = {Version 0.6.0}
+}
+```
+
+---
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details. or apache 2
