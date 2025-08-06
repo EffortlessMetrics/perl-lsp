@@ -23,13 +23,19 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.7.2
+## 📦 Latest Release: v0.7.3
 
+### v0.7.3 - Parser Bug Fixes
+- **Fixed** Return statement modifier parsing - `return if $cond;` now correctly parsed
+- **Fixed** Die with statement modifiers - Zero-arg builtins properly handled in expression context
+- **Fixed** CI warnings in LSP integration tests
+- **Improved** Build configuration - Resolved profile conflicts between .cargo/config and Cargo.toml
+
+### Previous: v0.7.2
 - **Fixed** Operator precedence for word operators (`or`, `and`, `not`, `xor`)
 - **Fixed** Division operator (`/`) parsing - Now correctly recognized in all contexts
 - **Added** Complete signatures for 150+ Perl built-in functions
 - **Enhanced** LSP signature help with comprehensive parameter hints
-- **Added** 100+ new test cases for operator precedence
 
 ## 🚀 Features
 
