@@ -96,6 +96,45 @@ This document provides a comprehensive list of parsing limitations across all th
 
 **Status**: Legacy implementation, kept for benchmarking and compatibility
 
+## LSP Server Limitations
+
+The perl-lsp server provides comprehensive IDE features but has some limitations:
+
+### Current Limitations
+
+1. **Type Inference**
+   - Limited type information for complex references
+   - Cannot infer types through dynamic dispatch
+   - No support for Moose/Moo type constraints
+
+2. **Cross-file Analysis**
+   - Symbol resolution limited to explicit imports
+   - Cannot track dynamic module loading (`require $module`)
+   - No analysis of eval'd code
+
+3. **Framework Support**
+   - Limited understanding of Moose/Moo/Mouse attributes
+   - No special handling for Catalyst/Dancer/Mojolicious
+   - Template files not analyzed
+
+4. **Performance**
+   - Full reparse on changes (no true incremental parsing yet)
+   - Large files (>1MB) may have slower response times
+   - No persistent indexing between sessions
+
+5. **Refactoring Scope**
+   - Some refactorings only work within single file
+   - Cannot rename across module boundaries safely
+   - Extract method doesn't handle closures perfectly
+
+### Planned Improvements
+
+- True incremental parsing for better performance
+- Persistent workspace indexing
+- Better type inference system
+- Framework-specific support
+- Multi-file refactoring support
+
 ## Common Limitations Across All Parsers
 
 ### Theoretical Limitations (Require Runtime Execution)
