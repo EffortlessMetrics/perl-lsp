@@ -52,6 +52,7 @@ pub mod rename;
 pub mod semantic;
 pub mod signature_help;
 pub mod symbol;
+pub mod folding;
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
