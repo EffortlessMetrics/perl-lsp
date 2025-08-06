@@ -1,294 +1,191 @@
 {
-  "name": "perl-language-server",
+  "name": "perl-lsp",
   "displayName": "Perl Language Server",
-  "description": "Perl language support powered by tree-sitter-perl v3 parser with full LSP features",
+  "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
   "version": "0.6.0",
   "publisher": "tree-sitter-perl",
-  "license": "MIT",
-  "icon": "icon.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/tree-sitter-perl/tree-sitter-perl"
+  "engines": {
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Programming Languages",
     "Linters",
     "Formatters",
-    "Testing"
+    "Debuggers"
   ],
   "keywords": [
     "perl",
+    "perl5",
     "language-server",
     "lsp",
-    "tree-sitter",
-    "formatting",
-    "linting"
+    "tree-sitter"
   ],
-  "engines": {
-    "vscode": "^1.75.0"
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tree-sitter/tree-sitter-perl"
   },
+  "bugs": {
+    "url": "https://github.com/tree-sitter/tree-sitter-perl/issues"
+  },
+  "license": "MIT",
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:perl"
+  ],
   "contributes": {
     "languages": [
       {
         "id": "perl",
-        "aliases": [
-          "Perl",
-          "perl"
-        ],
-        "extensions": [
-          ".pl",
-          ".pm",
-          ".pod",
-          ".t",
-          ".plx"
-        ],
+        "aliases": ["Perl", "perl", "Perl 5"],
+        "extensions": [".pl", ".pm", ".pod", ".t", ".psgi"],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
       }
     ],
-    "grammars": [
-      {
-        "language": "perl",
-        "scopeName": "source.perl",
-        "path": "./syntaxes/perl.tmLanguage.json"
-      }
-    ],
     "configuration": {
-      "type": "object",
-      "title": "Perl Language Server",
+      "title": "Perl LSP",
       "properties": {
-        "perl.lsp.path": {
+        "perl-lsp.serverPath": {
           "type": "string",
-          "default": "",
-          "description": "Path to perl-lsp executable. If not set, the bundled version will be used."
+          "default": "perl-lsp",
+          "description": "Path to the perl-lsp executable"
         },
-        "perl.lsp.trace.server": {
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Traces the communication between VS Code and the Perl language server."
-        },
-        "perl.formatting.perltidyPath": {
-          "type": "string",
-          "default": "perltidy",
-          "description": "Path to perltidy executable for code formatting."
-        },
-        "perl.formatting.perltidyArgs": {
-          "type": "array",
-          "default": [],
-          "description": "Additional arguments to pass to perltidy."
-        },
-        "perl.inlayHints.enabled": {
+        "perl-lsp.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable/disable inlay hints."
+          "description": "Enable real-time syntax diagnostics"
         },
-        "perl.inlayHints.parameterHints": {
+        "perl-lsp.enableSemanticTokens": {
           "type": "boolean",
           "default": true,
-          "description": "Show parameter hints for function calls."
+          "description": "Enable semantic syntax highlighting"
         },
-        "perl.inlayHints.typeHints": {
+        "perl-lsp.enableFormatting": {
           "type": "boolean",
           "default": true,
-          "description": "Show type hints for variable declarations."
+          "description": "Enable document formatting"
         },
-        "perl.inlayHints.chainedHints": {
+        "perl-lsp.formatOnSave": {
           "type": "boolean",
           "default": false,
-          "description": "Show hints for chained method calls."
+          "description": "Format document on save"
         },
-        "perl.inlayHints.maxLength": {
-          "type": "number",
-          "default": 30,
-          "description": "Maximum length of inlay hints."
-        },
-        "perl.testRunner.enabled": {
+        "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
-          "description": "Enable/disable test runner integration."
+          "description": "Enable advanced refactoring features"
         },
-        "perl.testRunner.testCommand": {
+        "perl-lsp.perltidyConfig": {
           "type": "string",
-          "default": "perl",
-          "description": "Command to run Perl tests."
+          "default": "",
+          "description": "Path to .perltidyrc configuration file"
         },
-        "perl.testRunner.testArgs": {
+        "perl-lsp.includePaths": {
           "type": "array",
-          "default": [],
-          "description": "Additional arguments for test command."
+          "default": ["lib", "local/lib/perl5"],
+          "description": "Additional paths to search for Perl modules"
         },
-        "perl.testRunner.testTimeout": {
-          "type": "number",
-          "default": 60000,
-          "description": "Test execution timeout in milliseconds."
+        "perl-lsp.enableTestIntegration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Test::More and Test2 integration"
+        },
+        "perl-lsp.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace server communication for debugging"
         }
       }
     },
     "commands": [
       {
-        "command": "perl.restartServer",
-        "title": "Perl: Restart Language Server"
+        "command": "perl-lsp.restart",
+        "title": "Restart Perl Language Server",
+        "category": "Perl"
       },
       {
-        "command": "perl.showOutputChannel",
-        "title": "Perl: Show Language Server Output"
+        "command": "perl-lsp.organizeImports",
+        "title": "Organize Use Statements",
+        "category": "Perl"
       },
       {
-        "command": "perl.runTest",
-        "title": "Perl: Run Test",
-        "icon": "$(play)"
+        "command": "perl-lsp.runTests",
+        "title": "Run Tests in Current File",
+        "category": "Perl"
       },
       {
-        "command": "perl.runTestFile",
-        "title": "Perl: Run Test File",
-        "icon": "$(run-all)"
+        "command": "perl-lsp.extractSubroutine",
+        "title": "Extract Subroutine",
+        "category": "Perl Refactor"
       },
       {
-        "command": "perl.debugTest",
-        "title": "Perl: Debug Test",
-        "icon": "$(debug)"
+        "command": "perl-lsp.extractVariable",
+        "title": "Extract Variable",
+        "category": "Perl Refactor"
+      },
+      {
+        "command": "perl-lsp.inlineVariable",
+        "title": "Inline Variable",
+        "category": "Perl Refactor"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "perl-lsp.extractSubroutine",
+          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "group": "1_modification"
+        },
+        {
+          "command": "perl-lsp.extractVariable",
+          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "group": "1_modification"
+        }
+      ]
+    },
     "keybindings": [
       {
-        "command": "editor.action.formatDocument",
-        "key": "shift+alt+f",
-        "when": "editorLangId == perl && editorTextFocus && !editorReadonly"
+        "command": "perl-lsp.organizeImports",
+        "key": "shift+alt+o",
+        "when": "editorTextFocus && resourceExtname == .pl"
       }
     ],
-    "debuggers": [
+    "snippets": [
+      {
+        "language": "perl",
+        "path": "./snippets/perl.json"
+      }
+    ],
+    "taskDefinitions": [
       {
         "type": "perl",
-        "label": "Perl Debug",
-        "program": "./out/debugAdapter.js",
-        "runtime": "node",
-        "languages": ["perl"],
-        "configurationAttributes": {
-          "launch": {
-            "required": ["program"],
-            "properties": {
-              "program": {
-                "type": "string",
-                "description": "Path to the Perl script to debug.",
-                "default": "${file}"
-              },
-              "args": {
-                "type": "array",
-                "description": "Command line arguments passed to the program.",
-                "default": []
-              },
-              "stopOnEntry": {
-                "type": "boolean",
-                "description": "Automatically stop after launch.",
-                "default": false
-              },
-              "cwd": {
-                "type": "string",
-                "description": "Current working directory.",
-                "default": "${workspaceFolder}"
-              },
-              "env": {
-                "type": "object",
-                "description": "Environment variables.",
-                "default": {}
-              },
-              "perlPath": {
-                "type": "string",
-                "description": "Path to the Perl interpreter.",
-                "default": "perl"
-              }
-            }
+        "required": ["script"],
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "The Perl script to execute"
           },
-          "attach": {
-            "properties": {
-              "port": {
-                "type": "number",
-                "description": "Port to attach to.",
-                "default": 5000
-              }
-            }
+          "args": {
+            "type": "array",
+            "description": "Arguments to pass to the script"
           }
-        },
-        "initialConfigurations": [
-          {
-            "type": "perl",
-            "request": "launch",
-            "name": "Launch Perl Script",
-            "program": "${file}",
-            "stopOnEntry": true
-          }
-        ],
-        "configurationSnippets": [
-          {
-            "label": "Perl: Launch Script",
-            "description": "Launch and debug a Perl script",
-            "body": {
-              "type": "perl",
-              "request": "launch",
-              "name": "Launch Perl Script",
-              "program": "^\"\\${file}\"",
-              "stopOnEntry": true,
-              "args": []
-            }
-          },
-          {
-            "label": "Perl: Launch Test",
-            "description": "Launch and debug a Perl test file",
-            "body": {
-              "type": "perl",
-              "request": "launch",
-              "name": "Debug Perl Test",
-              "program": "^\"\\${file}\"",
-              "stopOnEntry": false,
-              "args": [],
-              "env": {
-                "PERL_TEST_HARNESS_DUMP_TAP": "1"
-              }
-            }
-          }
-        ]
-      }
-    ],
-    "problemMatchers": [
-      {
-        "name": "perl",
-        "owner": "perl",
-        "fileLocation": [
-          "relative",
-          "${workspaceFolder}"
-        ],
-        "pattern": {
-          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-          "file": 1,
-          "line": 2,
-          "column": 3,
-          "severity": 4,
-          "message": 5
         }
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile && npm run bundle-lsp",
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "bundle-lsp": "node scripts/bundle-lsp.js",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "watch": "tsc -watch -p ./"
   },
   "dependencies": {
-    "vscode-languageclient": "^8.1.0"
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/node": "^18.0.0",
-    "@types/vscode": "^1.74.0",
-    "@vscode/vsce": "^2.22.0",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
     "typescript": "^5.0.0"
   }
 }

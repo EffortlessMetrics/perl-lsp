@@ -1,0 +1,141 @@
+name: LSP Tests
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'crates/perl-parser/**'
+      - 'crates/perl-lexer/**'
+      - '.github/workflows/lsp-tests.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'crates/perl-parser/**'
+      - 'crates/perl-lexer/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test LSP Implementation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta]
+        include:
+          - os: ubuntu-latest
+            rust: nightly
+            experimental: true
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+      continue-on-error: ${{ matrix.experimental == true }}
+    
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      continue-on-error: ${{ matrix.experimental == true }}
+    
+    - name: Build
+      run: cargo build --all --verbose
+    
+    - name: Run LSP tests
+      run: |
+        cargo test -p perl-parser --test lsp_user_story_test
+        cargo test -p perl-parser --test lsp_builtin_functions_test
+        cargo test -p perl-parser --test lsp_edge_cases_test
+        cargo test -p perl-parser --test lsp_multi_file_test
+        cargo test -p perl-parser --test lsp_testing_integration_test
+        cargo test -p perl-parser --test lsp_refactoring_test
+        cargo test -p perl-parser --test lsp_performance_test
+        cargo test -p perl-parser --test lsp_formatting_test
+        cargo test -p perl-parser --test lsp_master_integration_test
+    
+    - name: Run all parser tests
+      run: cargo test --all --verbose
+    
+    - name: Build release binary
+      run: cargo build -p perl-parser --bin perl-lsp --release
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: perl-lsp-${{ matrix.os }}-${{ matrix.rust }}
+        path: target/release/perl-lsp*
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+    
+    - name: Generate coverage
+      run: cargo tarpaulin --out Xml --all --verbose
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./cobertura.xml
+        fail_ci_if_error: false
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: Run benchmarks
+      run: cargo bench -p perl-parser --bench lsp_benchmarks
+    
+    - name: Store benchmark results
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'cargo'
+        output-file-path: target/criterion/output.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true

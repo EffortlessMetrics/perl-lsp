@@ -29,15 +29,20 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
 
-### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **NEW**
+### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
 - Full Language Server Protocol implementation
 - Real-time syntax diagnostics and error reporting
 - Symbol navigation (go to definition, find references)
 - Document symbols for outline view
-- Signature help for function parameters
+- Signature help for 114 built-in functions
 - Semantic tokens for enhanced highlighting
 - Incremental parsing support
 - Works with any LSP-compatible editor
+- **63+ comprehensive user story tests**
+- **Multi-file project support**
+- **Advanced refactoring capabilities**
+- **Code formatting and organization**
+- **Performance tested at scale**
 
 ## Default Build Configuration
 
