@@ -4,7 +4,7 @@
 
 ---
 
-## 🎉 Current State (v0.7.1 - January 2025)
+## 🎉 Current State (v0.7.2 - January 2025)
 
 We've built the most comprehensive Perl parsing solution available:
 
@@ -14,7 +14,7 @@ We've built the most comprehensive Perl parsing solution available:
 | **Performance** | ~12-68µs | ~200-450µs | **~1-150µs** | Real-time |
 | **Perl Coverage** | ~95% | ~99.995% | **~100%** | Full support |
 | **Edge Cases** | Limited | 95% | **100%** | All handled |
-| **Features** | Basic | Advanced | **Complete** | **11 IDE features** |
+| **Features** | Basic | Advanced | **Complete** | **20+ IDE features** |
 
 ---
 
@@ -29,7 +29,7 @@ We've built the most comprehensive Perl parsing solution available:
 ### Key Accomplishments
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **Full LSP implementation** (All 11 core features)
+- ✅ **Full LSP implementation** (20+ professional IDE features)
   - ✅ Real-time diagnostics
   - ✅ Code completion
   - ✅ Go to definition
@@ -52,16 +52,17 @@ We've built the most comprehensive Perl parsing solution available:
 ### Q1 2025: Polish & Distribution
 **Goal**: Production deployment and distribution
 
-#### Recent Accomplishments (v0.7.1)
-- ✅ **Fixed `bless {}` parsing** - Now correctly handles empty hash argument
-- ✅ **Fixed `sort {}`, `map {}`, `grep {}` parsing** - Properly handles empty blocks
-- ✅ **Enhanced LSP features** - Added textDocument/references and textDocument/definition
-- ✅ **Comprehensive test coverage** - 63+ user story tests, 141 edge case tests
+#### Recent Accomplishments (v0.7.2)
+- ✅ **Fixed operator precedence** - Word operators (`or`, `and`, `not`, `xor`) now have correct precedence
+- ✅ **Fixed division operator parsing** - `/` now correctly recognized in all contexts
+- ✅ **Complete built-in signatures** - Added signatures for 150+ Perl built-in functions
+- ✅ **Enhanced LSP signature help** - Comprehensive parameter hints and documentation
+- ✅ **Expanded test coverage** - 100+ operator precedence tests, edge case tests
 
 #### Immediate Tasks
-- [ ] **Parser Improvements**
-  - [ ] Fix `or`/`and`/`not` operator precedence
-  - [ ] Complete built-in function signatures
+- [x] **Parser Improvements** ✅
+  - [x] Fix `or`/`and`/`not` operator precedence ✅
+  - [x] Complete built-in function signatures ✅
 - [ ] **LSP Polish**
   - [ ] Multi-file support (cross-file references)
   - [ ] Performance optimization for large files

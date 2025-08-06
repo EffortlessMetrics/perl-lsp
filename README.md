@@ -23,12 +23,13 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.7.1
+## 📦 Latest Release: v0.7.2
 
-- **Fixed** `bless {}` parsing - Now correctly recognized as function call with empty hash
-- **Fixed** `sort {}`, `map {}`, `grep {}` empty block handling
-- **Enhanced** builtin function argument parsing
-- **Added** 25+ new test cases for edge cases
+- **Fixed** Operator precedence for word operators (`or`, `and`, `not`, `xor`)
+- **Fixed** Division operator (`/`) parsing - Now correctly recognized in all contexts
+- **Added** Complete signatures for 150+ Perl built-in functions
+- **Enhanced** LSP signature help with comprehensive parameter hints
+- **Added** 100+ new test cases for operator precedence
 
 ## 🚀 Features
 
@@ -111,7 +112,7 @@ The v3 parser includes a **full-featured Language Server Protocol implementation
 - ✅ **Go to Definition**: Jump to symbol definitions across files
 - ✅ **Find References**: Locate all uses of a symbol (including string interpolation)
 - ✅ **Hover Information**: Display documentation and type information
-- ✅ **Signature Help**: Function parameter hints for 114 built-in functions
+- ✅ **Signature Help**: Function parameter hints for 150+ built-in functions
 - ✅ **Document Symbols**: Hierarchical outline view with icons
 - ✅ **Rename Symbol**: Safe renaming across all references
 

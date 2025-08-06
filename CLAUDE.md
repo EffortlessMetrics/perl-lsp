@@ -28,7 +28,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Successfully handles m!pattern!, indirect object syntax, and more
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
-- **v0.7.1**: Fixed `bless {}`, `sort {}`, `map {}`, `grep {}` parsing
+- **v0.7.2**: Fixed operator precedence, division parsing, added 150+ built-in signatures
 
 ### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
 - **20+ Professional IDE Features** implemented
@@ -36,7 +36,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **Advanced Refactoring**: Extract variable/subroutine, convert loops, add error checking, organize imports
 - **Enhanced Features**: Semantic tokens, CodeLens, call hierarchy, inlay hints, workspace symbols, folding
 - **Code Completion**: Variables, functions, keywords, modules with smart filtering and documentation
-- **114 Built-in Functions**: Complete signature help with parameter hints
+- **150+ Built-in Functions**: Complete signature help with parameter hints
 - **63+ Comprehensive Tests**: User stories, edge cases, integration tests
 - **Performance**: <50ms response times for all operations
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
@@ -446,14 +446,15 @@ To extend the Pest grammar:
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.7.1)
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.7.2)
 - **Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Status**: Production ready, feature complete
-- **Latest fixes (v0.7.1)**:
-  - ✅ Fixed `bless {}` parsing (now correctly parsed as function call with hash)
-  - ✅ Fixed `sort {}`, `map {}`, `grep {}` empty block parsing
-  - ✅ Enhanced builtin function argument handling
+- **Latest fixes (v0.7.2)**:
+  - ✅ Fixed operator precedence for word operators (`or`, `and`, `not`, `xor`)
+  - ✅ Fixed division operator (`/`) parsing - now correctly recognized
+  - ✅ Added complete signatures for 150+ Perl built-in functions
+  - ✅ Enhanced LSP signature help with comprehensive parameter hints
 - **Successfully handles ALL edge cases**:
   - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, etc.)
   - ✅ Indirect object syntax (`print $fh "Hello"`, `print STDOUT "msg"`, `new Class`)
