@@ -94,6 +94,7 @@ pub use semantic_tokens_provider::{
     SemanticTokenType as SemanticTokenTypeV2, SemanticTokenModifier as SemanticTokenModifierV2,
     encode_semantic_tokens
 };
+pub use folding::{FoldingRangeExtractor, FoldingRange, FoldingRangeKind};
 
 #[cfg(test)]
 mod tests {

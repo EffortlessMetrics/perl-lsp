@@ -89,6 +89,10 @@ impl FoldingRangeExtractor {
                 if let Some(block_node) = block {
                     self.add_range_from_node(node, None);
                     self.visit_node(block_node);
+                } else {
+                    // Even packages without explicit blocks could be foldable
+                    // if they span multiple lines (e.g., package Foo; ... package Bar;)
+                    self.add_range_from_node(node, None);
                 }
             }
             
@@ -181,8 +185,9 @@ impl FoldingRangeExtractor {
             }
             
             NodeKind::ArrayLiteral { elements } => {
-                // Arrays with multiple elements are foldable
-                if elements.len() > 1 {
+                // Arrays are foldable if they have elements
+                // (They'll be filtered out later if too small)
+                if !elements.is_empty() {
                     self.add_range_from_node(node, None);
                 }
                 for elem in elements {
@@ -202,6 +207,13 @@ impl FoldingRangeExtractor {
             }
             
             // ArrayRef and HashRef don't exist as separate NodeKinds, they're handled via references
+            
+            NodeKind::VariableDeclaration { initializer, .. } => {
+                // Visit the initializer if present
+                if let Some(init) = initializer {
+                    self.visit_node(init);
+                }
+            }
             
             // Other node types - visit children if any
             _ => {}
