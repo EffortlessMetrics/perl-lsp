@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Parser**: Fixed incorrect parsing of `bless {}` syntax which was being treated as hash element access instead of a function call with empty hash argument
+  - Now correctly parses `bless {}` as `(call bless ((hash)))`
+  - Fixes work in all contexts: statements, returns, nested in subroutines
+  - Added comprehensive test coverage for all `bless` variations
+
 ## [0.7.0] - TBD
 
 ### Next Release Planning

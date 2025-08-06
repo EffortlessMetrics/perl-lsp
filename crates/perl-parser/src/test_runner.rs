@@ -118,6 +118,7 @@ impl TestRunner {
     }
 
     /// Find test functions in the AST
+    #[allow(dead_code)]
     fn find_test_functions(&self, node: &Node) -> Vec<TestItem> {
         let mut tests = Vec::new();
         self.visit_node_for_tests(node, &mut tests);
@@ -188,6 +189,7 @@ impl TestRunner {
     }
 
     /// Visit nodes looking for test functions
+    #[allow(dead_code)]
     fn visit_node_for_tests(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
             NodeKind::Program { statements } => {
@@ -262,6 +264,7 @@ impl TestRunner {
     }
 
     /// Check if a function call is a test assertion
+    #[allow(dead_code)]
     fn is_test_assertion(&self, name: &str) -> bool {
         // Test::More assertions
         matches!(name, 
@@ -273,6 +276,7 @@ impl TestRunner {
     }
 
     /// Extract test description from arguments
+    #[allow(dead_code)]
     fn extract_test_description(&self, args: &[Node]) -> Option<String> {
         // Usually the last argument is the description
         args.last().and_then(|arg| {
@@ -284,6 +288,7 @@ impl TestRunner {
     }
 
     /// Visit children nodes for tests
+    #[allow(dead_code)]
     fn visit_children_for_tests(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {

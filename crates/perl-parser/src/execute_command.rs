@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::process::Command;
-use std::path::Path;
 
 /// Commands supported by the Perl LSP
 #[derive(Debug, Clone, Serialize, Deserialize)]
