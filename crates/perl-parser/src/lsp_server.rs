@@ -1502,11 +1502,29 @@ impl LspServer {
         if let Some(params) = params {
             // Parse the code lens
             if let Ok(lens) = serde_json::from_value::<crate::code_lens_provider::CodeLens>(params.clone()) {
-                // For now, just resolve with a placeholder count
-                // In a real implementation, you'd count actual references
-                let reference_count = 0; // TODO: Count actual references
+                // Extract the symbol name and kind from the lens data
+                let symbol_name = lens.data.as_ref()
+                    .and_then(|d| d.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("");
                 
-                let resolved = resolve_code_lens(lens, reference_count);
+                let symbol_kind = lens.data.as_ref()
+                    .and_then(|d| d.get("kind"))
+                    .and_then(|k| k.as_str())
+                    .unwrap_or("unknown");
+                
+                // Get the document URI from the range (we need to track this better in the future)
+                // For now, count references across all documents
+                let mut total_references = 0;
+                
+                let documents = self.documents.lock().unwrap();
+                for (_uri, doc) in documents.iter() {
+                    if let Some(ref ast) = doc.ast {
+                        total_references += self.count_references(ast, symbol_name, symbol_kind);
+                    }
+                }
+                
+                let resolved = resolve_code_lens(lens, total_references);
                 return Ok(Some(json!(resolved)));
             }
         }
@@ -1518,6 +1536,158 @@ impl LspServer {
         })
     }
 
+    /// Count references to a symbol in an AST
+    fn count_references(&self, node: &crate::ast::Node, symbol_name: &str, symbol_kind: &str) -> usize {
+        use crate::ast::NodeKind;
+        
+        let mut count = 0;
+        
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    count += self.count_references(stmt, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::FunctionCall { name, args } => {
+                if symbol_kind == "subroutine" && name == symbol_name {
+                    count += 1;
+                }
+                for arg in args {
+                    count += self.count_references(arg, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::MethodCall { object, method, args } => {
+                if symbol_kind == "subroutine" && method == symbol_name {
+                    count += 1;
+                }
+                count += self.count_references(object, symbol_name, symbol_kind);
+                for arg in args {
+                    count += self.count_references(arg, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::Use { module, args: _ } => {
+                if symbol_kind == "package" && module == symbol_name {
+                    count += 1;
+                }
+            }
+            
+            NodeKind::Identifier { name } => {
+                if symbol_kind == "package" && name == symbol_name {
+                    count += 1;
+                }
+            }
+            
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    count += self.count_references(stmt, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                count += self.count_references(condition, symbol_name, symbol_kind);
+                count += self.count_references(then_branch, symbol_name, symbol_kind);
+                for (cond, branch) in elsif_branches {
+                    count += self.count_references(cond, symbol_name, symbol_kind);
+                    count += self.count_references(branch, symbol_name, symbol_kind);
+                }
+                if let Some(else_b) = else_branch {
+                    count += self.count_references(else_b, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::While { condition, body, continue_block } |
+            NodeKind::For { condition: Some(condition), body, continue_block, .. } => {
+                count += self.count_references(condition, symbol_name, symbol_kind);
+                count += self.count_references(body, symbol_name, symbol_kind);
+                if let Some(cont) = continue_block {
+                    count += self.count_references(cont, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::Foreach { variable: _, list, body } => {
+                count += self.count_references(list, symbol_name, symbol_kind);
+                count += self.count_references(body, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Binary { left, right, .. } => {
+                count += self.count_references(left, symbol_name, symbol_kind);
+                count += self.count_references(right, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Unary { op, operand } => {
+                // Check if this is a reference to a subroutine (\&function)
+                if op == "\\" && symbol_kind == "subroutine" {
+                    if let NodeKind::Identifier { name } = &operand.kind {
+                        if name == symbol_name {
+                            count += 1;
+                        }
+                    }
+                }
+                count += self.count_references(operand, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                count += self.count_references(condition, symbol_name, symbol_kind);
+                count += self.count_references(then_expr, symbol_name, symbol_kind);
+                count += self.count_references(else_expr, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Assignment { lhs, rhs, op: _ } => {
+                count += self.count_references(lhs, symbol_name, symbol_kind);
+                count += self.count_references(rhs, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    count += self.count_references(val, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    count += self.count_references(elem, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::HashLiteral { pairs } => {
+                for (key, val) in pairs {
+                    count += self.count_references(key, symbol_name, symbol_kind);
+                    count += self.count_references(val, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::Subroutine { body, .. } => {
+                count += self.count_references(body, symbol_name, symbol_kind);
+            }
+            
+            NodeKind::Package { block, .. } => {
+                if let Some(block) = block {
+                    count += self.count_references(block, symbol_name, symbol_kind);
+                }
+            }
+            
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                count += self.count_references(body, symbol_name, symbol_kind);
+                for (_var, block) in catch_blocks {
+                    count += self.count_references(block, symbol_name, symbol_kind);
+                }
+                if let Some(finally) = finally_block {
+                    count += self.count_references(finally, symbol_name, symbol_kind);
+                }
+            }
+            
+            // Recursively handle other node types that might contain references
+            _ => {
+                // Default: no references in other node types
+            }
+        }
+        
+        count
+    }
+    
     /// Handle semantic tokens full request
     fn handle_semantic_tokens_full(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
