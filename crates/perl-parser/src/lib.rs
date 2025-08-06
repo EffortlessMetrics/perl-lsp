@@ -34,6 +34,7 @@ pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod completion;
 pub mod diagnostics;
+pub mod execute_command;
 pub mod edit;
 pub mod error;
 pub mod error_recovery;

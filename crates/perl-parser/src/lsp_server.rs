@@ -313,7 +313,15 @@ impl LspServer {
                     "resolveProvider": false
                 },
                 "executeCommandProvider": {
-                    "commands": ["perl.runTest", "perl.runTestFile", "perl.debugTest"]
+                    "commands": [
+                        "perl.runTest", 
+                        "perl.runTestFile", 
+                        "perl.debugTest",
+                        "perl.runTests",
+                        "perl.runFile",
+                        "perl.runTestSub",
+                        "perl.debugTests"
+                    ]
                 },
                 "experimental": {
                     "testProvider": true
@@ -1989,24 +1997,39 @@ impl LspServer {
 
     /// Handle execute command request
     fn handle_execute_command(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        use crate::execute_command::ExecuteCommandProvider;
+        
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
-            let arguments = params["arguments"].as_array();
+            let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
             
             eprintln!("Executing command: {}", command);
             
+            // Use the new execute command provider for new commands
+            let provider = ExecuteCommandProvider::new();
+            
             match command {
+                // Keep existing test commands for backward compatibility
                 "perl.runTest" => {
-                    if let Some(args) = arguments {
-                        if let Some(test_id) = args.get(0).and_then(|v| v.as_str()) {
-                            return self.run_test(test_id);
-                        }
+                    if let Some(test_id) = arguments.get(0).and_then(|v| v.as_str()) {
+                        return self.run_test(test_id);
                     }
                 }
                 "perl.runTestFile" => {
-                    if let Some(args) = arguments {
-                        if let Some(file_uri) = args.get(0).and_then(|v| v.as_str()) {
-                            return self.run_test_file(file_uri);
+                    if let Some(file_uri) = arguments.get(0).and_then(|v| v.as_str()) {
+                        return self.run_test_file(file_uri);
+                    }
+                }
+                // New commands handled by ExecuteCommandProvider
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
+                    match provider.execute_command(command, arguments) {
+                        Ok(result) => return Ok(Some(result)),
+                        Err(e) => {
+                            return Err(JsonRpcError {
+                                code: -32603,
+                                message: e,
+                                data: None,
+                            });
                         }
                     }
                 }
