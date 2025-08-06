@@ -59,6 +59,21 @@ impl SignatureHelpProvider {
         }
     }
     
+    /// Check if a built-in function exists
+    pub fn has_builtin(&self, name: &str) -> bool {
+        self.builtin_signatures.contains_key(name)
+    }
+    
+    /// Get the number of built-in functions
+    pub fn builtin_count(&self) -> usize {
+        self.builtin_signatures.len()
+    }
+    
+    /// Get built-in signature info
+    pub fn get_builtin_signature(&self, name: &str) -> Option<&ImportedBuiltinSignature> {
+        self.builtin_signatures.get(name)
+    }
+    
     /// Get signature help at a position
     pub fn get_signature_help(&self, source: &str, position: usize) -> Option<SignatureHelp> {
         // Find the function call context
