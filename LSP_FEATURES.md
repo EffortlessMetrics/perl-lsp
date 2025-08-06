@@ -2,6 +2,12 @@
 
 This document provides comprehensive documentation of all LSP features implemented in the perl-lsp server.
 
+## Latest Updates (v0.7.2)
+
+- **Enhanced Signature Help**: Now includes comprehensive signatures for 150+ Perl built-in functions
+- **Fixed Parser Issues**: Corrected operator precedence for word operators and division operator parsing
+- **Improved Accuracy**: Better handling of Perl's context-sensitive syntax
+
 ## Table of Contents
 
 - [Core Features](#core-features)
@@ -102,11 +108,11 @@ Rich hover tooltips with:
 - **Value Preview**: For constants and literals
 - **Module Info**: Package and version information
 
-### 6. Signature Help
+### 6. Signature Help (Enhanced in v0.7.2)
 
 Real-time parameter hints while typing function calls:
 
-- **114 Built-in Functions**: Complete coverage of Perl built-ins
+- **150+ Built-in Functions**: Complete coverage of Perl built-ins
 - **User Functions**: Extracted from prototypes and signatures
 - **Active Parameter**: Highlights current parameter
 - **Optional/Required**: Shows parameter requirements
