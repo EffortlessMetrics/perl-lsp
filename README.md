@@ -96,18 +96,35 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features (11/11 Core Features Complete) ✅
-- ✅ **Real-time Diagnostics**: Live syntax checking as you type
-- ✅ **Code Completion**: Context-aware suggestions for variables and functions
-- ✅ **Go to Definition**: Jump to symbol definitions
+### LSP Features (20+ Professional IDE Features) ✅
+
+#### Core Features
+- ✅ **Real-time Diagnostics**: Live syntax checking with detailed error messages
+- ✅ **Code Completion**: Context-aware suggestions for variables, functions, keywords, and modules
+- ✅ **Go to Definition**: Jump to symbol definitions across files
 - ✅ **Find References**: Locate all uses of a symbol (including string interpolation)
 - ✅ **Hover Information**: Display documentation and type information
-- ✅ **Signature Help**: Function parameter hints while typing (40+ built-ins)
-- ✅ **Document Symbols**: Outline view of subroutines, packages, and variables
-- ✅ **Code Actions**: Quick fixes for common errors
-- ✅ **Incremental Parsing**: Efficient updates on document changes
+- ✅ **Signature Help**: Function parameter hints for 114 built-in functions
+- ✅ **Document Symbols**: Hierarchical outline view with icons
 - ✅ **Rename Symbol**: Safe renaming across all references
-- ✅ **Complete Workflow**: All features work together seamlessly
+
+#### Advanced Refactoring (NEW!)
+- ✅ **Extract Variable**: Extract expressions to named variables with smart naming
+- ✅ **Extract Subroutine**: Extract code blocks to functions
+- ✅ **Convert Loop Styles**: Modernize C-style for loops to foreach
+- ✅ **Add Error Checking**: Add `or die` to file operations
+- ✅ **Convert to Postfix**: Transform if/unless to postfix form
+- ✅ **Organize Imports**: Sort and group use statements
+- ✅ **Add Missing Pragmas**: Quick fix to add `use strict; use warnings;`
+
+#### Enhanced Features
+- ✅ **Semantic Tokens**: Advanced syntax highlighting with modifiers
+- ✅ **CodeLens**: Inline actions for running tests and debugging
+- ✅ **Call Hierarchy**: View incoming/outgoing function calls
+- ✅ **Inlay Hints**: Type and parameter hints inline
+- ✅ **Workspace Symbols**: Search across entire project
+- ✅ **Folding Ranges**: Code folding for subroutines and blocks
+- ✅ **Incremental Parsing**: Efficient updates on document changes
 
 See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 
