@@ -350,19 +350,15 @@ impl SymbolExtractor {
                 
                 self.table.add_symbol(symbol);
                 
-                // Create package scope
-                self.table.push_scope(ScopeKind::Package, node.location.clone());
-                
                 if let Some(block_node) = block {
+                    // Package with block - create a new scope
+                    self.table.push_scope(ScopeKind::Package, node.location.clone());
                     self.visit_node(block_node);
-                } else {
-                    // Package declaration without block affects the rest of the file
-                    // Don't pop the scope
-                    return;
+                    self.table.pop_scope();
+                    self.table.current_package = old_package;
                 }
-                
-                self.table.pop_scope();
-                self.table.current_package = old_package;
+                // If no block, package declaration affects rest of file
+                // Don't change scope or restore package name
             }
             
             NodeKind::Block { statements } => {
@@ -511,6 +507,115 @@ impl SymbolExtractor {
                 }
             }
             
+            NodeKind::Use { module: _, args: _ } |
+            NodeKind::No { module: _, args: _ } => {
+                // Use and No statements don't directly contain symbols we track
+                // (constants from use constant are handled differently)
+            }
+            
+            NodeKind::PhaseBlock { phase: _, block } => {
+                // BEGIN, END, CHECK, INIT blocks
+                self.visit_node(block);
+            }
+            
+            NodeKind::StatementModifier { statement, modifier: _, condition } => {
+                self.visit_node(statement);
+                self.visit_node(condition);
+            }
+            
+            NodeKind::Do { block } |
+            NodeKind::Eval { block } => {
+                self.visit_node(block);
+            }
+            
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                self.visit_node(body);
+                for (_, catch_block) in catch_blocks {
+                    self.visit_node(catch_block);
+                }
+                if let Some(finally) = finally_block {
+                    self.visit_node(finally);
+                }
+            }
+            
+            NodeKind::Given { expr, body } => {
+                self.visit_node(expr);
+                self.visit_node(body);
+            }
+            
+            NodeKind::When { condition, body } => {
+                self.visit_node(condition);
+                self.visit_node(body);
+            }
+            
+            NodeKind::Default { body } => {
+                self.visit_node(body);
+            }
+            
+            NodeKind::Class { name, body } => {
+                let symbol = Symbol {
+                    name: name.clone(),
+                    qualified_name: name.clone(),
+                    kind: SymbolKind::Package, // Classes are like packages
+                    location: node.location.clone(),
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec![],
+                };
+                self.table.add_symbol(symbol);
+                self.visit_node(body);
+            }
+            
+            NodeKind::Method { name, params: _, body } => {
+                let symbol = Symbol {
+                    name: name.clone(),
+                    qualified_name: format!("{}::{}", self.table.current_package, name),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location.clone(),
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec!["method".to_string()],
+                };
+                self.table.add_symbol(symbol);
+                
+                self.table.push_scope(ScopeKind::Subroutine, node.location.clone());
+                self.visit_node(body);
+                self.table.pop_scope();
+            }
+            
+            NodeKind::Format { name, body: _ } => {
+                let symbol = Symbol {
+                    name: name.clone(),
+                    qualified_name: format!("{}::{}", self.table.current_package, name),
+                    kind: SymbolKind::Format,
+                    location: node.location.clone(),
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec![],
+                };
+                self.table.add_symbol(symbol);
+            }
+            
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    self.visit_node(val);
+                }
+            }
+            
+            NodeKind::Match { expr, pattern: _, modifiers: _ } => {
+                self.visit_node(expr);
+            }
+            
+            NodeKind::IndirectCall { method: _, object, args } => {
+                self.visit_node(object);
+                for arg in args {
+                    self.visit_node(arg);
+                }
+            }
+            
             // Leaf nodes - no children to visit
             NodeKind::Number { .. } |
             NodeKind::Heredoc { .. } |
@@ -518,18 +623,18 @@ impl SymbolExtractor {
             NodeKind::Substitution { .. } |
             NodeKind::Transliteration { .. } |
             NodeKind::Undef |
-            NodeKind::Return { .. } |
             NodeKind::Diamond |
             NodeKind::Ellipsis |
             NodeKind::Glob { .. } |
             NodeKind::Readline { .. } |
+            NodeKind::Identifier { .. } |
             NodeKind::Error { .. } => {
                 // No symbols to extract
             }
             
             _ => {
-                // For any unhandled node types, we should still try to visit children
-                // This ensures we don't miss symbols in new node types
+                // For any unhandled node types, log a warning
+                eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
             }
         }
     }
