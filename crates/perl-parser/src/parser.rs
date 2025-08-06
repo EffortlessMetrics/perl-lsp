@@ -78,7 +78,7 @@ impl<'a> Parser<'a> {
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
         
-        match token.kind {
+        let mut stmt = match token.kind {
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
                 self.parse_variable_declaration()
@@ -134,7 +134,23 @@ impl<'a> Parser<'a> {
                 
                 self.parse_expression_statement()
             }
+        }?;
+        
+        // Check for statement modifiers on ANY statement
+        if matches!(self.peek_kind(), 
+            Some(TokenKind::If) | Some(TokenKind::Unless) | 
+            Some(TokenKind::While) | Some(TokenKind::Until) | 
+            Some(TokenKind::For) | Some(TokenKind::Foreach)
+        ) {
+            stmt = self.parse_statement_modifier(stmt)?;
         }
+        
+        // Consume optional semicolon
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        }
+        
+        Ok(stmt)
     }
     
     /// Check if this might be an indirect call pattern
@@ -1600,20 +1616,19 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'return'
         
+        // Check if we have a value to return - only stop at clear ends
         let value = if matches!(self.peek_kind(), 
             Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace) | 
             Some(TokenKind::Eof) | None
         ) {
             None
         } else {
+            // For now, just parse an expression and let statement-level handle modifiers
+            // This is a temporary workaround for the TokenKind::If matching issue
             Some(Box::new(self.parse_expression()?))
         };
         
-        if self.peek_kind() == Some(TokenKind::Semicolon) {
-            self.tokens.next()?;
-        }
-        
-        let end = self.previous_position();
+        let end = value.as_ref().map(|v| v.location.end).unwrap_or(self.previous_position());
         Ok(Node::new(
             NodeKind::Return { value },
             SourceLocation { start, end }
@@ -1822,7 +1837,7 @@ impl<'a> Parser<'a> {
     }
     
     
-    /// Parse expression statement (which may have modifiers)
+    /// Parse expression statement
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
         // Check for special blocks like AUTOLOAD and DESTROY
         if let Ok(token) = self.tokens.peek() {
@@ -1842,20 +1857,7 @@ impl<'a> Parser<'a> {
         // Check for word operators (or, and, xor) which have very low precedence
         expr = self.parse_word_or_expr(expr)?;
         
-        // Check for statement modifiers
-        expr = match self.peek_kind() {
-            Some(TokenKind::If) | Some(TokenKind::Unless) | 
-            Some(TokenKind::While) | Some(TokenKind::Until) | 
-            Some(TokenKind::For) | Some(TokenKind::Foreach) => {
-                self.parse_statement_modifier(expr)?
-            }
-            _ => expr
-        };
-        
-        // Consume optional semicolon
-        if self.peek_kind() == Some(TokenKind::Semicolon) {
-            self.consume_token()?;
-        }
+        // Statement modifiers are now handled at the statement level
         
         Ok(expr)
     }
@@ -1905,7 +1907,9 @@ impl<'a> Parser<'a> {
                            self.peek_kind() == Some(TokenKind::My) {
                             args.push(self.parse_variable_declaration()?);
                         } else {
-                            args.push(self.parse_expression()?);
+                            // For builtins, don't parse word operators as part of arguments
+                            // Word operators should be handled at statement level
+                            args.push(self.parse_assignment()?);
                         }
                         
                         // Parse remaining arguments
@@ -1917,7 +1921,7 @@ impl<'a> Parser<'a> {
                                 Some(TokenKind::If) | Some(TokenKind::Unless) |
                                 Some(TokenKind::While) | Some(TokenKind::Until) | 
                                 Some(TokenKind::For) | Some(TokenKind::Foreach) => break,
-                                _ => args.push(self.parse_expression()?)
+                                _ => args.push(self.parse_assignment()?)
                             }
                         }
                         
@@ -3140,7 +3144,8 @@ impl<'a> Parser<'a> {
                             // This was already parsed as a quote operator in parse_primary
                             // Don't try to parse arguments
                         } else if Self::is_builtin_function(name) {
-                            // Check if we're at statement end (no arguments)
+                            // Builtins always become function calls, even with no arguments
+                            // This ensures they work correctly in expressions like "return $x or die"
                             if self.is_at_statement_end() {
                                 // Bare builtin with no arguments
                                 expr = Node::new(
@@ -3880,17 +3885,17 @@ impl<'a> Parser<'a> {
             }
             
             // Handle keywords that can be used as identifiers in certain contexts
-            TokenKind::My | TokenKind::Our | TokenKind::Local |
-            TokenKind::State | TokenKind::If | TokenKind::Elsif | TokenKind::Else | 
-            TokenKind::Unless | TokenKind::While | TokenKind::Until | TokenKind::For | 
-            TokenKind::Foreach | TokenKind::Return | TokenKind::Package | TokenKind::Use | 
-            TokenKind::No | TokenKind::Begin | TokenKind::End | TokenKind::Check |
+            // Note: Statement-level keywords (if, unless, while, return, etc.) should NOT be here
+            TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State |
+            TokenKind::Package | TokenKind::Use | TokenKind::No |
+            TokenKind::Begin | TokenKind::End | TokenKind::Check |
             TokenKind::Init | TokenKind::Unitcheck |
             TokenKind::Given | TokenKind::When | TokenKind::Default |
             TokenKind::Catch | TokenKind::Finally |
             TokenKind::Continue | TokenKind::Class | TokenKind::Method | TokenKind::Format => {
-                // In expression context, keywords can sometimes be used as barewords/identifiers
+                // In expression context, some keywords can be used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
+                // But NOT for statement modifiers like if, unless, while, etc.
                 let token = self.tokens.next()?;
                 Ok(Node::new(
                     NodeKind::Identifier { name: token.text.to_string() },
