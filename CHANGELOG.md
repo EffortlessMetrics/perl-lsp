@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `$a = 1 or $b = 2` now parses as `($a = 1) or ($b = 2)` instead of `$a = (1 or $b) = 2`
   - Fixes long-standing issue where word operators were incorrectly parsed with higher precedence
   - Added comprehensive test suite with 10 test cases for word operator precedence
+- **Parser**: Fixed division operator (`/`) parsing
+  - Division operator was not being recognized by the token stream converter
+  - Expressions like `$a / $b` and `10 / 2` now parse correctly
+  - The lexer was correctly producing Division tokens but they weren't being converted to Slash tokens for the parser
 
 ### Added
 - **LSP**: Complete built-in function signatures for all 150+ Perl built-in functions

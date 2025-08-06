@@ -10,7 +10,7 @@ fn main() {
     
     // Example 1: Basic formatting
     println!("Example 1: Basic formatting");
-    println!("-" . repeat(40));
+    println!("{}", "-".repeat(40));
     
     let messy_code = r#"sub calculate_total{my($items,$tax_rate)=@_;my$subtotal=0;foreach my$item(@$items){$subtotal+=$item->{price}*$item->{quantity};}my$tax=$subtotal*$tax_rate;return$subtotal+$tax;}"#;
     
@@ -42,7 +42,7 @@ fn main() {
     
     // Example 2: Different indentation
     println!("\n\nExample 2: Tab indentation");
-    println!("-" . repeat(40));
+    println!("{}", "-".repeat(40));
     
     let tab_options = FormattingOptions {
         tab_size: 8,
@@ -68,7 +68,7 @@ fn main() {
     
     // Example 3: Range formatting
     println!("\n\nExample 3: Range formatting");
-    println!("-" . repeat(40));
+    println!("{}", "-".repeat(40));
     
     let multi_line = r#"#!/usr/bin/perl
 use strict;
@@ -111,7 +111,7 @@ print "Result: $result\n";"#;
     
     // Example 4: With .perltidyrc
     println!("\n\nExample 4: Using .perltidyrc");
-    println!("-" . repeat(40));
+    println!("{}", "-".repeat(40));
     
     match formatter.run_perltidy_with_config(messy_code, &options, Some(Path::new("."))) {
         Ok(formatted) => {

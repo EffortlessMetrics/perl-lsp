@@ -27,7 +27,11 @@ fn test_lsp_signature_help_request_format() {
                             .map(|d| d.clone())
                             .unwrap_or_default()
                     },
-                    "parameters": sig.parameters
+                    "parameters": sig.parameters.iter().map(|p| {
+                        json!({
+                            "label": p.label
+                        })
+                    }).collect::<Vec<_>>()
                 })
             }).collect::<Vec<_>>(),
             "activeSignature": help.active_signature,
@@ -287,7 +291,7 @@ fn test_special_forms() {
         ("no", vec!["no Module VERSION LIST", "no Module"]),
     ];
     
-    for (form, sigs) in special_forms {
+    for (form, _sigs) in special_forms {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
         
