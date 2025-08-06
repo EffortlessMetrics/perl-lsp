@@ -19,3 +19,20 @@ perl-parser = { path = "crates/perl-parser" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.25.8"
+
+# Profile for development - slightly optimized for better performance
+[profile.dev]
+opt-level = 1
+
+# Profile for release builds - fully optimized
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = "debuginfo"
+
+# Profile for benchmarks - maximum optimization
+[profile.bench]
+inherits = "release"
+lto = true
+codegen-units = 1
