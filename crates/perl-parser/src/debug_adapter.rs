@@ -41,6 +41,7 @@ struct DebugSession {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 enum DebugState {
     Running,
     Stopped,
