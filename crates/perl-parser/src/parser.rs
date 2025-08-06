@@ -2986,6 +2986,80 @@ impl<'a> Parser<'a> {
                 }
                 
                 Some(TokenKind::LeftBrace) => {
+                    // Check if this is a builtin function that needs special handling
+                    if let NodeKind::Identifier { name } = &expr.kind {
+                        if Self::is_builtin_function(name) {
+                            // This is a builtin function with {} as argument
+                            // Parse arguments without parentheses
+                            let mut args = Vec::new();
+                            
+                            // Special handling for bless {} - parse it as a hash
+                            if name == "bless" {
+                                args.push(self.parse_hash_or_block()?);
+                                
+                                // Parse remaining arguments separated by commas
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
+                                    args.push(self.parse_comma()?);
+                                }
+                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
+                                // Parse block expression as first argument
+                                let block_start = self.current_position();
+                                self.expect(TokenKind::LeftBrace)?;
+                                
+                                // Parse the expression inside the block
+                                let block_expr = self.parse_expression()?;
+                                
+                                self.expect(TokenKind::RightBrace)?;
+                                let block_end = self.previous_position();
+                                
+                                // Wrap the expression in a block node
+                                let block = Node::new(
+                                    NodeKind::Block { statements: vec![block_expr] },
+                                    SourceLocation { start: block_start, end: block_end }
+                                );
+                                
+                                args.push(block);
+                                
+                                // Parse remaining arguments
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
+                                    args.push(self.parse_comma()?);
+                                }
+                            } else {
+                                // Other builtins - parse {} as first argument
+                                args.push(self.parse_hash_or_block()?);
+                                
+                                // Parse remaining arguments separated by commas
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
+                                    args.push(self.parse_comma()?);
+                                }
+                            }
+                            
+                            let start = expr.location.start;
+                            let end = args.last().unwrap().location.end;
+                            
+                            expr = Node::new(
+                                NodeKind::FunctionCall { 
+                                    name: name.clone(), 
+                                    args 
+                                },
+                                SourceLocation { start, end }
+                            );
+                            continue; // Continue the loop
+                        }
+                    }
+                    
                     // Hash element access
                     self.tokens.next()?; // consume {
                     let key = self.parse_expression()?;
@@ -3077,9 +3151,22 @@ impl<'a> Parser<'a> {
                                     args.push(block);
                                     
                                     // Parse remaining arguments
-                                    while !self.is_at_statement_end() {
-                                        if self.peek_kind() == Some(TokenKind::Comma) {
-                                            self.consume_token()?; // consume comma
+                                    while self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?; // consume comma
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_comma()?);
+                                    }
+                                } else if name == "bless" && self.peek_kind() == Some(TokenKind::LeftBrace) {
+                                    // Special handling for bless {} - parse it as a hash
+                                    args.push(self.parse_hash_or_block()?);
+                                    
+                                    // Parse remaining arguments separated by commas
+                                    while self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?; // consume comma
+                                        if self.is_at_statement_end() {
+                                            break;
                                         }
                                         args.push(self.parse_comma()?);
                                     }
