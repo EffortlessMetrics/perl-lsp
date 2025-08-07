@@ -69,6 +69,8 @@ pub mod workspace_refactor;
 pub mod import_optimizer;
 pub mod dead_code_detector;
 pub mod type_inference;
+pub mod perl_critic;
+pub mod perltidy;
 pub mod semantic_tokens_provider;
 pub mod call_hierarchy_provider;
 pub mod inlay_hints_provider;
