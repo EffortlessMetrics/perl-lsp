@@ -318,6 +318,7 @@ impl DiagnosticsProvider {
     }
     
     /// Walk the AST and call a function for each node
+    #[allow(clippy::only_used_in_recursion)]
     fn walk_node<F>(&self, node: &Node, func: &mut F)
     where
         F: FnMut(&Node),

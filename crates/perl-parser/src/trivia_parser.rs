@@ -318,9 +318,9 @@ impl TriviaPreservingParser {
         }
         
         let end_pos = if let Some(last_token) = self.context.tokens.back() {
-            last_token.range.end.clone()
+            last_token.range.end
         } else {
-            start_pos.clone()
+            start_pos
         };
         
         let program = Node::new(

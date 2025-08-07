@@ -43,7 +43,7 @@ impl IncrementalTree {
         // Map start position to node
         self.node_map
             .entry(node.location.start)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(node.clone());
         
         // Recursively map child nodes
@@ -281,6 +281,7 @@ impl IncrementalParserV2 {
         self.pending_edits.affects_range(&node_range)
     }
     
+    #[allow(clippy::only_used_in_recursion)]
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
         let new_location = SourceLocation {
             start: (node.location.start as isize + shift) as usize,
@@ -460,6 +461,7 @@ impl IncrementalParserV2 {
         count
     }
     
+    #[allow(clippy::only_used_in_recursion)]
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1;
         

@@ -2814,7 +2814,7 @@ impl<'a> Parser<'a> {
                                         name: name.clone(), 
                                         args: vec![]
                                     },
-                                    expr.location.clone()
+                                    expr.location
                                 );
                             } else {
                                 // Parse arguments without parentheses

@@ -78,7 +78,7 @@ impl WorkspaceSymbolsProvider {
                 symbols.push(SymbolInfo {
                     name: name.clone(),
                     kind: symbol.kind.clone(),
-                    location: symbol.location.clone(),
+                    location: symbol.location,
                     container: None, // TODO: Track containing package/class
                 });
             }

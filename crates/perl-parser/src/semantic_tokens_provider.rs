@@ -208,7 +208,7 @@ impl SemanticTokensProvider {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let pos = self.get_position(variable);
                     self.declared_vars.entry(format!("{}{}", sigil, name))
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((pos.0, pos.1));
                 }
                 

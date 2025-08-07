@@ -238,7 +238,7 @@ impl SymbolIndex {
         for token in tokens {
             self.inverted_index
                 .entry(token)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(symbol.clone());
         }
     }

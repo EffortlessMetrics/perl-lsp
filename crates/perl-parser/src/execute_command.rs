@@ -42,14 +42,14 @@ impl ExecuteCommandProvider {
     pub fn execute_command(&self, command: &str, arguments: Vec<Value>) -> Result<Value, String> {
         match command {
             "perl.runTests" => {
-                if let Some(file_path) = arguments.get(0).and_then(|v| v.as_str()) {
+                if let Some(file_path) = arguments.first().and_then(|v| v.as_str()) {
                     self.run_tests(file_path)
                 } else {
                     Err("Missing file path argument".to_string())
                 }
             }
             "perl.runFile" => {
-                if let Some(file_path) = arguments.get(0).and_then(|v| v.as_str()) {
+                if let Some(file_path) = arguments.first().and_then(|v| v.as_str()) {
                     self.run_file(file_path)
                 } else {
                     Err("Missing file path argument".to_string())
@@ -57,7 +57,7 @@ impl ExecuteCommandProvider {
             }
             "perl.runTestSub" => {
                 if let (Some(file_path), Some(sub_name)) = (
-                    arguments.get(0).and_then(|v| v.as_str()),
+                    arguments.first().and_then(|v| v.as_str()),
                     arguments.get(1).and_then(|v| v.as_str()),
                 ) {
                     self.run_test_sub(file_path, sub_name)
@@ -66,7 +66,7 @@ impl ExecuteCommandProvider {
                 }
             }
             "perl.debugTests" => {
-                if let Some(file_path) = arguments.get(0).and_then(|v| v.as_str()) {
+                if let Some(file_path) = arguments.first().and_then(|v| v.as_str()) {
                     self.debug_tests(file_path)
                 } else {
                     Err("Missing file path argument".to_string())

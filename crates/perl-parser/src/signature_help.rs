@@ -238,15 +238,15 @@ impl SignatureHelpProvider {
                                 documentation: Some("scalar".to_string()),
                             }),
                             '@' => params.push(ParameterInfo {
-                                label: format!("@args"),
+                                label: "@args".to_string(),
                                 documentation: Some("array (slurps remaining args)".to_string()),
                             }),
                             '%' => params.push(ParameterInfo {
-                                label: format!("%args"),
+                                label: "%args".to_string(),
                                 documentation: Some("hash (slurps remaining args)".to_string()),
                             }),
                             '&' => params.push(ParameterInfo {
-                                label: format!("&code"),
+                                label: "&code".to_string(),
                                 documentation: Some("code reference".to_string()),
                             }),
                             _ => {}
