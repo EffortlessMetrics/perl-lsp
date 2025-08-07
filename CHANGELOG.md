@@ -37,6 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Type constraint checking
   - Foundation for advanced static analysis
 
+- **Perl::Critic Integration** - Static code analysis and policy enforcement
+  - Support for all 5 severity levels (Gentle to Brutal)
+  - Configurable policy profiles
+  - Quick fixes for common violations
+  - Built-in policies for when perlcritic is not available
+  - Cache for improved performance
+
+- **Perltidy Integration** - Automatic code formatting
+  - Full perltidy configuration support
+  - PBP and GNU style presets
+  - Range formatting capability
+  - Built-in formatter for when perltidy is not available
+  - Formatting suggestions without applying changes
+
 ### Improved
 - **Code Quality**: Fixed 81 clippy warnings across perl-lexer and perl-parser (61% reduction)
   - Eliminated 45+ unnecessary `.clone()` calls on Copy types for better performance

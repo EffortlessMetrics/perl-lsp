@@ -4,9 +4,10 @@
 //! lines, and columns for efficient incremental parsing and error reporting.
 
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
 /// A position in a source file with byte offset, line, and column
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Position {
     /// Byte offset in the source (0-based)
     pub byte: usize,
@@ -59,7 +60,7 @@ impl fmt::Display for Position {
 }
 
 /// A range in a source file defined by start and end positions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Range {
     /// Start position (inclusive)
     pub start: Position,
