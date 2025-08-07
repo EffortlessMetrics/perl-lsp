@@ -41,11 +41,14 @@ pub mod error;
 pub mod error_recovery;
 pub mod formatting;
 pub mod incremental;
+pub mod incremental_document;
+pub mod incremental_edit;
 // pub mod refactoring; // TODO: Fix compilation errors
 pub mod incremental_checkpoint;
 pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod lsp_server;
+// pub mod lsp_server_incremental; // TODO: Fix imports
 pub mod parser;
 pub mod parser_context;
 pub mod position;
