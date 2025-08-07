@@ -1,6 +1,6 @@
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -10,6 +10,10 @@ pub enum IssueKind {
     UnusedVariable,
     UndeclaredVariable,
     VariableRedeclaration,
+    DuplicateParameter,
+    ParameterShadowsGlobal,
+    UnusedParameter,
+    UnquotedBareword,
 }
 
 #[derive(Debug, Clone)]
@@ -190,6 +194,22 @@ impl ScopeAnalyzer {
                 }
             }
             
+            NodeKind::Identifier { name } => {
+                // Check for barewords under strict mode
+                if strict_mode && !is_known_function(name) && !is_filehandle(name) {
+                    // Check context - barewords are allowed in certain places
+                    // like hash keys: $hash{bareword}
+                    if !self.is_in_hash_key_context(node) {
+                        issues.push(ScopeIssue {
+                            kind: IssueKind::UnquotedBareword,
+                            variable_name: name.clone(),
+                            line: self.get_line_from_node(node, code),
+                            description: format!("Bareword '{}' not allowed under 'use strict'", name),
+                        });
+                    }
+                }
+            }
+            
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
@@ -229,17 +249,57 @@ impl ScopeAnalyzer {
             NodeKind::Subroutine { params, body, .. } => {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
-                // Declare parameters
+                // Check for duplicate parameters and shadowing
+                let mut param_names = std::collections::HashSet::new();
                 for param in params {
                     if let NodeKind::Variable { sigil, name } = &param.kind {
                         let full_name = format!("{}{}", sigil, name);
+                        
+                        // Check for duplicate parameters
+                        if !param_names.insert(full_name.clone()) {
+                            issues.push(ScopeIssue {
+                                kind: IssueKind::DuplicateParameter,
+                                variable_name: full_name.clone(),
+                                line: self.get_line_from_node(param, code),
+                                description: format!("Duplicate parameter '{}' in subroutine signature", full_name),
+                            });
+                        }
+                        
+                        // Check if parameter shadows a global or parent scope variable
+                        if scope.lookup_variable(&full_name).is_some() {
+                            issues.push(ScopeIssue {
+                                kind: IssueKind::ParameterShadowsGlobal,
+                                variable_name: full_name.clone(),
+                                line: self.get_line_from_node(param, code),
+                                description: format!("Parameter '{}' shadows a variable from outer scope", full_name),
+                            });
+                        }
+                        
+                        // Declare the parameter in subroutine scope
                         sub_scope.declare_variable(&full_name, param.location.start, false);
-                        // Mark parameters as used
-                        sub_scope.use_variable(&full_name);
+                        // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }
                 
                 self.analyze_node(body, &sub_scope, issues, code, strict_mode);
+                
+                // Check for unused parameters
+                for param in params {
+                    if let NodeKind::Variable { sigil, name } = &param.kind {
+                        let full_name = format!("{}{}", sigil, name);
+                        if let Some(var) = sub_scope.lookup_variable(&full_name) {
+                            if !*var.is_used.borrow() {
+                                issues.push(ScopeIssue {
+                                    kind: IssueKind::UnusedParameter,
+                                    variable_name: full_name.clone(),
+                                    line: self.get_line_from_node(param, code),
+                                    description: format!("Parameter '{}' is declared but never used", full_name),
+                                });
+                            }
+                        }
+                    }
+                }
+                
                 self.collect_unused_variables(&sub_scope, issues, code);
             }
             
@@ -286,6 +346,12 @@ impl ScopeAnalyzer {
             .filter(|&c| c == '\n')
             .count() + 1
     }
+    
+    fn is_in_hash_key_context(&self, _node: &Node) -> bool {
+        // TODO: Check if node is within a hash subscript context
+        // For now, return false to be conservative
+        false
+    }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
         issues.iter().map(|issue| {
@@ -301,6 +367,18 @@ impl ScopeAnalyzer {
                 }
                 IssueKind::VariableRedeclaration => {
                     format!("Remove duplicate declaration of '{}'", issue.variable_name)
+                }
+                IssueKind::DuplicateParameter => {
+                    format!("Remove or rename duplicate parameter '{}'", issue.variable_name)
+                }
+                IssueKind::ParameterShadowsGlobal => {
+                    format!("Rename parameter '{}' to avoid shadowing", issue.variable_name)
+                }
+                IssueKind::UnusedParameter => {
+                    format!("Rename '{}' with underscore or add comment", issue.variable_name)
+                }
+                IssueKind::UnquotedBareword => {
+                    format!("Quote bareword '{}' or declare as filehandle", issue.variable_name)
                 }
             }
         }).collect()
@@ -390,4 +468,69 @@ fn is_builtin_global(name: &str) -> bool {
     }
     
     false
+}
+
+/// Check if an identifier is a known Perl built-in function
+fn is_known_function(name: &str) -> bool {
+    const KNOWN_FUNCTIONS: &[&str] = &[
+        // I/O functions
+        "print", "printf", "say", "open", "close", "read", "write",
+        "seek", "tell", "eof", "fileno", "binmode", "sysopen",
+        "sysread", "syswrite", "sysclose", "select",
+        
+        // String functions
+        "chomp", "chop", "chr", "crypt", "fc", "hex", "index",
+        "lc", "lcfirst", "length", "oct", "ord", "pack", "q",
+        "qq", "qr", "quotemeta", "qw", "qx", "reverse", "rindex",
+        "sprintf", "substr", "tr", "uc", "ucfirst", "unpack",
+        
+        // Array/List functions
+        "pop", "push", "shift", "unshift", "splice", "split",
+        "join", "grep", "map", "sort", "reverse",
+        
+        // Hash functions
+        "delete", "each", "exists", "keys", "values",
+        
+        // Control flow
+        "die", "exit", "return", "goto", "last", "next", "redo",
+        "continue", "break", "given", "when", "default",
+        
+        // File test operators
+        "stat", "lstat", "-r", "-w", "-x", "-o", "-R", "-W", "-X",
+        "-O", "-e", "-z", "-s", "-f", "-d", "-l", "-p", "-S",
+        "-b", "-c", "-t", "-u", "-g", "-k", "-T", "-B", "-M",
+        "-A", "-C",
+        
+        // System functions
+        "system", "exec", "fork", "wait", "waitpid", "kill",
+        "sleep", "alarm", "getpgrp", "getppid", "getpriority",
+        "setpgrp", "setpriority", "time", "times", "localtime",
+        "gmtime",
+        
+        // Math functions
+        "abs", "atan2", "cos", "exp", "int", "log", "rand",
+        "sin", "sqrt", "srand",
+        
+        // Misc functions
+        "defined", "undef", "ref", "bless", "tie", "tied",
+        "untie", "eval", "caller", "import", "require", "use",
+        "do", "package", "sub", "my", "our", "local", "state",
+        "scalar", "wantarray", "warn",
+    ];
+    
+    KNOWN_FUNCTIONS.contains(&name)
+}
+
+/// Check if an identifier is a known filehandle
+fn is_filehandle(name: &str) -> bool {
+    const KNOWN_FILEHANDLES: &[&str] = &[
+        "STDIN", "STDOUT", "STDERR", "ARGV", "ARGVOUT", "DATA", 
+        "STDHANDLE", "__PACKAGE__", "__FILE__", "__LINE__",
+        "__SUB__", "__END__", "__DATA__",
+    ];
+    
+    // Check standard filehandles
+    KNOWN_FILEHANDLES.contains(&name) ||
+    // Check if it's all uppercase (common convention for filehandles)
+    (name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty())
 }

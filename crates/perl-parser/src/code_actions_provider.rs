@@ -70,6 +70,18 @@ impl CodeActionsProvider {
                 "variable-redeclaration" => {
                     actions.extend(self.fix_variable_redeclaration(diagnostic));
                 }
+                "duplicate-parameter" => {
+                    actions.extend(self.fix_duplicate_parameter(diagnostic));
+                }
+                "parameter-shadows-global" => {
+                    actions.extend(self.fix_parameter_shadowing(diagnostic));
+                }
+                "unused-parameter" => {
+                    actions.extend(self.fix_unused_parameter(diagnostic));
+                }
+                "unquoted-bareword" => {
+                    actions.extend(self.fix_unquoted_bareword(diagnostic));
+                }
                 code if code.starts_with("parse-error-") => {
                     actions.extend(self.fix_parse_error(diagnostic, code));
                 }
@@ -275,6 +287,163 @@ impl CodeActionsProvider {
     }
 
     // Helper methods
+
+    /// Generate fix for duplicate parameter
+    fn fix_duplicate_parameter(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+        
+        if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
+            // Remove the duplicate parameter
+            actions.push(CodeAction {
+                title: format!("Remove duplicate parameter '{}'", param_name),
+                kind: CodeActionKind::QuickFix,
+                edit: TextEdit {
+                    range: diagnostic.range,
+                    new_text: String::new(),
+                },
+                diagnostic_id: diagnostic.code.clone(),
+            });
+            
+            // Rename the duplicate to a different name
+            let base_name = param_name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+            let sigil = &param_name[..param_name.len() - base_name.len()];
+            let new_name = format!("{}{}_2", sigil, base_name);
+            
+            actions.push(CodeAction {
+                title: format!("Rename duplicate to '{}'", new_name),
+                kind: CodeActionKind::QuickFix,
+                edit: TextEdit {
+                    range: diagnostic.range,
+                    new_text: new_name,
+                },
+                diagnostic_id: diagnostic.code.clone(),
+            });
+        }
+        
+        actions
+    }
+    
+    /// Generate fix for parameter shadowing
+    fn fix_parameter_shadowing(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+        
+        if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
+            let base_name = param_name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+            let sigil = &param_name[..param_name.len() - base_name.len()];
+            
+            // Suggest renaming the parameter
+            let alternatives = vec![
+                format!("{}p_{}", sigil, base_name),  // p_ prefix for parameter
+                format!("{}{}_param", sigil, base_name),
+                format!("{}{}_arg", sigil, base_name),
+            ];
+            
+            for alt_name in alternatives {
+                actions.push(CodeAction {
+                    title: format!("Rename parameter to '{}'", alt_name),
+                    kind: CodeActionKind::QuickFix,
+                    edit: TextEdit {
+                        range: diagnostic.range,
+                        new_text: alt_name.clone(),
+                    },
+                    diagnostic_id: diagnostic.code.clone(),
+                });
+            }
+        }
+        
+        actions
+    }
+    
+    /// Generate fix for unused parameter
+    fn fix_unused_parameter(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+        
+        if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
+            // Prefix with underscore to indicate intentionally unused
+            let underscore_name = if param_name.starts_with('$') {
+                format!("$_{}", &param_name[1..])
+            } else if param_name.starts_with('@') {
+                format!("@_{}", &param_name[1..])
+            } else if param_name.starts_with('%') {
+                format!("%_{}", &param_name[1..])
+            } else {
+                format!("_{}", param_name)
+            };
+            
+            actions.push(CodeAction {
+                title: format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
+                kind: CodeActionKind::QuickFix,
+                edit: TextEdit {
+                    range: diagnostic.range,
+                    new_text: underscore_name,
+                },
+                diagnostic_id: diagnostic.code.clone(),
+            });
+            
+            // Add a comment to document why it's unused
+            actions.push(CodeAction {
+                title: "Add comment explaining unused parameter".to_string(),
+                kind: CodeActionKind::QuickFix,
+                edit: TextEdit {
+                    range: (diagnostic.range.0, diagnostic.range.0),
+                    new_text: "# unused ".to_string(),
+                },
+                diagnostic_id: diagnostic.code.clone(),
+            });
+        }
+        
+        actions
+    }
+    
+    /// Generate fix for unquoted bareword
+    fn fix_unquoted_bareword(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+        
+        // Extract bareword from diagnostic message
+        if let Some(start) = diagnostic.message.find('\'') {
+            if let Some(end) = diagnostic.message[start+1..].find('\'') {
+                let bareword = &diagnostic.message[start+1..start+1+end];
+                
+                // Quote with single quotes
+                actions.push(CodeAction {
+                    title: format!("Quote bareword as '{}'", bareword),
+                    kind: CodeActionKind::QuickFix,
+                    edit: TextEdit {
+                        range: diagnostic.range,
+                        new_text: format!("'{}'", bareword),
+                    },
+                    diagnostic_id: diagnostic.code.clone(),
+                });
+                
+                // Quote with double quotes
+                actions.push(CodeAction {
+                    title: format!("Quote bareword as \"{}\"", bareword),
+                    kind: CodeActionKind::QuickFix,
+                    edit: TextEdit {
+                        range: diagnostic.range,
+                        new_text: format!("\"{}\"", bareword),
+                    },
+                    diagnostic_id: diagnostic.code.clone(),
+                });
+                
+                // If it looks like a filehandle, suggest declaring it
+                if bareword.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
+                    let insert_pos = self.find_declaration_position(diagnostic.range.0);
+                    actions.push(CodeAction {
+                        title: format!("Declare {} as filehandle", bareword),
+                        kind: CodeActionKind::QuickFix,
+                        edit: TextEdit {
+                            range: (insert_pos, insert_pos),
+                            new_text: format!("open my ${}, '<', 'filename.txt' or die $!;\n", bareword.to_lowercase()),
+                        },
+                        diagnostic_id: diagnostic.code.clone(),
+                    });
+                }
+            }
+        }
+        
+        actions
+    }
 
     /// Check if two ranges overlap
     fn ranges_overlap(r1: (usize, usize), r2: (usize, usize)) -> bool {
