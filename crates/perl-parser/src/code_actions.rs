@@ -443,6 +443,7 @@ impl CodeActionsProvider {
     }
     
     /// Find node at the given range
+    #[allow(clippy::only_used_in_recursion)]
     fn find_node_at_range<'a>(&self, node: &'a Node, range: (usize, usize)) -> Option<&'a Node> {
         // Check if this node contains the range
         if node.location.start <= range.0 && node.location.end >= range.1 {

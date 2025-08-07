@@ -256,22 +256,20 @@ impl DiagnosticsProvider {
                 
                 // Check for == or != with undef
                 NodeKind::Binary { op, left, right } => {
-                    if op == "==" || op == "!=" {
-                        if self.might_be_undef(left) || self.might_be_undef(right) {
-                            diagnostics.push(Diagnostic {
-                                range: (n.location.start, n.location.end),
-                                severity: DiagnosticSeverity::Warning,
-                                code: Some("numeric-undef".to_string()),
-                                message: format!("Using '{}' with potentially undefined value", op),
-                                related_information: vec![
-                                    RelatedInformation {
-                                        location: (n.location.start, n.location.end),
-                                        message: "Consider using 'defined' check or '//' operator".to_string(),
-                                    }
-                                ],
-                                tags: Vec::new(),
-                            });
-                        }
+                    if (op == "==" || op == "!=") && (self.might_be_undef(left) || self.might_be_undef(right)) {
+                        diagnostics.push(Diagnostic {
+                            range: (n.location.start, n.location.end),
+                            severity: DiagnosticSeverity::Warning,
+                            code: Some("numeric-undef".to_string()),
+                            message: format!("Using '{}' with potentially undefined value", op),
+                            related_information: vec![
+                                RelatedInformation {
+                                    location: (n.location.start, n.location.end),
+                                    message: "Consider using 'defined' check or '//' operator".to_string(),
+                                }
+                            ],
+                            tags: Vec::new(),
+                        });
                     }
                 }
                 

@@ -552,19 +552,17 @@ impl<'a> PerlLexer<'a> {
                 
                 // Special case: After ->, sigils followed by { or [ should be tokenized separately
                 // This is for postfix dereference like ->@*, ->%{}, ->@[]
-                if self.position >= 3 && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)] == "->" {
-                    if matches!(self.current_char(), Some('{') | Some('[') | Some('*')) {
-                        // Just return the sigil
-                        let text = &self.input[start..self.position];
-                        self.mode = LexerMode::ExpectOperator;
-                        
-                        return Some(Token {
-                            token_type: TokenType::Identifier(Arc::from(text)),
-                            text: Arc::from(text),
-                            start,
-                            end: self.position,
-                        });
-                    }
+                if self.position >= 3 && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)] == "->" && matches!(self.current_char(), Some('{') | Some('[') | Some('*')) {
+                    // Just return the sigil
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    
+                    return Some(Token {
+                        token_type: TokenType::Identifier(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
                 }
                 
                 // Check for $# (array length operator)
@@ -949,7 +947,7 @@ impl<'a> PerlLexer<'a> {
         match ch {
             '.' => {
                 // Check if it's a decimal number like .5
-                if self.peek_char(1).map_or(false, |c| c.is_ascii_digit()) {
+                if self.peek_char(1).is_some_and(|c| c.is_ascii_digit()) {
                     return self.parse_decimal_number(start);
                 }
                 self.advance();
@@ -961,21 +959,19 @@ impl<'a> PerlLexer<'a> {
                         // Check for three-character operators like **=, <<=, >>=
                         if self.position < self.input.len() {
                             let third = self.current_char();
-                            if ch == '*' && next == '*' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '<' && next == '<' && third == Some('=') {
+                            // Check for three-character operators
+                            if matches!((ch, next, third),
+                                ('*', '*', Some('=')) |
+                                ('<', '<', Some('=')) |
+                                ('>', '>', Some('=')) |
+                                ('&', '&', Some('=')) |
+                                ('|', '|', Some('=')) |
+                                ('/', '/', Some('=')))
+                            {
                                 self.advance(); // consume the =
                             } else if ch == '<' && next == '=' && third == Some('>') {
                                 self.advance(); // consume the >
                                 // Special case: <=> spaceship operator
-                            } else if ch == '>' && next == '>' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '&' && next == '&' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '|' && next == '|' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '/' && next == '/' && third == Some('=') {
-                                self.advance(); // consume the =
                             } else if ch == '.' && next == '.' && third == Some('.') {
                                 self.advance(); // consume the third .
                             }
@@ -993,21 +989,19 @@ impl<'a> PerlLexer<'a> {
                         // Check for three-character operators like **=, <<=, >>=
                         if self.position < self.input.len() {
                             let third = self.current_char();
-                            if ch == '*' && next == '*' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '<' && next == '<' && third == Some('=') {
+                            // Check for three-character operators
+                            if matches!((ch, next, third),
+                                ('*', '*', Some('=')) |
+                                ('<', '<', Some('=')) |
+                                ('>', '>', Some('=')) |
+                                ('&', '&', Some('=')) |
+                                ('|', '|', Some('=')) |
+                                ('/', '/', Some('=')))
+                            {
                                 self.advance(); // consume the =
                             } else if ch == '<' && next == '=' && third == Some('>') {
                                 self.advance(); // consume the >
                                 // Special case: <=> spaceship operator
-                            } else if ch == '>' && next == '>' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '&' && next == '&' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '|' && next == '|' && third == Some('=') {
-                                self.advance(); // consume the =
-                            } else if ch == '/' && next == '/' && third == Some('=') {
-                                self.advance(); // consume the =
                             }
                         }
                     }
@@ -1633,7 +1627,7 @@ impl<'a> Checkpointable for PerlLexer<'a> {
             delimiter_stack: self.delimiter_stack.clone(),
             in_prototype: self.in_prototype,
             prototype_depth: self.prototype_depth,
-            current_pos: self.current_pos.clone(),
+            current_pos: self.current_pos,
             context,
         }
     }
@@ -1644,18 +1638,15 @@ impl<'a> Checkpointable for PerlLexer<'a> {
         self.delimiter_stack = checkpoint.delimiter_stack.clone();
         self.in_prototype = checkpoint.in_prototype;
         self.prototype_depth = checkpoint.prototype_depth;
-        self.current_pos = checkpoint.current_pos.clone();
+        self.current_pos = checkpoint.current_pos;
         
         // Handle special contexts
         use checkpoint::CheckpointContext;
-        match &checkpoint.context {
-            CheckpointContext::Format { .. } => {
-                // Ensure we're in format body mode
-                if !matches!(self.mode, LexerMode::InFormatBody) {
-                    self.mode = LexerMode::InFormatBody;
-                }
+        if let CheckpointContext::Format { .. } = &checkpoint.context {
+            // Ensure we're in format body mode
+            if !matches!(self.mode, LexerMode::InFormatBody) {
+                self.mode = LexerMode::InFormatBody;
             }
-            _ => {}
         }
     }
     

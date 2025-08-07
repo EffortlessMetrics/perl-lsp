@@ -449,20 +449,18 @@ impl CompletionProvider {
         if !context.prefix.starts_with(['$', '@', '%', '&']) {
             for (name, symbols) in &self.symbol_table.symbols {
                 for symbol in symbols {
-                    if matches!(symbol.kind, SymbolKind::ScalarVariable | SymbolKind::ArrayVariable | SymbolKind::HashVariable) {
-                        if name.starts_with(&context.prefix) {
-                            let sigil = symbol.kind.sigil().unwrap_or("");
-                            completions.push(CompletionItem {
-                                label: format!("{}{}", sigil, name),
-                                kind: CompletionItemKind::Variable,
-                                detail: Some(format!("{} variable", symbol.declaration.as_deref().unwrap_or(""))),
-                                documentation: symbol.documentation.clone(),
-                                insert_text: Some(format!("{}{}", sigil, name)),
-                                sort_text: Some(format!("5_{}", name)),
-                                filter_text: Some(name.clone()),
-                                additional_edits: vec![],
-                            });
-                        }
+                    if matches!(symbol.kind, SymbolKind::ScalarVariable | SymbolKind::ArrayVariable | SymbolKind::HashVariable) && name.starts_with(&context.prefix) {
+                        let sigil = symbol.kind.sigil().unwrap_or("");
+                        completions.push(CompletionItem {
+                            label: format!("{}{}", sigil, name),
+                            kind: CompletionItemKind::Variable,
+                            detail: Some(format!("{} variable", symbol.declaration.as_deref().unwrap_or(""))),
+                            documentation: symbol.documentation.clone(),
+                            insert_text: Some(format!("{}{}", sigil, name)),
+                            sort_text: Some(format!("5_{}", name)),
+                            filter_text: Some(name.clone()),
+                            additional_edits: vec![],
+                        });
                     }
                 }
             }

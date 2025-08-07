@@ -457,6 +457,7 @@ impl EnhancedCodeActionsProvider {
     }
     
     /// Collect variables used in a node
+    #[allow(clippy::only_used_in_recursion)]
     fn collect_variables(&self, node: &Node, vars: &mut HashSet<String>) {
         match &node.kind {
             NodeKind::Variable { name, .. } => {
@@ -478,7 +479,7 @@ impl EnhancedCodeActionsProvider {
     
     /// Try to convert C-style for loop to foreach
     fn try_convert_c_style_loop(&self, init: &Option<Box<Node>>, condition: &Option<Box<Node>>, 
-                                update: &Option<Box<Node>>, body: &Box<Node>) -> Option<String> {
+                                update: &Option<Box<Node>>, body: &Node) -> Option<String> {
         // Pattern: for (my $i = 0; $i < @array; $i++)
         // Convert to: foreach my $item (@array)
         
@@ -673,6 +674,7 @@ impl EnhancedCodeActionsProvider {
     }
     
     /// Find node at range
+    #[allow(clippy::only_used_in_recursion)]
     fn find_node_at_range<'a>(&self, node: &'a Node, range: (usize, usize)) -> Option<&'a Node> {
         if node.location.start <= range.0 && node.location.end >= range.1 {
             match &node.kind {

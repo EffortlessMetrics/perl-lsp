@@ -126,9 +126,7 @@ impl Node {
             NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
                 let type_str = if *indented {
                     if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
-                } else {
-                    if *interpolated { "heredoc_interpolated" } else { "heredoc" }
-                };
+                } else if *interpolated { "heredoc_interpolated" } else { "heredoc" };
                 format!("({} {:?} {:?})", type_str, delimiter, content)
             }
             
