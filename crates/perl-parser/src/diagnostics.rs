@@ -7,6 +7,7 @@ use crate::error::ParseError;
 use crate::error_classifier::ErrorClassifier;
 use crate::symbol::{SymbolTable, SymbolExtractor, SymbolKind};
 use crate::scope_analyzer::{ScopeAnalyzer, IssueKind};
+use crate::pragma_tracker::PragmaTracker;
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -75,8 +76,11 @@ impl DiagnosticsProvider {
             diagnostics.push(self.parse_error_to_diagnostic(error));
         }
         
-        // Run scope analyzer for variable issues
-        let scope_issues = self.scope_analyzer.analyze(source);
+        // Build pragma map from AST
+        let pragma_map = PragmaTracker::build(ast);
+        
+        // Run scope analyzer for variable issues with pragma awareness
+        let scope_issues = self.scope_analyzer.analyze(ast, source, &pragma_map);
         for issue in scope_issues {
             let severity = match issue.kind {
                 IssueKind::UndeclaredVariable | IssueKind::VariableRedeclaration | 
