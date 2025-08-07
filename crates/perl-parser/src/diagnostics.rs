@@ -5,6 +5,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::error::ParseError;
 use crate::symbol::{SymbolTable, SymbolExtractor, SymbolKind};
+use crate::scope_analyzer::{ScopeAnalyzer, IssueKind};
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,6 +45,7 @@ pub enum DiagnosticTag {
 pub struct DiagnosticsProvider {
     symbol_table: SymbolTable,
     _source: String,
+    scope_analyzer: ScopeAnalyzer,
 }
 
 impl DiagnosticsProvider {
@@ -51,15 +53,17 @@ impl DiagnosticsProvider {
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new();
         let symbol_table = extractor.extract(ast);
+        let scope_analyzer = ScopeAnalyzer::new();
         
         Self {
             symbol_table,
             _source: source,
+            scope_analyzer,
         }
     }
     
     /// Get all diagnostics for the document
-    pub fn get_diagnostics(&self, ast: &Node, parse_errors: &[ParseError]) -> Vec<Diagnostic> {
+    pub fn get_diagnostics(&self, ast: &Node, parse_errors: &[ParseError], source: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         
         // Convert parse errors to diagnostics
@@ -67,9 +71,44 @@ impl DiagnosticsProvider {
             diagnostics.push(self.parse_error_to_diagnostic(error));
         }
         
-        // Run various linting checks
-        self.check_undefined_variables(ast, &mut diagnostics);
-        self.check_unused_variables(&mut diagnostics);
+        // Run scope analyzer for variable issues
+        let scope_issues = self.scope_analyzer.analyze(source);
+        for issue in scope_issues {
+            let severity = match issue.kind {
+                IssueKind::UndeclaredVariable | IssueKind::VariableRedeclaration => DiagnosticSeverity::Error,
+                IssueKind::VariableShadowing | IssueKind::UnusedVariable => DiagnosticSeverity::Warning,
+            };
+            
+            let code = match issue.kind {
+                IssueKind::UndeclaredVariable => "undeclared-variable",
+                IssueKind::UnusedVariable => "unused-variable",
+                IssueKind::VariableShadowing => "variable-shadowing",
+                IssueKind::VariableRedeclaration => "variable-redeclaration",
+            };
+            
+            // Calculate byte position for the line number
+            let line_start = source.lines()
+                .take(issue.line.saturating_sub(1))
+                .map(|l| l.len() + 1)
+                .sum::<usize>();
+            
+            diagnostics.push(Diagnostic {
+                range: (line_start, line_start + issue.variable_name.len()),
+                severity,
+                code: Some(code.to_string()),
+                message: issue.description.clone(),
+                related_information: Vec::new(),
+                tags: if issue.kind == IssueKind::UnusedVariable {
+                    vec![DiagnosticTag::Unnecessary]
+                } else {
+                    Vec::new()
+                },
+            });
+        }
+        
+        // Run other linting checks (now disabled to avoid duplicates)
+        // self.check_undefined_variables(ast, &mut diagnostics);
+        // self.check_unused_variables(&mut diagnostics);
         self.check_deprecated_syntax(ast, &mut diagnostics);
         self.check_strict_warnings(ast, &mut diagnostics);
         self.check_common_mistakes(ast, &mut diagnostics);
@@ -398,7 +437,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[]);
+        let diagnostics = provider.get_diagnostics(&ast, &[], &code);
         
         assert!(diagnostics.iter().any(|d| d.code == Some("undefined-variable".to_string())));
     }
@@ -414,7 +453,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[]);
+        let diagnostics = provider.get_diagnostics(&ast, &[], &code);
         
         assert!(diagnostics.iter().any(|d| d.code == Some("unused-variable".to_string())));
     }

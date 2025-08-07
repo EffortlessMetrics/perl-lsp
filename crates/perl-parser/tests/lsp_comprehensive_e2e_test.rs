@@ -235,7 +235,8 @@ $us  # Complete here
     })));
     
     assert!(result.is_some());
-    let items = result.unwrap()["items"].as_array().unwrap();
+    let result_value = result.unwrap();
+    let items = result_value["items"].as_array().unwrap();
     assert!(items.iter().any(|i| i["label"] == "$user_name"));
     assert!(items.iter().any(|i| i["label"] == "$user_email"));
     
@@ -254,7 +255,8 @@ $us  # Complete here
     })));
     
     assert!(result.is_some());
-    let items = result.unwrap()["items"].as_array().unwrap();
+    let result_value = result.unwrap();
+    let items = result_value["items"].as_array().unwrap();
     assert!(items.iter().any(|i| i["label"] == "print"));
     
     // Scenario 3: Method completion
@@ -359,7 +361,8 @@ sub reload_config {
     })));
     
     assert!(result.is_some());
-    let refs = result.unwrap().as_array().unwrap();
+    let result_value = result.unwrap();
+    let refs = result_value.as_array().unwrap();
     assert!(refs.len() >= 3);  // Declaration + 2 uses
 }
 

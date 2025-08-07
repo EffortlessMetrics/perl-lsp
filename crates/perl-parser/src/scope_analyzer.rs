@@ -1,6 +1,8 @@
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
@@ -18,90 +20,102 @@ pub struct ScopeIssue {
     pub description: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+struct Variable {
+    name: String,
+    line: usize,
+    is_used: RefCell<bool>,
+    is_our: bool,
+}
+
+#[derive(Debug)]
 struct Scope {
-    variables: HashMap<String, (usize, bool)>, // (line, is_used)
-    parent: Option<Box<Scope>>,
+    variables: RefCell<HashMap<String, Rc<Variable>>>,
+    parent: Option<Rc<Scope>>,
 }
 
 impl Scope {
     fn new() -> Self {
         Self {
-            variables: HashMap::new(),
+            variables: RefCell::new(HashMap::new()),
             parent: None,
         }
     }
 
-    fn with_parent(parent: Scope) -> Self {
+    fn with_parent(parent: Rc<Scope>) -> Self {
         Self {
-            variables: HashMap::new(),
-            parent: Some(Box::new(parent)),
+            variables: RefCell::new(HashMap::new()),
+            parent: Some(parent),
         }
     }
 
-    fn declare_variable(&mut self, name: &str, line: usize) -> Option<IssueKind> {
-        if self.variables.contains_key(name) {
-            return Some(IssueKind::VariableRedeclaration);
+    fn declare_variable(&self, name: &str, line: usize, is_our: bool) -> Option<IssueKind> {
+        // First check if already declared in this scope
+        {
+            let vars = self.variables.borrow();
+            if vars.contains_key(name) {
+                return Some(IssueKind::VariableRedeclaration);
+            }
         }
         
         // Check if it shadows a parent scope variable
-        if self.is_variable_in_parent(name) {
-            self.variables.insert(name.to_string(), (line, false));
-            return Some(IssueKind::VariableShadowing);
-        }
+        let shadows = if let Some(ref parent) = self.parent {
+            parent.lookup_variable(name).is_some()
+        } else {
+            false
+        };
         
-        self.variables.insert(name.to_string(), (line, false));
-        None
+        // Now insert the variable
+        let mut vars = self.variables.borrow_mut();
+        vars.insert(name.to_string(), Rc::new(Variable {
+            name: name.to_string(),
+            line,
+            is_used: RefCell::new(is_our), // 'our' variables are considered used
+            is_our,
+        }));
+        
+        if shadows {
+            Some(IssueKind::VariableShadowing)
+        } else {
+            None
+        }
     }
 
-    fn use_variable(&mut self, name: &str) -> bool {
-        if let Some((line, _)) = self.variables.get(name).cloned() {
-            self.variables.insert(name.to_string(), (line, true));
-            return true;
-        }
-        
-        if let Some(ref mut parent) = self.parent {
-            return parent.use_variable(name);
-        }
-        
-        false
+    fn lookup_variable(&self, name: &str) -> Option<Rc<Variable>> {
+        self.variables.borrow().get(name).cloned()
+            .or_else(|| self.parent.as_ref()?.lookup_variable(name))
     }
 
-    fn is_variable_in_parent(&self, name: &str) -> bool {
-        if let Some(ref parent) = self.parent {
-            parent.variables.contains_key(name) || parent.is_variable_in_parent(name)
+    fn use_variable(&self, name: &str) -> bool {
+        if let Some(var) = self.lookup_variable(name) {
+            *var.is_used.borrow_mut() = true;
+            true
         } else {
             false
         }
     }
 
-    fn is_variable_declared(&self, name: &str) -> bool {
-        self.variables.contains_key(name) || 
-            self.parent.as_ref().map_or(false, |p| p.is_variable_declared(name))
-    }
-
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
-        self.variables.iter()
-            .filter_map(|(name, (line, used))| {
-                if !used {
-                    Some((name.clone(), *line))
-                } else {
-                    None
-                }
-            })
-            .collect()
+        let mut unused = Vec::new();
+        
+        for var in self.variables.borrow().values() {
+            if !*var.is_used.borrow() && !var.is_our {
+                unused.push((var.name.clone(), var.line));
+            }
+        }
+        
+        // Recursively collect from parent scopes if needed
+        // (Not needed for our current use case)
+        
+        unused
     }
 }
 
-pub struct ScopeAnalyzer {
-    strict_mode: bool,
-}
+pub struct ScopeAnalyzer;
 
 impl ScopeAnalyzer {
     pub fn new() -> Self {
-        Self {
-            strict_mode: false,
-        }
+        Self
     }
 
     pub fn analyze(&self, code: &str) -> Vec<ScopeIssue> {
@@ -110,25 +124,13 @@ impl ScopeAnalyzer {
         
         match parser.parse() {
             Ok(ast) => {
-                let mut scope = Scope::new();
-                let mut strict_mode = self.strict_mode;
+                let root_scope = Rc::new(Scope::new());
+                let strict_mode = code.contains("use strict");
                 
-                // Check for 'use strict' pragma
-                if code.contains("use strict") {
-                    strict_mode = true;
-                }
+                self.analyze_node(&ast, &root_scope, &mut issues, code, strict_mode);
                 
-                self.analyze_node(&ast, &mut scope, &mut issues, code, strict_mode);
-                
-                // Report unused variables
-                for (var_name, line) in scope.get_unused_variables() {
-                    issues.push(ScopeIssue {
-                        kind: IssueKind::UnusedVariable,
-                        variable_name: var_name.clone(),
-                        line: self.get_line_number(code, line),
-                        description: format!("Variable '{}' is declared but never used", var_name),
-                    });
-                }
+                // Collect all unused variables from all scopes
+                self.collect_unused_variables(&root_scope, &mut issues, code);
             }
             Err(_) => {
                 // Parse error, can't analyze scope
@@ -138,42 +140,41 @@ impl ScopeAnalyzer {
         issues
     }
 
-    fn analyze_node(&self, node: &Node, scope: &mut Scope, issues: &mut Vec<ScopeIssue>, code: &str, strict_mode: bool) {
+    fn analyze_node(&self, node: &Node, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str, strict_mode: bool) {
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, .. } => {
                 let var_name = self.extract_variable_name(variable);
                 let line = self.get_line_from_node(variable, code);
+                let is_our = declarator == "our";
                 
-                // Package variables (our) don't follow normal scoping rules
-                if declarator == "our" {
-                    // Mark as used since package variables are global
-                    scope.declare_variable(&var_name, variable.location.start);
-                    scope.use_variable(&var_name);
-                } else {
-                    if let Some(issue_kind) = scope.declare_variable(&var_name, variable.location.start) {
-                        issues.push(ScopeIssue {
-                            kind: issue_kind,
-                            variable_name: var_name.clone(),
-                            line,
-                            description: match issue_kind {
-                                IssueKind::VariableShadowing => 
-                                    format!("Variable '{}' shadows a variable in outer scope", var_name),
-                                IssueKind::VariableRedeclaration =>
-                                    format!("Variable '{}' is already declared in this scope", var_name),
-                                _ => String::new(),
-                            },
-                        });
-                    }
+                if let Some(issue_kind) = scope.declare_variable(&var_name, variable.location.start, is_our) {
+                    issues.push(ScopeIssue {
+                        kind: issue_kind,
+                        variable_name: var_name.clone(),
+                        line,
+                        description: match issue_kind {
+                            IssueKind::VariableShadowing => 
+                                format!("Variable '{}' shadows a variable in outer scope", var_name),
+                            IssueKind::VariableRedeclaration =>
+                                format!("Variable '{}' is already declared in this scope", var_name),
+                            _ => String::new(),
+                        },
+                    });
                 }
             }
+            
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
-                let was_declared = scope.is_variable_declared(&full_name);
                 
-                // Try to mark as used
+                // Skip package-qualified variables
+                if full_name.contains("::") {
+                    return;
+                }
+                
+                // Try to use the variable
                 if !scope.use_variable(&full_name) {
-                    // Variable not found in current or parent scopes
-                    if strict_mode && !was_declared {
+                    // Variable not found - check if we should report it
+                    if strict_mode {
                         issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
                             variable_name: full_name.clone(),
@@ -183,75 +184,60 @@ impl ScopeAnalyzer {
                     }
                 }
             }
+            
             NodeKind::Block { statements } => {
-                let mut new_scope = Scope::with_parent(scope.clone());
+                let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &mut new_scope, issues, code, strict_mode);
+                    self.analyze_node(stmt, &block_scope, issues, code, strict_mode);
                 }
+                self.collect_unused_variables(&block_scope, issues, code);
+            }
+            
+            NodeKind::For { init, condition, update, body, .. } => {
+                let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
-                // Merge back used variable information
-                for (var_name, (_, used)) in &new_scope.variables {
-                    if *used {
-                        scope.use_variable(var_name);
+                if let Some(init_node) = init {
+                    self.analyze_node(init_node, &loop_scope, issues, code, strict_mode);
+                }
+                if let Some(cond) = condition {
+                    self.analyze_node(cond, &loop_scope, issues, code, strict_mode);
+                }
+                if let Some(upd) = update {
+                    self.analyze_node(upd, &loop_scope, issues, code, strict_mode);
+                }
+                self.analyze_node(body, &loop_scope, issues, code, strict_mode);
+                
+                self.collect_unused_variables(&loop_scope, issues, code);
+            }
+            
+            NodeKind::Foreach { variable, list, body } => {
+                let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
+                
+                // Declare the loop variable
+                self.analyze_node(variable, &loop_scope, issues, code, strict_mode);
+                self.analyze_node(list, &loop_scope, issues, code, strict_mode);
+                self.analyze_node(body, &loop_scope, issues, code, strict_mode);
+                
+                self.collect_unused_variables(&loop_scope, issues, code);
+            }
+            
+            NodeKind::Subroutine { params, body, .. } => {
+                let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
+                
+                // Declare parameters
+                for param in params {
+                    if let NodeKind::Variable { sigil, name } = &param.kind {
+                        let full_name = format!("{}{}", sigil, name);
+                        sub_scope.declare_variable(&full_name, param.location.start, false);
+                        // Mark parameters as used
+                        sub_scope.use_variable(&full_name);
                     }
                 }
                 
-                // Report unused variables in this block
-                for (var_name, line) in new_scope.get_unused_variables() {
-                    issues.push(ScopeIssue {
-                        kind: IssueKind::UnusedVariable,
-                        variable_name: var_name.clone(),
-                        line: self.get_line_number(code, line),
-                        description: format!("Variable '{}' is declared but never used", var_name),
-                    });
-                }
+                self.analyze_node(body, &sub_scope, issues, code, strict_mode);
+                self.collect_unused_variables(&sub_scope, issues, code);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
-                let mut loop_scope = Scope::with_parent(scope.clone());
-                
-                // Handle loop initialization
-                if let Some(init_node) = init {
-                    self.analyze_node(init_node, &mut loop_scope, issues, code, strict_mode);
-                }
-                
-                // Handle condition
-                if let Some(cond) = condition {
-                    self.analyze_node(cond, &mut loop_scope, issues, code, strict_mode);
-                }
-                
-                // Handle update
-                if let Some(upd) = update {
-                    self.analyze_node(upd, &mut loop_scope, issues, code, strict_mode);
-                }
-                
-                // Analyze loop body
-                self.analyze_node(body, &mut loop_scope, issues, code, strict_mode);
-            }
-            NodeKind::Foreach { variable, list, body } => {
-                let mut loop_scope = Scope::with_parent(scope.clone());
-                
-                // Handle loop variable  
-                self.analyze_node(variable, &mut loop_scope, issues, code, strict_mode);
-                
-                // Handle list
-                self.analyze_node(list, &mut loop_scope, issues, code, strict_mode);
-                
-                // Analyze loop body
-                self.analyze_node(body, &mut loop_scope, issues, code, strict_mode);
-            }
-            NodeKind::Subroutine { params, body, .. } => {
-                // Note: Subroutines capture outer scope, but we don't want to
-                // report unused variables within them separately from the outer scope
-                // Analyze subroutine body with the current scope to track variable usage
-                
-                // Declare parameters as new variables in subroutine scope
-                for param in params {
-                    self.declare_params(param, scope, node.location.start);
-                }
-                
-                // Analyze subroutine body in current scope context
-                self.analyze_node(body, scope, issues, code, strict_mode);
-            }
+            
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
@@ -261,28 +247,27 @@ impl ScopeAnalyzer {
         }
     }
 
+    fn collect_unused_variables(&self, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str) {
+        for (var_name, offset) in scope.get_unused_variables() {
+            issues.push(ScopeIssue {
+                kind: IssueKind::UnusedVariable,
+                variable_name: var_name.clone(),
+                line: self.get_line_number(code, offset),
+                description: format!("Variable '{}' is declared but never used", var_name),
+            });
+        }
+    }
+
     fn extract_variable_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
             _ => {
-                // Try to extract from source
                 if let Some(child) = node.children().first() {
                     self.extract_variable_name(child)
                 } else {
                     String::new()
                 }
             }
-        }
-    }
-
-    fn declare_params(&self, param: &Node, scope: &mut Scope, start: usize) {
-        match &param.kind {
-            NodeKind::Variable { sigil, name } => {
-                let full_name = format!("{}{}", sigil, name);
-                scope.declare_variable(&full_name, start);
-                scope.use_variable(&full_name); // Parameters are considered used
-            }
-            _ => {}
         }
     }
 

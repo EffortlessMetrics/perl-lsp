@@ -461,7 +461,7 @@ impl LspServer {
             if let Some(ast) = &doc.ast {
                 // Get diagnostics
                 let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors);
+                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
 
                 // Convert to LSP diagnostics
                 let lsp_diagnostics: Vec<Value> = diagnostics
@@ -556,7 +556,7 @@ impl LspServer {
                     
                     // Get diagnostics from the document
                     let diag_provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                    let diagnostics = diag_provider.get_diagnostics(ast, &doc.parse_errors);
+                    let diagnostics = diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
                     
                     // Get code actions
                     let provider = CodeActionsProvider::new(doc.content.clone());

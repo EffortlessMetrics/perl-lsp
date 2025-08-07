@@ -513,7 +513,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = diag_provider.get_diagnostics(&ast, &[]);
+        let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
         
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
@@ -528,7 +528,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = diag_provider.get_diagnostics(&ast, &[]);
+        let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
         
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
