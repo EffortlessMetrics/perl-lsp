@@ -1,6 +1,4 @@
-#[cfg(test)]
-mod scope_analyzer_tests {
-    use perl_parser::scope_analyzer::{ScopeAnalyzer, ScopeIssue, IssueKind};
+use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
     
     #[test]
     fn test_detect_variable_shadowing() {
@@ -158,4 +156,3 @@ mod scope_analyzer_tests {
         assert!(!suggestions.is_empty());
         assert!(suggestions[0].contains("rename"));
     }
-}

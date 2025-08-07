@@ -140,34 +140,45 @@ impl ScopeAnalyzer {
 
     fn analyze_node(&self, node: &Node, scope: &mut Scope, issues: &mut Vec<ScopeIssue>, code: &str, strict_mode: bool) {
         match &node.kind {
-            NodeKind::VariableDeclaration { variable, .. } => {
+            NodeKind::VariableDeclaration { declarator, variable, .. } => {
                 let var_name = self.extract_variable_name(variable);
-                let line = self.get_line_from_node(node, code);
+                let line = self.get_line_from_node(variable, code);
                 
-                if let Some(issue_kind) = scope.declare_variable(&var_name, node.location.start) {
-                    issues.push(ScopeIssue {
-                        kind: issue_kind,
-                        variable_name: var_name.clone(),
-                        line,
-                        description: match issue_kind {
-                            IssueKind::VariableShadowing => 
-                                format!("Variable '{}' shadows a variable in outer scope", var_name),
-                            IssueKind::VariableRedeclaration =>
-                                format!("Variable '{}' is already declared in this scope", var_name),
-                            _ => String::new(),
-                        },
-                    });
+                // Package variables (our) don't follow normal scoping rules
+                if declarator == "our" {
+                    // Mark as used since package variables are global
+                    scope.declare_variable(&var_name, variable.location.start);
+                    scope.use_variable(&var_name);
+                } else {
+                    if let Some(issue_kind) = scope.declare_variable(&var_name, variable.location.start) {
+                        issues.push(ScopeIssue {
+                            kind: issue_kind,
+                            variable_name: var_name.clone(),
+                            line,
+                            description: match issue_kind {
+                                IssueKind::VariableShadowing => 
+                                    format!("Variable '{}' shadows a variable in outer scope", var_name),
+                                IssueKind::VariableRedeclaration =>
+                                    format!("Variable '{}' is already declared in this scope", var_name),
+                                _ => String::new(),
+                            },
+                        });
+                    }
                 }
             }
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
-                if !scope.use_variable(&full_name) && strict_mode {
-                    if !scope.is_variable_declared(&full_name) {
+                let was_declared = scope.is_variable_declared(&full_name);
+                
+                // Try to mark as used
+                if !scope.use_variable(&full_name) {
+                    // Variable not found in current or parent scopes
+                    if strict_mode && !was_declared {
                         issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
                             variable_name: full_name.clone(),
                             line: self.get_line_from_node(node, code),
-                            description: format!("Variable '{}' is used but not declared", name),
+                            description: format!("Variable '{}' is used but not declared", full_name),
                         });
                     }
                 }
@@ -229,15 +240,17 @@ impl ScopeAnalyzer {
                 self.analyze_node(body, &mut loop_scope, issues, code, strict_mode);
             }
             NodeKind::Subroutine { params, body, .. } => {
-                let mut sub_scope = Scope::with_parent(scope.clone());
+                // Note: Subroutines capture outer scope, but we don't want to
+                // report unused variables within them separately from the outer scope
+                // Analyze subroutine body with the current scope to track variable usage
                 
-                // Declare parameters
+                // Declare parameters as new variables in subroutine scope
                 for param in params {
-                    self.declare_params(param, &mut sub_scope, node.location.start);
+                    self.declare_params(param, scope, node.location.start);
                 }
                 
-                // Analyze subroutine body
-                self.analyze_node(body, &mut sub_scope, issues, code, strict_mode);
+                // Analyze subroutine body in current scope context
+                self.analyze_node(body, scope, issues, code, strict_mode);
             }
             _ => {
                 // Recursively analyze children
@@ -288,7 +301,7 @@ impl ScopeAnalyzer {
         issues.iter().map(|issue| {
             match issue.kind {
                 IssueKind::VariableShadowing => {
-                    format!("Consider renaming '{}' to avoid shadowing", issue.variable_name)
+                    format!("Consider rename '{}' to avoid shadowing", issue.variable_name)
                 }
                 IssueKind::UnusedVariable => {
                     format!("Remove unused variable '{}' or prefix with underscore", issue.variable_name)
