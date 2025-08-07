@@ -69,13 +69,21 @@ impl PragmaTracker {
     pub fn get_state_at_line(&self, line: usize, pragma_map: &HashMap<usize, PragmaState>) -> PragmaState {
         // Find the most recent pragma state before this line
         let mut effective_state = PragmaState::default();
-        
-        for (&pragma_line, state) in pragma_map.iter() {
+
+        // Collect and sort the pragma lines to ensure correct order
+        let mut lines: Vec<_> = pragma_map.keys().cloned().collect();
+        lines.sort_unstable();
+
+        for pragma_line in lines {
             if pragma_line <= line {
-                effective_state = state.clone();
+                if let Some(state) = pragma_map.get(&pragma_line) {
+                    effective_state = state.clone();
+                }
+            } else {
+                break;
             }
         }
-        
+
         effective_state
     }
     
@@ -121,7 +129,10 @@ impl PragmaTracker {
                 }
             }
             _ => {
-                // Most node types don't have direct children we need to visit
+                // Recursively visit all children if present
+                for child in node.children() {
+                    self.visit_node(child, pragma_map);
+                }
             }
         }
     }
