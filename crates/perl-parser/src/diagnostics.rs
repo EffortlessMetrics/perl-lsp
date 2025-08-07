@@ -4,6 +4,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::error::ParseError;
+use crate::error_classifier::ErrorClassifier;
 use crate::symbol::{SymbolTable, SymbolExtractor, SymbolKind};
 use crate::scope_analyzer::{ScopeAnalyzer, IssueKind};
 
@@ -46,6 +47,7 @@ pub struct DiagnosticsProvider {
     symbol_table: SymbolTable,
     _source: String,
     scope_analyzer: ScopeAnalyzer,
+    error_classifier: ErrorClassifier,
 }
 
 impl DiagnosticsProvider {
@@ -54,11 +56,13 @@ impl DiagnosticsProvider {
         let extractor = SymbolExtractor::new();
         let symbol_table = extractor.extract(ast);
         let scope_analyzer = ScopeAnalyzer::new();
+        let error_classifier = ErrorClassifier::new();
         
         Self {
             symbol_table,
             _source: source,
             scope_analyzer,
+            error_classifier,
         }
     }
     
@@ -106,12 +110,18 @@ impl DiagnosticsProvider {
             });
         }
         
+        // Check for ERROR nodes in AST and classify them
+        self.check_error_nodes(ast, source, &mut diagnostics);
+        
         // Run other linting checks (now disabled to avoid duplicates)
         // self.check_undefined_variables(ast, &mut diagnostics);
         // self.check_unused_variables(&mut diagnostics);
         self.check_deprecated_syntax(ast, &mut diagnostics);
         self.check_strict_warnings(ast, &mut diagnostics);
         self.check_common_mistakes(ast, &mut diagnostics);
+        
+        // De-duplicate diagnostics - remove parse errors that overlap with classified errors
+        self.deduplicate_diagnostics(&mut diagnostics);
         
         diagnostics
     }
@@ -402,6 +412,55 @@ impl DiagnosticsProvider {
             }
             _ => {} // Other nodes don't have children or are handled differently
         }
+    }
+    
+    /// Check for ERROR nodes in the AST and classify them
+    fn check_error_nodes(&self, node: &Node, source: &str, diagnostics: &mut Vec<Diagnostic>) {
+        self.walk_node(node, &mut |n| {
+            if let NodeKind::Error { message } = &n.kind {
+                let error_kind = self.error_classifier.classify(n, source);
+                let diagnostic_message = self.error_classifier.get_diagnostic_message(&error_kind);
+                let suggestion = self.error_classifier.get_suggestion(&error_kind);
+                
+                let mut full_message = diagnostic_message.clone();
+                if !message.is_empty() {
+                    full_message.push_str(&format!(": {}", message));
+                }
+                if let Some(sugg) = suggestion {
+                    full_message.push_str(&format!(". {}", sugg));
+                }
+                
+                let start = n.location.start;
+                let end = n.location.end.min(source.len());
+                
+                diagnostics.push(Diagnostic {
+                    range: (start, end),
+                    severity: DiagnosticSeverity::Error,
+                    code: Some(format!("parse-error-{:?}", error_kind).to_lowercase()),
+                    message: full_message,
+                    related_information: Vec::new(),
+                    tags: Vec::new(),
+                });
+            }
+        });
+    }
+    
+    /// De-duplicate diagnostics to avoid reporting the same issue twice
+    fn deduplicate_diagnostics(&self, diagnostics: &mut Vec<Diagnostic>) {
+        // Sort by range and severity
+        diagnostics.sort_by(|a, b| {
+            a.range.0.cmp(&b.range.0)
+                .then(a.range.1.cmp(&b.range.1))
+                .then(a.severity.cmp(&b.severity))
+        });
+        
+        // Remove duplicates that overlap
+        diagnostics.dedup_by(|a, b| {
+            // If ranges overlap and have same severity, keep only one
+            let ranges_overlap = (a.range.0 <= b.range.0 && b.range.0 < a.range.1) ||
+                                (b.range.0 <= a.range.0 && a.range.0 < b.range.1);
+            ranges_overlap && a.severity == b.severity
+        });
     }
 }
 

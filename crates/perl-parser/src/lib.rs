@@ -38,6 +38,7 @@ pub mod diagnostics;
 pub mod execute_command;
 pub mod edit;
 pub mod error;
+pub mod error_classifier;
 pub mod error_recovery;
 pub mod formatting;
 pub mod incremental;
@@ -116,6 +117,7 @@ pub use type_inference::{
     TypeInferenceEngine, PerlType, ScalarType, TypeEnvironment,
     TypeConstraint, TypeLocation, TypeBasedCompletion
 };
+pub use scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue};
 
 #[cfg(test)]
 mod tests {
