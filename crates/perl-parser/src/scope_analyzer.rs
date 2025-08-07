@@ -135,7 +135,7 @@ impl ScopeAnalyzer {
                 let mut pragma_tracker = PragmaTracker::new();
                 let pragma_map = pragma_tracker.analyze(&ast);
                 
-                self.analyze_node(&ast, &root_scope, &mut issues, code, &pragma_map);
+                self.analyze_node(&ast, &root_scope, &mut issues, code, &pragma_map, &pragma_tracker);
                 
                 // Collect all unused variables from all scopes
                 self.collect_unused_variables(&root_scope, &mut issues, code);
@@ -148,9 +148,8 @@ impl ScopeAnalyzer {
         issues
     }
 
-    fn analyze_node(&self, node: &Node, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str, pragma_map: &HashMap<usize, PragmaState>) {
+    fn analyze_node(&self, node: &Node, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str, pragma_map: &HashMap<usize, PragmaState>, pragma_tracker: &PragmaTracker) {
         // Get effective pragma state at this line
-        let pragma_tracker = PragmaTracker::new();
         let line = self.get_line_from_position(node.location.start, code);
         let pragma_state = pragma_tracker.get_state_at_line(line, pragma_map);
         let strict_mode = pragma_state.is_strict(StrictCategory::Subs);
@@ -222,7 +221,7 @@ impl ScopeAnalyzer {
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, issues, code, pragma_map);
+                    self.analyze_node(stmt, &block_scope, issues, code, pragma_map, pragma_tracker);
                 }
                 self.collect_unused_variables(&block_scope, issues, code);
             }
@@ -231,15 +230,15 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, issues, code, pragma_map);
+                    self.analyze_node(init_node, &loop_scope, issues, code, pragma_map, pragma_tracker);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, issues, code, pragma_map);
+                    self.analyze_node(cond, &loop_scope, issues, code, pragma_map, pragma_tracker);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, issues, code, pragma_map);
+                    self.analyze_node(upd, &loop_scope, issues, code, pragma_map, pragma_tracker);
                 }
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, issues, code, pragma_map, pragma_tracker);
                 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -248,9 +247,9 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, issues, code, pragma_map);
-                self.analyze_node(list, &loop_scope, issues, code, pragma_map);
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map);
+                self.analyze_node(variable, &loop_scope, issues, code, pragma_map, pragma_tracker);
+                self.analyze_node(list, &loop_scope, issues, code, pragma_map, pragma_tracker);
+                self.analyze_node(body, &loop_scope, issues, code, pragma_map, pragma_tracker);
                 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -290,12 +289,16 @@ impl ScopeAnalyzer {
                     }
                 }
                 
-                self.analyze_node(body, &sub_scope, issues, code, pragma_map);
+                self.analyze_node(body, &sub_scope, issues, code, pragma_map, pragma_tracker);
                 
                 // Check for unused parameters
                 for param in params {
                     if let NodeKind::Variable { sigil, name } = &param.kind {
                         let full_name = format!("{}{}", sigil, name);
+                        // Skip parameters starting with underscore (intentionally unused)
+                        if name.starts_with('_') {
+                            continue;
+                        }
                         if let Some(var) = sub_scope.lookup_variable(&full_name) {
                             if !*var.is_used.borrow() {
                                 issues.push(ScopeIssue {
@@ -315,7 +318,7 @@ impl ScopeAnalyzer {
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
-                    self.analyze_node(child, scope, issues, code, pragma_map);
+                    self.analyze_node(child, scope, issues, code, pragma_map, pragma_tracker);
                 }
             }
         }
@@ -323,6 +326,10 @@ impl ScopeAnalyzer {
 
     fn collect_unused_variables(&self, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str) {
         for (var_name, offset) in scope.get_unused_variables() {
+            // Skip variables starting with underscore (intentionally unused)
+            if var_name.len() > 1 && var_name.chars().nth(1) == Some('_') {
+                continue;
+            }
             issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
                 variable_name: var_name.clone(),
@@ -399,7 +406,7 @@ impl ScopeAnalyzer {
 }
 
 impl Node {
-    fn children(&self) -> Vec<&Node> {
+    pub fn children(&self) -> Vec<&Node> {
         match &self.kind {
             NodeKind::Program { statements } => statements.iter().collect(),
             NodeKind::Block { statements } => statements.iter().collect(),
@@ -421,6 +428,32 @@ impl Node {
                 children
             }
             NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    vec![val.as_ref()]
+                } else {
+                    vec![]
+                }
+            }
+            NodeKind::Subroutine { body, .. } => {
+                vec![body.as_ref()]
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                let mut children = vec![body.as_ref()];
+                if let Some(i) = init {
+                    children.push(i.as_ref());
+                }
+                if let Some(c) = condition {
+                    children.push(c.as_ref());
+                }
+                if let Some(u) = update {
+                    children.push(u.as_ref());
+                }
+                children
+            }
+            NodeKind::While { condition, body, .. } => {
+                vec![condition.as_ref(), body.as_ref()]
+            }
             _ => vec![],
         }
     }

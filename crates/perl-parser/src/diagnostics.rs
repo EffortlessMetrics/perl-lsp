@@ -453,19 +453,21 @@ impl DiagnosticsProvider {
     
     /// De-duplicate diagnostics to avoid reporting the same issue twice
     fn deduplicate_diagnostics(&self, diagnostics: &mut Vec<Diagnostic>) {
-        // Sort by range and severity
+        // Sort by range, severity, code, and message
         diagnostics.sort_by(|a, b| {
             a.range.0.cmp(&b.range.0)
                 .then(a.range.1.cmp(&b.range.1))
                 .then(a.severity.cmp(&b.severity))
+                .then(a.code.cmp(&b.code))
+                .then(a.message.cmp(&b.message))
         });
         
-        // Remove duplicates that overlap
+        // Remove only exact duplicates (same range, severity, code, and message)
         diagnostics.dedup_by(|a, b| {
-            // If ranges overlap and have same severity, keep only one
-            let ranges_overlap = (a.range.0 <= b.range.0 && b.range.0 < a.range.1) ||
-                                (b.range.0 <= a.range.0 && a.range.0 < b.range.1);
-            ranges_overlap && a.severity == b.severity
+            a.range == b.range && 
+            a.severity == b.severity && 
+            a.code == b.code && 
+            a.message == b.message
         });
     }
 }
