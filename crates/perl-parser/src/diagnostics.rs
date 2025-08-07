@@ -437,7 +437,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[], &code);
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
         
         assert!(diagnostics.iter().any(|d| d.code == Some("undefined-variable".to_string())));
     }
@@ -453,7 +453,7 @@ mod tests {
         let ast = parser.parse().unwrap();
         
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[], &code);
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
         
         assert!(diagnostics.iter().any(|d| d.code == Some("unused-variable".to_string())));
     }
