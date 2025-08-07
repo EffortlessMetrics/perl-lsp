@@ -68,6 +68,7 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod import_optimizer;
 pub mod dead_code_detector;
+pub mod type_inference;
 pub mod semantic_tokens_provider;
 pub mod call_hierarchy_provider;
 pub mod inlay_hints_provider;
@@ -103,6 +104,10 @@ pub use semantic_tokens_provider::{
     encode_semantic_tokens
 };
 pub use folding::{FoldingRangeExtractor, FoldingRange, FoldingRangeKind};
+pub use type_inference::{
+    TypeInferenceEngine, PerlType, ScalarType, TypeEnvironment,
+    TypeConstraint, TypeLocation, TypeBasedCompletion
+};
 
 #[cfg(test)]
 mod tests {
