@@ -263,6 +263,29 @@ cargo run -p perl-parser --example lsp_capabilities
 - Run `cargo clippy` and address warnings
 - Add documentation comments for public APIs
 
+### Code Quality Standards
+
+The project maintains high code quality standards. Before committing:
+
+1. **Format your code**
+   ```bash
+   cargo fmt --all
+   ```
+
+2. **Fix clippy warnings**
+   ```bash
+   cargo clippy --all -- -W clippy::all
+   ```
+
+3. **Follow Rust best practices**
+   - Prefer `.first()` over `.get(0)` for accessing first element
+   - Use `.push(char)` instead of `.push_str("x")` for single characters
+   - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
+   - Avoid unnecessary `.clone()` on types that implement Copy
+   - Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
+   - Use `format!()` directly without `&` when passing to functions expecting String
+   - Replace `&mut Vec<T>` parameters with `&mut [T]` where possible
+
 ```rust
 /// Parses a Perl source file and returns an AST.
 /// 

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Improved
+- **Code Quality**: Fixed 81 clippy warnings across perl-lexer and perl-parser (61% reduction)
+  - Eliminated 45+ unnecessary `.clone()` calls on Copy types for better performance
+  - Fixed recursive function warnings with proper annotations
+  - Replaced `.get(0)` with `.first()` for better Rust idioms
+  - Changed `push_str("x")` to `push('x')` for single characters
+  - Replaced `format!("literal")` with `"literal".to_string()` where appropriate
+  - Fixed `or_insert_with(Vec::new)` to use `or_default()` for cleaner code
+  - Removed unnecessary borrows from `format!()` expressions
+  - Overall memory usage and performance improvements from avoiding unnecessary allocations
+
 ## [0.7.2] - 2025-01-31
 
 ### Fixed
