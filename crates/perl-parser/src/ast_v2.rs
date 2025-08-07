@@ -166,7 +166,7 @@ impl NodeIdGenerator {
         NodeIdGenerator { next_id: 0 }
     }
     
-    pub fn next(&mut self) -> NodeId {
+    pub fn next_id(&mut self) -> NodeId {
         let id = self.next_id;
         self.next_id += 1;
         id
@@ -193,7 +193,7 @@ mod tests {
         );
         
         let node = Node::new(
-            id_gen.next(),
+            id_gen.next_id(),
             NodeKind::Number { value: "42".to_string() },
             range
         );
@@ -211,7 +211,7 @@ mod tests {
         );
         
         let error = Node::new(
-            id_gen.next(),
+            id_gen.next_id(),
             NodeKind::Error {
                 message: "Unexpected token".to_string(),
                 expected: vec!["identifier".to_string()],

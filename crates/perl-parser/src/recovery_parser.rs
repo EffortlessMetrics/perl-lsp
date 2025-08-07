@@ -45,7 +45,7 @@ impl RecoveryParser {
         
         let end_pos = self.context.current_position();
         Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::Program { statements },
             Range::new(start_pos, end_pos),
         )
@@ -192,7 +192,7 @@ impl StatementRecovery for RecoveryParser {
         
         let end_pos = self.context.current_position();
         Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::Block { statements },
             Range::new(start_pos, end_pos),
         )
@@ -253,7 +253,7 @@ impl RecoveryParser {
         
         let end_pos = self.context.current_position();
         Ok(Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::VariableDeclaration {
                 declarator,
                 variable: Box::new(variable),
@@ -276,7 +276,7 @@ impl RecoveryParser {
                             let range = token.range();
                             self.context.advance();
                             let node = Node::new(
-                                self.context.id_generator.next(),
+                                self.context.id_generator.next_id(),
                                 NodeKind::Variable {
                                     sigil: sigil.to_string(),
                                     name: var_name,
@@ -313,7 +313,7 @@ impl RecoveryParser {
                     let range = token.range();
                     self.context.advance();
                     let node = Node::new(
-                        self.context.id_generator.next(),
+                        self.context.id_generator.next_id(),
                         NodeKind::Number { value },
                         range,
                     );
@@ -324,7 +324,7 @@ impl RecoveryParser {
                     let range = token.range();
                     self.context.advance();
                     let node = Node::new(
-                        self.context.id_generator.next(),
+                        self.context.id_generator.next_id(),
                         NodeKind::String {
                             value,
                             interpolated: false,
@@ -366,7 +366,7 @@ impl RecoveryParser {
         
         let end_pos = self.context.current_position();
         Ok(Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::If {
                 condition,
                 then_branch,
@@ -387,7 +387,7 @@ impl RecoveryParser {
         // For now, create a simple identifier node
         let end_pos = self.context.current_position();
         Ok(Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::Identifier { name: "while_stmt".to_string() },
             Range::new(start_pos, end_pos),
         ))
@@ -403,7 +403,7 @@ impl RecoveryParser {
         // For now, create a simple identifier node
         let end_pos = self.context.current_position();
         Ok(Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::Identifier { name: "sub_decl".to_string() },
             Range::new(start_pos, end_pos),
         ))

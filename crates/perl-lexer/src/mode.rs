@@ -1,9 +1,10 @@
 //! Lexer modes for context-sensitive parsing
 
 /// Perl lexer mode to disambiguate slash tokens
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LexerMode {
     /// Expecting a term (value) - slash starts a regex
+    #[default]
     ExpectTerm,
     /// Expecting an operator - slash is division
     ExpectOperator,
@@ -25,8 +26,3 @@ impl LexerMode {
     }
 }
 
-impl Default for LexerMode {
-    fn default() -> Self {
-        LexerMode::ExpectTerm
-    }
-}

@@ -324,7 +324,7 @@ impl TriviaPreservingParser {
         };
         
         let program = Node::new(
-            self.context.id_generator.next(),
+            self.context.id_generator.next_id(),
             NodeKind::Program { statements: statement_nodes },
             Range::new(start_pos, end_pos),
         );
@@ -361,7 +361,7 @@ impl TriviaPreservingParser {
                     .offset_to_position(token.end);
                 
                 let node = Node::new(
-                    self.context.id_generator.next(),
+                    self.context.id_generator.next_id(),
                     NodeKind::Identifier { name: declarator },
                     Range::new(start_pos, end_pos),
                 );

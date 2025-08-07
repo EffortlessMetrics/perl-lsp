@@ -104,7 +104,7 @@ impl ErrorRecovery for ParserContext {
         };
         
         Node::new(
-            self.id_generator.next(),
+            self.id_generator.next_id(),
             NodeKind::Error {
                 message,
                 expected,
@@ -259,7 +259,7 @@ pub mod recovery_patterns {
     /// Create a placeholder for missing expressions
     pub fn create_missing_expression(ctx: &mut ParserContext) -> Node {
         Node::new(
-            ctx.id_generator.next(),
+            ctx.id_generator.next_id(),
             NodeKind::MissingExpression,
             ctx.current_position_range(),
         )
@@ -268,7 +268,7 @@ pub mod recovery_patterns {
     /// Create a placeholder for missing statements
     pub fn create_missing_statement(ctx: &mut ParserContext) -> Node {
         Node::new(
-            ctx.id_generator.next(),
+            ctx.id_generator.next_id(),
             NodeKind::MissingStatement,
             ctx.current_position_range(),
         )

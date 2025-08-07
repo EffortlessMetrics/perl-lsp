@@ -284,7 +284,7 @@ impl TriviaPreservingParser {
         
         // For now, create a simple demonstration node
         let node = Node::new(
-            self.id_generator.next(),
+            self.id_generator.next_id(),
             NodeKind::Program { statements: Vec::new() },
             Range::new(
                 crate::position::Position::new(0, 1, 1),

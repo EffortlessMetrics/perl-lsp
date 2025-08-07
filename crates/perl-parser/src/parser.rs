@@ -1610,7 +1610,6 @@ impl<'a> Parser<'a> {
     }
     
     /// Parse format declaration
-    
     /// Parse return statement
     fn parse_return(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -4405,12 +4404,10 @@ fn parse_substitution_parts(s: &str) -> (String, String, String) {
                         phase = 2;
                         continue;
                     }
+                } else if phase == 0 {
+                    pattern.push(ch);
                 } else {
-                    if phase == 0 {
-                        pattern.push(ch);
-                    } else {
-                        replacement.push(ch);
-                    }
+                    replacement.push(ch);
                 }
             } else if phase == 1 && depth == 0 && ch == delimiter {
                 // Start of replacement part in paired delimiters
@@ -4418,23 +4415,17 @@ fn parse_substitution_parts(s: &str) -> (String, String, String) {
             } else if phase == 1 && depth == 0 && ch.is_whitespace() {
                 // Skip whitespace between paired delimiters
                 continue;
-            } else {
-                if phase == 0 {
-                    pattern.push(ch);
-                } else if phase == 1 && depth > 0 {
-                    replacement.push(ch);
-                }
+            } else if phase == 0 {
+                pattern.push(ch);
+            } else if phase == 1 && depth > 0 {
+                replacement.push(ch);
             }
-        } else {
-            if ch == delimiter {
-                phase += 1;
-            } else {
-                if phase == 0 {
-                    pattern.push(ch);
-                } else if phase == 1 {
-                    replacement.push(ch);
-                }
-            }
+        } else if ch == delimiter {
+            phase += 1;
+        } else if phase == 0 {
+            pattern.push(ch);
+        } else if phase == 1 {
+            replacement.push(ch);
         }
     }
     
@@ -4595,12 +4586,10 @@ fn parse_transliteration_parts(s: &str) -> (String, String, String) {
                         phase = 2;
                         continue;
                     }
+                } else if phase == 0 {
+                    search.push(ch);
                 } else {
-                    if phase == 0 {
-                        search.push(ch);
-                    } else {
-                        replace.push(ch);
-                    }
+                    replace.push(ch);
                 }
             } else if phase == 1 && depth == 0 && ch == delimiter {
                 // Start of replace part in paired delimiters
@@ -4608,23 +4597,17 @@ fn parse_transliteration_parts(s: &str) -> (String, String, String) {
             } else if phase == 1 && depth == 0 && ch.is_whitespace() {
                 // Skip whitespace between paired delimiters
                 continue;
-            } else {
-                if phase == 0 {
-                    search.push(ch);
-                } else if phase == 1 && depth > 0 {
-                    replace.push(ch);
-                }
+            } else if phase == 0 {
+                search.push(ch);
+            } else if phase == 1 && depth > 0 {
+                replace.push(ch);
             }
-        } else {
-            if ch == delimiter {
-                phase += 1;
-            } else {
-                if phase == 0 {
-                    search.push(ch);
-                } else if phase == 1 {
-                    replace.push(ch);
-                }
-            }
+        } else if ch == delimiter {
+            phase += 1;
+        } else if phase == 0 {
+            search.push(ch);
+        } else if phase == 1 {
+            replace.push(ch);
         }
     }
     

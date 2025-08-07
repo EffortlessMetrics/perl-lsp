@@ -2,7 +2,6 @@
 /// 
 /// Perl allows a wide range of Unicode characters in identifiers,
 /// including emoji and other symbols.
-
 use unicode_ident::{is_xid_start, is_xid_continue};
 
 /// Check if a character can start a Perl identifier
