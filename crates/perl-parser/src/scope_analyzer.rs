@@ -1,6 +1,6 @@
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -171,6 +171,11 @@ impl ScopeAnalyzer {
                     return;
                 }
                 
+                // Skip built-in global variables
+                if is_builtin_global(&full_name) {
+                    return;
+                }
+                
                 // Try to use the variable
                 if !scope.use_variable(&full_name) {
                     // Variable not found - check if we should report it
@@ -328,4 +333,61 @@ impl Node {
             _ => vec![],
         }
     }
+}
+
+/// Check if a variable is a built-in Perl global variable
+fn is_builtin_global(name: &str) -> bool {
+    // Standard global variables
+    const BUILTIN_GLOBALS: &[&str] = &[
+        // Special variables
+        "$_", "@_", "%_", "$!", "$@", "$?", "$^", "$$", "$0",
+        "$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9",
+        "$.", "$,", "$/", "$\\", "$\"", "$;", "$%", "$=", "$-",
+        "$~", "$|", "$&", "$`", "$'", "$+", "@+", "%+",
+        "$[", "$]", "$^A", "$^C", "$^D", "$^E", "$^F", "$^H",
+        "$^I", "$^L", "$^M", "$^N", "$^O", "$^P", "$^R", "$^S",
+        "$^T", "$^V", "$^W", "$^X",
+        
+        // Common globals
+        "%ENV", "@INC", "%INC", "@ARGV", "%SIG", "$ARGV",
+        "@EXPORT", "@EXPORT_OK", "%EXPORT_TAGS", "@ISA",
+        "$VERSION", "$AUTOLOAD",
+        
+        // Filehandles
+        "STDIN", "STDOUT", "STDERR", "DATA", "ARGVOUT",
+        
+        // Sort variables
+        "$a", "$b",
+        
+        // Error variables
+        "$EVAL_ERROR", "$ERRNO", "$EXTENDED_OS_ERROR",
+        "$CHILD_ERROR", "$PROCESS_ID", "$PROGRAM_NAME",
+        
+        // Perl version variables
+        "$PERL_VERSION", "$OLD_PERL_VERSION",
+    ];
+    
+    // Check exact matches
+    if BUILTIN_GLOBALS.contains(&name) {
+        return true;
+    }
+    
+    // Check patterns
+    // $^[A-Z] variables
+    if name.starts_with("$^") && name.len() == 3 {
+        if let Some(ch) = name.chars().nth(2) {
+            if ch.is_ascii_uppercase() {
+                return true;
+            }
+        }
+    }
+    
+    // Numbered capture variables ($1, $2, etc.)
+    if name.starts_with('$') && name.len() > 1 {
+        if name[1..].chars().all(|c| c.is_ascii_digit()) {
+            return true;
+        }
+    }
+    
+    false
 }
