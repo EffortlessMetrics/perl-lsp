@@ -271,7 +271,7 @@ impl SymbolExtractor {
             }
             
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                self.handle_variable_declaration(declarator, variable, attributes, variable.location.clone());
+                self.handle_variable_declaration(declarator, variable, attributes, variable.location);
                 if let Some(init) = initializer {
                     self.visit_node(init);
                 }
@@ -279,7 +279,7 @@ impl SymbolExtractor {
             
             NodeKind::VariableListDeclaration { declarator, variables, attributes, initializer } => {
                 for var in variables {
-                    self.handle_variable_declaration(declarator, var, attributes, var.location.clone());
+                    self.handle_variable_declaration(declarator, var, attributes, var.location);
                 }
                 if let Some(init) = initializer {
                     self.visit_node(init);
@@ -297,7 +297,7 @@ impl SymbolExtractor {
                 let reference = SymbolReference {
                     name: name.clone(),
                     kind,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     is_write: false, // Will be updated based on context
                 };
@@ -313,7 +313,7 @@ impl SymbolExtractor {
                         name: sub_name.clone(),
                         qualified_name: format!("{}::{}", self.table.current_package, sub_name),
                         kind: SymbolKind::Subroutine,
-                        location: node.location.clone(),
+                        location: node.location,
                         scope_id: self.table.current_scope(),
                         declaration: None,
                         documentation: None, // TODO: Extract from preceding comments
@@ -324,7 +324,7 @@ impl SymbolExtractor {
                 }
                 
                 // Create subroutine scope
-                self.table.push_scope(ScopeKind::Subroutine, node.location.clone());
+                self.table.push_scope(ScopeKind::Subroutine, node.location);
                 
                 {
                     self.visit_node(body);
@@ -341,7 +341,7 @@ impl SymbolExtractor {
                     name: name.clone(),
                     qualified_name: name.clone(),
                     kind: SymbolKind::Package,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation: None,
@@ -352,7 +352,7 @@ impl SymbolExtractor {
                 
                 if let Some(block_node) = block {
                     // Package with block - create a new scope
-                    self.table.push_scope(ScopeKind::Package, node.location.clone());
+                    self.table.push_scope(ScopeKind::Package, node.location);
                     self.visit_node(block_node);
                     self.table.pop_scope();
                     self.table.current_package = old_package;
@@ -362,7 +362,7 @@ impl SymbolExtractor {
             }
             
             NodeKind::Block { statements } => {
-                self.table.push_scope(ScopeKind::Block, node.location.clone());
+                self.table.push_scope(ScopeKind::Block, node.location);
                 for stmt in statements {
                     self.visit_node(stmt);
                 }
@@ -372,12 +372,12 @@ impl SymbolExtractor {
             NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
                 self.visit_node(condition);
                 
-                self.table.push_scope(ScopeKind::Block, then_branch.location.clone());
+                self.table.push_scope(ScopeKind::Block, then_branch.location);
                 self.visit_node(then_branch);
                 self.table.pop_scope();
                 
                 if let Some(else_node) = else_branch {
-                    self.table.push_scope(ScopeKind::Block, else_node.location.clone());
+                    self.table.push_scope(ScopeKind::Block, else_node.location);
                     self.visit_node(else_node);
                     self.table.pop_scope();
                 }
@@ -386,13 +386,13 @@ impl SymbolExtractor {
             NodeKind::While { condition, body, continue_block: _ } => {
                 self.visit_node(condition);
                 
-                self.table.push_scope(ScopeKind::Block, body.location.clone());
+                self.table.push_scope(ScopeKind::Block, body.location);
                 self.visit_node(body);
                 self.table.pop_scope();
             }
             
             NodeKind::For { init, condition, update, body, .. } => {
-                self.table.push_scope(ScopeKind::Block, node.location.clone());
+                self.table.push_scope(ScopeKind::Block, node.location);
                 
                 if let Some(init_node) = init {
                     self.visit_node(init_node);
@@ -409,10 +409,10 @@ impl SymbolExtractor {
             }
             
             NodeKind::Foreach { variable, list, body } => {
-                self.table.push_scope(ScopeKind::Block, node.location.clone());
+                self.table.push_scope(ScopeKind::Block, node.location);
                 
                 // The loop variable is implicitly declared
-                self.handle_variable_declaration("my", variable, &[], variable.location.clone());
+                self.handle_variable_declaration("my", variable, &[], variable.location);
                 self.visit_node(list);
                 self.visit_node(body);
                 
@@ -441,7 +441,7 @@ impl SymbolExtractor {
                 let reference = SymbolReference {
                     name: name.clone(),
                     kind: SymbolKind::Subroutine,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     is_write: false,
                 };
@@ -485,7 +485,7 @@ impl SymbolExtractor {
                     name: label.clone(),
                     qualified_name: label.clone(),
                     kind: SymbolKind::Label,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation: None,
@@ -503,7 +503,7 @@ impl SymbolExtractor {
             NodeKind::String { value, interpolated } => {
                 if *interpolated {
                     // Extract variable references from interpolated strings
-                    self.extract_vars_from_string(value, node.location.clone());
+                    self.extract_vars_from_string(value, node.location);
                 }
             }
             
@@ -557,7 +557,7 @@ impl SymbolExtractor {
                     name: name.clone(),
                     qualified_name: name.clone(),
                     kind: SymbolKind::Package, // Classes are like packages
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation: None,
@@ -572,7 +572,7 @@ impl SymbolExtractor {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
                     kind: SymbolKind::Subroutine,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation: None,
@@ -580,7 +580,7 @@ impl SymbolExtractor {
                 };
                 self.table.add_symbol(symbol);
                 
-                self.table.push_scope(ScopeKind::Subroutine, node.location.clone());
+                self.table.push_scope(ScopeKind::Subroutine, node.location);
                 self.visit_node(body);
                 self.table.pop_scope();
             }
@@ -590,7 +590,7 @@ impl SymbolExtractor {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
                     kind: SymbolKind::Format,
-                    location: node.location.clone(),
+                    location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation: None,

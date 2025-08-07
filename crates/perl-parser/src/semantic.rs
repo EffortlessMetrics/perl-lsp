@@ -271,7 +271,7 @@ impl SemanticAnalyzer {
                     }
                     
                     self.semantic_tokens.push(SemanticToken {
-                        location: variable.location.clone(),
+                        location: variable.location,
                         token_type,
                         modifiers,
                     });
@@ -287,7 +287,7 @@ impl SemanticAnalyzer {
                         },
                     };
                     
-                    self.hover_info.insert(variable.location.clone(), hover);
+                    self.hover_info.insert(variable.location, hover);
                 }
                 
                 if let Some(init) = initializer {
@@ -319,7 +319,7 @@ impl SemanticAnalyzer {
                 };
                 
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type,
                     modifiers: vec![],
                 });
@@ -338,14 +338,14 @@ impl SemanticAnalyzer {
                         ],
                     };
                     
-                    self.hover_info.insert(node.location.clone(), hover);
+                    self.hover_info.insert(node.location, hover);
                 }
             }
             
             NodeKind::Subroutine { name, params, attributes, body } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
-                        location: node.location.clone(),
+                        location: node.location,
                         token_type: SemanticTokenType::FunctionDeclaration,
                         modifiers: vec![SemanticTokenModifier::Declaration],
                     };
@@ -368,7 +368,7 @@ impl SemanticAnalyzer {
                         },
                     };
                     
-                    self.hover_info.insert(node.location.clone(), hover);
+                    self.hover_info.insert(node.location, hover);
                 }
                 
                 {
@@ -394,7 +394,7 @@ impl SemanticAnalyzer {
                     };
                     
                     self.semantic_tokens.push(SemanticToken {
-                        location: node.location.clone(),
+                        location: node.location,
                         token_type,
                         modifiers: if is_builtin_function(name) {
                             vec![SemanticTokenModifier::DefaultLibrary]
@@ -411,7 +411,7 @@ impl SemanticAnalyzer {
                             details: vec![],
                         };
                         
-                        self.hover_info.insert(node.location.clone(), hover);
+                        self.hover_info.insert(node.location, hover);
                     }
                 }
                 
@@ -423,7 +423,7 @@ impl SemanticAnalyzer {
             
             NodeKind::Package { name, block } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type: SemanticTokenType::Namespace,
                     modifiers: vec![SemanticTokenModifier::Declaration],
                 });
@@ -434,7 +434,7 @@ impl SemanticAnalyzer {
                     details: vec![],
                 };
                 
-                self.hover_info.insert(node.location.clone(), hover);
+                self.hover_info.insert(node.location, hover);
                 
                 if let Some(block_node) = block {
                     let package_scope = scope_id; // TODO: Get actual package scope
@@ -444,7 +444,7 @@ impl SemanticAnalyzer {
             
             NodeKind::String { value: _, interpolated: _ } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type: SemanticTokenType::String,
                     modifiers: vec![],
                 });
@@ -452,7 +452,7 @@ impl SemanticAnalyzer {
             
             NodeKind::Number { value: _ } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type: SemanticTokenType::Number,
                     modifiers: vec![],
                 });
@@ -461,7 +461,7 @@ impl SemanticAnalyzer {
             NodeKind::Regex { pattern: _, modifiers: _ } |
             NodeKind::Match { pattern: _, modifiers: _, .. } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type: SemanticTokenType::Regex,
                     modifiers: vec![],
                 });
@@ -469,7 +469,7 @@ impl SemanticAnalyzer {
             
             NodeKind::LabeledStatement { label: _, statement } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: node.location.clone(),
+                    location: node.location,
                     token_type: SemanticTokenType::Label,
                     modifiers: vec![],
                 });

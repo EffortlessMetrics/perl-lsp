@@ -103,6 +103,7 @@ impl SimpleIncrementalParser {
         false
     }
     
+    #[allow(clippy::only_used_in_recursion)]
     fn affects_structure(&self, node: &Node, range: &Range) -> bool {
         // Check if this node is a structural element and overlaps with the edit
         let node_range = Range::from(node.location);
@@ -187,6 +188,7 @@ impl SimpleIncrementalParser {
             _ => false,
         }
     }
+    #[allow(clippy::only_used_in_recursion)]
     
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1;

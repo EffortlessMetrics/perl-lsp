@@ -100,7 +100,7 @@ impl ErrorRecovery for ParserContext {
         } else {
             // End of file
             let pos = self.current_position();
-            Range::new(pos.clone(), pos)
+            Range::new(pos, pos)
         };
         
         Node::new(

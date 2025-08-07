@@ -1545,6 +1545,7 @@ impl LspServer {
     }
 
     /// Count references to a symbol in an AST
+    #[allow(clippy::only_used_in_recursion)]
     fn count_references(&self, node: &crate::ast::Node, symbol_name: &str, symbol_kind: &str) -> usize {
         use crate::ast::NodeKind;
         
@@ -2011,12 +2012,12 @@ impl LspServer {
             match command {
                 // Keep existing test commands for backward compatibility
                 "perl.runTest" => {
-                    if let Some(test_id) = arguments.get(0).and_then(|v| v.as_str()) {
+                    if let Some(test_id) = arguments.first().and_then(|v| v.as_str()) {
                         return self.run_test(test_id);
                     }
                 }
                 "perl.runTestFile" => {
-                    if let Some(file_uri) = arguments.get(0).and_then(|v| v.as_str()) {
+                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
                         return self.run_test_file(file_uri);
                     }
                 }

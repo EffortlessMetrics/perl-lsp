@@ -401,7 +401,7 @@ impl<'a> Parser<'a> {
             ("*".to_string(), rest.to_string())
         } else {
             return Err(ParseError::syntax(
-                &format!("Expected variable, found '{}'", text),
+                format!("Expected variable, found '{}'", text),
                 token.start
             ));
         };
@@ -525,7 +525,7 @@ impl<'a> Parser<'a> {
                         }
                         _ => {
                             return Err(ParseError::syntax(
-                                &format!("Unexpected character after sigil: {}", token.text),
+                                format!("Unexpected character after sigil: {}", token.text),
                                 token.start
                             ));
                         }
@@ -1322,7 +1322,7 @@ impl<'a> Parser<'a> {
                 first_token.text.clone()
             } else {
                 return Err(ParseError::syntax(
-                    &format!("Expected module name or version, found {:?}", first_token.kind),
+                    format!("Expected module name or version, found {:?}", first_token.kind),
                     first_token.start
                 ));
             }
@@ -1493,7 +1493,7 @@ impl<'a> Parser<'a> {
         // Phase blocks must be followed by a block
         if self.peek_kind() != Some(TokenKind::LeftBrace) {
             return Err(ParseError::syntax(
-                &format!("{} must be followed by a block", phase),
+                format!("{} must be followed by a block", phase),
                 self.current_position()
             ));
         }
@@ -3155,7 +3155,7 @@ impl<'a> Parser<'a> {
                                         name: name.clone(), 
                                         args: vec![]
                                     },
-                                    expr.location.clone()
+                                    expr.location
                                 );
                             } else {
                                 // Parse arguments without parentheses
@@ -3300,50 +3300,50 @@ impl<'a> Parser<'a> {
                 match (delim_char, token_kind) {
                     ('{', Some(TokenKind::LeftBrace)) => {
                         self.consume_token()?;
-                        content.push_str("{");
+                        content.push('{');
                         depth += 1;
                     }
                     ('{', Some(TokenKind::RightBrace)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str("}");
+                            content.push('}');
                         }
                     }
                     ('[', Some(TokenKind::LeftBracket)) => {
                         self.consume_token()?;
-                        content.push_str("[");
+                        content.push('[');
                         depth += 1;
                     }
                     ('[', Some(TokenKind::RightBracket)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str("]");
+                            content.push(']');
                         }
                     }
                     ('(', Some(TokenKind::LeftParen)) => {
                         self.consume_token()?;
-                        content.push_str("(");
+                        content.push('(');
                         depth += 1;
                     }
                     ('(', Some(TokenKind::RightParen)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str(")");
+                            content.push(')');
                         }
                     }
                     ('<', Some(TokenKind::Less)) => {
                         self.consume_token()?;
-                        content.push_str("<");
+                        content.push('<');
                         depth += 1;
                     }
                     ('<', Some(TokenKind::Greater)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str(">");
+                            content.push('>');
                         }
                     }
                     _ => {
@@ -3475,7 +3475,7 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 Err(ParseError::syntax(
-                    &format!("Unknown quote operator: {}", op),
+                    format!("Unknown quote operator: {}", op),
                     start
                 ))
             }
@@ -3915,7 +3915,7 @@ impl<'a> Parser<'a> {
                 let pos = self.current_position();
                 Err(ParseError::unexpected(
                     "expression",
-                    &format!("{:?}", token_kind),
+                    format!("{:?}", token_kind),
                     pos
                 ))
             }
@@ -4005,8 +4005,8 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next()?;
         if token.kind != kind {
             return Err(ParseError::unexpected(
-                &format!("{:?}", kind),
-                &format!("{:?}", token.kind),
+                format!("{:?}", kind),
+                format!("{:?}", token.kind),
                 token.start
             ));
         }

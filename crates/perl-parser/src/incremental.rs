@@ -53,7 +53,7 @@ impl Tree {
         let start = node.location.start;
         self.node_positions
             .entry(start)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(NodeRef {
                 node: node.clone(),
                 depth,
@@ -223,6 +223,7 @@ impl IncrementalParser {
     }
     
     /// Count total nodes in a tree
+    #[allow(clippy::only_used_in_recursion)]
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1; // Count this node
         
@@ -372,6 +373,7 @@ impl IncrementalParser {
     }
     
     
+    #[allow(clippy::only_used_in_recursion)]
     fn shift_node_recursive(&self, node: &Node, edits: &EditSet, reused_count: &mut usize) -> Node {
         *reused_count += 1;
         

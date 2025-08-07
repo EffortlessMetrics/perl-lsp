@@ -44,7 +44,7 @@ impl TokenWithPosition {
     
     /// Get the position range
     pub fn range(&self) -> crate::position::Range {
-        crate::position::Range::new(self.start_pos.clone(), self.end_pos.clone())
+        crate::position::Range::new(self.start_pos, self.end_pos)
     }
 }
 
