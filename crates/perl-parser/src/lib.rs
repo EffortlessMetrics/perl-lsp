@@ -80,6 +80,8 @@ pub mod test_runner;
 pub mod tdd_basic;
 pub mod performance;
 pub mod debug_adapter;
+pub mod modernize;
+pub mod modernize_refactored;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
