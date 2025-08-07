@@ -79,8 +79,10 @@ impl DiagnosticsProvider {
         let scope_issues = self.scope_analyzer.analyze(source);
         for issue in scope_issues {
             let severity = match issue.kind {
-                IssueKind::UndeclaredVariable | IssueKind::VariableRedeclaration => DiagnosticSeverity::Error,
-                IssueKind::VariableShadowing | IssueKind::UnusedVariable => DiagnosticSeverity::Warning,
+                IssueKind::UndeclaredVariable | IssueKind::VariableRedeclaration | 
+                IssueKind::DuplicateParameter | IssueKind::UnquotedBareword => DiagnosticSeverity::Error,
+                IssueKind::VariableShadowing | IssueKind::UnusedVariable | 
+                IssueKind::ParameterShadowsGlobal | IssueKind::UnusedParameter => DiagnosticSeverity::Warning,
             };
             
             let code = match issue.kind {
@@ -88,6 +90,10 @@ impl DiagnosticsProvider {
                 IssueKind::UnusedVariable => "unused-variable",
                 IssueKind::VariableShadowing => "variable-shadowing",
                 IssueKind::VariableRedeclaration => "variable-redeclaration",
+                IssueKind::DuplicateParameter => "duplicate-parameter",
+                IssueKind::ParameterShadowsGlobal => "parameter-shadows-global",
+                IssueKind::UnusedParameter => "unused-parameter",
+                IssueKind::UnquotedBareword => "unquoted-bareword",
             };
             
             // Calculate byte position for the line number
@@ -102,7 +108,7 @@ impl DiagnosticsProvider {
                 code: Some(code.to_string()),
                 message: issue.description.clone(),
                 related_information: Vec::new(),
-                tags: if issue.kind == IssueKind::UnusedVariable {
+                tags: if matches!(issue.kind, IssueKind::UnusedVariable | IssueKind::UnusedParameter) {
                     vec![DiagnosticTag::Unnecessary]
                 } else {
                     Vec::new()
