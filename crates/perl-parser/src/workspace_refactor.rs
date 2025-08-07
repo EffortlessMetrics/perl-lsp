@@ -1,0 +1,125 @@
+//! Workspace-wide refactoring operations (stub implementation)
+//!
+//! This module provides refactoring capabilities that span multiple files.
+//! Currently a stub implementation to demonstrate the architecture.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol};
+use serde::{Serialize, Deserialize};
+
+/// A file edit as part of a refactoring operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEdit {
+    pub file_path: PathBuf,
+    pub edits: Vec<TextEdit>,
+}
+
+/// A single text edit
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEdit {
+    pub start: usize,
+    pub end: usize,
+    pub new_text: String,
+}
+
+/// Result of a refactoring operation
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RefactorResult {
+    pub file_edits: Vec<FileEdit>,
+    pub description: String,
+    pub warnings: Vec<String>,
+}
+
+/// Workspace-wide refactoring provider
+pub struct WorkspaceRefactor {
+    index: WorkspaceIndex,
+}
+
+impl WorkspaceRefactor {
+    pub fn new(index: WorkspaceIndex) -> Self {
+        Self { index }
+    }
+
+    /// Rename a symbol across all files (stub implementation)
+    pub fn rename_symbol(
+        &self,
+        old_name: &str,
+        new_name: &str,
+        _file_path: &Path,
+        _position: (usize, usize),
+    ) -> Result<RefactorResult, String> {
+        // Stub implementation
+        Ok(RefactorResult {
+            file_edits: vec![],
+            description: format!("Rename '{}' to '{}'", old_name, new_name),
+            warnings: vec![],
+        })
+    }
+
+    /// Extract selected code into a new module (stub implementation)
+    pub fn extract_module(
+        &self,
+        file_path: &Path,
+        start_line: usize,
+        end_line: usize,
+        module_name: &str,
+    ) -> Result<RefactorResult, String> {
+        // Stub implementation
+        Ok(RefactorResult {
+            file_edits: vec![],
+            description: format!(
+                "Extract {} lines from {} into module '{}'",
+                end_line - start_line + 1,
+                file_path.display(),
+                module_name
+            ),
+            warnings: vec![],
+        })
+    }
+
+    /// Optimize imports across the workspace (stub implementation)
+    pub fn optimize_imports(&self) -> Result<RefactorResult, String> {
+        // Stub implementation
+        Ok(RefactorResult {
+            file_edits: vec![],
+            description: "Optimize imports across workspace".to_string(),
+            warnings: vec![],
+        })
+    }
+
+    /// Move a subroutine to another module (stub implementation)
+    pub fn move_subroutine(
+        &self,
+        sub_name: &str,
+        from_file: &Path,
+        to_module: &str,
+    ) -> Result<RefactorResult, String> {
+        // Stub implementation
+        Ok(RefactorResult {
+            file_edits: vec![],
+            description: format!(
+                "Move subroutine '{}' from {} to module '{}'",
+                sub_name,
+                from_file.display(),
+                to_module
+            ),
+            warnings: vec![],
+        })
+    }
+
+    /// Inline a variable across its scope (stub implementation)
+    pub fn inline_variable(
+        &self,
+        var_name: &str,
+        file_path: &Path,
+        _position: (usize, usize),
+    ) -> Result<RefactorResult, String> {
+        // Stub implementation
+        Ok(RefactorResult {
+            file_edits: vec![],
+            description: format!("Inline variable '{}' in {}", var_name, file_path.display()),
+            warnings: vec![],
+        })
+    }
+}
