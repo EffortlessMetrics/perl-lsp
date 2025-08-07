@@ -1,4 +1,4 @@
-use crate::ast::{Node, NodeKind, SourceLocation};
+use crate::ast::Node;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {

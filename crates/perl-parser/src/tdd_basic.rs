@@ -2,7 +2,7 @@
 //!
 //! Simplified TDD implementation focused on core red-green-refactor cycle
 
-use crate::ast::{Node, NodeKind, SourceLocation};
+use crate::ast::{Node, NodeKind};
 use crate::diagnostics::Diagnostic;
 
 /// Basic test generator

@@ -88,6 +88,7 @@ pub mod scope_analyzer;
 pub mod pragma_tracker;
 
 pub use ast::{Node, NodeKind, SourceLocation};
+pub use pragma_tracker::{PragmaTracker, PragmaState};
 pub use error::{ParseError, ParseResult};
 pub use parser::Parser;
 pub use recovery_parser::RecoveryParser;

@@ -1,7 +1,4 @@
-use crate::diagnostics::{Diagnostic, DiagnosticSeverity};
-use crate::ast::{Node, NodeKind};
-use crate::Parser;
-use std::collections::HashMap;
+use crate::diagnostics::Diagnostic;
 
 /// Represents a code action (quick-fix) that can be applied to resolve a diagnostic
 #[derive(Debug, Clone)]

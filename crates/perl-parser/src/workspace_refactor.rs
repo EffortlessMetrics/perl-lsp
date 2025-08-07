@@ -3,9 +3,8 @@
 //! This module provides refactoring capabilities that span multiple files.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol};
+use crate::workspace_index::WorkspaceIndex;
 use serde::{Serialize, Deserialize};
 
 /// A file edit as part of a refactoring operation

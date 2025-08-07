@@ -1,5 +1,5 @@
 use crate::ast::{Node, NodeKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Represents a Perl type

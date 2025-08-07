@@ -6,7 +6,6 @@ use std::process::{Command, Stdio};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
-use crate::perltidy::{PerlTidyFormatter, PerlTidyConfig};
 
 /// Text edit for formatting
 #[derive(Debug, Clone, Serialize, Deserialize)]

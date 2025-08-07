@@ -3,7 +3,7 @@
 //! This module provides an extended Edit type that includes the new text
 //! being inserted, enabling efficient incremental parsing with subtree reuse.
 
-use crate::position::{Position, Range};
+use crate::position::Position;
 
 /// Enhanced edit with text content for incremental parsing
 #[derive(Debug, Clone, PartialEq)]
