@@ -1,0 +1,161 @@
+#[cfg(test)]
+mod scope_analyzer_tests {
+    use perl_parser::scope_analyzer::{ScopeAnalyzer, ScopeIssue, IssueKind};
+    
+    #[test]
+    fn test_detect_variable_shadowing() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $x = 10;
+            {
+                my $x = 20;  # This shadows the outer $x
+                print $x;
+            }
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, IssueKind::VariableShadowing);
+        assert_eq!(issues[0].variable_name, "$x");
+        assert_eq!(issues[0].line, 4);
+    }
+    
+    #[test]
+    fn test_detect_unused_variable() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $unused = 42;
+            my $used = 10;
+            print $used;
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, IssueKind::UnusedVariable);
+        assert_eq!(issues[0].variable_name, "$unused");
+    }
+    
+    #[test]
+    fn test_detect_undeclared_variable() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            use strict;
+            my $declared = 10;
+            print $undeclared;  # This is not declared
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, IssueKind::UndeclaredVariable);
+        assert_eq!(issues[0].variable_name, "$undeclared");
+    }
+    
+    #[test]
+    fn test_multiple_scope_levels() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $outer = 1;
+            {
+                my $middle = 2;
+                {
+                    my $inner = 3;
+                    print $outer, $middle, $inner;
+                }
+                print $middle;  # $inner not accessible here
+            }
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 0);  // No issues, all variables properly scoped
+    }
+    
+    #[test]
+    fn test_for_loop_scope() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            for my $i (1..10) {
+                print $i;
+            }
+            # $i should not be accessible here
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 0);  // Loop variable is properly scoped
+    }
+    
+    #[test]
+    fn test_subroutine_parameters() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            sub process {
+                my ($a, $b) = @_;
+                return $a + $b;
+            }
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 0);  // Parameters are used
+    }
+    
+    #[test]
+    fn test_package_variables() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            package MyPackage;
+            our $package_var = 10;
+            my $lexical_var = 20;
+            
+            sub get_package { return $package_var; }
+            sub get_lexical { return $lexical_var; }
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 0);  // Both variables are used
+    }
+    
+    #[test]
+    fn test_variable_reassignment() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $x = 10;
+            $x = 20;  # Reassignment
+            my $x = 30;  # Redeclaration in same scope - issue!
+            print $x;
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, IssueKind::VariableRedeclaration);
+    }
+    
+    #[test]
+    fn test_closure_captures() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $captured = 10;
+            my $sub = sub {
+                return $captured * 2;  # Captures outer variable
+            };
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        assert_eq!(issues.len(), 0);  // $captured is used in closure
+    }
+    
+    #[test]
+    fn test_get_suggestions() {
+        let analyzer = ScopeAnalyzer::new();
+        let code = r#"
+            my $x = 10;
+            {
+                my $x = 20;
+            }
+        "#;
+        
+        let issues = analyzer.analyze(code);
+        let suggestions = analyzer.get_suggestions(&issues);
+        
+        assert!(!suggestions.is_empty());
+        assert!(suggestions[0].contains("rename"));
+    }
+}
