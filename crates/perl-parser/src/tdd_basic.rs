@@ -401,6 +401,7 @@ pub struct TddResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SourceLocation;
 
     #[test]
     fn test_test_generation() {

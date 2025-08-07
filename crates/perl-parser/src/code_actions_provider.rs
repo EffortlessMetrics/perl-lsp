@@ -545,6 +545,7 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DiagnosticSeverity;
 
     #[test]
     fn test_undefined_variable_fix() {

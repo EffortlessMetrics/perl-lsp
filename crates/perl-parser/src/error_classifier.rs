@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{Node, NodeKind, SourceLocation};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
@@ -184,7 +184,7 @@ impl ErrorClassifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Parser;
+    use crate::{Parser, NodeKind, SourceLocation};
 
     #[test]
     fn test_classify_unclosed_string() {
