@@ -75,6 +75,9 @@ pub mod semantic_tokens_provider;
 pub mod call_hierarchy_provider;
 pub mod inlay_hints_provider;
 pub mod test_runner;
+// pub mod test_generator;  // TODO: Fix compilation
+// pub mod tdd_workflow;    // TODO: Fix compilation
+pub mod tdd_basic;
 pub mod performance;
 pub mod debug_adapter;
 

@@ -51,6 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Built-in formatter for when perltidy is not available
   - Formatting suggestions without applying changes
 
+- **TDD Workflow Support** - Test-Driven Development features
+  - Automatic test generation for subroutines
+  - Support for Test::More, Test2::V0, Test::Simple, Test::Class
+  - Red-green-refactor cycle management
+  - Cyclomatic complexity analysis for refactoring suggestions
+  - Method length analysis (>50 lines triggers suggestions)
+  - Parameter count analysis (>5 parameters triggers suggestions)
+  - Coverage tracking and diagnostics integration
+
 ### Improved
 - **Code Quality**: Fixed 81 clippy warnings across perl-lexer and perl-parser (61% reduction)
   - Eliminated 45+ unnecessary `.clone()` calls on Copy types for better performance

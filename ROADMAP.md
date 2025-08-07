@@ -112,6 +112,11 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - [x] Quick fixes for violations
   - [x] Import optimization across workspace
   - [x] Dead code detection
+- [x] **TDD Workflow Support** ✅ **COMPLETED**
+  - [x] Test generation for subroutines (Test::More, Test2::V0)
+  - [x] Red-green-refactor cycle management
+  - [x] Refactoring suggestions with complexity analysis
+  - [x] Coverage tracking and diagnostics
 - [ ] **Documentation & Tutorials**
   - [ ] Video tutorial series
   - [ ] Migration guide from other Perl tools
