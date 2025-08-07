@@ -40,6 +40,7 @@ pub mod edit;
 pub mod error;
 pub mod error_classifier;
 pub mod error_recovery;
+pub mod code_actions_provider;
 pub mod formatting;
 pub mod incremental;
 pub mod incremental_document;
@@ -118,6 +119,12 @@ pub use type_inference::{
     TypeConstraint, TypeLocation, TypeBasedCompletion
 };
 pub use scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue};
+pub use code_actions_provider::{
+    CodeActionsProvider as CodeActionsProviderV2, 
+    CodeAction as CodeActionV2, 
+    CodeActionKind as CodeActionKindV2,
+    TextEdit as TextEditV2
+};
 
 #[cfg(test)]
 mod tests {
