@@ -1,4 +1,4 @@
-use crate::ast::Node;
+use crate::ast::{Node, NodeKind, SourceLocation};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
@@ -192,7 +192,10 @@ mod tests {
         let source = r#"my $x = "hello"#;
         let mut parser = Parser::new(source);
         let ast = parser.parse().unwrap_or_else(|_| {
-            Node::new(NodeKind::Error, 0, source.len())
+            Node::new(
+                NodeKind::Error { message: "Parse error".to_string() },
+                SourceLocation { start: 0, end: source.len() }
+            )
         });
         
         // Find error nodes
@@ -211,17 +214,31 @@ mod tests {
         let source = "my $x = 42\nmy $y = 10";
         
         // Simulate an error node at the end of first line
-        let error = Node::new(NodeKind::Error, 10, 11);
+        let error = Node::new(
+            NodeKind::Error { message: "".to_string() },
+            SourceLocation { start: 10, end: 11 }
+        );
         let kind = classifier.classify(&error, source);
         assert_eq!(kind, ParseErrorKind::MissingSemicolon);
     }
 
     fn find_errors(node: &Node, errors: &mut Vec<Node>) {
-        if matches!(node.kind(), NodeKind::Error) {
+        if matches!(&node.kind, NodeKind::Error { .. }) {
             errors.push(node.clone());
         }
-        for child in node.children() {
-            find_errors(child, errors);
+        // Recursively check children based on node kind
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    find_errors(stmt, errors);
+                }
+            }
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    find_errors(stmt, errors);
+                }
+            }
+            _ => {} // Other node types don't have children we need to check
         }
     }
 }

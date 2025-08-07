@@ -7,6 +7,7 @@ use crate::{
     Parser, 
     DiagnosticsProvider, DiagnosticSeverity as InternalDiagnosticSeverity,
     CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
+    CodeActionsProviderV2, CodeActionKindV2 as InternalCodeActionKindV2,
     CompletionProvider, CompletionItemKind,
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
@@ -558,44 +559,77 @@ impl LspServer {
                     let diag_provider = DiagnosticsProvider::new(ast, doc.content.clone());
                     let diagnostics = diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
                     
-                    // Get code actions
+                    // Get code actions from both providers
+                    let mut code_actions: Vec<Value> = Vec::new();
+                    
+                    // Get quick-fixes from the V2 provider (diagnostic-based)
+                    let provider_v2 = CodeActionsProviderV2::new(doc.content.clone());
+                    let quick_fixes = provider_v2.get_code_actions((start_offset, end_offset), &diagnostics);
+                    
+                    for action in quick_fixes {
+                        let mut changes = HashMap::new();
+                        let (start_line, start_char) = self.offset_to_position(&doc.content, action.edit.range.0);
+                        let (end_line, end_char) = self.offset_to_position(&doc.content, action.edit.range.1);
+                        
+                        let edits = vec![json!({
+                            "range": {
+                                "start": {"line": start_line, "character": start_char},
+                                "end": {"line": end_line, "character": end_char},
+                            },
+                            "newText": action.edit.new_text,
+                        })];
+                        changes.insert(uri.to_string(), edits);
+                        
+                        code_actions.push(json!({
+                            "title": action.title,
+                            "kind": match action.kind {
+                                InternalCodeActionKindV2::QuickFix => "quickfix",
+                                InternalCodeActionKindV2::Refactor => "refactor",
+                                InternalCodeActionKindV2::RefactorExtract => "refactor.extract",
+                                InternalCodeActionKindV2::RefactorInline => "refactor.inline",
+                                InternalCodeActionKindV2::RefactorRewrite => "refactor.rewrite",
+                            },
+                            "edit": {
+                                "changes": changes,
+                            },
+                        }));
+                    }
+                    
+                    // Get refactorings from the original provider (AST-based)
                     let provider = CodeActionsProvider::new(doc.content.clone());
                     let actions = provider.get_code_actions(ast, (start_offset, end_offset), &diagnostics);
 
-                    let code_actions: Vec<Value> = actions
-                        .into_iter()
-                        .map(|action| {
-                            let mut changes = HashMap::new();
-                            let edits: Vec<Value> = action.edit.changes
-                                .into_iter()
-                                .map(|edit| {
-                                    let (start_line, start_char) = self.offset_to_position(&doc.content, edit.location.start);
-                                    let (end_line, end_char) = self.offset_to_position(&doc.content, edit.location.end);
-                                    json!({
-                                        "range": {
-                                            "start": {"line": start_line, "character": start_char},
-                                            "end": {"line": end_line, "character": end_char},
-                                        },
-                                        "newText": edit.new_text,
-                                    })
+                    for action in actions {
+                        let mut changes = HashMap::new();
+                        let edits: Vec<Value> = action.edit.changes
+                            .into_iter()
+                            .map(|edit| {
+                                let (start_line, start_char) = self.offset_to_position(&doc.content, edit.location.start);
+                                let (end_line, end_char) = self.offset_to_position(&doc.content, edit.location.end);
+                                json!({
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "newText": edit.new_text,
                                 })
-                                .collect();
-                            changes.insert(uri.to_string(), edits);
-
-                            json!({
-                                "title": action.title,
-                                "kind": match action.kind {
-                                    InternalCodeActionKind::QuickFix => "quickfix",
-                                    InternalCodeActionKind::Refactor => "refactor",
-                                    InternalCodeActionKind::RefactorExtract => "refactor.extract",
-                                    _ => "quickfix",
-                                },
-                                "edit": {
-                                    "changes": changes,
-                                },
                             })
-                        })
-                        .collect();
+                            .collect();
+                        changes.insert(uri.to_string(), edits);
+
+                        code_actions.push(json!({
+                            "title": action.title,
+                            "kind": match action.kind {
+                                InternalCodeActionKind::QuickFix => "quickfix",
+                                InternalCodeActionKind::Refactor => "refactor",
+                                InternalCodeActionKind::RefactorExtract => "refactor.extract",
+                                _ => "quickfix",
+                            },
+                            "edit": {
+                                "changes": changes,
+                            },
+                        }));
+                    }
 
                     eprintln!("Returning {} code actions", code_actions.len());
                     return Ok(Some(json!(code_actions)));
