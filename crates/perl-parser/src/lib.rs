@@ -85,6 +85,7 @@ pub mod debug_adapter;
 pub mod modernize;
 pub mod modernize_refactored;
 pub mod scope_analyzer;
+pub mod pragma_tracker;
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};

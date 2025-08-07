@@ -1,5 +1,6 @@
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
+use crate::pragma_tracker::{PragmaTracker, PragmaState, StrictCategory};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -129,9 +130,12 @@ impl ScopeAnalyzer {
         match parser.parse() {
             Ok(ast) => {
                 let root_scope = Rc::new(Scope::new());
-                let strict_mode = code.contains("use strict");
                 
-                self.analyze_node(&ast, &root_scope, &mut issues, code, strict_mode);
+                // Use pragma tracker to get accurate strict state
+                let mut pragma_tracker = PragmaTracker::new();
+                let pragma_map = pragma_tracker.analyze(&ast);
+                
+                self.analyze_node(&ast, &root_scope, &mut issues, code, &pragma_map);
                 
                 // Collect all unused variables from all scopes
                 self.collect_unused_variables(&root_scope, &mut issues, code);
@@ -144,7 +148,12 @@ impl ScopeAnalyzer {
         issues
     }
 
-    fn analyze_node(&self, node: &Node, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str, strict_mode: bool) {
+    fn analyze_node(&self, node: &Node, scope: &Rc<Scope>, issues: &mut Vec<ScopeIssue>, code: &str, pragma_map: &HashMap<usize, PragmaState>) {
+        // Get effective pragma state at this line
+        let pragma_tracker = PragmaTracker::new();
+        let line = self.get_line_from_position(node.location.start, code);
+        let pragma_state = pragma_tracker.get_state_at_line(line, pragma_map);
+        let strict_mode = pragma_state.is_strict(StrictCategory::Subs);
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, .. } => {
                 let var_name = self.extract_variable_name(variable);
@@ -213,7 +222,7 @@ impl ScopeAnalyzer {
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, issues, code, strict_mode);
+                    self.analyze_node(stmt, &block_scope, issues, code, pragma_map);
                 }
                 self.collect_unused_variables(&block_scope, issues, code);
             }
@@ -222,15 +231,15 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, issues, code, strict_mode);
+                    self.analyze_node(init_node, &loop_scope, issues, code, pragma_map);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, issues, code, strict_mode);
+                    self.analyze_node(cond, &loop_scope, issues, code, pragma_map);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, issues, code, strict_mode);
+                    self.analyze_node(upd, &loop_scope, issues, code, pragma_map);
                 }
-                self.analyze_node(body, &loop_scope, issues, code, strict_mode);
+                self.analyze_node(body, &loop_scope, issues, code, pragma_map);
                 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -239,9 +248,9 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
                 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, issues, code, strict_mode);
-                self.analyze_node(list, &loop_scope, issues, code, strict_mode);
-                self.analyze_node(body, &loop_scope, issues, code, strict_mode);
+                self.analyze_node(variable, &loop_scope, issues, code, pragma_map);
+                self.analyze_node(list, &loop_scope, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, issues, code, pragma_map);
                 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -281,7 +290,7 @@ impl ScopeAnalyzer {
                     }
                 }
                 
-                self.analyze_node(body, &sub_scope, issues, code, strict_mode);
+                self.analyze_node(body, &sub_scope, issues, code, pragma_map);
                 
                 // Check for unused parameters
                 for param in params {
@@ -306,7 +315,7 @@ impl ScopeAnalyzer {
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
-                    self.analyze_node(child, scope, issues, code, strict_mode);
+                    self.analyze_node(child, scope, issues, code, pragma_map);
                 }
             }
         }
@@ -338,6 +347,10 @@ impl ScopeAnalyzer {
 
     fn get_line_from_node(&self, node: &Node, code: &str) -> usize {
         self.get_line_number(code, node.location.start)
+    }
+    
+    fn get_line_from_position(&self, offset: usize, code: &str) -> usize {
+        self.get_line_number(code, offset)
     }
 
     fn get_line_number(&self, code: &str, offset: usize) -> usize {
