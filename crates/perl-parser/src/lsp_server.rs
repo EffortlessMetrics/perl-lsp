@@ -355,13 +355,11 @@ impl LspServer {
                 let mut parser = Parser::new(text);
                 match parser.parse() {
                     Ok(ast) => {
-                        eprintln!("Parse successful for {}", uri);
                         let arc_ast = Arc::new(ast);
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), vec![])
                     },
                     Err(e) => {
-                        eprintln!("Parse failed for {}: {:?}", uri, e);
                         (None, vec![e])
                     },
                 }
@@ -696,12 +694,12 @@ impl LspServer {
             
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
-                    
-                    // Find the function call context at this position
-                    if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
-                        // Try to get signature from user-defined functions first
+                let offset = self.position_to_offset(&doc.content, line, character);
+                
+                // Find the function call context at this position
+                if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
+                    // Try to get signature from user-defined functions first (if AST exists)
+                    if let Some(ref ast) = doc.ast {
                         if let Some(signature) = self.get_user_function_signature(ast, &function_name) {
                             return Ok(Some(json!({
                                 "signatures": [signature],
@@ -709,16 +707,27 @@ impl LspServer {
                                 "activeParameter": active_param
                             })));
                         }
-                        
-                        // Fall back to built-in functions
-                        if let Some(signature) = self.get_function_signature(&function_name) {
-                            return Ok(Some(json!({
-                                "signatures": [signature],
-                                "activeSignature": 0,
-                                "activeParameter": active_param
-                            })));
-                        }
                     }
+                    
+                    // Fall back to built-in functions
+                    if let Some(signature) = self.get_function_signature(&function_name) {
+                        return Ok(Some(json!({
+                            "signatures": [signature],
+                            "activeSignature": 0,
+                            "activeParameter": active_param
+                        })));
+                    }
+                    
+                    // If no signature found, return a generic one
+                    return Ok(Some(json!({
+                        "signatures": [json!({
+                            "label": format!("{}(...)", function_name),
+                            "documentation": null,
+                            "parameters": []
+                        })],
+                        "activeSignature": 0,
+                        "activeParameter": active_param
+                    })));
                 }
             }
         }
@@ -1482,13 +1491,10 @@ impl LspServer {
             
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                eprintln!("DEBUG: Document found for {}", uri);
                 if let Some(ref ast) = doc.ast {
-                    eprintln!("DEBUG: AST exists, root kind: {:?}", std::mem::discriminant(&ast.kind));
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
-                    eprintln!("DEBUG: Extracted {} folding ranges", ranges.len());
                     
                     // Convert to LSP JSON format with proper line offsets
                     let mut lsp_ranges = Vec::new();
@@ -1515,7 +1521,15 @@ impl LspServer {
                         }
                     }
                     
+                    // If no ranges from AST, try fallback
+                    if lsp_ranges.is_empty() {
+                        return Ok(Some(json!(self.extract_folding_fallback(&doc.content))));
+                    }
+                    
                     return Ok(Some(json!(lsp_ranges)));
+                } else {
+                    // No AST, use fallback
+                    return Ok(Some(json!(self.extract_folding_fallback(&doc.content))));
                 }
             }
         }
@@ -1529,6 +1543,113 @@ impl LspServer {
             .chars()
             .filter(|&c| c == '\n')
             .count()
+    }
+    
+    /// Fallback folding extraction using text-based analysis
+    fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
+        let mut ranges = Vec::new();
+        let lines: Vec<&str> = content.lines().collect();
+        let mut brace_stack: Vec<usize> = Vec::new();
+        let mut sub_start: Option<usize> = None;
+        let mut pod_start: Option<usize> = None;
+        
+        for (line_num, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            
+            // Handle POD sections
+            if trimmed.starts_with("=") {
+                if trimmed == "=cut" {
+                    if let Some(start) = pod_start {
+                        if line_num > start {
+                            ranges.push(json!({
+                                "startLine": start,
+                                "endLine": line_num,
+                                "kind": "comment"
+                            }));
+                        }
+                        pod_start = None;
+                    }
+                } else if pod_start.is_none() {
+                    pod_start = Some(line_num);
+                }
+                continue;
+            }
+            
+            // Skip if we're in POD
+            if pod_start.is_some() {
+                continue;
+            }
+            
+            // Handle subroutines
+            if trimmed.starts_with("sub ") {
+                // If we had a previous sub, close it
+                if let Some(start) = sub_start {
+                    if line_num > start + 1 {
+                        ranges.push(json!({
+                            "startLine": start,
+                            "endLine": line_num - 1
+                        }));
+                    }
+                }
+                sub_start = Some(line_num);
+            }
+            
+            // Count braces (simple approach, doesn't handle strings/comments perfectly)
+            let mut in_string = false;
+            let mut escape_next = false;
+            let mut prev_char = ' ';
+            
+            for ch in line.chars() {
+                if escape_next {
+                    escape_next = false;
+                    prev_char = ch;
+                    continue;
+                }
+                
+                if ch == '\\' {
+                    escape_next = true;
+                    prev_char = ch;
+                    continue;
+                }
+                
+                // Simple string detection (not perfect but good enough)
+                if ch == '"' || ch == '\'' {
+                    if !in_string || prev_char != '\\' {
+                        in_string = !in_string;
+                    }
+                }
+                
+                if !in_string {
+                    if ch == '{' {
+                        brace_stack.push(line_num);
+                    } else if ch == '}' {
+                        if let Some(start_line) = brace_stack.pop() {
+                            // Only create fold if it spans multiple lines
+                            if line_num > start_line {
+                                ranges.push(json!({
+                                    "startLine": start_line,
+                                    "endLine": line_num
+                                }));
+                            }
+                        }
+                    }
+                }
+                
+                prev_char = ch;
+            }
+        }
+        
+        // Close any remaining sub
+        if let Some(start) = sub_start {
+            if lines.len() > start + 1 {
+                ranges.push(json!({
+                    "startLine": start,
+                    "endLine": lines.len() - 1
+                }));
+            }
+        }
+        
+        ranges
     }
     
     /// Fallback symbol extraction using regex when parser fails
