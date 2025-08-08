@@ -81,6 +81,10 @@ jobs:
         cargo test -p perl-parser --test lsp_formatting_test
         cargo test -p perl-parser --test lsp_master_integration_test
     
+    - name: Run LSP smoke test
+      run: scripts/lsp-smoke.sh
+      if: matrix.os == 'ubuntu-latest'
+    
     - name: Run all parser tests
       run: cargo test --all --verbose
     
