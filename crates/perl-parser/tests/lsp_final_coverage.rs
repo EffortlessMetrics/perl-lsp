@@ -83,7 +83,7 @@ fn test_user_story_advanced_debugging() {
     ctx.initialize();
 
     // Complex Perl application with debugging needs
-    let debug_target_code = r#"
+    let _debug_target_code = r#"
 #!/usr/bin/perl
 use strict;
 use warnings;
@@ -229,7 +229,7 @@ main() unless caller;
         "console": "integratedTerminal"
     });
 
-    let session_id = ctx.start_debug_session(debug_config);
+    let _session_id = ctx.start_debug_session(debug_config);
     println!("✓ Debug session configuration works");
 
     // TEST 2: Breakpoint Validation
@@ -308,7 +308,7 @@ fn test_user_story_workspace_configuration() {
     println!("\n=== Testing Workspace Configuration ===");
 
     // TEST 1: Project-specific Perl Configuration
-    let perl_project_config = r#"
+    let _perl_project_config = r#"
 {
     "perl.executable": "/usr/local/bin/perl",
     "perl.includePaths": [
@@ -341,7 +341,7 @@ fn test_user_story_workspace_configuration() {
     println!("✓ Project-specific Perl configuration works");
 
     // TEST 2: .perlcriticrc Integration
-    let perlcritic_config = r#"
+    let _perlcritic_config = r#"
 # Perl::Critic configuration
 severity = 3
 only = 1
@@ -370,7 +370,7 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
     println!("✓ .perlcriticrc integration works");
 
     // TEST 3: .perltidyrc Integration  
-    let perltidy_config = r#"
+    let _perltidy_config = r#"
 # Perl::Tidy configuration
 -pbp     # Perl Best Practices
 -nola    # don't outdent labels
@@ -468,7 +468,7 @@ fn test_user_story_custom_snippets() {
     println!("✓ Built-in Perl snippets work");
 
     // TEST 2: Custom Project Snippets
-    let custom_snippets = r#"
+    let _custom_snippets = r#"
 {
     "Moose Class": {
         "prefix": "mooseclass",

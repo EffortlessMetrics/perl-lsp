@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use serde_json::{json, Value};
 
 /// Test context helper for missing user stories
+#[allow(dead_code)]
 struct MissingStoryTestContext {
     server_pid: Option<u32>,
     open_documents: HashMap<String, String>,

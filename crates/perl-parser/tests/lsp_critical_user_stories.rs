@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Extended test context for additional user stories
+#[allow(dead_code)]
 struct ExtendedTestContext {
     workspace_files: HashMap<String, String>,
     diagnostics: Vec<Value>,
