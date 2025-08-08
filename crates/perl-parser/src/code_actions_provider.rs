@@ -55,7 +55,7 @@ impl CodeActionsProvider {
         // Match on diagnostic code to provide appropriate fixes
         if let Some(code) = &diagnostic.code {
             match code.as_str() {
-                "undefined-variable" => {
+                "undefined-variable" | "undeclared-variable" => {
                     actions.extend(self.fix_undefined_variable(diagnostic));
                 }
                 "unused-variable" => {
