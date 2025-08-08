@@ -10,6 +10,7 @@ use crate::{
     CodeActionsProviderV2, CodeActionKindV2 as InternalCodeActionKindV2,
     CompletionProvider, CompletionItemKind,
     document_highlight::{DocumentHighlightProvider, DocumentHighlight, DocumentHighlightKind},
+    type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
@@ -236,6 +237,9 @@ impl LspServer {
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
+            "textDocument/prepareTypeHierarchy" => self.handle_prepare_type_hierarchy(request.params),
+            "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
+            "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
             "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
@@ -293,6 +297,7 @@ impl LspServer {
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "documentHighlightProvider": true,
+                "typeHierarchyProvider": true,
                 "signatureHelpProvider": {
                     "triggerCharacters": ["(", ","]
                 },
@@ -1290,6 +1295,215 @@ impl LspServer {
                         }).collect();
                         
                         return Ok(Some(json!(lsp_highlights)));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/prepareTypeHierarchy request
+    fn handle_prepare_type_hierarchy(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Create type hierarchy provider
+                    let provider = TypeHierarchyProvider::new();
+                    
+                    // Prepare type hierarchy at the position
+                    if let Some(items) = provider.prepare(ast, &doc.content, offset) {
+                        let lsp_items: Vec<Value> = items.iter().map(|item| {
+                            json!({
+                                "name": item.name,
+                                "kind": item.kind as u32,
+                                "uri": uri,
+                                "range": {
+                                    "start": {
+                                        "line": item.range.start.line,
+                                        "character": item.range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.range.end.line,
+                                        "character": item.range.end.character,
+                                    },
+                                },
+                                "selectionRange": {
+                                    "start": {
+                                        "line": item.selection_range.start.line,
+                                        "character": item.selection_range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.selection_range.end.line,
+                                        "character": item.selection_range.end.character,
+                                    },
+                                },
+                                "detail": item.detail,
+                                "data": {
+                                    "uri": uri,
+                                    "name": item.name,
+                                },
+                            })
+                        }).collect();
+                        
+                        return Ok(Some(json!(lsp_items)));
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+
+    /// Handle typeHierarchy/supertypes request
+    fn handle_type_hierarchy_supertypes(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(item) = params.get("item") {
+                let uri = item["data"]["uri"].as_str().unwrap_or("");
+                let name = item["data"]["name"].as_str().unwrap_or("");
+                
+                let documents = self.documents.lock().unwrap();
+                if let Some(doc) = documents.get(uri) {
+                    if let Some(ref ast) = doc.ast {
+                        // Create type hierarchy provider
+                        let provider = TypeHierarchyProvider::new();
+                        
+                        // Create item from request
+                        let type_item = crate::type_hierarchy::TypeHierarchyItem {
+                            name: name.to_string(),
+                            kind: crate::type_hierarchy::SymbolKind::Class,
+                            uri: uri.to_string(),
+                            range: crate::type_hierarchy::Range {
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                            },
+                            selection_range: crate::type_hierarchy::Range {
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                            },
+                            detail: None,
+                            data: None,
+                        };
+                        
+                        // Find supertypes
+                        let supertypes = provider.find_supertypes(ast, &type_item);
+                        
+                        let lsp_items: Vec<Value> = supertypes.iter().map(|item| {
+                            json!({
+                                "name": item.name,
+                                "kind": item.kind as u32,
+                                "uri": uri,
+                                "range": {
+                                    "start": {
+                                        "line": item.range.start.line,
+                                        "character": item.range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.range.end.line,
+                                        "character": item.range.end.character,
+                                    },
+                                },
+                                "selectionRange": {
+                                    "start": {
+                                        "line": item.selection_range.start.line,
+                                        "character": item.selection_range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.selection_range.end.line,
+                                        "character": item.selection_range.end.character,
+                                    },
+                                },
+                                "detail": item.detail,
+                                "data": {
+                                    "uri": uri,
+                                    "name": item.name,
+                                },
+                            })
+                        }).collect();
+                        
+                        return Ok(Some(json!(lsp_items)));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle typeHierarchy/subtypes request
+    fn handle_type_hierarchy_subtypes(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(item) = params.get("item") {
+                let uri = item["data"]["uri"].as_str().unwrap_or("");
+                let name = item["data"]["name"].as_str().unwrap_or("");
+                
+                let documents = self.documents.lock().unwrap();
+                if let Some(doc) = documents.get(uri) {
+                    if let Some(ref ast) = doc.ast {
+                        // Create type hierarchy provider
+                        let provider = TypeHierarchyProvider::new();
+                        
+                        // Create item from request
+                        let type_item = crate::type_hierarchy::TypeHierarchyItem {
+                            name: name.to_string(),
+                            kind: crate::type_hierarchy::SymbolKind::Class,
+                            uri: uri.to_string(),
+                            range: crate::type_hierarchy::Range {
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                            },
+                            selection_range: crate::type_hierarchy::Range {
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                            },
+                            detail: None,
+                            data: None,
+                        };
+                        
+                        // Find subtypes
+                        let subtypes = provider.find_subtypes(ast, &type_item);
+                        
+                        let lsp_items: Vec<Value> = subtypes.iter().map(|item| {
+                            json!({
+                                "name": item.name,
+                                "kind": item.kind as u32,
+                                "uri": uri,
+                                "range": {
+                                    "start": {
+                                        "line": item.range.start.line,
+                                        "character": item.range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.range.end.line,
+                                        "character": item.range.end.character,
+                                    },
+                                },
+                                "selectionRange": {
+                                    "start": {
+                                        "line": item.selection_range.start.line,
+                                        "character": item.selection_range.start.character,
+                                    },
+                                    "end": {
+                                        "line": item.selection_range.end.line,
+                                        "character": item.selection_range.end.character,
+                                    },
+                                },
+                                "detail": item.detail,
+                                "data": {
+                                    "uri": uri,
+                                    "name": item.name,
+                                },
+                            })
+                        }).collect();
+                        
+                        return Ok(Some(json!(lsp_items)));
                     }
                 }
             }
