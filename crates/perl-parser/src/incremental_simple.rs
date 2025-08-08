@@ -188,8 +188,8 @@ impl SimpleIncrementalParser {
             _ => false,
         }
     }
-    #[allow(clippy::only_used_in_recursion)]
     
+    #[allow(clippy::only_used_in_recursion)]
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1;
         

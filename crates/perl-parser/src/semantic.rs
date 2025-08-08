@@ -615,7 +615,7 @@ print $x;
         let x_tokens: Vec<_> = tokens.iter()
             .filter(|t| matches!(t.token_type, SemanticTokenType::Variable | SemanticTokenType::VariableDeclaration))
             .collect();
-        assert!(x_tokens.len() >= 1);
+        assert!(!x_tokens.is_empty());
         assert!(x_tokens[0].modifiers.contains(&SemanticTokenModifier::Declaration));
     }
     

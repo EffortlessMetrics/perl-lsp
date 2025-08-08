@@ -7,7 +7,7 @@ use perl_parser::{
     incremental_edit::IncrementalEdit,
 };
 use std::time::Instant;
-use colored::*;
+use yansi::Paint;
 
 fn main() {
     println!("🚀 {} {}", "Incremental Parsing Demo".bold().cyan(), "- Achieving <1ms updates".yellow());

@@ -1,6 +1,5 @@
 //! Test full package example
 use perl_parser::Parser;
-use perl_lexer::PerlLexer;
 
 fn main() {
     let input = r#"package Bar {
@@ -16,7 +15,7 @@ fn main() {
     println!("Character at position 112: {:?}", input.chars().nth(112));
     
     // Show context
-    let start = 100.max(0);
+    let start = 100;
     let end = 125.min(input.len());
     println!("\nContext around position 112:");
     println!("{}", &input[start..end]);

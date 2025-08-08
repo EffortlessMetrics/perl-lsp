@@ -94,7 +94,7 @@ impl Tree {
     pub fn find_nodes_in_range(&self, start: usize, end: usize) -> Vec<&Node> {
         let mut nodes = Vec::new();
         
-        for (_pos, refs) in &self.node_positions {
+        for refs in self.node_positions.values() {
             for node_ref in refs {
                 let loc = &node_ref.node.location;
                 if loc.start < end && loc.end > start {

@@ -619,7 +619,7 @@ sub test_another_thing {
             }
             
             // Should find at least 1 test (file or functions)
-            assert!(tests.len() >= 1);
+            assert!(!tests.is_empty());
             
             // Should have found test functions
             let test_functions: Vec<&str> = tests.iter()
@@ -651,7 +651,7 @@ done_testing();
             let tests = runner.discover_tests(&ast);
             
             // Should find test file with assertions
-            assert!(tests.len() >= 1);
+            assert!(!tests.is_empty());
             
             // Should have discovered individual assertions
             let all_tests: Vec<&TestItem> = tests.iter()
@@ -669,7 +669,7 @@ done_testing();
             }
             
             // Should have found the test file
-            assert!(tests.len() >= 1);
+            assert!(!tests.is_empty());
             assert_eq!(tests[0].kind, TestKind::File);
         }
     }

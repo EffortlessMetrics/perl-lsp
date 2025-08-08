@@ -403,7 +403,7 @@ impl IncrementalDocument {
     fn cache_subtrees(&mut self) {
         self.subtree_cache.clear();
         let root = self.root.clone();
-        self.cache_node(&*root);
+        self.cache_node(&root);
     }
     
     fn cache_node(&mut self, node: &Node) {
@@ -586,7 +586,7 @@ mod tests {
         let doc = IncrementalDocument::new(source.to_string()).unwrap();
         
         // Cache should have entries
-        assert!(doc.subtree_cache.by_range.len() > 0);
-        assert!(doc.subtree_cache.by_content.len() > 0);
+        assert!(!doc.subtree_cache.by_range.is_empty());
+        assert!(!doc.subtree_cache.by_content.is_empty());
     }
 }

@@ -94,7 +94,7 @@ my $hash = { key => value };  # These barewords should also be flagged
         .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
         .collect();
     
-    assert!(bareword_errors.len() > 0);
+    assert!(!bareword_errors.is_empty());
     assert!(bareword_errors[0].message.contains("Bareword"));
     assert!(bareword_errors[0].message.contains("not allowed"));
 }

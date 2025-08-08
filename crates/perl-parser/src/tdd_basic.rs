@@ -126,6 +126,12 @@ pub struct RefactoringAnalyzer {
     max_params: usize,
 }
 
+impl Default for RefactoringAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RefactoringAnalyzer {
     pub fn new() -> Self {
         Self {

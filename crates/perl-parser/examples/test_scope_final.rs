@@ -1,4 +1,4 @@
-use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+use perl_parser::{Parser, scope_analyzer::{ScopeAnalyzer, IssueKind}};
 
 fn main() {
     let tests = vec![
@@ -79,7 +79,19 @@ fn main() {
         print!("Testing {}: ", name);
         
         let analyzer = ScopeAnalyzer::new();
-        let issues = analyzer.analyze(code);
+        
+        // Parse the code first
+        let mut parser = Parser::new(code);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(_) => {
+                println!("❌ FAIL - Could not parse code");
+                failed += 1;
+                continue;
+            }
+        };
+        
+        let issues = analyzer.analyze(&ast, code, &[]);
         
         let relevant_issues: Vec<_> = issues.iter()
             .filter(|i| i.kind == expected_kind)

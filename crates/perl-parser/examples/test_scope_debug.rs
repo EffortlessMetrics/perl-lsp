@@ -23,7 +23,18 @@ print $y;"#;
     }
     
     // Now analyze with scope analyzer
-    let issues = analyzer.analyze(code);
+    // Need to parse first to get AST
+    let mut parser2 = Parser::new(code);
+    let ast = match parser2.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            println!("Failed to parse for analysis: {:?}", e);
+            return;
+        }
+    };
+    
+    // Analyze with empty pragma map (will be inferred from code)
+    let issues = analyzer.analyze(&ast, code, &[]);
     
     println!("Detected {} issues:", issues.len());
     for issue in &issues {

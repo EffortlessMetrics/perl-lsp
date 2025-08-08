@@ -178,14 +178,14 @@ impl<'a> TokenStream<'a> {
     /// Consume and return the next token
     pub fn next(&mut self) -> ParseResult<Token> {
         // If we have a peeked token, return it and move peeked_second to peeked
-        let result = if let Some(token) = self.peeked.take() {
+        
+        
+        if let Some(token) = self.peeked.take() {
             self.peeked = self.peeked_second.take();
             Ok(token)
         } else {
             self.next_token()
-        };
-        
-        result
+        }
     }
     
     /// Check if we're at the end of input
@@ -216,7 +216,7 @@ impl<'a> TokenStream<'a> {
         // Skip whitespace and comments
         loop {
             let lexer_token = self.lexer.next_token()
-                .ok_or_else(|| ParseError::UnexpectedEof)?;
+                .ok_or(ParseError::UnexpectedEof)?;
             
             match &lexer_token.token_type {
                 LexerTokenType::Whitespace | LexerTokenType::Newline => continue,

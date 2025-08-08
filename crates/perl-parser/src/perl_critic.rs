@@ -180,7 +180,7 @@ impl CriticAnalyzer {
                 severity: Severity::from_number(severity),
                 range: Range {
                     start: Position { byte: 0, line: line_num - 1, column: column - 1 },
-                    end: Position { byte: 0, line: line_num - 1, column: column },
+                    end: Position { byte: 0, line: line_num - 1, column },
                 },
                 file: file_path.to_string(),
             });
@@ -220,7 +220,7 @@ impl CriticAnalyzer {
                 Some(QuickFix {
                     title: "Remove unused variable".to_string(),
                     edit: TextEdit {
-                        range: violation.range.clone(),
+                        range: violation.range,
                         new_text: String::new(),
                     },
                 })
@@ -229,7 +229,7 @@ impl CriticAnalyzer {
                 Some(QuickFix {
                     title: "Remove unused subroutine".to_string(),
                     edit: TextEdit {
-                        range: violation.range.clone(),
+                        range: violation.range,
                         new_text: String::new(),
                     },
                 })

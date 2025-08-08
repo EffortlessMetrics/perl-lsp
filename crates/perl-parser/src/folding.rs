@@ -25,6 +25,12 @@ pub enum FoldingRangeKind {
     Region,
 }
 
+impl Default for FoldingRangeExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FoldingRangeExtractor {
     pub fn new() -> Self {
         Self {

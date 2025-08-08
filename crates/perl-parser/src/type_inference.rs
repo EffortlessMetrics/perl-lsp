@@ -69,6 +69,12 @@ pub struct TypeEnvironment {
     parent: Option<Box<TypeEnvironment>>,
 }
 
+impl Default for TypeEnvironment {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeEnvironment {
     pub fn new() -> Self {
         Self {
@@ -117,6 +123,12 @@ pub struct TypeInferenceEngine {
     builtins: HashMap<String, PerlType>,
     /// Type aliases from use statements
     type_aliases: HashMap<String, PerlType>,
+}
+
+impl Default for TypeInferenceEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeInferenceEngine {
@@ -257,7 +269,7 @@ impl TypeInferenceEngine {
             NodeKind::Undef => Ok(Scalar(Undef)),
             
             NodeKind::Variable { name, .. } => {
-                let base_name = name.trim_start_matches(|c| c == '$' || c == '@' || c == '%' || c == '*');
+                let base_name = name.trim_start_matches(['$', '@', '%', '*']);
                 
                 if name.starts_with('$') {
                     // Scalar variable
@@ -448,7 +460,7 @@ impl TypeInferenceEngine {
                 
                 // Register variable with inferred type
                 if let NodeKind::Variable { name, .. } = &variable.kind {
-                    let base_name = name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+                    let base_name = name.trim_start_matches(['$', '@', '%']);
                     env.set_variable(base_name.to_string(), init_type.clone());
                 }
                 
@@ -509,7 +521,7 @@ impl TypeInferenceEngine {
     fn extract_var_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { name, .. } => {
-                name.trim_start_matches(|c| c == '$' || c == '@' || c == '%').to_string()
+                name.trim_start_matches(['$', '@', '%']).to_string()
             }
             _ => String::new()
         }

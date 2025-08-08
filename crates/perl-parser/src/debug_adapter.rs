@@ -130,6 +130,12 @@ struct Variable {
     indexed_variables: Option<i32>,
 }
 
+impl Default for DebugAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugAdapter {
     /// Create a new debug adapter
     pub fn new() -> Self {

@@ -32,6 +32,12 @@ pub struct CommandResult {
 /// Execute command provider
 pub struct ExecuteCommandProvider;
 
+impl Default for ExecuteCommandProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecuteCommandProvider {
     /// Create a new execute command provider
     pub fn new() -> Self {

@@ -97,6 +97,12 @@ pub struct IncrementalParser {
     changed_regions: Vec<(usize, usize)>,
 }
 
+impl Default for IncrementalParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IncrementalParser {
     pub fn new() -> Self {
         Self {
@@ -218,6 +224,12 @@ pub struct SymbolIndex {
 struct SymbolTrie {
     children: HashMap<char, Box<SymbolTrie>>,
     symbols: Vec<String>,
+}
+
+impl Default for SymbolIndex {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SymbolIndex {

@@ -57,6 +57,12 @@ pub struct WorkspaceSymbolsProvider {
     documents: HashMap<String, Vec<SymbolInfo>>,
 }
 
+impl Default for WorkspaceSymbolsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkspaceSymbolsProvider {
     /// Create a new workspace symbols provider
     pub fn new() -> Self {
@@ -77,7 +83,7 @@ impl WorkspaceSymbolsProvider {
             for symbol in symbol_list {
                 symbols.push(SymbolInfo {
                     name: name.clone(),
-                    kind: symbol.kind.clone(),
+                    kind: symbol.kind,
                     location: symbol.location,
                     container: None, // TODO: Track containing package/class
                 });

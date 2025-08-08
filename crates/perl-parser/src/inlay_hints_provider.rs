@@ -464,7 +464,7 @@ print("Hello, World!");
                 .collect();
             
             // Should have some parameter hints, but skip clear ones
-            assert!(param_hints.len() >= 1);
+            assert!(!param_hints.is_empty());
         }
     }
 }

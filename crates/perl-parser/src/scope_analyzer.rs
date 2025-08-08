@@ -118,6 +118,12 @@ impl Scope {
 
 pub struct ScopeAnalyzer;
 
+impl Default for ScopeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScopeAnalyzer {
     pub fn new() -> Self {
         Self
@@ -490,10 +496,8 @@ fn is_builtin_global(name: &str) -> bool {
     }
     
     // Numbered capture variables ($1, $2, etc.)
-    if name.starts_with('$') && name.len() > 1 {
-        if name[1..].chars().all(|c| c.is_ascii_digit()) {
-            return true;
-        }
+    if name.starts_with('$') && name.len() > 1 && name[1..].chars().all(|c| c.is_ascii_digit()) {
+        return true;
     }
     
     false

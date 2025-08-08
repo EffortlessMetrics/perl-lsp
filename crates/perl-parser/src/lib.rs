@@ -187,7 +187,7 @@ mod tests {
             
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
-                assert!(statements.len() >= 1);
+                assert!(!statements.is_empty());
                 if let NodeKind::Binary { op, .. } = &statements[0].kind {
                     assert_eq!(op, expected_op);
                 } else {

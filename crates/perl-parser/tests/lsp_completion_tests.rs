@@ -585,7 +585,7 @@ MyModule::"#
     
     let items = response["result"].as_array().unwrap();
     // Since package completion is TODO, this might be empty for now
-    assert!(items.is_empty() || items.len() > 0, "Package completion handling");
+    assert!(items.is_empty() || !items.is_empty(), "Package completion handling");
 }
 
 /// Test snippet expansion in completions

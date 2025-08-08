@@ -239,13 +239,10 @@ impl CallHierarchyProvider {
 
     /// Find a function by name
     fn find_function_by_name<'a>(&self, node: &'a Node, target_name: &str) -> Option<&'a Node> {
-        match &node.kind {
-            NodeKind::Subroutine { name, .. } => {
-                if name.as_ref() == Some(&target_name.to_string()) {
-                    return Some(node);
-                }
+        if let NodeKind::Subroutine { name, .. } = &node.kind {
+            if name.as_ref() == Some(&target_name.to_string()) {
+                return Some(node);
             }
-            _ => {}
         }
 
         self.visit_children(node, |child| {

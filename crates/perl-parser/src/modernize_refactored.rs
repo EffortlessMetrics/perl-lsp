@@ -124,8 +124,7 @@ impl PerlModernizer {
     }
     
     fn check_bareword_filehandle(&self, code: &str) -> Option<ModernizationSuggestion> {
-        if let Some(pos) = code.find("open FH") {
-            Some(ModernizationSuggestion {
+        code.find("open FH").map(|pos| ModernizationSuggestion {
                 old_pattern: "open FH".to_string(),
                 new_pattern: "open my $fh".to_string(),
                 description: "Use lexical filehandles instead of barewords".to_string(),
@@ -133,9 +132,6 @@ impl PerlModernizer {
                 start: pos,
                 end: pos + 7,
             })
-        } else {
-            None
-        }
     }
     
     fn check_two_arg_open(&self, code: &str) -> Option<ModernizationSuggestion> {
