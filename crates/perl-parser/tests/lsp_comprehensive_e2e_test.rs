@@ -1227,8 +1227,10 @@ foreach my $user (@$users) {
     
     // Hover might not have docs for external modules
     if let Some(h) = hover {
-        let obj = h.as_object().expect("hover should be object");
-        assert!(obj.contains_key("contents"), "Hover must have contents");
+        if !h.is_null() {
+            let obj = h.as_object().expect("hover should be object");
+            assert!(obj.contains_key("contents"), "Hover must have contents");
+        }
     }
     
     // Step 4: Developer finds all uses of $DEBUG
