@@ -21,7 +21,7 @@ struct TestContext {
 
 impl TestContext {
     fn new() -> Self {
-        let mut server = LspServer::new();
+        let server = LspServer::new();
         Self {
             server,
             documents: HashMap::new(),
@@ -1385,7 +1385,7 @@ print "Sum: $sum\n";
     ctx.open_document("file:///test/legacy_proc.pl", legacy);
     
     // Step 2: Get refactoring suggestions
-    let actions = ctx.send_request("textDocument/codeAction", Some(json!({
+    let _actions = ctx.send_request("textDocument/codeAction", Some(json!({
         "textDocument": {
             "uri": "file:///test/legacy_proc.pl"
         },

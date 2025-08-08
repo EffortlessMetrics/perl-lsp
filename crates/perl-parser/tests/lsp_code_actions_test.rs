@@ -103,7 +103,7 @@ fn test_parse_error_semicolon_fix() {
     
     // Parse the code (will have error)
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap_or_else(|_| {
+    let _ast = parser.parse().unwrap_or_else(|_| {
         // Create error node for test
         perl_parser::Node {
             kind: perl_parser::NodeKind::Program { statements: vec![] },

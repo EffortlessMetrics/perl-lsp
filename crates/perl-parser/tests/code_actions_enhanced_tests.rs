@@ -1,7 +1,7 @@
 use perl_parser::{
     Parser, DiagnosticsProvider
 };
-use perl_parser::code_actions_provider::{CodeActionsProvider as CodeActionsProviderV2, CodeActionKind as CodeActionKindV2};
+use perl_parser::code_actions_provider::CodeActionsProvider as CodeActionsProviderV2;
 
 #[test]
 fn test_duplicate_parameter_code_actions() {

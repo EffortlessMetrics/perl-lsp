@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod modernize_perl_tests {
     // Test both implementations
-    use perl_parser::modernize::{PerlModernizer, ModernizationSuggestion};
-    use perl_parser::modernize_refactored::{PerlModernizer as RefactoredModernizer, ModernizationSuggestion as RefactoredSuggestion};
+    use perl_parser::modernize::PerlModernizer;
     
     #[test]
     fn test_modernize_bareword_filehandles() {
