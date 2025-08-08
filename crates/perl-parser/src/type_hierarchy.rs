@@ -1,5 +1,6 @@
 use crate::ast::{Node, NodeKind};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Represents a type in the hierarchy
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,12 +33,200 @@ pub struct Position {
     pub character: u32,
 }
 
+/// Index for tracking package hierarchy relationships
+#[derive(Default, Debug)]
+struct HierarchyIndex {
+    /// Map from child package to its parent packages
+    parents: BTreeMap<String, BTreeSet<String>>,
+    /// Map from parent package to its child packages
+    children: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl HierarchyIndex {
+    fn add_inheritance(&mut self, child: &str, parent: &str) {
+        self.parents.entry(child.to_string())
+            .or_default()
+            .insert(parent.to_string());
+        self.children.entry(parent.to_string())
+            .or_default()
+            .insert(child.to_string());
+    }
+    
+    fn get_parents(&self, package: &str) -> Vec<String> {
+        self.parents.get(package)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+    
+    fn get_children(&self, package: &str) -> Vec<String> {
+        self.children.get(package)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+}
+
 /// Provider for type hierarchy (inheritance) information
 pub struct TypeHierarchyProvider;
 
 impl TypeHierarchyProvider {
     pub fn new() -> Self {
         Self
+    }
+    
+    /// Build a hierarchy index from the AST
+    fn build_hierarchy_index(&self, ast: &Node) -> HierarchyIndex {
+        let mut index = HierarchyIndex::default();
+        let mut current_package = "main".to_string();
+        
+        // Walk the AST in order, tracking package scope
+        self.index_hierarchy_recursive(ast, &mut index, &mut current_package);
+        
+        index
+    }
+    
+    fn index_hierarchy_recursive(&self, node: &Node, index: &mut HierarchyIndex, current_package: &mut String) {
+        match &node.kind {
+            NodeKind::Package { name, block } => {
+                if block.is_some() {
+                    // Block form: package Foo { ... }
+                    // Save current package, process block, restore
+                    let saved_package = current_package.clone();
+                    *current_package = name.clone();
+                    if let Some(blk) = block {
+                        self.index_hierarchy_recursive(blk, index, current_package);
+                    }
+                    *current_package = saved_package;
+                } else {
+                    // Linear form: package Foo;
+                    // Changes package scope for subsequent statements
+                    *current_package = name.clone();
+                }
+            }
+            NodeKind::Use { module, args, .. } => {
+                if module == "parent" || module == "base" {
+                    for arg in args {
+                        for parent in self.normalize_parent_arg(arg) {
+                            index.add_inheritance(current_package, &parent);
+                        }
+                    }
+                }
+            }
+            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+                if declarator == "our" {
+                    if let NodeKind::Variable { sigil, name: var_name } = &variable.kind {
+                        if sigil == "@" && var_name == "ISA" {
+                            if let Some(init) = initializer {
+                                for parent in self.extract_isa_parents(init) {
+                                    index.add_inheritance(current_package, &parent);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+                if declarator == "our" {
+                    // Check if any variable is @ISA
+                    for var in variables {
+                        if let NodeKind::Variable { sigil, name: var_name } = &var.kind {
+                            if sigil == "@" && var_name == "ISA" {
+                                if let Some(init) = initializer {
+                                    for parent in self.extract_isa_parents(init) {
+                                        index.add_inheritance(current_package, &parent);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.index_hierarchy_recursive(stmt, index, current_package);
+                }
+            }
+            _ => {
+                // Recurse into other nodes
+                if let Some(children) = self.get_children(node) {
+                    for child in children {
+                        self.index_hierarchy_recursive(child, index, current_package);
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Normalize parent argument (handle quotes, qw(), etc.)
+    fn normalize_parent_arg(&self, arg: &str) -> Vec<String> {
+        let arg = arg.trim();
+        
+        // Handle qw(Base Other)
+        if arg.starts_with("qw(") && arg.ends_with(')') {
+            let content = &arg[3..arg.len()-1];
+            return content.split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
+        }
+        
+        // Handle qw{Base Other}, qw[Base Other], etc.
+        if arg.starts_with("qw") && arg.len() > 2 {
+            let delim_start = arg.chars().nth(2).unwrap_or(' ');
+            let delim_end = match delim_start {
+                '(' => ')',
+                '{' => '}',
+                '[' => ']',
+                '<' => '>',
+                _ => delim_start,
+            };
+            if let Some(start) = arg.find(delim_start) {
+                if let Some(end) = arg.rfind(delim_end) {
+                    let content = &arg[start+1..end];
+                    return content.split_whitespace()
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+            }
+        }
+        
+        // Remove quotes
+        let clean = arg.trim_matches('"').trim_matches('\'').trim_matches('`');
+        vec![clean.to_string()]
+    }
+    
+    /// Extract parent classes from @ISA initialization
+    fn extract_isa_parents(&self, node: &Node) -> Vec<String> {
+        let mut parents = Vec::new();
+        
+        match &node.kind {
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    match &elem.kind {
+                        NodeKind::String { value, .. } => {
+                            for parent in self.normalize_parent_arg(value) {
+                                parents.push(parent);
+                            }
+                        }
+                        NodeKind::Identifier { name } => {
+                            // Bareword
+                            parents.push(name.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            NodeKind::String { value, .. } => {
+                for parent in self.normalize_parent_arg(value) {
+                    parents.push(parent);
+                }
+            }
+            NodeKind::Identifier { name } => {
+                // Bareword
+                parents.push(name.clone());
+            }
+            _ => {}
+        }
+        
+        parents
     }
 
     /// Prepare type hierarchy at position
@@ -78,25 +267,50 @@ impl TypeHierarchyProvider {
 
     /// Find supertypes (parent classes) via @ISA
     pub fn find_supertypes(&self, ast: &Node, item: &TypeHierarchyItem) -> Vec<TypeHierarchyItem> {
-        let mut supertypes = Vec::new();
+        let index = self.build_hierarchy_index(ast);
+        let parents = index.get_parents(&item.name);
         
-        // Look for @ISA assignments for this package
-        self.find_isa_relationships(ast, &item.name, &mut supertypes);
-        
-        // Look for 'use parent' or 'use base' declarations
-        self.find_parent_pragmas(ast, &item.name, &mut supertypes);
-        
-        supertypes
+        parents.into_iter().map(|name| {
+            TypeHierarchyItem {
+                name,
+                kind: SymbolKind::Class,
+                uri: "file:///current".to_string(),
+                range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
+                },
+                selection_range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
+                },
+                detail: Some("Parent Class".to_string()),
+                data: None,
+            }
+        }).collect()
     }
 
     /// Find subtypes (child classes) that inherit from this class
     pub fn find_subtypes(&self, ast: &Node, item: &TypeHierarchyItem) -> Vec<TypeHierarchyItem> {
-        let mut subtypes = Vec::new();
+        let index = self.build_hierarchy_index(ast);
+        let children = index.get_children(&item.name);
         
-        // Find all packages that have this class in their @ISA
-        self.find_inheritors(ast, &item.name, &mut subtypes);
-        
-        subtypes
+        children.into_iter().map(|name| {
+            TypeHierarchyItem {
+                name,
+                kind: SymbolKind::Class,
+                uri: "file:///current".to_string(),
+                range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
+                },
+                selection_range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
+                },
+                detail: Some("Subclass".to_string()),
+                data: None,
+            }
+        }).collect()
     }
 
     // Helper methods
@@ -153,24 +367,6 @@ impl TypeHierarchyProvider {
         false
     }
 
-    fn find_in_ast<F>(&self, node: &Node, predicate: F) -> bool
-    where
-        F: Fn(&Node) -> bool + Copy,
-    {
-        if predicate(node) {
-            return true;
-        }
-        
-        if let Some(children) = self.get_children(node) {
-            for child in children {
-                if self.find_in_ast(child, predicate) {
-                    return true;
-                }
-            }
-        }
-        
-        false
-    }
 
     fn create_type_item(&self, name: &str, node: &Node, code: &str, kind: SymbolKind) -> TypeHierarchyItem {
         TypeHierarchyItem {
@@ -222,243 +418,6 @@ impl TypeHierarchyProvider {
         (line, col)
     }
 
-    fn find_isa_relationships(&self, node: &Node, package_name: &str, results: &mut Vec<TypeHierarchyItem>) {
-        // Look for patterns like: @PackageName::ISA = qw(Parent1 Parent2);
-        // or: push @PackageName::ISA, 'Parent';
-        self.traverse_for_isa(node, package_name, results);
-    }
-
-    fn traverse_for_isa(&self, node: &Node, package_name: &str, results: &mut Vec<TypeHierarchyItem>) {
-        match &node.kind {
-            NodeKind::Assignment { lhs, rhs, .. } => {
-                // Check if LHS is @ISA variable
-                if let NodeKind::Variable { sigil, name } = &lhs.kind {
-                    if sigil == "@" && (name.ends_with("::ISA") || name == "ISA") {
-                        // Extract parent class names from RHS
-                        self.extract_parent_classes(rhs, results);
-                    }
-                }
-            }
-            NodeKind::FunctionCall { name, args } => {
-                // Check for push @ISA, 'Parent'
-                if name == "push" && !args.is_empty() {
-                    if let NodeKind::Variable { sigil, name: var_name } = &args[0].kind {
-                        if sigil == "@" && (var_name.ends_with("::ISA") || var_name == "ISA") {
-                            // Extract parent from remaining arguments
-                            for arg in &args[1..] {
-                                if let NodeKind::String { value, .. } = &arg.kind {
-                                    results.push(TypeHierarchyItem {
-                                        name: value.clone(),
-                                        kind: SymbolKind::Class,
-                                        uri: "file:///current".to_string(),
-                                        range: Range {
-                                            start: Position { line: 0, character: 0 },
-                                            end: Position { line: 0, character: 0 },
-                                        },
-                                        selection_range: Range {
-                                            start: Position { line: 0, character: 0 },
-                                            end: Position { line: 0, character: 0 },
-                                        },
-                                        detail: Some("Parent Class".to_string()),
-                                        data: None,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        // Recurse into children
-        if let Some(children) = self.get_children(node) {
-            for child in children {
-                self.traverse_for_isa(child, package_name, results);
-            }
-        }
-    }
-
-    fn extract_parent_classes(&self, node: &Box<Node>, results: &mut Vec<TypeHierarchyItem>) {
-        match &node.kind {
-            NodeKind::ArrayLiteral { elements } => {
-                for element in elements {
-                    if let NodeKind::String { value, .. } = &element.kind {
-                        results.push(TypeHierarchyItem {
-                            name: value.clone(),
-                            kind: SymbolKind::Class,
-                            uri: "file:///current".to_string(),
-                            range: Range {
-                                start: Position { line: 0, character: 0 },
-                                end: Position { line: 0, character: 0 },
-                            },
-                            selection_range: Range {
-                                start: Position { line: 0, character: 0 },
-                                end: Position { line: 0, character: 0 },
-                            },
-                            detail: Some("Parent Class".to_string()),
-                            data: None,
-                        });
-                    }
-                }
-            }
-            NodeKind::String { value, .. } => {
-                results.push(TypeHierarchyItem {
-                    name: value.clone(),
-                    kind: SymbolKind::Class,
-                    uri: "file:///current".to_string(),
-                    range: Range {
-                        start: Position { line: 0, character: 0 },
-                        end: Position { line: 0, character: 0 },
-                    },
-                    selection_range: Range {
-                        start: Position { line: 0, character: 0 },
-                        end: Position { line: 0, character: 0 },
-                    },
-                    detail: Some("Parent Class".to_string()),
-                    data: None,
-                });
-            }
-            _ => {}
-        }
-    }
-
-    fn find_parent_pragmas(&self, node: &Node, _package_name: &str, results: &mut Vec<TypeHierarchyItem>) {
-        // Look for 'use parent' or 'use base' declarations
-        self.traverse_for_parent_pragmas(node, results);
-    }
-
-    fn traverse_for_parent_pragmas(&self, node: &Node, results: &mut Vec<TypeHierarchyItem>) {
-        if let NodeKind::Use { module, args, .. } = &node.kind {
-            if module == "parent" || module == "base" {
-                // Extract parent classes from arguments
-                for arg in args {
-                    // Remove quotes from the argument
-                    let name = arg.trim_matches('\'').trim_matches('"').to_string();
-                    results.push(TypeHierarchyItem {
-                        name,
-                        kind: SymbolKind::Class,
-                        uri: "file:///current".to_string(),
-                        range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
-                        },
-                        selection_range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
-                        },
-                        detail: Some("Parent Class (via pragma)".to_string()),
-                        data: None,
-                    });
-                }
-            }
-        }
-
-        // Recurse
-        if let Some(children) = self.get_children(node) {
-            for child in children {
-                self.traverse_for_parent_pragmas(child, results);
-            }
-        }
-    }
-
-    fn find_inheritors(&self, node: &Node, parent_name: &str, results: &mut Vec<TypeHierarchyItem>) {
-        // Find all packages that inherit from parent_name
-        self.traverse_for_inheritors(node, parent_name, results, None);
-    }
-
-    fn traverse_for_inheritors(&self, node: &Node, parent_name: &str, results: &mut Vec<TypeHierarchyItem>, current_package: Option<String>) {
-        let mut package = current_package;
-        
-        // Track current package context
-        if let NodeKind::Package { name, .. } = &node.kind {
-            package = Some(name.clone());
-        }
-        if let NodeKind::Class { name, .. } = &node.kind {
-            package = Some(name.clone());
-        }
-
-        // Check for ISA relationships
-        match &node.kind {
-            NodeKind::Assignment { lhs, rhs, .. } => {
-                if let NodeKind::Variable { sigil, name: var_name } = &lhs.kind {
-                    if sigil == "@" && (var_name == "ISA" || var_name.ends_with("::ISA")) {
-                        // Check if parent_name is in the RHS
-                        if self.contains_parent(rhs, parent_name) {
-                            if let Some(pkg) = &package {
-                                results.push(TypeHierarchyItem {
-                                    name: pkg.clone(),
-                                    kind: SymbolKind::Class,
-                                    uri: "file:///current".to_string(),
-                                    range: Range {
-                                        start: Position { line: 0, character: 0 },
-                                        end: Position { line: 0, character: 0 },
-                                    },
-                                    selection_range: Range {
-                                        start: Position { line: 0, character: 0 },
-                                        end: Position { line: 0, character: 0 },
-                                    },
-                                    detail: Some("Subclass".to_string()),
-                                    data: None,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            NodeKind::Use { module, args, .. } => {
-                if (module == "parent" || module == "base") && !args.is_empty() {
-                    for arg in args {
-                        // Remove quotes from the argument
-                        let clean_arg = arg.trim_matches('\'').trim_matches('"');
-                        if clean_arg == parent_name {
-                            if let Some(pkg) = &package {
-                                results.push(TypeHierarchyItem {
-                                    name: pkg.clone(),
-                                    kind: SymbolKind::Class,
-                                    uri: "file:///current".to_string(),
-                                    range: Range {
-                                        start: Position { line: 0, character: 0 },
-                                        end: Position { line: 0, character: 0 },
-                                    },
-                                    selection_range: Range {
-                                        start: Position { line: 0, character: 0 },
-                                        end: Position { line: 0, character: 0 },
-                                    },
-                                    detail: Some("Subclass (via pragma)".to_string()),
-                                    data: None,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        // Recurse with current package context
-        if let Some(children) = self.get_children(node) {
-            for child in children {
-                self.traverse_for_inheritors(child, parent_name, results, package.clone());
-            }
-        }
-    }
-
-    fn contains_parent(&self, node: &Box<Node>, parent_name: &str) -> bool {
-        match &node.kind {
-            NodeKind::String { value, .. } => value == parent_name,
-            NodeKind::ArrayLiteral { elements } => {
-                elements.iter().any(|e| {
-                    if let NodeKind::String { value, .. } = &e.kind {
-                        value == parent_name
-                    } else {
-                        false
-                    }
-                })
-            }
-            _ => false,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -508,10 +467,10 @@ our @ISA = qw(Parent1 Parent2);
         let items = items.unwrap();
         assert_eq!(items[0].name, "Child");
         
-        // Find supertypes - This test may fail if qw() is not parsed correctly
+        // Find supertypes - qw() parsing needs AST improvements
         let supertypes = provider.find_supertypes(&ast, &items[0]);
-        // For now, just check that the function runs without panic
-        assert!(supertypes.len() >= 0);
+        // Just verify it doesn't panic for now
+        let _ = supertypes.len();
     }
 
     #[test]
@@ -523,6 +482,9 @@ use parent 'Base';
 
 package Derived2;
 our @ISA = ('Base');
+
+package Unrelated;
+use parent 'Other';
 "#;
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
@@ -547,9 +509,66 @@ our @ISA = ('Base');
         
         // Find subtypes
         let subtypes = provider.find_subtypes(&ast, &base_item);
-        // The current parser doesn't maintain package scope context well,
-        // so this test just checks that the method runs without panic
-        // TODO: Fix when package scoping is improved
-        assert!(subtypes.len() >= 0);
+        assert_eq!(subtypes.len(), 2, "Should find exactly 2 subtypes");
+        
+        let subtype_names: Vec<String> = subtypes.iter().map(|t| t.name.clone()).collect();
+        assert!(subtype_names.contains(&"Derived1".to_string()), "Should find Derived1");
+        assert!(subtype_names.contains(&"Derived2".to_string()), "Should find Derived2");
+        assert!(!subtype_names.contains(&"Unrelated".to_string()), "Should not find Unrelated");
+    }
+    
+    #[test]
+    fn test_qw_parsing() {
+        let code = r#"package Multi;
+our @ISA = qw(Parent1 Parent2 Parent3);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = TypeHierarchyProvider::new();
+        
+        let items = provider.prepare(&ast, code, 8);
+        assert!(items.is_some());
+        let items = items.unwrap();
+        assert_eq!(items[0].name, "Multi");
+        
+        // Find supertypes - should handle qw() properly
+        let supertypes = provider.find_supertypes(&ast, &items[0]);
+        // For now just check it doesn't panic - full qw() support needs AST improvements
+        let _ = supertypes.len();
+    }
+    
+    #[test]
+    fn test_block_form_packages() {
+        let code = r#"package Outer {
+    package Inner;
+    use parent 'Outer';
+}
+package Other;
+use parent 'Outer';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = TypeHierarchyProvider::new();
+        
+        let outer_item = TypeHierarchyItem {
+            name: "Outer".to_string(),
+            kind: SymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: Range {
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
+            },
+            selection_range: Range {
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
+            },
+            detail: None,
+            data: None,
+        };
+        
+        // Find subtypes - should handle block form packages
+        let subtypes = provider.find_subtypes(&ast, &outer_item);
+        // Both Inner and Other inherit from Outer
+        assert_eq!(subtypes.len(), 2, "Should find both Inner and Other as subtypes");
     }
 }
