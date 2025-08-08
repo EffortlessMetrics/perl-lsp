@@ -20,6 +20,7 @@ use support::*;
 struct TestContext {
     server: LspServer,
     documents: HashMap<String, String>,
+    #[allow(dead_code)]
     workspace_root: String,
     request_id: i32,
 }
