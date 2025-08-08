@@ -1,0 +1,195 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test-coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+      
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --workspace --lcov --output-path lcov.info
+          cargo llvm-cov report --workspace
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
+
+  tautology-check:
+    name: Tautology Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check for tautological assertions
+        run: |
+          echo "Checking for tautological test patterns..."
+          
+          # Check for always-true assertions
+          if grep -r "assert!(.*\.is_some() || .*\.is_none())" tests/; then
+            echo "❌ Found tautological assertions (is_some || is_none)"
+            exit 1
+          fi
+          
+          # Check for redundant boolean checks
+          if grep -r "assert!(true)" tests/; then
+            echo "❌ Found assert!(true)"
+            exit 1
+          fi
+          
+          # Check for empty assertions
+          if grep -r "assert!(.*\.len() >= 0)" tests/; then
+            echo "❌ Found tautological length check (>= 0)"
+            exit 1
+          fi
+          
+          echo "✅ No tautological patterns found"
+
+  dependency-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Run security audit
+        run: cargo audit
+
+  semver-check:
+    name: API Compatibility
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks
+      
+      - name: Check API compatibility
+        run: cargo semver-checks check-release -p perl-parser
+
+  clippy-strict:
+    name: Clippy (Strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      
+      - name: Run clippy with strict settings
+        run: |
+          cargo clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::all \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo \
+            -A clippy::module_name_repetitions \
+            -A clippy::must_use_candidate \
+            -A clippy::missing_errors_doc \
+            -A clippy::missing_panics_doc
+
+  test-determinism:
+    name: Test Determinism
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Run tests multiple times
+        run: |
+          echo "Running tests 5 times to check determinism..."
+          for i in {1..5}; do
+            echo "Run $i:"
+            cargo test -p perl-parser --quiet 2>&1 | tee run_$i.log
+          done
+          
+          # Check that all runs had the same output
+          for i in {2..5}; do
+            if ! diff -q run_1.log run_$i.log > /dev/null; then
+              echo "❌ Test output differs between runs"
+              diff run_1.log run_$i.log
+              exit 1
+            fi
+          done
+          
+          echo "✅ Tests are deterministic"
+
+  mutation-testing:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail the build, just report
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants
+      
+      - name: Run mutation testing
+        run: |
+          cargo mutants -p perl-parser --timeout 60 --jobs 2 || true
+          echo "Mutation testing complete (informational only)"
+
+  test-metrics:
+    name: Test Metrics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Generate test metrics
+        run: |
+          echo "## Test Metrics Report" > test_metrics.md
+          echo "" >> test_metrics.md
+          
+          # Count test functions
+          echo "### Test Count by File" >> test_metrics.md
+          find tests -name "*.rs" -exec sh -c 'echo "- $(basename {}): $(grep -c "#\[test\]" {} || echo 0) tests"' \; >> test_metrics.md
+          
+          # Count assertions
+          echo "" >> test_metrics.md
+          echo "### Assertion Count" >> test_metrics.md
+          echo "- Total assertions: $(grep -r "assert" tests/ | wc -l)" >> test_metrics.md
+          echo "- assert! calls: $(grep -r "assert!(" tests/ | wc -l)" >> test_metrics.md
+          echo "- assert_eq! calls: $(grep -r "assert_eq!(" tests/ | wc -l)" >> test_metrics.md
+          echo "- Custom assertions: $(grep -r "assert_.*(" tests/support/ | wc -l)" >> test_metrics.md
+          
+          cat test_metrics.md
+      
+      - name: Upload metrics
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-metrics
+          path: test_metrics.md

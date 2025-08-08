@@ -59,6 +59,7 @@ pub fn assert_hover_has_text(v: &Option<Value>) {
 }
 
 /// Assert completion response has items with proper structure
+#[allow(dead_code)]
 pub fn assert_completion_has_items(v: &Option<Value>) {
     if let Some(comp) = v {
         if !comp.is_null() {
