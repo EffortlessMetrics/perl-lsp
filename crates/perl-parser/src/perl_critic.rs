@@ -214,7 +214,7 @@ impl CriticAnalyzer {
     }
     
     /// Get quick fix for a violation
-    pub fn get_quick_fix(&self, violation: &Violation, content: &str) -> Option<QuickFix> {
+    pub fn get_quick_fix(&self, violation: &Violation, _content: &str) -> Option<QuickFix> {
         match violation.policy.as_str() {
             "Variables::ProhibitUnusedVariables" => {
                 Some(QuickFix {
@@ -303,7 +303,7 @@ impl Policy for RequireUseStrict {
         Severity::Harsh
     }
     
-    fn analyze(&self, ast: &Node, content: &str) -> Vec<Violation> {
+    fn analyze(&self, _ast: &Node, content: &str) -> Vec<Violation> {
         // Check if 'use strict' is present
         if !content.contains("use strict") {
             vec![Violation {
@@ -335,7 +335,7 @@ impl Policy for RequireUseWarnings {
         Severity::Harsh
     }
     
-    fn analyze(&self, ast: &Node, content: &str) -> Vec<Violation> {
+    fn analyze(&self, _ast: &Node, content: &str) -> Vec<Violation> {
         if !content.contains("use warnings") {
             vec![Violation {
                 policy: self.name().to_string(),

@@ -383,7 +383,7 @@ impl TypeInferenceEngine {
                 }
             }
             
-            NodeKind::FunctionCall { name, args } => {
+            NodeKind::FunctionCall { name, args: _ } => {
                 let func_name = name.clone();
                 
                 // Check built-in functions
