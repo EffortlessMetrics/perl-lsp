@@ -123,9 +123,7 @@ impl DiagnosticsProvider {
         // Check for ERROR nodes in AST and classify them
         self.check_error_nodes(ast, source, &mut diagnostics);
         
-        // Run other linting checks (now disabled to avoid duplicates)
-        // self.check_undefined_variables(ast, &mut diagnostics);
-        // self.check_unused_variables(&mut diagnostics);
+        // Run other linting checks
         self.check_deprecated_syntax(ast, &mut diagnostics);
         self.check_strict_warnings(ast, &mut diagnostics);
         self.check_common_mistakes(ast, &mut diagnostics);
@@ -152,67 +150,6 @@ impl DiagnosticsProvider {
             message,
             related_information: Vec::new(),
             tags: Vec::new(),
-        }
-    }
-    
-    /// Check for undefined variables
-    fn check_undefined_variables(&self, node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-        self.walk_node(node, &mut |n| {
-            if let NodeKind::Variable { sigil, name } = &n.kind {
-                let var_name = format!("{}{}", sigil, name);
-                
-                // Skip special variables
-                if is_special_variable(&var_name) {
-                    return;
-                }
-                
-                // Check if variable is defined in any scope
-                let kind = match sigil.as_str() {
-                    "$" => SymbolKind::ScalarVariable,
-                    "@" => SymbolKind::ArrayVariable,
-                    "%" => SymbolKind::HashVariable,
-                    _ => SymbolKind::ScalarVariable,
-                };
-                if self.symbol_table.find_symbol(name, 0, kind).is_empty() {
-                    diagnostics.push(Diagnostic {
-                        range: (n.location.start, n.location.end),
-                        severity: DiagnosticSeverity::Warning,
-                        code: Some("undefined-variable".to_string()),
-                        message: format!("Variable '{}' is not defined", var_name),
-                        related_information: Vec::new(),
-                        tags: Vec::new(),
-                    });
-                }
-            }
-        });
-    }
-    
-    /// Check for unused variables
-    fn check_unused_variables(&self, diagnostics: &mut Vec<Diagnostic>) {
-        // Check each symbol in the symbol table
-        let symbols = self.symbol_table.symbols.values().flatten().collect::<Vec<_>>();
-        for symbol in symbols {
-            // Skip if it's a subroutine or package
-            if matches!(symbol.kind, SymbolKind::Subroutine | SymbolKind::Package) {
-                continue;
-            }
-            
-            // Check if the symbol has any references
-            if self.symbol_table.find_references(symbol).is_empty() {
-                // Skip parameters and special variables
-                if symbol.name.starts_with('_') || is_special_variable(&symbol.name) {
-                    continue;
-                }
-                
-                diagnostics.push(Diagnostic {
-                    range: (symbol.location.start, symbol.location.end),
-                    severity: DiagnosticSeverity::Warning,
-                    code: Some("unused-variable".to_string()),
-                    message: format!("Variable '{}' is declared but never used", symbol.name),
-                    related_information: Vec::new(),
-                    tags: vec![DiagnosticTag::Unnecessary],
-                });
-            }
         }
     }
     
@@ -476,22 +413,6 @@ impl DiagnosticsProvider {
     }
 }
 
-/// Check if a variable is a special Perl variable
-fn is_special_variable(name: &str) -> bool {
-    // Common special variables
-    const SPECIAL_VARS: &[&str] = &[
-        "$_", "@_", "%_", "$!", "$@", "$?", "$^", "$$", "$0", "$1", "$2", "$3", "$4", "$5",
-        "$6", "$7", "$8", "$9", "$.", "$,", "$/", "$\\", "$\"", "$;", "$%", "$=", "$-",
-        "$~", "$|", "$&", "$`", "$'", "$+", "@+", "%+", "$[", "$]", "$^A", "$^C", "$^D",
-        "$^E", "$^F", "$^H", "$^I", "$^L", "$^M", "$^N", "$^O", "$^P", "$^R", "$^S",
-        "$^T", "$^V", "$^W", "$^X", "%ENV", "@INC", "%INC", "@ARGV", "%SIG", "$ARGV",
-        "STDIN", "STDOUT", "STDERR", "DATA", "ARGVOUT", "$a", "$b",
-    ];
-    
-    SPECIAL_VARS.contains(&name) || 
-        name.starts_with("$^") || 
-        (name.len() == 2 && name.starts_with('$') && name.chars().nth(1).is_some_and(|c| !c.is_alphanumeric()))
-}
 
 #[cfg(test)]
 mod tests {
