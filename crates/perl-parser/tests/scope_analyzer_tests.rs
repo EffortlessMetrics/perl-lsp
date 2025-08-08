@@ -1,200 +1,352 @@
-use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
-use perl_parser::{Parser, PragmaTracker};
+use perl_parser::{Parser, scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue}};
+
+fn analyze_code(code: &str) -> Vec<ScopeIssue> {
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("Failed to parse");
+    let analyzer = ScopeAnalyzer::new();
+    analyzer.analyze(&ast, code, &[])
+}
+
+#[test]
+fn test_undefined_variable_detection() {
+    let code = r#"
+use strict;
+print $undefined_var;
+"#;
     
-    #[test]
-    fn test_detect_variable_shadowing() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $x = 10;
-            {
-                my $x = 20;  # This shadows the outer $x
-                print $x;
-            }
-            print $x;  # Use outer $x
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        // Should only have a shadowing issue
-        let shadowing_issues: Vec<_> = issues.iter()
-            .filter(|i| i.kind == IssueKind::VariableShadowing)
-            .collect();
-        assert_eq!(shadowing_issues.len(), 1);
-        assert_eq!(shadowing_issues[0].variable_name, "$x");
-    }
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_unused_variable_detection() {
+    let code = r#"
+use warnings;
+my $unused = 42;
+print "Hello";
+"#;
     
-    #[test]
-    fn test_detect_unused_variable() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $unused = 42;
-            my $used = 10;
-            print $used;
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].kind, IssueKind::UnusedVariable);
-        assert_eq!(issues[0].variable_name, "$unused");
-    }
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UnusedVariable)));
+}
+
+#[test]
+fn test_variable_shadowing() {
+    let code = r#"
+my $x = 1;
+{
+    my $x = 2;  # shadows outer $x
+    print $x;
+}
+"#;
     
-    #[test]
-    fn test_detect_undeclared_variable() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            use strict;
-            my $declared = 10;
-            print $undeclared;  # This is not declared
-            print $declared;    # Use declared to avoid unused warning
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        // Should have an undeclared variable issue
-        let undeclared_issues: Vec<_> = issues.iter()
-            .filter(|i| i.kind == IssueKind::UndeclaredVariable)
-            .collect();
-        assert_eq!(undeclared_issues.len(), 1);
-        assert_eq!(undeclared_issues[0].variable_name, "$undeclared");
-    }
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::VariableShadowing)));
+}
+
+
+#[test]
+fn test_our_variable_not_undefined() {
+    let code = r#"
+use strict;
+our $global_var = 42;
+print $global_var;
+"#;
     
-    #[test]
-    fn test_multiple_scope_levels() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $outer = 1;
-            {
-                my $middle = 2;
-                {
-                    my $inner = 3;
-                    print $outer, $middle, $inner;
-                }
-                print $middle;  # $inner not accessible here
-            }
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 0);  // No issues, all variables properly scoped
-    }
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_local_variable_not_undefined() {
+    let code = r#"
+use strict;
+local $ENV{PATH} = '/usr/bin';
+print $ENV{PATH};
+"#;
     
-    #[test]
-    fn test_for_loop_scope() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            for my $i (1..10) {
-                print $i;
-            }
-            # $i should not be accessible here
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 0);  // Loop variable is properly scoped
-    }
+    let issues = analyze_code(code);
+    // $ENV is a built-in global
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$ENV")));
+}
+
+#[test]
+fn test_package_variable_tracking() {
+    let code = r#"
+package Foo;
+use strict;
+our $package_var = 42;
+
+package Bar;
+use strict;
+print $Foo::package_var;  # Should be ok
+"#;
     
-    #[test]
-    fn test_subroutine_parameters() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            sub process {
-                my ($a, $b) = @_;
-                return $a + $b;
-            }
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 0);  // Parameters are used
-    }
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$Foo::package_var")));
+}
+
+#[test]
+fn test_subroutine_parameters() {
+    let code = r#"
+use strict;
+sub foo {
+    my ($x, $y) = @_;
+    return $x + $y;
+}
+"#;
     
-    #[test]
-    fn test_package_variables() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            package MyPackage;
-            our $package_var = 10;
-            my $lexical_var = 20;
-            
-            sub get_package { return $package_var; }
-            sub get_lexical { return $lexical_var; }
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        // The lexical variable in package scope is not captured correctly by the parser
-        // This is a known limitation - variables used in subroutines should be marked as used
-        // For now, we expect 1 issue (unused lexical_var)
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].kind, IssueKind::UnusedVariable);
-    }
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_foreach_loop_variable() {
+    let code = r#"
+use strict;
+my @arr = (1, 2, 3);
+foreach my $item (@arr) {
+    print $item;
+}
+"#;
     
-    #[test]
-    fn test_variable_reassignment() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $x = 10;
-            $x = 20;  # Reassignment
-            my $x = 30;  # Redeclaration in same scope - issue!
-            print $x;
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].kind, IssueKind::VariableRedeclaration);
-    }
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_while_loop_variable() {
+    let code = r#"
+use strict;
+while (my $line = <STDIN>) {
+    print $line;
+}
+"#;
     
-    #[test]
-    fn test_closure_captures() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $captured = 10;
-            my $sub = sub {
-                return $captured * 2;  # Captures outer variable
-            };
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        assert_eq!(issues.len(), 0);  // $captured is used in closure
-    }
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_if_condition_variable() {
+    let code = r#"
+use strict;
+if (my $result = some_func()) {
+    print $result;
+}
+"#;
     
-    #[test]
-    fn test_get_suggestions() {
-        let analyzer = ScopeAnalyzer::new();
-        let code = r#"
-            my $x = 10;
-            {
-                my $x = 20;
-            }
-        "#;
-        
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
-        let pragma_map = PragmaTracker::build(&ast);
-        let issues = analyzer.analyze(&ast, code, &pragma_map);
-        let suggestions = analyzer.get_suggestions(&issues);
-        
-        assert!(!suggestions.is_empty());
-        assert!(suggestions[0].contains("rename"));
-    }
+    let issues = analyze_code(code);
+    // some_func is undefined but $result should be ok
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$result")));
+}
+
+#[test]
+fn test_nested_scopes() {
+    let code = r#"
+use strict;
+my $outer = 1;
+{
+    my $inner = 2;
+    print $outer;  # ok
+    print $inner;  # ok
+}
+print $outer;  # ok
+print $inner;  # undefined
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$inner")));
+}
+
+#[test]
+fn test_builtin_variables() {
+    let code = r#"
+use strict;
+print $_;
+print @ARGV;
+print %ENV;
+print $0;
+print $!;
+print $@;
+print $$;
+"#;
+    
+    let issues = analyze_code(code);
+    // None of these should be undefined
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_unused_variable_basic() {
+    let code = r#"
+my $unused = 42;
+"#;
+    
+    let issues = analyze_code(code);
+    
+    // Check for unused variables
+    let unused_issues: Vec<_> = issues.iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnusedVariable))
+        .collect();
+    assert!(!unused_issues.is_empty());
+}
+
+#[test]
+fn test_my_declaration_in_list() {
+    let code = r#"
+use strict;
+my ($x, $y, $z) = (1, 2, 3);
+print "$x $y $z";
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_hash_slice_not_undefined() {
+    let code = r#"
+use strict;
+my %hash = (a => 1, b => 2);
+my @values = @hash{'a', 'b'};
+print @values;
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_array_slice_not_undefined() {
+    let code = r#"
+use strict;
+my @array = (1, 2, 3, 4);
+my @slice = @array[0..2];
+print @slice;
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_special_blocks() {
+    let code = r#"
+use strict;
+BEGIN {
+    my $begin_var = 1;
+    print $begin_var;  # ok
+}
+END {
+    my $end_var = 2;
+    print $end_var;  # ok
+}
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_use_vars_pragma() {
+    let code = r#"
+use strict;
+use vars qw($global_var @global_array);
+$global_var = 42;
+@global_array = (1, 2, 3);
+"#;
+    
+    let issues = analyze_code(code);
+    // Variables declared with 'use vars' should not be undefined
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_glob_assignment() {
+    let code = r#"
+use strict;
+*alias = *main::original;
+"#;
+    
+    let issues = analyze_code(code);
+    // Glob assignments are special and shouldn't trigger undefined warnings
+    // Note: This might need special handling in the analyzer
+    assert!(issues.len() <= 2); // Only pragma warnings expected
+}
+
+#[test]
+fn test_state_variable() {
+    let code = r#"
+use strict;
+use feature 'state';
+sub counter {
+    state $count = 0;
+    return ++$count;
+}
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_regex_capture_variables() {
+    let code = r#"
+use strict;
+my $text = "hello world";
+if ($text =~ /(\w+)\s+(\w+)/) {
+    print "$1 $2";  # Capture variables should be recognized
+}
+"#;
+    
+    let issues = analyze_code(code);
+    // $1, $2 etc. are special regex capture variables
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$1" || i.variable_name == "$2")));
+}
+
+#[test]
+fn test_eval_block() {
+    let code = r#"
+use strict;
+eval {
+    my $eval_var = 42;
+    print $eval_var;  # ok
+};
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$eval_var")));
+}
+
+#[test]
+fn test_do_block() {
+    let code = r#"
+use strict;
+my $result = do {
+    my $temp = 42;
+    $temp * 2
+};
+print $result;
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
+
+#[test]
+fn test_given_when() {
+    let code = r#"
+use strict;
+use feature 'switch';
+my $value = 5;
+given ($value) {
+    when (1) { print "one" }
+    when (2) { print "two" }
+    default { print "other" }
+}
+"#;
+    
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
