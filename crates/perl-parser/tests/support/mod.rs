@@ -295,41 +295,8 @@ fn assert_location_valid(location: &Value, context: &str) {
 
 // ===================== Async Helpers =====================
 
-/// Wait for a condition with timeout and logging (async version)
-/// Note: Requires tokio runtime. Use wait_for_sync for non-async tests.
-#[cfg(feature = "async")]
-pub async fn wait_for<F>(
-    mut condition: F,
-    timeout: Option<Duration>,
-    poll_interval: Option<Duration>,
-    description: &str,
-) -> bool
-where
-    F: FnMut() -> bool,
-{
-    let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
-    let poll_interval = poll_interval.unwrap_or(DEFAULT_POLL_INTERVAL);
-    let start = Instant::now();
-    
-    loop {
-        if condition() {
-            let elapsed = start.elapsed();
-            if elapsed > Duration::from_millis(100) {
-                eprintln!("✓ {} completed in {:?}", description, elapsed);
-            }
-            return true;
-        }
-        
-        if start.elapsed() >= timeout {
-            eprintln!("✗ {} timed out after {:?}", description, timeout);
-            return false;
-        }
-        
-        // Only available with async feature
-        #[cfg(feature = "async")]
-        tokio::time::sleep(poll_interval).await;
-    }
-}
+// Note: Async version would require tokio, but we don't need it for these tests
+// Use wait_for_sync instead
 
 /// Synchronous wait for condition (for non-async tests)
 pub fn wait_for_sync<F>(
