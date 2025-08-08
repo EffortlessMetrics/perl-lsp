@@ -355,11 +355,13 @@ impl LspServer {
                 let mut parser = Parser::new(text);
                 match parser.parse() {
                     Ok(ast) => {
+                        eprintln!("Parse successful for {}", uri);
                         let arc_ast = Arc::new(ast);
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), vec![])
                     },
                     Err(e) => {
+                        eprintln!("Parse failed for {}: {:?}", uri, e);
                         (None, vec![e])
                     },
                 }
@@ -726,48 +728,33 @@ impl LspServer {
     
     /// Find function context at position (returns function name and active parameter index)
     fn find_function_context(&self, content: &str, offset: usize) -> Option<(String, usize)> {
-        // Work backwards to find the opening parenthesis and function name
         let chars: Vec<char> = content.chars().collect();
         if offset > chars.len() {
             return None;
         }
         
-        let mut paren_depth = 0;
-        let mut comma_count = 0;
-        let mut i = offset.saturating_sub(1);
+        // Find the opening parenthesis, tracking all bracket types
+        let mut paren_pos = None;
+        let mut depth = 0;
+        let mut i = if offset > 0 { offset - 1 } else { return None };
         
-        // First, check if we're inside a function call
-        while i > 0 {
+        loop {
             match chars[i] {
-                ')' => paren_depth += 1,
+                ')' => depth += 1,
+                ']' => depth += 1, 
+                '}' => depth += 1,
                 '(' => {
-                    if paren_depth == 0 {
-                        // Found the opening paren, now get the function name
-                        let mut j = i.saturating_sub(1);
-                        
-                        // Skip whitespace
-                        while j > 0 && chars[j].is_whitespace() {
-                            j -= 1;
-                        }
-                        
-                        // Get the function name
-                        let end = j + 1;
-                        while j > 0 && (chars[j].is_alphanumeric() || chars[j] == '_') {
-                            j -= 1;
-                        }
-                        if !chars[j].is_alphanumeric() && chars[j] != '_' {
-                            j += 1;
-                        }
-                        
-                        let func_name: String = chars[j..end].iter().collect();
-                        if !func_name.is_empty() {
-                            return Some((func_name, comma_count));
-                        }
-                        return None;
+                    if depth == 0 {
+                        paren_pos = Some(i);
+                        break;
                     }
-                    paren_depth -= 1;
-                },
-                ',' if paren_depth == 0 => comma_count += 1,
+                    depth -= 1;
+                }
+                '[' | '{' => {
+                    if depth > 0 {
+                        depth -= 1;
+                    }
+                }
                 _ => {}
             }
             
@@ -777,7 +764,94 @@ impl LspServer {
             i -= 1;
         }
         
-        None
+        let paren_pos = paren_pos?;
+        
+        // Now extract the function name before the parenthesis
+        // Handle: func(), $obj->func(), Package::func()
+        let mut j = if paren_pos > 0 { paren_pos - 1 } else { return None };
+        
+        // Skip whitespace before '('
+        while j > 0 && chars[j].is_whitespace() {
+            j -= 1;
+        }
+        
+        if j == 0 && !chars[0].is_alphanumeric() && chars[0] != '_' {
+            return None;
+        }
+        
+        let mut end = j + 1;
+        let mut start = j;
+        
+        // Check for method call pattern (->)
+        if j >= 1 && chars[j] == '>' && chars[j-1] == '-' {
+            // This is a method call, extract method name after ->
+            // First find where -> starts
+            let arrow_end = j - 1; // Position of '-'
+            
+            // Now find method name after ->
+            j = paren_pos - 1;
+            while j > arrow_end + 1 && chars[j].is_whitespace() {
+                j -= 1;
+            }
+            end = j + 1;
+            
+            j = arrow_end + 2; // Start after ->
+            while j < end && chars[j].is_whitespace() {
+                j += 1;
+            }
+            start = j;
+        } else {
+            // Regular function or Package::function
+            while start > 0 {
+                let ch = chars[start];
+                if ch.is_alphanumeric() || ch == '_' {
+                    start -= 1;
+                } else if start >= 2 && ch == ':' && chars[start - 1] == ':' {
+                    // Package separator
+                    start -= 2;
+                } else {
+                    // Adjust if we overshot
+                    if !ch.is_alphanumeric() && ch != '_' && ch != ':' {
+                        start += 1;
+                    }
+                    break;
+                }
+            }
+            
+            // Handle case where we're at the beginning
+            if start == 0 && (chars[0].is_alphanumeric() || chars[0] == '_') {
+                // Include first character
+            } else if start == 0 {
+                start = 1;
+            }
+        }
+        
+        if start >= end {
+            return None;
+        }
+        
+        let full_name: String = chars[start..end].iter().collect();
+        
+        // Extract just the function name (strip package prefix if present)
+        let func_name = if let Some(pos) = full_name.rfind("::") {
+            &full_name[pos + 2..]
+        } else {
+            &full_name
+        };
+        
+        // Count commas at depth 0 to determine active parameter
+        let mut comma_count = 0;
+        let mut depth = 0;
+        for k in (paren_pos + 1)..offset.min(chars.len()) {
+            match chars[k] {
+                '(' | '[' | '{' => depth += 1,
+                ')' | ']' | '}' => depth -= 1,
+                ',' if depth == 0 => comma_count += 1,
+                _ => {}
+            }
+        }
+        
+        Some((func_name.trim().to_string(), comma_count))
     }
     
     /// Get function signature information
@@ -1390,6 +1464,10 @@ impl LspServer {
                     }
                     
                     return Ok(Some(json!(document_symbols)));
+                } else {
+                    // Fallback: Extract symbols via regex when parse fails
+                    let symbols = self.extract_symbols_fallback(&doc.content);
+                    return Ok(Some(json!(symbols)));
                 }
             }
         }
@@ -1404,10 +1482,13 @@ impl LspServer {
             
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
+                eprintln!("DEBUG: Document found for {}", uri);
                 if let Some(ref ast) = doc.ast {
+                    eprintln!("DEBUG: AST exists, root kind: {:?}", std::mem::discriminant(&ast.kind));
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
+                    eprintln!("DEBUG: Extracted {} folding ranges", ranges.len());
                     
                     // Convert to LSP JSON format with proper line offsets
                     let mut lsp_ranges = Vec::new();
@@ -1448,6 +1529,64 @@ impl LspServer {
             .chars()
             .filter(|&c| c == '\n')
             .count()
+    }
+    
+    /// Fallback symbol extraction using regex when parser fails
+    fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
+        let mut symbols = Vec::new();
+        let lines: Vec<&str> = content.lines().collect();
+        
+        // Regex for subroutine declarations
+        let sub_regex = regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b").unwrap();
+        let package_regex = regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b").unwrap();
+        
+        for (line_num, line) in lines.iter().enumerate() {
+            // Check for subroutines
+            if let Some(captures) = sub_regex.captures(line) {
+                if let Some(name_match) = captures.get(1) {
+                    let name = name_match.as_str().to_string();
+                    let start_char = name_match.start();
+                    let end_char = name_match.end();
+                    
+                    symbols.push(json!({
+                        "name": name,
+                        "kind": 12, // Function
+                        "range": {
+                            "start": { "line": line_num, "character": 0 },
+                            "end": { "line": line_num, "character": line.len() }
+                        },
+                        "selectionRange": {
+                            "start": { "line": line_num, "character": start_char },
+                            "end": { "line": line_num, "character": end_char }
+                        }
+                    }));
+                }
+            }
+            
+            // Check for packages
+            if let Some(captures) = package_regex.captures(line) {
+                if let Some(name_match) = captures.get(1) {
+                    let name = name_match.as_str().to_string();
+                    let start_char = name_match.start();
+                    let end_char = name_match.end();
+                    
+                    symbols.push(json!({
+                        "name": name,
+                        "kind": 4, // Module
+                        "range": {
+                            "start": { "line": line_num, "character": 0 },
+                            "end": { "line": line_num, "character": line.len() }
+                        },
+                        "selectionRange": {
+                            "start": { "line": line_num, "character": start_char },
+                            "end": { "line": line_num, "character": end_char }
+                        }
+                    }));
+                }
+            }
+        }
+        
+        symbols
     }
     
     /// Validate if a string is a valid Perl identifier
