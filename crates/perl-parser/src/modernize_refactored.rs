@@ -11,6 +11,7 @@ pub struct ModernizationSuggestion {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Pattern {
     search: &'static str,
     replacement: &'static str,
@@ -19,7 +20,7 @@ struct Pattern {
 }
 
 pub struct PerlModernizer {
-    patterns: Vec<Pattern>,
+    _patterns: Vec<Pattern>,
 }
 
 impl PerlModernizer {
@@ -63,7 +64,7 @@ impl PerlModernizer {
             },
         ];
         
-        Self { patterns }
+        Self { _patterns: patterns }
     }
     
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {

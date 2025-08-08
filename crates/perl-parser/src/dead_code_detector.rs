@@ -56,14 +56,14 @@ pub struct DeadCodeStats {
 
 /// Dead code detector
 pub struct DeadCodeDetector {
-    workspace_index: WorkspaceIndex,
+    _workspace_index: WorkspaceIndex,
     entry_points: HashSet<PathBuf>,
 }
 
 impl DeadCodeDetector {
     pub fn new(workspace_index: WorkspaceIndex) -> Self {
         Self {
-            workspace_index,
+            _workspace_index: workspace_index,
             entry_points: HashSet::new(),
         }
     }

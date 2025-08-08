@@ -122,7 +122,7 @@ pub struct TypeInferenceEngine {
     /// Built-in function signatures
     builtins: HashMap<String, PerlType>,
     /// Type aliases from use statements
-    type_aliases: HashMap<String, PerlType>,
+    _type_aliases: HashMap<String, PerlType>,
 }
 
 impl Default for TypeInferenceEngine {
@@ -137,7 +137,7 @@ impl TypeInferenceEngine {
             global_env: TypeEnvironment::new(),
             constraints: Vec::new(),
             builtins: HashMap::new(),
-            type_aliases: HashMap::new(),
+            _type_aliases: HashMap::new(),
         };
         
         // Initialize built-in function types
@@ -511,6 +511,7 @@ impl TypeInferenceEngine {
     }
 
     /// Parse a subroutine signature
+    #[allow(dead_code)]
     fn parse_signature(&mut self, _sig: &Node, _env: &mut TypeEnvironment) -> Result<Vec<PerlType>, Vec<TypeConstraint>> {
         // Simplified signature parsing
         // In a full implementation, this would parse Perl 5.20+ signatures
@@ -528,6 +529,7 @@ impl TypeInferenceEngine {
     }
 
     /// Extract function name from a node
+    #[allow(dead_code)]
     fn extract_func_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Identifier { name } => name.clone(),
