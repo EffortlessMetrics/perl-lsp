@@ -496,7 +496,7 @@ my $result = calculate();
         let result = provider.rename(pos, "compute", &RenameOptions::default());
         assert!(result.is_valid);
         // The current implementation finds 2 edits - the function definition and the call
-        assert!(result.edits.len() >= 1); // At least the definition
+        assert!(!result.edits.is_empty()); // At least the definition
         
         // Apply edits
         let new_code = apply_rename_edits(code, &result.edits);

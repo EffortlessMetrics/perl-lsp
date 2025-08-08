@@ -170,7 +170,7 @@ impl<'a> Parser<'a> {
                     // print STDOUT ...
                     TokenKind::Identifier => {
                         // Check if it's uppercase (likely a filehandle)
-                        if next.text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if next.text.chars().next().is_some_and(|c| c.is_uppercase()) {
                             return true;
                         }
                     }
@@ -186,7 +186,7 @@ impl<'a> Parser<'a> {
             if let Ok(next) = self.tokens.peek() {
                 if let TokenKind::Identifier = next.kind {
                     // Uppercase identifier after "new" suggests constructor
-                    if next.text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                    if next.text.chars().next().is_some_and(|c| c.is_uppercase()) {
                         return true;
                     }
                 }
@@ -3715,10 +3715,10 @@ impl<'a> Parser<'a> {
                             ))
                         }
                     } else {
-                        return Err(ParseError::syntax(
+                        Err(ParseError::syntax(
                             "Expected '>' to close angle bracket construct",
                             self.current_position()
-                        ));
+                        ))
                     }
                 }
             }
@@ -4108,7 +4108,7 @@ impl<'a> Parser<'a> {
             // This happens when parse_comma creates an array from key => value pairs
             if let NodeKind::ArrayLiteral { elements } = &first_expr.kind {
                 // Check if this looks like hash pairs (even number of elements)
-                if elements.len() % 2 == 0 && elements.len() > 0 {
+                if elements.len() % 2 == 0 && !elements.is_empty() {
                     // Convert array elements to hash pairs
                     let mut pairs = Vec::new();
                     for i in (0..elements.len()).step_by(2) {

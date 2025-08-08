@@ -343,7 +343,7 @@ impl TriviaPreservingParser {
             (
                 token_with_trivia.token.clone(),
                 token_with_trivia.leading_trivia.clone(),
-                token_with_trivia.range.clone(),
+                token_with_trivia.range,
             )
         };
         

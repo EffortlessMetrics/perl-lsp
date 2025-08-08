@@ -1441,8 +1441,8 @@ fn test_edge_case_malformed_requests() {
         // Missing position
     })));
     
-    // Should handle gracefully
-    assert!(result.is_none() || result.unwrap()["error"].is_object());
+    // Should handle gracefully - either no result or an error
+    assert!(result.is_none() || result.as_ref().unwrap().get("error").is_some());
 }
 
 /// Test concurrent document modifications

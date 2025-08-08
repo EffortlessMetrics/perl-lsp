@@ -247,6 +247,12 @@ pub struct SymbolExtractor {
     table: SymbolTable,
 }
 
+impl Default for SymbolExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SymbolExtractor {
     /// Create a new symbol extractor
     pub fn new() -> Self {

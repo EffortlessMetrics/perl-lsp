@@ -23,8 +23,7 @@ fn test_lsp_signature_help_request_format() {
                     "label": sig.label,
                     "documentation": {
                         "kind": "markdown",
-                        "value": sig.documentation.as_ref()
-                            .map(|d| d.clone())
+                        "value": sig.documentation.clone()
                             .unwrap_or_default()
                     },
                     "parameters": sig.parameters.iter().map(|p| {

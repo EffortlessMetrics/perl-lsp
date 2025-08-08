@@ -287,7 +287,7 @@ mod tests {
             Position::new(5, 1, 6),
         );
         
-        let error = ParseError::new("Syntax error".to_string(), range.clone())
+        let error = ParseError::new("Syntax error".to_string(), range)
             .with_expected(vec!["identifier".to_string()])
             .with_found("number".to_string())
             .with_hint("Did you mean to use a variable?".to_string());

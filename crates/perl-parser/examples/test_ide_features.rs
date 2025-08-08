@@ -30,7 +30,7 @@ if ($x = 5) {
             
             // Get diagnostics
             let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-            let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[]);
+            let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
             
             println!("\nDiagnostics found: {}", diagnostics.len());
             for diag in &diagnostics {

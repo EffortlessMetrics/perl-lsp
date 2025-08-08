@@ -173,7 +173,7 @@ impl CodeActionsProvider {
 
         if let Some(var_name) = Self::extract_variable_name(&diagnostic.message) {
             // Suggest renaming the inner variable
-            let base_name = var_name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+            let base_name = var_name.trim_start_matches(['$', '@', '%']);
             let sigil = &var_name[..var_name.len() - base_name.len()];
             
             // Generate alternative names
@@ -302,7 +302,7 @@ impl CodeActionsProvider {
             });
             
             // Rename the duplicate to a different name
-            let base_name = param_name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+            let base_name = param_name.trim_start_matches(['$', '@', '%']);
             let sigil = &param_name[..param_name.len() - base_name.len()];
             let new_name = format!("{}{}_2", sigil, base_name);
             
@@ -325,7 +325,7 @@ impl CodeActionsProvider {
         let mut actions = Vec::new();
         
         if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
-            let base_name = param_name.trim_start_matches(|c| c == '$' || c == '@' || c == '%');
+            let base_name = param_name.trim_start_matches(['$', '@', '%']);
             let sigil = &param_name[..param_name.len() - base_name.len()];
             
             // Suggest renaming the parameter

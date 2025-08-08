@@ -1,4 +1,4 @@
-use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+use perl_parser::{Parser, scope_analyzer::ScopeAnalyzer};
 
 fn main() {
     let test_cases = vec![
@@ -29,7 +29,18 @@ sub get_lexical { return $lexical_var; }
         println!("Code:\n{}", code);
         
         let analyzer = ScopeAnalyzer::new();
-        let issues = analyzer.analyze(code);
+        
+        // Parse the code first
+        let mut parser = Parser::new(code);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => {
+                println!("Parse error: {:?}", e);
+                continue;
+            }
+        };
+        
+        let issues = analyzer.analyze(&ast, code, &[]);
         
         println!("\nFound {} issues:", issues.len());
         for issue in &issues {

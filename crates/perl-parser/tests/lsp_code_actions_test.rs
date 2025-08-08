@@ -17,7 +17,7 @@ fn test_undefined_variable_quick_fix() {
     
     // Find undefined variable diagnostic
     let undefined_diag = diagnostics.iter()
-        .find(|d| d.code.as_ref().map_or(false, |c| c == "undefined-variable"))
+        .find(|d| d.code.as_ref().is_some_and(|c| c == "undefined-variable"))
         .expect("Should have undefined variable diagnostic");
     
     // Get code actions
@@ -47,7 +47,7 @@ fn test_unused_variable_quick_fix() {
     
     // Find unused variable diagnostic
     let unused_diag = diagnostics.iter()
-        .find(|d| d.code.as_ref().map_or(false, |c| c == "unused-variable"))
+        .find(|d| d.code.as_ref().is_some_and(|c| c == "unused-variable"))
         .expect("Should have unused variable diagnostic");
     
     // Get code actions
@@ -78,7 +78,7 @@ fn test_variable_shadowing_quick_fix() {
     
     // Find shadowing diagnostic
     let shadow_diag = diagnostics.iter()
-        .find(|d| d.code.as_ref().map_or(false, |c| c == "variable-shadowing"))
+        .find(|d| d.code.as_ref().is_some_and(|c| c == "variable-shadowing"))
         .expect("Should have variable shadowing diagnostic");
     
     // Get code actions
@@ -145,9 +145,9 @@ fn test_multiple_diagnostics_multiple_actions() {
     
     // Should have both undefined and unused diagnostics
     let has_undefined = diagnostics.iter()
-        .any(|d| d.code.as_ref().map_or(false, |c| c == "undefined-variable"));
+        .any(|d| d.code.as_ref().is_some_and(|c| c == "undefined-variable"));
     let has_unused = diagnostics.iter()
-        .any(|d| d.code.as_ref().map_or(false, |c| c == "unused-variable"));
+        .any(|d| d.code.as_ref().is_some_and(|c| c == "unused-variable"));
     
     assert!(has_undefined, "Should have undefined variable diagnostic");
     assert!(has_unused, "Should have unused variable diagnostic");

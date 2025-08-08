@@ -34,6 +34,12 @@ pub struct LspTestRunner {
     start_time: Instant,
 }
 
+impl Default for LspTestRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LspTestRunner {
     pub fn new() -> Self {
         let mut features = HashMap::new();
@@ -351,7 +357,7 @@ impl LspTestRunner {
         writeln!(file, "| Feature | Status | Tests | Passed | Coverage |")?;
         writeln!(file, "|---------|--------|-------|--------|----------|")?;
         
-        for (_, coverage) in &self.features {
+        for coverage in self.features.values() {
             if coverage.tested {
                 let status = if coverage.fail_count == 0 { "✅" } else { "⚠️" };
                 writeln!(file, "| {} | {} | {} | {} | {:.1}% |",

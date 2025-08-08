@@ -10,7 +10,7 @@ pub struct LspServer {
 
 pub fn start_lsp_server() -> LspServer {
     let mut process = Command::new("cargo")
-        .args(&["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
+        .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -22,8 +22,8 @@ pub fn start_lsp_server() -> LspServer {
     
     LspServer {
         process,
-        stdin: stdin,
-        stdout: stdout,
+        stdin,
+        stdout,
     }
 }
 

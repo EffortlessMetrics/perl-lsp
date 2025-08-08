@@ -490,7 +490,7 @@ fn is_special_variable(name: &str) -> bool {
     
     SPECIAL_VARS.contains(&name) || 
         name.starts_with("$^") || 
-        (name.len() == 2 && name.starts_with('$') && name.chars().nth(1).map_or(false, |c| !c.is_alphanumeric()))
+        (name.len() == 2 && name.starts_with('$') && name.chars().nth(1).is_some_and(|c| !c.is_alphanumeric()))
 }
 
 #[cfg(test)]

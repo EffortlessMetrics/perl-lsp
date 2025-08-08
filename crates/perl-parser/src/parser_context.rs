@@ -223,7 +223,7 @@ mod tests {
         let ctx = ParserContext::new(source);
         
         assert!(!ctx.is_eof());
-        assert!(ctx.tokens.len() > 0);
+        assert!(!ctx.tokens.is_empty());
     }
     
     #[test]

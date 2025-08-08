@@ -928,11 +928,8 @@ impl LspServer {
     
     /// Extract parameter names from a params node
     fn extract_params(&self, params_node: &Node, params: &mut Vec<String>) {
-        match &params_node.kind {
-            NodeKind::Variable { sigil, name } => {
-                params.push(format!("{}{}", sigil, name));
-            }
-            _ => {}
+        if let NodeKind::Variable { sigil, name } = &params_node.kind {
+            params.push(format!("{}{}", sigil, name));
         }
     }
     
@@ -1265,7 +1262,7 @@ impl LspServer {
                     
                     // Get the token at the current position
                     let token = self.get_token_at_position(&doc.content, offset);
-                    if !token.is_empty() && (token.starts_with('$') || token.starts_with('@') || token.starts_with('%') || token.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')) {
+                    if !token.is_empty() && (token.starts_with('$') || token.starts_with('@') || token.starts_with('%') || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')) {
                         // Find the token bounds
                         let (start_offset, end_offset) = self.get_token_bounds(&doc.content, offset);
                         let (start_line, start_char) = self.offset_to_position(&doc.content, start_offset);
@@ -1613,10 +1610,8 @@ impl LspServer {
                 }
                 
                 // Simple string detection (not perfect but good enough)
-                if ch == '"' || ch == '\'' {
-                    if !in_string || prev_char != '\\' {
-                        in_string = !in_string;
-                    }
+                if (ch == '"' || ch == '\'') && (!in_string || prev_char != '\\') {
+                    in_string = !in_string;
                 }
                 
                 if !in_string {
@@ -2597,7 +2592,7 @@ impl LspServer {
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
             let runner = TestRunner::new(doc.content.clone(), uri.to_string());
-            let results = runner.run_test(&uri.to_string());
+            let results = runner.run_test(uri);
             
             // Convert results to JSON
             let json_results: Vec<Value> = results.into_iter()

@@ -128,6 +128,12 @@ impl SimpleEdit {
     }
 }
 
+impl Default for CheckpointedIncrementalParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CheckpointedIncrementalParser {
     /// Create a new incremental parser
     pub fn new() -> Self {

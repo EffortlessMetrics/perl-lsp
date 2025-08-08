@@ -21,6 +21,12 @@ pub enum ParseErrorKind {
 
 pub struct ErrorClassifier;
 
+impl Default for ErrorClassifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ErrorClassifier {
     pub fn new() -> Self {
         ErrorClassifier
@@ -69,7 +75,7 @@ impl ErrorClassifier {
             let line = &source[line_start..line_end];
             
             // Check for missing semicolon
-            if line.trim().len() > 0 && !line.trim().ends_with(';') && !line.trim().ends_with('{') && !line.trim().ends_with('}') {
+            if !line.trim().is_empty() && !line.trim().ends_with(';') && !line.trim().ends_with('{') && !line.trim().ends_with('}') {
                 // Look for common statement patterns
                 if line.contains("my ") || line.contains("our ") || line.contains("local ") ||
                    line.contains("print ") || line.contains("say ") || line.contains("return ") {
