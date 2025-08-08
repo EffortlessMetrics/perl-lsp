@@ -830,7 +830,10 @@ return$x*2}
     
     // Formatting might not be implemented yet, so we just check it doesn't crash
     // In a real implementation, we'd verify the formatted output
-    assert!(result.is_some() || result.is_none());
+    // Prepare rename might return null if rename not supported
+    if let Some(res) = result {
+        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+    }
 }
 
 /// Test 18: Execute Command
@@ -859,7 +862,10 @@ my $y = $x * 2;
     })));
     
     // Command execution might return edits or nothing
-    assert!(result.is_some() || result.is_none());
+    // Prepare rename might return null if rename not supported
+    if let Some(res) = result {
+        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+    }
 }
 
 /// Test 19: Multi-file Support
@@ -1149,7 +1155,10 @@ for (my $i = 0; $i < 10; $i++) {
         }
     })));
     
-    assert!(result.is_some() || result.is_none());
+    // Prepare rename might return null if rename not supported
+    if let Some(res) = result {
+        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+    }
 }
 
 // ======================== USER STORY SCENARIOS ========================
@@ -1216,7 +1225,11 @@ foreach my $user (@$users) {
         }
     })));
     
-    assert!(hover.is_some() || hover.is_none()); // Might not have DBI docs
+    // Hover might not have docs for external modules
+    if let Some(h) = hover {
+        let obj = h.as_object().expect("hover should be object");
+        assert!(obj.contains_key("contents"), "Hover must have contents");
+    }
     
     // Step 4: Developer finds all uses of $DEBUG
     let refs = ctx.send_request("textDocument/references", Some(json!({
@@ -1354,7 +1367,10 @@ sub is_valid {
         }
     })));
     
-    assert!(definition.is_some() || definition.is_none());
+    // Definition might be empty for external modules
+    if let Some(def) = definition {
+        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
+    }
 }
 
 /// Complete workflow: Refactoring legacy code
