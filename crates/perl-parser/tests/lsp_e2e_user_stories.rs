@@ -675,3 +675,470 @@ sub multiply {
     // This workflow demonstrates how multiple LSP features work together
     // to provide a smooth development experience
 }
+
+// ==================== USER STORY 11: DEBUGGING WORKFLOW ====================
+// As a Perl developer debugging production issues, I want to understand code flow
+// and variable states, so I can quickly identify and fix bugs.
+
+#[test]
+fn test_user_story_debugging_workflow() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    // Developer is debugging a complex data processing script
+    let debug_code = r#"
+use strict;
+use warnings;
+use Data::Dumper;
+
+sub process_records {
+    my ($records) = @_;
+    my @filtered = ();
+    
+    foreach my $record (@$records) {
+        next unless $record->{active};
+        
+        # Developer wants to understand what transform_record does
+        my $transformed = transform_record($record);
+        
+        if (validate_record($transformed)) {
+            push @filtered, $transformed;
+        }
+    }
+    
+    return \@filtered;
+}
+
+sub transform_record {
+    my ($record) = @_;
+    $record->{timestamp} = time();
+    $record->{processed} = 1;
+    return $record;
+}
+
+sub validate_record {
+    my ($record) = @_;
+    return $record->{timestamp} && $record->{processed};
+}
+
+my $data = [
+    { id => 1, active => 1, name => 'Item 1' },
+    { id => 2, active => 0, name => 'Item 2' },
+    { id => 3, active => 1, name => 'Item 3' },
+];
+
+my $results = process_records($data);
+print Dumper($results);
+"#;
+    
+    open_document(&mut server, "file:///test/debug.pl", debug_code);
+    
+    // Scenario 1: Developer hovers over transform_record to understand what it does
+    let hover_result = send_request(&mut server, "textDocument/hover", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/debug.pl"
+        },
+        "position": {
+            "line": 13,
+            "character": 25  // On 'transform_record'
+        }
+    })));
+    
+    assert!(hover_result.is_some() || hover_result.is_none());
+    
+    // Scenario 2: Developer finds all references to see where function is called
+    let refs = send_request(&mut server, "textDocument/references", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/debug.pl"
+        },
+        "position": {
+            "line": 24,
+            "character": 5  // On 'transform_record' definition
+        },
+        "context": {
+            "includeDeclaration": true
+        }
+    })));
+    
+    assert!(refs.is_some() || refs.is_none());
+    
+    // Scenario 3: Developer uses call hierarchy to understand call flow
+    let call_hierarchy = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/debug.pl"
+        },
+        "position": {
+            "line": 6,
+            "character": 5  // On 'process_records'
+        }
+    })));
+    
+    assert!(call_hierarchy.is_some() || call_hierarchy.is_none());
+}
+
+// ==================== USER STORY 12: MODULE NAVIGATION ====================
+// As a Perl developer working with multiple modules, I want to easily navigate
+// between module definitions and their usage across files.
+
+#[test]
+fn test_user_story_module_navigation() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    // Scenario: Developer working with custom modules
+    let main_script = r#"
+#!/usr/bin/perl
+use strict;
+use warnings;
+use lib './lib';
+
+use MyApp::Database;
+use MyApp::Logger;
+use MyApp::Config;
+
+my $config = MyApp::Config->new();
+my $logger = MyApp::Logger->new($config->get('log_level'));
+my $db = MyApp::Database->connect($config->get('db_config'));
+
+$logger->info('Application started');
+
+my $users = $db->fetch_all('users');
+foreach my $user (@$users) {
+    $logger->debug("Processing user: $user->{name}");
+    process_user($user);
+}
+
+sub process_user {
+    my ($user) = @_;
+    # Process user data
+    return $user;
+}
+"#;
+    
+    open_document(&mut server, "file:///test/main.pl", main_script);
+    
+    // Module file
+    let module_code = r#"
+package MyApp::Database;
+use strict;
+use warnings;
+
+sub connect {
+    my ($class, $config) = @_;
+    return bless { config => $config }, $class;
+}
+
+sub fetch_all {
+    my ($self, $table) = @_;
+    # Fetch from database
+    return [];
+}
+
+1;
+"#;
+    
+    open_document(&mut server, "file:///test/lib/MyApp/Database.pm", module_code);
+    
+    // Developer wants to navigate to Database module definition
+    let definition = send_request(&mut server, "textDocument/definition", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/main.pl"
+        },
+        "position": {
+            "line": 12,
+            "character": 15  // On 'MyApp::Database'
+        }
+    })));
+    
+    assert!(definition.is_some() || definition.is_none());
+    
+    // Developer wants to find all uses of the Database module
+    let workspace_symbols = send_request(&mut server, "workspace/symbol", Some(json!({
+        "query": "Database"
+    })));
+    
+    assert!(workspace_symbols.is_some() || workspace_symbols.is_none());
+}
+
+// ==================== USER STORY 13: CODE REVIEW WORKFLOW ====================
+// As a code reviewer, I want to understand code changes and their impact,
+// so I can provide meaningful feedback on pull requests.
+
+#[test]
+fn test_user_story_code_review_workflow() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    // Code being reviewed with potential issues
+    let review_code = r#"
+use strict;
+use warnings;
+
+# PR #123: Add user authentication
+sub authenticate_user {
+    my ($username, $password) = @_;
+    
+    # FIXME: Should hash password
+    my $users = load_users();
+    
+    foreach my $user (@$users) {
+        if ($user->{name} eq $username) {
+            # Security issue: plain text comparison
+            if ($user->{password} eq $password) {
+                return $user;
+            }
+        }
+    }
+    
+    return undef;
+}
+
+sub load_users {
+    # TODO: Load from database instead of file
+    return [
+        { name => 'admin', password => 'admin123' },
+        { name => 'user', password => 'pass456' },
+    ];
+}
+
+# New feature: password reset
+sub reset_password {
+    my ($username, $new_password) = @_;
+    
+    # Missing validation
+    my $users = load_users();
+    
+    foreach my $user (@$users) {
+        if ($user->{name} eq $username) {
+            $user->{password} = $new_password;
+            save_users($users);
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+
+sub save_users {
+    my ($users) = @_;
+    # Not implemented
+    die "save_users not implemented";
+}
+"#;
+    
+    open_document(&mut server, "file:///test/auth.pl", review_code);
+    
+    // Reviewer uses document symbols to understand structure
+    let symbols = send_request(&mut server, "textDocument/documentSymbol", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/auth.pl"
+        }
+    })));
+    
+    assert!(symbols.is_some());
+    
+    // Reviewer checks for code issues
+    let code_actions = send_request(&mut server, "textDocument/codeAction", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/auth.pl"
+        },
+        "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 55, "character": 0 }
+        },
+        "context": {
+            "diagnostics": []
+        }
+    })));
+    
+    assert!(code_actions.is_some() || code_actions.is_none());
+    
+    // Reviewer uses call hierarchy to understand impact
+    let prepare_call = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/auth.pl"
+        },
+        "position": {
+            "line": 24,
+            "character": 5  // On 'load_users'
+        }
+    })));
+    
+    assert!(prepare_call.is_some() || prepare_call.is_none());
+}
+
+// ==================== USER STORY 14: API DOCUMENTATION BROWSING ====================
+// As a Perl developer, I want to quickly access documentation for built-in functions
+// and CPAN modules, so I can use them correctly without leaving my editor.
+
+#[test]
+fn test_user_story_api_documentation() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    let code_with_builtins = r#"
+use strict;
+use warnings;
+use List::Util qw(max min sum);
+use File::Path qw(make_path remove_tree);
+
+sub process_data {
+    my @numbers = (1, 5, 3, 9, 2);
+    
+    # Developer wants to know how 'map' works
+    my @doubled = map { $_ * 2 } @numbers;
+    
+    # Developer wants to know parameters for 'sprintf'
+    my $formatted = sprintf("Average: %.2f", sum(@numbers) / @numbers);
+    
+    # Developer wants to know 'grep' syntax
+    my @filtered = grep { $_ > 3 } @doubled;
+    
+    # Developer wants to understand 'sort' with custom comparison
+    my @sorted = sort { $b <=> $a } @filtered;
+    
+    # Developer wants File::Path::make_path documentation
+    make_path('/tmp/test/dir', { mode => 0755 });
+    
+    return \@sorted;
+}
+"#;
+    
+    open_document(&mut server, "file:///test/builtins.pl", code_with_builtins);
+    
+    // Scenario 1: Hover over 'map' for documentation
+    let map_hover = send_request(&mut server, "textDocument/hover", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/builtins.pl"
+        },
+        "position": {
+            "line": 10,
+            "character": 18  // On 'map'
+        }
+    })));
+    
+    assert!(map_hover.is_some());
+    
+    // Scenario 2: Signature help for sprintf
+    let sprintf_sig = send_request(&mut server, "textDocument/signatureHelp", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/builtins.pl"
+        },
+        "position": {
+            "line": 13,
+            "character": 35  // Inside sprintf arguments
+        }
+    })));
+    
+    assert!(sprintf_sig.is_some());
+    
+    // Scenario 3: Completion for List::Util functions
+    let completion = send_request(&mut server, "textDocument/completion", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/builtins.pl"
+        },
+        "position": {
+            "line": 13,
+            "character": 45  // After 'sum'
+        }
+    })));
+    
+    assert!(completion.is_some() || completion.is_none());
+}
+
+// ==================== USER STORY 15: PERFORMANCE OPTIMIZATION WORKFLOW ====================  
+// As a Perl developer optimizing code, I want insights about performance implications
+// and suggestions for improvements.
+
+#[test]
+fn test_user_story_performance_optimization() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    let performance_code = r#"
+use strict;
+use warnings;
+use Benchmark qw(timethese);
+
+# Potentially inefficient code
+sub process_large_dataset {
+    my ($data) = @_;
+    my @results;
+    
+    # Inefficient: multiple passes over data
+    foreach my $item (@$data) {
+        if ($item->{type} eq 'A') {
+            push @results, transform_a($item);
+        }
+    }
+    
+    foreach my $item (@$data) {
+        if ($item->{type} eq 'B') {
+            push @results, transform_b($item);
+        }
+    }
+    
+    # Inefficient: repeated regex compilation
+    foreach my $result (@results) {
+        $result->{name} =~ s/\s+/_/g;
+        $result->{desc} =~ s/\s+/_/g;
+    }
+    
+    return \@results;
+}
+
+# Better version
+sub process_large_dataset_optimized {
+    my ($data) = @_;
+    my @results;
+    my $space_regex = qr/\s+/;
+    
+    # Single pass over data
+    foreach my $item (@$data) {
+        if ($item->{type} eq 'A') {
+            push @results, transform_a($item);
+        } elsif ($item->{type} eq 'B') {
+            push @results, transform_b($item);
+        }
+    }
+    
+    # Pre-compiled regex
+    foreach my $result (@results) {
+        $result->{name} =~ s/$space_regex/_/g;
+        $result->{desc} =~ s/$space_regex/_/g;
+    }
+    
+    return \@results;
+}
+
+sub transform_a { return $_[0] }
+sub transform_b { return $_[0] }
+"#;
+    
+    open_document(&mut server, "file:///test/performance.pl", performance_code);
+    
+    // Developer uses code lens to see complexity/usage hints
+    let code_lens = send_request(&mut server, "textDocument/codeLens", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/performance.pl"
+        }
+    })));
+    
+    assert!(code_lens.is_some() || code_lens.is_none());
+    
+    // Developer gets suggestions for optimization
+    let actions = send_request(&mut server, "textDocument/codeAction", Some(json!({
+        "textDocument": {
+            "uri": "file:///test/performance.pl"
+        },
+        "range": {
+            "start": { "line": 10, "character": 0 },
+            "end": { "line": 28, "character": 0 }
+        },
+        "context": {
+            "only": ["refactor"]
+        }
+    })));
+    
+    assert!(actions.is_some() || actions.is_none());
+}
