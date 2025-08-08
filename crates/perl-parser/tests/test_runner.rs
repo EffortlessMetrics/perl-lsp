@@ -162,14 +162,14 @@ impl LspTestRunner {
         println!("{}", "─".repeat(60));
         
         let mut tested_features = 0;
-        let mut total_tests = 0;
-        let mut total_passed = 0;
+        let mut _total_tests = 0;
+        let mut _total_passed = 0;
         
         for (name, coverage) in &self.features {
             if coverage.tested {
                 tested_features += 1;
-                total_tests += coverage.test_count;
-                total_passed += coverage.pass_count;
+                _total_tests += coverage.test_count;
+                _total_passed += coverage.pass_count;
                 
                 let status = if coverage.fail_count == 0 {
                     "✓".green()
