@@ -376,7 +376,10 @@ done_testing();
         ]
     })));
 
-    assert!(run_single_test.is_some() || run_single_test.is_none(), "Should handle test execution request");
+    // Test execution might not be available yet, just verify response format
+    if let Some(response) = run_single_test {
+        assert!(response.is_array(), "Code lens should be array");
+    }
     println!("✓ Single test execution works");
 
     // TEST 3: Run Test File
@@ -386,7 +389,10 @@ done_testing();
         "arguments": ["file:///workspace/t/calculator.t"]
     })));
 
-    assert!(run_test_file.is_some() || run_test_file.is_none(), "Should handle test file execution");
+    // Test file execution might not be available yet
+    if let Some(response) = run_test_file {
+        assert!(response.is_array(), "Code lens should be array");
+    }
     println!("✓ Test file execution works");
 
     // TEST 4: Test Coverage
@@ -396,7 +402,10 @@ done_testing();
         "arguments": ["file:///workspace/lib/Calculator.pm"]
     })));
 
-    assert!(test_coverage.is_some() || test_coverage.is_none(), "Should handle coverage request");
+    // Coverage might not be available yet
+    if let Some(response) = test_coverage {
+        assert!(response.is_array(), "Code lens should be array");
+    }
     println!("✓ Test coverage integration works");
 
     // TEST 5: Failed Test Navigation
@@ -498,7 +507,13 @@ sub process_user_data {
         }
     })));
 
-    assert!(extract_variable.is_some() || extract_variable.is_none(), "Should offer extract variable refactoring");
+    // Extract variable might be available depending on context
+    if let Some(actions) = extract_variable {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Extract variable refactoring available");
 
     // TEST 2: Extract Method
@@ -514,7 +529,13 @@ sub process_user_data {
         }
     })));
 
-    assert!(extract_method.is_some() || extract_method.is_none(), "Should offer extract method refactoring");
+    // Extract method might be available depending on context
+    if let Some(actions) = extract_method {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Extract method refactoring available");
 
     // TEST 3: Inline Variable
@@ -530,7 +551,13 @@ sub process_user_data {
         }
     })));
 
-    assert!(inline_variable.is_some() || inline_variable.is_none(), "Should offer inline variable refactoring");
+    // Inline variable might be available depending on context
+    if let Some(actions) = inline_variable {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Inline variable refactoring available");
 
     // TEST 4: Change Function Signature
@@ -546,7 +573,13 @@ sub process_user_data {
         }
     })));
 
-    assert!(change_signature.is_some() || change_signature.is_none(), "Should offer signature change refactoring");
+    // Change signature might be available depending on context
+    if let Some(actions) = change_signature {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Change signature refactoring available");
 
     // TEST 5: Move Method to Another Module
@@ -560,7 +593,13 @@ sub process_user_data {
         ]
     })));
 
-    assert!(move_method.is_some() || move_method.is_none(), "Should handle move method request");
+    // Move method might be available depending on context
+    if let Some(actions) = move_method {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Move method refactoring available");
 
     println!("✅ Advanced refactoring user story test complete");
@@ -650,7 +689,13 @@ sub validate_and_parse_data {
         ]
     })));
 
-    assert!(test_regex.is_some() || test_regex.is_none(), "Should handle regex testing");
+    // Regex testing might not be implemented yet
+    if let Some(actions) = test_regex {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Regex testing works");
 
     // TEST 4: Regex Refactoring
@@ -666,7 +711,13 @@ sub validate_and_parse_data {
         }
     })));
 
-    assert!(regex_refactor.is_some() || regex_refactor.is_none(), "Should offer regex improvements");
+    // Regex refactoring might not be implemented yet
+    if let Some(actions) = regex_refactor {
+        let arr = actions.as_array().expect("code actions should be array");
+        for action in arr {
+            assert!(action.get("title").is_some(), "Action must have title");
+        }
+    }
     println!("✓ Regex refactoring suggestions work");
 
     // TEST 5: Named Capture Groups
@@ -711,7 +762,10 @@ fn test_user_story_performance_monitoring() {
     })));
 
     // Large file handling should not crash, even if it returns None for performance
-    assert!(large_file_symbols.is_some() || large_file_symbols.is_none(), "Should handle large files without crashing");
+    // Large file should return symbols array (might be empty if parsing fails)
+    if let Some(symbols) = large_file_symbols {
+        assert!(symbols.is_array(), "Document symbols should be array");
+    }
     println!("✓ Large file handling works (1000 functions)");
 
     // TEST 2: Many Open Files Scenario
@@ -776,7 +830,10 @@ sub inefficient_function {
         "command": "perl.getMemoryUsage"
     })));
 
-    assert!(memory_usage.is_some() || memory_usage.is_none(), "Should monitor memory usage");
+    // Memory monitoring might not be implemented yet
+    if let Some(response) = memory_usage {
+        assert!(response.is_array(), "Code lens should be array for memory hints");
+    }
     println!("✓ Memory usage monitoring available");
 
     println!("✅ Performance monitoring user story test complete");
