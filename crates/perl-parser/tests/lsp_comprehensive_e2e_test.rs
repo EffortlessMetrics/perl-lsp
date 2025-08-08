@@ -830,9 +830,9 @@ return$x*2}
     
     // Formatting might not be implemented yet, so we just check it doesn't crash
     // In a real implementation, we'd verify the formatted output
-    // Prepare rename might return null if rename not supported
+    // Formatting returns an array of text edits or null
     if let Some(res) = result {
-        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+        assert!(res.is_array() || res.is_null(), "Formatting should return array of text edits or null");
     }
 }
 
@@ -862,9 +862,9 @@ my $y = $x * 2;
     })));
     
     // Command execution might return edits or nothing
-    // Prepare rename might return null if rename not supported
+    // Execute command might return various result types or null
     if let Some(res) = result {
-        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+        assert!(res.is_object() || res.is_array() || res.is_null(), "Command result should be object, array, or null");
     }
 }
 
@@ -1155,9 +1155,9 @@ for (my $i = 0; $i < 10; $i++) {
         }
     })));
     
-    // Prepare rename might return null if rename not supported
+    // Code actions might return an array of actions or null
     if let Some(res) = result {
-        assert!(res.is_object() || res.is_string(), "PrepareRename should return range or placeholder");
+        assert!(res.is_array() || res.is_null(), "Code actions should return array of actions or null");
     }
 }
 
