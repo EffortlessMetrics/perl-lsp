@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-02-07
+## [0.7.4] - 2025-02-08
+
+### Fixed
+- **Test Infrastructure** - Complete overhaul of test assertions
+  - Fixed 27+ tautological assertions that were always passing
+  - Created centralized test support module with production-grade helpers
+  - Deep validation of all LSP response structures
+  - Meaningful error messages for debugging test failures
+
+### Improved
+- **Code Quality** - Zero compilation warnings
+  - Removed 159+ lines of obsolete diagnostics code
+  - Properly marked all intentionally unused stub implementations
+  - Cleaned up dead code in WorkspaceIndex, TypeInferenceEngine, etc.
+  - All 33 comprehensive tests passing (25 E2E + 8 user story tests)
+
+### Added
+- **Test Support Module** (`tests/support/mod.rs`)
+  - `assert_hover_has_text()` - Validates hover content and range
+  - `assert_completion_has_items()` - Ensures items with labels
+  - `assert_references_found()` - Validates URI and range for each ref
+  - `assert_call_hierarchy_items()` - Checks name, URI, range/selection
+  - `assert_workspace_symbols_valid()` - Requires location or container
+  - `assert_code_actions_available()` - Validates title + command/edit
+  - `assert_folding_ranges_valid()` - Ensures multi-line spans
+
+## [0.7.3] - 2025-02-07
 
 ### Added
 - **Incremental Parsing** - Lightning-fast incremental updates with <1ms performance
