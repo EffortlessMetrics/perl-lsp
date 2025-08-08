@@ -1,4 +1,5 @@
 use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+use perl_parser::{Parser, PragmaTracker};
     
     #[test]
     fn test_detect_variable_shadowing() {
@@ -12,7 +13,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             print $x;  # Use outer $x
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         // Should only have a shadowing issue
         let shadowing_issues: Vec<_> = issues.iter()
             .filter(|i| i.kind == IssueKind::VariableShadowing)
@@ -30,7 +34,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             print $used;
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].kind, IssueKind::UnusedVariable);
         assert_eq!(issues[0].variable_name, "$unused");
@@ -46,7 +53,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             print $declared;    # Use declared to avoid unused warning
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         // Should have an undeclared variable issue
         let undeclared_issues: Vec<_> = issues.iter()
             .filter(|i| i.kind == IssueKind::UndeclaredVariable)
@@ -70,7 +80,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             }
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 0);  // No issues, all variables properly scoped
     }
     
@@ -84,7 +97,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             # $i should not be accessible here
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 0);  // Loop variable is properly scoped
     }
     
@@ -98,7 +114,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             }
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 0);  // Parameters are used
     }
     
@@ -114,7 +133,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             sub get_lexical { return $lexical_var; }
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         // The lexical variable in package scope is not captured correctly by the parser
         // This is a known limitation - variables used in subroutines should be marked as used
         // For now, we expect 1 issue (unused lexical_var)
@@ -132,7 +154,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             print $x;
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].kind, IssueKind::VariableRedeclaration);
     }
@@ -147,7 +172,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             };
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         assert_eq!(issues.len(), 0);  // $captured is used in closure
     }
     
@@ -161,7 +189,10 @@ use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
             }
         "#;
         
-        let issues = analyzer.analyze(code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        let issues = analyzer.analyze(&ast, code, &pragma_map);
         let suggestions = analyzer.get_suggestions(&issues);
         
         assert!(!suggestions.is_empty());

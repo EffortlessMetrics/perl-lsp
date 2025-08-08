@@ -328,7 +328,7 @@ impl IncrementalDocument {
     }
     
     /// Parse with reusable subtrees
-    fn parse_with_reuse(&mut self, source: &str, reusable: Vec<Arc<Node>>) -> ParseResult<Node> {
+    fn parse_with_reuse(&mut self, source: &str, _reusable: Vec<Arc<Node>>) -> ParseResult<Node> {
         // Create a custom parser that can use cached subtrees
         let mut parser = Parser::new(source);
         
