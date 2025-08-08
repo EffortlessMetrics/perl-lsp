@@ -1,0 +1,92 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use Getopt::Long;
+use Pod::Usage;
+
+our $VERSION = '0.01';
+
+# Command line options
+my %opts = (
+    verbose => 0,
+    help    => 0,
+    version => 0,
+);
+
+GetOptions(
+    'verbose|v' => \$opts{verbose},
+    'help|h'    => \$opts{help},
+    'version'   => \$opts{version},
+) or pod2usage(2);
+
+pod2usage(1) if $opts{help};
+
+if ($opts{version}) {
+    say "{{ SCRIPT_NAME }} version $VERSION";
+    exit 0;
+}
+
+# Main program logic
+main();
+
+sub main {
+    # Your code here
+    say "Running {{ SCRIPT_NAME }}..." if $opts{verbose};
+    
+    # Process arguments
+    for my $arg (@ARGV) {
+        process_argument($arg);
+    }
+}
+
+sub process_argument {
+    my ($arg) = @_;
+    
+    say "Processing: $arg" if $opts{verbose};
+    # Implementation here
+}
+
+__END__
+
+=head1 NAME
+
+{{ SCRIPT_NAME }} - Brief description
+
+=head1 SYNOPSIS
+
+{{ SCRIPT_NAME }} [options] [file ...]
+
+ Options:
+   -v, --verbose    Enable verbose output
+   -h, --help       Show this help message
+   --version        Show version information
+
+=head1 DESCRIPTION
+
+This script does...
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-v, --verbose>
+
+Enable verbose output
+
+=item B<-h, --help>
+
+Print this help message and exit
+
+=item B<--version>
+
+Print version information and exit
+
+=back
+
+=head1 AUTHOR
+
+{{ AUTHOR }} <{{ EMAIL }}>
+
+=cut
