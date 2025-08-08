@@ -233,6 +233,7 @@ impl LspServer {
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
+            "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
             "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
             "textDocument/foldingRange" => self.handle_folding_range(request.params),
@@ -1024,6 +1025,48 @@ impl LspServer {
     }
     
     /// Handle textDocument/rename request
+    fn handle_prepare_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(_ast) = &doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Get the token at the current position
+                    let token = self.get_token_at_position(&doc.content, offset);
+                    if !token.is_empty() && (token.starts_with('$') || token.starts_with('@') || token.starts_with('%') || token.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')) {
+                        // Find the token bounds
+                        let (start_offset, end_offset) = self.get_token_bounds(&doc.content, offset);
+                        let (start_line, start_char) = self.offset_to_position(&doc.content, start_offset);
+                        let (end_line, end_char) = self.offset_to_position(&doc.content, end_offset);
+                        
+                        // Return the range and placeholder text
+                        return Ok(Some(json!({
+                            "range": {
+                                "start": {
+                                    "line": start_line,
+                                    "character": start_char
+                                },
+                                "end": {
+                                    "line": end_line,
+                                    "character": end_char
+                                }
+                            },
+                            "placeholder": token
+                        })));
+                    }
+                }
+            }
+        }
+        
+        // Return null if rename is not possible at this position
+        Ok(Some(json!(null)))
+    }
+
     fn handle_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
@@ -1305,6 +1348,27 @@ impl LspServer {
         }
         
         chars[start..end].iter().collect()
+    }
+    
+    /// Get the bounds of the token at the given position
+    fn get_token_bounds(&self, content: &str, offset: usize) -> (usize, usize) {
+        let chars: Vec<char> = content.chars().collect();
+        if offset >= chars.len() {
+            return (offset, offset);
+        }
+        
+        // Find word boundaries
+        let mut start = offset;
+        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_' || chars[start - 1] == '$' || chars[start - 1] == '@' || chars[start - 1] == '%') {
+            start -= 1;
+        }
+        
+        let mut end = offset;
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+        
+        (start, end)
     }
 
     /// Convert offset to line/column position
