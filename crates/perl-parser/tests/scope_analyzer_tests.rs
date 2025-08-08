@@ -1,10 +1,11 @@
-use perl_parser::{Parser, scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue}};
+use perl_parser::{Parser, scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue}, pragma_tracker::PragmaTracker};
 
 fn analyze_code(code: &str) -> Vec<ScopeIssue> {
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Failed to parse");
     let analyzer = ScopeAnalyzer::new();
-    analyzer.analyze(&ast, code, &[])
+    let pragma_map = PragmaTracker::build(&ast);
+    analyzer.analyze(&ast, code, &pragma_map)
 }
 
 #[test]
