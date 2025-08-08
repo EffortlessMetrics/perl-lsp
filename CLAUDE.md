@@ -31,11 +31,13 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
 
 ### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
-- **20+ Professional IDE Features** implemented
-- **Core Features**: Diagnostics, completion, go-to-definition, find-references, hover, signature help, symbols, rename
+- **22+ Professional IDE Features** implemented
+- **Core Features**: Diagnostics, completion, go-to-definition, find-references, hover, signature help, symbols, rename, document highlights, type hierarchy
 - **Advanced Refactoring**: Extract variable/subroutine, convert loops, add error checking, organize imports
 - **Enhanced Features**: Semantic tokens, CodeLens, call hierarchy, inlay hints, workspace symbols, folding
 - **Code Completion**: Variables, functions, keywords, modules with smart filtering and documentation
+- **Document Highlights**: Smart symbol highlighting with exact matching
+- **Type Hierarchy**: Full inheritance navigation with @ISA and use parent/base support
 - **150+ Built-in Functions**: Complete signature help with parameter hints
 - **100% Test Coverage**: All 33 comprehensive tests passing (v0.7.4)
 - **Robust Error Recovery**: Fallback mechanisms for incomplete/invalid code

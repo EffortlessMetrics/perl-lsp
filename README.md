@@ -117,7 +117,7 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features (20+ Professional IDE Features) ✅
+### LSP Features (22+ Professional IDE Features) ✅
 
 #### Core Features
 - ✅ **Real-time Diagnostics**: Live syntax checking with detailed error messages
@@ -128,6 +128,8 @@ The v3 parser includes a **full-featured Language Server Protocol implementation
 - ✅ **Signature Help**: Function parameter hints for 150+ built-in functions
 - ✅ **Document Symbols**: Hierarchical outline view with icons
 - ✅ **Rename Symbol**: Safe renaming across all references
+- ✅ **Document Highlights**: Highlight all occurrences of symbol at cursor
+- ✅ **Type Hierarchy**: Navigate inheritance relationships (supertypes/subtypes)
 
 #### Advanced Refactoring (NEW!)
 - ✅ **Extract Variable**: Extract expressions to named variables with smart naming

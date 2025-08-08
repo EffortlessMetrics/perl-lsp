@@ -2,8 +2,13 @@
 
 This document provides comprehensive documentation of all LSP features implemented in the perl-lsp server.
 
-## Latest Updates (v0.7.2)
+## Latest Updates
 
+### Unreleased
+- **Document Highlights**: Smart highlighting of all symbol occurrences at cursor
+- **Type Hierarchy**: Navigate inheritance relationships with full @ISA and pragma support
+
+### v0.7.2
 - **Enhanced Signature Help**: Now includes comprehensive signatures for 150+ Perl built-in functions
 - **Fixed Parser Issues**: Corrected operator precedence for word operators and division operator parsing
 - **Improved Accuracy**: Better handling of Perl's context-sensitive syntax
@@ -144,6 +149,64 @@ Safe, project-wide renaming:
 - **Multi-file**: Updates across all files
 - **Preview**: Shows changes before applying
 - **Undo Support**: Full undo/redo capability
+
+### 9. Document Highlights
+
+Highlight all occurrences of the symbol at cursor position:
+
+- **Smart Matching**: Exact symbol matching (e.g., `$foo` won't highlight `$food`)
+- **Variable Types**: Supports scalars (`$`), arrays (`@`), hashes (`%`)
+- **Functions & Methods**: Highlights function calls and method invocations
+- **Read/Write Detection**: Different highlight kinds for read vs write access
+- **Performance**: Single-pass AST traversal for instant results
+
+Example:
+```perl
+my $count = 0;          # Highlights when cursor on any $count
+$count++;               # Also highlighted
+print "Count: $count";  # Highlighted in string interpolation
+my $counter = $count;   # Only the last $count is highlighted
+```
+
+### 10. Type Hierarchy
+
+Navigate inheritance relationships in object-oriented Perl code:
+
+#### Supertypes (Parent Classes)
+Find all parent classes of the current class:
+- **@ISA Arrays**: `our @ISA = ('Base', 'Mixin');`
+- **Parent Pragma**: `use parent 'BaseClass';`
+- **Base Pragma**: `use base qw(Base1 Base2);`
+- **Multiple Inheritance**: Shows all parent classes
+- **Namespaced Classes**: `use parent 'My::Base::Class';`
+
+#### Subtypes (Child Classes)
+Find all classes that inherit from the current class:
+- **Package Scope Tracking**: Correctly handles linear and block form packages
+- **Cross-File**: Searches entire workspace (when implemented)
+- **Inheritance Patterns**: Detects all forms of inheritance
+
+Example:
+```perl
+package Animal;
+
+package Dog;
+use parent 'Animal';    # Dog is subtype of Animal
+
+package Cat;
+our @ISA = ('Animal');  # Cat is subtype of Animal
+
+package Bird;
+use base 'Animal';      # Bird is subtype of Animal
+```
+
+Supported patterns:
+- `use parent 'Base'` and `use parent qw(Base1 Base2)`
+- `use base 'Base'` and `use base qw(Base1 Base2)`
+- `our @ISA = ('Base')` and `our @ISA = qw(Base1 Base2)`
+- Bareword lists: `@ISA = (Base)`
+- All quote styles: `'Base'`, `"Base"`, `` `Base` ``
+- qw() with various delimiters: `qw(Base)`, `qw{Base}`, `qw[Base]`, `qw<Base>`
 
 ## Advanced Refactoring
 

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Document Highlight Provider** - Highlight all occurrences of symbols
+  - Highlights variables ($foo, @arr, %hash), functions, and methods
+  - Smart exact matching (e.g., $foo won't highlight $food)
+  - Efficient single-pass AST traversal
+  - Full LSP integration with proper capability advertisement
+
+- **Type Hierarchy Provider** - Navigate inheritance relationships
+  - Find supertypes (parent classes) via @ISA and use parent/base pragmas
+  - Find subtypes (child classes) that inherit from a class
+  - Proper package scope tracking for linear and block form packages
+  - Support for multiple inheritance patterns:
+    - `use parent 'Base'` and `use base 'Base'`
+    - `our @ISA = ('Base')` and `our @ISA = qw(Base1 Base2)`
+    - Bareword lists: `@ISA = (Base)`
+    - All quote styles: single, double, backticks
+  - Handles namespaced packages (My::Base::Class)
+  - Comprehensive qw() parsing with various delimiters
+
 ## [0.7.4] - 2025-02-08
 
 ### Fixed
