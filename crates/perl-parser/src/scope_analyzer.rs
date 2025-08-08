@@ -345,6 +345,7 @@ impl ScopeAnalyzer {
         self.get_line_number(code, node.location.start)
     }
     
+    #[allow(dead_code)]
     fn get_line_from_position(&self, offset: usize, code: &str) -> usize {
         self.get_line_number(code, offset)
     }
@@ -356,6 +357,7 @@ impl ScopeAnalyzer {
             .count() + 1
     }
     
+    #[allow(dead_code)]
     fn is_in_hash_key_context(&self, _node: &Node) -> bool {
         // TODO: Check if node is within a hash subscript context
         // For now, return false to be conservative
@@ -555,6 +557,7 @@ fn is_known_function(name: &str) -> bool {
 }
 
 /// Check if an identifier is a known filehandle
+#[allow(dead_code)]
 fn is_filehandle(name: &str) -> bool {
     const KNOWN_FILEHANDLES: &[&str] = &[
         "STDIN", "STDOUT", "STDERR", "ARGV", "ARGVOUT", "DATA", 

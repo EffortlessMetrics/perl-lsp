@@ -58,7 +58,6 @@ pub struct WorkspaceIndex {
     references: Arc<RwLock<HashMap<String, Vec<SymbolReference>>>>,
     dependencies: Arc<RwLock<HashMap<PathBuf, HashSet<PathBuf>>>>,
     dependents: Arc<RwLock<HashMap<PathBuf, HashSet<PathBuf>>>>,
-    package_files: Arc<RwLock<HashMap<String, PathBuf>>>,
     file_mtimes: Arc<RwLock<HashMap<PathBuf, std::time::SystemTime>>>,
 }
 
@@ -69,7 +68,6 @@ impl WorkspaceIndex {
             references: Arc::new(RwLock::new(HashMap::new())),
             dependencies: Arc::new(RwLock::new(HashMap::new())),
             dependents: Arc::new(RwLock::new(HashMap::new())),
-            package_files: Arc::new(RwLock::new(HashMap::new())),
             file_mtimes: Arc::new(RwLock::new(HashMap::new())),
         }
     }

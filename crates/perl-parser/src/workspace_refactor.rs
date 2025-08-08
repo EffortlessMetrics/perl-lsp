@@ -32,12 +32,12 @@ pub struct RefactorResult {
 
 /// Workspace-wide refactoring provider
 pub struct WorkspaceRefactor {
-    index: WorkspaceIndex,
+    _index: WorkspaceIndex,
 }
 
 impl WorkspaceRefactor {
     pub fn new(index: WorkspaceIndex) -> Self {
-        Self { index }
+        Self { _index: index }
     }
 
     /// Rename a symbol across all files (stub implementation)
