@@ -9,6 +9,7 @@ use crate::{
     CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
     CodeActionsProviderV2, CodeActionKindV2 as InternalCodeActionKindV2,
     CompletionProvider, CompletionItemKind,
+    document_highlight::{DocumentHighlightProvider, DocumentHighlight, DocumentHighlightKind},
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
@@ -234,6 +235,7 @@ impl LspServer {
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
             "textDocument/references" => self.handle_references(request.params),
+            "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
             "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
@@ -290,6 +292,7 @@ impl LspServer {
                 "hoverProvider": true,
                 "definitionProvider": true,
                 "referencesProvider": true,
+                "documentHighlightProvider": true,
                 "signatureHelpProvider": {
                     "triggerCharacters": ["(", ","]
                 },
@@ -1240,6 +1243,53 @@ impl LspServer {
                         }).collect();
                         
                         return Ok(Some(json!(locations)));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+    
+    /// Handle textDocument/documentHighlight request
+    fn handle_document_highlight(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Create document highlight provider
+                    let provider = DocumentHighlightProvider::new();
+                    
+                    // Find all highlights at the position
+                    let highlights = provider.find_highlights(ast, &doc.content, offset);
+                    
+                    if !highlights.is_empty() {
+                        let lsp_highlights: Vec<Value> = highlights.iter().map(|highlight| {
+                            let (start_line, start_char) = self.offset_to_position(&doc.content, highlight.location.start);
+                            let (end_line, end_char) = self.offset_to_position(&doc.content, highlight.location.end);
+                            
+                            json!({
+                                "range": {
+                                    "start": {
+                                        "line": start_line,
+                                        "character": start_char,
+                                    },
+                                    "end": {
+                                        "line": end_line,
+                                        "character": end_char,
+                                    },
+                                },
+                                "kind": highlight.kind as u32,
+                            })
+                        }).collect();
+                        
+                        return Ok(Some(json!(lsp_highlights)));
                     }
                 }
             }
