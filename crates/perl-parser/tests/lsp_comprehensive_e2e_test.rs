@@ -30,7 +30,7 @@ impl TestContext {
     }
 
     fn initialize(&mut self) -> Value {
-        let _result = self.send_request("initialize", Some(json!({
+        let result = self.send_request("initialize", Some(json!({
             "processId": null,
             "capabilities": {
                 "textDocument": {
@@ -57,7 +57,7 @@ impl TestContext {
         })));
         
         self.send_notification("initialized", None);
-        json!({"capabilities": {}})
+        result.unwrap_or_else(|| json!({"capabilities": {}}))
     }
 
     fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
@@ -125,26 +125,27 @@ impl TestContext {
 #[test]
 fn test_e2e_initialization_and_capabilities() {
     let mut ctx = TestContext::new();
-    let capabilities = ctx.initialize();
+    let response = ctx.initialize();
     
     // Verify all 25+ capabilities are advertised
-    assert!(capabilities["capabilities"]["completionProvider"].is_object());
-    assert!(capabilities["capabilities"]["hoverProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["signatureHelpProvider"].is_object());
-    assert!(capabilities["capabilities"]["definitionProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["referencesProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["documentSymbolProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["workspaceSymbolProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["codeActionProvider"].is_object());
-    assert!(capabilities["capabilities"]["codeLensProvider"].is_object());
-    assert!(capabilities["capabilities"]["documentFormattingProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["documentRangeFormattingProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["renameProvider"].is_object());
-    assert!(capabilities["capabilities"]["foldingRangeProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["executeCommandProvider"].is_object());
-    assert!(capabilities["capabilities"]["semanticTokensProvider"].is_object());
-    assert!(capabilities["capabilities"]["callHierarchyProvider"].is_boolean());
-    assert!(capabilities["capabilities"]["inlayHintProvider"].is_object());
+    let capabilities = &response["capabilities"];
+    assert!(capabilities["completionProvider"].is_object());
+    assert!(capabilities["hoverProvider"].is_boolean());
+    assert!(capabilities["signatureHelpProvider"].is_object());
+    assert!(capabilities["definitionProvider"].is_boolean());
+    assert!(capabilities["referencesProvider"].is_boolean());
+    assert!(capabilities["documentSymbolProvider"].is_boolean());
+    assert!(capabilities["workspaceSymbolProvider"].is_boolean());
+    assert!(capabilities["codeActionProvider"].is_boolean() || capabilities["codeActionProvider"].is_object());
+    assert!(capabilities["codeLensProvider"].is_object());
+    assert!(capabilities["documentFormattingProvider"].is_boolean());
+    assert!(capabilities["documentRangeFormattingProvider"].is_boolean());
+    assert!(capabilities["renameProvider"].is_boolean() || capabilities["renameProvider"].is_object());
+    assert!(capabilities["foldingRangeProvider"].is_boolean());
+    assert!(capabilities["executeCommandProvider"].is_object());
+    assert!(capabilities["semanticTokensProvider"].is_object());
+    assert!(capabilities["callHierarchyProvider"].is_boolean());
+    assert!(capabilities["inlayHintProvider"].is_object());
 }
 
 /// Test 2: Real-time Diagnostics
