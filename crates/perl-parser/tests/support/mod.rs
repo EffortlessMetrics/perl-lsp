@@ -8,14 +8,17 @@ use std::time::{Duration, Instant};
 // ===================== Constants =====================
 
 /// Default timeout for async operations
+#[allow(dead_code)]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(1500);
 
 /// Default polling interval
+#[allow(dead_code)]
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 // ===================== Extraction Helpers =====================
 
 /// Extract object from optional value with meaningful error
+#[allow(dead_code)]
 pub fn expect_obj(v: &Option<Value>) -> &serde_json::Map<String, Value> {
     v.as_ref()
         .expect("expected Some value, got None")
@@ -24,6 +27,7 @@ pub fn expect_obj(v: &Option<Value>) -> &serde_json::Map<String, Value> {
 }
 
 /// Extract array from optional value with meaningful error
+#[allow(dead_code)]
 pub fn expect_arr(v: &Option<Value>) -> &Vec<Value> {
     v.as_ref()
         .expect("expected Some value, got None")
@@ -80,6 +84,7 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
 }
 
 /// Assert rename has actual edits with validation
+#[allow(dead_code)]
 pub fn assert_rename_has_edits(v: &Option<Value>) {
     let obj = expect_obj(v);
     
@@ -113,11 +118,13 @@ pub fn assert_rename_has_edits(v: &Option<Value>) {
 }
 
 /// Assert references are found with validation
+#[allow(dead_code)]
 pub fn assert_references_found(v: &Option<Value>) {
     assert_references_found_with_min(v, None);
 }
 
 /// Assert references are found with minimum count validation
+#[allow(dead_code)]
 pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usize>) {
     if let Some(refs_val) = v {
         if !refs_val.is_null() {
@@ -139,6 +146,7 @@ pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usiz
 }
 
 /// Assert call hierarchy has items with proper structure
+#[allow(dead_code)]
 pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(ch_val) = v {
         if !ch_val.is_null() {
@@ -174,6 +182,7 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
 }
 
 /// Assert folding ranges are valid
+#[allow(dead_code)]
 pub fn assert_folding_ranges_valid(v: &Option<Value>) {
     let ranges = expect_arr(v);
     assert!(!ranges.is_empty(), "should have at least one folding range");
@@ -202,6 +211,7 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
 }
 
 /// Assert code actions are available with validation
+#[allow(dead_code)]
 pub fn assert_code_actions_available(v: &Option<Value>) {
     if let Some(actions) = v {
         if !actions.is_null() {
@@ -226,6 +236,7 @@ pub fn assert_code_actions_available(v: &Option<Value>) {
 }
 
 /// Assert workspace symbols have proper structure
+#[allow(dead_code)]
 pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(symbols) = v {
         if !symbols.is_null() {
@@ -281,6 +292,7 @@ fn assert_range_valid(range: &Value, context: &str) {
 }
 
 /// Validate a location object
+#[allow(dead_code)]
 fn assert_location_valid(location: &Value, context: &str) {
     let loc_obj = location.as_object().expect(&format!("{} must be object", context));
     assert!(loc_obj.contains_key("uri"), "{} must have uri", context);
@@ -299,6 +311,7 @@ fn assert_location_valid(location: &Value, context: &str) {
 // Use wait_for_sync instead
 
 /// Synchronous wait for condition (for non-async tests)
+#[allow(dead_code)]
 pub fn wait_for_sync<F>(
     mut condition: F,
     timeout: Option<Duration>,
