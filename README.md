@@ -5,8 +5,7 @@
 [![Coverage](.github/badges/coverage.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
 [![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
-[![Documentation](https://docs.
-rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
+[![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -629,6 +628,22 @@ cargo xtask test-edge-cases --bench
 cargo xtask test-edge-cases --coverage
 ```
 
+### Quick Smoke Test (LSP stdio)
+
+```bash
+scripts/lsp-smoke.sh   # prints "OK: documentHighlight + typeHierarchy"
+```
+
+### Running One Test Exactly
+
+```bash
+# List all tests for a package
+cargo test -p perl-parser -- --list
+
+# Run a specific test by exact name
+cargo test -p perl-parser type_hierarchy -- --exact --nocapture
+```
+
 ### Current Test Status
 
 **v3 Parser (Native)**: ✅ 141/141 edge case tests passing (100% coverage)  
@@ -834,7 +849,11 @@ Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Perfo
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details. or apache 2
+Licensed under either of
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
 
 ---
 
