@@ -20,6 +20,7 @@ use crate::{
     inlay_hints_provider::{InlayHintsProvider, InlayHintConfig},
     test_runner::{TestRunner, TestKind},
     performance::{AstCache, SymbolIndex},
+    ast::{Node, NodeKind},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -492,7 +493,20 @@ impl LspServer {
 
                 eprintln!("Publishing {} diagnostics for {}", lsp_diagnostics.len(), uri);
                 
-                // TODO: Send notification via stdout
+                // Send diagnostics notification to client
+                let notification = json!({
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": uri,
+                        "diagnostics": lsp_diagnostics
+                    }
+                });
+                
+                let response_str = serde_json::to_string(&notification).unwrap();
+                // Ignore broken pipe errors in tests
+                let _ = io::stdout().write_all(format!("Content-Length: {}\r\n\r\n{}", response_str.len(), response_str).as_bytes());
+                let _ = io::stdout().flush();
             }
         }
     }
@@ -680,12 +694,21 @@ impl LspServer {
             
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                if let Some(ref _ast) = doc.ast {
+                if let Some(ref ast) = doc.ast {
                     let offset = self.position_to_offset(&doc.content, line, character);
                     
                     // Find the function call context at this position
                     if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
-                        // Get signature for the function
+                        // Try to get signature from user-defined functions first
+                        if let Some(signature) = self.get_user_function_signature(ast, &function_name) {
+                            return Ok(Some(json!({
+                                "signatures": [signature],
+                                "activeSignature": 0,
+                                "activeParameter": active_param
+                            })));
+                        }
+                        
+                        // Fall back to built-in functions
                         if let Some(signature) = self.get_function_signature(&function_name) {
                             return Ok(Some(json!({
                                 "signatures": [signature],
@@ -758,6 +781,127 @@ impl LspServer {
     }
     
     /// Get function signature information
+    /// Get signature for user-defined functions from AST
+    fn get_user_function_signature(&self, ast: &Node, function_name: &str) -> Option<Value> {
+        // Walk the AST to find the subroutine definition
+        let sub_node = self.find_subroutine_definition(ast, function_name)?;
+        
+        // Extract parameters from the subroutine
+        let mut params = Vec::new();
+        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
+            if !sub_params.is_empty() {
+                // Extract parameter names from the params node
+                for param in sub_params {
+                    self.extract_params(param, &mut params);
+                }
+            } else {
+                // Look for my (...) = @_; pattern in the body
+                self.extract_params_from_body(body, &mut params);
+            }
+        }
+        
+        // Build signature
+        let label = if params.is_empty() {
+            format!("sub {}", function_name)
+        } else {
+            format!("sub {}({})", function_name, params.join(", "))
+        };
+        
+        let parameters: Vec<Value> = params.iter().map(|p| {
+            json!({
+                "label": p,
+                "documentation": null
+            })
+        }).collect();
+        
+        Some(json!({
+            "label": label,
+            "documentation": format!("User-defined function '{}'", function_name),
+            "parameters": parameters
+        }))
+    }
+    
+    /// Find a subroutine definition by name in the AST
+    fn find_subroutine_definition<'a>(&self, node: &'a Node, name: &str) -> Option<&'a Node> {
+        match &node.kind {
+            NodeKind::Subroutine { name: sub_name, .. } => {
+                if let Some(sub_name) = sub_name {
+                    if sub_name == name {
+                        return Some(node);
+                    }
+                }
+            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(found) = self.find_subroutine_definition(stmt, name) {
+                        return Some(found);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+    
+    /// Extract parameter names from a params node
+    fn extract_params(&self, params_node: &Node, params: &mut Vec<String>) {
+        match &params_node.kind {
+            NodeKind::Variable { sigil, name } => {
+                params.push(format!("{}{}", sigil, name));
+            }
+            _ => {}
+        }
+    }
+    
+    /// Extract parameters from my (...) = @_; pattern in the body
+    fn extract_params_from_body(&self, body: &Node, params: &mut Vec<String>) {
+        if let NodeKind::Block { statements } = &body.kind {
+            if let Some(first_stmt) = statements.first() {
+                // Look for my (...) = @_ pattern
+                if let NodeKind::VariableListDeclaration { variables, initializer, .. } = &first_stmt.kind {
+                    // Check if initializer is @_
+                    if let Some(init) = initializer {
+                        if let NodeKind::Variable { sigil, name } = &init.kind {
+                            if sigil == "@" && name == "_" {
+                                // Extract params from variables
+                                for var in variables {
+                                    if let NodeKind::Variable { sigil: var_sigil, name: var_name } = &var.kind {
+                                        params.push(format!("{}{}", var_sigil, var_name));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if let NodeKind::Assignment { lhs, rhs, .. } = &first_stmt.kind {
+                    // Alternative pattern: ($x, $y) = @_
+                    if let NodeKind::Variable { sigil, name } = &rhs.kind {
+                        if sigil == "@" && name == "_" {
+                            // Extract params from lhs
+                            self.extract_params_from_lhs(lhs, params);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Helper to extract params from left-hand side of assignment
+    fn extract_params_from_lhs(&self, lhs: &Node, params: &mut Vec<String>) {
+        match &lhs.kind {
+            NodeKind::Variable { sigil, name } => {
+                params.push(format!("{}{}", sigil, name));
+            }
+            NodeKind::VariableListDeclaration { variables, .. } => {
+                for var in variables {
+                    if let NodeKind::Variable { sigil, name } = &var.kind {
+                        params.push(format!("{}{}", sigil, name));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    
     fn get_function_signature(&self, function_name: &str) -> Option<Value> {
         // Define signatures for common Perl built-in functions
         let signature = match function_name {
