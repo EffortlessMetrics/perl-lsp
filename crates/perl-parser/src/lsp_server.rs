@@ -9,7 +9,7 @@ use crate::{
     CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
     CodeActionsProviderV2, CodeActionKindV2 as InternalCodeActionKindV2,
     CompletionProvider, CompletionItemKind,
-    document_highlight::{DocumentHighlightProvider, DocumentHighlight, DocumentHighlightKind},
+    document_highlight::DocumentHighlightProvider,
     type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
