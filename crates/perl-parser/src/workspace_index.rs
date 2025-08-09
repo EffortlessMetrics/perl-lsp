@@ -41,6 +41,12 @@ pub struct WorkspaceSymbol {
     pub qualified_name: Option<String>,
     pub documentation: Option<String>,
     pub container_name: Option<String>,
+    #[serde(default = "default_has_body")]
+    pub has_body: bool,  // For forward declarations
+}
+
+fn default_has_body() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,13 +110,35 @@ impl WorkspaceIndex {
         }
     }
     
+    /// Normalize a URI to a consistent form
+    fn normalize_uri(uri: &str) -> String {
+        // Remove trailing slashes, normalize file:// prefix, etc.
+        let mut normalized = uri.to_string();
+        
+        // Ensure file URIs have proper prefix
+        if normalized.starts_with("file://") {
+            normalized = normalized.to_string();
+        } else if normalized.starts_with('/') {
+            normalized = format!("file://{}", normalized);
+        }
+        
+        // Remove trailing slashes from paths (but not from scheme)
+        if normalized.ends_with('/') && !normalized.ends_with("://") {
+            normalized.pop();
+        }
+        
+        normalized
+    }
+    
     /// Index a file from its URI and text content
     pub fn index_file(&self, uri: &str, text: &str, version: i32) -> Result<(), String> {
+        let normalized_uri = Self::normalize_uri(uri);
+        
         // Update document store
-        if self.document_store.is_open(uri) {
-            self.document_store.update(uri, version, text.to_string());
+        if self.document_store.is_open(&normalized_uri) {
+            self.document_store.update(&normalized_uri, version, text.to_string());
         } else {
-            self.document_store.open(uri.to_string(), version, text.to_string());
+            self.document_store.open(normalized_uri.clone(), version, text.to_string());
         }
         
         // Parse the file
@@ -121,15 +149,15 @@ impl WorkspaceIndex {
         };
         
         // Get the document for line index
-        let mut doc = self.document_store.get(uri).ok_or("Document not found")?;
+        let mut doc = self.document_store.get(&normalized_uri).ok_or("Document not found")?;
         
         // Extract symbols and references
         let mut file_index = FileIndex::default();
-        let mut visitor = IndexVisitor::new(&mut doc, uri.to_string());
+        let mut visitor = IndexVisitor::new(&mut doc, normalized_uri.clone());
         visitor.visit(&ast, &mut file_index);
         
         // Update the index
-        let key = DocumentStore::uri_key(uri);
+        let key = DocumentStore::uri_key(&normalized_uri);
         {
             let mut files = self.files.write().unwrap();
             files.insert(key.clone(), file_index);
@@ -155,7 +183,8 @@ impl WorkspaceIndex {
     
     /// Remove a file from the index
     pub fn remove_file(&self, uri: &str) {
-        let key = DocumentStore::uri_key(uri);
+        let normalized_uri = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&normalized_uri);
         
         // Remove from document store
         self.document_store.close(uri);
@@ -177,7 +206,8 @@ impl WorkspaceIndex {
     
     /// Clear a file from the index (alias for remove_file)
     pub fn clear_file(&self, uri: &str) {
-        self.remove_file(uri);
+        let normalized_uri = Self::normalize_uri(uri);
+        self.remove_file(&normalized_uri);
     }
     
     /// Find all references to a symbol
@@ -250,7 +280,8 @@ impl WorkspaceIndex {
     
     /// Get symbols in a specific file
     pub fn file_symbols(&self, uri: &str) -> Vec<WorkspaceSymbol> {
-        let key = DocumentStore::uri_key(uri);
+        let normalized_uri = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read().unwrap();
         
         files.get(&key)
@@ -260,7 +291,8 @@ impl WorkspaceIndex {
     
     /// Get dependencies of a file
     pub fn file_dependencies(&self, uri: &str) -> HashSet<String> {
-        let key = DocumentStore::uri_key(uri);
+        let normalized_uri = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read().unwrap();
         
         files.get(&key)
@@ -369,7 +401,10 @@ impl IndexVisitor {
         match &node.kind {
             NodeKind::Package { name, .. } => {
                 let package_name = name.clone();
+                
+                // Update the current package and push to stack
                 self.current_package = Some(package_name.clone());
+                self.package_stack.push(package_name.clone());
                 
                 file_index.symbols.push(WorkspaceSymbol {
                     name: package_name.clone(),
@@ -379,6 +414,7 @@ impl IndexVisitor {
                     qualified_name: Some(package_name),
                     documentation: None,
                     container_name: None,
+                    has_body: true,
                 });
             }
             
@@ -408,6 +444,7 @@ impl IndexVisitor {
                             qualified_name: Some(qualified_name),
                             documentation: None,
                             container_name: self.current_package.clone(),
+                            has_body: true,  // Subroutine node always has body
                         });
                     }
                     
@@ -438,6 +475,7 @@ impl IndexVisitor {
                         qualified_name: None,
                         documentation: None,
                         container_name: self.current_package.clone(),
+                        has_body: true,  // Variables always have body
                     });
                     
                     // Mark as definition
@@ -471,6 +509,7 @@ impl IndexVisitor {
                             qualified_name: None,
                             documentation: None,
                             container_name: self.current_package.clone(),
+                            has_body: true,
                         });
                         
                         // Mark as definition
@@ -636,13 +675,22 @@ impl IndexVisitor {
             }
             
             NodeKind::MethodCall { object, method, args } => {
+                // Check if this is a static method call (Package->method)
+                let qualified_method = if let NodeKind::Identifier { name } = &object.kind {
+                    // Static method call: Package->method
+                    Some(format!("{}::{}", name, method))
+                } else {
+                    // Instance method call: $obj->method
+                    None
+                };
+                
                 // Object is a read context
                 self.visit_node(object, file_index);
                 
-                // Track method call
-                let method_name = method.clone();
+                // Track method call with qualified name if applicable
+                let method_key = qualified_method.as_ref().unwrap_or(method);
                 file_index.references
-                    .entry(method_name)
+                    .entry(method_key.clone())
                     .or_default()
                     .push(SymbolReference {
                         uri: self.uri.clone(),
@@ -673,6 +721,7 @@ impl IndexVisitor {
                     qualified_name: Some(class_name),
                     documentation: None,
                     container_name: None,
+                    has_body: true,
                 });
             }
             
@@ -692,6 +741,7 @@ impl IndexVisitor {
                     qualified_name: Some(qualified_name),
                     documentation: None,
                     container_name: self.current_package.clone(),
+                    has_body: true,
                 });
                 
                 // Visit params
