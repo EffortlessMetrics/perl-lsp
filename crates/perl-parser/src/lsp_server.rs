@@ -13,6 +13,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
+    workspace_index::{WorkspaceIndex, SymbolKind as IndexSymbolKind},
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     semantic_tokens_provider::{
         SemanticTokensProvider, 
@@ -38,6 +39,8 @@ pub struct LspServer {
     initialized: bool,
     /// Workspace symbols provider
     workspace_symbols: Arc<Mutex<WorkspaceSymbolsProvider>>,
+    /// Workspace-wide index for cross-file features
+    workspace_index: Arc<WorkspaceIndex>,
     /// AST cache for performance
     ast_cache: Arc<AstCache>,
     /// Symbol index for fast lookups
@@ -128,6 +131,7 @@ impl LspServer {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
             workspace_symbols: Arc::new(Mutex::new(WorkspaceSymbolsProvider::new())),
+            workspace_index: Arc::new(WorkspaceIndex::new()),
             // Cache up to 100 ASTs with 5 minute TTL
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
@@ -226,6 +230,12 @@ impl LspServer {
             }
             "textDocument/didChange" => {
                 match self.handle_did_change(request.params) {
+                    Ok(_) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
+            "textDocument/didClose" => {
+                match self.handle_did_close(request.params) {
                     Ok(_) => Ok(None),
                     Err(e) => Err(e),
                 }
@@ -402,6 +412,14 @@ impl LspServer {
                 for symbol in symbols {
                     index.add_symbol(symbol);
                 }
+                
+                // Update the workspace-wide index for cross-file features
+                if let Some(path) = uri.strip_prefix("file://") {
+                    let path = std::path::Path::new(path);
+                    if let Err(e) = self.workspace_index.index_file(path, text) {
+                        eprintln!("Failed to index file {}: {}", uri, e);
+                    }
+                }
             }
 
             // Send diagnostics
@@ -455,6 +473,14 @@ impl LspServer {
                     if let Some(ref ast) = ast {
                         self.workspace_symbols.lock().unwrap()
                             .index_document(uri, ast, text);
+                        
+                        // Update the workspace-wide index for cross-file features
+                        if let Some(path) = uri.strip_prefix("file://") {
+                            let path = std::path::Path::new(path);
+                            if let Err(e) = self.workspace_index.index_file(path, text) {
+                                eprintln!("Failed to index file {}: {}", uri, e);
+                            }
+                        }
                     }
 
                     // Send diagnostics
@@ -518,6 +544,29 @@ impl LspServer {
                 let _ = io::stdout().flush();
             }
         }
+    }
+
+    /// Handle didClose notification
+    fn handle_did_close(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            eprintln!("Document closed: {}", uri);
+            
+            // Remove from documents
+            self.documents.lock().unwrap().remove(uri);
+            
+            // Clear from workspace index
+            if let Some(path) = uri.strip_prefix("file://") {
+                let path = std::path::Path::new(path);
+                self.workspace_index.clear_file(path);
+            }
+            
+            // Clear from workspace symbols
+            self.workspace_symbols.lock().unwrap().remove_document(uri);
+        }
+        
+        Ok(())
     }
 
     /// Handle completion request
@@ -2226,13 +2275,63 @@ impl LspServer {
         };
         
         // Search for symbols, prioritizing candidates from the index
-        let symbols = if !candidate_names.is_empty() {
+        let mut symbols = if !candidate_names.is_empty() {
             self.workspace_symbols.lock().unwrap()
                 .search_with_candidates(query, &source_map, &candidate_names)
         } else {
             self.workspace_symbols.lock().unwrap()
                 .search(query, &source_map)
         };
+        
+        // Also search in the workspace index for cross-file symbols
+        if !query.is_empty() {
+            let index_symbols = self.workspace_index.find_symbols(query);
+            
+            // Convert workspace index symbols to workspace_symbols::WorkspaceSymbol format
+            for sym in index_symbols {
+                let uri = format!("file://{}", sym.file_path.display());
+                
+                // Skip if already in results from workspace_symbols provider
+                let already_exists = symbols.iter().any(|existing| {
+                    existing.location.uri == uri && existing.name == sym.name
+                });
+                
+                if already_exists {
+                    continue;
+                }
+                
+                let kind = match sym.kind {
+                    IndexSymbolKind::Package => 4,  // Module
+                    IndexSymbolKind::Subroutine => 12,  // Function
+                    IndexSymbolKind::Method => 6,  // Method
+                    IndexSymbolKind::Variable => 13,  // Variable
+                    IndexSymbolKind::Constant => 14,  // Constant
+                    IndexSymbolKind::Class => 5,  // Class
+                    _ => 0,  // File
+                };
+                
+                use crate::workspace_symbols::{WorkspaceSymbol as WsSymbol, Location, Range, Position};
+                
+                symbols.push(WsSymbol {
+                    name: sym.name.clone(),
+                    kind,
+                    location: Location {
+                        uri,
+                        range: Range {
+                            start: Position {
+                                line: sym.line.saturating_sub(1) as u32,
+                                character: sym.column.saturating_sub(1) as u32,
+                            },
+                            end: Position {
+                                line: sym.line.saturating_sub(1) as u32,
+                                character: (sym.column.saturating_sub(1) + sym.name.len()) as u32,
+                            },
+                        },
+                    },
+                    container_name: sym.qualified_name,
+                });
+            }
+        }
         
         eprintln!("Found {} symbols", symbols.len());
         

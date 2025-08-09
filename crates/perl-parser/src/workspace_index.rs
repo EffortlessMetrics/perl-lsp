@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::{Serialize, Deserialize};
-use crate::ast::{AST, Node};
+use crate::ast::Node;
 use crate::Parser;
 
 /// A symbol in the workspace
@@ -119,14 +119,14 @@ impl WorkspaceIndex {
     /// Walk AST and extract symbols/references
     fn walk_ast(
         &self,
-        ast: &AST,
+        ast: &Node,
         content: &str,
         path: &Path,
         current_package: &mut Option<String>,
         symbols: &mut Vec<WorkspaceSymbol>,
         references: &mut Vec<(String, SymbolReference)>,
     ) {
-        self.visit_node(&ast.root, content, path, current_package, symbols, references);
+        self.visit_node(ast, content, path, current_package, symbols, references);
     }
     
     /// Visit a node and its children
@@ -145,93 +145,127 @@ impl WorkspaceIndex {
         match &node.kind {
             NodeKind::Package { name, .. } => {
                 *current_package = Some(name.clone());
+                let (line, column) = self.offset_to_line_col(content, node.location.start);
                 
                 symbols.push(WorkspaceSymbol {
                     name: name.clone(),
                     kind: SymbolKind::Package,
                     file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
+                    line,
+                    column,
                     qualified_name: Some(name.clone()),
                     documentation: None,
                 });
             }
-            NodeKind::Subroutine { name, .. } => {
-                let qualified_name = if let Some(pkg) = current_package {
-                    Some(format!("{}::{}", pkg, name))
-                } else {
-                    Some(name.clone())
-                };
+            NodeKind::Subroutine { name, body, .. } => {
+                let (line, column) = self.offset_to_line_col(content, node.location.start);
                 
-                symbols.push(WorkspaceSymbol {
-                    name: name.clone(),
-                    kind: SymbolKind::Subroutine,
-                    file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
-                    qualified_name,
-                    documentation: None,
-                });
+                if let Some(sub_name) = name {
+                    let qualified_name = if let Some(pkg) = current_package {
+                        Some(format!("{}::{}", pkg, sub_name))
+                    } else {
+                        Some(sub_name.clone())
+                    };
+                    
+                    symbols.push(WorkspaceSymbol {
+                        name: sub_name.clone(),
+                        kind: SymbolKind::Subroutine,
+                        file_path: path.to_path_buf(),
+                        line,
+                        column,
+                        qualified_name,
+                        documentation: None,
+                    });
+                    
+                    // This is also a definition reference
+                    references.push((sub_name.clone(), SymbolReference {
+                        file_path: path.to_path_buf(),
+                        line,
+                        column,
+                        kind: ReferenceKind::Definition,
+                    }));
+                }
                 
-                // This is also a definition reference
-                references.push((name.clone(), SymbolReference {
-                    file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
-                    kind: ReferenceKind::Definition,
-                }));
+                // Visit body
+                self.visit_node(body, content, path, current_package, symbols, references);
             }
-            NodeKind::VariableDeclaration { variable, .. } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    let (line, column) = self.offset_to_line_col(content, variable.location.start);
                     let var_name = format!("{}{}", sigil, name);
                     symbols.push(WorkspaceSymbol {
                         name: var_name.clone(),
                         kind: SymbolKind::Variable,
                         file_path: path.to_path_buf(),
-                        line: variable.location.line,
-                        column: variable.location.column,
+                        line,
+                        column,
                         qualified_name: None,
                         documentation: None,
                     });
                 }
+                
+                // Visit initializer if present
+                if let Some(init) = initializer {
+                    self.visit_node(init, content, path, current_package, symbols, references);
+                }
             }
-            NodeKind::VariableListDeclaration { variables, .. } => {
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
                 for var in variables {
                     if let NodeKind::Variable { sigil, name } = &var.kind {
+                        let (line, column) = self.offset_to_line_col(content, var.location.start);
                         let var_name = format!("{}{}", sigil, name);
                         symbols.push(WorkspaceSymbol {
                             name: var_name.clone(),
                             kind: SymbolKind::Variable,
                             file_path: path.to_path_buf(),
-                            line: var.location.line,
-                            column: var.location.column,
+                            line,
+                            column,
                             qualified_name: None,
                             documentation: None,
                         });
                     }
                 }
+                
+                // Visit initializer if present
+                if let Some(init) = initializer {
+                    self.visit_node(init, content, path, current_package, symbols, references);
+                }
             }
-            NodeKind::FunctionCall { name, .. } => {
+            NodeKind::FunctionCall { name, args, .. } => {
+                let (line, column) = self.offset_to_line_col(content, node.location.start);
                 references.push((name.clone(), SymbolReference {
                     file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
+                    line,
+                    column,
                     kind: ReferenceKind::Usage,
                 }));
+                
+                // Visit arguments
+                for arg in args {
+                    self.visit_node(arg, content, path, current_package, symbols, references);
+                }
             }
-            NodeKind::MethodCall { method, .. } => {
+            NodeKind::MethodCall { method, object, args, .. } => {
+                let (line, column) = self.offset_to_line_col(content, node.location.start);
                 references.push((method.clone(), SymbolReference {
                     file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
+                    line,
+                    column,
                     kind: ReferenceKind::Usage,
                 }));
+                
+                // Visit object and arguments
+                self.visit_node(object, content, path, current_package, symbols, references);
+                for arg in args {
+                    self.visit_node(arg, content, path, current_package, symbols, references);
+                }
             }
             NodeKind::Use { module, .. } => {
+                let (line, column) = self.offset_to_line_col(content, node.location.start);
                 references.push((module.clone(), SymbolReference {
                     file_path: path.to_path_buf(),
-                    line: node.location.line,
-                    column: node.location.column,
+                    line,
+                    column,
                     kind: ReferenceKind::Import,
                 }));
                 
@@ -241,14 +275,41 @@ impl WorkspaceIndex {
                     .or_default()
                     .insert(PathBuf::from(module.replace("::", "/") + ".pm"));
             }
-            _ => {}
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.visit_node(stmt, content, path, current_package, symbols, references);
+                }
+            }
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.visit_node(stmt, content, path, current_package, symbols, references);
+                }
+            }
+            _ => {
+                // For other node kinds, we don't extract symbols but may want to visit children
+                // This is a simplified version - a complete implementation would handle all node types
+            }
+        }
+    }
+    
+    /// Convert byte offset to line and column
+    fn offset_to_line_col(&self, content: &str, offset: usize) -> (usize, usize) {
+        let mut line = 1;
+        let mut column = 1;
+        
+        for (i, ch) in content.chars().enumerate() {
+            if i >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
         }
         
-        // Visit children - use the children() method from scope_analyzer.rs
-        use crate::scope_analyzer::*;  // Import Node trait impl
-        for child in node.children() {
-            self.visit_node(child, content, path, current_package, symbols, references);
-        }
+        (line, column)
     }
 
     /// Find all symbols with a given name
