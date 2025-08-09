@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Workspace File Operations Support** - Complete file synchronization
+  - `workspace/didChangeWatchedFiles` - Re-indexes files changed externally
+  - `workspace/willRenameFiles` - Updates module references when files are renamed
+  - `workspace/didDeleteFiles` - Removes deleted files from workspace index
+  - `workspace/applyEdit` - Applies multi-file refactoring operations
+  - Automatic module name extraction from file paths
+  - Smart import updating (use, require, use parent, use base)
+  - Robust error handling with graceful fallbacks
+
 - **Document Highlight Provider** - Highlight all occurrences of symbols
   - Highlights variables ($foo, @arr, %hash), functions, and methods
   - Smart exact matching (e.g., $foo won't highlight $food)
@@ -25,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - All quote styles: single, double, backticks
   - Handles namespaced packages (My::Base::Class)
   - Comprehensive qw() parsing with various delimiters
+
+### Improved
+- **Error Handling** - Replaced critical `.unwrap()` calls
+  - 8+ unwrap calls in workspace handlers replaced with proper error handling
+  - Added let-else patterns for cleaner error flow
+  - Improved robustness for production environments
+
+### Tests
+- **Workspace File Operations Tests** - 13 new comprehensive tests
+  - File creation, modification, and deletion handling
+  - Module rename and import updating
+  - Multi-file edit application
+  - Error cases with missing URIs and invalid parameters
 
 ## [0.7.4] - 2025-02-08
 
