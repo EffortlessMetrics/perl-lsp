@@ -118,9 +118,9 @@ pub struct JsonRpcResponse {
 /// JSON-RPC error
 #[derive(Debug, Serialize)]
 pub struct JsonRpcError {
-    code: i32,
-    message: String,
-    data: Option<Value>,
+    pub code: i32,
+    pub message: String,
+    pub data: Option<Value>,
 }
 
 impl LspServer {
@@ -135,6 +135,19 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             output: Arc::new(Mutex::new(Box::new(io::stdout()))),
+        }
+    }
+
+    /// Create a new LSP server with custom output (for testing)
+    pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        Self {
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            initialized: false,
+            workspace_index: Arc::new(WorkspaceIndex::new()),
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
+            output,
         }
     }
     
@@ -281,6 +294,10 @@ impl LspServer {
             "workspace/executeCommand" => self.handle_execute_command(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery(request.params),
             "workspace/configuration" => self.handle_configuration(request.params),
+            "workspace/didChangeWatchedFiles" => self.handle_did_change_watched_files(request.params),
+            "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
+            "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
+            "workspace/applyEdit" => self.handle_apply_edit(request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
@@ -2983,6 +3000,281 @@ impl LspServer {
         
         Ok(Some(json!([])))
     }
+
+    /// Handle workspace/didChangeWatchedFiles notification
+    fn handle_did_change_watched_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(changes) = params["changes"].as_array() {
+                for change in changes {
+                    let Some(uri) = change["uri"].as_str() else {
+                        eprintln!("Invalid URI in file change event");
+                        continue;
+                    };
+                    let change_type = change["type"].as_u64().unwrap_or(0);
+                    
+                    eprintln!("File change detected: {} (type: {})", uri, change_type);
+                    
+                    match change_type {
+                        1 => { // Created
+                            // Re-index the file if it's a Perl file
+                            if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                                if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
+                                    let _ = self.workspace_index.index_file(uri, &content, 0);
+                                    eprintln!("Indexed new file: {}", uri);
+                                }
+                            }
+                        }
+                        2 => { // Changed
+                            // Re-index the file
+                            if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
+                                // Clear old index data
+                                self.workspace_index.clear_file(uri);
+                                // Re-index with new content
+                                let _ = self.workspace_index.index_file(uri, &content, 0);
+                                
+                                // Also update our internal document store if it exists
+                                if let Ok(mut documents) = self.documents.lock() {
+                                    if let Some(doc) = documents.get_mut(uri) {
+                                        doc.content = content;
+                                        doc._version += 1;
+                                        // Clear cached AST
+                                        doc.ast = None;
+                                    }
+                                }
+                                
+                                eprintln!("Re-indexed changed file: {}", uri);
+                            }
+                        }
+                        3 => { // Deleted
+                            // Remove from index
+                            self.workspace_index.remove_file(uri);
+                            
+                            // Remove from document store
+                            if let Ok(mut documents) = self.documents.lock() {
+                                documents.remove(uri);
+                            }
+                            
+                            eprintln!("Removed deleted file from index: {}", uri);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        
+        // This is a notification, no response needed
+        Ok(None)
+    }
+
+    /// Handle workspace/willRenameFiles request
+    fn handle_will_rename_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                let mut workspace_edit = json!({
+                    "changes": {}
+                });
+                
+                for file in files {
+                    let Some(old_uri) = file["oldUri"].as_str() else {
+                        continue;
+                    };
+                    let Some(new_uri) = file["newUri"].as_str() else {
+                        continue;
+                    };
+                    
+                    eprintln!("File rename: {} -> {}", old_uri, new_uri);
+                    
+                    // Extract module names from file paths
+                    let old_module = path_to_module_name(old_uri);
+                    let new_module = path_to_module_name(new_uri);
+                    
+                    if !old_module.is_empty() && !new_module.is_empty() {
+                        // Find all files that reference the old module
+                        let dependents = self.workspace_index.find_dependents(&old_module);
+                        
+                        for dependent_uri in dependents {
+                            // Get the document content
+                            let Ok(documents) = self.documents.lock() else {
+                                continue;
+                            };
+                            if let Some(doc) = documents.get(&dependent_uri) {
+                                let mut edits = Vec::new();
+                                
+                                // Find and replace use statements
+                                for (line_num, line) in doc.content.lines().enumerate() {
+                                    if line.contains(&format!("use {}", old_module)) || 
+                                       line.contains(&format!("require {}", old_module)) ||
+                                       line.contains(&format!("use parent '{}'", old_module)) ||
+                                       line.contains(&format!("use base '{}'", old_module)) {
+                                        
+                                        let new_line = line.replace(&old_module, &new_module);
+                                        edits.push(json!({
+                                            "range": {
+                                                "start": {"line": line_num, "character": 0},
+                                                "end": {"line": line_num, "character": line.len()}
+                                            },
+                                            "newText": new_line
+                                        }));
+                                    }
+                                }
+                                
+                                if !edits.is_empty() {
+                                    workspace_edit["changes"][dependent_uri] = json!(edits);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Update the index for the renamed file
+                    self.workspace_index.remove_file(old_uri);
+                    if let Ok(content) = std::fs::read_to_string(new_uri.trim_start_matches("file://")) {
+                        let _ = self.workspace_index.index_file(new_uri, &content, 0);
+                    }
+                }
+                
+                return Ok(Some(workspace_edit));
+            }
+        }
+        
+        // Return empty edit if no changes needed
+        Ok(Some(json!({"changes": {}})))
+    }
+
+    /// Handle workspace/didDeleteFiles notification
+    fn handle_did_delete_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                for file in files {
+                    let Some(uri) = file["uri"].as_str() else {
+                        continue;
+                    };
+                    
+                    eprintln!("File deleted: {}", uri);
+                    
+                    // Remove from workspace index
+                    self.workspace_index.remove_file(uri);
+                    
+                    // Remove from document store
+                    if let Ok(mut documents) = self.documents.lock() {
+                        documents.remove(uri);
+                    }
+                }
+            }
+        }
+        
+        // This is a notification, no response needed
+        Ok(None)
+    }
+
+    /// Handle workspace/applyEdit request
+    fn handle_apply_edit(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let Some(edit) = params.get("edit") else {
+                return Ok(Some(json!({"applied": false, "failureReason": "Missing 'edit' field"})));
+            };
+            
+            eprintln!("Applying workspace edit");
+            
+            // Apply changes to each document
+            if let Some(changes) = edit["changes"].as_object() {
+                for (uri, edits) in changes {
+                    if let Some(edits) = edits.as_array() {
+                        let Ok(mut documents) = self.documents.lock() else {
+                            continue;
+                        };
+                        if let Some(doc) = documents.get_mut(uri) {
+                            // Apply edits in reverse order to maintain positions
+                            let mut sorted_edits = edits.clone();
+                            sorted_edits.sort_by(|a, b| {
+                                let a_line = a["range"]["start"]["line"].as_u64().unwrap_or(0);
+                                let b_line = b["range"]["start"]["line"].as_u64().unwrap_or(0);
+                                b_line.cmp(&a_line)
+                            });
+                            
+                            for edit in sorted_edits {
+                                if let Some(new_text) = edit["newText"].as_str() {
+                                    let start_line = edit["range"]["start"]["line"].as_u64().unwrap_or(0) as usize;
+                                    let start_char = edit["range"]["start"]["character"].as_u64().unwrap_or(0) as usize;
+                                    let end_line = edit["range"]["end"]["line"].as_u64().unwrap_or(0) as usize;
+                                    let end_char = edit["range"]["end"]["character"].as_u64().unwrap_or(0) as usize;
+                                    
+                                    // Apply the edit to the document content
+                                    let lines: Vec<String> = doc.content.lines().map(String::from).collect();
+                                    let mut new_lines = Vec::new();
+                                    
+                                    // Copy lines before the edit
+                                    for i in 0..start_line {
+                                        new_lines.push(lines[i].clone());
+                                    }
+                                    
+                                    // Apply the edit
+                                    if start_line == end_line {
+                                        let line = &lines[start_line];
+                                        let new_line = format!(
+                                            "{}{}{}",
+                                            &line[..start_char.min(line.len())],
+                                            new_text,
+                                            &line[end_char.min(line.len())..]
+                                        );
+                                        new_lines.push(new_line);
+                                    } else {
+                                        // Multi-line edit
+                                        let first_line = &lines[start_line];
+                                        let last_line = &lines[end_line];
+                                        let new_line = format!(
+                                            "{}{}{}",
+                                            &first_line[..start_char.min(first_line.len())],
+                                            new_text,
+                                            &last_line[end_char.min(last_line.len())..]
+                                        );
+                                        new_lines.push(new_line);
+                                    }
+                                    
+                                    // Copy lines after the edit
+                                    for i in (end_line + 1)..lines.len() {
+                                        new_lines.push(lines[i].clone());
+                                    }
+                                    
+                                    doc.content = new_lines.join("\n");
+                                    doc._version += 1;
+                                }
+                            }
+                            
+                            // Re-index the file after changes
+                            let _ = self.workspace_index.index_file(uri, &doc.content, doc._version);
+                            
+                            // Clear cached AST
+                            doc.ast = None;
+                        }
+                    }
+                }
+            }
+            
+            // Return success
+            return Ok(Some(json!({"applied": true})));
+        }
+        
+        Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
+    }
+}
+
+/// Convert a file path to a Perl module name
+fn path_to_module_name(uri: &str) -> String {
+    let path = uri.trim_start_matches("file://");
+    let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
+    
+    // Find the lib directory and extract module path
+    if let Some(lib_index) = path.rfind("/lib/") {
+        let module_path = &path[lib_index + 5..];
+        return module_path.replace('/', "::");
+    }
+    
+    // Fallback: use filename as module name
+    if let Some(last_slash) = path.rfind('/') {
+        return path[last_slash + 1..].to_string();
+    }
+    
+    path.to_string()
 }
 
 impl Default for LspServer {
