@@ -26,41 +26,41 @@ fn highlights_read_and_write() {
     assert_eq!(highlights.len(), 3, "Should find all 3 occurrences of $x");
     
     // Verify exact ranges for each highlight
-    let expected_positions = [
-        (30, 32),  // First $x at "my $x=1"
-        (37, 39),  // Second $x at "$x++"
-        (48, 50),  // Third $x at "print $x"
-    ];
-    
-    for (i, highlight) in highlights.iter().enumerate() {
-        let range = &highlight["range"];
+    // Sort highlights by position to make order-independent
+    let mut sorted_highlights: Vec<_> = highlights.iter().map(|h| {
+        let range = &h["range"];
         let start_char = range["start"]["character"].as_u64().unwrap() as usize;
         let end_char = range["end"]["character"].as_u64().unwrap() as usize;
-        
+        let kind = h["kind"].as_i64().unwrap_or(2);
+        (start_char, end_char, kind)
+    }).collect();
+    sorted_highlights.sort_by_key(|&(start, _, _)| start);
+    
+    let expected_positions = [
+        (30, 32, 3),  // First $x at "my $x=1" - Write (declaration)
+        (37, 39, 3),  // Second $x at "$x++" - Write (modification)
+        (48, 50, 2),  // Third $x at "print $x" - Read
+    ];
+    
+    for (i, &(start, end, kind)) in sorted_highlights.iter().enumerate() {
         assert_eq!(
-            (start_char, end_char), 
-            expected_positions[i],
+            (start, end), 
+            (expected_positions[i].0, expected_positions[i].1),
             "Highlight {} should have correct range", i
         );
-        
-        // Also verify line numbers (all on line 0)
+        assert_eq!(
+            kind,
+            expected_positions[i].2,
+            "Highlight {} should have correct kind", i
+        );
+    }
+    
+    // Also verify all line numbers (all on line 0)
+    for highlight in highlights {
+        let range = &highlight["range"];
         assert_eq!(range["start"]["line"], 0, "All highlights on line 0");
         assert_eq!(range["end"]["line"], 0, "All highlights on line 0");
     }
-    
-    // Collect kinds (2=Read, 3=Write in LSP spec)
-    let kinds: Vec<i64> = highlights.iter()
-        .map(|h| h["kind"].as_i64().unwrap_or(2))
-        .collect();
-    
-    // First occurrence is write (declaration)
-    assert_eq!(kinds[0], 3, "First occurrence should be Write");
-    
-    // Second occurrence is write ($x++)
-    assert_eq!(kinds[1], 3, "Second occurrence should be Write");
-    
-    // Third occurrence is read (print $x)
-    assert_eq!(kinds[2], 2, "Third occurrence should be Read");
     
     client.shutdown();
 }

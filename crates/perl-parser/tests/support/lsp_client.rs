@@ -1,7 +1,8 @@
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
 
 /// A simple LSP client for testing the LSP server
 #[allow(dead_code)]
@@ -15,11 +16,22 @@ pub struct LspClient {
 impl LspClient {
     /// Spawn a new LSP server process
     pub fn spawn(bin: &str) -> Self {
-        let mut child = Command::new(bin)
-            .stdin(Stdio::piped())
+        Self::spawn_with_env(bin, &[])
+    }
+    
+    /// Spawn a new LSP server process with environment variables
+    pub fn spawn_with_env(bin: &str, env_vars: &[(&str, &str)]) -> Self {
+        let mut cmd = Command::new(bin);
+        cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
+            .stderr(Stdio::null());
+        
+        // Add any environment variables
+        for (key, value) in env_vars {
+            cmd.env(key, value);
+        }
+        
+        let mut child = cmd.spawn()
             .expect("Failed to start LSP server");
         
         let reader = BufReader::new(child.stdout.take().expect("Failed to get stdout"));
@@ -50,9 +62,9 @@ impl LspClient {
     fn recv_one(&mut self, timeout_ms: u64) -> Value {
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         
-        // Read headers
+        // Read headers (case-insensitive, handle extra headers)
+        let mut headers = HashMap::new();
         let mut line = String::new();
-        let mut content_length: Option<usize> = None;
         
         loop {
             line.clear();
@@ -60,15 +72,14 @@ impl LspClient {
                 panic!("LSP server closed stdout unexpectedly");
             }
             
-            if line.starts_with("Content-Length:") {
-                content_length = Some(
-                    line["Content-Length:".len()..]
-                        .trim()
-                        .parse()
-                        .expect("Invalid content length")
-                );
-            } else if line == "\r\n" {
-                break;
+            let line_trimmed = line.trim();
+            if line_trimmed.is_empty() {
+                break; // End of headers
+            }
+            
+            if let Some((key, value)) = line_trimmed.split_once(':') {
+                let key = key.trim().to_lowercase();
+                headers.insert(key, value.trim().to_string());
             }
             
             if Instant::now() > deadline {
@@ -76,10 +87,13 @@ impl LspClient {
             }
         }
         
-        let length = content_length.expect("Missing Content-Length header");
+        // Get content length (case-insensitive)
+        let content_length: usize = headers.get("content-length")
+            .and_then(|s| s.parse().ok())
+            .expect("Missing or invalid Content-Length header");
         
         // Read the message body
-        let mut body = vec![0u8; length];
+        let mut body = vec![0u8; content_length];
         self.reader.read_exact(&mut body).expect("Failed to read body");
         
         serde_json::from_slice(&body).expect("Failed to parse JSON")
@@ -117,9 +131,18 @@ impl LspClient {
 
     /// Initialize the LSP connection
     fn initialize(&mut self) {
-        // Send initialize request
-        let response = self.request("initialize", serde_json::json!({
-            "capabilities": {}
+        // Send initialize request with explicit UTF-16 position encoding
+        let response = self.request("initialize", json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-16"]
+                },
+                "textDocument": {
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
+                    }
+                }
+            }
         }));
         
         // Verify initialization succeeded
@@ -128,7 +151,7 @@ impl LspClient {
         }
         
         // Send initialized notification
-        self.send(&serde_json::json!({
+        self.send(&json!({
             "jsonrpc": "2.0",
             "method": "initialized",
             "params": {}
@@ -137,7 +160,7 @@ impl LspClient {
 
     /// Open a document in the LSP server
     pub fn did_open(&mut self, uri: &str, language_id: &str, text: &str) {
-        self.send(&serde_json::json!({
+        self.send(&json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
             "params": {
@@ -156,7 +179,7 @@ impl LspClient {
         let id = self.next_id;
         self.next_id += 1;
         
-        self.send(&serde_json::json!({
+        self.send(&json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": method,
@@ -169,10 +192,10 @@ impl LspClient {
     /// Shutdown the LSP server gracefully
     pub fn shutdown(mut self) {
         // Send shutdown request
-        let _ = self.request("shutdown", serde_json::json!(null));
+        let _ = self.request("shutdown", json!(null));
         
         // Send exit notification
-        self.send(&serde_json::json!({
+        self.send(&json!({
             "jsonrpc": "2.0",
             "method": "exit",
             "params": null
@@ -186,8 +209,8 @@ impl LspClient {
 impl Drop for LspClient {
     fn drop(&mut self) {
         // Try to gracefully shutdown
-        let _ = self.request("shutdown", serde_json::json!(null));
-        let _ = self.send(&serde_json::json!({
+        let _ = self.request("shutdown", json!(null));
+        let _ = self.send(&json!({
             "jsonrpc": "2.0",
             "method": "exit"
         }));

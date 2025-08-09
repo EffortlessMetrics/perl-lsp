@@ -4,6 +4,8 @@
 //! Each test represents a complete user workflow, ensuring the LSP server delivers
 //! a professional IDE experience.
 
+mod support;
+
 use perl_parser::{
     LspServer, JsonRpcRequest, Parser
 };
@@ -828,11 +830,19 @@ return$x*2}
         }
     })));
     
-    // Formatting might not be implemented yet, so we just check it doesn't crash
-    // In a real implementation, we'd verify the formatted output
     // Formatting returns an array of text edits or null
     if let Some(res) = result {
-        assert!(res.is_array() || res.is_null(), "Formatting should return array of text edits or null");
+        if res.is_array() {
+            let edits = res.as_array().unwrap();
+            if !edits.is_empty() {
+                // Apply all edits to verify they produce valid Perl
+                let formatted = support::apply_text_edits(unformatted, edits);
+                // Just ensure the result is non-empty valid text
+                assert!(!formatted.is_empty(), "Formatted code should not be empty");
+            }
+        } else {
+            assert!(res.is_null(), "Formatting should return array of text edits or null");
+        }
     }
 }
 
