@@ -225,8 +225,8 @@ fn test_run_single_test() {
         })
     ]);
     
-    // In real implementation, would check test results
-    assert!(result.is_some() || result.is_none(), "Test execution should complete");
+    // Verify test execution completes
+    assert!(result.is_some(), "Test execution should return a result");
 }
 
 #[test]
@@ -242,8 +242,8 @@ fn test_run_test_suite() {
         })
     ]);
     
-    // Should return test results or handle gracefully
-    assert!(result.is_some() || result.is_none(), "Test suite execution should complete");
+    // Verify test suite execution
+    assert!(result.is_some(), "Test suite execution should return results");
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn test_debug_test() {
     ]);
     
     // Debug session should start or fail gracefully
-    assert!(result.is_some() || result.is_none(), "Debug test should complete");
+    assert!(result.is_some(), "Debug test should complete");
 }
 
 // ===================== Code Generation Tests =====================
@@ -281,7 +281,7 @@ fn test_generate_getters_setters() {
     ]);
     
     // Should generate accessor methods
-    assert!(result.is_some() || result.is_none(), "Accessor generation should complete");
+    assert!(result.is_some(), "Accessor generation should complete");
 }
 
 #[test]
@@ -298,7 +298,7 @@ fn test_generate_test_skeleton() {
     ]);
     
     // Should create test skeleton
-    assert!(result.is_some() || result.is_none(), "Test generation should complete");
+    assert!(result.is_some(), "Test generation should complete");
 }
 
 // ===================== Project Configuration Tests =====================
@@ -319,7 +319,7 @@ fn test_project_initialization() {
     ]);
     
     // Should create project structure
-    assert!(result.is_some() || result.is_none(), "Project initialization should complete");
+    assert!(result.is_some(), "Project initialization should complete");
 }
 
 #[test]
@@ -341,10 +341,10 @@ fn test_dependency_management() {
     // Check outdated modules
     let check_result = ctx.execute_command("perl.checkOutdated", vec![]);
     
-    // All operations should complete
-    assert!(add_result.is_some() || add_result.is_none());
-    assert!(update_result.is_some() || update_result.is_none());
-    assert!(check_result.is_some() || check_result.is_none());
+    // Verify dependency operations
+    assert!(add_result.is_some(), "Dependency add should return status");
+    assert!(update_result.is_some(), "Dependency update should return status");
+    assert!(check_result.is_some(), "Dependency check should return results");
 }
 
 // ===================== Linting and Formatting =====================
@@ -362,7 +362,7 @@ fn test_perltidy_integration() {
     ]);
     
     // Should format or report error
-    assert!(result.is_some() || result.is_none(), "Perltidy should complete");
+    assert!(result.is_some(), "Perltidy should complete");
 }
 
 #[test]
@@ -379,7 +379,7 @@ fn test_perlcritic_integration() {
     ]);
     
     // Should return critic results
-    assert!(result.is_some() || result.is_none(), "Perlcritic should complete");
+    assert!(result.is_some(), "Perlcritic should complete");
 }
 
 // ===================== Documentation Generation =====================
@@ -398,7 +398,7 @@ fn test_generate_pod_documentation() {
     ]);
     
     // Should generate documentation
-    assert!(result.is_some() || result.is_none(), "POD generation should complete");
+    assert!(result.is_some(), "POD generation should complete");
 }
 
 #[test]
@@ -414,7 +414,7 @@ fn test_extract_pod_to_markdown() {
     ]);
     
     // Should create markdown file
-    assert!(result.is_some() || result.is_none(), "POD to Markdown should complete");
+    assert!(result.is_some(), "POD to Markdown should complete");
 }
 
 // ===================== Performance Profiling =====================
@@ -433,7 +433,7 @@ fn test_profile_execution() {
     ]);
     
     // Should generate profile data
-    assert!(result.is_some() || result.is_none(), "Profiling should complete");
+    assert!(result.is_some(), "Profiling should complete");
 }
 
 #[test]
@@ -450,7 +450,7 @@ fn test_analyze_profile_results() {
     ]);
     
     // Should generate analysis report
-    assert!(result.is_some() || result.is_none(), "Profile analysis should complete");
+    assert!(result.is_some(), "Profile analysis should complete");
 }
 
 // ===================== Version Control Integration =====================
@@ -468,7 +468,7 @@ fn test_git_blame_integration() {
     ]);
     
     // Should show blame info or handle gracefully
-    assert!(result.is_some() || result.is_none(), "Git blame should complete");
+    assert!(result.is_some(), "Git blame should complete");
 }
 
 #[test]
@@ -487,7 +487,7 @@ fn test_commit_with_conventional_format() {
     ]);
     
     // Should create commit or report error
-    assert!(result.is_some() || result.is_none(), "Commit should complete");
+    assert!(result.is_some(), "Commit should complete");
 }
 
 // ===================== Database Integration =====================
@@ -506,7 +506,7 @@ fn test_sql_preview_in_dbi_code() {
     ]);
     
     // Should show query results or error
-    assert!(result.is_some() || result.is_none(), "SQL preview should complete");
+    assert!(result.is_some(), "SQL preview should complete");
 }
 
 #[test]
@@ -523,7 +523,7 @@ fn test_generate_dbi_code_from_schema() {
     ]);
     
     // Should generate database access code
-    assert!(result.is_some() || result.is_none(), "DBI code generation should complete");
+    assert!(result.is_some(), "DBI code generation should complete");
 }
 
 // ===================== Container and Deployment =====================
@@ -543,7 +543,7 @@ fn test_dockerfile_generation() {
     ]);
     
     // Should create Dockerfile
-    assert!(result.is_some() || result.is_none(), "Dockerfile generation should complete");
+    assert!(result.is_some(), "Dockerfile generation should complete");
 }
 
 #[test]
@@ -562,5 +562,5 @@ fn test_kubernetes_manifest_generation() {
     ]);
     
     // Should create K8s YAML files
-    assert!(result.is_some() || result.is_none(), "K8s manifest generation should complete");
+    assert!(result.is_some(), "K8s manifest generation should complete");
 }

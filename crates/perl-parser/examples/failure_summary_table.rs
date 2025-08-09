@@ -1,7 +1,8 @@
 //! Generate a summary table of all test failures
 use perl_parser::Parser;
 
-fn test_suite(name: &str, tests: Vec<(&str, &str)>) -> Vec<(String, String, String)> {
+#[allow(dead_code)]
+fn test_suite(_name: &str, tests: Vec<(&str, &str)>) -> Vec<(String, String, String)> {
     let mut failures = Vec::new();
     
     for (code, desc) in tests {
