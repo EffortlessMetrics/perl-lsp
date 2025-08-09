@@ -17,6 +17,37 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(1500);
 #[allow(dead_code)]
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+// ===================== UTF-16 Helpers (for LSP) =====================
+
+/// Convert byte offset to UTF-16 column position (for LSP)
+#[allow(dead_code)]
+pub fn utf16_col(s: &str, byte_off: usize) -> u32 {
+    let prefix = &s[..byte_off.min(s.len())];
+    prefix.encode_utf16().count() as u32
+}
+
+/// Calculate line and UTF-16 column from byte offset in source
+#[allow(dead_code)]
+pub fn position_at(source: &str, offset: usize) -> (u32, u32) {
+    let lines: Vec<&str> = source.lines().collect();
+    let mut bytes_so_far = 0;
+    
+    for (line_idx, line) in lines.iter().enumerate() {
+        let line_len = line.len() + 1; // +1 for newline
+        if bytes_so_far + line_len > offset {
+            let col_bytes = offset - bytes_so_far;
+            let col_utf16 = utf16_col(line, col_bytes);
+            return (line_idx as u32, col_utf16);
+        }
+        bytes_so_far += line_len;
+    }
+    
+    // If we're at the end, return the last position
+    let last_line_idx = lines.len().saturating_sub(1);
+    let last_line = lines.get(last_line_idx).unwrap_or(&"");
+    (last_line_idx as u32, utf16_col(last_line, last_line.len()))
+}
+
 // ===================== Extraction Helpers =====================
 
 /// Extract object from optional value with meaningful error

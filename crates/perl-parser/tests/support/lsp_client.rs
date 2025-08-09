@@ -1,24 +1,36 @@
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 /// A simple LSP client for testing the LSP server
 #[allow(dead_code)]
 pub struct LspClient {
     child: std::process::Child,
+    reader: BufReader<std::process::ChildStdout>,
+    buf: Vec<Value>,  // pending messages (notifications, etc)
+    next_id: u64,
 }
 
 impl LspClient {
     /// Spawn a new LSP server process
     pub fn spawn(bin: &str) -> Self {
-        let child = Command::new(bin)
+        let mut child = Command::new(bin)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .expect("Failed to start LSP server");
         
-        let mut client = Self { child };
+        let reader = BufReader::new(child.stdout.take().expect("Failed to get stdout"));
+        
+        let mut client = Self { 
+            child,
+            reader,
+            buf: Vec::new(),
+            next_id: 1,
+        };
+        
         client.initialize();
         client
     }
@@ -34,50 +46,86 @@ impl LspClient {
         stdin.flush().expect("Failed to flush stdin");
     }
 
-    /// Receive a JSON-RPC message from the server
-    fn recv(&mut self) -> Value {
-        let stdout = self.child.stdout.as_mut().expect("stdout not available");
-        let mut reader = BufReader::new(stdout);
-        let mut line = String::new();
+    /// Receive one message from the server
+    fn recv_one(&mut self, timeout_ms: u64) -> Value {
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         
-        // Read headers until we find Content-Length
-        let content_length = loop {
+        // Read headers
+        let mut line = String::new();
+        let mut content_length: Option<usize> = None;
+        
+        loop {
             line.clear();
-            reader.read_line(&mut line).expect("Failed to read line");
+            if self.reader.read_line(&mut line).expect("Failed to read line") == 0 {
+                panic!("LSP server closed stdout unexpectedly");
+            }
             
             if line.starts_with("Content-Length:") {
-                let len_str = line["Content-Length:".len()..].trim();
-                let len = len_str.parse::<usize>().expect("Invalid Content-Length");
-                
-                // Consume the blank line after headers
-                let mut blank = [0u8; 2];
-                reader.read_exact(&mut blank).expect("Failed to read blank line");
-                
-                break len;
+                content_length = Some(
+                    line["Content-Length:".len()..]
+                        .trim()
+                        .parse()
+                        .expect("Invalid content length")
+                );
+            } else if line == "\r\n" {
+                break;
             }
-        };
+            
+            if Instant::now() > deadline {
+                panic!("Timeout waiting for LSP response headers");
+            }
+        }
         
-        // Read the JSON body
-        let mut body = vec![0u8; content_length];
-        reader.read_exact(&mut body).expect("Failed to read body");
+        let length = content_length.expect("Missing Content-Length header");
         
-        serde_json::from_slice(&body).expect("Failed to parse JSON response")
+        // Read the message body
+        let mut body = vec![0u8; length];
+        self.reader.read_exact(&mut body).expect("Failed to read body");
+        
+        serde_json::from_slice(&body).expect("Failed to parse JSON")
+    }
+    
+    /// Receive messages until we get one with the specified id
+    fn recv_until_id(&mut self, id: u64) -> Value {
+        let timeout_ms = 10_000; // 10 second timeout
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        
+        loop {
+            // First check buffered messages
+            if let Some(pos) = self.buf.iter().position(|m| {
+                m.get("id") == Some(&serde_json::json!(id))
+            }) {
+                return self.buf.remove(pos);
+            }
+            
+            if Instant::now() > deadline {
+                panic!("Timeout waiting for response with id {}", id);
+            }
+            
+            // Read a new message
+            let msg = self.recv_one(1000);
+            
+            // Check if this is our response
+            if msg.get("id") == Some(&serde_json::json!(id)) {
+                return msg;
+            }
+            
+            // Otherwise buffer it (probably a notification)
+            self.buf.push(msg);
+        }
     }
 
     /// Initialize the LSP connection
     fn initialize(&mut self) {
         // Send initialize request
-        self.send(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "capabilities": {}
-            }
+        let response = self.request("initialize", serde_json::json!({
+            "capabilities": {}
         }));
         
-        // Receive initialize response
-        let _response = self.recv();
+        // Verify initialization succeeded
+        if response.get("error").is_some() {
+            panic!("Failed to initialize LSP server: {:?}", response);
+        }
         
         // Send initialized notification
         self.send(&serde_json::json!({
@@ -103,8 +151,11 @@ impl LspClient {
         }));
     }
 
-    /// Send a request and receive a response
-    pub fn request(&mut self, id: u64, method: &str, params: Value) -> Value {
+    /// Send a request and wait for response
+    pub fn request(&mut self, method: &str, params: Value) -> Value {
+        let id = self.next_id;
+        self.next_id += 1;
+        
         self.send(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -112,13 +163,13 @@ impl LspClient {
             "params": params
         }));
         
-        self.recv()
+        self.recv_until_id(id)
     }
 
     /// Shutdown the LSP server gracefully
-    pub fn shutdown(&mut self) {
+    pub fn shutdown(mut self) {
         // Send shutdown request
-        let _ = self.request(99, "shutdown", serde_json::json!(null));
+        let _ = self.request("shutdown", serde_json::json!(null));
         
         // Send exit notification
         self.send(&serde_json::json!({
@@ -127,14 +178,22 @@ impl LspClient {
             "params": null
         }));
         
-        // Give the server a moment to shut down
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Wait for the process to exit
+        let _ = self.child.wait();
     }
 }
 
 impl Drop for LspClient {
     fn drop(&mut self) {
-        // Kill the process if it's still running
+        // Try to gracefully shutdown
+        let _ = self.request("shutdown", serde_json::json!(null));
+        let _ = self.send(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "exit"
+        }));
+        
+        // Force kill if still running
         let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
