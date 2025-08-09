@@ -5,13 +5,8 @@ use support::lsp_client::LspClient;
 
 #[test]
 fn highlights_read_and_write() {
-    // Build the LSP binary first
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///test.pl";
     let source = "use strict; use warnings; my $x=1; $x++; print $x;\n";
     
@@ -19,7 +14,7 @@ fn highlights_read_and_write() {
     
     // Find column for first "$x"
     let col = source.find("$x").unwrap();
-    let response = client.request(2, "textDocument/documentHighlight", json!({
+    let response = client.request("textDocument/documentHighlight", json!({
         "textDocument": {"uri": uri},
         "position": {"line": 0, "character": col}
     }));
@@ -29,6 +24,29 @@ fn highlights_read_and_write() {
     
     // Should find 3 occurrences of $x
     assert_eq!(highlights.len(), 3, "Should find all 3 occurrences of $x");
+    
+    // Verify exact ranges for each highlight
+    let expected_positions = [
+        (30, 32),  // First $x at "my $x=1"
+        (37, 39),  // Second $x at "$x++"
+        (48, 50),  // Third $x at "print $x"
+    ];
+    
+    for (i, highlight) in highlights.iter().enumerate() {
+        let range = &highlight["range"];
+        let start_char = range["start"]["character"].as_u64().unwrap() as usize;
+        let end_char = range["end"]["character"].as_u64().unwrap() as usize;
+        
+        assert_eq!(
+            (start_char, end_char), 
+            expected_positions[i],
+            "Highlight {} should have correct range", i
+        );
+        
+        // Also verify line numbers (all on line 0)
+        assert_eq!(range["start"]["line"], 0, "All highlights on line 0");
+        assert_eq!(range["end"]["line"], 0, "All highlights on line 0");
+    }
     
     // Collect kinds (2=Read, 3=Write in LSP spec)
     let kinds: Vec<i64> = highlights.iter()
@@ -49,12 +67,8 @@ fn highlights_read_and_write() {
 
 #[test]
 fn highlights_across_scopes() {
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///scope.pl";
     let source = r#"
 my $global = 1;
@@ -72,7 +86,7 @@ $global++;
     let col = source.find("$global").unwrap();
     let line = source[..col].matches('\n').count();
     
-    let response = client.request(3, "textDocument/documentHighlight", json!({
+    let response = client.request("textDocument/documentHighlight", json!({
         "textDocument": {"uri": uri},
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
     }));
@@ -88,12 +102,8 @@ $global++;
 
 #[test]
 fn no_highlights_for_different_variables() {
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///different.pl";
     let source = "my $foo = 1; my $bar = 2; $foo++; $bar++;\n";
     
@@ -101,7 +111,7 @@ fn no_highlights_for_different_variables() {
     
     // Highlight $foo
     let col = source.find("$foo").unwrap();
-    let response = client.request(4, "textDocument/documentHighlight", json!({
+    let response = client.request("textDocument/documentHighlight", json!({
         "textDocument": {"uri": uri},
         "position": {"line": 0, "character": col}
     }));

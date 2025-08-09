@@ -5,13 +5,8 @@ use support::lsp_client::LspClient;
 
 #[test]
 fn prepare_and_subtypes() {
-    // Build the LSP binary first
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///isa.pl";
     let source = "package Base; package Child; use parent 'Base'; package GrandChild; use parent 'Child'; 1;\n";
     
@@ -19,7 +14,7 @@ fn prepare_and_subtypes() {
     
     // Prepare type hierarchy at "Base"
     let base_col = source.find("Base").unwrap();
-    let prep_response = client.request(3, "textDocument/prepareTypeHierarchy", json!({
+    let prep_response = client.request("textDocument/prepareTypeHierarchy", json!({
         "textDocument": {"uri": uri},
         "position": {"line": 0, "character": base_col}
     }));
@@ -32,7 +27,7 @@ fn prepare_and_subtypes() {
     assert_eq!(base_item["name"], "Base", "Should find Base class");
     
     // Get subtypes of Base
-    let subtypes_response = client.request(4, "typeHierarchy/subtypes", json!({
+    let subtypes_response = client.request("typeHierarchy/subtypes", json!({
         "item": base_item
     }));
     
@@ -44,7 +39,7 @@ fn prepare_and_subtypes() {
     
     // Get supertypes of Child
     let child_col = source.find("Child").unwrap();
-    let child_prep = client.request(5, "textDocument/prepareTypeHierarchy", json!({
+    let child_prep = client.request("textDocument/prepareTypeHierarchy", json!({
         "textDocument": {"uri": uri},
         "position": {"line": 0, "character": child_col}
     }));
@@ -53,7 +48,7 @@ fn prepare_and_subtypes() {
         .expect("prepareTypeHierarchy should return an array");
     let child_item = &child_items[0];
     
-    let supertypes_response = client.request(6, "typeHierarchy/supertypes", json!({
+    let supertypes_response = client.request("typeHierarchy/supertypes", json!({
         "item": child_item
     }));
     
@@ -68,12 +63,8 @@ fn prepare_and_subtypes() {
 
 #[test]
 fn multiple_inheritance() {
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///multi.pl";
     let source = r#"
 package Mixin1;
@@ -90,7 +81,7 @@ use parent qw(Mixin1 Mixin2);
     let line = source[..col].matches('\n').count();
     let char_pos = col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0);
     
-    let prep_response = client.request(7, "textDocument/prepareTypeHierarchy", json!({
+    let prep_response = client.request("textDocument/prepareTypeHierarchy", json!({
         "textDocument": {"uri": uri},
         "position": {"line": line, "character": char_pos}
     }));
@@ -102,7 +93,7 @@ use parent qw(Mixin1 Mixin2);
     let combined_item = &items[0];
     
     // Get supertypes - should have both Mixin1 and Mixin2
-    let supertypes_response = client.request(8, "typeHierarchy/supertypes", json!({
+    let supertypes_response = client.request("typeHierarchy/supertypes", json!({
         "item": combined_item
     }));
     
@@ -123,12 +114,8 @@ use parent qw(Mixin1 Mixin2);
 
 #[test]
 fn isa_array_inheritance() {
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///isa.pl";
     let source = r#"
 package Parent1;
@@ -145,7 +132,7 @@ our @ISA = ('Parent1', 'Parent2');
     let line = source[..col].matches('\n').count();
     let char_pos = col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0);
     
-    let prep_response = client.request(9, "textDocument/prepareTypeHierarchy", json!({
+    let prep_response = client.request("textDocument/prepareTypeHierarchy", json!({
         "textDocument": {"uri": uri},
         "position": {"line": line, "character": char_pos}
     }));
@@ -157,7 +144,7 @@ our @ISA = ('Parent1', 'Parent2');
     let child_item = &items[0];
     
     // Get supertypes - should have both Parent1 and Parent2
-    let supertypes_response = client.request(10, "typeHierarchy/supertypes", json!({
+    let supertypes_response = client.request("typeHierarchy/supertypes", json!({
         "item": child_item
     }));
     
@@ -172,6 +159,56 @@ our @ISA = ('Parent1', 'Parent2');
     
     assert!(names.contains(&"Parent1".to_string()), "Should have Parent1 in @ISA");
     assert!(names.contains(&"Parent2".to_string()), "Should have Parent2 in @ISA");
+    
+    client.shutdown();
+}
+
+#[test]
+fn type_hierarchy_ignores_string_literals() {
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
+    let uri = "file:///string.pl";
+    let source = r#"
+package Base;
+sub new { bless {}, shift }
+sub test {
+    my $msg = 'Base';  # This string literal should not be treated as a class
+    print "Using Base class\n";  # Neither should this
+}
+1;
+"#;
+    
+    client.did_open(uri, "perl", source);
+    
+    // Try to get type hierarchy on the string literal 'Base'
+    let string_col = source.find("'Base'").unwrap();
+    let line = source[..string_col].matches('\n').count();
+    let char_pos = (string_col + 1) - source[..string_col].rfind('\n').map(|p| p + 1).unwrap_or(0); // +1 to be inside the string
+    
+    let prep_response = client.request("textDocument/prepareTypeHierarchy", json!({
+        "textDocument": {"uri": uri},
+        "position": {"line": line, "character": char_pos}
+    }));
+    
+    // Should return empty or null for string literals
+    let result = &prep_response["result"];
+    if let Some(items) = result.as_array() {
+        assert!(items.is_empty(), "String literals should not have type hierarchy");
+    } else {
+        assert!(result.is_null(), "String literals should return null for type hierarchy");
+    }
+    
+    // Now test that the actual package Base works
+    let package_col = source.find("package Base").unwrap() + 8; // Position on "Base"
+    let prep_response2 = client.request("textDocument/prepareTypeHierarchy", json!({
+        "textDocument": {"uri": uri},
+        "position": {"line": 1, "character": package_col}
+    }));
+    
+    let items = prep_response2["result"].as_array()
+        .expect("Package should have type hierarchy");
+    assert!(!items.is_empty(), "Package Base should be found");
+    assert_eq!(items[0]["name"], "Base", "Should find the Base package");
     
     client.shutdown();
 }

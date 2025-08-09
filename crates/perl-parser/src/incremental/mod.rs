@@ -215,81 +215,82 @@ impl IncrementalState {
         }
         
         // Recurse into children based on node kind
-        let mut child_id = node_id + 1;
         match &node.kind {
             NodeKind::Program { statements } => {
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    let child_id = node_id.wrapping_mul(101).wrapping_add(i);
                     Self::walk_ast_for_checkpoints(stmt, checkpoints, scope, child_id);
-                    child_id += 1;
                 }
             }
             NodeKind::Block { statements } => {
                 // Enter new scope for blocks
                 let mut local_scope = scope.clone();
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    let child_id = node_id.wrapping_mul(101).wrapping_add(i);
                     Self::walk_ast_for_checkpoints(stmt, checkpoints, &mut local_scope, child_id);
-                    child_id += 1;
                 }
             }
             NodeKind::Subroutine { body, .. } => {
                 // Subroutine body is a single node (Block), not Vec<Node>
                 let mut local_scope = scope.clone();
+                let child_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(body, checkpoints, &mut local_scope, child_id);
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                Self::walk_ast_for_checkpoints(condition, checkpoints, scope, child_id);
-                child_id += 1;
+                let base_id = node_id.wrapping_mul(101);
+                Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
+                
                 // then_branch is Box<Node>, not Option<Box<Node>>
-                {
-                    Self::walk_ast_for_checkpoints(then_branch, checkpoints, scope, child_id);
-                    child_id += 1;
-                }
+                Self::walk_ast_for_checkpoints(then_branch, checkpoints, scope, base_id.wrapping_add(1));
+                
                 // elsif_branches is Vec<(Box<Node>, Box<Node>)>
-                for (elsif_cond, elsif_block) in elsif_branches {
-                    Self::walk_ast_for_checkpoints(elsif_cond, checkpoints, scope, child_id);
-                    child_id += 1;
-                    Self::walk_ast_for_checkpoints(elsif_block, checkpoints, scope, child_id);
-                    child_id += 1;
+                for (i, (elsif_cond, elsif_block)) in elsif_branches.iter().enumerate() {
+                    let elsif_base = base_id.wrapping_add((i + 2) * 2);
+                    Self::walk_ast_for_checkpoints(elsif_cond, checkpoints, scope, elsif_base);
+                    Self::walk_ast_for_checkpoints(elsif_block, checkpoints, scope, elsif_base.wrapping_add(1));
                 }
                 if let Some(else_br) = else_branch {
-                    Self::walk_ast_for_checkpoints(else_br, checkpoints, scope, child_id);
-                    child_id += 1;
+                    let else_id = base_id.wrapping_add((elsif_branches.len() + 2) * 2);
+                    Self::walk_ast_for_checkpoints(else_br, checkpoints, scope, else_id);
                 }
             }
             NodeKind::While { condition, body, .. } => {
-                Self::walk_ast_for_checkpoints(condition, checkpoints, scope, child_id);
-                child_id += 1;
+                let base_id = node_id.wrapping_mul(101);
+                Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
                 // body is Box<Node>, not Option<Box<Node>>
-                Self::walk_ast_for_checkpoints(body, checkpoints, scope, child_id);
+                Self::walk_ast_for_checkpoints(body, checkpoints, scope, base_id.wrapping_add(1));
             }
             NodeKind::For { init, condition, update, body, .. } => {
+                let base_id = node_id.wrapping_mul(101);
+                let mut offset = 0;
                 if let Some(init) = init {
-                    Self::walk_ast_for_checkpoints(init, checkpoints, scope, child_id);
-                    child_id += 1;
+                    Self::walk_ast_for_checkpoints(init, checkpoints, scope, base_id.wrapping_add(offset));
+                    offset += 1;
                 }
                 if let Some(cond) = condition {
-                    Self::walk_ast_for_checkpoints(cond, checkpoints, scope, child_id);
-                    child_id += 1;
+                    Self::walk_ast_for_checkpoints(cond, checkpoints, scope, base_id.wrapping_add(offset));
+                    offset += 1;
                 }
                 if let Some(upd) = update {
-                    Self::walk_ast_for_checkpoints(upd, checkpoints, scope, child_id);
-                    child_id += 1;
+                    Self::walk_ast_for_checkpoints(upd, checkpoints, scope, base_id.wrapping_add(offset));
+                    offset += 1;
                 }
                 // body is Box<Node>, not Option<Box<Node>>
-                Self::walk_ast_for_checkpoints(body, checkpoints, scope, child_id);
+                Self::walk_ast_for_checkpoints(body, checkpoints, scope, base_id.wrapping_add(offset));
             }
             NodeKind::Binary { left, right, .. } => {
-                Self::walk_ast_for_checkpoints(left, checkpoints, scope, child_id);
-                child_id += 1;
-                Self::walk_ast_for_checkpoints(right, checkpoints, scope, child_id);
+                let base_id = node_id.wrapping_mul(101);
+                Self::walk_ast_for_checkpoints(left, checkpoints, scope, base_id);
+                Self::walk_ast_for_checkpoints(right, checkpoints, scope, base_id.wrapping_add(1));
             }
             NodeKind::Assignment { lhs, rhs, .. } => {
-                Self::walk_ast_for_checkpoints(lhs, checkpoints, scope, child_id);
-                child_id += 1;
-                Self::walk_ast_for_checkpoints(rhs, checkpoints, scope, child_id);
+                let base_id = node_id.wrapping_mul(101);
+                Self::walk_ast_for_checkpoints(lhs, checkpoints, scope, base_id);
+                Self::walk_ast_for_checkpoints(rhs, checkpoints, scope, base_id.wrapping_add(1));
             }
             NodeKind::VariableDeclaration { initializer, .. } => {
                 if let Some(init) = initializer {
+                    let child_id = node_id.wrapping_mul(101);
                     Self::walk_ast_for_checkpoints(init, checkpoints, scope, child_id);
                 }
             }
@@ -385,6 +386,7 @@ pub fn apply_edits(
     
     // Fallback thresholds
     const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
+    #[allow(dead_code)] // TODO: Use for checkpoint-based incremental parsing
     const MAX_TOUCHED_CHECKPOINTS: usize = 20;
     
     if total_changed > MAX_EDIT_SIZE {

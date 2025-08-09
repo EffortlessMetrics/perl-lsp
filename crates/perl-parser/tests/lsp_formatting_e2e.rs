@@ -15,13 +15,8 @@ fn document_formatting_with_perltidy() {
         return;
     }
     
-    // Build the LSP binary first
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///fmt.pl";
     
     // Intentionally poorly formatted code
@@ -29,7 +24,7 @@ fn document_formatting_with_perltidy() {
     
     client.did_open(uri, "perl", source);
     
-    let response = client.request(5, "textDocument/formatting", json!({
+    let response = client.request("textDocument/formatting", json!({
         "textDocument": {"uri": uri},
         "options": {"tabSize": 4, "insertSpaces": true}
     }));
@@ -64,12 +59,8 @@ fn range_formatting() {
         return;
     }
     
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///range.pl";
     
     let source = r#"
@@ -83,7 +74,7 @@ sub second{my$b=2;return$b;}
     client.did_open(uri, "perl", source);
     
     // Request formatting only for the first subroutine (lines 1-2)
-    let response = client.request(6, "textDocument/rangeFormatting", json!({
+    let response = client.request("textDocument/rangeFormatting", json!({
         "textDocument": {"uri": uri},
         "range": {
             "start": {"line": 1, "character": 0},
@@ -120,12 +111,8 @@ fn formatting_preserves_comments() {
         return;
     }
     
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///comments.pl";
     
     let source = r#"#!/usr/bin/perl
@@ -141,7 +128,7 @@ return$x;
     
     client.did_open(uri, "perl", source);
     
-    let response = client.request(7, "textDocument/formatting", json!({
+    let response = client.request("textDocument/formatting", json!({
         "textDocument": {"uri": uri},
         "options": {"tabSize": 4, "insertSpaces": true}
     }));
@@ -192,12 +179,8 @@ fn formatting_with_custom_config() {
     std::fs::write("/tmp/test.perltidyrc", config_content)
         .expect("Failed to write test config");
     
-    std::process::Command::new("cargo")
-        .args(&["build", "-p", "perl-parser", "--bin", "perl-lsp"])
-        .output()
-        .expect("Failed to build perl-lsp");
-    
-    let mut client = LspClient::spawn("target/debug/perl-lsp");
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
     let uri = "file:///custom.pl";
     
     let source = "sub test { my @array = ( 1, 2, 3 ); return \\@array; }\n";
@@ -206,7 +189,7 @@ fn formatting_with_custom_config() {
     
     // Note: The LSP server would need to support custom config paths
     // This test demonstrates the structure but may need server-side support
-    let response = client.request(8, "textDocument/formatting", json!({
+    let response = client.request("textDocument/formatting", json!({
         "textDocument": {"uri": uri},
         "options": {"tabSize": 2, "insertSpaces": true}
     }));

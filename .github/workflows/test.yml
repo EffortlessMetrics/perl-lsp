@@ -16,6 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
+      fail-fast: false  # Continue testing other platforms if one fails
     
     steps:
     - uses: actions/checkout@v4
@@ -55,14 +56,40 @@ jobs:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
     
+    - name: Install ripgrep
+      if: matrix.os != 'windows-latest'
+      run: |
+        if ! command -v rg &> /dev/null; then
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get update && sudo apt-get install -y ripgrep
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            brew install ripgrep
+          fi
+        fi
+    
     - name: Check for tautological tests
+      shell: bash
       run: |
         echo "Checking for tautological assertions..."
+        
+        # Pattern 1: is_some() || is_none()
         if grep -r "is_some().*||.*is_none()" crates/perl-parser/tests/ 2>/dev/null; then
-          echo "ERROR: Found tautological test assertions (always pass)"
-          echo "These tests provide no validation. Please fix them."
+          echo "ERROR: Found is_some() || is_none() patterns"
           exit 1
         fi
+        
+        # Pattern 2: !is_empty() || is_empty()
+        if grep -r "!.*is_empty().*||.*is_empty()" crates/perl-parser/tests/ 2>/dev/null; then
+          echo "ERROR: Found !is_empty() || is_empty() patterns"
+          exit 1
+        fi
+        
+        # Pattern 3: assert!(true) or assert!(false)
+        if grep -E 'assert!\((true|false)\)' crates/perl-parser/tests/ 2>/dev/null; then
+          echo "ERROR: Found hardcoded assert!(true/false)"
+          exit 1
+        fi
+        
         echo "✓ No tautological assertions found"
     
     - name: Build
@@ -79,6 +106,13 @@ jobs:
     
     - name: Run incremental tests (feature-gated)
       run: cargo test -p perl-parser --features incremental --verbose
+    
+    - name: Build with deny warnings (soft check)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        echo "Building with warnings as errors (soft check)..."
+        RUSTFLAGS="-D warnings" cargo build --release -p perl-parser --bin perl-lsp || echo "Warning: Build with -D warnings failed"
+      continue-on-error: true
 
   clippy:
     runs-on: ubuntu-latest
@@ -92,8 +126,20 @@ jobs:
         components: clippy
     
     - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-      continue-on-error: true  # Don't fail the build yet, but show warnings
+      run: |
+        echo "Running clippy with all features..."
+        cargo clippy --all-targets --all-features 2>&1 | tee clippy-output.txt
+        
+        # Count warnings
+        WARNING_COUNT=$(grep -c "warning:" clippy-output.txt || echo "0")
+        echo "Found $WARNING_COUNT clippy warnings"
+        
+        # Fail if there are errors (not warnings)
+        if grep -q "error:" clippy-output.txt; then
+          echo "ERROR: Clippy found errors"
+          exit 1
+        fi
+      continue-on-error: true  # Don't fail on warnings yet
 
   format:
     runs-on: ubuntu-latest
