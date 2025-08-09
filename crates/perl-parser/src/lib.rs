@@ -29,6 +29,7 @@
 //! ```
 
 pub mod ast;
+pub use parser::Parser;
 pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod code_actions;
@@ -74,6 +75,8 @@ pub mod trivia;
 pub mod trivia_parser;
 pub mod workspace_symbols;
 pub mod code_lens_provider;
+pub mod line_index;
+pub mod document_store;
 pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod import_optimizer;
@@ -100,7 +103,6 @@ pub mod pragma_tracker;
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use pragma_tracker::{PragmaTracker, PragmaState};
 pub use error::{ParseError, ParseResult};
-pub use parser::Parser;
 pub use recovery_parser::RecoveryParser;
 pub use token_stream::{Token, TokenKind, TokenStream};
 pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
