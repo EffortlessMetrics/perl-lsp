@@ -41,9 +41,10 @@ def recv_response(expected_id, timeout=5.0):
     raise SystemExit(f"timeout waiting for id {expected_id}")
 
 try:
-    # 1) initialize
+    # 1) initialize + initialized
     send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})
     init = recv_response(1)
+    send({"jsonrpc":"2.0","method":"initialized","params":{}})
     
     # Verify capabilities are advertised
     caps = init["result"]["capabilities"]
@@ -57,17 +58,19 @@ try:
         "textDocument":{"uri":"file:///test.pl","languageId":"perl","version":1,"text":text}
     }})
 
-    # 3) documentHighlight on $x (position adjusted for new text)
+    # 3) documentHighlight on $x (compute position)
+    col = text.index("$x")
     send({"jsonrpc":"2.0","id":2,"method":"textDocument/documentHighlight","params":{
-        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":79}
+        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":col}
     }})
     hl = recv_response(2)
     assert "result" in hl, f"No result in response: {hl}"
-    assert isinstance(hl["result"], list) and len(hl["result"]) >= 2, f"Expected 2+ highlights, got {hl.get('result')}"
+    assert isinstance(hl["result"], list) and len(hl["result"]) == 2, f"Expected exactly 2 highlights, got {hl.get('result')}"
 
-    # 4) prepareTypeHierarchy on Base (position adjusted for new text)
+    # 4) prepareTypeHierarchy on "Base" (compute position)
+    base_col = text.index("Base")
     send({"jsonrpc":"2.0","id":3,"method":"textDocument/prepareTypeHierarchy","params":{
-        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":36}
+        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":base_col}
     }})
     prep = recv_response(3)
     assert "result" in prep and prep["result"], f"No prepare result: {prep}"
@@ -76,7 +79,7 @@ try:
     item = prep["result"][0]
     send({"jsonrpc":"2.0","id":4,"method":"typeHierarchy/subtypes","params":{"item":item}})
     subs = recv_response(4)
-    assert any(i.get("name") == "Child" for i in (subs["result"] or [])), "Child subtype not found"
+    assert len(subs["result"]) == 1 and subs["result"][0]["name"] == "Child", f"Expected exactly Child subtype, got {subs.get('result')}"
 
     print("OK: documentHighlight + typeHierarchy")
     
@@ -87,9 +90,19 @@ except Exception as e:
         print(f"Server stderr:\n{stderr}", file=sys.stderr)
     raise
 finally:
+    # LSP-spec friendly shutdown
+    try:
+        send({"jsonrpc":"2.0","id":99,"method":"shutdown","params":None})
+        _ = recv_response(99, timeout=2.0)
+    except Exception:
+        pass
+    try:
+        send({"jsonrpc":"2.0","method":"exit","params":None})
+    except Exception:
+        pass
     proc.terminate()
     try:
         proc.wait(timeout=1)
-    except:
+    except Exception:
         proc.kill()
 PY
