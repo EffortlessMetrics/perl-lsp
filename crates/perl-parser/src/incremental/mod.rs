@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Range;
 use lsp_types::{Diagnostic, TextDocumentContentChangeEvent};
 use ropey::Rope;
@@ -7,7 +6,6 @@ use anyhow::Result;
 use perl_lexer::{PerlLexer, Token, TokenType, LexerMode};
 use crate::parser::Parser;
 use crate::ast::{Node, NodeKind, SourceLocation};
-use crate::error::ParseDiagnostic;
 
 
 /// Stable restart points to avoid re-lexing the whole world
@@ -86,8 +84,8 @@ impl IncrementalState {
         let mut parser = Parser::new(&source);
         let ast = match parser.parse() {
             Ok(ast) => ast,
-            Err(_) => Node::new(
-                NodeKind::Error { message: "Parse error".to_string() },
+            Err(e) => Node::new(
+                NodeKind::Error { message: e.to_string() },
                 SourceLocation { start: 0, end: source.len() }
             ),
         };
@@ -97,13 +95,13 @@ impl IncrementalState {
         let mut tokens = Vec::new();
         loop {
             match lexer.next_token() {
-                Ok(token) => {
-                    if token.token_type == TokenType::Eof {
+                Some(token) => {
+                    if token.token_type == TokenType::EOF {
                         break;
                     }
                     tokens.push(token);
                 }
-                Err(_) => break,
+                None => break,
             }
         }
         
@@ -139,26 +137,26 @@ impl IncrementalState {
                 TokenType::Semicolon | TokenType::LeftBrace | TokenType::RightBrace => {
                     // Safe boundary - reset to ExpectTerm
                     checkpoints.push(LexCheckpoint {
-                        byte: token.span.end,
+                        byte: token.end,
                         mode: LexerMode::ExpectTerm,
-                        line: token.span.end_line,
-                        column: token.span.end_column,
+                        line: 0, // TODO: Calculate line/column from byte position
+                        column: 0,
                     });
                     LexerMode::ExpectTerm
                 }
-                TokenType::Keyword if matches!(token.text.as_str(), "sub" | "package") => {
+                TokenType::Keyword(ref kw) if kw.as_ref() == "sub" || kw.as_ref() == "package" => {
                     checkpoints.push(LexCheckpoint {
-                        byte: token.span.start,
-                        mode: LexerMode::ExpectIdentifier,
-                        line: token.span.start_line,
-                        column: token.span.start_column,
+                        byte: token.start,
+                        mode: LexerMode::ExpectTerm, // ExpectIdentifier not available
+                        line: 0, // TODO: Calculate line/column
+                        column: 0,
                     });
-                    LexerMode::ExpectIdentifier
+                    LexerMode::ExpectTerm // ExpectIdentifier not available
                 }
-                TokenType::Variable | TokenType::Number | TokenType::String => {
+                TokenType::Identifier(_) | TokenType::Number(_) | TokenType::StringLiteral => {
                     LexerMode::ExpectOperator
                 }
-                TokenType::Operator => LexerMode::ExpectTerm,
+                TokenType::Operator(_) => LexerMode::ExpectTerm,
                 _ => mode,
             };
         }
@@ -185,30 +183,28 @@ impl IncrementalState {
             NodeKind::Package { name, .. } => {
                 scope.package_name = name.clone();
                 checkpoints.push(ParseCheckpoint {
-                    byte: node.span.start,
+                    byte: node.location.start,
                     scope_snapshot: scope.clone(),
                     node_id,
                 });
             }
             NodeKind::Subroutine { .. } | NodeKind::Block { .. } => {
                 checkpoints.push(ParseCheckpoint {
-                    byte: node.span.start,
+                    byte: node.location.start,
                     scope_snapshot: scope.clone(),
                     node_id,
                 });
             }
-            NodeKind::VariableDeclaration { name, .. } => {
-                if let Some(name) = name {
+            NodeKind::VariableDeclaration { variable, .. } => {
+                // Extract variable name from the variable node
+                if let NodeKind::Variable { name, .. } = &variable.kind {
                     scope.locals.push(name.clone());
                 }
             }
             _ => {}
         }
         
-        // Recurse into children
-        for (i, child) in node.children.iter().enumerate() {
-            Self::walk_ast_for_checkpoints(child, checkpoints, scope, node_id * 100 + i);
-        }
+        // TODO: Recurse into children when the Node type has a children method
     }
 
     /// Find the best checkpoint before a given byte offset
@@ -229,7 +225,7 @@ impl IncrementalState {
 }
 
 /// Edit description
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Edit {
     pub start_byte: usize,
     pub old_end_byte: usize,
@@ -286,12 +282,27 @@ pub fn apply_edits(
     state: &mut IncrementalState,
     edits: &[Edit],
 ) -> Result<ReparseResult> {
-    // For MVP, we'll handle single edits first
-    if edits.len() != 1 {
+    // Handle multiple edits by sorting and applying in reverse order
+    let mut sorted_edits = edits.to_vec();
+    sorted_edits.sort_by_key(|e| e.start_byte);
+    sorted_edits.reverse(); // Apply from end to start to avoid offset shifts
+    
+    // Check if we should fall back to full reparse
+    let total_changed = sorted_edits.iter()
+        .map(|e| e.new_text.len())
+        .sum::<usize>();
+    
+    // Fallback thresholds
+    const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
+    const MAX_TOUCHED_CHECKPOINTS: usize = 20;
+    
+    if total_changed > MAX_EDIT_SIZE {
         return full_reparse(state);
     }
     
-    let edit = &edits[0];
+    // For MVP, handle single edit with incremental logic
+    if sorted_edits.len() == 1 {
+        let edit = &sorted_edits[0];
     
     // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
     if edit.new_text.len() > 1024 || edit.new_text.matches('\n').count() > 10 {
@@ -315,14 +326,35 @@ pub fn apply_edits(
     new_source.push_str(&state.source[edit.old_end_byte..]);
     
     // Re-lex the window
-    let window_text = &new_source[window.clone()];
-    let checkpoint = state.find_lex_checkpoint(window.start)
+    let _window_text = &new_source[window.clone()];
+    let _checkpoint = state.find_lex_checkpoint(window.start)
         .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
     
     // For now, fall back to full reparse
     // TODO: Implement actual incremental lexing and parsing
     state.source = new_source;
     full_reparse(state)
+    } else {
+        // Multiple edits - apply them in sequence
+        for edit in sorted_edits {
+            apply_single_edit(state, &edit)?;
+        }
+        full_reparse(state)
+    }
+}
+
+/// Apply a single edit to the state
+fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
+    let mut new_source = String::with_capacity(
+        state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len()
+    );
+    new_source.push_str(&state.source[..edit.start_byte]);
+    new_source.push_str(&edit.new_text);
+    new_source.push_str(&state.source[edit.old_end_byte..]);
+    state.source = new_source;
+    state.rope = Rope::from_str(&state.source);
+    state.line_index = LineIndex::new(&state.source);
+    Ok(())
 }
 
 /// Find the window to reparse
@@ -347,8 +379,8 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     let mut parser = Parser::new(&state.source);
     state.ast = match parser.parse() {
         Ok(ast) => ast,
-        Err(_) => Node::new(
-            NodeKind::Error { message: "Parse error".to_string() },
+        Err(e) => Node::new(
+            NodeKind::Error { message: e.to_string() },
             SourceLocation { start: 0, end: state.source.len() }
         ),
     };
@@ -358,13 +390,13 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     let mut tokens = Vec::new();
     loop {
         match lexer.next_token() {
-            Ok(token) => {
-                if token.token_type == TokenType::Eof {
+            Some(token) => {
+                if token.token_type == TokenType::EOF {
                     break;
                 }
                 tokens.push(token);
             }
-            Err(_) => break,
+            None => break,
         }
     }
     state.tokens = tokens;

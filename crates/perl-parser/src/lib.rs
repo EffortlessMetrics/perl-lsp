@@ -42,6 +42,7 @@ pub mod error_classifier;
 pub mod error_recovery;
 pub mod code_actions_provider;
 pub mod formatting;
+#[cfg(feature = "incremental")]
 pub mod incremental;
 pub mod incremental_document;
 pub mod incremental_edit;
@@ -51,6 +52,8 @@ pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod lsp_server;
 // pub mod lsp_server_incremental; // TODO: Fix imports
+#[cfg(feature = "incremental")]
+pub mod lsp_server_incremental_v2;
 pub mod parser;
 pub mod parser_context;
 pub mod position;
@@ -98,6 +101,10 @@ pub use token_stream::{Token, TokenKind, TokenStream};
 pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
+
+// Incremental parsing exports (feature-gated)
+#[cfg(feature = "incremental")]
+pub use incremental::{IncrementalState, Edit, apply_edits};
 
 // IDE feature exports
 pub use symbol::{Symbol, SymbolKind, SymbolTable, SymbolExtractor, SymbolReference};
