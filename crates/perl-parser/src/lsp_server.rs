@@ -12,7 +12,6 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
-    workspace_symbols::WorkspaceSymbolsProvider,
     workspace_index::WorkspaceIndex,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     semantic_tokens_provider::{
@@ -37,8 +36,6 @@ pub struct LspServer {
     documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
-    /// Workspace symbols provider
-    workspace_symbols: Arc<Mutex<WorkspaceSymbolsProvider>>,
     /// Workspace-wide index for cross-file features
     workspace_index: Arc<WorkspaceIndex>,
     /// AST cache for performance
@@ -130,7 +127,6 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
-            workspace_symbols: Arc::new(Mutex::new(WorkspaceSymbolsProvider::new())),
             workspace_index: Arc::new(WorkspaceIndex::new()),
             // Cache up to 100 ASTs with 5 minute TTL
             ast_cache: Arc::new(AstCache::new(100, 300)),
@@ -297,61 +293,82 @@ impl LspServer {
 
     /// Handle initialize request
     fn handle_initialize(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        Ok(Some(json!({
-            "capabilities": {
-                "textDocumentSync": 1,
-                "completionProvider": {
-                    "triggerCharacters": ["$", "@", "%", "->"]
-                },
-                "hoverProvider": true,
-                "definitionProvider": true,
-                "referencesProvider": true,
-                "documentHighlightProvider": true,
-                "typeHierarchyProvider": true,
-                "signatureHelpProvider": {
-                    "triggerCharacters": ["(", ","]
-                },
-                "renameProvider": true,
-                "documentSymbolProvider": true,
-                "foldingRangeProvider": true,
-                "codeActionProvider": true,
-                "documentFormattingProvider": true,
-                "documentRangeFormattingProvider": true,
-                "workspaceSymbolProvider": true,
-                "codeLensProvider": {
-                    "resolveProvider": true
-                },
-                "semanticTokensProvider": {
-                    "legend": {
-                        "tokenTypes": ["namespace", "class", "function", "method", "variable", "parameter", "property", "keyword", "comment", "string", "number", "regexp", "operator", "macro"],
-                        "tokenModifiers": ["declaration", "definition", "reference", "modification", "static", "defaultLibrary", "async", "readonly", "deprecated"]
-                    },
-                    "full": true,
-                    "range": true
-                },
-                "callHierarchyProvider": true,
-                "inlayHintProvider": {
-                    "resolveProvider": false
-                },
-                "executeCommandProvider": {
-                    "commands": [
-                        "perl.runTest", 
-                        "perl.runTestFile", 
-                        "perl.debugTest",
-                        "perl.runTests",
-                        "perl.runFile",
-                        "perl.runTestSub",
-                        "perl.debugTests"
-                    ]
-                },
-                "experimental": {
-                    "testProvider": true
-                },
-                "positionEncoding": "utf-8"
+        // Check for available tools
+        let has_perltidy = std::process::Command::new("which")
+            .arg("perltidy")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+            
+        let has_perlcritic = std::process::Command::new("which")
+            .arg("perlcritic")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        
+        eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
+        
+        let mut capabilities = json!({
+            "textDocumentSync": 1,
+            "completionProvider": {
+                "triggerCharacters": ["$", "@", "%", "->"]
             },
+            "hoverProvider": true,
+            "definitionProvider": true,
+            "referencesProvider": true,
+            "documentHighlightProvider": true,
+            "typeHierarchyProvider": true,
+            "signatureHelpProvider": {
+                "triggerCharacters": ["(", ","]
+            },
+            "renameProvider": true,
+            "documentSymbolProvider": true,
+            "foldingRangeProvider": true,
+            "codeActionProvider": true,
+            "workspaceSymbolProvider": true,
+            "codeLensProvider": {
+                "resolveProvider": true
+            },
+            "semanticTokensProvider": {
+                "legend": {
+                    "tokenTypes": ["namespace", "class", "function", "method", "variable", "parameter", "property", "keyword", "comment", "string", "number", "regexp", "operator", "macro"],
+                    "tokenModifiers": ["declaration", "definition", "reference", "modification", "static", "defaultLibrary", "async", "readonly", "deprecated"]
+                },
+                "full": true,
+                "range": true
+            },
+            "callHierarchyProvider": true,
+            "inlayHintProvider": {
+                "resolveProvider": false
+            },
+            "executeCommandProvider": {
+                "commands": [
+                    "perl.runTest", 
+                    "perl.runTestFile", 
+                    "perl.debugTest",
+                    "perl.runTests",
+                    "perl.runFile",
+                    "perl.runTestSub",
+                    "perl.debugTests"
+                ]
+            },
+            "experimental": {
+                "testProvider": true
+            },
+            "positionEncoding": "utf-8"
+        });
+        
+        // Only advertise formatting if perltidy is available
+        if has_perltidy {
+            capabilities["documentFormattingProvider"] = json!(true);
+            capabilities["documentRangeFormattingProvider"] = json!(true);
+        }
+        
+        Ok(Some(json!({
+            "capabilities": capabilities,
             "serverInfo": {
                 "name": "perl-language-server",
-                "version": "0.1.0"
+                "version": "0.7.4"
             }
         })))
     }
@@ -396,15 +413,11 @@ impl LspServer {
             );
 
             // Index symbols for workspace search
-            if let Some(ref ast) = ast {
-                self.workspace_symbols.lock().unwrap()
-                    .index_document(uri, ast, text);
-                
-                // Also update the fast symbol index
-                let symbols = self.workspace_symbols.lock().unwrap()
-                    .get_all_symbols()
-                    .into_iter()
-                    .filter(|s| s.location.uri == uri)
+            if let Some(ref _ast) = ast {
+                // Update the fast symbol index with symbols from workspace index
+                let index_symbols = self.workspace_index.find_symbols("");
+                let symbols = index_symbols.into_iter()
+                    .filter(|s| &s.uri == uri)
                     .map(|s| s.name.clone())
                     .collect::<Vec<_>>();
                 
@@ -468,10 +481,7 @@ impl LspServer {
                     );
 
                     // Index symbols for workspace search
-                    if let Some(ref ast) = ast {
-                        self.workspace_symbols.lock().unwrap()
-                            .index_document(uri, ast, text);
-                        
+                    if let Some(ref _ast) = ast {
                         // Update the workspace-wide index for cross-file features
                         // Note: version is maintained by the document state
                         if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
@@ -555,8 +565,17 @@ impl LspServer {
             // Clear from workspace index
             self.workspace_index.clear_file(uri);
             
-            // Clear from workspace symbols
-            self.workspace_symbols.lock().unwrap().remove_document(uri);
+            // Clear diagnostics for this file
+            let clear_diagnostics = json!({
+                "method": "textDocument/publishDiagnostics",
+                "params": {
+                    "uri": uri,
+                    "diagnostics": []
+                }
+            });
+            
+            // Send notification to clear diagnostics
+            println!("{}", clear_diagnostics);
         }
         
         Ok(())
@@ -2248,83 +2267,40 @@ impl LspServer {
         
         eprintln!("Workspace symbol search: '{}'", query);
         
-        // Get all document sources for offset conversion
-        let documents = self.documents.lock().unwrap();
-        let mut source_map = HashMap::new();
-        for (uri, doc) in documents.iter() {
-            source_map.insert(uri.clone(), doc.content.clone());
-        }
-        drop(documents);
+        // Use workspace index for all symbol searches
+        let index_symbols = self.workspace_index.find_symbols(query);
         
-        // Use fast symbol index for initial filtering
-        let candidate_names = if query.len() >= 2 {
-            // Use prefix search for short queries
-            self.symbol_index.lock().unwrap().search_prefix(query)
-        } else if !query.is_empty() {
-            // Use fuzzy search for longer queries
-            self.symbol_index.lock().unwrap().search_fuzzy(query)
-        } else {
-            vec![]
-        };
-        
-        // Search for symbols, prioritizing candidates from the index
-        let mut symbols = if !candidate_names.is_empty() {
-            self.workspace_symbols.lock().unwrap()
-                .search_with_candidates(query, &source_map, &candidate_names)
-        } else {
-            self.workspace_symbols.lock().unwrap()
-                .search(query, &source_map)
-        };
-        
-        // Also search in the workspace index for cross-file symbols
-        if !query.is_empty() {
-            let index_symbols = self.workspace_index.find_symbols(query);
+        // Convert workspace index symbols to LSP format
+        let symbols: Vec<_> = index_symbols.into_iter().map(|sym| {
+            let kind = match sym.kind {
+                crate::workspace_index::SymbolKind::Package => 4,  // Module
+                crate::workspace_index::SymbolKind::Subroutine => 12,  // Function
+                crate::workspace_index::SymbolKind::Method => 6,  // Method
+                crate::workspace_index::SymbolKind::Variable => 13,  // Variable
+                crate::workspace_index::SymbolKind::Constant => 14,  // Constant
+                crate::workspace_index::SymbolKind::Class => 5,  // Class
+                _ => 0,  // File
+            };
             
-            // Convert workspace index symbols to workspace_symbols::WorkspaceSymbol format
-            for sym in index_symbols {
-                let uri = sym.uri.clone();  // Already has URI from index
-                
-                // Skip if already in results from workspace_symbols provider
-                let already_exists = symbols.iter().any(|existing| {
-                    existing.location.uri == uri && existing.name == sym.name
-                });
-                
-                if already_exists {
-                    continue;
-                }
-                
-                let kind = match sym.kind {
-                    crate::workspace_index::SymbolKind::Package => 4,  // Module
-                    crate::workspace_index::SymbolKind::Subroutine => 12,  // Function
-                    crate::workspace_index::SymbolKind::Method => 6,  // Method
-                    crate::workspace_index::SymbolKind::Variable => 13,  // Variable
-                    crate::workspace_index::SymbolKind::Constant => 14,  // Constant
-                    crate::workspace_index::SymbolKind::Class => 5,  // Class
-                    _ => 0,  // File
-                };
-                
-                use crate::workspace_symbols::{WorkspaceSymbol as WsSymbol, Location, Range, Position};
-                
-                symbols.push(WsSymbol {
-                    name: sym.name.clone(),
-                    kind,
-                    location: Location {
-                        uri,
-                        range: Range {
-                            start: Position {
-                                line: sym.range.start.line,
-                                character: sym.range.start.character,
-                            },
-                            end: Position {
-                                line: sym.range.end.line,
-                                character: sym.range.end.character,
-                            },
+            json!({
+                "name": sym.name,
+                "kind": kind,
+                "location": {
+                    "uri": sym.uri,
+                    "range": {
+                        "start": {
+                            "line": sym.range.start.line,
+                            "character": sym.range.start.character,
+                        },
+                        "end": {
+                            "line": sym.range.end.line,
+                            "character": sym.range.end.character,
                         },
                     },
-                    container_name: sym.qualified_name,
-                });
-            }
-        }
+                },
+                "containerName": sym.qualified_name,
+            })
+        }).collect();
         
         eprintln!("Found {} symbols", symbols.len());
         
