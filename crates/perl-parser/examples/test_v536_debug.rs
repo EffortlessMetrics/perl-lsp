@@ -1,5 +1,5 @@
 //! Debug v5.36 features
-use perl_parser::Parser;
+// use perl_parser::Parser;
 use perl_lexer::PerlLexer;
 
 fn main() {

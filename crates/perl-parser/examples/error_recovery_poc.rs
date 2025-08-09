@@ -84,7 +84,7 @@ impl<'a> RecoveryParser<'a> {
         }
     }
     
-    fn try_parse_line(&mut self, line: &str, line_no: usize) -> Option<Node> {
+    fn try_parse_line(&mut self, line: &str, _line_no: usize) -> Option<Node> {
         // Try to identify and parse common patterns
         let trimmed = line.trim();
         

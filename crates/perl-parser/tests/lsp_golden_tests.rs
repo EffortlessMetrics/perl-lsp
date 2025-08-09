@@ -187,7 +187,7 @@ fn test_diagnostics_golden() {
     })));
     
     // Should handle gracefully even with syntax errors
-    assert!(hover.is_some() || hover.is_none(), "Should not crash on invalid code");
+    assert!(hover.is_none(), "Should handle invalid code gracefully");
 }
 
 #[test]

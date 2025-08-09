@@ -541,7 +541,7 @@ $dbh->disconnect();
     
     // Get hover for DBI methods
     let hover = ctx.get_hover("file:///workspace/database.pl", 11, 16);
-    assert!(hover.is_some() || hover.is_none(), "Hover may or may not be available");
+    assert!(hover.is_some(), "Hover should return information");
 }
 
 #[test]
@@ -882,15 +882,15 @@ sub run {
     
     // Test cross-file navigation
     let defs = ctx.get_definition("file:///workspace/app.pl", 4, 20);
-    assert!(!defs.is_empty() || defs.is_empty(), "Definition lookup should work or gracefully fail");
+    assert!(!defs.is_empty(), "Definition lookup should find target");
     
     // Test project-wide refactoring
     let rename_result = ctx.rename("file:///workspace/lib/Project/Main.pm", 6, 4, "initialize");
-    assert!(rename_result.is_some() || rename_result.is_none(), "Rename should work or gracefully fail");
+    assert!(rename_result.is_some(), "Rename should return workspace edits");
     
     // Test workspace symbols
     let symbols = ctx.get_workspace_symbols("Project");
-    assert!(!symbols.is_empty() || symbols.is_empty(), "Should find project symbols or return empty");
+    assert!(!symbols.is_empty(), "Should find project symbols");
     
     // Test formatting
     let _edits = ctx.format_document("file:///workspace/lib/Project/Main.pm");

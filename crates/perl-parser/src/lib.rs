@@ -44,11 +44,16 @@ pub mod code_actions_provider;
 pub mod formatting;
 #[cfg(feature = "incremental")]
 pub mod incremental;
+#[cfg(feature = "incremental")]
 pub mod incremental_document;
+#[cfg(feature = "incremental")]
 pub mod incremental_edit;
 // pub mod refactoring; // TODO: Fix compilation errors
+#[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
+#[cfg(feature = "incremental")]
 pub mod incremental_simple;
+#[cfg(feature = "incremental")]
 pub mod incremental_v2;
 pub mod lsp_server;
 // pub mod lsp_server_incremental; // TODO: Fix imports
@@ -100,6 +105,7 @@ pub use recovery_parser::RecoveryParser;
 pub use token_stream::{Token, TokenKind, TokenStream};
 pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
+#[cfg(feature = "incremental")]
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
 
 // Incremental parsing exports (feature-gated)

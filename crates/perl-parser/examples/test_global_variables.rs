@@ -26,7 +26,8 @@ print $undefined_var;
     let ast = parser.parse().expect("Failed to parse");
     println!("AST: {:?}\n", ast);
     
-    let issues = analyzer.analyze(code);
+    let pragma_map = vec![];
+    let issues = analyzer.analyze(&ast, code, &pragma_map);
     
     if issues.is_empty() {
         println!("✅ No issues found (all built-in globals recognized correctly)");
