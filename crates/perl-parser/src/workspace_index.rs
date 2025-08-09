@@ -4,22 +4,43 @@
 //! enabling features like find-references, rename, and workspace symbol search.
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::{Serialize, Deserialize};
-use crate::ast::Node;
+use crate::ast::{Node, NodeKind};
 use crate::Parser;
+use crate::document_store::{Document, DocumentStore};
+
+/// A position in a document
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Position {
+    pub line: u32,
+    pub character: u32,
+}
+
+/// A range in a document
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Range {
+    pub start: Position,
+    pub end: Position,
+}
+
+/// A location in a workspace
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Location {
+    pub uri: String,
+    pub range: Range,
+}
 
 /// A symbol in the workspace
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceSymbol {
     pub name: String,
     pub kind: SymbolKind,
-    pub file_path: PathBuf,
-    pub line: usize,
-    pub column: usize,
+    pub uri: String,
+    pub range: Range,
     pub qualified_name: Option<String>,
     pub documentation: Option<String>,
+    pub container_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,9 +59,8 @@ pub enum SymbolKind {
 /// Reference to a symbol
 #[derive(Debug, Clone)]
 pub struct SymbolReference {
-    pub file_path: PathBuf,
-    pub line: usize,
-    pub column: usize,
+    pub uri: String,
+    pub range: Range,
     pub kind: ReferenceKind,
 }
 
@@ -49,373 +69,472 @@ pub enum ReferenceKind {
     Definition,
     Usage,
     Import,
-    Export,
-    TypeAnnotation,
+    Read,
+    Write,
 }
 
-/// Workspace index for fast symbol lookups
-#[derive(Clone)]
+/// File-level index data
+#[derive(Default)]
+struct FileIndex {
+    /// Symbols defined in this file
+    symbols: Vec<WorkspaceSymbol>,
+    /// References in this file (symbol name -> references)
+    references: HashMap<String, Vec<SymbolReference>>,
+    /// Dependencies (modules this file imports)
+    dependencies: HashSet<String>,
+}
+
+/// Thread-safe workspace index
 pub struct WorkspaceIndex {
-    symbols: Arc<RwLock<HashMap<String, Vec<WorkspaceSymbol>>>>,
-    references: Arc<RwLock<HashMap<String, Vec<SymbolReference>>>>,
-    dependencies: Arc<RwLock<HashMap<PathBuf, HashSet<PathBuf>>>>,
-    dependents: Arc<RwLock<HashMap<PathBuf, HashSet<PathBuf>>>>,
-    file_mtimes: Arc<RwLock<HashMap<PathBuf, std::time::SystemTime>>>,
+    /// Index data per file URI (normalized key -> data)
+    files: Arc<RwLock<HashMap<String, FileIndex>>>,
+    /// Global symbol map (qualified name -> defining URI)
+    symbols: Arc<RwLock<HashMap<String, String>>>,
+    /// Document store for in-memory text
+    document_store: DocumentStore,
 }
 
 impl WorkspaceIndex {
+    /// Create a new empty index
     pub fn new() -> Self {
         Self {
+            files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
-            references: Arc::new(RwLock::new(HashMap::new())),
-            dependencies: Arc::new(RwLock::new(HashMap::new())),
-            dependents: Arc::new(RwLock::new(HashMap::new())),
-            file_mtimes: Arc::new(RwLock::new(HashMap::new())),
+            document_store: DocumentStore::new(),
         }
     }
-
-    /// Index a single file, extracting all symbols and references
-    pub fn index_file(&self, path: &Path, content: &str) -> Result<(), String> {
-        // Parse the file
-        let mut parser = Parser::new(content);
-        let ast = parser.parse().map_err(|e| format!("Parse error: {}", e))?;
+    
+    /// Index a file from its URI and text content
+    pub fn index_file(&self, uri: &str, text: &str, version: i32) -> Result<(), String> {
+        // Update document store
+        if self.document_store.is_open(uri) {
+            self.document_store.update(uri, version, text.to_string());
+        } else {
+            self.document_store.open(uri.to_string(), version, text.to_string());
+        }
         
-        // Clear old data for this file
-        self.clear_file(path);
+        // Parse the file
+        let mut parser = Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => return Err(format!("Parse error: {}", e)),
+        };
+        
+        // Get the document for line index
+        let mut doc = self.document_store.get(uri).ok_or("Document not found")?;
         
         // Extract symbols and references
-        let mut current_package = None;
-        let mut symbols_to_add = Vec::new();
-        let mut references_to_add = Vec::new();
+        let mut file_index = FileIndex::default();
+        let mut visitor = IndexVisitor::new(&mut doc, uri.to_string());
+        visitor.visit(&ast, &mut file_index);
         
-        self.walk_ast(&ast, content, path, &mut current_package, &mut symbols_to_add, &mut references_to_add);
-        
-        // Add to index
-        let mut symbols = self.symbols.write().unwrap();
-        for symbol in symbols_to_add {
-            symbols.entry(symbol.name.clone())
-                .or_default()
-                .push(symbol);
+        // Update the index
+        let key = DocumentStore::uri_key(uri);
+        {
+            let mut files = self.files.write().unwrap();
+            files.insert(key.clone(), file_index);
         }
         
-        let mut references = self.references.write().unwrap();
-        for (name, reference) in references_to_add {
-            references.entry(name)
-                .or_default()
-                .push(reference);
-        }
-        
-        // Track file modification time
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if let Ok(mtime) = metadata.modified() {
-                let mut mtimes = self.file_mtimes.write().unwrap();
-                mtimes.insert(path.to_path_buf(), mtime);
+        // Update global symbol map
+        {
+            let files = self.files.read().unwrap();
+            if let Some(file_index) = files.get(&key) {
+                let mut symbols = self.symbols.write().unwrap();
+                for symbol in &file_index.symbols {
+                    if let Some(ref qname) = symbol.qualified_name {
+                        symbols.insert(qname.clone(), uri.to_string());
+                    } else {
+                        symbols.insert(symbol.name.clone(), uri.to_string());
+                    }
+                }
             }
         }
         
         Ok(())
     }
     
-    /// Walk AST and extract symbols/references
-    fn walk_ast(
-        &self,
-        ast: &Node,
-        content: &str,
-        path: &Path,
-        current_package: &mut Option<String>,
-        symbols: &mut Vec<WorkspaceSymbol>,
-        references: &mut Vec<(String, SymbolReference)>,
-    ) {
-        self.visit_node(ast, content, path, current_package, symbols, references);
+    /// Remove a file from the index
+    pub fn remove_file(&self, uri: &str) {
+        let key = DocumentStore::uri_key(uri);
+        
+        // Remove from document store
+        self.document_store.close(uri);
+        
+        // Remove file index
+        let mut files = self.files.write().unwrap();
+        if let Some(file_index) = files.remove(&key) {
+            // Remove from global symbol map
+            let mut symbols = self.symbols.write().unwrap();
+            for symbol in file_index.symbols {
+                if let Some(ref qname) = symbol.qualified_name {
+                    symbols.remove(qname);
+                } else {
+                    symbols.remove(&symbol.name);
+                }
+            }
+        }
     }
     
-    /// Visit a node and its children
-    fn visit_node(
-        &self,
-        node: &Node,
-        content: &str,
-        path: &Path,
-        current_package: &mut Option<String>,
-        symbols: &mut Vec<WorkspaceSymbol>,
-        references: &mut Vec<(String, SymbolReference)>,
-    ) {
-        use crate::NodeKind;
+    /// Clear a file from the index (alias for remove_file)
+    pub fn clear_file(&self, uri: &str) {
+        self.remove_file(uri);
+    }
+    
+    /// Find all references to a symbol
+    pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+        let mut locations = Vec::new();
+        let files = self.files.read().unwrap();
         
-        // Extract based on node kind
+        for (_uri_key, file_index) in files.iter() {
+            if let Some(refs) = file_index.references.get(symbol_name) {
+                for reference in refs {
+                    locations.push(Location {
+                        uri: reference.uri.clone(),
+                        range: reference.range,
+                    });
+                }
+            }
+        }
+        
+        locations
+    }
+    
+    /// Find the definition of a symbol
+    pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
+        let files = self.files.read().unwrap();
+        
+        for (_uri_key, file_index) in files.iter() {
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name || symbol.qualified_name.as_deref() == Some(symbol_name) {
+                    return Some(Location {
+                        uri: symbol.uri.clone(),
+                        range: symbol.range,
+                    });
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Get all symbols in the workspace
+    pub fn all_symbols(&self) -> Vec<WorkspaceSymbol> {
+        let files = self.files.read().unwrap();
+        let mut symbols = Vec::new();
+        
+        for (_uri_key, file_index) in files.iter() {
+            symbols.extend(file_index.symbols.clone());
+        }
+        
+        symbols
+    }
+    
+    /// Search for symbols by query
+    pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        let query_lower = query.to_lowercase();
+        self.all_symbols()
+            .into_iter()
+            .filter(|s| {
+                s.name.to_lowercase().contains(&query_lower) ||
+                s.qualified_name.as_ref()
+                    .map(|qn| qn.to_lowercase().contains(&query_lower))
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+    
+    /// Find symbols by query (alias for search_symbols for compatibility)
+    pub fn find_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        self.search_symbols(query)
+    }
+    
+    /// Get symbols in a specific file
+    pub fn file_symbols(&self, uri: &str) -> Vec<WorkspaceSymbol> {
+        let key = DocumentStore::uri_key(uri);
+        let files = self.files.read().unwrap();
+        
+        files.get(&key)
+            .map(|fi| fi.symbols.clone())
+            .unwrap_or_default()
+    }
+    
+    /// Get dependencies of a file
+    pub fn file_dependencies(&self, uri: &str) -> HashSet<String> {
+        let key = DocumentStore::uri_key(uri);
+        let files = self.files.read().unwrap();
+        
+        files.get(&key)
+            .map(|fi| fi.dependencies.clone())
+            .unwrap_or_default()
+    }
+    
+    /// Find all files that depend on a module
+    pub fn find_dependents(&self, module_name: &str) -> Vec<String> {
+        let files = self.files.read().unwrap();
+        let mut dependents = Vec::new();
+        
+        for (uri_key, file_index) in files.iter() {
+            if file_index.dependencies.contains(module_name) {
+                dependents.push(uri_key.clone());
+            }
+        }
+        
+        dependents
+    }
+    
+    /// Get the document store
+    pub fn document_store(&self) -> &DocumentStore {
+        &self.document_store
+    }
+}
+
+/// AST visitor for extracting symbols and references
+struct IndexVisitor {
+    document: Document,
+    uri: String,
+    current_package: Option<String>,
+}
+
+impl IndexVisitor {
+    fn new(document: &mut Document, uri: String) -> Self {
+        Self {
+            document: document.clone(),
+            uri,
+            current_package: Some("main".to_string()),
+        }
+    }
+    
+    fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
+        self.visit_node(node, file_index);
+    }
+    
+    fn visit_node(&mut self, node: &Node, file_index: &mut FileIndex) {
         match &node.kind {
             NodeKind::Package { name, .. } => {
-                *current_package = Some(name.clone());
-                let (line, column) = self.offset_to_line_col(content, node.location.start);
+                let package_name = name.clone();
+                self.current_package = Some(package_name.clone());
                 
-                symbols.push(WorkspaceSymbol {
-                    name: name.clone(),
+                file_index.symbols.push(WorkspaceSymbol {
+                    name: package_name.clone(),
                     kind: SymbolKind::Package,
-                    file_path: path.to_path_buf(),
-                    line,
-                    column,
-                    qualified_name: Some(name.clone()),
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    qualified_name: Some(package_name),
                     documentation: None,
+                    container_name: None,
                 });
             }
+            
             NodeKind::Subroutine { name, body, .. } => {
-                let (line, column) = self.offset_to_line_col(content, node.location.start);
-                
-                if let Some(sub_name) = name {
-                    let qualified_name = if let Some(pkg) = current_package {
-                        Some(format!("{}::{}", pkg, sub_name))
+                if let Some(name_str) = name.clone() {
+                    let qualified_name = if let Some(ref pkg) = self.current_package {
+                        format!("{}::{}", pkg, name_str)
                     } else {
-                        Some(sub_name.clone())
+                        name_str.clone()
                     };
                     
-                    symbols.push(WorkspaceSymbol {
-                        name: sub_name.clone(),
+                    file_index.symbols.push(WorkspaceSymbol {
+                        name: name_str.clone(),
                         kind: SymbolKind::Subroutine,
-                        file_path: path.to_path_buf(),
-                        line,
-                        column,
-                        qualified_name,
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        qualified_name: Some(qualified_name),
                         documentation: None,
+                        container_name: self.current_package.clone(),
                     });
                     
-                    // This is also a definition reference
-                    references.push((sub_name.clone(), SymbolReference {
-                        file_path: path.to_path_buf(),
-                        line,
-                        column,
-                        kind: ReferenceKind::Definition,
-                    }));
+                    // Mark as definition
+                    file_index.references
+                        .entry(name_str.clone())
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(node),
+                            kind: ReferenceKind::Definition,
+                        });
                 }
                 
                 // Visit body
-                self.visit_node(body, content, path, current_package, symbols, references);
+                self.visit_node(body, file_index);
             }
+            
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    let (line, column) = self.offset_to_line_col(content, variable.location.start);
                     let var_name = format!("{}{}", sigil, name);
-                    symbols.push(WorkspaceSymbol {
+                    
+                    file_index.symbols.push(WorkspaceSymbol {
                         name: var_name.clone(),
                         kind: SymbolKind::Variable,
-                        file_path: path.to_path_buf(),
-                        line,
-                        column,
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(variable),
                         qualified_name: None,
                         documentation: None,
+                        container_name: self.current_package.clone(),
                     });
-                }
-                
-                // Visit initializer if present
-                if let Some(init) = initializer {
-                    self.visit_node(init, content, path, current_package, symbols, references);
-                }
-            }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-                for var in variables {
-                    if let NodeKind::Variable { sigil, name } = &var.kind {
-                        let (line, column) = self.offset_to_line_col(content, var.location.start);
-                        let var_name = format!("{}{}", sigil, name);
-                        symbols.push(WorkspaceSymbol {
-                            name: var_name.clone(),
-                            kind: SymbolKind::Variable,
-                            file_path: path.to_path_buf(),
-                            line,
-                            column,
-                            qualified_name: None,
-                            documentation: None,
+                    
+                    // Mark as definition
+                    file_index.references
+                        .entry(var_name.clone())
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(variable),
+                            kind: ReferenceKind::Definition,
                         });
-                    }
                 }
                 
-                // Visit initializer if present
+                // Visit initializer
                 if let Some(init) = initializer {
-                    self.visit_node(init, content, path, current_package, symbols, references);
+                    self.visit_node(init, file_index);
                 }
             }
+            
+            NodeKind::Variable { sigil, name } => {
+                let var_name = format!("{}{}", sigil, name);
+                
+                // Track as usage (could be read or write based on context)
+                file_index.references
+                    .entry(var_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Read, // Default to read, would need context for write
+                    });
+            }
+            
             NodeKind::FunctionCall { name, args, .. } => {
-                let (line, column) = self.offset_to_line_col(content, node.location.start);
-                references.push((name.clone(), SymbolReference {
-                    file_path: path.to_path_buf(),
-                    line,
-                    column,
-                    kind: ReferenceKind::Usage,
-                }));
+                let func_name = name.clone();
+                
+                // Track as usage
+                file_index.references
+                    .entry(func_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Usage,
+                    });
                 
                 // Visit arguments
                 for arg in args {
-                    self.visit_node(arg, content, path, current_package, symbols, references);
+                    self.visit_node(arg, file_index);
                 }
             }
-            NodeKind::MethodCall { method, object, args, .. } => {
-                let (line, column) = self.offset_to_line_col(content, node.location.start);
-                references.push((method.clone(), SymbolReference {
-                    file_path: path.to_path_buf(),
-                    line,
-                    column,
-                    kind: ReferenceKind::Usage,
-                }));
-                
-                // Visit object and arguments
-                self.visit_node(object, content, path, current_package, symbols, references);
-                for arg in args {
-                    self.visit_node(arg, content, path, current_package, symbols, references);
-                }
-            }
+            
             NodeKind::Use { module, .. } => {
-                let (line, column) = self.offset_to_line_col(content, node.location.start);
-                references.push((module.clone(), SymbolReference {
-                    file_path: path.to_path_buf(),
-                    line,
-                    column,
-                    kind: ReferenceKind::Import,
-                }));
+                let module_name = module.clone();
+                file_index.dependencies.insert(module_name.clone());
                 
-                // Track dependency
-                let mut deps = self.dependencies.write().unwrap();
-                deps.entry(path.to_path_buf())
+                // Track as import
+                file_index.references
+                    .entry(module_name)
                     .or_default()
-                    .insert(PathBuf::from(module.replace("::", "/") + ".pm"));
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Import,
+                    });
             }
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    self.visit_node(stmt, content, path, current_package, symbols, references);
+            
+            // Handle assignment to detect writes
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                // Left side is a write
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    let var_name = format!("{}{}", sigil, name);
+                    file_index.references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(lhs),
+                            kind: ReferenceKind::Write,
+                        });
                 }
+                
+                // Right side could have reads
+                self.visit_node(rhs, file_index);
             }
+            
+            // Recursively visit child nodes
             NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.visit_node(stmt, content, path, current_package, symbols, references);
+                    self.visit_node(stmt, file_index);
                 }
             }
-            _ => {
-                // For other node kinds, we don't extract symbols but may want to visit children
-                // This is a simplified version - a complete implementation would handle all node types
-            }
-        }
-    }
-    
-    /// Convert byte offset to line and column
-    fn offset_to_line_col(&self, content: &str, offset: usize) -> (usize, usize) {
-        let mut line = 1;
-        let mut column = 1;
-        
-        for (i, ch) in content.chars().enumerate() {
-            if i >= offset {
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                column = 1;
-            } else {
-                column += 1;
-            }
-        }
-        
-        (line, column)
-    }
-
-    /// Find all symbols with a given name
-    pub fn find_symbols(&self, name: &str) -> Vec<WorkspaceSymbol> {
-        let symbols = self.symbols.read().unwrap();
-        symbols.get(name).cloned().unwrap_or_default()
-    }
-
-    /// Find all references to a symbol
-    pub fn find_references(&self, name: &str) -> Vec<SymbolReference> {
-        let references = self.references.read().unwrap();
-        references.get(name).cloned().unwrap_or_default()
-    }
-
-    /// Get all files that depend on a given file
-    pub fn get_dependents(&self, file: &Path) -> HashSet<PathBuf> {
-        let dependents = self.dependents.read().unwrap();
-        dependents.get(file).cloned().unwrap_or_default()
-    }
-
-    /// Get all files that a given file depends on
-    pub fn get_dependencies(&self, file: &Path) -> HashSet<PathBuf> {
-        let dependencies = self.dependencies.read().unwrap();
-        dependencies.get(file).cloned().unwrap_or_default()
-    }
-
-    /// Find unused symbols
-    pub fn find_unused_symbols(&self) -> Vec<WorkspaceSymbol> {
-        let symbols = self.symbols.read().unwrap();
-        let references = self.references.read().unwrap();
-        let mut unused = Vec::new();
-        
-        for (name, symbol_list) in symbols.iter() {
-            // Check if this symbol has any non-definition references
-            let refs = references.get(name);
-            let has_usage = refs.map_or(false, |refs| {
-                refs.iter().any(|r| r.kind != ReferenceKind::Definition)
-            });
             
-            if !has_usage {
-                // Check if it's exported or has special meaning
-                let is_special = name == "main" || 
-                                 name.starts_with("BEGIN") || 
-                                 name.starts_with("END") ||
-                                 name.starts_with("CHECK") ||
-                                 name.starts_with("INIT");
-                
-                if !is_special {
-                    unused.extend(symbol_list.clone());
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                self.visit_node(condition, file_index);
+                self.visit_node(then_branch, file_index);
+                for (cond, branch) in elsif_branches {
+                    self.visit_node(cond, file_index);
+                    self.visit_node(branch, file_index);
+                }
+                if let Some(else_br) = else_branch {
+                    self.visit_node(else_br, file_index);
                 }
             }
-        }
-        
-        unused
-    }
-
-    /// Check if a file needs re-indexing
-    pub fn needs_reindex(&self, path: &Path) -> bool {
-        let mtimes = self.file_mtimes.read().unwrap();
-        if let Some(stored_mtime) = mtimes.get(path) {
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if let Ok(current_mtime) = metadata.modified() {
-                    return current_mtime > *stored_mtime;
+            
+            NodeKind::While { condition, body, continue_block } => {
+                self.visit_node(condition, file_index);
+                self.visit_node(body, file_index);
+                if let Some(cont) = continue_block {
+                    self.visit_node(cont, file_index);
                 }
             }
-        }
-        true
-    }
-
-    /// Get package members for completion
-    pub fn get_package_members(&self, package: &str) -> Vec<WorkspaceSymbol> {
-        let symbols = self.symbols.read().unwrap();
-        let mut members = Vec::new();
-        
-        for (_, symbol_list) in symbols.iter() {
-            for symbol in symbol_list {
-                if let Some(ref qualified) = symbol.qualified_name {
-                    if qualified.starts_with(&format!("{}::", package)) {
-                        members.push(symbol.clone());
-                    }
+            
+            NodeKind::For { init, condition, update, body, continue_block } => {
+                if let Some(i) = init {
+                    self.visit_node(i, file_index);
+                }
+                if let Some(c) = condition {
+                    self.visit_node(c, file_index);
+                }
+                if let Some(u) = update {
+                    self.visit_node(u, file_index);
+                }
+                self.visit_node(body, file_index);
+                if let Some(cont) = continue_block {
+                    self.visit_node(cont, file_index);
                 }
             }
+            
+            NodeKind::Foreach { variable, list, body } => {
+                // Iterator is a write context
+                if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    let var_name = format!("{}{}", sigil, name);
+                    file_index.references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(variable),
+                            kind: ReferenceKind::Write,
+                        });
+                }
+                self.visit_node(variable, file_index); 
+                self.visit_node(list, file_index);
+                self.visit_node(body, file_index);
+            }
+            
+            _ => {
+                // For other node types, just visit children
+                self.visit_children(node, file_index);
+            }
         }
-        
-        members
     }
     
-    /// Clear index for a file
-    pub fn clear_file(&self, path: &Path) {
-        let mut symbols = self.symbols.write().unwrap();
-        let mut references = self.references.write().unwrap();
-        
-        for syms in symbols.values_mut() {
-            syms.retain(|s| s.file_path != path);
-        }
-        
-        for refs in references.values_mut() {
-            refs.retain(|r| r.file_path != path);
-        }
-
-        let mut deps = self.dependencies.write().unwrap();
-        deps.remove(path);
-
-        let mut rev_deps = self.dependents.write().unwrap();
-        for dependents_set in rev_deps.values_mut() {
-            dependents_set.remove(path);
+    fn visit_children(&mut self, _node: &Node, _file_index: &mut FileIndex) {
+        // This would need to be expanded to handle all node types
+        // For now, it's a placeholder for recursive traversal
+    }
+    
+    fn node_to_range(&mut self, node: &Node) -> Range {
+        let ((start_line, start_col), (end_line, end_col)) = 
+            self.document.line_index.range(node.location.start, node.location.end);
+        Range {
+            start: Position { line: start_line, character: start_col },
+            end: Position { line: end_line, character: end_col },
         }
     }
 }
@@ -423,5 +542,72 @@ impl WorkspaceIndex {
 impl Default for WorkspaceIndex {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_basic_indexing() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///test.pl";
+        
+        let code = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+
+my $var = 42;
+"#;
+        
+        index.index_file(uri, code, 1).unwrap();
+        
+        // Should have indexed the package and subroutine
+        let symbols = index.file_symbols(uri);
+        assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind == SymbolKind::Variable));
+    }
+    
+    #[test]
+    fn test_find_references() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///test.pl";
+        
+        let code = r#"
+sub test {
+    my $x = 1;
+    $x = 2;
+    print $x;
+}
+"#;
+        
+        index.index_file(uri, code, 1).unwrap();
+        
+        let refs = index.find_references("$x");
+        assert!(refs.len() >= 2); // Definition + at least one usage
+    }
+    
+    #[test]
+    fn test_dependencies() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///test.pl";
+        
+        let code = r#"
+use strict;
+use warnings;
+use Data::Dumper;
+"#;
+        
+        index.index_file(uri, code, 1).unwrap();
+        
+        let deps = index.file_dependencies(uri);
+        assert!(deps.contains("strict"));
+        assert!(deps.contains("warnings"));
+        assert!(deps.contains("Data::Dumper"));
     }
 }
