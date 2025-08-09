@@ -336,7 +336,8 @@ impl LspServer {
                 },
                 "experimental": {
                     "testProvider": true
-                }
+                },
+                "positionEncoding": "utf-8"
             },
             "serverInfo": {
                 "name": "perl-language-server",
