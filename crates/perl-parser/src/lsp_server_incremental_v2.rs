@@ -160,11 +160,7 @@ mod tests {
             new_text: "99".to_string(),
         };
         
-        // Debug print to see what's happening
-        eprintln!("Before edit: source = {:?}", state.source);
         let result = apply_edits(&mut state, &[edit]);
-        eprintln!("After edit: source = {:?}", state.source);
-        eprintln!("Result: {:?}", result);
         
         assert!(result.is_ok());
         assert_eq!(state.source, "my $x = 99;");
