@@ -13,7 +13,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
     workspace_symbols::WorkspaceSymbolsProvider,
-    workspace_index::{WorkspaceIndex, SymbolKind as IndexSymbolKind},
+    workspace_index::WorkspaceIndex,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     semantic_tokens_provider::{
         SemanticTokensProvider, 
@@ -414,11 +414,9 @@ impl LspServer {
                 }
                 
                 // Update the workspace-wide index for cross-file features
-                if let Some(path) = uri.strip_prefix("file://") {
-                    let path = std::path::Path::new(path);
-                    if let Err(e) = self.workspace_index.index_file(path, text) {
-                        eprintln!("Failed to index file {}: {}", uri, e);
-                    }
+                // Note: version defaults to 0 for initial open
+                if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
+                    eprintln!("Failed to index file {}: {}", uri, e);
                 }
             }
 
@@ -475,11 +473,9 @@ impl LspServer {
                             .index_document(uri, ast, text);
                         
                         // Update the workspace-wide index for cross-file features
-                        if let Some(path) = uri.strip_prefix("file://") {
-                            let path = std::path::Path::new(path);
-                            if let Err(e) = self.workspace_index.index_file(path, text) {
-                                eprintln!("Failed to index file {}: {}", uri, e);
-                            }
+                        // Note: version is maintained by the document state
+                        if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
+                            eprintln!("Failed to index file {}: {}", uri, e);
                         }
                     }
 
@@ -557,10 +553,7 @@ impl LspServer {
             self.documents.lock().unwrap().remove(uri);
             
             // Clear from workspace index
-            if let Some(path) = uri.strip_prefix("file://") {
-                let path = std::path::Path::new(path);
-                self.workspace_index.clear_file(path);
-            }
+            self.workspace_index.clear_file(uri);
             
             // Clear from workspace symbols
             self.workspace_symbols.lock().unwrap().remove_document(uri);
@@ -2289,7 +2282,7 @@ impl LspServer {
             
             // Convert workspace index symbols to workspace_symbols::WorkspaceSymbol format
             for sym in index_symbols {
-                let uri = format!("file://{}", sym.file_path.display());
+                let uri = sym.uri.clone();  // Already has URI from index
                 
                 // Skip if already in results from workspace_symbols provider
                 let already_exists = symbols.iter().any(|existing| {
@@ -2301,12 +2294,12 @@ impl LspServer {
                 }
                 
                 let kind = match sym.kind {
-                    IndexSymbolKind::Package => 4,  // Module
-                    IndexSymbolKind::Subroutine => 12,  // Function
-                    IndexSymbolKind::Method => 6,  // Method
-                    IndexSymbolKind::Variable => 13,  // Variable
-                    IndexSymbolKind::Constant => 14,  // Constant
-                    IndexSymbolKind::Class => 5,  // Class
+                    crate::workspace_index::SymbolKind::Package => 4,  // Module
+                    crate::workspace_index::SymbolKind::Subroutine => 12,  // Function
+                    crate::workspace_index::SymbolKind::Method => 6,  // Method
+                    crate::workspace_index::SymbolKind::Variable => 13,  // Variable
+                    crate::workspace_index::SymbolKind::Constant => 14,  // Constant
+                    crate::workspace_index::SymbolKind::Class => 5,  // Class
                     _ => 0,  // File
                 };
                 
@@ -2319,12 +2312,12 @@ impl LspServer {
                         uri,
                         range: Range {
                             start: Position {
-                                line: sym.line.saturating_sub(1) as u32,
-                                character: sym.column.saturating_sub(1) as u32,
+                                line: sym.range.start.line,
+                                character: sym.range.start.character,
                             },
                             end: Position {
-                                line: sym.line.saturating_sub(1) as u32,
-                                character: (sym.column.saturating_sub(1) + sym.name.len()) as u32,
+                                line: sym.range.end.line,
+                                character: sym.range.end.character,
                             },
                         },
                     },
