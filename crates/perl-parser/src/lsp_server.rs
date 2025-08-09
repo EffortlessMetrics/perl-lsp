@@ -44,6 +44,8 @@ pub struct LspServer {
     symbol_index: Arc<Mutex<SymbolIndex>>,
     /// Server configuration
     config: Arc<Mutex<ServerConfig>>,
+    /// Synchronized output writer for notifications
+    output: Arc<Mutex<Box<dyn Write + Send>>>,
 }
 
 /// State of a document
@@ -132,7 +134,22 @@ impl LspServer {
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
+            output: Arc::new(Mutex::new(Box::new(io::stdout()))),
         }
+    }
+    
+    /// Send a notification to the client with proper framing
+    fn notify(&self, method: &str, params: Value) -> io::Result<()> {
+        let notification = json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params
+        });
+        
+        let notification_str = serde_json::to_string(&notification)?;
+        let mut output = self.output.lock().unwrap();
+        write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+        output.flush()
     }
 
     /// Run the LSP server
@@ -538,20 +555,11 @@ impl LspServer {
 
                 eprintln!("Publishing {} diagnostics for {}", lsp_diagnostics.len(), uri);
                 
-                // Send diagnostics notification to client
-                let notification = json!({
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/publishDiagnostics",
-                    "params": {
-                        "uri": uri,
-                        "diagnostics": lsp_diagnostics
-                    }
-                });
-                
-                let response_str = serde_json::to_string(&notification).unwrap();
-                // Ignore broken pipe errors in tests
-                let _ = io::stdout().write_all(format!("Content-Length: {}\r\n\r\n{}", response_str.len(), response_str).as_bytes());
-                let _ = io::stdout().flush();
+                // Send diagnostics notification to client using centralized notify
+                let _ = self.notify("textDocument/publishDiagnostics", json!({
+                    "uri": uri,
+                    "diagnostics": lsp_diagnostics
+                }));
             }
         }
     }
@@ -569,20 +577,11 @@ impl LspServer {
             // Clear from workspace index
             self.workspace_index.clear_file(uri);
             
-            // Clear diagnostics for this file by sending proper JSON-RPC notification
-            let notification = json!({
-                "jsonrpc": "2.0",
-                "method": "textDocument/publishDiagnostics",
-                "params": {
-                    "uri": uri,
-                    "diagnostics": []
-                }
-            });
-            
-            // Send notification with proper headers
-            let notification_str = serde_json::to_string(&notification).unwrap();
-            let _ = io::stdout().write_all(format!("Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str).as_bytes());
-            let _ = io::stdout().flush();
+            // Clear diagnostics for this file using centralized notify
+            let _ = self.notify("textDocument/publishDiagnostics", json!({
+                "uri": uri,
+                "diagnostics": []
+            }));
         }
         
         Ok(())
@@ -2281,7 +2280,8 @@ impl LspServer {
         use std::collections::HashSet;
         let mut seen = HashSet::new();
         
-        let symbols: Vec<crate::workspace_index::WorkspaceSymbol> = index_symbols.into_iter()
+        // First deduplicate the internal symbols
+        let deduped_symbols: Vec<crate::workspace_index::WorkspaceSymbol> = index_symbols.into_iter()
             .filter(|sym| {
                 // Deduplicate by (uri, start position, name, kind)
                 seen.insert((
@@ -2294,11 +2294,17 @@ impl LspServer {
             })
             .collect();
         
-        eprintln!("Found {} symbols (after deduplication)", symbols.len());
+        // Convert to LSP DTOs (no internal fields)
+        let lsp_symbols: Vec<crate::workspace_index::LspWorkspaceSymbol> = deduped_symbols
+            .iter()
+            .map(|sym| sym.into())
+            .collect();
+        
+        eprintln!("Found {} symbols (after deduplication)", lsp_symbols.len());
         
         // Convert to JSON for LSP response
-        // Note: We serialize at the last moment to maintain type safety
-        let result = serde_json::to_value(&symbols)
+        // Now we're only serializing LSP-compliant fields
+        let result = serde_json::to_value(&lsp_symbols)
             .unwrap_or_else(|_| json!([]));
         
         Ok(Some(result))

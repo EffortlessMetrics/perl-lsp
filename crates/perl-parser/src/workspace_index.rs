@@ -62,6 +62,24 @@ pub enum SymbolKind {
     Export,
 }
 
+impl SymbolKind {
+    /// Convert to LSP-compliant symbol kind number
+    pub fn to_lsp_kind(self) -> u32 {
+        // Using lsp_types::SymbolKind constants
+        match self {
+            SymbolKind::Package => 2,     // Module
+            SymbolKind::Subroutine => 12, // Function
+            SymbolKind::Method => 6,       // Method
+            SymbolKind::Variable => 13,    // Variable
+            SymbolKind::Constant => 14,    // Constant
+            SymbolKind::Class => 5,        // Class
+            SymbolKind::Role => 8,         // Interface (closest match)
+            SymbolKind::Import => 2,       // Module
+            SymbolKind::Export => 12,      // Function
+        }
+    }
+}
+
 /// Reference to a symbol
 #[derive(Debug, Clone)]
 pub struct SymbolReference {
@@ -77,6 +95,61 @@ pub enum ReferenceKind {
     Import,
     Read,
     Write,
+}
+
+/// LSP-compliant workspace symbol for wire format (no internal fields)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LspWorkspaceSymbol {
+    pub name: String,
+    pub kind: u32,
+    pub location: LspLocation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container_name: Option<String>,
+}
+
+/// LSP-compliant location
+#[derive(Debug, Serialize)]
+pub struct LspLocation {
+    pub uri: String,
+    pub range: LspRange,
+}
+
+/// LSP-compliant range
+#[derive(Debug, Serialize)]
+pub struct LspRange {
+    pub start: LspPosition,
+    pub end: LspPosition,
+}
+
+/// LSP-compliant position
+#[derive(Debug, Serialize)]
+pub struct LspPosition {
+    pub line: u32,
+    pub character: u32,
+}
+
+impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
+    fn from(sym: &WorkspaceSymbol) -> Self {
+        Self {
+            name: sym.name.clone(),
+            kind: sym.kind.to_lsp_kind(),
+            location: LspLocation {
+                uri: sym.uri.clone(),
+                range: LspRange {
+                    start: LspPosition {
+                        line: sym.range.start.line,
+                        character: sym.range.start.character,
+                    },
+                    end: LspPosition {
+                        line: sym.range.end.line,
+                        character: sym.range.end.character,
+                    },
+                },
+            },
+            container_name: sym.container_name.clone(),
+        }
+    }
 }
 
 /// File-level index data
@@ -110,15 +183,17 @@ impl WorkspaceIndex {
         }
     }
     
-    /// Normalize a URI to a consistent form using proper URL parsing
+    /// Normalize a URI to a consistent form using lsp_types
     fn normalize_uri(uri: &str) -> String {
         // Try to parse as URL first
-        if let Ok(url) = url::Url::parse(uri) {
+        use url::Url;
+        
+        if let Ok(url) = Url::parse(uri) {
             return url.to_string();
         }
         
         // If not a valid URL, try as file path
-        if let Ok(url) = url::Url::from_file_path(uri) {
+        if let Ok(url) = Url::from_file_path(uri) {
             return url.to_string();
         }
         
@@ -133,7 +208,7 @@ impl WorkspaceIndex {
         std::path::Path::new(path)
             .canonicalize()
             .ok()
-            .and_then(|p| url::Url::from_file_path(p).ok())
+            .and_then(|p| Url::from_file_path(p).ok())
             .map(|u| u.to_string())
             .unwrap_or_else(|| {
                 // Last resort: just ensure file:// prefix
@@ -205,7 +280,7 @@ impl WorkspaceIndex {
         let key = DocumentStore::uri_key(&normalized_uri);
         
         // Remove from document store
-        self.document_store.close(uri);
+        self.document_store.close(&normalized_uri);
         
         // Remove file index
         let mut files = self.files.write().unwrap();
