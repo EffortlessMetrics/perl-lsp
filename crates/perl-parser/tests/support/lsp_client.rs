@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
 
 /// A simple LSP client for testing the LSP server
+#[allow(dead_code)]
 pub struct LspClient {
     child: std::process::Child,
 }

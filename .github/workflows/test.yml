@@ -1,0 +1,110 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+    
+    - name: Install perltidy and perlcritic (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y perltidy libperl-critic-perl
+    
+    - name: Install perltidy and perlcritic (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install perltidy
+        cpan install Perl::Critic
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check for tautological tests
+      run: |
+        echo "Checking for tautological assertions..."
+        if grep -r "is_some().*||.*is_none()" crates/perl-parser/tests/ 2>/dev/null; then
+          echo "ERROR: Found tautological test assertions (always pass)"
+          echo "These tests provide no validation. Please fix them."
+          exit 1
+        fi
+        echo "✓ No tautological assertions found"
+    
+    - name: Build
+      run: cargo build --verbose
+    
+    - name: Build LSP server
+      run: cargo build -p perl-parser --bin perl-lsp --verbose
+    
+    - name: Run tests
+      run: cargo test --verbose
+    
+    - name: Run E2E tests
+      run: cargo test -p perl-parser --tests --verbose
+    
+    - name: Run incremental tests (feature-gated)
+      run: cargo test -p perl-parser --features incremental --verbose
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: clippy
+    
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      continue-on-error: true  # Don't fail the build yet, but show warnings
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: rustfmt
+    
+    - name: Check formatting
+      run: cargo fmt --all -- --check
