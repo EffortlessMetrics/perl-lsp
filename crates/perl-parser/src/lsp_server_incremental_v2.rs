@@ -2,10 +2,9 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::str::FromStr;
 use lsp_types::{
     DidChangeTextDocumentParams, TextDocumentContentChangeEvent,
-    PublishDiagnosticsParams, Range,
+    Range,
 };
 
 use crate::incremental::{IncrementalState, Edit, apply_edits, ReparseResult};
@@ -79,8 +78,8 @@ impl IncrementalLspServer {
             if let Some(edit) = Edit::from_lsp_change(change, &state.line_index, &state.source) {
                 edits.push(edit);
             } else {
-                // Full document change - use text from change if available
-                let text = change.text.as_str();
+                // Full document change
+                let text = &change.text;
                 edits.push(Edit {
                     start_byte: 0,
                     old_end_byte: state.source.len(),
@@ -98,17 +97,12 @@ impl IncrementalLspServer {
         // Convert result diagnostics to LSP diagnostics
         let diagnostics = result.diagnostics;
         
-        // Create publish diagnostics params
-        if let Ok(url) = lsp_types::Uri::from_str(uri) {
-            let params = PublishDiagnosticsParams {
-                uri: url,
-                diagnostics,
-                version: None,
-            };
-            
-            // In a real implementation, send this via the LSP connection
-            eprintln!("Publishing {} diagnostics for {}", params.diagnostics.len(), uri);
-        }
+        // In a real implementation, send this via the LSP connection
+        eprintln!("Publishing {} diagnostics for {}", diagnostics.len(), uri);
+        
+        // TODO: Actually publish the diagnostics via LSP when integrated
+        // This would need the LSP connection/sender to emit the notification:
+        // PublishDiagnosticsParams { uri: <parsed_uri>, diagnostics, version: None }
     }
 }
 
@@ -166,7 +160,12 @@ mod tests {
             new_text: "99".to_string(),
         };
         
+        // Debug print to see what's happening
+        eprintln!("Before edit: source = {:?}", state.source);
         let result = apply_edits(&mut state, &[edit]);
+        eprintln!("After edit: source = {:?}", state.source);
+        eprintln!("Result: {:?}", result);
+        
         assert!(result.is_ok());
         assert_eq!(state.source, "my $x = 99;");
     }
