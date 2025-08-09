@@ -117,6 +117,9 @@ pub use incremental::{IncrementalState, Edit, apply_edits};
 // IDE feature exports
 pub use symbol::{Symbol, SymbolKind, SymbolTable, SymbolExtractor, SymbolReference};
 pub use semantic::{SemanticAnalyzer, SemanticToken, SemanticTokenType, SemanticTokenModifier, HoverInfo};
+
+#[cfg(test)]
+mod workspace_index_utf16_test;
 pub use completion::{CompletionProvider, CompletionItem, CompletionItemKind, CompletionContext};
 pub use signature_help::{SignatureHelpProvider, SignatureHelp, SignatureInfo, ParameterInfo};
 pub use rename::{RenameProvider, RenameResult, RenameOptions, TextEdit, apply_rename_edits};
