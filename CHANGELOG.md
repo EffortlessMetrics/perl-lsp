@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2025-02-09
+
+### Critical Fix
+- **Test Infrastructure** - Recovered 400+ silently skipped tests
+  - Fixed Rust test harness bug that prevented test discovery
+  - Tests now properly discovered with empty filter workaround
+  - Added comprehensive test runner script for CI/local use
+  - Real test count: 526+ tests (was showing only 27)
+
 ### Added
 - **Workspace File Operations Support** - Complete file synchronization
   - `workspace/didChangeWatchedFiles` - Re-indexes files changed externally
@@ -35,14 +44,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Handles namespaced packages (My::Base::Class)
   - Comprehensive qw() parsing with various delimiters
 
+- **Compatibility Shim** - Zero-cost API migration layer
+  - Added `src/compat.rs` module for smooth test migration
+  - Feature-gated behind `test-compat` flag
+  - All functions marked deprecated to track migration progress
+  - Enables old tests to run while transitioning to new API
+
 ### Improved
 - **Error Handling** - Replaced critical `.unwrap()` calls
   - 8+ unwrap calls in workspace handlers replaced with proper error handling
   - Added let-else patterns for cleaner error flow
   - Improved robustness for production environments
 
+- **CI/CD** - Added test discovery guards
+  - New workflow verifies no test files have 0 tests
+  - Comprehensive test runner script in `.github/run_all_tests.sh`
+  - Prevents regression of test discovery issues
+  - Documents minimum expected test counts
+
 ### Tests
-- **Workspace File Operations Tests** - 13 new comprehensive tests
+- **Test Discovery Fixed** - All 526+ tests now running
+  - 400+ LSP integration tests recovered
+  - 126 library unit tests
+  - 13 new workspace file operations tests
+  - All tests properly discovered with empty filter workaround
   - File creation, modification, and deletion handling
   - Module rename and import updating
   - Multi-file edit application
