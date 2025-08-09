@@ -40,6 +40,7 @@ pub fn expect_arr(v: &Option<Value>) -> &Vec<Value> {
 // ===================== Assertion Helpers =====================
 
 /// Assert hover response has meaningful text content
+#[allow(dead_code)]
 pub fn assert_hover_has_text(v: &Option<Value>) {
     if let Some(hover) = v {
         if !hover.is_null() {
