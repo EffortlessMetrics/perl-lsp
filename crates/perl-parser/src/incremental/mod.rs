@@ -394,10 +394,10 @@ pub fn apply_edits(
     // For MVP, handle single edit with incremental logic
     if sorted_edits.len() == 1 {
         let edit = &sorted_edits[0];
-        eprintln!("DEBUG: Handling single edit: {:?}", edit);
         
         // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
         if edit.new_text.len() > 1024 || edit.new_text.matches('\n').count() > 10 {
+            apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
         
@@ -406,6 +406,7 @@ pub fn apply_edits(
         
         // If window is too large (>20% of doc), fall back to full parse
         if window.end - window.start > state.source.len() / 5 {
+            apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
         
@@ -416,7 +417,6 @@ pub fn apply_edits(
         new_source.push_str(&state.source[..edit.start_byte]);
         new_source.push_str(&edit.new_text);
         new_source.push_str(&state.source[edit.old_end_byte..]);
-        eprintln!("DEBUG: Applied edit, new source: {:?}", new_source);
         
         // Re-lex the window
         let _window_text = &new_source[window.clone()];
