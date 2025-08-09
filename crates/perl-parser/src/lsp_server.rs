@@ -293,17 +293,21 @@ impl LspServer {
 
     /// Handle initialize request
     fn handle_initialize(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        // Check for available tools
-        let has_perltidy = std::process::Command::new("which")
-            .arg("perltidy")
-            .output()
-            .map(|o| o.status.success())
+        // Check for available tools by trying to execute them
+        let has_perltidy = std::process::Command::new("perltidy")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
             .unwrap_or(false);
             
-        let has_perlcritic = std::process::Command::new("which")
-            .arg("perlcritic")
-            .output()
-            .map(|o| o.status.success())
+        let has_perlcritic = std::process::Command::new("perlcritic")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
             .unwrap_or(false);
         
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
@@ -355,7 +359,7 @@ impl LspServer {
             "experimental": {
                 "testProvider": true
             },
-            "positionEncoding": "utf-8"
+            "positionEncoding": "utf-16"
         });
         
         // Only advertise formatting if perltidy is available
@@ -565,8 +569,9 @@ impl LspServer {
             // Clear from workspace index
             self.workspace_index.clear_file(uri);
             
-            // Clear diagnostics for this file
-            let clear_diagnostics = json!({
+            // Clear diagnostics for this file by sending proper JSON-RPC notification
+            let notification = json!({
+                "jsonrpc": "2.0",
                 "method": "textDocument/publishDiagnostics",
                 "params": {
                     "uri": uri,
@@ -574,8 +579,10 @@ impl LspServer {
                 }
             });
             
-            // Send notification to clear diagnostics
-            println!("{}", clear_diagnostics);
+            // Send notification with proper headers
+            let notification_str = serde_json::to_string(&notification).unwrap();
+            let _ = io::stdout().write_all(format!("Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str).as_bytes());
+            let _ = io::stdout().flush();
         }
         
         Ok(())
@@ -2270,41 +2277,31 @@ impl LspServer {
         // Use workspace index for all symbol searches
         let index_symbols = self.workspace_index.find_symbols(query);
         
-        // Convert workspace index symbols to LSP format
-        let symbols: Vec<_> = index_symbols.into_iter().map(|sym| {
-            let kind = match sym.kind {
-                crate::workspace_index::SymbolKind::Package => 4,  // Module
-                crate::workspace_index::SymbolKind::Subroutine => 12,  // Function
-                crate::workspace_index::SymbolKind::Method => 6,  // Method
-                crate::workspace_index::SymbolKind::Variable => 13,  // Variable
-                crate::workspace_index::SymbolKind::Constant => 14,  // Constant
-                crate::workspace_index::SymbolKind::Class => 5,  // Class
-                _ => 0,  // File
-            };
-            
-            json!({
-                "name": sym.name,
-                "kind": kind,
-                "location": {
-                    "uri": sym.uri,
-                    "range": {
-                        "start": {
-                            "line": sym.range.start.line,
-                            "character": sym.range.start.character,
-                        },
-                        "end": {
-                            "line": sym.range.end.line,
-                            "character": sym.range.end.character,
-                        },
-                    },
-                },
-                "containerName": sym.qualified_name,
+        // Convert workspace index symbols to typed LSP WorkspaceSymbol structs
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        
+        let symbols: Vec<crate::workspace_index::WorkspaceSymbol> = index_symbols.into_iter()
+            .filter(|sym| {
+                // Deduplicate by (uri, start position, name, kind)
+                seen.insert((
+                    sym.uri.clone(),
+                    sym.range.start.line,
+                    sym.range.start.character,
+                    sym.name.clone(),
+                    sym.kind.clone(),
+                ))
             })
-        }).collect();
+            .collect();
         
-        eprintln!("Found {} symbols", symbols.len());
+        eprintln!("Found {} symbols (after deduplication)", symbols.len());
         
-        Ok(Some(json!(symbols)))
+        // Convert to JSON for LSP response
+        // Note: We serialize at the last moment to maintain type safety
+        let result = serde_json::to_value(&symbols)
+            .unwrap_or_else(|_| json!([]));
+        
+        Ok(Some(result))
     }
     
     /// Handle textDocument/codeLens request

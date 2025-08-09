@@ -49,7 +49,7 @@ fn default_has_body() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SymbolKind {
     Package,
     Subroutine,
@@ -110,24 +110,42 @@ impl WorkspaceIndex {
         }
     }
     
-    /// Normalize a URI to a consistent form
+    /// Normalize a URI to a consistent form using proper URL parsing
     fn normalize_uri(uri: &str) -> String {
-        // Remove trailing slashes, normalize file:// prefix, etc.
-        let mut normalized = uri.to_string();
-        
-        // Ensure file URIs have proper prefix
-        if normalized.starts_with("file://") {
-            normalized = normalized.to_string();
-        } else if normalized.starts_with('/') {
-            normalized = format!("file://{}", normalized);
+        // Try to parse as URL first
+        if let Ok(url) = url::Url::parse(uri) {
+            return url.to_string();
         }
         
-        // Remove trailing slashes from paths (but not from scheme)
-        if normalized.ends_with('/') && !normalized.ends_with("://") {
-            normalized.pop();
+        // If not a valid URL, try as file path
+        if let Ok(url) = url::Url::from_file_path(uri) {
+            return url.to_string();
         }
         
-        normalized
+        // Fallback: try to construct file URL manually
+        let path = if uri.starts_with("file://") {
+            &uri[7..]
+        } else {
+            uri
+        };
+        
+        // Try to create file URL from path
+        std::path::Path::new(path)
+            .canonicalize()
+            .ok()
+            .and_then(|p| url::Url::from_file_path(p).ok())
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| {
+                // Last resort: just ensure file:// prefix
+                if uri.starts_with("file://") || uri.starts_with("untitled:") {
+                    uri.to_string()
+                } else if uri.starts_with('/') {
+                    format!("file://{}", uri)
+                } else {
+                    // Relative path - keep as is
+                    uri.to_string()
+                }
+            })
     }
     
     /// Index a file from its URI and text content
@@ -379,8 +397,6 @@ struct IndexVisitor {
     document: Document,
     uri: String,
     current_package: Option<String>,
-    #[allow(dead_code)]
-    package_stack: Vec<String>,
 }
 
 impl IndexVisitor {
@@ -389,7 +405,6 @@ impl IndexVisitor {
             document: document.clone(),
             uri,
             current_package: Some("main".to_string()),
-            package_stack: vec!["main".to_string()],
         }
     }
     
@@ -402,9 +417,8 @@ impl IndexVisitor {
             NodeKind::Package { name, .. } => {
                 let package_name = name.clone();
                 
-                // Update the current package and push to stack
+                // Update the current package (replaces the previous one, not a stack)
                 self.current_package = Some(package_name.clone());
-                self.package_stack.push(package_name.clone());
                 
                 file_index.symbols.push(WorkspaceSymbol {
                     name: package_name.clone(),
