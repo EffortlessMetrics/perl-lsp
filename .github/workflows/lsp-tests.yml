@@ -84,6 +84,7 @@ jobs:
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
       if: matrix.os == 'ubuntu-latest'
+      shell: bash
     
     - name: Run all parser tests
       run: cargo test --all --verbose

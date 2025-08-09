@@ -5,7 +5,7 @@ BIN=${BIN:-target/debug/perl-lsp}
 cargo build -p perl-parser --bin perl-lsp --quiet
 
 python3 - "$BIN" <<'PY'
-import json, subprocess, sys, os, time
+import json, subprocess, sys, os, time, signal
 
 def frame(obj):
     b = json.dumps(obj).encode()
@@ -31,45 +31,65 @@ def recv():
     body = proc.stdout.read(length)
     return json.loads(body)
 
-def recv_response(expected_id):
-    # Keep receiving until we get a response with the expected ID
-    while True:
+def recv_response(expected_id, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         msg = recv()
-        if "id" in msg and msg["id"] == expected_id:
+        if msg.get("id") == expected_id:
             return msg
         # Otherwise it's a notification, ignore it
+    raise SystemExit(f"timeout waiting for id {expected_id}")
 
-# 1) initialize
-send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})
-_ = recv_response(1)
+try:
+    # 1) initialize
+    send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})
+    init = recv_response(1)
+    
+    # Verify capabilities are advertised
+    caps = init["result"]["capabilities"]
+    assert caps.get("documentHighlightProvider"), "documentHighlightProvider not advertised"
+    assert caps.get("typeHierarchyProvider"), "typeHierarchyProvider not advertised"
 
-# 2) didOpen with simple inheritance and a repeated variable
-text = "package Base; package Child; use parent 'Base'; my $x=1; $x++;\n"
-send({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{
-    "textDocument":{"uri":"file:///test.pl","languageId":"perl","version":1,"text":text}
-}})
+    # 2) didOpen with simple inheritance and a repeated variable
+    # Added 'use strict; use warnings;' to avoid diagnostic noise
+    text = "use strict; use warnings; package Base; package Child; use parent 'Base'; my $x=1; $x++;\n"
+    send({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{
+        "textDocument":{"uri":"file:///test.pl","languageId":"perl","version":1,"text":text}
+    }})
 
-# 3) documentHighlight on $x (position 52 = first $x)
-send({"jsonrpc":"2.0","id":2,"method":"textDocument/documentHighlight","params":{
-    "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":52}
-}})
-hl = recv_response(2)
-assert "result" in hl, f"No result in response: {hl}"
-assert isinstance(hl["result"], list) and len(hl["result"]) >= 2, f"Expected 2+ highlights, got {hl.get('result')}"
+    # 3) documentHighlight on $x (position adjusted for new text)
+    send({"jsonrpc":"2.0","id":2,"method":"textDocument/documentHighlight","params":{
+        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":79}
+    }})
+    hl = recv_response(2)
+    assert "result" in hl, f"No result in response: {hl}"
+    assert isinstance(hl["result"], list) and len(hl["result"]) >= 2, f"Expected 2+ highlights, got {hl.get('result')}"
 
-# 4) prepareTypeHierarchy on Base
-send({"jsonrpc":"2.0","id":3,"method":"textDocument/prepareTypeHierarchy","params":{
-    "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":10}
-}})
-prep = recv_response(3)
-assert "result" in prep and prep["result"], f"No prepare result: {prep}"
+    # 4) prepareTypeHierarchy on Base (position adjusted for new text)
+    send({"jsonrpc":"2.0","id":3,"method":"textDocument/prepareTypeHierarchy","params":{
+        "textDocument":{"uri":"file:///test.pl"},"position":{"line":0,"character":36}
+    }})
+    prep = recv_response(3)
+    assert "result" in prep and prep["result"], f"No prepare result: {prep}"
 
-# 5) typeHierarchy/subtypes
-item = prep["result"][0]
-send({"jsonrpc":"2.0","id":4,"method":"typeHierarchy/subtypes","params":{"item":item}})
-subs = recv_response(4)
-assert any(i.get("name") == "Child" for i in (subs["result"] or [])), "Child subtype not found"
+    # 5) typeHierarchy/subtypes
+    item = prep["result"][0]
+    send({"jsonrpc":"2.0","id":4,"method":"typeHierarchy/subtypes","params":{"item":item}})
+    subs = recv_response(4)
+    assert any(i.get("name") == "Child" for i in (subs["result"] or [])), "Child subtype not found"
 
-print("OK: documentHighlight + typeHierarchy")
-proc.terminate()
+    print("OK: documentHighlight + typeHierarchy")
+    
+except Exception as e:
+    # Print stderr on failure to help debug
+    stderr = proc.stderr.read().decode('utf-8', errors='replace')
+    if stderr:
+        print(f"Server stderr:\n{stderr}", file=sys.stderr)
+    raise
+finally:
+    proc.terminate()
+    try:
+        proc.wait(timeout=1)
+    except:
+        proc.kill()
 PY
