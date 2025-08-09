@@ -3,6 +3,7 @@
 //! This example shows how unchanged parts of the parse tree are reused
 //! when making small edits to the source code.
 
+#[cfg(feature = "incremental")]
 use perl_parser::{
     edit::Edit,
     incremental::IncrementalParser,
@@ -10,6 +11,15 @@ use perl_parser::{
 };
 
 fn main() {
+    #[cfg(not(feature = "incremental"))]
+    {
+        println!("This demo requires the 'incremental' feature to be enabled.");
+        println!("Run with: cargo run --example incremental_tree_reuse --features incremental");
+        return;
+    }
+    
+    #[cfg(feature = "incremental")]
+    {
     println!("=== Tree Reuse Demonstration ===\n");
     
     // Demo 1: Edit that doesn't affect structure
@@ -20,8 +30,10 @@ fn main() {
     
     // Demo 3: Multiple edits
     demo_multiple_edits();
+    } // End of #[cfg(feature = "incremental")] block
 }
 
+#[cfg(feature = "incremental")]
 fn demo_simple_edit() {
     println!("1. Simple Value Edit (Maximum Reuse)");
     println!("-----------------------------------");
@@ -82,6 +94,7 @@ print "Result: $z\n";
     println!("\n");
 }
 
+#[cfg(feature = "incremental")]
 fn demo_statement_edit() {
     println!("2. Statement-Level Edit");
     println!("----------------------");
@@ -144,6 +157,7 @@ print "Answer: $x\n";
     println!("\n");
 }
 
+#[cfg(feature = "incremental")]
 fn demo_multiple_edits() {
     println!("3. Multiple Edits in Different Locations");
     println!("---------------------------------------");

@@ -40,6 +40,10 @@ print $undefined_var;
                     IssueKind::UnusedVariable => "Unused",
                     IssueKind::VariableShadowing => "Shadowing",
                     IssueKind::VariableRedeclaration => "Redeclaration",
+                    IssueKind::DuplicateParameter => "Duplicate parameter",
+                    IssueKind::ParameterShadowsGlobal => "Parameter shadows global",
+                    IssueKind::UnusedParameter => "Unused parameter",
+                    IssueKind::UnquotedBareword => "Unquoted bareword",
                 },
                 issue.line,
                 issue.description

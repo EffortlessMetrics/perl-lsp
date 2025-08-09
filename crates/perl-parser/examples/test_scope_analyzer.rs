@@ -1,4 +1,4 @@
-use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+use perl_parser::{Parser, scope_analyzer::ScopeAnalyzer};
 
 fn main() {
     let analyzer = ScopeAnalyzer::new();
@@ -10,7 +10,19 @@ fn main() {
         my $declared = 10;
         print $undeclared;  # This is not declared
     "#;
-    let issues = analyzer.analyze(code);
+    
+    // Parse the code first
+    let mut parser = Parser::new(code);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            println!("Parse error: {}", e);
+            return;
+        }
+    };
+    
+    // Analyze with AST and empty pragma map
+    let issues = analyzer.analyze(&ast, code, &[]);
     println!("Found {} issues:", issues.len());
     for issue in &issues {
         println!("  - {:?} '{}' at line {}: {}", 
@@ -32,7 +44,16 @@ fn main() {
         }
         print $x;  # Only $x accessible here
     "#;
-    let issues = analyzer.analyze(code);
+    
+    let mut parser = Parser::new(code);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            println!("Parse error: {}", e);
+            return;
+        }
+    };
+    let issues = analyzer.analyze(&ast, code, &[]);
     println!("Found {} issues:", issues.len());
     for issue in &issues {
         println!("  - {:?} '{}' at line {}: {}", 
@@ -50,7 +71,16 @@ fn main() {
         sub get_package { return $package_var; }
         sub get_lexical { return $lexical_var; }
     "#;
-    let issues = analyzer.analyze(code);
+    
+    let mut parser = Parser::new(code);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            println!("Parse error: {}", e);
+            return;
+        }
+    };
+    let issues = analyzer.analyze(&ast, code, &[]);
     println!("Found {} issues:", issues.len());
     for issue in &issues {
         println!("  - {:?} '{}' at line {}: {}", 

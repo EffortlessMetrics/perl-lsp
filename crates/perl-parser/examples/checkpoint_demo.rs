@@ -3,9 +3,19 @@
 //! This example shows how lexer checkpoints enable efficient incremental
 //! parsing by avoiding re-lexing of unchanged portions of the file.
 
+#[cfg(feature = "incremental")]
 use perl_parser::incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
 
 fn main() {
+    #[cfg(not(feature = "incremental"))]
+    {
+        println!("This demo requires the 'incremental' feature to be enabled.");
+        println!("Run with: cargo run --example checkpoint_demo --features incremental");
+        return;
+    }
+    
+    #[cfg(feature = "incremental")]
+    {
     println!("=== Lexer Checkpointing Demo ===\n");
     
     // Create incremental parser with checkpointing
@@ -162,4 +172,5 @@ my $y = 99;
     println!("  Checkpoint correctly restored delimiter stack");
     println!("  Re-lexed only affected region");
     println!("  Tokens re-lexed: {}", stats.tokens_relexed);
+    } // End of #[cfg(feature = "incremental")] block
 }

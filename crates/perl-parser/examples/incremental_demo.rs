@@ -3,6 +3,7 @@
 //! This example shows how the position tracking, edit tracking, and 
 //! incremental parsing features work together.
 
+#[cfg(feature = "incremental")]
 use perl_parser::{
     edit::{Edit, EditSet},
     incremental::IncrementalParser,
@@ -11,6 +12,15 @@ use perl_parser::{
 };
 
 fn main() {
+    #[cfg(not(feature = "incremental"))]
+    {
+        println!("This demo requires the 'incremental' feature to be enabled.");
+        println!("Run with: cargo run --example incremental_demo --features incremental");
+        return;
+    }
+    
+    #[cfg(feature = "incremental")]
+    {
     println!("=== Incremental Parsing Infrastructure Demo ===\n");
     
     // Demo 1: Position tracking
@@ -21,8 +31,10 @@ fn main() {
     
     // Demo 3: Incremental parsing
     demo_incremental_parsing();
+    } // End of #[cfg(feature = "incremental")] block
 }
 
+#[cfg(feature = "incremental")]
 fn demo_position_tracking() {
     println!("1. Position Tracking Demo");
     println!("------------------------");
@@ -46,6 +58,7 @@ fn demo_position_tracking() {
     println!("\n");
 }
 
+#[cfg(feature = "incremental")]
 fn demo_edit_tracking() {
     println!("2. Edit Tracking Demo");
     println!("--------------------");
@@ -102,6 +115,7 @@ fn demo_edit_tracking() {
     println!("\n");
 }
 
+#[cfg(feature = "incremental")]
 fn demo_incremental_parsing() {
     println!("3. Incremental Parsing Demo");
     println!("--------------------------");

@@ -30,18 +30,20 @@ fn main() {
         
         // First parse to see the AST
         let mut parser = Parser::new(code);
-        match parser.parse() {
+        let ast = match parser.parse() {
             Ok(ast) => {
                 println!("AST: {}", ast.to_sexp());
+                ast
             }
             Err(e) => {
                 println!("Parse error: {}", e);
+                continue;
             }
-        }
+        };
         
         // Now analyze scoping
         let analyzer = ScopeAnalyzer::new();
-        let issues = analyzer.analyze(code);
+        let issues = analyzer.analyze(&ast, code, &[]);
         
         println!("Issues found: {}", issues.len());
         for issue in &issues {

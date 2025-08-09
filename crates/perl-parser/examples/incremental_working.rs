@@ -2,14 +2,25 @@
 //!
 //! This example shows real tree reuse in action for value edits.
 
+#[cfg(feature = "incremental")]
 use perl_parser::{
     edit::Edit,
     incremental_v2::IncrementalParserV2,
     position::Position,
 };
+#[cfg(feature = "incremental")]
 use std::time::Instant;
 
 fn main() {
+    #[cfg(not(feature = "incremental"))]
+    {
+        println!("This demo requires the 'incremental' feature to be enabled.");
+        println!("Run with: cargo run --example incremental_working --features incremental");
+        return;
+    }
+    
+    #[cfg(feature = "incremental")]
+    {
     println!("=== Working Incremental Parsing Demo ===\n");
     
     // Demo 1: Simple value change
@@ -20,8 +31,10 @@ fn main() {
     
     // Demo 3: Performance comparison
     demo_performance();
+    } // End of #[cfg(feature = "incremental")] block
 }
 
+#[cfg(feature = "incremental")]
 fn demo_simple_value_change() {
     println!("1. Simple Value Change");
     println!("---------------------");
@@ -60,6 +73,7 @@ fn demo_simple_value_change() {
     println!();
 }
 
+#[cfg(feature = "incremental")]
 fn demo_multiple_values() {
     println!("2. Multiple Value Changes");
     println!("------------------------");
@@ -123,6 +137,7 @@ print "Volume: $volume\n";
     println!();
 }
 
+#[cfg(feature = "incremental")]
 fn demo_performance() {
     println!("3. Performance Comparison");
     println!("------------------------");
