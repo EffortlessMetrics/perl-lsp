@@ -286,6 +286,60 @@ impl WorkspaceIndex {
     pub fn document_store(&self) -> &DocumentStore {
         &self.document_store
     }
+    
+    /// Find unused symbols in the workspace
+    pub fn find_unused_symbols(&self) -> Vec<WorkspaceSymbol> {
+        let files = self.files.read().unwrap();
+        let mut unused = Vec::new();
+        
+        // Collect all defined symbols
+        for (_uri_key, file_index) in files.iter() {
+            for symbol in &file_index.symbols {
+                // Check if this symbol has any references beyond its definition
+                let has_usage = files.values().any(|fi| {
+                    if let Some(refs) = fi.references.get(&symbol.name) {
+                        refs.iter().any(|r| r.kind != ReferenceKind::Definition)
+                    } else {
+                        false
+                    }
+                });
+                
+                if !has_usage {
+                    unused.push(symbol.clone());
+                }
+            }
+        }
+        
+        unused
+    }
+    
+    /// Get all symbols that belong to a specific package
+    pub fn get_package_members(&self, package_name: &str) -> Vec<WorkspaceSymbol> {
+        let files = self.files.read().unwrap();
+        let mut members = Vec::new();
+        
+        for (_uri_key, file_index) in files.iter() {
+            for symbol in &file_index.symbols {
+                // Check if symbol belongs to this package
+                if let Some(ref container) = symbol.container_name {
+                    if container == package_name {
+                        members.push(symbol.clone());
+                    }
+                }
+                // Also check qualified names
+                if let Some(ref qname) = symbol.qualified_name {
+                    if qname.starts_with(&format!("{}::", package_name)) {
+                        // Avoid duplicates - only add if not already in via container_name
+                        if symbol.container_name.as_deref() != Some(package_name) {
+                            members.push(symbol.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        members
+    }
 }
 
 /// AST visitor for extracting symbols and references
@@ -293,6 +347,8 @@ struct IndexVisitor {
     document: Document,
     uri: String,
     current_package: Option<String>,
+    #[allow(dead_code)]
+    package_stack: Vec<String>,
 }
 
 impl IndexVisitor {
@@ -301,6 +357,7 @@ impl IndexVisitor {
             document: document.clone(),
             uri,
             current_package: Some("main".to_string()),
+            package_stack: vec!["main".to_string()],
         }
     }
     
@@ -333,15 +390,26 @@ impl IndexVisitor {
                         name_str.clone()
                     };
                     
-                    file_index.symbols.push(WorkspaceSymbol {
-                        name: name_str.clone(),
-                        kind: SymbolKind::Subroutine,
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        qualified_name: Some(qualified_name),
-                        documentation: None,
-                        container_name: self.current_package.clone(),
+                    // Check if this is a forward declaration or update to existing symbol
+                    let existing_symbol_idx = file_index.symbols.iter().position(|s| {
+                        s.name == name_str && s.container_name == self.current_package
                     });
+                    
+                    if let Some(idx) = existing_symbol_idx {
+                        // Update existing forward declaration with body
+                        file_index.symbols[idx].range = self.node_to_range(node);
+                    } else {
+                        // New symbol
+                        file_index.symbols.push(WorkspaceSymbol {
+                            name: name_str.clone(),
+                            kind: SymbolKind::Subroutine,
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(node),
+                            qualified_name: Some(qualified_name),
+                            documentation: None,
+                            container_name: self.current_package.clone(),
+                        });
+                    }
                     
                     // Mark as definition
                     file_index.references
@@ -384,6 +452,40 @@ impl IndexVisitor {
                 }
                 
                 // Visit initializer
+                if let Some(init) = initializer {
+                    self.visit_node(init, file_index);
+                }
+            }
+            
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                // Handle each variable in the list declaration
+                for var in variables {
+                    if let NodeKind::Variable { sigil, name } = &var.kind {
+                        let var_name = format!("{}{}", sigil, name);
+                        
+                        file_index.symbols.push(WorkspaceSymbol {
+                            name: var_name.clone(),
+                            kind: SymbolKind::Variable,
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(var),
+                            qualified_name: None,
+                            documentation: None,
+                            container_name: self.current_package.clone(),
+                        });
+                        
+                        // Mark as definition
+                        file_index.references
+                            .entry(var_name)
+                            .or_default()
+                            .push(SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(var),
+                                kind: ReferenceKind::Definition,
+                            });
+                    }
+                }
+                
+                // Visit the initializer
                 if let Some(init) = initializer {
                     self.visit_node(init, file_index);
                 }
@@ -438,10 +540,26 @@ impl IndexVisitor {
             }
             
             // Handle assignment to detect writes
-            NodeKind::Assignment { lhs, rhs, .. } => {
-                // Left side is a write
+            NodeKind::Assignment { lhs, rhs, op } => {
+                // For compound assignments (+=, -=, .=, etc.), the LHS is both read and written
+                let is_compound = op != "=";
+                
                 if let NodeKind::Variable { sigil, name } = &lhs.kind {
                     let var_name = format!("{}{}", sigil, name);
+                    
+                    // For compound assignments, it's a read first
+                    if is_compound {
+                        file_index.references
+                            .entry(var_name.clone())
+                            .or_default()
+                            .push(SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(lhs),
+                                kind: ReferenceKind::Read,
+                            });
+                    }
+                    
+                    // Then it's always a write
                     file_index.references
                         .entry(var_name)
                         .or_default()
@@ -517,6 +635,101 @@ impl IndexVisitor {
                 self.visit_node(body, file_index);
             }
             
+            NodeKind::MethodCall { object, method, args } => {
+                // Object is a read context
+                self.visit_node(object, file_index);
+                
+                // Track method call
+                let method_name = method.clone();
+                file_index.references
+                    .entry(method_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Usage,
+                    });
+                
+                // Visit arguments
+                for arg in args {
+                    self.visit_node(arg, file_index);
+                }
+            }
+            
+            NodeKind::No { module, .. } => {
+                let module_name = module.clone();
+                file_index.dependencies.insert(module_name.clone());
+            }
+            
+            NodeKind::Class { name, .. } => {
+                let class_name = name.clone();
+                self.current_package = Some(class_name.clone());
+                
+                file_index.symbols.push(WorkspaceSymbol {
+                    name: class_name.clone(),
+                    kind: SymbolKind::Class,
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    qualified_name: Some(class_name),
+                    documentation: None,
+                    container_name: None,
+                });
+            }
+            
+            NodeKind::Method { name, body, params } => {
+                let method_name = name.clone();
+                let qualified_name = if let Some(ref pkg) = self.current_package {
+                    format!("{}::{}", pkg, method_name)
+                } else {
+                    method_name.clone()
+                };
+                
+                file_index.symbols.push(WorkspaceSymbol {
+                    name: method_name.clone(),
+                    kind: SymbolKind::Method,
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    qualified_name: Some(qualified_name),
+                    documentation: None,
+                    container_name: self.current_package.clone(),
+                });
+                
+                // Visit params
+                for param in params {
+                    self.visit_node(param, file_index);
+                }
+                
+                // Visit body
+                self.visit_node(body, file_index);
+            }
+            
+            // Handle special assignments (++ and --)
+            NodeKind::Unary { op, operand } if op == "++" || op == "--" => {
+                // Pre/post increment/decrement are both read and write
+                if let NodeKind::Variable { sigil, name } = &operand.kind {
+                    let var_name = format!("{}{}", sigil, name);
+                    
+                    // It's both a read and a write
+                    file_index.references
+                        .entry(var_name.clone())
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(operand),
+                            kind: ReferenceKind::Read,
+                        });
+                        
+                    file_index.references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(operand),
+                            kind: ReferenceKind::Write,
+                        });
+                }
+            }
+            
             _ => {
                 // For other node types, just visit children
                 self.visit_children(node, file_index);
@@ -524,12 +737,84 @@ impl IndexVisitor {
         }
     }
     
-    fn visit_children(&mut self, _node: &Node, _file_index: &mut FileIndex) {
-        // This would need to be expanded to handle all node types
-        // For now, it's a placeholder for recursive traversal
+    fn visit_children(&mut self, node: &Node, file_index: &mut FileIndex) {
+        // Generic visitor for unhandled node types - visit all nested nodes
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.visit_node(stmt, file_index);
+                }
+            }
+            // Expression nodes
+            NodeKind::Unary { operand, .. } => {
+                self.visit_node(operand, file_index);
+            }
+            NodeKind::Binary { left, right, .. } => {
+                self.visit_node(left, file_index);
+                self.visit_node(right, file_index);
+            }
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                self.visit_node(condition, file_index);
+                self.visit_node(then_expr, file_index);
+                self.visit_node(else_expr, file_index);
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    self.visit_node(elem, file_index);
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    self.visit_node(key, file_index);
+                    self.visit_node(value, file_index);
+                }
+            }
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    self.visit_node(val, file_index);
+                }
+            }
+            NodeKind::Eval { block } | NodeKind::Do { block } => {
+                self.visit_node(block, file_index);
+            }
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                self.visit_node(body, file_index);
+                for (_, block) in catch_blocks {
+                    self.visit_node(block, file_index);
+                }
+                if let Some(finally) = finally_block {
+                    self.visit_node(finally, file_index);
+                }
+            }
+            NodeKind::Given { expr, body } => {
+                self.visit_node(expr, file_index);
+                self.visit_node(body, file_index);
+            }
+            NodeKind::When { condition, body } => {
+                self.visit_node(condition, file_index);
+                self.visit_node(body, file_index);
+            }
+            NodeKind::Default { body } => {
+                self.visit_node(body, file_index);
+            }
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                self.visit_node(statement, file_index);
+                self.visit_node(condition, file_index);
+            }
+            NodeKind::VariableWithAttributes { variable, .. } => {
+                self.visit_node(variable, file_index);
+            }
+            NodeKind::LabeledStatement { statement, .. } => {
+                self.visit_node(statement, file_index);
+            }
+            _ => {
+                // For other node types, no children to visit
+            }
+        }
     }
     
     fn node_to_range(&mut self, node: &Node) -> Range {
+        // LineIndex.range returns line numbers and UTF-16 code unit columns
         let ((start_line, start_col), (end_line, end_col)) = 
             self.document.line_index.range(node.location.start, node.location.end);
         Range {
