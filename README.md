@@ -22,14 +22,14 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.7.4
+## 📦 Latest Release: v0.7.5
 
-### v0.7.4 - Test Infrastructure & Code Quality
-- **Fixed** 27+ tautological test assertions - All tests now properly validate responses
-- **Added** Centralized test infrastructure with production-grade assertion helpers
-- **Achieved** Zero compilation warnings in core library
-- **Removed** 159+ lines of dead code - Cleaner, more maintainable codebase
-- **Passing** All 33 comprehensive tests (25 E2E + 8 user story tests)
+### v0.7.5 - Critical Test Infrastructure Fix & Workspace Operations
+- **Fixed** Critical test infrastructure bug - Recovered 400+ silently skipped tests
+- **Added** Workspace file operations support (file watching, rename tracking, multi-file edits)
+- **Created** Zero-cost compatibility shim for smooth API migration
+- **Running** 526+ tests properly (was incorrectly showing only 27)
+- **Added** CI guards to prevent test discovery regression
 
 ### Previous: v0.7.3
 - **Fixed** Return statement modifier parsing - `return if $cond;` now correctly parsed
@@ -648,7 +648,10 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 
 **v3 Parser (Native)**: ✅ 141/141 edge case tests passing (100% coverage)  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage)  
-**v1 Parser (C)**: ⚠️ Limited edge case support
+**v1 Parser (C)**: ⚠️ Limited edge case support  
+**LSP Server**: ✅ 526+ tests running properly (400+ integration, 126 unit)
+
+> **Important**: Due to a Rust test harness bug, use `cargo test -p perl-parser ''` (with empty filter) to ensure all tests are discovered, or use `.github/run_all_tests.sh`
 
 **Known Test Issues**:
 - `incremental_v2::tests::test_multiple_value_changes` - Assertion failure on reused nodes
