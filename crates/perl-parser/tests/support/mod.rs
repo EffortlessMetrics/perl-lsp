@@ -48,6 +48,86 @@ pub fn position_at(source: &str, offset: usize) -> (u32, u32) {
     (last_line_idx as u32, utf16_col(last_line, last_line.len()))
 }
 
+// ===================== Text Edit Helpers =====================
+
+/// Apply a list of text edits to a document
+/// Edits are applied from end to start to avoid position shifts
+#[allow(dead_code)]
+pub fn apply_text_edits(text: &str, edits: &[Value]) -> String {
+    if edits.is_empty() {
+        return text.to_string();
+    }
+    
+    // Sort edits by start position (reverse order for applying)
+    let mut sorted_edits = edits.to_vec();
+    sorted_edits.sort_by(|a, b| {
+        let a_start = &a["range"]["start"];
+        let b_start = &b["range"]["start"];
+        
+        let a_line = a_start["line"].as_u64().unwrap_or(0);
+        let b_line = b_start["line"].as_u64().unwrap_or(0);
+        
+        match b_line.cmp(&a_line) {
+            std::cmp::Ordering::Equal => {
+                let a_char = a_start["character"].as_u64().unwrap_or(0);
+                let b_char = b_start["character"].as_u64().unwrap_or(0);
+                b_char.cmp(&a_char)
+            }
+            other => other
+        }
+    });
+    
+    let mut result = text.to_string();
+    let lines: Vec<&str> = text.lines().collect();
+    
+    for edit in sorted_edits {
+        let range = &edit["range"];
+        let new_text = edit["newText"].as_str().unwrap_or("");
+        
+        let start_line = range["start"]["line"].as_u64().unwrap_or(0) as usize;
+        let start_char = range["start"]["character"].as_u64().unwrap_or(0) as usize;
+        let end_line = range["end"]["line"].as_u64().unwrap_or(0) as usize;
+        let end_char = range["end"]["character"].as_u64().unwrap_or(0) as usize;
+        
+        // Convert UTF-16 positions to byte offsets
+        let start_offset = line_col_to_offset(&lines, start_line, start_char);
+        let end_offset = line_col_to_offset(&lines, end_line, end_char);
+        
+        // Apply the edit
+        result.replace_range(start_offset..end_offset, new_text);
+    }
+    
+    result
+}
+
+/// Convert line/column (UTF-16) to byte offset
+fn line_col_to_offset(lines: &[&str], line: usize, col_utf16: usize) -> usize {
+    let mut offset = 0;
+    
+    for i in 0..line.min(lines.len()) {
+        offset += lines[i].len() + 1; // +1 for newline
+    }
+    
+    if line < lines.len() {
+        // Convert UTF-16 column to byte offset
+        let line_str = lines[line];
+        let mut byte_offset = 0;
+        let mut utf16_count = 0;
+        
+        for ch in line_str.chars() {
+            if utf16_count >= col_utf16 {
+                break;
+            }
+            byte_offset += ch.len_utf8();
+            utf16_count += ch.len_utf16();
+        }
+        
+        offset += byte_offset;
+    }
+    
+    offset
+}
+
 // ===================== Extraction Helpers =====================
 
 /// Extract object from optional value with meaningful error
