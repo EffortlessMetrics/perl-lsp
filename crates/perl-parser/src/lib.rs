@@ -100,6 +100,10 @@ pub mod modernize_refactored;
 pub mod scope_analyzer;
 pub mod pragma_tracker;
 
+// Compatibility module for tests using old API
+#[cfg(any(test, feature = "test-compat"))]
+pub mod compat;
+
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use pragma_tracker::{PragmaTracker, PragmaState};
 pub use error::{ParseError, ParseResult};

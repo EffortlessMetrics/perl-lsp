@@ -41,6 +41,7 @@ path = "src/bin/perl-dap.rs"
 default = []
 cli = []
 incremental = ["ropey", "anyhow"]
+test-compat = []  # Enables compatibility shim for old test API
 
 [dev-dependencies]
 criterion = "0.7.0"

@@ -1,0 +1,88 @@
+name: Comprehensive Test Suite
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Run All Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Run comprehensive test suite
+      run: |
+        chmod +x .github/run_all_tests.sh
+        .github/run_all_tests.sh
+    
+    - name: Verify no empty test binaries
+      run: |
+        echo "Checking for test files with 0 tests..."
+        EMPTY_TESTS=""
+        
+        for test_file in crates/perl-parser/tests/*.rs; do
+          test_name=$(basename "$test_file" .rs)
+          TEST_COUNT=$(cargo test -p perl-parser --test "$test_name" '' --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
+          
+          if [ "$TEST_COUNT" = "0" ]; then
+            EMPTY_TESTS="$EMPTY_TESTS $test_name"
+          fi
+        done
+        
+        if [ -n "$EMPTY_TESTS" ]; then
+          echo "❌ ERROR: The following test files have 0 tests:"
+          for empty in $EMPTY_TESTS; do
+            echo "  - $empty"
+          done
+          echo ""
+          echo "This indicates a test discovery bug. Please investigate!"
+          exit 1
+        else
+          echo "✅ All test files contain runnable tests"
+        fi
+    
+    - name: Run tests with all features
+      run: cargo test --workspace --all-features --all-targets
+    
+    - name: Check for orphaned tests
+      run: |
+        # Count test functions in source vs executed
+        SOURCE_TEST_COUNT=$(grep -r "#\[test\]" crates/perl-parser/tests/ | wc -l)
+        echo "Test functions in source: $SOURCE_TEST_COUNT"
+        
+        # This is a sanity check - if the executed count is way lower than source,
+        # we likely have a discovery issue
+        if [ "$SOURCE_TEST_COUNT" -gt 100 ]; then
+          echo "✅ Found $SOURCE_TEST_COUNT test functions in source files"
+        else
+          echo "⚠️  Warning: Only found $SOURCE_TEST_COUNT test functions, expected more"
+        fi
