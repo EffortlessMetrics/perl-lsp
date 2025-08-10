@@ -7,12 +7,15 @@ use crate::ast::{Node, NodeKind};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
+/// Type alias for parent map using fast hash
+pub type ParentMap = FxHashMap<*const Node, *const Node>;
+
 /// Provider for finding declarations
 pub struct DeclarationProvider<'a> {
     ast: Arc<Node>,
     content: String,
     document_uri: String,
-    parent_map: Option<&'a FxHashMap<*const Node, *const Node>>,
+    parent_map: Option<&'a ParentMap>,
 }
 
 /// Represents a location link from origin to target
@@ -38,13 +41,20 @@ impl<'a> DeclarationProvider<'a> {
         }
     }
     
-    pub fn with_parent_map(mut self, parent_map: &'a FxHashMap<*const Node, *const Node>) -> Self {
+    pub fn with_parent_map(mut self, parent_map: &'a ParentMap) -> Self {
+        // Assert parent map is not empty in debug builds
+        #[cfg(debug_assertions)]
+        {
+            if parent_map.is_empty() {
+                eprintln!("Warning: DeclarationProvider constructed with empty parent map");
+            }
+        }
         self.parent_map = Some(parent_map);
         self
     }
     
     /// Build a parent map for efficient scope walking
-    pub fn build_parent_map(node: &Node, map: &mut FxHashMap<*const Node, *const Node>, parent: Option<*const Node>) {
+    pub fn build_parent_map(node: &Node, map: &mut ParentMap, parent: Option<*const Node>) {
         if let Some(p) = parent {
             map.insert(node as *const _, p);
         }
@@ -315,6 +325,10 @@ impl<'a> DeclarationProvider<'a> {
         while i < args.len() && args[i].starts_with('-') {
             i += 1;
         }
+        // Also skip a comma if present after options
+        if i < args.len() && args[i] == "," {
+            i += 1;
+        }
         &args[i..]
     }
 
@@ -350,9 +364,10 @@ impl<'a> DeclarationProvider<'a> {
         }
     }
     
-    /// Check if a character could be part of an identifier
-    fn is_ident_char(c: char) -> bool {
-        c.is_alphanumeric() || c == '_'
+    /// Check if a byte is part of an ASCII identifier
+    #[inline]
+    fn is_ident_ascii(b: u8) -> bool {
+        matches!(b, b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' | b'_')
     }
     
     /// Iterate over all qw windows in the string
@@ -365,7 +380,7 @@ impl<'a> DeclarationProvider<'a> {
             let q = i + pos;
             
             // Check word boundary before qw
-            let left_ok = q == 0 || !Self::is_ident_char(s.as_bytes()[q.saturating_sub(1)] as char);
+            let left_ok = q == 0 || !Self::is_ident_ascii(s.as_bytes()[q.saturating_sub(1)]);
             if !left_ok { 
                 i = q + 2; 
                 continue; 
@@ -373,7 +388,7 @@ impl<'a> DeclarationProvider<'a> {
             
             // Check word boundary after qw (ensure it's not qwerty)
             let right_idx = q + 2;
-            if right_idx < s.len() && Self::is_ident_char(s.as_bytes()[right_idx] as char) {
+            if right_idx < s.len() && Self::is_ident_ascii(s.as_bytes()[right_idx]) {
                 i = q + 2;
                 continue;
             }
@@ -459,8 +474,8 @@ impl<'a> DeclarationProvider<'a> {
         while let Some(hit) = hay[find_from..].find(needle) {
             let start = find_from + hit;
             let end = start + needle.len();
-            let left_ok = start == 0 || !Self::is_ident(hay.as_bytes()[start-1] as char);
-            let right_ok = end == hay.len() || !Self::is_ident(hay.as_bytes().get(end).copied().map(|b| b as char).unwrap_or('\0'));
+            let left_ok = start == 0 || !Self::is_ident_ascii(hay.as_bytes()[start-1]);
+            let right_ok = end == hay.len() || !Self::is_ident_ascii(*hay.as_bytes().get(end).unwrap_or(&b' '));
             if left_ok && right_ok { return Some((start, end)); }
             find_from = end;
         }
@@ -472,9 +487,9 @@ impl<'a> DeclarationProvider<'a> {
         let bytes = s.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
-            while i < bytes.len() && !Self::is_ident(bytes[i] as char) { i += 1; }
+            while i < bytes.len() && !Self::is_ident_ascii(bytes[i]) { i += 1; }
             let start = i;
-            while i < bytes.len() && Self::is_ident(bytes[i] as char) { i += 1; }
+            while i < bytes.len() && Self::is_ident_ascii(bytes[i]) { i += 1; }
             if start < i {
                 let w = &s[start..i];
                 if w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
@@ -485,10 +500,6 @@ impl<'a> DeclarationProvider<'a> {
         None
     }
     
-    #[inline]
-    fn is_ident(c: char) -> bool {
-        c.is_ascii_alphanumeric() || c == '_' || c == ':' // allow Foo::BAR etc.
-    }
 
     fn get_subroutine_name_range(&self, decl: &Node) -> (usize, usize) {
         // TODO: Store name spans in AST to avoid this heuristic
