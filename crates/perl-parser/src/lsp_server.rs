@@ -1424,7 +1424,8 @@ impl LspServer {
                     // Use the Declaration provider
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::new(ast.clone()),
-                        doc.content.clone()
+                        doc.content.clone(),
+                        uri.to_string()
                     );
                     
                     // Find declaration at the position
@@ -2360,44 +2361,68 @@ impl LspServer {
         (start, end)
     }
 
-    /// Convert offset to line/column position
+    /// Convert offset to line/column position (UTF-16 aware)
     fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
         let mut line = 0;
-        let mut col = 0;
+        let mut col_utf16 = 0;
+        let mut byte_pos = 0;
         
-        for (i, ch) in content.chars().enumerate() {
-            if i >= offset {
+        for ch in content.chars() {
+            if byte_pos >= offset {
                 break;
             }
+            
             if ch == '\n' {
                 line += 1;
-                col = 0;
+                col_utf16 = 0;
             } else {
-                col += 1;
+                // Count UTF-16 code units (surrogate pairs count as 2)
+                col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
             }
+            
+            byte_pos += ch.len_utf8();
         }
         
-        (line, col)
+        (line, col_utf16)
     }
 
-    /// Convert line/column position to offset
+    /// Convert line/column position to offset (UTF-16 aware)
     fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut current_line = 0;
-        let mut current_col = 0;
+        let mut current_col_utf16 = 0;
+        let mut byte_pos = 0;
         
-        for (i, ch) in content.chars().enumerate() {
-            if current_line == line && current_col == character {
-                return i;
+        for ch in content.chars() {
+            if current_line == line && current_col_utf16 == character {
+                return byte_pos;
             }
+            
+            if current_line > line {
+                // We've gone past the target line
+                return byte_pos;
+            }
+            
             if ch == '\n' {
+                if current_line == line {
+                    // End of target line reached before target column
+                    return byte_pos;
+                }
                 current_line += 1;
-                current_col = 0;
-            } else {
-                current_col += 1;
+                current_col_utf16 = 0;
+            } else if current_line == line {
+                // Count UTF-16 code units only on the target line
+                let ch_utf16_len = if ch.len_utf16() == 2 { 2 } else { 1 };
+                if current_col_utf16 + ch_utf16_len > character {
+                    // Character position is in the middle of this char
+                    return byte_pos;
+                }
+                current_col_utf16 += ch_utf16_len;
             }
+            
+            byte_pos += ch.len_utf8();
         }
         
-        content.len()
+        byte_pos
     }
     
     /// Handle textDocument/formatting request
