@@ -51,7 +51,7 @@ jobs:
         
         for test_file in crates/perl-parser/tests/*.rs; do
           test_name=$(basename "$test_file" .rs)
-          TEST_COUNT=$(cargo test -p perl-parser --test "$test_name" '' --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
+          TEST_COUNT=$(cargo test -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
           
           if [ "$TEST_COUNT" = "0" ]; then
             EMPTY_TESTS="$EMPTY_TESTS $test_name"
@@ -64,7 +64,7 @@ jobs:
             echo "  - $empty"
           done
           echo ""
-          echo "This indicates a test discovery bug. Please investigate!"
+          echo "This may indicate a wrapper issue or missing tests. Please investigate!"
           exit 1
         else
           echo "✅ All test files contain runnable tests"

@@ -642,6 +642,9 @@ cargo test -p perl-parser -- --list
 
 # Run a specific test by exact name
 cargo test -p perl-parser type_hierarchy -- --exact --nocapture
+
+# Troubleshooting: If you use a wrapper, avoid passing shell redirections as argv.
+# Use a real shell for redirection, or place extra args after `--`.
 ```
 
 ### Current Test Status
@@ -651,7 +654,10 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 **v1 Parser (C)**: ⚠️ Limited edge case support  
 **LSP Server**: ✅ 526+ tests running properly (400+ integration, 126 unit)
 
-> **Important**: Due to a Rust test harness bug, use `cargo test -p perl-parser ''` (with empty filter) to ensure all tests are discovered, or use `.github/run_all_tests.sh`
+> **Note**: If you see "0 tests, N filtered out", a wrapper probably injected
+> a stray positional filter (e.g., mis-parsed `2>&1`). Run the same command in a
+> normal shell or place extra args after `--`. Our CI also lists tests per binary
+> to catch real regressions.
 
 **Known Test Issues**:
 - `incremental_v2::tests::test_multiple_value_changes` - Assertion failure on reused nodes
@@ -785,6 +791,47 @@ parser_config.perl = {
   '((perl . ("https://github.com/EffortlessSteven/tree-sitter-perl-rs" "main"))))
 (treesit-install-language-grammar 'perl)
 ```
+
+---
+
+## 🔧 Troubleshooting
+
+### "0 tests, N filtered out" or "unexpected argument '2' found"
+
+If you're using a wrapper or custom tooling to run tests and encounter these errors:
+
+* **Root Cause**: The wrapper is likely passing shell redirections (like `2>&1`) as positional arguments to cargo/test binary
+* **Solution**: Don't pass shell syntax as argv when invoking cargo programmatically
+
+#### For Node.js Users
+```js
+// ❌ Bad: Passing shell syntax as argv
+child_process.spawn('cargo', ['test', '-p', 'perl-parser', '2>&1']);
+
+// ✅ Good: Run through a shell for redirections
+child_process.spawn('bash', ['-lc', 'cargo test -p perl-parser 2>&1']);
+
+// ✅ Better: Wire stdio directly without redirections
+child_process.spawn('cargo', ['test', '-p', 'perl-parser'], { stdio: 'inherit' });
+```
+
+#### For Python Users
+```python
+# ❌ Bad: Shell syntax in argv
+subprocess.run(['cargo', 'test', '-p', 'perl-parser', '2>&1'])
+
+# ✅ Good: Use shell=True for redirections
+subprocess.run('cargo test -p perl-parser 2>&1', shell=True)
+
+# ✅ Better: Capture streams directly
+subprocess.run(['cargo', 'test', '-p', 'perl-parser'], capture_output=True)
+```
+
+#### General Rule
+If you're not launching through a real shell, don't include shell syntax (`2>&1`, pipes, `*`, `~`) in the argv array. Either:
+1. Run through a shell (`bash -c`, `sh -c`)
+2. Wire stdio/pipes programmatically
+3. Place shell args after `--` separator
 
 ---
 

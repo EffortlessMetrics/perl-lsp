@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Critical Fix
 - **Test Infrastructure** - Recovered 400+ silently skipped tests
-  - Fixed Rust test harness bug that prevented test discovery
-  - Tests now properly discovered with empty filter workaround
-  - Added comprehensive test runner script for CI/local use
+  - Fixed wrapper issue that incorrectly passed shell redirections as test filters
+  - Tests now properly discovered when run in normal shells
+  - Added comprehensive test runner script with --list based verification
   - Real test count: 526+ tests (was showing only 27)
 
 ### Added
