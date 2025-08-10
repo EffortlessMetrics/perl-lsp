@@ -129,7 +129,7 @@ jobs:
         while IFS= read -r exe; do
           test_name=$(basename "$exe")
           test_name=${test_name%.exe}  # strip .exe on Windows
-          test_name=$(printf "%s" "$test_name" | sed 's/-[a-f0-9]\{8,\}$//')
+          test_name=$(printf "%s" "$test_name" | sed 's/-[[:xdigit:]]\{8,\}$//')
           
           # Count tests using --list
           if ! LIST_OUTPUT=$("$exe" --list --format=terse 2>&1); then
@@ -137,9 +137,8 @@ jobs:
             continue
           fi
           
-          # Count tests, handling potential double output
-          TEST_COUNT=$(printf "%s\n" "$LIST_OUTPUT" | grep -c ': test$' || echo "0")
-          TEST_COUNT=$(echo "$TEST_COUNT" | head -1)  # Take first line in case of duplicates
+          # Count tests with awk for rock-solid reliability
+          TEST_COUNT=$(awk -F': ' '$NF=="test"{c++} END{print c+0}' <<< "$LIST_OUTPUT")
           
           if [ "$TEST_COUNT" -eq 0 ]; then
             echo "⚠️  WARNING: 0 tests found in $test_name"
@@ -155,10 +154,24 @@ jobs:
         echo ""
         echo "Total tests discovered: $TOTAL_TESTS"
         
-        # Fail if we discover fewer tests than expected
-        MIN_EXPECTED_TESTS=500  # We expect at least 500 tests based on v0.7.5
+        # Baseline drift guard with configurable threshold
+        BASELINE=${BASELINE_TOTAL_TESTS:-700}   # set in env, or fall back to 700
+        THRESHOLD_PCT=${BASELINE_DROP_PCT:-10}  # allow 10% drop
+        
+        # integer math: allowed = baseline * (100 - threshold) / 100
+        ALLOWED=$(( BASELINE * (100 - THRESHOLD_PCT) / 100 ))
+        MIN_EXPECTED_TESTS=500  # Absolute minimum as fallback
+        
+        # Use the stricter of the two thresholds
+        if [ "$ALLOWED" -gt "$MIN_EXPECTED_TESTS" ]; then
+          MIN_EXPECTED_TESTS=$ALLOWED
+        fi
+        
         if [ "$TOTAL_TESTS" -lt "$MIN_EXPECTED_TESTS" ]; then
-          echo "❌ ERROR: Found only $TOTAL_TESTS tests, expected at least $MIN_EXPECTED_TESTS"
+          echo "❌ ERROR: Test count dropped: $TOTAL_TESTS < $MIN_EXPECTED_TESTS"
+          echo "  Baseline: $BASELINE tests"
+          echo "  Max allowed drop: ${THRESHOLD_PCT}%"
+          echo "  Minimum allowed: $ALLOWED tests"
           echo "This may indicate a test discovery regression!"
           exit 1
         fi
