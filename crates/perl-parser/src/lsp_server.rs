@@ -23,10 +23,11 @@ use crate::{
     test_runner::{TestRunner, TestKind},
     performance::{AstCache, SymbolIndex},
     ast::{Node, NodeKind},
+    declaration::ParentMap,
+    positions::LineStartsCache,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
@@ -77,7 +78,9 @@ struct DocumentState {
     parse_errors: Vec<crate::error::ParseError>,
     /// Parent map for O(1) scope traversal (built once per AST)
     /// Uses FxHashMap for faster pointer hashing
-    parent_map: FxHashMap<*const crate::ast::Node, *const crate::ast::Node>,
+    parent_map: ParentMap,
+    /// Line starts cache for O(log n) position conversion
+    line_starts: LineStartsCache,
 }
 
 /// Server configuration
@@ -518,10 +521,13 @@ impl LspServer {
             let ast_arc = ast.map(Arc::new);
             
             // Build parent map from the Arc'd AST so pointers remain stable
-            let mut parent_map = FxHashMap::default();
+            let mut parent_map = ParentMap::default();
             if let Some(ref arc) = ast_arc {
                 crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
             }
+            
+            // Build line starts cache for O(log n) position conversion
+            let line_starts = LineStartsCache::new(text);
             
             // Store document state
             self.documents.lock().unwrap().insert(
@@ -532,6 +538,7 @@ impl LspServer {
                     ast: ast_arc.clone(),
                     parse_errors: errors,
                     parent_map,
+                    line_starts,
                 },
             );
 
@@ -596,10 +603,13 @@ impl LspServer {
                     let ast_arc = ast.map(Arc::new);
                     
                     // Build parent map from the Arc'd AST so pointers remain stable
-                    let mut parent_map = FxHashMap::default();
+                    let mut parent_map = ParentMap::default();
                     if let Some(ref arc) = ast_arc {
                         crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
                     }
+                    
+                    // Build line starts cache for O(log n) position conversion
+                    let line_starts = LineStartsCache::new(&text);
                     
                     // Update document state
                     self.documents.lock().unwrap().insert(
@@ -610,6 +620,7 @@ impl LspServer {
                             ast: ast_arc.clone(),
                             parse_errors: errors,
                             parent_map,
+                            line_starts,
                         },
                     );
 
