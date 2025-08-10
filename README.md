@@ -88,7 +88,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 #### Option 1: Quick Install (Linux/macOS)
 ```bash
 # One-liner installer
-curl -fsSL https://raw.githubusercontent.com/tree-sitter-perl/perl-language-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 ```
 
 #### Option 2: Homebrew (macOS)
@@ -98,7 +98,7 @@ brew install perl-lsp
 ```
 
 #### Option 3: Download Binary
-Download pre-built binaries from the [latest release](https://github.com/tree-sitter-perl/perl-language-server/releases/latest).
+Download pre-built binaries from the [latest release](https://github.com/EffortlessSteven/tree-sitter-perl/releases/latest).
 
 #### Option 4: Build from Source
 ```bash
