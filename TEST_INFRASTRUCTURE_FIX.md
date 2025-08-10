@@ -2,12 +2,12 @@
 
 ## Critical Issue Discovered
 
-The Perl parser test infrastructure had a **severe bug** where **400+ LSP tests were being silently skipped**. Only 27 tests were actually running out of hundreds that existed in the codebase.
+The Perl parser test infrastructure had a **severe issue** where **400+ LSP tests were being silently skipped**. Only 27 tests were actually running out of hundreds that existed in the codebase.
 
 ## Root Causes
 
-### 1. Test Discovery Bug
-The Rust test harness has a bug where integration test files don't properly discover their tests when run without arguments. Tests only run when provided with an empty filter string `''`.
+### 1. Wrapper Tokenization Issue
+A command wrapper was incorrectly tokenizing shell redirections (like `2>&1`) and passing them as positional arguments to the test binary. The test harness interpreted these as filter patterns, causing all tests to be filtered out.
 
 **Impact**: 60+ test files showing "running 0 tests" despite containing valid `#[test]` functions.
 
@@ -22,10 +22,10 @@ Several API changes orphaned tests:
 
 ## Solution Implemented
 
-### 1. Test Discovery Workaround
-- Created `run_all_tests.sh` script that runs each test file with empty filter `''`
-- Ensures all tests are discovered and executed
-- Provides clear reporting of test counts per file
+### 1. Proper Test Invocation
+- Updated documentation to remove incorrect "empty filter" workaround
+- Tests run correctly in normal shells without special arguments
+- Added troubleshooting guide for wrapper users
 
 ### 2. Zero-Cost Compatibility Shim
 - Added `src/compat.rs` module with deprecated compatibility functions
@@ -33,16 +33,16 @@ Several API changes orphaned tests:
 - Provides smooth migration path for old tests
 - All functions marked `#[deprecated]` to encourage migration
 
-### 3. CI Guards
-- Added `.github/workflows/comprehensive_tests.yml` workflow
-- Verifies no test files have 0 tests
-- Runs all tests with proper discovery workaround
-- Prevents regression of the test discovery bug
+### 3. CI Guards with --list Verification
+- Updated `.github/run_all_tests.sh` to use `--list` for verification
+- Builds test binaries and verifies each contains tests
+- Guards against both wrapper issues and real test discovery problems
+- Clear diagnostics when 0 tests are detected
 
 ## Results
 
 - **Before**: Only 27 tests running (2 lib + 25 e2e)
-- **After**: 400+ LSP tests + 126 library tests discovered and running
+- **After**: 526+ tests discovered and running properly
 - **Coverage**: Restored full test coverage for all LSP features
 
 ## Files Created/Modified
@@ -50,33 +50,39 @@ Several API changes orphaned tests:
 1. `/crates/perl-parser/src/compat.rs` - Compatibility shim
 2. `/crates/perl-parser/src/lib.rs` - Added compat module
 3. `/crates/perl-parser/Cargo.toml` - Added test-compat feature
-4. `/.github/run_all_tests.sh` - Test runner workaround
-5. `/.github/workflows/comprehensive_tests.yml` - CI workflow
+4. `/.github/run_all_tests.sh` - Updated with --list based verification
+5. `/README.md` - Added troubleshooting section for wrapper issues
+6. `/CLAUDE.md` - Removed incorrect "empty filter" guidance
 
 ## Migration Plan
 
-1. **Immediate**: Use `cargo test '' --features test-compat` to run all tests
+1. **Immediate**: Use `cargo test --features test-compat` to run all tests
 2. **Short-term**: Migrate tests off compatibility shim (deprecation warnings guide this)
 3. **Long-term**: Remove `test-compat` feature once all tests migrated
-4. **CI**: Keep discovery workaround until Rust fixes the underlying bug
+4. **CI**: Keep --list based verification as defensive programming
 
 ## Lessons Learned
 
 1. **Silent failures are dangerous** - Tests that don't run are worse than failing tests
 2. **API changes need migration paths** - Breaking changes should include compatibility layers
-3. **CI should verify test discovery** - Not just that tests pass, but that they run
-4. **Test infrastructure needs testing** - Meta-tests to ensure the test system works
+3. **CI should verify test discovery** - Use `--list` to ensure tests exist
+4. **Wrapper issues != Rust bugs** - Debug carefully before blaming the toolchain
 
 ## Recommendations
 
-1. Add test count assertions to CI to catch future discovery issues
+1. Keep test count assertions in CI to catch future discovery issues
 2. Document minimum expected test counts in README
 3. Consider using `#[warn(deprecated)]` in test files to track migration progress
-4. File bug report with Rust about test discovery issue
+4. Use `--list` based verification in all CI workflows
 5. Add pre-commit hook to verify test discovery locally
 
 ## Technical Details
 
-The test discovery bug appears to be related to how Rust's test harness filters tests in integration test binaries. When no filter is provided, it incorrectly filters out all tests. Providing an empty string `''` as a filter bypasses this bug.
+The issue was definitively NOT a Rust/Cargo bug. An `argv_probe` diagnostic test revealed that the wrapper was incorrectly tokenizing `2>&1` and passing `"2"` as a positional argument to the test binary. The test harness correctly interpreted this as a filter pattern, which matched no tests.
 
-This is likely a regression in the test harness or an undocumented behavior change. The workaround is reliable and has no performance impact.
+The fix is simple: don't pass shell syntax as argv when invoking cargo programmatically. Either:
+- Run through a real shell (`bash -c`)
+- Wire stdio/pipes programmatically
+- Place shell args after `--` separator
+
+The --list based verification in CI ensures we catch any future issues, whether from wrappers or real test discovery problems.

@@ -99,18 +99,6 @@ cargo build --all
 ```
 
 ### Test Commands
-
-#### IMPORTANT: Test Discovery Fix (v0.7.5)
-Due to a Rust test harness bug, integration tests require an empty filter `''` to be discovered properly:
-```bash
-# Run all tests with proper discovery (RECOMMENDED)
-cargo test -p perl-parser --features test-compat ''
-
-# Or use the comprehensive test script
-./.github/run_all_tests.sh
-```
-
-#### Standard Test Commands
 ```bash
 # Run all tests
 cargo xtask test
@@ -125,14 +113,17 @@ cargo xtask corpus --diagnose
 cargo xtask test --suite unit
 cargo xtask test --suite integration
 
-# Run a single test (use empty filter for integration tests)
-cargo test test_name ''
+# Run a single test
+cargo test test_name
 
 # Test pure Rust parser
 cargo test --features pure-rust
 
-# Run LSP tests with proper discovery
-cargo test -p perl-parser --test lsp_comprehensive_e2e_test ''
+# Run LSP tests
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test
+
+> **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
+> If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
 ```
 
 ### Parser Commands
