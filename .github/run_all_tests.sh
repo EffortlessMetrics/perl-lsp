@@ -36,8 +36,11 @@ PASSED_TESTS=0
 FAILED_FILES=""
 ZERO_TEST_FILES=""
 
-for exe in $EXECS; do
-    test_name=$(basename "$exe" | sed 's/-[a-f0-9]*$//')
+# Process executables safely (handles paths with spaces)
+while IFS= read -r exe; do
+    test_name=$(basename "$exe")
+    test_name=${test_name%.exe}  # strip .exe on Windows
+    test_name=$(printf "%s" "$test_name" | sed 's/-[a-f0-9]\{8,\}$//')
     echo -n "Running $test_name... "
     
     # First verify the test binary has tests using --list
@@ -47,7 +50,9 @@ for exe in $EXECS; do
         continue
     fi
     
-    TEST_COUNT=$(echo "$LIST_OUTPUT" | grep -c ': test$' || echo "0")
+    # Count tests, handling potential double output
+    TEST_COUNT=$(printf "%s\n" "$LIST_OUTPUT" | grep -c ': test$' || echo "0")
+    TEST_COUNT=$(echo "$TEST_COUNT" | head -1)  # Take first line in case of duplicates
     
     if [ "$TEST_COUNT" -eq 0 ]; then
         echo "⚠️  WARNING: 0 tests found!"
@@ -62,10 +67,15 @@ for exe in $EXECS; do
         TOTAL_TESTS=$((TOTAL_TESTS + TEST_COUNT))
     else
         echo "❌ Some of $TEST_COUNT tests failed"
+        # Re-run without --quiet to show details
+        echo "  Re-running for details:"
+        "$exe" --format=terse 2>&1 || true
         FAILED_FILES="$FAILED_FILES $test_name"
         TOTAL_TESTS=$((TOTAL_TESTS + TEST_COUNT))
     fi
-done
+done <<EOF
+$EXECS
+EOF
 
 echo ""
 echo "========================================="
