@@ -54,41 +54,43 @@ info "Detected platform: $PLATFORM (target: $TARGET)"
 
 # Determine download URL based on version
 if [[ "$VERSION" == "latest" ]]; then
-  # Try different asset naming patterns
-  BASE_URL="https://github.com/${REPO}/releases/latest/download"
+  # For latest, first try to get the actual version tag via API
+  LATEST_VERSION=$(curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d '"' -f 4 | sed 's/^v//')
   
-  # Common patterns: perl-lsp-{target}.tar.gz, perl-lsp-v{version}-{target}.tar.gz, etc.
-  for pattern in \
-    "perl-lsp-${TARGET}.tar.gz" \
-    "perl-lsp-${TARGET}.tar.xz" \
-    "perl-lsp-${PLATFORM}.tar.gz" \
-    "perl-lsp-v${VERSION}-${TARGET}.tar.gz" \
-    "perl-lsp-v${VERSION}-${TARGET}.tar.xz"
-  do
-    URL="${BASE_URL}/${pattern}"
-    if curl -fsLI "$URL" >/dev/null 2>&1; then
-      DOWNLOAD_URL="$URL"
-      break
-    fi
-  done
+  if [[ -n "$LATEST_VERSION" ]]; then
+    # Try the versioned pattern first (most likely with our release workflow)
+    BASE_URL="https://github.com/${REPO}/releases/latest/download"
+    
+    for pattern in \
+      "perl-lsp-v${LATEST_VERSION}-${TARGET}.tar.gz" \
+      "perl-lsp-v${LATEST_VERSION}-${TARGET}.tar.xz" \
+      "perl-lsp-${TARGET}.tar.gz" \
+      "perl-lsp-${TARGET}.tar.xz"
+    do
+      URL="${BASE_URL}/${pattern}"
+      if curl -fsLI "$URL" >/dev/null 2>&1; then
+        DOWNLOAD_URL="$URL"
+        break
+      fi
+    done
+  fi
   
   if [[ -z "${DOWNLOAD_URL:-}" ]]; then
-    warn "Could not find release asset. Trying API..."
-    # Fallback to API
+    warn "Could not find release asset via direct URL. Trying API..."
+    # Fallback to API to get the exact download URL
     DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | \
-      grep -E "browser_download_url.*${TARGET}|browser_download_url.*${PLATFORM}" | \
+      grep -E "browser_download_url.*${TARGET}" | \
       head -1 | cut -d '"' -f 4)
   fi
 else
-  # Specific version - try common patterns
+  # Specific version - the release workflow creates assets like perl-lsp-v0.7.5-x86_64-unknown-linux-gnu.tar.gz
   BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
   
   for pattern in \
-    "perl-lsp-${TARGET}.tar.gz" \
-    "perl-lsp-${TARGET}.tar.xz" \
     "perl-lsp-v${VERSION}-${TARGET}.tar.gz" \
     "perl-lsp-v${VERSION}-${TARGET}.tar.xz" \
-    "perl-lsp-${PLATFORM}.tar.gz"
+    "perl-lsp-${TARGET}.tar.gz" \
+    "perl-lsp-${TARGET}.tar.xz"
   do
     URL="${BASE_URL}/${pattern}"
     if curl -fsLI "$URL" >/dev/null 2>&1; then
@@ -190,7 +192,8 @@ install_bin() {
 }
 
 install_bin perl-lsp
-install_bin perl-parse  # optional companion binary if shipped
+install_bin perl-dap   # Debug adapter protocol server
+install_bin perl-parse # optional companion binary if shipped
 
 # Verify installation
 if [[ -x "$INSTALL_DIR/perl-lsp" ]]; then

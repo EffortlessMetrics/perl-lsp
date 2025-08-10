@@ -154,7 +154,13 @@ jobs:
           
           ### Quick Install (Linux/macOS)
           \`\`\`bash
-          curl -fsSL https://github.com/anthropics/perl-language-server/releases/download/${VERSION}/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+          \`\`\`
+          
+          ### Homebrew (macOS)
+          \`\`\`bash
+          brew tap tree-sitter-perl/tap
+          brew install perl-lsp
           \`\`\`
           
           ### VSCode Extension
@@ -167,9 +173,9 @@ jobs:
           See \`checksums.txt\` for SHA256 hashes of all release files.
           
           ## 📚 Documentation
-          - [Getting Started](https://github.com/anthropics/perl-language-server#quick-start)
-          - [Configuration](https://github.com/anthropics/perl-language-server#configuration)
-          - [Contributing](https://github.com/anthropics/perl-language-server#contributing)
+          - [Getting Started](https://github.com/EffortlessSteven/tree-sitter-perl#quick-start)
+          - [Configuration](https://github.com/EffortlessSteven/tree-sitter-perl#configuration)
+          - [Contributing](https://github.com/EffortlessSteven/tree-sitter-perl#contributing)
           EOF
 
       - name: Create GitHub Release
