@@ -93,11 +93,9 @@ while IFS= read -r exe; do
                     status_chunk=1
                 fi
             fi
-        done <<'EOFTESTS'
-$( "$exe" --list --format=terse 2>/dev/null \
-   | tr -d '\r' \
-   | awk -F': ' '/: test$/{print $1}' )
-EOFTESTS
+        done < <( "$exe" --list --format=terse 2>/dev/null \
+                  | tr -d '\r' \
+                  | awk -F': ' '/: test$/{print $1}' )
         
         if [ $status_chunk -eq 0 ]; then
             echo "✅ $tests_passed tests passed"
