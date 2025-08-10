@@ -28,6 +28,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Successfully handles m!pattern!, indirect object syntax, and more
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
+- **v0.7.5**: Enterprise release automation, enhanced type inference, CI/CD pipeline
 - **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
 
 ### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
@@ -36,6 +37,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **Advanced Refactoring**: Extract variable/subroutine, convert loops, add error checking, organize imports
 - **Enhanced Features**: Semantic tokens, CodeLens, call hierarchy, inlay hints, workspace symbols, folding
 - **Workspace File Operations** (v0.7.5): File watching, rename tracking, deletion handling, multi-file edits
+- **Type System** (v0.7.5): Smart hash literal inference, type unification, union types
 - **Code Completion**: Variables, functions, keywords, modules with smart filtering and documentation
 - **Document Highlights**: Smart symbol highlighting with exact matching
 - **Type Hierarchy**: Full inheritance navigation with @ISA and use parent/base support
@@ -44,6 +46,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **Robust Error Recovery**: Fallback mechanisms for incomplete/invalid code
 - **Real-time Diagnostics**: Undefined variables, unused variables, strict/warnings suggestions
 - **Performance**: <50ms response times for all operations
+- **Distribution**: Pre-built binaries for all platforms, Homebrew formula, one-liner installer
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
 
 ## Default Build Configuration
@@ -60,9 +63,16 @@ The project includes `.cargo/config.toml` which automatically configures:
 
 ### Build Commands
 
-#### LSP Server (NEW!)
+#### LSP Server
 ```bash
-# Build the LSP server
+# Quick install (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/tree-sitter-perl/perl-language-server/main/install.sh | bash
+
+# Homebrew (macOS)
+brew tap tree-sitter-perl/tap
+brew install perl-lsp
+
+# Build from source
 cargo build -p perl-parser --bin perl-lsp --release
 
 # Install globally
@@ -506,6 +516,11 @@ To extend the Pest grammar:
 - **Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Status**: Production ready, feature complete
 - **Latest improvements (v0.7.5)**:
+  - ✅ Added enterprise-grade release automation with cargo-dist
+  - ✅ Created comprehensive CI/CD pipeline with test matrix and coverage
+  - ✅ Enhanced type inference for hash literals with smart unification
+  - ✅ Added multi-platform binary releases (Linux/macOS/Windows, x86_64/aarch64)
+  - ✅ Created Homebrew formula and one-liner installer
   - ✅ Fixed critical test infrastructure bug - recovered 400+ silently skipped tests
   - ✅ Added workspace file operations support (didChangeWatchedFiles, willRenameFiles, etc.)
   - ✅ Created zero-cost compatibility shim for smooth API migration

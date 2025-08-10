@@ -4,7 +4,7 @@
 
 ---
 
-## 🎉 Current State (v0.7.3 - February 2025)
+## 🎉 Current State (v0.7.5 - February 2025)
 
 We've built the most comprehensive Perl parsing solution available, **exceeding our Q1-Q2 2025 goals**:
 
@@ -26,7 +26,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 - **v3**: Native lexer+parser with 100% coverage ⭐ **RECOMMENDED**
 - **LSP**: Full Language Server Protocol implementation 🚀
 
-### Key Accomplishments (v0.7.3)
+### Key Accomplishments (v0.7.5)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
 - ✅ **Enterprise LSP implementation** (25+ professional IDE features)
@@ -64,7 +64,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 ### ✅ Q1 2025: Polish & Distribution - **COMPLETED**
 **Status**: All goals achieved ahead of schedule!
 
-#### Accomplished (v0.7.2-v0.7.3)
+#### Accomplished (v0.7.2-v0.7.5)
 - ✅ **Parser Improvements**
   - ✅ Fixed operator precedence for word operators
   - ✅ Fixed division operator parsing
@@ -85,16 +85,26 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 **Goal**: Launch to the Perl community
 
 #### Immediate Priority (February-March) - **MAJOR ACHIEVEMENTS** ✅
-- [ ] **Crates.io Publishing**
-  - [ ] Verify metadata: readme, license, categories, keywords, repository URLs
-  - [ ] Publish perl-lexer v0.7.5
-  - [ ] Publish perl-parser v0.7.5  
-  - [ ] Publish perl-lsp v0.7.5
-- [ ] **GitHub Release v0.7.5**
-  - [ ] Tag release with changelog
-  - [ ] Pre-built binaries: Linux (x64/aarch64), macOS (x64/arm64), Windows (x64)
-  - [ ] Attach SBOM (Software Bill of Materials)
-  - [ ] Installation instructions per platform
+- [x] **Release Infrastructure** ✅ **COMPLETED**
+  - [x] cargo-dist configuration for automated releases
+  - [x] Multi-platform binary builds (Linux/macOS/Windows, x86_64/aarch64)
+  - [x] SHA256 checksums for all artifacts
+  - [x] GitHub Actions release workflow
+- [x] **CI/CD Pipeline** ✅ **COMPLETED**  
+  - [x] Test matrix across all platforms
+  - [x] Static analysis and code coverage
+  - [x] Benchmark regression detection
+  - [x] Test discovery guard (>100 tests required)
+- [x] **Easy Installation** ✅ **COMPLETED**
+  - [x] One-liner installer script with checksums
+  - [x] Homebrew formula for macOS
+  - [x] Pre-built binaries for all platforms
+  - [x] Smart PATH detection and shell config
+- [x] **Enhanced Type System** ✅ **COMPLETED**
+  - [x] Smart hash literal type inference
+  - [x] Type unification for collections
+  - [x] Union types for mixed values
+  - [x] Full test coverage
 - [ ] **VSCode Extension v0.6.0**
   - [ ] Finalize publisher ID and marketplace metadata
   - [ ] Add icon assets and screenshots
@@ -334,9 +344,10 @@ perl-lsp --stdio
 ### Released
 - **v0.7.2** - January 2025 - Parser fixes, built-in signatures
 - **v0.7.3** - February 2025 - Enterprise LSP, distribution ready
+- **v0.7.5** - February 2025 - Release automation, CI/CD, enhanced type inference
 
 ### Upcoming
-- **v0.8.0** - March 2025 - Official launch, incremental parsing
+- **v0.8.0** - March 2025 - Official launch, VSCode marketplace
 - **v0.9.0** - June 2025 - AI integration, advanced analysis
 - **v0.10.0** - September 2025 - Perl 7 support
 - **v1.0.0** - January 2026 - Industry standard platform
@@ -355,4 +366,4 @@ perl-lsp --stdio
 
 *The future of Perl tooling is here. Join us in building it!*
 
-*Last Updated: 2025-02-07*
+*Last Updated: 2025-02-09*
