@@ -12,9 +12,13 @@ echo ""
 # Enable test-compat feature for old API tests
 export CARGO_TEST_FEATURES="--features test-compat"
 
-# Run library tests
+# Run library tests (capture failure to continue with full report)
 echo "Running library tests..."
-cargo test -p perl-parser --lib $CARGO_TEST_FEATURES
+LIB_FAIL=0
+if ! cargo test -p perl-parser --lib $CARGO_TEST_FEATURES; then
+    echo "⚠️  lib tests had failures; continuing to run all binaries for full report"
+    LIB_FAIL=1
+fi
 
 echo ""
 echo "Running integration tests..."
@@ -51,7 +55,10 @@ while IFS= read -r exe; do
     fi
     
     # Count tests with awk for rock-solid reliability
-    TEST_COUNT=$(awk -F': ' '$NF=="test"{c++} END{print c+0}' <<< "$LIST_OUTPUT")
+    # CRLF-safe counting (handles Windows line endings)
+    TEST_COUNT=$(
+      awk -F': ' '{ x=$NF; sub(/\r$/,"",x); if (x=="test") c++ } END{ print c+0 }' <<< "$LIST_OUTPUT"
+    )
     
     if [ "$TEST_COUNT" -eq 0 ]; then
         echo "⚠️  WARNING: 0 tests found!"
@@ -110,9 +117,13 @@ if [ -n "$FAILED_FILES" ]; then
     STATUS=1
 fi
 
-if [ $STATUS -eq 0 ]; then
+if [ $STATUS -eq 0 ] && [ $LIB_FAIL -eq 0 ]; then
     echo ""
     echo "🎉 All $TOTAL_TESTS tests passed successfully!"
 else
-    exit $STATUS
+    echo ""
+    echo "❌ Some tests failed. See details above."
+    if [ $LIB_FAIL -ne 0 ] || [ $STATUS -ne 0 ]; then
+        exit 1
+    fi
 fi

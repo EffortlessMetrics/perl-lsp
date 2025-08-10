@@ -106,8 +106,8 @@ jobs:
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             brew install jq
           elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "Skipping jq check on Windows"
-            exit 0
+            echo "Installing jq on Windows..."
+            choco install jq -y
           fi
         fi
         
@@ -137,8 +137,10 @@ jobs:
             continue
           fi
           
-          # Count tests with awk for rock-solid reliability
-          TEST_COUNT=$(awk -F': ' '$NF=="test"{c++} END{print c+0}' <<< "$LIST_OUTPUT")
+          # CRLF-safe counting (handles Windows line endings)
+          TEST_COUNT=$(
+            awk -F': ' '{ x=$NF; sub(/\r$/,"",x); if (x=="test") c++ } END{ print c+0 }' <<< "$LIST_OUTPUT"
+          )
           
           if [ "$TEST_COUNT" -eq 0 ]; then
             echo "⚠️  WARNING: 0 tests found in $test_name"
