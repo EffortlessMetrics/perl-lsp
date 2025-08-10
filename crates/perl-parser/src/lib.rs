@@ -87,6 +87,7 @@ pub mod perltidy;
 pub mod semantic_tokens_provider;
 pub mod call_hierarchy_provider;
 pub mod document_highlight;
+pub mod declaration;
 pub mod type_hierarchy;
 pub mod inlay_hints_provider;
 pub mod test_runner;
