@@ -4,7 +4,7 @@
 //! Supports LocationLink for enhanced client experience.
 
 use crate::ast::{Node, NodeKind};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 /// Provider for finding declarations
@@ -12,7 +12,7 @@ pub struct DeclarationProvider<'a> {
     ast: Arc<Node>,
     content: String,
     document_uri: String,
-    parent_map: Option<&'a HashMap<*const Node, *const Node>>,
+    parent_map: Option<&'a FxHashMap<*const Node, *const Node>>,
 }
 
 /// Represents a location link from origin to target
@@ -38,13 +38,13 @@ impl<'a> DeclarationProvider<'a> {
         }
     }
     
-    pub fn with_parent_map(mut self, parent_map: &'a HashMap<*const Node, *const Node>) -> Self {
+    pub fn with_parent_map(mut self, parent_map: &'a FxHashMap<*const Node, *const Node>) -> Self {
         self.parent_map = Some(parent_map);
         self
     }
     
     /// Build a parent map for efficient scope walking
-    pub fn build_parent_map(node: &Node, map: &mut HashMap<*const Node, *const Node>, parent: Option<*const Node>) {
+    pub fn build_parent_map(node: &Node, map: &mut FxHashMap<*const Node, *const Node>, parent: Option<*const Node>) {
         if let Some(p) = parent {
             map.insert(node as *const _, p);
         }
@@ -80,7 +80,7 @@ impl<'a> DeclarationProvider<'a> {
             pm
         } else {
             temp_parent_map = {
-                let mut map = HashMap::new();
+                let mut map = FxHashMap::default();
                 Self::build_parent_map(&self.ast, &mut map, None);
                 map
             };
@@ -219,7 +219,7 @@ impl<'a> DeclarationProvider<'a> {
             pm
         } else {
             temp_parent_map = {
-                let mut map = HashMap::new();
+                let mut map = FxHashMap::default();
                 Self::build_parent_map(&self.ast, &mut map, None);
                 map
             };
@@ -370,19 +370,21 @@ impl<'a> DeclarationProvider<'a> {
                 return false; 
             }
             
-            let delim = bytes[i] as char;
-            let (open, close) = match delim {
+            let open = bytes[i] as char;
+            // Support both paired and symmetric delimiters
+            let (open_delim, close_delim) = match open {
                 '(' => ('(', ')'),
                 '[' => ('[', ']'),
                 '{' => ('{', '}'),
                 '<' => ('<', '>'),
-                '/' => ('/', '/'),
+                // Any other non-alnum char is a symmetric delimiter
+                _ if !open.is_alphanumeric() => (open, open),
                 _ => return false,
             };
             
-            if let Some(start_rel) = s[i..].find(open) {
+            if let Some(start_rel) = s[i..].find(open_delim) {
                 let start = i + start_rel + 1;
-                if let Some(end_rel) = s[start..].find(close) {
+                if let Some(end_rel) = s[start..].find(close_delim) {
                     let end = start + end_rel;
                     // tokens are whitespace separated
                     return s[start..end].split_whitespace().any(|tok| tok == name);
@@ -481,10 +483,43 @@ impl<'a> DeclarationProvider<'a> {
     
     fn get_constant_name_range_for(&self, decl: &Node, name: &str) -> (usize, usize) {
         let text = self.get_node_text(decl);
+        
+        // Fast path: try to find the exact word
         if let Some((lo, hi)) = self.find_word(&text, name) {
             return (decl.location.start + lo, decl.location.start + hi);
         }
-        // Fallback to default behavior
+        
+        // Try inside qw(...) or symmetric qw|...|
+        if self.contains_name_in_qw(&text, name) {
+            // Re-scan for the exact token position within the qw window
+            if let Some(qw_pos) = text.find("qw") {
+                // Skip past qw and find the content region
+                let mut i = qw_pos + 2;
+                let bytes = text.as_bytes();
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() { 
+                    i += 1; 
+                }
+                if i < bytes.len() {
+                    // Find the content between delimiters and locate the name
+                    if let Some((lo, hi)) = self.find_word(&text[i..], name) {
+                        return (decl.location.start + i + lo, decl.location.start + i + hi);
+                    }
+                }
+            }
+        }
+        
+        // Try inside a { ... } block (hash form)
+        if let Some(open) = text.find('{') {
+            if let Some(close_rel) = text[open+1..].find('}') {
+                let start = open + 1;
+                let end = start + close_rel;
+                if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
+                    return (decl.location.start + start + lo, decl.location.start + start + hi);
+                }
+            }
+        }
+        
+        // Final fallback to heuristics
         self.get_constant_name_range(decl)
     }
 
