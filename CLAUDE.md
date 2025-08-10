@@ -21,7 +21,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Tree-sitter compatible S-expression output
 
 ### 3. **v3: Native Lexer+Parser** (`/crates/perl-lexer/` + `/crates/perl-parser/`) ⭐ **RECOMMENDED**
-- Hand-written lexer with context-aware tokenization
+- Lexer with context-aware tokenization
 - Recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
 - **4-19x faster than v1** (simple: ~1.1 µs, medium: ~50-150 µs)
