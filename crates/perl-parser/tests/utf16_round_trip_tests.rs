@@ -32,6 +32,12 @@ mod utf16_round_trip_tests {
         assert!(test_round_trip(&server, text, 0, 5), "Middle of first line");
         assert!(test_round_trip(&server, text, 1, 3), "Middle of second line");
         assert!(test_round_trip(&server, text, 2, 8), "End of third line");
+        
+        // CRLF clamp assertion: position at huge column should map to EOL
+        let clamped_offset = server.position_to_offset(text, 0, 1000);
+        let (rt_line, rt_char) = server.offset_to_position(text, clamped_offset);
+        assert_eq!(rt_line, 0, "Should stay on first line");
+        assert_eq!(rt_char, 10, "Should clamp to before \\r");
     }
     
     #[test]
@@ -55,6 +61,21 @@ mod utf16_round_trip_tests {
         let (_, char_before) = server.offset_to_position(text, offset_before);
         let (_, char_after) = server.offset_to_position(text, offset_after);
         assert_eq!(char_after - char_before, 2, "Emoji counts as 2 UTF-16 units");
+        
+        // Surrogate pair fence assertion: positions at boundaries map correctly
+        let text_just_emoji = "🐍";
+        let before_offset = server.position_to_offset(text_just_emoji, 0, 0);
+        assert_eq!(before_offset, 0, "Position before emoji maps to byte 0");
+        
+        let after_offset = server.position_to_offset(text_just_emoji, 0, 2);
+        assert_eq!(after_offset, 4, "Position after emoji maps to byte 4");
+        
+        // Round-trip both positions
+        let (line1, char1) = server.offset_to_position(text_just_emoji, before_offset);
+        assert_eq!((line1, char1), (0, 0), "Before emoji round-trips correctly");
+        
+        let (line2, char2) = server.offset_to_position(text_just_emoji, after_offset);
+        assert_eq!((line2, char2), (0, 2), "After emoji round-trips correctly");
     }
     
     #[test]

@@ -63,6 +63,7 @@ pub mod lsp_server_incremental_v2;
 pub mod parser;
 pub mod parser_context;
 pub mod position;
+pub mod positions;
 pub mod recovery_parser;
 pub mod rename;
 pub mod semantic;
