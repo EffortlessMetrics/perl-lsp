@@ -84,12 +84,28 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 ### 🎯 Q2 2025: Official Release & Adoption
 **Goal**: Launch to the Perl community
 
-#### Immediate Priority (February) - **MAJOR ACHIEVEMENTS** ✅
-- [ ] **Official Releases**
-  - [ ] Publish perl-lexer & perl-parser to crates.io
-  - [ ] VSCode extension marketplace release
-  - [ ] GitHub release with pre-built binaries
-  - [ ] Homebrew tap setup
+#### Immediate Priority (February-March) - **MAJOR ACHIEVEMENTS** ✅
+- [ ] **Crates.io Publishing**
+  - [ ] Verify metadata: readme, license, categories, keywords, repository URLs
+  - [ ] Publish perl-lexer v0.7.5
+  - [ ] Publish perl-parser v0.7.5  
+  - [ ] Publish perl-lsp v0.7.5
+- [ ] **GitHub Release v0.7.5**
+  - [ ] Tag release with changelog
+  - [ ] Pre-built binaries: Linux (x64/aarch64), macOS (x64/arm64), Windows (x64)
+  - [ ] Attach SBOM (Software Bill of Materials)
+  - [ ] Installation instructions per platform
+- [ ] **VSCode Extension v0.6.0**
+  - [ ] Finalize publisher ID and marketplace metadata
+  - [ ] Add icon assets and screenshots
+  - [ ] Set engines.vscode version requirement
+  - [ ] Implement binary download logic per platform
+  - [ ] Publish to marketplace
+- [ ] **Package Managers**
+  - [ ] Homebrew formula with SHA256 verification
+  - [ ] Debian package (.deb) with GPG signing
+  - [ ] RPM package with signing
+  - [ ] AUR package for Arch Linux
 - [x] **True Incremental Parsing** ✅ **COMPLETED - 200x BETTER THAN TARGET!**
   - [x] Integrate IncrementalDocument with LSP
   - [x] Implement subtree reuse optimization
