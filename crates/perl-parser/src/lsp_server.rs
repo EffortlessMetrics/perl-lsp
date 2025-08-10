@@ -74,6 +74,8 @@ struct DocumentState {
     ast: Option<crate::ast::Node>,
     /// Parse errors
     parse_errors: Vec<crate::error::ParseError>,
+    /// Parent map for O(1) scope traversal (built once per AST)
+    parent_map: std::collections::HashMap<*const crate::ast::Node, *const crate::ast::Node>,
 }
 
 /// Server configuration
@@ -513,11 +515,18 @@ impl LspServer {
             // Store document state
             self.documents.lock().unwrap().insert(
                 uri.to_string(),
-                DocumentState {
-                    content: text.to_string(),
-                    _version: version,
-                    ast: ast.clone(),
-                    parse_errors: errors,
+                {
+                    let mut parent_map = std::collections::HashMap::new();
+                    if let Some(ref ast) = ast {
+                        crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
+                    }
+                    DocumentState {
+                        content: text.to_string(),
+                        _version: version,
+                        ast: ast.clone(),
+                        parse_errors: errors,
+                        parent_map,
+                    }
                 },
             );
 
@@ -581,11 +590,18 @@ impl LspServer {
                     // Update document state
                     self.documents.lock().unwrap().insert(
                         uri.to_string(),
-                        DocumentState {
-                            content: text.to_string(),
-                            _version: version,
-                            ast: ast.clone(),
-                            parse_errors: errors,
+                        {
+                            let mut parent_map = std::collections::HashMap::new();
+                            if let Some(ref ast) = ast {
+                                crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
+                            }
+                            DocumentState {
+                                content: text.to_string(),
+                                _version: version,
+                                ast: ast.clone(),
+                                parse_errors: errors,
+                                parent_map,
+                            }
                         },
                     );
 
@@ -1476,7 +1492,7 @@ impl LspServer {
                         Arc::new(ast.clone()),
                         doc.content.clone(),
                         uri.to_string()
-                    );
+                    ).with_parent_map(&doc.parent_map);
                     
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset) {
