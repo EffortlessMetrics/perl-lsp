@@ -24,12 +24,14 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ## 📦 Latest Release: v0.7.5
 
-### v0.7.5 - Critical Test Infrastructure Fix & Workspace Operations
+### v0.7.5 - Production Release Infrastructure & Enhanced Type System
+- **Added** Enterprise-grade release automation with cargo-dist
+- **Added** Multi-platform binary releases (Linux/macOS/Windows, x86_64/aarch64)
+- **Added** Comprehensive CI/CD pipeline with test matrix and coverage
+- **Enhanced** Type inference for hash literals with smart unification
 - **Fixed** Critical test infrastructure bug - Recovered 400+ silently skipped tests
 - **Added** Workspace file operations support (file watching, rename tracking, multi-file edits)
-- **Created** Zero-cost compatibility shim for smooth API migration
-- **Running** 526+ tests properly (was incorrectly showing only 27)
-- **Added** CI guards to prevent test discovery regression
+- **Running** 526+ tests properly with CI guards against regression
 
 ### Previous: v0.7.3
 - **Fixed** Return statement modifier parsing - `return if $cond;` now correctly parsed
@@ -83,11 +85,27 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ### Install the LSP Server (Recommended)
 
+#### Option 1: Quick Install (Linux/macOS)
 ```bash
-# Install the Perl Language Server globally
+# One-liner installer
+curl -fsSL https://raw.githubusercontent.com/tree-sitter-perl/perl-language-server/main/install.sh | bash
+```
+
+#### Option 2: Homebrew (macOS)
+```bash
+brew tap tree-sitter-perl/tap
+brew install perl-lsp
+```
+
+#### Option 3: Download Binary
+Download pre-built binaries from the [latest release](https://github.com/tree-sitter-perl/perl-language-server/releases/latest).
+
+#### Option 4: Build from Source
+```bash
+# Install via cargo
 cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
 
-# Or build from source
+# Or build locally
 git clone https://github.com/EffortlessSteven/tree-sitter-perl
 cd tree-sitter-perl
 cargo build -p perl-parser --bin perl-lsp --release
