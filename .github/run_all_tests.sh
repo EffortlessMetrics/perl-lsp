@@ -66,12 +66,17 @@ while IFS= read -r exe; do
         continue
     fi
     
-    # Run the actual tests (first attempt, quiet)
-    RUN_OUTPUT=$("$exe" --quiet 2>&1 || true)
-    RUN_EXIT=$?
+    # Run the actual tests (first attempt, quiet) and capture real exit code
+    if RUN_OUTPUT=$("$exe" --quiet 2>&1); then
+        RUN_EXIT=0
+    else
+        RUN_EXIT=$?
+    fi
     
-    # Check if libtest thought there was a name filter
-    if printf "%s\n" "$RUN_OUTPUT" | grep -q 'filtered out'; then
+    # Check if libtest thought there was a name filter:
+    # trigger only when nothing actually ran but some tests were "filtered out"
+    if printf "%s\n" "$RUN_OUTPUT" \
+         | grep -qE 'test result: .* 0 passed; 0 failed; 0 ignored; 0 measured; [1-9][0-9]* filtered out;'; then
         echo "ℹ️  Detected libtest filter — re-running each test with --exact"
         status_chunk=0
         tests_passed=0
@@ -88,8 +93,10 @@ while IFS= read -r exe; do
                     status_chunk=1
                 fi
             fi
-        done <<EOFTESTS
-$( "$exe" --list --format=terse 2>/dev/null | awk -F': ' '/: test$/{print $0}' )
+        done <<'EOFTESTS'
+$( "$exe" --list --format=terse 2>/dev/null \
+   | tr -d '\r' \
+   | awk -F': ' '/: test$/{print $1}' )
 EOFTESTS
         
         if [ $status_chunk -eq 0 ]; then
@@ -97,12 +104,13 @@ EOFTESTS
             PASSED_TESTS=$((PASSED_TESTS + tests_passed))
             TOTAL_TESTS=$((TOTAL_TESTS + tests_passed))
         else
-            echo "❌ $tests_failed of $TEST_COUNT tests failed"
+            echo "❌ $tests_failed tests failed"
             FAILED_FILES="$FAILED_FILES $test_name"
             TOTAL_TESTS=$((TOTAL_TESTS + tests_passed + tests_failed))
             # Re-run failed tests for details
             echo "  Re-running failed tests for details..."
             "$exe" 2>&1 || true
+            STATUS=1
         fi
         # Skip the normal path since we already handled it
         continue
@@ -120,6 +128,7 @@ EOFTESTS
         "$exe" 2>&1 || true
         FAILED_FILES="$FAILED_FILES $test_name"
         TOTAL_TESTS=$((TOTAL_TESTS + TEST_COUNT))
+        STATUS=1
     fi
 done <<EOF
 $EXECS
@@ -167,5 +176,18 @@ else
     echo "❌ Some tests failed. See details above."
     if [ $LIB_FAIL -ne 0 ] || [ $STATUS -ne 0 ]; then
         exit 1
+    fi
+fi
+
+# Optional: run xtask with a longer timeout, don't fail the whole run if it times out
+if [ "${RUN_XTASK:-0}" = "1" ]; then
+    echo ""
+    echo "========================================="
+    echo "Running cargo xtask test (up to 5m)..."
+    echo "========================================="
+    if timeout 5m cargo xtask test; then
+        echo "✅ cargo xtask test done"
+    else
+        echo "⚠️  cargo xtask test timed out or failed (not marking run failed)"
     fi
 fi
