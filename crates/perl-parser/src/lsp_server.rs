@@ -26,6 +26,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
@@ -75,7 +76,8 @@ struct DocumentState {
     /// Parse errors
     parse_errors: Vec<crate::error::ParseError>,
     /// Parent map for O(1) scope traversal (built once per AST)
-    parent_map: std::collections::HashMap<*const crate::ast::Node, *const crate::ast::Node>,
+    /// Uses FxHashMap for faster pointer hashing
+    parent_map: FxHashMap<*const crate::ast::Node, *const crate::ast::Node>,
 }
 
 /// Server configuration
@@ -516,7 +518,7 @@ impl LspServer {
             let ast_arc = ast.map(Arc::new);
             
             // Build parent map from the Arc'd AST so pointers remain stable
-            let mut parent_map = std::collections::HashMap::new();
+            let mut parent_map = FxHashMap::default();
             if let Some(ref arc) = ast_arc {
                 crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
             }
@@ -594,7 +596,7 @@ impl LspServer {
                     let ast_arc = ast.map(Arc::new);
                     
                     // Build parent map from the Arc'd AST so pointers remain stable
-                    let mut parent_map = std::collections::HashMap::new();
+                    let mut parent_map = FxHashMap::default();
                     if let Some(ref arc) = ast_arc {
                         crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
                     }
