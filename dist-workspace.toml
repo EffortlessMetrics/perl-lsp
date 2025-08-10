@@ -1,0 +1,22 @@
+[workspace]
+members = ["cargo:."]
+
+[dist]
+# The binaries to include
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
+# Build the most important binaries
+include = ["perl-lsp", "perl-parse"]
+# GitHub CI support
+ci = ["github"]
+# Create installers
+installers = ["shell", "powershell"]
+# Auto-detect the targets
+allow-dirty = ["ci"]
+# Unix path: /home/user/.local/bin
+# Windows path: C:\Users\user\AppData\Local\Programs\project\bin
+install-path = "CARGO_HOME"
+pr-run-mode = "skip"
+
+# Create GitHub releases
+[dist.github-releases]
+create = true

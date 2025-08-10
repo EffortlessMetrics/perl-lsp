@@ -67,16 +67,13 @@ while IFS= read -r exe; do
     fi
     
     # Run the actual tests (first attempt, quiet) and capture real exit code
-    if RUN_OUTPUT=$("$exe" --quiet 2>&1); then
-        RUN_EXIT=0
-    else
-        RUN_EXIT=$?
-    fi
+    RUN_OUTPUT=$("$exe" --quiet 2>&1)
+    RUN_EXIT=$?
     
     # Check if libtest thought there was a name filter:
     # trigger only when nothing actually ran but some tests were "filtered out"
     if printf "%s\n" "$RUN_OUTPUT" \
-         | grep -qE 'test result: .* 0 passed; 0 failed; 0 ignored; 0 measured; [1-9][0-9]* filtered out;'; then
+         | grep -Eq 'test result: .* 0 passed; 0 failed; 0 ignored; 0 measured; [1-9][0-9]* filtered out;'; then
         echo "ℹ️  Detected libtest filter — re-running each test with --exact"
         status_chunk=0
         tests_passed=0

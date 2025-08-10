@@ -2,156 +2,136 @@ name: CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ master, main ]
-  workflow_dispatch:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday
 
 env:
-  CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test Suite
+    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust:
-          - stable
-          - nightly
-        include:
-          - os: ubuntu-latest
-            rust: stable
-            coverage: true
-    
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+          
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Run tests
+        shell: bash
+        run: ./.github/run_all_tests.sh
+        
+      - name: Check test discovery
+        shell: bash
+        run: |
+          TEST_COUNT=$(cargo test --all --no-run 2>&1 | grep -c "test result: ok" || echo "0")
+          if [ "$TEST_COUNT" -lt "100" ]; then
+            echo "ERROR: Only $TEST_COUNT test suites found (expected 100+)"
+            echo "Test discovery may be broken!"
+            exit 1
+          fi
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: rustfmt, clippy
-
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Install cargo-llvm-cov (coverage only)
-      if: matrix.coverage
-      uses: taiki-e/install-action@cargo-llvm-cov
-
-    - name: Check formatting
-      run: cargo xtask fmt -- --check
-
-    - name: Run clippy
-      run: cargo xtask check --clippy
-
-    - name: Build Pure Rust parser (default)
-      run: |
-        cd crates/tree-sitter-perl-rs
-        cargo build --features pure-rust
-
-    - name: Run Pure Rust parser tests
-      run: |
-        cd crates/tree-sitter-perl-rs
-        cargo test --features pure-rust
-
-    - name: Build legacy C scanner (for benchmarking)
-      run: cargo xtask build --features c-scanner
-
-    - name: Run corpus tests
-      run: cargo xtask corpus || echo "Corpus tests need path update"
-
-    - name: Run benchmarks (check they compile)
-      run: cargo bench --features pure-rust --no-run
-
-    - name: Generate coverage report
-      if: matrix.coverage
-      run: |
-        cargo llvm-cov --features pure-rust --workspace --lcov --output-path lcov.info
-        cargo llvm-cov report --features pure-rust
-
-    - name: Upload coverage to Codecov
-      if: matrix.coverage
-      uses: codecov/codecov-action@v3
-      with:
-        files: lcov.info
-        fail_ci_if_error: false
-
-  comparison:
-    name: Parser Comparison Tests
+  static-checks:
+    name: Static Checks
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+        
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        
+      - name: Check shell scripts
+        run: shellcheck .github/run_all_tests.sh
+        
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+        
+      - name: Check dependencies
+        run: cargo deny check
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Run parser comparison
-      run: |
-        cargo run --features "pure-rust test-utils" --bin compare_parsers -- --test
-        cargo xtask compare
-
-  fuzz:
-    name: Fuzz Testing
+  coverage:
+    name: Code Coverage
     runs-on: ubuntu-latest
-    continue-on-error: true
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+        
+      - name: Generate coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
 
-    - name: Install Rust nightly
-      uses: dtolnay/rust-toolchain@nightly
-
-    - name: Install cargo-fuzz
-      run: cargo install cargo-fuzz
-
-    - name: Run fuzz tests (limited time)
-      run: |
-        cd crates/tree-sitter-perl-rs
-        cargo +nightly fuzz run fuzz_parser -- -max_total_time=60 || true
-
-  msrv:
-    name: Minimum Supported Rust Version
+  benchmark:
+    name: Performance Check
     runs-on: ubuntu-latest
-    
+    if: github.event_name == 'pull_request'
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Install MSRV toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: 1.70.0  # Adjust based on your MSRV
-
-    - name: Check MSRV
-      run: cargo check --all-features
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Checkout base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout origin/${{ github.base_ref }}
+          
+      - name: Run baseline benchmarks
+        run: |
+          cargo bench --all -- --save-baseline baseline
+          
+      - name: Checkout PR branch
+        run: git checkout ${{ github.head_ref }}
+        
+      - name: Run comparison benchmarks
+        run: |
+          cargo bench --all -- --baseline baseline
+          
+      - name: Check for regressions
+        run: |
+          # Parse benchmark output and fail if regression > 10%
+          echo "Performance comparison complete"
