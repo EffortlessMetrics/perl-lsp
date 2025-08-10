@@ -309,17 +309,29 @@ impl<'a> DeclarationProvider<'a> {
         constants
     }
 
+    /// Strip leading -options from constant args
+    fn strip_constant_options<'b>(&self, args: &'b [String]) -> &'b [String] {
+        let mut i = 0;
+        while i < args.len() && args[i].starts_with('-') {
+            i += 1;
+        }
+        &args[i..]
+    }
+
     fn collect_constant_declarations<'b>(&'b self, node: &'b Node, const_name: &str, constants: &mut Vec<&'b Node>) {
         if let NodeKind::Use { module, args } = &node.kind {
             if module == "constant" {
+                // Strip leading options like -strict, -nonstrict, -force
+                let stripped_args = self.strip_constant_options(args);
+                
                 // Form 1: FOO => ...
-                if args.first().map(|s| s.as_str()) == Some(const_name) {
+                if stripped_args.first().map(|s| s.as_str()) == Some(const_name) {
                     constants.push(node);
                     // keep scanning siblings too (there can be multiple `use constant`)
                 }
                 
                 // Flattened args text once (cheap)
-                let args_text = args.join(" ");
+                let args_text = stripped_args.join(" ");
                 
                 // Form 2: { FOO => 1, BAR => 2 }
                 if self.contains_name_in_hash(&args_text, const_name) {
@@ -338,15 +350,83 @@ impl<'a> DeclarationProvider<'a> {
         }
     }
     
-    fn contains_name_in_hash(&self, s: &str, name: &str) -> bool {
-        // super simple: find any "{ ... }" and check for `name` with word boundaries before `=>`
+    /// Check if a character could be part of an identifier
+    fn is_ident_char(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+    
+    /// Iterate over all qw windows in the string
+    fn for_each_qw_window<F>(&self, s: &str, mut f: F) -> bool 
+    where
+        F: FnMut(usize, usize) -> bool,
+    {
+        let mut i = 0;
+        while let Some(pos) = s[i..].find("qw") {
+            let q = i + pos;
+            
+            // Check word boundary before qw
+            let left_ok = q == 0 || !Self::is_ident_char(s.as_bytes()[q.saturating_sub(1)] as char);
+            if !left_ok { 
+                i = q + 2; 
+                continue; 
+            }
+            
+            // Check word boundary after qw (ensure it's not qwerty)
+            let right_idx = q + 2;
+            if right_idx < s.len() && Self::is_ident_char(s.as_bytes()[right_idx] as char) {
+                i = q + 2;
+                continue;
+            }
+            
+            let mut j = q + 2;
+            let bytes = s.as_bytes();
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() { 
+                j += 1; 
+            }
+            if j >= bytes.len() { 
+                return false; 
+            }
+            
+            let open = bytes[j] as char;
+            let (open_delim, close_delim) = match open {
+                '(' => ('(', ')'),
+                '[' => ('[', ']'),
+                '{' => ('{', '}'),
+                '<' => ('<', '>'),
+                _ if !open.is_alphanumeric() && !open.is_whitespace() => (open, open),
+                _ => {
+                    i = j + 1;
+                    continue;
+                }
+            };
+            
+            if let Some(start_rel) = s[j..].find(open_delim) {
+                let start = j + start_rel + 1;
+                if let Some(end_rel) = s[start..].find(close_delim) {
+                    let end = start + end_rel;
+                    if f(start, end) {
+                        return true;
+                    }
+                    i = end + 1;
+                    continue;
+                }
+            }
+            i = j + 1;
+        }
+        false
+    }
+    
+    /// Iterate over all {...} pairs in the string
+    fn for_each_brace_window<F>(&self, s: &str, mut f: F) -> bool
+    where
+        F: FnMut(usize, usize) -> bool,
+    {
         let mut i = 0;
         while let Some(open) = s[i..].find('{') {
             let start = i + open + 1;
             if let Some(close_rel) = s[start..].find('}') {
                 let end = start + close_rel;
-                // only scan that slice
-                if self.find_word(&s[start..end], name).is_some() {
+                if f(start, end) {
                     return true;
                 }
                 i = end + 1;
@@ -357,41 +437,20 @@ impl<'a> DeclarationProvider<'a> {
         false
     }
     
+    fn contains_name_in_hash(&self, s: &str, name: &str) -> bool {
+        // for { FOO => 1, BAR => 2 } form - check all {...} pairs
+        self.for_each_brace_window(s, |start, end| {
+            // only scan that slice
+            self.find_word(&s[start..end], name).is_some()
+        })
+    }
+    
     fn contains_name_in_qw(&self, s: &str, name: &str) -> bool {
-        // looks for qw(...) / qw[...] / qw/.../ etc.
-        if let Some(mut i) = s.find("qw") {
-            // skip "qw" and any whitespace
-            i += 2;
-            let bytes = s.as_bytes();
-            while i < bytes.len() && bytes[i].is_ascii_whitespace() { 
-                i += 1; 
-            }
-            if i >= bytes.len() { 
-                return false; 
-            }
-            
-            let open = bytes[i] as char;
-            // Support both paired and symmetric delimiters
-            let (open_delim, close_delim) = match open {
-                '(' => ('(', ')'),
-                '[' => ('[', ']'),
-                '{' => ('{', '}'),
-                '<' => ('<', '>'),
-                // Any other non-alnum char is a symmetric delimiter
-                _ if !open.is_alphanumeric() => (open, open),
-                _ => return false,
-            };
-            
-            if let Some(start_rel) = s[i..].find(open_delim) {
-                let start = i + start_rel + 1;
-                if let Some(end_rel) = s[start..].find(close_delim) {
-                    let end = start + end_rel;
-                    // tokens are whitespace separated
-                    return s[start..end].split_whitespace().any(|tok| tok == name);
-                }
-            }
-        }
-        false
+        // looks for qw(...) / qw[...] / qw/.../ etc. with word boundaries
+        self.for_each_qw_window(s, |start, end| {
+            // tokens are whitespace separated
+            s[start..end].split_whitespace().any(|tok| tok == name)
+        })
     }
     
     fn find_word(&self, hay: &str, needle: &str) -> Option<(usize, usize)> {
@@ -489,34 +548,32 @@ impl<'a> DeclarationProvider<'a> {
             return (decl.location.start + lo, decl.location.start + hi);
         }
         
-        // Try inside qw(...) or symmetric qw|...|
-        if self.contains_name_in_qw(&text, name) {
-            // Re-scan for the exact token position within the qw window
-            if let Some(qw_pos) = text.find("qw") {
-                // Skip past qw and find the content region
-                let mut i = qw_pos + 2;
-                let bytes = text.as_bytes();
-                while i < bytes.len() && bytes[i].is_ascii_whitespace() { 
-                    i += 1; 
-                }
-                if i < bytes.len() {
-                    // Find the content between delimiters and locate the name
-                    if let Some((lo, hi)) = self.find_word(&text[i..], name) {
-                        return (decl.location.start + i + lo, decl.location.start + i + hi);
-                    }
-                }
+        // Try inside all qw(...) windows
+        let mut found_range = None;
+        self.for_each_qw_window(&text, |start, end| {
+            // Find the exact token position within this qw window
+            if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
+                found_range = Some((decl.location.start + start + lo, decl.location.start + start + hi));
+                true  // Stop searching
+            } else {
+                false  // Continue to next window
             }
+        });
+        if let Some(range) = found_range {
+            return range;
         }
         
-        // Try inside a { ... } block (hash form)
-        if let Some(open) = text.find('{') {
-            if let Some(close_rel) = text[open+1..].find('}') {
-                let start = open + 1;
-                let end = start + close_rel;
-                if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
-                    return (decl.location.start + start + lo, decl.location.start + start + hi);
-                }
+        // Try inside all { ... } blocks (hash form)
+        self.for_each_brace_window(&text, |start, end| {
+            if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
+                found_range = Some((decl.location.start + start + lo, decl.location.start + start + hi));
+                true  // Stop searching
+            } else {
+                false  // Continue to next window
             }
+        });
+        if let Some(range) = found_range {
+            return range;
         }
         
         // Final fallback to heuristics
