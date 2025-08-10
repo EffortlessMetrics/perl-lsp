@@ -30,6 +30,19 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
 
+/// Client capabilities received during initialization
+#[derive(Debug, Clone, Default)]
+struct ClientCapabilities {
+    /// Supports LocationLink for goto declaration
+    declaration_link_support: bool,
+    /// Supports LocationLink for goto definition
+    definition_link_support: bool,
+    /// Supports LocationLink for goto type definition
+    type_definition_link_support: bool,
+    /// Supports LocationLink for goto implementation
+    implementation_link_support: bool,
+}
+
 /// LSP server that handles JSON-RPC communication
 pub struct LspServer {
     /// Document contents indexed by URI
@@ -46,6 +59,8 @@ pub struct LspServer {
     config: Arc<Mutex<ServerConfig>>,
     /// Synchronized output writer for notifications
     output: Arc<Mutex<Box<dyn Write + Send>>>,
+    /// Client capabilities
+    client_capabilities: ClientCapabilities,
 }
 
 /// State of a document
@@ -135,6 +150,7 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             output: Arc::new(Mutex::new(Box::new(io::stdout()))),
+            client_capabilities: ClientCapabilities::default(),
         }
     }
 
@@ -148,6 +164,7 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             output,
+            client_capabilities: ClientCapabilities::default(),
         }
     }
     
@@ -340,7 +357,38 @@ impl LspServer {
     }
 
     /// Handle initialize request
-    fn handle_initialize(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_initialize(&mut self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Parse client capabilities
+        if let Some(params) = &params {
+            self.client_capabilities.declaration_link_support = params
+                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("declaration"))
+                .and_then(|d| d.get("linkSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+                
+            self.client_capabilities.definition_link_support = params
+                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("definition"))
+                .and_then(|d| d.get("linkSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+                
+            self.client_capabilities.type_definition_link_support = params
+                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("typeDefinition"))
+                .and_then(|d| d.get("linkSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+                
+            self.client_capabilities.implementation_link_support = params
+                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("implementation"))
+                .and_then(|d| d.get("linkSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+        }
+        
         // Check for available tools by trying to execute them
         let has_perltidy = std::process::Command::new("perltidy")
             .arg("--version")
@@ -1411,6 +1459,8 @@ impl LspServer {
     
     /// Handle textDocument/definition request
     fn handle_declaration(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        let t0 = std::time::Instant::now();
+        
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
@@ -1430,37 +1480,38 @@ impl LspServer {
                     
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset) {
-                        // Convert LocationLink to LSP format
-                        let result: Vec<Value> = location_links.iter().map(|link| {
-                            let (orig_start_line, orig_start_char) = 
-                                self.offset_to_position(&doc.content, link.origin_selection_range.0);
-                            let (orig_end_line, orig_end_char) = 
-                                self.offset_to_position(&doc.content, link.origin_selection_range.1);
-                            
-                            let (target_start_line, target_start_char) = 
-                                self.offset_to_position(&doc.content, link.target_range.0);
-                            let (target_end_line, target_end_char) = 
-                                self.offset_to_position(&doc.content, link.target_range.1);
-                            
-                            let (sel_start_line, sel_start_char) = 
-                                self.offset_to_position(&doc.content, link.target_selection_range.0);
-                            let (sel_end_line, sel_end_char) = 
-                                self.offset_to_position(&doc.content, link.target_selection_range.1);
-                            
+                        // Check client capability and return appropriate format
+                        if self.client_capabilities.declaration_link_support {
                             // Return LocationLink format
-                            json!({
-                                "originSelectionRange": {
-                                    "start": {
-                                        "line": orig_start_line,
-                                        "character": orig_start_char,
+                            let result: Vec<Value> = location_links.iter().map(|link| {
+                                let (orig_start_line, orig_start_char) = 
+                                    self.offset_to_position(&doc.content, link.origin_selection_range.0);
+                                let (orig_end_line, orig_end_char) = 
+                                    self.offset_to_position(&doc.content, link.origin_selection_range.1);
+                                
+                                let (target_start_line, target_start_char) = 
+                                    self.offset_to_position(&doc.content, link.target_range.0);
+                                let (target_end_line, target_end_char) = 
+                                    self.offset_to_position(&doc.content, link.target_range.1);
+                                
+                                let (sel_start_line, sel_start_char) = 
+                                    self.offset_to_position(&doc.content, link.target_selection_range.0);
+                                let (sel_end_line, sel_end_char) = 
+                                    self.offset_to_position(&doc.content, link.target_selection_range.1);
+                                
+                                json!({
+                                    "originSelectionRange": {
+                                        "start": {
+                                            "line": orig_start_line,
+                                            "character": orig_start_char,
+                                        },
+                                        "end": {
+                                            "line": orig_end_line,
+                                            "character": orig_end_char,
+                                        },
                                     },
-                                    "end": {
-                                        "line": orig_end_line,
-                                        "character": orig_end_char,
-                                    },
-                                },
-                                "targetUri": uri, // Same file for now
-                                "targetRange": {
+                                    "targetUri": link.target_uri,
+                                    "targetRange": {
                                     "start": {
                                         "line": target_start_line,
                                         "character": target_start_char,
@@ -1482,9 +1533,40 @@ impl LspServer {
                                 },
                             })
                         }).collect();
-                        
-                        return Ok(Some(json!(result)));
+                            
+                            return Ok(Some(json!(result)));
+                        } else {
+                            // Down-convert to Location format for clients that don't support LocationLink
+                            let result: Vec<Value> = location_links.iter().map(|link| {
+                                let (sel_start_line, sel_start_char) = 
+                                    self.offset_to_position(&doc.content, link.target_selection_range.0);
+                                let (sel_end_line, sel_end_char) = 
+                                    self.offset_to_position(&doc.content, link.target_selection_range.1);
+                                
+                                json!({
+                                    "uri": link.target_uri,
+                                    "range": {
+                                        "start": {
+                                            "line": sel_start_line,
+                                            "character": sel_start_char,
+                                        },
+                                        "end": {
+                                            "line": sel_end_line,
+                                            "character": sel_end_char,
+                                        },
+                                    },
+                                })
+                            }).collect();
+                            
+                            return Ok(Some(json!(result)));
+                        }
                     }
+                }
+                
+                // Performance monitoring
+                let dt = t0.elapsed();
+                if doc.content.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
+                    eprintln!("[warn] slow {}: {:?} (uri={})", "declaration", dt, uri);
                 }
             }
         }
@@ -2361,23 +2443,27 @@ impl LspServer {
         (start, end)
     }
 
-    /// Convert offset to line/column position (UTF-16 aware)
+    /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
     fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
-        let mut line = 0;
-        let mut col_utf16 = 0;
-        let mut byte_pos = 0;
+        let mut line = 0u32;
+        let mut col_utf16 = 0u32;
+        let mut byte_pos = 0usize;
         
         for ch in content.chars() {
             if byte_pos >= offset {
                 break;
             }
             
-            if ch == '\n' {
-                line += 1;
-                col_utf16 = 0;
-            } else {
-                // Count UTF-16 code units (surrogate pairs count as 2)
-                col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+            match ch {
+                '\r' => { /* ignore; CRLF will be handled on '\n' */ }
+                '\n' => {
+                    line += 1;
+                    col_utf16 = 0;
+                }
+                _ => {
+                    // Count UTF-16 code units (surrogate pairs count as 2)
+                    col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                }
             }
             
             byte_pos += ch.len_utf8();
@@ -2386,43 +2472,55 @@ impl LspServer {
         (line, col_utf16)
     }
 
-    /// Convert line/column position to offset (UTF-16 aware)
+    /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
     fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
-        let mut current_line = 0;
-        let mut current_col_utf16 = 0;
-        let mut byte_pos = 0;
+        let mut cur_line = 0u32;
+        let mut col_utf16 = 0u32;
+        let mut byte_pos = 0usize;
         
         for ch in content.chars() {
-            if current_line == line && current_col_utf16 == character {
-                return byte_pos;
+            if cur_line == line {
+                match ch {
+                    '\n' => {
+                        // End of target line - clamp to EOL
+                        return byte_pos.min(content.len());
+                    }
+                    '\r' => {
+                        // ignore CR; CRLF handled on '\n'
+                    }
+                    _ => {
+                        let w = if ch.len_utf16() == 2 { 2 } else { 1 };
+                        if col_utf16 + w > character {
+                            // Character position is in the middle of this char
+                            return byte_pos;
+                        }
+                        col_utf16 += w;
+                        if col_utf16 == character {
+                            // Found exact position
+                            return byte_pos + ch.len_utf8();
+                        }
+                    }
+                }
             }
             
-            if current_line > line {
-                // We've gone past the target line
-                return byte_pos;
-            }
-            
-            if ch == '\n' {
-                if current_line == line {
-                    // End of target line reached before target column
-                    return byte_pos;
+            match ch {
+                '\n' => {
+                    cur_line += 1;
+                    if cur_line > line {
+                        // We've gone past the target line
+                        return byte_pos;
+                    }
+                    col_utf16 = 0;
                 }
-                current_line += 1;
-                current_col_utf16 = 0;
-            } else if current_line == line {
-                // Count UTF-16 code units only on the target line
-                let ch_utf16_len = if ch.len_utf16() == 2 { 2 } else { 1 };
-                if current_col_utf16 + ch_utf16_len > character {
-                    // Character position is in the middle of this char
-                    return byte_pos;
-                }
-                current_col_utf16 += ch_utf16_len;
+                '\r' => { /* ignore */ }
+                _ => { }
             }
             
             byte_pos += ch.len_utf8();
         }
         
-        byte_pos
+        // Clamp to end of buffer
+        content.len()
     }
     
     /// Handle textDocument/formatting request
