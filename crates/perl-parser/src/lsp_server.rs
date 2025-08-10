@@ -266,11 +266,25 @@ impl LspServer {
                     Err(e) => Err(e),
                 }
             }
+            "textDocument/didSave" => {
+                match self.handle_did_save(request.params) {
+                    Ok(_) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
+            "textDocument/willSave" => {
+                match self.handle_will_save(request.params) {
+                    Ok(_) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
+            "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
             "textDocument/completion" => self.handle_completion(request.params),
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => self.handle_definition(request.params),
+            "textDocument/declaration" => self.handle_declaration(request.params),
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
             "textDocument/prepareTypeHierarchy" => self.handle_prepare_type_hierarchy(request.params),
@@ -347,12 +361,21 @@ impl LspServer {
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
         
         let mut capabilities = json!({
-            "textDocumentSync": 1,
+            "textDocumentSync": {
+                "openClose": true,
+                "change": 2, // 2 = Incremental sync (with full sync fallback)
+                "willSave": true,
+                "willSaveWaitUntil": false, // Only enable when formatter is available
+                "save": {
+                    "includeText": true // Include text for robust save handling
+                }
+            },
             "completionProvider": {
                 "triggerCharacters": ["$", "@", "%", "->"]
             },
             "hoverProvider": true,
             "definitionProvider": true,
+            "declarationProvider": true,
             "referencesProvider": true,
             "documentHighlightProvider": true,
             "typeHierarchyProvider": true,
@@ -602,6 +625,144 @@ impl LspServer {
         }
         
         Ok(())
+    }
+
+    /// Handle didSave notification
+    fn handle_did_save(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let _version = params["textDocument"].get("version")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+            
+            eprintln!("Document saved: {}", uri);
+            
+            // Re-run diagnostics on save to catch any changes
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    // Run diagnostics
+                    let provider = DiagnosticsProvider::new(ast, doc.content.clone());
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                    
+                    // Convert diagnostics
+                    let lsp_diagnostics: Vec<Value> = diagnostics.iter().map(|diag| {
+                        let (start_line, start_char) = self.offset_to_position(&doc.content, diag.range.0);
+                        let (end_line, end_char) = self.offset_to_position(&doc.content, diag.range.1);
+                        
+                        json!({
+                            "range": {
+                                "start": { "line": start_line, "character": start_char },
+                                "end": { "line": end_line, "character": end_char }
+                            },
+                            "severity": match diag.severity {
+                                InternalDiagnosticSeverity::Error => 1,
+                                InternalDiagnosticSeverity::Warning => 2,
+                                InternalDiagnosticSeverity::Information => 3,
+                                InternalDiagnosticSeverity::Hint => 4,
+                            },
+                            "message": diag.message,
+                            "source": "perl"
+                        })
+                    }).collect();
+                    
+                    // Send diagnostics notification
+                    let _ = self.notify("textDocument/publishDiagnostics", json!({
+                        "uri": uri,
+                        "diagnostics": lsp_diagnostics
+                    }));
+                }
+            }
+            
+            // Optionally, trigger any post-save hooks here
+            // For example: format on save, run tests, etc.
+        }
+        
+        Ok(())
+    }
+
+    /// Handle willSave notification
+    fn handle_will_save(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let reason = params["reason"].as_u64().unwrap_or(1); // 1 = Manual, 2 = AfterDelay, 3 = FocusOut
+            
+            eprintln!("Document will save: {} (reason: {})", uri, reason);
+            
+            // Pre-save validation or cleanup can be done here
+            // For example: remove trailing whitespace, fix imports, etc.
+        }
+        
+        Ok(())
+    }
+
+    /// Handle willSaveWaitUntil request
+    fn handle_will_save_wait_until(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let _reason = params["reason"].as_u64().unwrap_or(1);
+            
+            eprintln!("Document will save wait until: {}", uri);
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                // Return text edits to be applied before saving
+                // For example: format document, organize imports, etc.
+                
+                // Check if we should format on save
+                let config = self.config.lock().unwrap();
+                if config.test_runner_enabled { // Using existing config field as example
+                    // Could add format_on_save config option
+                    let formatter = CodeFormatter::new();
+                    let format_options = FormattingOptions {
+                        tab_size: 4,
+                        insert_spaces: true,
+                        trim_trailing_whitespace: Some(true),
+                        insert_final_newline: Some(true),
+                        trim_final_newlines: Some(true),
+                    };
+                    
+                    if let Ok(edits) = formatter.format_document(&doc.content, &format_options) {
+                        if !edits.is_empty() {
+                            // Convert FormatTextEdit to LSP TextEdit  
+                            // The edits already have line/character positions
+                            let lsp_edits: Vec<Value> = edits.iter().map(|edit| {
+                                json!({
+                                    "range": {
+                                        "start": { 
+                                            "line": edit.range.start.line, 
+                                            "character": edit.range.start.character 
+                                        },
+                                        "end": { 
+                                            "line": edit.range.end.line, 
+                                            "character": edit.range.end.character 
+                                        }
+                                    },
+                                    "newText": edit.new_text
+                                })
+                            }).collect();
+                            
+                            return Ok(Some(json!(lsp_edits)));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Return empty array if no edits
+        Ok(Some(json!([])))
+    }
+
+    /// Get the end position of a document
+    fn get_document_end_position(&self, content: &str) -> Value {
+        let lines: Vec<&str> = content.lines().collect();
+        let last_line = lines.len().saturating_sub(1);
+        let last_char = lines.last().map(|l| l.len()).unwrap_or(0);
+        
+        json!({
+            "line": last_line,
+            "character": last_char
+        })
     }
 
     /// Handle completion request
@@ -1249,6 +1410,86 @@ impl LspServer {
     }
     
     /// Handle textDocument/definition request
+    fn handle_declaration(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.position_to_offset(&doc.content, line, character);
+                    
+                    // Use the Declaration provider
+                    let provider = crate::declaration::DeclarationProvider::new(
+                        Arc::new(ast.clone()),
+                        doc.content.clone()
+                    );
+                    
+                    // Find declaration at the position
+                    if let Some(location_links) = provider.find_declaration(offset) {
+                        // Convert LocationLink to LSP format
+                        let result: Vec<Value> = location_links.iter().map(|link| {
+                            let (orig_start_line, orig_start_char) = 
+                                self.offset_to_position(&doc.content, link.origin_selection_range.0);
+                            let (orig_end_line, orig_end_char) = 
+                                self.offset_to_position(&doc.content, link.origin_selection_range.1);
+                            
+                            let (target_start_line, target_start_char) = 
+                                self.offset_to_position(&doc.content, link.target_range.0);
+                            let (target_end_line, target_end_char) = 
+                                self.offset_to_position(&doc.content, link.target_range.1);
+                            
+                            let (sel_start_line, sel_start_char) = 
+                                self.offset_to_position(&doc.content, link.target_selection_range.0);
+                            let (sel_end_line, sel_end_char) = 
+                                self.offset_to_position(&doc.content, link.target_selection_range.1);
+                            
+                            // Return LocationLink format
+                            json!({
+                                "originSelectionRange": {
+                                    "start": {
+                                        "line": orig_start_line,
+                                        "character": orig_start_char,
+                                    },
+                                    "end": {
+                                        "line": orig_end_line,
+                                        "character": orig_end_char,
+                                    },
+                                },
+                                "targetUri": uri, // Same file for now
+                                "targetRange": {
+                                    "start": {
+                                        "line": target_start_line,
+                                        "character": target_start_char,
+                                    },
+                                    "end": {
+                                        "line": target_end_line,
+                                        "character": target_end_char,
+                                    },
+                                },
+                                "targetSelectionRange": {
+                                    "start": {
+                                        "line": sel_start_line,
+                                        "character": sel_start_char,
+                                    },
+                                    "end": {
+                                        "line": sel_end_line,
+                                        "character": sel_end_char,
+                                    },
+                                },
+                            })
+                        }).collect();
+                        
+                        return Ok(Some(json!(result)));
+                    }
+                }
+            }
+        }
+        Ok(Some(json!([])))
+    }
+
     fn handle_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");

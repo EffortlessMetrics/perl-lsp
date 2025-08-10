@@ -3,6 +3,7 @@
 //! Provides robust assertion helpers and utilities for testing LSP functionality
 
 pub mod lsp_client;
+pub mod lsp_harness;
 
 use serde_json::Value;
 use std::time::{Duration, Instant};
