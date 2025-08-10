@@ -66,8 +66,50 @@ while IFS= read -r exe; do
         continue
     fi
     
-    # Run the actual tests
-    if "$exe" --quiet 2>&1; then
+    # Run the actual tests (first attempt, quiet)
+    RUN_OUTPUT=$("$exe" --quiet 2>&1 || true)
+    RUN_EXIT=$?
+    
+    # Check if libtest thought there was a name filter
+    if printf "%s\n" "$RUN_OUTPUT" | grep -q 'filtered out'; then
+        echo "ℹ️  Detected libtest filter — re-running each test with --exact"
+        status_chunk=0
+        tests_passed=0
+        tests_failed=0
+        
+        # Run each test explicitly to bypass any accidental filters
+        while IFS= read -r tname; do
+            tname=${tname%%: test}  # strip trailing ": test"
+            if [ -n "$tname" ]; then
+                if "$exe" --exact "$tname" --quiet 2>&1; then
+                    tests_passed=$((tests_passed + 1))
+                else
+                    tests_failed=$((tests_failed + 1))
+                    status_chunk=1
+                fi
+            fi
+        done <<EOFTESTS
+$( "$exe" --list --format=terse 2>/dev/null | awk -F': ' '/: test$/{print $0}' )
+EOFTESTS
+        
+        if [ $status_chunk -eq 0 ]; then
+            echo "✅ $tests_passed tests passed"
+            PASSED_TESTS=$((PASSED_TESTS + tests_passed))
+            TOTAL_TESTS=$((TOTAL_TESTS + tests_passed))
+        else
+            echo "❌ $tests_failed of $TEST_COUNT tests failed"
+            FAILED_FILES="$FAILED_FILES $test_name"
+            TOTAL_TESTS=$((TOTAL_TESTS + tests_passed + tests_failed))
+            # Re-run failed tests for details
+            echo "  Re-running failed tests for details..."
+            "$exe" 2>&1 || true
+        fi
+        # Skip the normal path since we already handled it
+        continue
+    fi
+    
+    # Normal path: no filter detected
+    if [ $RUN_EXIT -eq 0 ]; then
         echo "✅ $TEST_COUNT tests passed"
         PASSED_TESTS=$((PASSED_TESTS + TEST_COUNT))
         TOTAL_TESTS=$((TOTAL_TESTS + TEST_COUNT))
