@@ -203,7 +203,7 @@ impl<'a> DeclarationProvider<'a> {
         // Try to find as constant (supporting multiple forms)
         let constants = self.find_constant_declarations(&self.ast, name);
         if let Some(const_decl) = constants.first() {
-            return Some(vec![self.create_location_link(node, const_decl, self.get_constant_name_range(const_decl))]);
+            return Some(vec![self.create_location_link(node, const_decl, self.get_constant_name_range_for(const_decl, name))]);
         }
         
         None
@@ -359,26 +359,33 @@ impl<'a> DeclarationProvider<'a> {
     
     fn contains_name_in_qw(&self, s: &str, name: &str) -> bool {
         // looks for qw(...) / qw[...] / qw/.../ etc.
-        if let Some(qw_pos) = s.find("qw") {
-            // grab the delimiter if present
+        if let Some(mut i) = s.find("qw") {
+            // skip "qw" and any whitespace
+            i += 2;
             let bytes = s.as_bytes();
-            if qw_pos + 2 < bytes.len() {
-                let delim = bytes[qw_pos + 2] as char;
-                let (open, close) = match delim {
-                    '(' => ('(', ')'),
-                    '[' => ('[', ']'),
-                    '{' => ('{', '}'),
-                    '<' => ('<', '>'),
-                    '/' => ('/', '/'),
-                    _ => return false,
-                };
-                if let Some(start) = s[qw_pos..].find(open) {
-                    let start = qw_pos + start + 1;
-                    if let Some(end_rel) = s[start..].find(close) {
-                        let end = start + end_rel;
-                        // tokens are whitespace separated
-                        return s[start..end].split_whitespace().any(|tok| tok == name);
-                    }
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() { 
+                i += 1; 
+            }
+            if i >= bytes.len() { 
+                return false; 
+            }
+            
+            let delim = bytes[i] as char;
+            let (open, close) = match delim {
+                '(' => ('(', ')'),
+                '[' => ('[', ']'),
+                '{' => ('{', '}'),
+                '<' => ('<', '>'),
+                '/' => ('/', '/'),
+                _ => return false,
+            };
+            
+            if let Some(start_rel) = s[i..].find(open) {
+                let start = i + start_rel + 1;
+                if let Some(end_rel) = s[start..].find(close) {
+                    let end = start + end_rel;
+                    // tokens are whitespace separated
+                    return s[start..end].split_whitespace().any(|tok| tok == name);
                 }
             }
         }
@@ -470,6 +477,15 @@ impl<'a> DeclarationProvider<'a> {
         
         // Fallback to whole range
         (decl.location.start, decl.location.end)
+    }
+    
+    fn get_constant_name_range_for(&self, decl: &Node, name: &str) -> (usize, usize) {
+        let text = self.get_node_text(decl);
+        if let Some((lo, hi)) = self.find_word(&text, name) {
+            return (decl.location.start + lo, decl.location.start + hi);
+        }
+        // Fallback to default behavior
+        self.get_constant_name_range(decl)
     }
 
     fn get_children<'b>(&self, node: &'b Node) -> Vec<&'b Node> {

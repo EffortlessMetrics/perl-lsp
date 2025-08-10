@@ -71,7 +71,7 @@ struct DocumentState {
     /// Version number
     _version: i32,
     /// Parsed AST (cached)
-    ast: Option<crate::ast::Node>,
+    ast: Option<std::sync::Arc<crate::ast::Node>>,
     /// Parse errors
     parse_errors: Vec<crate::error::ParseError>,
     /// Parent map for O(1) scope traversal (built once per AST)
@@ -512,26 +512,29 @@ impl LspServer {
                 }
             };
 
+            // Convert AST to Arc for stable pointers
+            let ast_arc = ast.map(Arc::new);
+            
+            // Build parent map from the Arc'd AST so pointers remain stable
+            let mut parent_map = std::collections::HashMap::new();
+            if let Some(ref arc) = ast_arc {
+                crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
+            }
+            
             // Store document state
             self.documents.lock().unwrap().insert(
                 uri.to_string(),
-                {
-                    let mut parent_map = std::collections::HashMap::new();
-                    if let Some(ref ast) = ast {
-                        crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
-                    }
-                    DocumentState {
-                        content: text.to_string(),
-                        _version: version,
-                        ast: ast.clone(),
-                        parse_errors: errors,
-                        parent_map,
-                    }
+                DocumentState {
+                    content: text.to_string(),
+                    _version: version,
+                    ast: ast_arc.clone(),
+                    parse_errors: errors,
+                    parent_map,
                 },
             );
 
             // Index symbols for workspace search
-            if let Some(ref _ast) = ast {
+            if let Some(ref _ast) = ast_arc {
                 // Update the fast symbol index with symbols from workspace index
                 let index_symbols = self.workspace_index.find_symbols("");
                 let symbols = index_symbols.into_iter()
@@ -587,26 +590,29 @@ impl LspServer {
                         }
                     };
 
+                    // Convert AST to Arc for stable pointers
+                    let ast_arc = ast.map(Arc::new);
+                    
+                    // Build parent map from the Arc'd AST so pointers remain stable
+                    let mut parent_map = std::collections::HashMap::new();
+                    if let Some(ref arc) = ast_arc {
+                        crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
+                    }
+                    
                     // Update document state
                     self.documents.lock().unwrap().insert(
                         uri.to_string(),
-                        {
-                            let mut parent_map = std::collections::HashMap::new();
-                            if let Some(ref ast) = ast {
-                                crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
-                            }
-                            DocumentState {
-                                content: text.to_string(),
-                                _version: version,
-                                ast: ast.clone(),
-                                parse_errors: errors,
-                                parent_map,
-                            }
+                        DocumentState {
+                            content: text.to_string(),
+                            _version: version,
+                            ast: ast_arc.clone(),
+                            parse_errors: errors,
+                            parent_map,
                         },
                     );
 
                     // Index symbols for workspace search
-                    if let Some(ref _ast) = ast {
+                    if let Some(ref _ast) = ast_arc {
                         // Update the workspace-wide index for cross-file features
                         // Note: version is maintained by the document state
                         if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
@@ -1487,9 +1493,9 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.position_to_offset(&doc.content, line, character);
                     
-                    // Use the Declaration provider
+                    // Use the Declaration provider - ast is already an Arc
                     let provider = crate::declaration::DeclarationProvider::new(
-                        Arc::new(ast.clone()),
+                        ast.clone(),
                         doc.content.clone(),
                         uri.to_string()
                     ).with_parent_map(&doc.parent_map);
@@ -2510,11 +2516,11 @@ impl LspServer {
                             // Character position is in the middle of this char
                             return byte_pos;
                         }
-                        col_utf16 += w;
-                        if col_utf16 == character {
-                            // Found exact position
+                        if col_utf16 + w == character {
+                            // Caret is after this char
                             return byte_pos + ch.len_utf8();
                         }
+                        col_utf16 += w;
                     }
                 }
             }
