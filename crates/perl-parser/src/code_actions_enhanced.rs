@@ -24,8 +24,19 @@ impl EnhancedCodeActionsProvider {
     pub fn get_enhanced_refactoring_actions(&self, ast: &Node, range: (usize, usize)) -> Vec<CodeAction> {
         let mut actions = Vec::new();
         
-        // Find the node at the cursor position
-        if let Some(node) = self.find_node_at_range(ast, range) {
+        // Find all nodes that overlap the range and collect actions
+        self.collect_actions_for_range(ast, range, &mut actions);
+        
+        // Global actions (not node-specific)
+        actions.extend(self.get_global_refactorings(ast));
+        
+        actions
+    }
+    
+    /// Recursively collect actions for all nodes in range
+    fn collect_actions_for_range(&self, node: &Node, range: (usize, usize), actions: &mut Vec<CodeAction>) {
+        // Check if this node overlaps the range
+        if node.location.start <= range.1 && node.location.end >= range.0 {
             // Extract variable (enhanced version)
             if self.is_extractable_expression(node) {
                 actions.push(self.create_extract_variable_action(node));
@@ -52,10 +63,50 @@ impl EnhancedCodeActionsProvider {
             }
         }
         
-        // Global actions (not node-specific)
-        actions.extend(self.get_global_refactorings(ast));
-        
-        actions
+        // Recursively check children
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.collect_actions_for_range(stmt, range, actions);
+                }
+            }
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.collect_actions_for_range(stmt, range, actions);
+                }
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                self.collect_actions_for_range(condition, range, actions);
+                self.collect_actions_for_range(then_branch, range, actions);
+                for (cond, branch) in elsif_branches {
+                    self.collect_actions_for_range(cond, range, actions);
+                    self.collect_actions_for_range(branch, range, actions);
+                }
+                if let Some(branch) = else_branch {
+                    self.collect_actions_for_range(branch, range, actions);
+                }
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    self.collect_actions_for_range(arg, range, actions);
+                }
+            }
+            NodeKind::Binary { left, right, .. } => {
+                self.collect_actions_for_range(left, range, actions);
+                self.collect_actions_for_range(right, range, actions);
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                self.collect_actions_for_range(lhs, range, actions);
+                self.collect_actions_for_range(rhs, range, actions);
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                self.collect_actions_for_range(variable, range, actions);
+                if let Some(init) = initializer {
+                    self.collect_actions_for_range(init, range, actions);
+                }
+            }
+            _ => {}
+        }
     }
     
     /// Check if expression is extractable
@@ -707,7 +758,15 @@ mod tests {
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 23)); // Select "length($string)"
         
-        assert!(actions.iter().any(|a| a.title.contains("Extract")));
+        // Debug: print all actions
+        for action in &actions {
+            eprintln!("Action: {}", action.title);
+        }
+        
+        assert!(!actions.is_empty(), "Expected at least one action");
+        assert!(actions.iter().any(|a| a.title.contains("Extract")), 
+            "Expected an Extract action, got: {:?}", 
+            actions.iter().map(|a| &a.title).collect::<Vec<_>>());
     }
     
     #[test]

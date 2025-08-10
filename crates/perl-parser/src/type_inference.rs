@@ -268,31 +268,41 @@ impl TypeInferenceEngine {
             
             NodeKind::Undef => Ok(Scalar(Undef)),
             
-            NodeKind::Variable { name, .. } => {
-                let base_name = name.trim_start_matches(['$', '@', '%', '*']);
+            NodeKind::Variable { sigil, name } => {
+                // First check if we have a known type for this variable (use name without sigil)
+                if let Some(ty) = env.get_variable(name) {
+                    return Ok(ty.clone());
+                }
                 
-                if name.starts_with('$') {
-                    // Scalar variable
-                    if let Some(ty) = env.get_variable(base_name) {
-                        Ok(ty.clone())
-                    } else {
-                        // Infer as Any for unknown variables
+                // Otherwise, infer from sigil
+                match sigil.as_str() {
+                    "$" => {
+                        // Scalar variable
                         Ok(Scalar(Mixed))
                     }
-                } else if name.starts_with('@') {
-                    // Array variable
-                    Ok(Array(Box::new(Any)))
-                } else if name.starts_with('%') {
-                    // Hash variable
-                    Ok(Hash {
-                        key: Box::new(Scalar(String)),
-                        value: Box::new(Any),
-                    })
-                } else if name.starts_with('*') {
-                    // Glob variable
-                    Ok(Glob)
-                } else {
-                    Ok(Any)
+                    "@" => {
+                        // Array variable - store type for later retrieval
+                        let array_type = Array(Box::new(Any));
+                        self.global_env.set_variable(name.to_string(), array_type.clone());
+                        Ok(array_type)
+                    }
+                    "%" => {
+                        // Hash variable - store type for later retrieval
+                        let hash_type = Hash {
+                            key: Box::new(Scalar(String)),
+                            value: Box::new(Any),
+                        };
+                        self.global_env.set_variable(name.to_string(), hash_type.clone());
+                        Ok(hash_type)
+                    }
+                    "*" => {
+                        // Glob variable
+                        Ok(Glob)
+                    }
+                    _ => {
+                        // Unknown variable type
+                        Ok(Any)
+                    }
                 }
             }
             
@@ -452,19 +462,38 @@ impl TypeInferenceEngine {
             }
             
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                let init_type = if let Some(init) = initializer {
-                    self.infer_node(init, env)?
+                // Determine type from variable sigil and initializer
+                let var_type = if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    // Use the sigil field to determine type
+                    // Infer type based on sigil first, then initializer
+                    let inferred_type = if sigil == "@" {
+                        // Array variable - always treat as array
+                        PerlType::Array(Box::new(PerlType::Any))
+                    } else if sigil == "%" {
+                        // Hash variable - always treat as hash
+                        PerlType::Hash {
+                            key: Box::new(PerlType::Scalar(ScalarType::String)),
+                            value: Box::new(PerlType::Any),
+                        }
+                    } else {
+                        // Scalar variable - infer from initializer
+                        if let Some(init) = initializer {
+                            self.infer_node(init, env)?
+                        } else {
+                            PerlType::Scalar(ScalarType::Undef)
+                        }
+                    };
+                    
+                    // Store in both environments using the name (without sigil)
+                    self.global_env.set_variable(name.to_string(), inferred_type.clone());
+                    env.set_variable(name.to_string(), inferred_type.clone());
+                    
+                    inferred_type
                 } else {
-                    Scalar(Undef)
+                    PerlType::Any
                 };
                 
-                // Register variable with inferred type
-                if let NodeKind::Variable { name, .. } = &variable.kind {
-                    let base_name = name.trim_start_matches(['$', '@', '%']);
-                    env.set_variable(base_name.to_string(), init_type.clone());
-                }
-                
-                Ok(init_type)
+                Ok(var_type)
             }
             
             NodeKind::If { condition, then_branch, else_branch, .. } => {

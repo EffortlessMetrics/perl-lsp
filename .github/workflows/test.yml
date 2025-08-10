@@ -157,8 +157,8 @@ jobs:
         echo "Total tests discovered: $TOTAL_TESTS"
         
         # Baseline drift guard with configurable threshold
-        BASELINE=${BASELINE_TOTAL_TESTS:-700}   # set in env, or fall back to 700
-        THRESHOLD_PCT=${BASELINE_DROP_PCT:-10}  # allow 10% drop
+        BASELINE=${BASELINE_TOTAL_TESTS:-720}   # set in env, or fall back to 720
+        THRESHOLD_PCT=${BASELINE_DROP_PCT:-5}   # allow 5% drop
         
         # integer math: allowed = baseline * (100 - threshold) / 100
         ALLOWED=$(( BASELINE * (100 - THRESHOLD_PCT) / 100 ))
