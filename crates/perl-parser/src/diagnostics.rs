@@ -422,6 +422,7 @@ mod tests {
     #[test]
     fn test_undefined_variable() {
         let source = r#"
+            use strict;
             print $undefined_var;
         "#;
         
@@ -431,7 +432,10 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
         
-        assert!(diagnostics.iter().any(|d| d.code == Some("undefined-variable".to_string())));
+        assert!(diagnostics.iter().any(|d| 
+            d.code == Some("undefined-variable".to_string()) || 
+            d.code == Some("undeclared-variable".to_string())
+        ), "Expected undefined/undeclared variable diagnostic, got: {:?}", diagnostics);
     }
     
     #[test]

@@ -44,7 +44,19 @@ impl ErrorClassifier {
             }
         };
 
-        // Check for common patterns
+        // Check for common patterns - check the entire source for unclosed quotes
+        let quote_count = source.matches('"').count();
+        let single_quote_count = source.matches('\'').count();
+        
+        // Check if we have unclosed quotes
+        if quote_count % 2 != 0 {
+            return ParseErrorKind::UnclosedString;
+        }
+        if single_quote_count % 2 != 0 {
+            return ParseErrorKind::UnclosedString;
+        }
+        
+        // Also check the error text itself
         if error_text.starts_with('"') && !error_text.ends_with('"') {
             return ParseErrorKind::UnclosedString;
         }
