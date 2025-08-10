@@ -8,11 +8,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Provider for finding declarations
-pub struct DeclarationProvider {
+pub struct DeclarationProvider<'a> {
     ast: Arc<Node>,
     content: String,
     document_uri: String,
-    parent_map: HashMap<*const Node, *const Node>,
+    parent_map: Option<&'a HashMap<*const Node, *const Node>>,
 }
 
 /// Represents a location link from origin to target
@@ -28,21 +28,23 @@ pub struct LocationLink {
     pub target_selection_range: (usize, usize),
 }
 
-impl DeclarationProvider {
+impl<'a> DeclarationProvider<'a> {
     pub fn new(ast: Arc<Node>, content: String, document_uri: String) -> Self {
-        let mut parent_map = HashMap::new();
-        Self::build_parent_map(&ast, &mut parent_map, None);
-        
         Self { 
             ast, 
             content,
             document_uri,
-            parent_map,
+            parent_map: None,
         }
     }
     
+    pub fn with_parent_map(mut self, parent_map: &'a HashMap<*const Node, *const Node>) -> Self {
+        self.parent_map = Some(parent_map);
+        self
+    }
+    
     /// Build a parent map for efficient scope walking
-    fn build_parent_map(node: &Node, map: &mut HashMap<*const Node, *const Node>, parent: Option<*const Node>) {
+    pub fn build_parent_map(node: &Node, map: &mut HashMap<*const Node, *const Node>, parent: Option<*const Node>) {
         if let Some(p) = parent {
             map.insert(node as *const _, p);
         }
@@ -72,7 +74,20 @@ impl DeclarationProvider {
         // Walk upwards through scopes to find the nearest declaration
         let mut current_ptr: *const Node = usage as *const _;
         
-        while let Some(&parent_ptr) = self.parent_map.get(&current_ptr) {
+        // Build temporary parent map if not provided (for testing)
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = HashMap::new();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        
+        while let Some(&parent_ptr) = parent_map.get(&current_ptr) {
             let parent = unsafe { &*parent_ptr };
             
             // Check siblings before this node in the current scope
@@ -198,7 +213,20 @@ impl DeclarationProvider {
     fn find_current_package(&self, node: &Node) -> Option<String> {
         let mut current_ptr: *const Node = node as *const _;
         
-        while let Some(&parent_ptr) = self.parent_map.get(&current_ptr) {
+        // Build temporary parent map if not provided (for testing)
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = HashMap::new();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        
+        while let Some(&parent_ptr) = parent_map.get(&current_ptr) {
             let parent = unsafe { &*parent_ptr };
             
             // Check siblings before this node for package declarations
@@ -230,7 +258,7 @@ impl DeclarationProvider {
 
     // Helper methods
 
-    fn find_node_at_offset<'a>(&'a self, node: &'a Node, offset: usize) -> Option<&'a Node> {
+    fn find_node_at_offset<'b>(&'b self, node: &'b Node, offset: usize) -> Option<&'b Node> {
         if offset >= node.location.start && offset <= node.location.end {
             // Check children first for more specific match
             for child in self.get_children(node) {
@@ -243,7 +271,7 @@ impl DeclarationProvider {
         None
     }
 
-    fn collect_subroutine_declarations<'a>(&'a self, node: &'a Node, sub_name: &str, subs: &mut Vec<&'a Node>) {
+    fn collect_subroutine_declarations<'b>(&'b self, node: &'b Node, sub_name: &str, subs: &mut Vec<&'b Node>) {
         if let NodeKind::Subroutine { name, .. } = &node.kind {
             if let Some(name_str) = name {
                 if name_str == sub_name {
@@ -257,13 +285,13 @@ impl DeclarationProvider {
         }
     }
 
-    fn find_package_declarations<'a>(&'a self, node: &'a Node, pkg_name: &str) -> Vec<&'a Node> {
+    fn find_package_declarations<'b>(&'b self, node: &'b Node, pkg_name: &str) -> Vec<&'b Node> {
         let mut packages = Vec::new();
         self.collect_package_declarations(node, pkg_name, &mut packages);
         packages
     }
 
-    fn collect_package_declarations<'a>(&'a self, node: &'a Node, pkg_name: &str, packages: &mut Vec<&'a Node>) {
+    fn collect_package_declarations<'b>(&'b self, node: &'b Node, pkg_name: &str, packages: &mut Vec<&'b Node>) {
         if let NodeKind::Package { name, .. } = &node.kind {
             if name == pkg_name {
                 packages.push(node);
@@ -275,13 +303,13 @@ impl DeclarationProvider {
         }
     }
 
-    fn find_constant_declarations<'a>(&'a self, node: &'a Node, const_name: &str) -> Vec<&'a Node> {
+    fn find_constant_declarations<'b>(&'b self, node: &'b Node, const_name: &str) -> Vec<&'b Node> {
         let mut constants = Vec::new();
         self.collect_constant_declarations(node, const_name, &mut constants);
         constants
     }
 
-    fn collect_constant_declarations<'a>(&'a self, node: &'a Node, const_name: &str, constants: &mut Vec<&'a Node>) {
+    fn collect_constant_declarations<'b>(&'b self, node: &'b Node, const_name: &str, constants: &mut Vec<&'b Node>) {
         if let NodeKind::Use { module, args } = &node.kind {
             if module == "constant" {
                 // Form 1: FOO => ...
@@ -444,7 +472,7 @@ impl DeclarationProvider {
         (decl.location.start, decl.location.end)
     }
 
-    fn get_children<'a>(&self, node: &'a Node) -> Vec<&'a Node> {
+    fn get_children<'b>(&self, node: &'b Node) -> Vec<&'b Node> {
         Self::get_children_static(node)
     }
     
