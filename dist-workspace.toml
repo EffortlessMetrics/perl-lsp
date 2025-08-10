@@ -3,7 +3,7 @@ members = ["cargo:."]
 
 [dist]
 # The binaries to include
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-apple-darwin", "aarch64-unknown-linux-gnu"]
 # Build the most important binaries
 include = ["perl-lsp", "perl-parse"]
 # GitHub CI support
@@ -16,6 +16,8 @@ allow-dirty = ["ci"]
 # Windows path: C:\Users\user\AppData\Local\Programs\project\bin
 install-path = "CARGO_HOME"
 pr-run-mode = "skip"
+# Generate checksums for all artifacts
+checksum = "sha256"
 
 # Create GitHub releases
 [dist.github-releases]
