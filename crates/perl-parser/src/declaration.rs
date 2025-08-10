@@ -282,25 +282,25 @@ impl DeclarationProvider {
     }
 
     fn collect_constant_declarations<'a>(&'a self, node: &'a Node, const_name: &str, constants: &mut Vec<&'a Node>) {
-        // Handle multiple forms of constant declarations
         if let NodeKind::Use { module, args } = &node.kind {
             if module == "constant" {
-                // Form 1: use constant FOO => 42;
-                if !args.is_empty() && args[0] == const_name {
+                // Form 1: FOO => ...
+                if args.first().map(|s| s.as_str()) == Some(const_name) {
+                    constants.push(node);
+                    // keep scanning siblings too (there can be multiple `use constant`)
+                }
+                
+                // Flattened args text once (cheap)
+                let args_text = args.join(" ");
+                
+                // Form 2: { FOO => 1, BAR => 2 }
+                if self.contains_name_in_hash(&args_text, const_name) {
                     constants.push(node);
                 }
                 
-                // Form 2: use constant { FOO => 1, BAR => 2 };
-                // This would need more complex parsing of the args
-                // TODO: Add support for hash form
-                
-                // Form 3: use constant qw(FOO BAR);
-                // Check if const_name is in the qw list
-                for arg in args {
-                    if arg == const_name {
-                        constants.push(node);
-                        break;
-                    }
+                // Form 3: qw(FOO BAR) / qw/FOO BAR/
+                if self.contains_name_in_qw(&args_text, const_name) {
+                    constants.push(node);
                 }
             }
         }
@@ -308,6 +308,90 @@ impl DeclarationProvider {
         for child in self.get_children(node) {
             self.collect_constant_declarations(child, const_name, constants);
         }
+    }
+    
+    fn contains_name_in_hash(&self, s: &str, name: &str) -> bool {
+        // super simple: find any "{ ... }" and check for `name` with word boundaries before `=>`
+        let mut i = 0;
+        while let Some(open) = s[i..].find('{') {
+            let start = i + open + 1;
+            if let Some(close_rel) = s[start..].find('}') {
+                let end = start + close_rel;
+                // only scan that slice
+                if self.find_word(&s[start..end], name).is_some() {
+                    return true;
+                }
+                i = end + 1;
+            } else {
+                break;
+            }
+        }
+        false
+    }
+    
+    fn contains_name_in_qw(&self, s: &str, name: &str) -> bool {
+        // looks for qw(...) / qw[...] / qw/.../ etc.
+        if let Some(qw_pos) = s.find("qw") {
+            // grab the delimiter if present
+            let bytes = s.as_bytes();
+            if qw_pos + 2 < bytes.len() {
+                let delim = bytes[qw_pos + 2] as char;
+                let (open, close) = match delim {
+                    '(' => ('(', ')'),
+                    '[' => ('[', ']'),
+                    '{' => ('{', '}'),
+                    '<' => ('<', '>'),
+                    '/' => ('/', '/'),
+                    _ => return false,
+                };
+                if let Some(start) = s[qw_pos..].find(open) {
+                    let start = qw_pos + start + 1;
+                    if let Some(end_rel) = s[start..].find(close) {
+                        let end = start + end_rel;
+                        // tokens are whitespace separated
+                        return s[start..end].split_whitespace().any(|tok| tok == name);
+                    }
+                }
+            }
+        }
+        false
+    }
+    
+    fn find_word(&self, hay: &str, needle: &str) -> Option<(usize, usize)> {
+        if needle.is_empty() { return None; }
+        let mut find_from = 0;
+        while let Some(hit) = hay[find_from..].find(needle) {
+            let start = find_from + hit;
+            let end = start + needle.len();
+            let left_ok = start == 0 || !Self::is_ident(hay.as_bytes()[start-1] as char);
+            let right_ok = end == hay.len() || !Self::is_ident(hay.as_bytes().get(end).copied().map(|b| b as char).unwrap_or('\0'));
+            if left_ok && right_ok { return Some((start, end)); }
+            find_from = end;
+        }
+        None
+    }
+    
+    fn first_all_caps_word(&self, s: &str) -> Option<(usize, usize)> {
+        // very small scanner: find FOO-ish
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            while i < bytes.len() && !Self::is_ident(bytes[i] as char) { i += 1; }
+            let start = i;
+            while i < bytes.len() && Self::is_ident(bytes[i] as char) { i += 1; }
+            if start < i {
+                let w = &s[start..i];
+                if w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+                    return Some((start, i));
+                }
+            }
+        }
+        None
+    }
+    
+    #[inline]
+    fn is_ident(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '_' || c == ':' // allow Foo::BAR etc.
     }
 
     fn get_subroutine_name_range(&self, decl: &Node) -> (usize, usize) {
@@ -339,8 +423,24 @@ impl DeclarationProvider {
     }
     
     fn get_constant_name_range(&self, decl: &Node) -> (usize, usize) {
-        // For now, return the whole range
-        // TODO: Parse constant name position properly
+        let text = self.get_node_text(decl);
+        
+        // Prefer an exact span if we can find the first occurrence with word boundaries
+        if let NodeKind::Use { args, .. } = &decl.kind {
+            let best_guess = args.first().map(|s| s.as_str()).unwrap_or("");
+            if let Some((lo, hi)) = self.find_word(&text, best_guess) {
+                let abs_lo = decl.location.start + lo;
+                let abs_hi = decl.location.start + hi;
+                return (abs_lo, abs_hi);
+            }
+        }
+        
+        // Try any constant-looking all-caps token in the decl
+        if let Some((lo, hi)) = self.first_all_caps_word(&text) {
+            return (decl.location.start + lo, decl.location.start + hi);
+        }
+        
+        // Fallback to whole range
         (decl.location.start, decl.location.end)
     }
 
