@@ -327,22 +327,27 @@ impl TypeInferenceEngine {
             }
             
             NodeKind::HashLiteral { pairs } => {
-                let mut key_type = Scalar(String);
-                let mut value_type = Any;
-                
-                // Infer types from pairs
-                for (key, val) in pairs {
-                    let key_ty = self.infer_node(key, env)?;
-                    if let Scalar(_) = key_ty {
-                        key_type = key_ty;
-                    }
-                    let val_ty = self.infer_node(val, env)?;
-                    if value_type == Any {
-                        value_type = val_ty;
-                    } else if !self.types_compatible(&value_type, &val_ty) {
-                        value_type = Any;
-                    }
+                if pairs.is_empty() {
+                    return Ok(Hash {
+                        key: Box::new(Scalar(String)),
+                        value: Box::new(Any),
+                    });
                 }
+                
+                // Collect all key and value types
+                let mut key_types = Vec::new();
+                let mut value_types = Vec::new();
+                
+                for (key, val) in pairs {
+                    key_types.push(self.infer_node(key, env)?);
+                    value_types.push(self.infer_node(val, env)?);
+                }
+                
+                // Unify key types (typically strings)
+                let key_type = self.unify_types(&key_types);
+                
+                // Unify value types - use smart unification
+                let value_type = self.unify_types(&value_types);
                 
                 Ok(Hash {
                     key: Box::new(key_type),
@@ -581,6 +586,96 @@ impl TypeInferenceEngine {
         });
     }
 
+    /// Unify a collection of types into a single type
+    fn unify_types(&self, types: &[PerlType]) -> PerlType {
+        use PerlType::*;
+        use ScalarType::*;
+        
+        if types.is_empty() {
+            return Any;
+        }
+        
+        if types.len() == 1 {
+            return types[0].clone();
+        }
+        
+        // Check if all types are the same
+        let first = &types[0];
+        if types.iter().all(|t| self.types_compatible(first, t)) {
+            return first.clone();
+        }
+        
+        // Special case: all scalar types
+        let all_scalars = types.iter().all(|t| matches!(t, Scalar(_)));
+        if all_scalars {
+            // Check if all are numeric
+            let all_numeric = types.iter().all(|t| {
+                matches!(t, Scalar(Integer) | Scalar(Float))
+            });
+            if all_numeric {
+                // If any float, return float, else integer
+                if types.iter().any(|t| matches!(t, Scalar(Float))) {
+                    return Scalar(Float);
+                } else {
+                    return Scalar(Integer);
+                }
+            }
+            
+            // Check if all are strings
+            let all_strings = types.iter().all(|t| matches!(t, Scalar(String)));
+            if all_strings {
+                return Scalar(String);
+            }
+            
+            // Mixed scalar types
+            return Scalar(Mixed);
+        }
+        
+        // Special case: all arrays with same element type
+        let all_arrays = types.iter().all(|t| matches!(t, Array(_)));
+        if all_arrays {
+            let element_types: Vec<PerlType> = types.iter()
+                .filter_map(|t| {
+                    if let Array(elem) = t {
+                        Some(elem.as_ref().clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            return Array(Box::new(self.unify_types(&element_types)));
+        }
+        
+        // Special case: all hashes
+        let all_hashes = types.iter().all(|t| matches!(t, Hash { .. }));
+        if all_hashes {
+            let mut key_types = Vec::new();
+            let mut value_types = Vec::new();
+            
+            for t in types {
+                if let Hash { key, value } = t {
+                    key_types.push(key.as_ref().clone());
+                    value_types.push(value.as_ref().clone());
+                }
+            }
+            
+            return Hash {
+                key: Box::new(self.unify_types(&key_types)),
+                value: Box::new(self.unify_types(&value_types)),
+            };
+        }
+        
+        // Heterogeneous types - create union or return Any
+        if types.len() <= 3 {
+            // Small number of types, use union
+            Union(types.to_vec())
+        } else {
+            // Too many types, use Any
+            Any
+        }
+    }
+    
     /// Check if two types are compatible
     fn types_compatible(&self, t1: &PerlType, t2: &PerlType) -> bool {
         use PerlType::*;
@@ -796,6 +891,66 @@ mod tests {
             engine.get_type_at("mixed"),
             Some(PerlType::Array(_))
         ));
+    }
+    
+    #[test]
+    fn test_hash_type_inference() {
+        let mut engine = TypeInferenceEngine::new();
+        
+        let code = r#"
+            my %numbers = (a => 1, b => 2, c => 3);
+            my %strings = (x => "hello", y => "world");
+            my %mixed = (num => 42, str => "text", float => 3.14);
+        "#;
+        
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let _result = engine.infer(&ast);
+        
+        // Check that hash types are properly inferred
+        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("numbers") {
+            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+        } else {
+            panic!("Expected hash type for numbers");
+        }
+        
+        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("strings") {
+            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::String) | &PerlType::Any));
+        } else {
+            panic!("Expected hash type for strings");
+        }
+        
+        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("mixed") {
+            // Mixed types should unify to Mixed or Any
+            assert!(matches!(value.as_ref(), 
+                &PerlType::Scalar(ScalarType::Mixed) | &PerlType::Any | &PerlType::Union(_)
+            ));
+        } else {
+            panic!("Expected hash type for mixed");
+        }
+    }
+    
+    #[test]
+    fn test_hash_merge_type_inference() {
+        let mut engine = TypeInferenceEngine::new();
+        
+        let code = r#"
+            my %base = (a => 1, b => 2);
+            my %extended = (%base, c => 3, d => 4);
+        "#;
+        
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let _result = engine.infer(&ast);
+        
+        // Both hashes should have integer values
+        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("base") {
+            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+        }
+        
+        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("extended") {
+            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+        }
     }
     
     #[test]
