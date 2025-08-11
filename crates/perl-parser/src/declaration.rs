@@ -39,7 +39,7 @@ impl<'a> DeclarationProvider<'a> {
             content,
             document_uri,
             parent_map: None,
-            doc_version: 0,
+            doc_version: i32::MIN,  // Sentinel value to detect missing with_doc_version() call
         }
     }
     
@@ -59,6 +59,9 @@ impl<'a> DeclarationProvider<'a> {
                 !parent_map.contains_key(&root_ptr),
                 "Root node must have no parent in the parent map"
             );
+            
+            // Cycle detection - ensure no node is its own ancestor
+            Self::debug_assert_no_cycles(parent_map);
         }
         self.parent_map = Some(parent_map);
         self
@@ -73,11 +76,48 @@ impl<'a> DeclarationProvider<'a> {
     #[track_caller]
     fn assert_fresh(&self, current_version: i32) {
         #[cfg(debug_assertions)]
-        debug_assert_eq!(
-            self.doc_version, current_version,
-            "DeclarationProvider used after AST refresh (provider version: {}, current: {})",
-            self.doc_version, current_version
-        );
+        {
+            debug_assert!(
+                self.doc_version != i32::MIN,
+                "DeclarationProvider: with_doc_version() not called - provider must be initialized with document version"
+            );
+            debug_assert_eq!(
+                self.doc_version, current_version,
+                "DeclarationProvider used after AST refresh (provider version: {}, current: {})",
+                self.doc_version, current_version
+            );
+        }
+        
+        // Suppress unused warning in release builds
+        #[cfg(not(debug_assertions))]
+        let _ = current_version;
+    }
+    
+    /// Debug-only cycle detection for parent map
+    #[cfg(debug_assertions)]
+    fn debug_assert_no_cycles(parent_map: &ParentMap) {
+        // For each node in the map, climb up to ensure we don't hit a cycle
+        let cap = parent_map.len() + 1;  // Max depth before assuming cycle
+        
+        for (&child, _) in parent_map.iter() {
+            let mut current = child;
+            let mut depth = 0;
+            
+            while depth < cap {
+                if let Some(&parent) = parent_map.get(&current) {
+                    current = parent;
+                    depth += 1;
+                } else {
+                    // Reached a node with no parent (root), no cycle
+                    break;
+                }
+            }
+            
+            // If we exhausted the cap, we have a cycle
+            if depth >= cap {
+                panic!("Cycle detected in ParentMap - node is its own ancestor");
+            }
+        }
     }
     
     /// Build a parent map for efficient scope walking

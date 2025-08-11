@@ -71,16 +71,56 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
         
       - name: Assert cached position converters are used
+        if: runner.os != 'Windows'
         run: |
           set -euo pipefail
-          # Fail if any old helpers are referenced outside test-only definitions
-          if rg -n "offset_to_position\(|position_to_offset\(" \
-               crates/perl-parser/src/lsp_server.rs \
-               | grep -vE "^(2486|2516):"; then
-            echo "ERROR: Found uncached position conversions in lsp_server.rs"
-            echo "All position conversions must use cached pos16_to_offset() and offset_to_pos16()"
-            exit 1
+          # Check for any usage of uncached position converters outside the test-only block
+          if rg -n 'offset_to_position\(|position_to_offset\(' crates/perl-parser/src/lsp_server.rs > /tmp/hits.txt 2>/dev/null; then
+            # Filter out lines within the marked test-only block
+            awk '
+              /=== BEGIN_TEST_ONLY_POSITION_HELPERS ===/ {allow=1; next}
+              /=== END_TEST_ONLY_POSITION_HELPERS ===/   {allow=0; next}
+              {if (!allow) print}
+            ' crates/perl-parser/src/lsp_server.rs | \
+            rg -n 'offset_to_position\(|position_to_offset\(' > /tmp/bad.txt 2>/dev/null || true
+            
+            if [ -s /tmp/bad.txt ]; then
+              echo "ERROR: Uncached position conversions found outside test block:"
+              cat /tmp/bad.txt
+              echo ""
+              echo "All position conversions must use cached pos16_to_offset() and offset_to_pos16()"
+              exit 1
+            fi
           fi
+      
+      - name: Assert cached position converters are used (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Check for usage outside test block
+          $content = Get-Content "crates/perl-parser/src/lsp_server.rs" -Raw
+          $lines = $content -split "`n"
+          
+          $inTestBlock = $false
+          $badLines = @()
+          
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+              $line = $lines[$i]
+              if ($line -match "=== BEGIN_TEST_ONLY_POSITION_HELPERS ===") {
+                  $inTestBlock = $true
+              } elseif ($line -match "=== END_TEST_ONLY_POSITION_HELPERS ===") {
+                  $inTestBlock = $false
+              } elseif (-not $inTestBlock -and ($line -match "offset_to_position\(" -or $line -match "position_to_offset\(")) {
+                  $badLines += "${i}:$line"
+              }
+          }
+          
+          if ($badLines.Count -gt 0) {
+              Write-Error "ERROR: Uncached position conversions found outside test block:"
+              $badLines | ForEach-Object { Write-Host $_ }
+              Write-Error "All position conversions must use cached pos16_to_offset() and offset_to_pos16()"
+              exit 1
+          }
         
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck

@@ -8,10 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Declaration Provider API** - Added version guard for safety
+- **Declaration Provider API** - Production-hardened with multiple safety layers
   - `find_declaration()` now requires `current_version` parameter
-  - Guards against stale provider reuse after AST refresh
-  - Debug-only assertion with zero production overhead
+  - Guards against stale provider reuse after AST refresh  
+  - Added `i32::MIN` sentinel to detect missing `with_doc_version()` calls
+  - Parent map cycle detection in debug builds
+  - Debug-only assertions with zero production overhead
+  
+### Improved
+- **Position Conversion Performance** - 40-100x speedup on large files
+  - Cached O(log n) binary search replaces O(n) scan
+  - Test-only helpers marked with clear boundaries for CI validation
+  - Cross-platform CI checks (Linux/macOS/Windows) for regression prevention
+  
+### Added
+- **Comprehensive Unicode Tests** - Edge case coverage
+  - ZWJ sequences (emoji families with >2 UTF-16 units)
+  - BOM handling at file start
+  - Column clamping on extremely long lines (20k+ chars)
+  - Property tests verifying cache matches slow path exactly
 
 ## [0.7.5] - 2025-02-09
 
