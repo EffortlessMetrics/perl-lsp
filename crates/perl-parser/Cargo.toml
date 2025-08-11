@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.7.5"
+version = "0.8.0"
 edition = "2024"
 authors = ["Tree-sitter Perl Contributors"]
 description = "A high-performance Perl parser with full Language Server Protocol support"
@@ -13,7 +13,7 @@ keywords = ["perl", "parser", "lsp", "language-server", "ast"]
 categories = ["parsing", "development-tools", "text-editors"]
 
 [dependencies]
-perl-lexer = { version = "0.7.5", path = "../perl-lexer" }
+perl-lexer = { version = "0.8.0", path = "../perl-lexer" }
 thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"

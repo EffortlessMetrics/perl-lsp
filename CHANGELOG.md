@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2025-02-13
 
+### ⚠️ Breaking Changes
+- **Declaration Provider API** - Production-hardened with mandatory version tracking
+  - **BREAKING**: `find_declaration()` now requires `current_version: i32` parameter
+  - **BREAKING**: Must call `.with_doc_version()` after construction
+  - Migration: Pass server's `doc_version` to `find_declaration(offset, col, doc_version)`
+  
 ### Changed
-- **Declaration Provider API** - Production-hardened with multiple safety layers
-  - `find_declaration()` now requires `current_version` parameter
+- **Declaration Provider Safety** - Multiple protection layers
   - Guards against stale provider reuse after AST refresh  
   - Added `i32::MIN` sentinel to detect missing `with_doc_version()` calls
   - Parent map cycle detection in debug builds
