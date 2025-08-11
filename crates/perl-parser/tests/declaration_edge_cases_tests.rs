@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod declaration_edge_cases_tests {
-    use perl_parser::{Parser, lsp_server::LspServer};
+    use perl_parser::Parser;
     use perl_parser::declaration::DeclarationProvider;
     use std::sync::Arc;
     
@@ -13,7 +13,7 @@ mod declaration_edge_cases_tests {
             ast_arc,
             code.to_string(),
             "file:///test.pl".to_string()
-        )
+        ).with_doc_version(0)
     }
     
     #[test]
@@ -22,7 +22,7 @@ mod declaration_edge_cases_tests {
         let provider = parse_and_get_provider(code);
         
         // Should find FOO despite -strict option
-        let decls = provider.find_declarations(11, 43);  // Position at FOO usage
+        let decls = provider.find_declaration(43, 0).unwrap_or_default();  // Position at FOO usage
         assert!(!decls.is_empty(), "Should find FOO constant despite -strict option");
         
         // Verify the declaration points to the right place
@@ -54,7 +54,7 @@ my $x = FOO;
         let provider = parse_and_get_provider(code);
         
         // Should find FOO with pipe delimiters
-        let decls = provider.find_declarations(11, code.find("my $x = FOO").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = FOO").unwrap() + 8, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find FOO with pipe delimiters");
     }
     
@@ -69,7 +69,7 @@ my $x = FOO;
         let provider = parse_and_get_provider(code);
         
         // Should still find FOO despite qwerty in comment
-        let decls = provider.find_declarations(11, code.find("my $x = FOO").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = FOO").unwrap() + 8, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find FOO despite qwerty in comment");
     }
     
@@ -82,7 +82,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should find BAR from the second qw
-        let decls = provider.find_declarations(11, code.find("my $x = BAR").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = BAR").unwrap() + 8, 0).unwrap_or_default();
         // This is a complex case that may not be fully supported yet
         // Just verify we don't crash
         let _ = decls;
@@ -97,7 +97,7 @@ my $x = FOO;
         let provider = parse_and_get_provider(code);
         
         // Should find FOO despite unary + before hash
-        let decls = provider.find_declarations(11, code.find("my $x = FOO").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = FOO").unwrap() + 8, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find FOO with unary + before hash");
     }
     
@@ -116,7 +116,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should find BAR from the second hash block
-        let decls = provider.find_declarations(11, code.find("my $x = BAR").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = BAR").unwrap() + 8, 0).unwrap_or_default();
         // Verify we scan all {...} blocks
         assert!(!decls.is_empty() || true, "Should scan all hash blocks (or gracefully handle)");
     }
@@ -127,7 +127,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should handle mixed line endings
-        let decls = provider.find_declarations(11, code.find("my $x = BAR").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = BAR").unwrap() + 8, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find BAR with mixed line endings");
     }
     
@@ -137,7 +137,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should find π constant
-        let decls = provider.find_declarations(11, code.find("2 * π").unwrap() + 4);
+        let decls = provider.find_declaration(code.find("2 * π").unwrap() + 4, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find Unicode constant name π");
     }
     
@@ -148,7 +148,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // This form may not be fully supported, but shouldn't crash
-        let decls = provider.find_declarations(11, code.find("my $x = FOO").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = FOO").unwrap() + 8, 0).unwrap_or_default();
         let _ = decls;  // Just verify no panic
     }
     
@@ -174,7 +174,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should find BAR despite nested braces
-        let decls = provider.find_declarations(11, code.find("my $x = BAR").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = BAR").unwrap() + 8, 0).unwrap_or_default();
         // Complex nested structure may be challenging
         let _ = decls;
     }
@@ -192,7 +192,7 @@ my $x = BAR;
         let provider = parse_and_get_provider(code);
         
         // Should find BAR in multi-line qw
-        let decls = provider.find_declarations(11, code.find("my $x = BAR").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = BAR").unwrap() + 8, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find BAR in multi-line qw");
     }
     
@@ -206,7 +206,7 @@ my $x = FOO;
         let provider = parse_and_get_provider(code);
         
         // Should find both FOO definitions
-        let decls = provider.find_declarations(11, code.find("my $x = FOO").unwrap() + 8);
+        let decls = provider.find_declaration(code.find("my $x = FOO").unwrap() + 8, 0).unwrap_or_default();
         // May find one or both - just verify no crash
         let _ = decls;
     }
@@ -222,7 +222,7 @@ my $x = Foo::BAR;
         let provider = parse_and_get_provider(code);
         
         // Should handle package-qualified constants
-        let decls = provider.find_declarations(11, code.find("Foo::BAR").unwrap() + 5);
+        let decls = provider.find_declaration(code.find("Foo::BAR").unwrap() + 5, 0).unwrap_or_default();
         // Package-qualified lookups are complex
         let _ = decls;
     }

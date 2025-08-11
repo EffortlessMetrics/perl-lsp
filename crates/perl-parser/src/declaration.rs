@@ -12,7 +12,7 @@ pub type ParentMap = FxHashMap<*const Node, *const Node>;
 
 /// Provider for finding declarations
 pub struct DeclarationProvider<'a> {
-    ast: Arc<Node>,
+    pub ast: Arc<Node>,
     content: String,
     document_uri: String,
     parent_map: Option<&'a ParentMap>,
@@ -722,7 +722,7 @@ impl<'a> DeclarationProvider<'a> {
         }
     }
 
-    fn get_node_text(&self, node: &Node) -> String {
+    pub fn get_node_text(&self, node: &Node) -> String {
         self.content[node.location.start..node.location.end].to_string()
     }
 }
