@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Declaration Provider API** - Added version guard for safety
+  - `find_declaration()` now requires `current_version` parameter
+  - Guards against stale provider reuse after AST refresh
+  - Debug-only assertion with zero production overhead
+
 ## [0.7.5] - 2025-02-09
 
 ### 🚀 Release Infrastructure
