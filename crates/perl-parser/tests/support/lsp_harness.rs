@@ -4,7 +4,7 @@
 
 use perl_parser::lsp_server::LspServer;
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Cursor, Write};
+use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::collections::VecDeque;

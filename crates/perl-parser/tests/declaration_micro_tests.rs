@@ -18,7 +18,8 @@ mod declaration_micro_tests {
         // Create provider - we need to leak to satisfy lifetime
         let leaked_map = Box::leak(Box::new(parent_map));
         let provider = DeclarationProvider::new(ast_arc.clone(), code.to_string(), "test.pl".to_string())
-            .with_parent_map(leaked_map);
+            .with_parent_map(leaked_map)
+            .with_doc_version(0);
         
         (provider, leaked_map.clone(), ast_arc)
     }
@@ -29,7 +30,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // FOO at position 38-41
-        let links = provider.find_declaration(38);
+        let links = provider.find_declaration(38, 0);
         assert!(links.is_some(), "Should find declaration for FOO");
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
@@ -42,7 +43,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // BAR at print position
-        let links = provider.find_declaration(55);
+        let links = provider.find_declaration(55, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find declaration for BAR with options");
     }
     
@@ -52,7 +53,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // FOO at print position  
-        let links = provider.find_declaration(32);
+        let links = provider.find_declaration(32, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find FOO in qw|...|");
     }
     
@@ -62,7 +63,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // QUX at print position
-        let links = provider.find_declaration(32);
+        let links = provider.find_declaration(32, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find QUX in qw!...!");
     }
     
@@ -72,7 +73,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // qwerty at print position - should find the variable, not think it's qw
-        let links = provider.find_declaration(27);
+        let links = provider.find_declaration(27, 0);
         assert!(links.is_some(), "Should find qwerty variable");
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
@@ -86,7 +87,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // BAR at print position
-        let links = provider.find_declaration(51);
+        let links = provider.find_declaration(51, 0);
         assert!(links.is_some(), "Should find BAR from second qw");
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
@@ -100,7 +101,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // $var at print position
-        let links = provider.find_declaration(36);
+        let links = provider.find_declaration(36, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find $var despite qw in comment");
     }
     
@@ -110,7 +111,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // FOO at print position
-        let links = provider.find_declaration(45);
+        let links = provider.find_declaration(45, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find FOO in +{{...}}");
     }
     
@@ -120,7 +121,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // $x at print position - should still work with empty qw
-        let links = provider.find_declaration(37);
+        let links = provider.find_declaration(37, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find $x despite empty qw()");
     }
     
@@ -130,7 +131,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // BAR at print position
-        let links = provider.find_declaration(58);
+        let links = provider.find_declaration(58, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find BAR despite nested braces");
     }
     
@@ -140,7 +141,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // FOO at print position
-        let links = provider.find_declaration(42);
+        let links = provider.find_declaration(42, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find FOO in multi-line qw");
     }
     
@@ -150,7 +151,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // π at print position
-        let links = provider.find_declaration(33);
+        let links = provider.find_declaration(33, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find Unicode constant π");
     }
     
@@ -161,7 +162,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // $🐍 at print position
-        let links = provider.find_declaration(27);
+        let links = provider.find_declaration(27, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find emoji variable with CRLF");
     }
     
@@ -171,7 +172,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // FOO at print position
-        let links = provider.find_declaration(35);
+        let links = provider.find_declaration(35, 0);
         assert!(links.is_some(), "Should find simple arrow constant");
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
@@ -184,7 +185,7 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code);
         
         // B at print position - should find it in second hash
-        let links = provider.find_declaration(43);
+        let links = provider.find_declaration(43, 0);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find B in second hash block");
     }
 
@@ -195,7 +196,7 @@ mod declaration_micro_tests {
 
         // offset for FOO in `print FOO, BAR;`
         let foo_off = code.find("FOO,").unwrap();
-        let foo_links = provider.find_declaration(foo_off);
+        let foo_links = provider.find_declaration(foo_off, 0);
         assert!(foo_links.is_some(), "Should find FOO");
         let foo_links = foo_links.unwrap();
         assert!(!foo_links.is_empty(), "Should have at least one link for FOO");
@@ -204,7 +205,7 @@ mod declaration_micro_tests {
 
         // offset for BAR
         let bar_off = code.find(" BAR;").unwrap() + 1;
-        let bar_links = provider.find_declaration(bar_off);
+        let bar_links = provider.find_declaration(bar_off, 0);
         assert!(bar_links.is_some(), "Should find BAR");
         let bar_links = bar_links.unwrap();
         assert!(!bar_links.is_empty(), "Should have at least one link for BAR");

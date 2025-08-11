@@ -200,7 +200,7 @@ impl LspServer {
 
         loop {
             // Read LSP message
-            if let Some(request) = self.read_message(&mut reader)? {
+            if let Some(request) = self.read_message_from(&mut reader)? {
                 eprintln!("Received request: {}", request.method);
                 
                 // Handle the request
@@ -212,8 +212,37 @@ impl LspServer {
         }
     }
 
-    /// Read an LSP message from stdin
-    fn read_message(&self, reader: &mut BufReader<io::StdinLock>) -> io::Result<Option<JsonRpcRequest>> {
+
+    /// Send an LSP message to stdout
+    fn send_message(&self, stdout: &mut io::StdoutLock, response: &JsonRpcResponse) -> io::Result<()> {
+        let content = serde_json::to_string(response)?;
+        let content_length = content.len();
+        
+        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
+        stdout.flush()?;
+        
+        Ok(())
+    }
+
+    /// Handle a message from any reader (for testing)
+    pub fn handle_message<R: Read>(&mut self, reader: &mut R) -> io::Result<()> {
+        let mut buf_reader = BufReader::new(reader);
+        if let Some(request) = self.read_message_from(&mut buf_reader)? {
+            if let Some(response) = self.handle_request(request) {
+                // Write response to the configured output
+                if let Ok(mut output) = self.output.lock() {
+                    let content = serde_json::to_string(&response)?;
+                    let content_length = content.len();
+                    write!(output, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
+                    output.flush()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Read an LSP message from any BufRead source
+    fn read_message_from<R: BufRead>(&self, reader: &mut R) -> io::Result<Option<JsonRpcRequest>> {
         let mut headers = HashMap::new();
         
         // Read headers
@@ -247,17 +276,6 @@ impl LspServer {
         }
         
         Ok(None)
-    }
-
-    /// Send an LSP message to stdout
-    fn send_message(&self, stdout: &mut io::StdoutLock, response: &JsonRpcResponse) -> io::Result<()> {
-        let content = serde_json::to_string(response)?;
-        let content_length = content.len();
-        
-        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-        stdout.flush()?;
-        
-        Ok(())
     }
 
     /// Handle a JSON-RPC request
@@ -461,11 +479,9 @@ impl LspServer {
                 "commands": [
                     "perl.runTest", 
                     "perl.runTestFile", 
-                    "perl.debugTest",
                     "perl.runTests",
                     "perl.runFile",
-                    "perl.runTestSub",
-                    "perl.debugTests"
+                    "perl.runTestSub"
                 ]
             },
             "experimental": {
@@ -2482,9 +2498,8 @@ impl LspServer {
 
     // === BEGIN_TEST_ONLY_POSITION_HELPERS ===
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
-    #[cfg(test)]
     #[allow(deprecated)]
-    fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
+    pub fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
@@ -2513,9 +2528,8 @@ impl LspServer {
     }
 
     /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
-    #[cfg(test)]
     #[allow(deprecated)]
-    fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
+    pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
@@ -3292,7 +3306,7 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
@@ -3303,10 +3317,6 @@ impl LspServer {
                             });
                         }
                     }
-                }
-                "perl.debugTest" => {
-                    // TODO: Implement test debugging
-                    return Ok(Some(json!({"status": "not_implemented"})));
                 }
                 _ => {
                     return Err(JsonRpcError {
