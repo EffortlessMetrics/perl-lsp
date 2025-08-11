@@ -436,7 +436,7 @@ impl LspServer {
         let mut capabilities = json!({
             "textDocumentSync": {
                 "openClose": true,
-                "change": 2, // 2 = Incremental sync (with full sync fallback)
+                "change": 1, // 1 = Full document sync (honest about current implementation)
                 "willSave": true,
                 "willSaveWaitUntil": false, // Only enable when formatter is available
                 "save": {
