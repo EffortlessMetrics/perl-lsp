@@ -57,9 +57,12 @@ pub mod incremental_simple;
 #[cfg(feature = "incremental")]
 pub mod incremental_v2;
 pub mod lsp_server;
+pub mod lsp_incremental_adapter;
 // pub mod lsp_server_incremental; // TODO: Fix imports
 #[cfg(feature = "incremental")]
 pub mod lsp_server_incremental_v2;
+#[cfg(feature = "incremental")]
+pub mod incremental_integration;
 pub mod parser;
 pub mod parser_context;
 pub mod position;
