@@ -1,23 +1,26 @@
 [workspace]
 members = ["cargo:."]
 
+# Config for 'dist'
 [dist]
 # The binaries to include
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-apple-darwin", "aarch64-unknown-linux-gnu"]
-# Build the most important binaries
 include = ["perl-lsp", "perl-parse"]
-# GitHub CI support
-ci = ["github"]
-# Create installers
-installers = ["shell", "powershell"]
-# Auto-detect the targets
-allow-dirty = ["ci"]
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell", "powershell", "homebrew"]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.29.0"
 # Unix path: /home/user/.local/bin
 # Windows path: C:\Users\user\AppData\Local\Programs\project\bin
 install-path = "CARGO_HOME"
 pr-run-mode = "skip"
 # Generate checksums for all artifacts
 checksum = "sha256"
+# Allow dirty for CI regeneration
+allow-dirty = ["ci"]
 
 # Create GitHub releases
 [dist.github-releases]

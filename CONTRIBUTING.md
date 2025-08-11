@@ -215,6 +215,73 @@ fn test_exponentiation() {
 }
 ```
 
+## VSCode Extension Development
+
+### Running Extension Locally
+
+1. **Setup Development Environment**
+   ```bash
+   cd vscode-extension
+   npm install
+   npm run compile
+   ```
+
+2. **Launch Extension in Debug Mode**
+   - Open VSCode in the `vscode-extension` directory
+   - Press `F5` to launch a new VSCode instance with the extension loaded
+   - The extension will use the development version
+
+3. **Configure Local LSP Server**
+   
+   For testing with a local LSP server build:
+   ```json
+   // .vscode/settings.json in test workspace
+   {
+     "perl-lsp.serverPath": "/path/to/your/target/debug/perl-lsp",
+     "perl-lsp.autoDownload": false
+   }
+   ```
+
+4. **Debug Extension and Server Together**
+   ```bash
+   # Terminal 1: Build and run LSP with logging
+   cargo build -p perl-parser --bin perl-lsp
+   RUST_LOG=debug target/debug/perl-lsp --stdio --log
+   
+   # Terminal 2: Launch VSCode extension
+   cd vscode-extension
+   code .
+   # Press F5 to debug
+   ```
+
+5. **Test Auto-Download Feature**
+   - Remove local perl-lsp from PATH
+   - Set `"perl-lsp.autoDownload": true`
+   - Extension will download from GitHub releases
+
+### Publishing Extension
+
+1. **Update Version**
+   ```bash
+   cd vscode-extension
+   npm version patch/minor/major
+   ```
+
+2. **Package Extension**
+   ```bash
+   npm run package
+   # Creates perl-lsp-x.x.x.vsix
+   ```
+
+3. **Test VSIX Locally**
+   ```bash
+   code --install-extension perl-lsp-x.x.x.vsix
+   ```
+
+4. **Publish to Marketplace**
+   - Automated via GitHub Actions on tag push
+   - Manual: `vsce publish` (requires VSCE_PAT)
+
 ## LSP Development
 
 ### Adding LSP Features
