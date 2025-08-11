@@ -15,7 +15,7 @@ fn test_var_decl_in_same_block() {
     );
     
     // Find the usage of $x at position 11 (the $x in "$x + 1")
-    let links = provider.find_declaration(11);
+    let links = provider.find_declaration(11, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -43,7 +43,7 @@ my $x = 1;
     
     // Find the usage of $x inside the block
     let usage_pos = content.find("$x;").expect("Could not find usage");
-    let links = provider.find_declaration(usage_pos);
+    let links = provider.find_declaration(usage_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -75,7 +75,7 @@ foo();
     
     // Find the call to foo()
     let call_pos = content.find("foo()").expect("Could not find call");
-    let links = provider.find_declaration(call_pos);
+    let links = provider.find_declaration(call_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -106,7 +106,7 @@ Foo::bar();
     
     // Find the call to Foo::bar()
     let call_pos = content.find("bar()").expect("Could not find call");
-    let links = provider.find_declaration(call_pos);
+    let links = provider.find_declaration(call_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -140,7 +140,7 @@ print QUX;
     
     // Test FOO (simple form)
     let foo_usage = content.rfind("FOO").expect("Could not find FOO usage");
-    let links = provider.find_declaration(foo_usage);
+    let links = provider.find_declaration(foo_usage, 0);
     assert!(links.is_some(), "Should find FOO declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -152,12 +152,12 @@ print QUX;
     
     // Test BAR (hash form)
     let bar_usage = content.rfind("BAR").expect("Could not find BAR usage");
-    let links = provider.find_declaration(bar_usage);
+    let links = provider.find_declaration(bar_usage, 0);
     assert!(links.is_some(), "Should find BAR declaration");
     
     // Test QUX (qw form)
     let qux_usage = content.rfind("QUX").expect("Could not find QUX usage");
-    let links = provider.find_declaration(qux_usage);
+    let links = provider.find_declaration(qux_usage, 0);
     assert!(links.is_some(), "Should find QUX declaration");
 }
 
@@ -176,7 +176,7 @@ fn test_unicode_and_crlf() {
     
     // Find usage of $π
     let pi_usage = content.rfind("$π++").expect("Could not find π usage");
-    let links = provider.find_declaration(pi_usage);
+    let links = provider.find_declaration(pi_usage, 0);
     assert!(links.is_some(), "Should find π declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
@@ -188,7 +188,7 @@ fn test_unicode_and_crlf() {
     
     // Find usage of $🐍 (snake emoji - surrogate pair)
     let snake_usage = content.rfind("$🐍;").expect("Could not find snake usage");
-    let links = provider.find_declaration(snake_usage);
+    let links = provider.find_declaration(snake_usage, 0);
     assert!(links.is_some(), "Should find snake declaration");
     
     // Test UTF-16 position round-trip
@@ -218,11 +218,11 @@ métód_π();
     
     // Test _priv (private sub with underscore)
     let priv_call = content.rfind("_priv()").expect("Could not find _priv call");
-    let links = provider.find_declaration(priv_call);
+    let links = provider.find_declaration(priv_call, 0);
     assert!(links.is_some(), "Should find _priv declaration");
     
     // Test métód_π (unicode method name)
     let unicode_call = content.rfind("métód_π()").expect("Could not find unicode call");
-    let links = provider.find_declaration(unicode_call);
+    let links = provider.find_declaration(unicode_call, 0);
     assert!(links.is_some(), "Should find unicode method declaration");
 }
