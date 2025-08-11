@@ -2,7 +2,7 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "tree-sitter-perl",
   "engines": {
     "vscode": "^1.75.0"
@@ -21,7 +21,9 @@
     "tree-sitter",
     "intellisense"
   ],
-  "extensionKind": ["workspace"],
+  "extensionKind": [
+    "workspace"
+  ],
   "capabilities": {
     "virtualWorkspaces": true,
     "untrustedWorkspaces": {
@@ -50,8 +52,18 @@
     "languages": [
       {
         "id": "perl",
-        "aliases": ["Perl", "perl", "Perl 5"],
-        "extensions": [".pl", ".pm", ".pod", ".t", ".psgi"],
+        "aliases": [
+          "Perl",
+          "perl",
+          "Perl 5"
+        ],
+        "extensions": [
+          ".pl",
+          ".pm",
+          ".pod",
+          ".t",
+          ".psgi"
+        ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
       }
@@ -71,9 +83,13 @@
         },
         "perl-lsp.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
-          "description": "Trace LSP communication for debugging"
+          "description": "Trace server communication for debugging"
         },
         "perl-lsp.enableDiagnostics": {
           "type": "boolean",
@@ -107,19 +123,16 @@
         },
         "perl-lsp.includePaths": {
           "type": "array",
-          "default": ["lib", "local/lib/perl5"],
+          "default": [
+            "lib",
+            "local/lib/perl5"
+          ],
           "description": "Additional paths to search for Perl modules"
         },
         "perl-lsp.enableTestIntegration": {
           "type": "boolean",
           "default": true,
           "description": "Enable Test::More and Test2 integration"
-        },
-        "perl-lsp.trace.server": {
-          "type": "string",
-          "enum": ["off", "messages", "verbose"],
-          "default": "off",
-          "description": "Trace server communication for debugging"
         }
       }
     },
@@ -185,7 +198,9 @@
     "taskDefinitions": [
       {
         "type": "perl",
-        "required": ["script"],
+        "required": [
+          "script"
+        ],
         "properties": {
           "script": {
             "type": "string",
