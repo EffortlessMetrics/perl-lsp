@@ -38,36 +38,41 @@ impl LspServer {
                 let text = changes[0]["text"].as_str().unwrap_or_default();
                 doc.content = text.to_string();
             } else {
-                // Incremental updates using rope for efficient editing
-                let mut rope = Rope::from_str(&doc.content);
-                
+                // Incremental updates using rope; keep a mapper in sync
+                let mut rope   = Rope::from_str(&doc.content);
+                let mut mapper = PositionMapper::new(&doc.content);
+
                 for change in changes {
                     if let Some(range) = change.get("range") {
                         let text = change["text"].as_str().unwrap_or_default();
-                        let mapper = PositionMapper::new(&doc.content);
-                        
-                        // Convert LSP positions to char indices
+
+                        // LSP positions (UTF-16 cols) → byte offsets via mapper
                         let start_pos = Position {
-                            line: range["start"]["line"].as_u64().unwrap_or(0) as u32,
+                            line:      range["start"]["line"].as_u64().unwrap_or(0) as u32,
                             character: range["start"]["character"].as_u64().unwrap_or(0) as u32,
                         };
                         let end_pos = Position {
-                            line: range["end"]["line"].as_u64().unwrap_or(0) as u32,
+                            line:      range["end"]["line"].as_u64().unwrap_or(0) as u32,
                             character: range["end"]["character"].as_u64().unwrap_or(0) as u32,
                         };
-                        
-                        // Use the new lsp_pos_to_char method for direct char conversion
-                        if let (Some(start_char), Some(end_char)) = 
-                            (mapper.lsp_pos_to_char(start_pos), 
-                             mapper.lsp_pos_to_char(end_pos)) {
-                            // Apply edit to rope (efficient in-place modification)
+
+                        if let (Some(start_byte), Some(end_byte)) =
+                            (mapper.lsp_pos_to_byte(start_pos), mapper.lsp_pos_to_byte(end_pos))
+                        {
+                            // Rope uses char indices, convert bytes → chars once
+                            let start_char = rope.byte_to_char(start_byte);
+                            let end_char   = rope.byte_to_char(end_byte);
+
                             rope.remove(start_char..end_char);
                             rope.insert(start_char, text);
+
+                            // Keep mapper consistent for subsequent changes
+                            mapper.apply_edit(start_byte, end_byte, text);
                         }
                     }
                 }
-                
-                // Convert rope back to string
+
+                // Commit edited rope to the document once
                 doc.content = rope.to_string();
             }
             
