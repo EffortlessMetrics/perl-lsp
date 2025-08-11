@@ -655,8 +655,8 @@ impl LspServer {
                 let lsp_diagnostics: Vec<Value> = diagnostics
                     .into_iter()
                     .map(|d| {
-                        let (start_line, start_char) = self.offset_to_position(&doc.content, d.range.0);
-                        let (end_line, end_char) = self.offset_to_position(&doc.content, d.range.1);
+                        let (start_line, start_char) = self.offset_to_pos16(doc, d.range.0);
+                        let (end_line, end_char) = self.offset_to_pos16(doc, d.range.1);
                         
                         json!({
                             "range": {
@@ -730,8 +730,8 @@ impl LspServer {
                     
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics.iter().map(|diag| {
-                        let (start_line, start_char) = self.offset_to_position(&doc.content, diag.range.0);
-                        let (end_line, end_char) = self.offset_to_position(&doc.content, diag.range.1);
+                        let (start_line, start_char) = self.offset_to_pos16(doc, diag.range.0);
+                        let (end_line, end_char) = self.offset_to_pos16(doc, diag.range.1);
                         
                         json!({
                             "range": {
@@ -858,7 +858,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ast) = &doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     let provider = CompletionProvider::new(ast);
                     let completions = provider.get_completions(&doc.content, offset);
@@ -904,8 +904,8 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ast) = &doc.ast {
-                    let start_offset = self.position_to_offset(&doc.content, start_line, start_char);
-                    let end_offset = self.position_to_offset(&doc.content, end_line, end_char);
+                    let start_offset = self.pos16_to_offset(doc, start_line, start_char);
+                    let end_offset = self.pos16_to_offset(doc, end_line, end_char);
                     
                     // Get diagnostics from the document
                     let diag_provider = DiagnosticsProvider::new(ast, doc.content.clone());
@@ -920,8 +920,8 @@ impl LspServer {
                     
                     for action in quick_fixes {
                         let mut changes = HashMap::new();
-                        let (start_line, start_char) = self.offset_to_position(&doc.content, action.edit.range.0);
-                        let (end_line, end_char) = self.offset_to_position(&doc.content, action.edit.range.1);
+                        let (start_line, start_char) = self.offset_to_pos16(doc, action.edit.range.0);
+                        let (end_line, end_char) = self.offset_to_pos16(doc, action.edit.range.1);
                         
                         let edits = vec![json!({
                             "range": {
@@ -956,8 +956,8 @@ impl LspServer {
                         let edits: Vec<Value> = action.edit.changes
                             .into_iter()
                             .map(|edit| {
-                                let (start_line, start_char) = self.offset_to_position(&doc.content, edit.location.start);
-                                let (end_line, end_char) = self.offset_to_position(&doc.content, edit.location.end);
+                                let (start_line, start_char) = self.offset_to_pos16(doc, edit.location.start);
+                                let (end_line, end_char) = self.offset_to_pos16(doc, edit.location.end);
                                 json!({
                                     "range": {
                                         "start": {"line": start_line, "character": start_char},
@@ -1002,7 +1002,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(_ast) = &doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // For now, just show the token at position
                     let hover_text = self.get_token_at_position(&doc.content, offset);
@@ -1031,7 +1031,7 @@ impl LspServer {
             
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                let offset = self.position_to_offset(&doc.content, line, character);
+                let offset = self.pos16_to_offset(doc, line, character);
                 
                 // Find the function call context at this position
                 if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
@@ -1504,14 +1504,16 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Use the Declaration provider - ast is already an Arc
                     let provider = crate::declaration::DeclarationProvider::new(
                         ast.clone(),
                         doc.content.clone(),
                         uri.to_string()
-                    ).with_parent_map(&doc.parent_map);
+                    )
+                    .with_parent_map(&doc.parent_map)
+                    .with_doc_version(doc._version);
                     
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset) {
@@ -1520,19 +1522,19 @@ impl LspServer {
                             // Return LocationLink format
                             let result: Vec<Value> = location_links.iter().map(|link| {
                                 let (orig_start_line, orig_start_char) = 
-                                    self.offset_to_position(&doc.content, link.origin_selection_range.0);
+                                    self.offset_to_pos16(doc, link.origin_selection_range.0);
                                 let (orig_end_line, orig_end_char) = 
-                                    self.offset_to_position(&doc.content, link.origin_selection_range.1);
+                                    self.offset_to_pos16(doc, link.origin_selection_range.1);
                                 
                                 let (target_start_line, target_start_char) = 
-                                    self.offset_to_position(&doc.content, link.target_range.0);
+                                    self.offset_to_pos16(doc, link.target_range.0);
                                 let (target_end_line, target_end_char) = 
-                                    self.offset_to_position(&doc.content, link.target_range.1);
+                                    self.offset_to_pos16(doc, link.target_range.1);
                                 
                                 let (sel_start_line, sel_start_char) = 
-                                    self.offset_to_position(&doc.content, link.target_selection_range.0);
+                                    self.offset_to_pos16(doc, link.target_selection_range.0);
                                 let (sel_end_line, sel_end_char) = 
-                                    self.offset_to_position(&doc.content, link.target_selection_range.1);
+                                    self.offset_to_pos16(doc, link.target_selection_range.1);
                                 
                                 json!({
                                     "originSelectionRange": {
@@ -1574,9 +1576,9 @@ impl LspServer {
                             // Down-convert to Location format for clients that don't support LocationLink
                             let result: Vec<Value> = location_links.iter().map(|link| {
                                 let (sel_start_line, sel_start_char) = 
-                                    self.offset_to_position(&doc.content, link.target_selection_range.0);
+                                    self.offset_to_pos16(doc, link.target_selection_range.0);
                                 let (sel_end_line, sel_end_char) = 
-                                    self.offset_to_position(&doc.content, link.target_selection_range.1);
+                                    self.offset_to_pos16(doc, link.target_selection_range.1);
                                 
                                 json!({
                                     "uri": link.target_uri,
@@ -1618,14 +1620,14 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Create semantic analyzer
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
                     
                     // Find definition at the position
                     if let Some(definition) = analyzer.find_definition(offset) {
-                        let (def_line, def_char) = self.offset_to_position(&doc.content, definition.location.start);
+                        let (def_line, def_char) = self.offset_to_pos16(doc, definition.location.start);
                         
                         return Ok(Some(json!([{
                             "uri": uri,
@@ -1663,7 +1665,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Create semantic analyzer
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
@@ -1673,8 +1675,8 @@ impl LspServer {
                     
                     if !references.is_empty() {
                         let locations: Vec<Value> = references.iter().map(|loc| {
-                            let (start_line, start_char) = self.offset_to_position(&doc.content, loc.start);
-                            let (end_line, end_char) = self.offset_to_position(&doc.content, loc.end);
+                            let (start_line, start_char) = self.offset_to_pos16(doc, loc.start);
+                            let (end_line, end_char) = self.offset_to_pos16(doc, loc.end);
                             
                             json!({
                                 "uri": uri,
@@ -1710,7 +1712,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Create document highlight provider
                     let provider = DocumentHighlightProvider::new();
@@ -1720,8 +1722,8 @@ impl LspServer {
                     
                     if !highlights.is_empty() {
                         let lsp_highlights: Vec<Value> = highlights.iter().map(|highlight| {
-                            let (start_line, start_char) = self.offset_to_position(&doc.content, highlight.location.start);
-                            let (end_line, end_char) = self.offset_to_position(&doc.content, highlight.location.end);
+                            let (start_line, start_char) = self.offset_to_pos16(doc, highlight.location.start);
+                            let (end_line, end_char) = self.offset_to_pos16(doc, highlight.location.end);
                             
                             json!({
                                 "range": {
@@ -1757,7 +1759,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Create type hierarchy provider
                     let provider = TypeHierarchyProvider::new();
@@ -1966,15 +1968,15 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(_ast) = &doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Get the token at the current position
                     let token = self.get_token_at_position(&doc.content, offset);
                     if !token.is_empty() && (token.starts_with('$') || token.starts_with('@') || token.starts_with('%') || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')) {
                         // Find the token bounds
                         let (start_offset, end_offset) = self.get_token_bounds(&doc.content, offset);
-                        let (start_line, start_char) = self.offset_to_position(&doc.content, start_offset);
-                        let (end_line, end_char) = self.offset_to_position(&doc.content, end_offset);
+                        let (start_line, start_char) = self.offset_to_pos16(doc, start_offset);
+                        let (end_line, end_char) = self.offset_to_pos16(doc, end_offset);
                         
                         // Return the range and placeholder text
                         return Ok(Some(json!({
@@ -2018,7 +2020,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.position_to_offset(&doc.content, line, character);
+                    let offset = self.pos16_to_offset(doc, line, character);
                     
                     // Create semantic analyzer
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
@@ -2030,8 +2032,8 @@ impl LspServer {
                         // Create text edits for all references
                         let mut edits = Vec::new();
                         for location in references {
-                            let (start_line, start_char) = self.offset_to_position(&doc.content, location.start);
-                            let (end_line, end_char) = self.offset_to_position(&doc.content, location.end);
+                            let (start_line, start_char) = self.offset_to_pos16(doc, location.start);
+                            let (end_line, end_char) = self.offset_to_pos16(doc, location.end);
                             
                             edits.push(json!({
                                 "range": {
@@ -2087,8 +2089,8 @@ impl LspServer {
                     let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
                     
                     for symbol in global_symbols {
-                        let (start_line, start_char) = self.offset_to_position(&doc.content, symbol.location.start);
-                        let (end_line, end_char) = self.offset_to_position(&doc.content, symbol.location.end);
+                        let (start_line, start_char) = self.offset_to_pos16(doc, symbol.location.start);
+                        let (end_line, end_char) = self.offset_to_pos16(doc, symbol.location.end);
                         
                         // Map symbol kind to LSP SymbolKind
                         let symbol_kind = match symbol.kind {
@@ -2118,8 +2120,8 @@ impl LspServer {
                                     // Get symbols in this scope
                                     if let Some(child_symbols) = symbols_by_scope.get(scope_id) {
                                         for child in child_symbols {
-                                            let (child_start_line, child_start_char) = self.offset_to_position(&doc.content, child.location.start);
-                                            let (child_end_line, child_end_char) = self.offset_to_position(&doc.content, child.location.end);
+                                            let (child_start_line, child_start_char) = self.offset_to_pos16(doc, child.location.start);
+                                            let (child_end_line, child_end_char) = self.offset_to_pos16(doc, child.location.end);
                                             
                                             let child_kind = match child.kind {
                                                 crate::symbol::SymbolKind::Package => 4,
@@ -2479,6 +2481,7 @@ impl LspServer {
     }
 
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
+    #[deprecated(note = "Use offset_to_pos16() instead for cached O(log n) performance")]
     fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
@@ -2508,6 +2511,7 @@ impl LspServer {
     }
 
     /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
+    #[deprecated(note = "Use pos16_to_offset() instead for cached O(log n) performance")]
     fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
@@ -2556,6 +2560,19 @@ impl LspServer {
         
         // Clamp to end of buffer
         content.len()
+    }
+
+    /// Position conversion using cached line starts for O(log n) performance
+    #[inline]
+    fn pos16_to_offset(&self, doc: &DocumentState, line: u32, ch: u32) -> usize {
+        // Uses the cached, CRLF/UTF-16 aware converter
+        doc.line_starts.position_to_offset(&doc.content, line, ch)
+    }
+
+    /// Offset to position conversion using cached line starts for O(log n) performance
+    #[inline]
+    fn offset_to_pos16(&self, doc: &DocumentState, offset: usize) -> (u32, u32) {
+        doc.line_starts.offset_to_position(&doc.content, offset)
     }
     
     /// Handle textDocument/formatting request

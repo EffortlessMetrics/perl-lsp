@@ -16,6 +16,7 @@ pub struct DeclarationProvider<'a> {
     content: String,
     document_uri: String,
     parent_map: Option<&'a ParentMap>,
+    doc_version: i32,
 }
 
 /// Represents a location link from origin to target
@@ -38,19 +39,44 @@ impl<'a> DeclarationProvider<'a> {
             content,
             document_uri,
             parent_map: None,
+            doc_version: 0,
         }
     }
     
     pub fn with_parent_map(mut self, parent_map: &'a ParentMap) -> Self {
-        // Assert parent map is not empty in debug builds
         #[cfg(debug_assertions)]
         {
-            if parent_map.is_empty() {
-                eprintln!("Warning: DeclarationProvider constructed with empty parent map");
-            }
+            // If the AST has more than the root node, an empty map is suspicious.
+            // (Root has no parent, so a truly trivial AST may legitimately produce 0.)
+            debug_assert!(
+                !parent_map.is_empty(),
+                "DeclarationProvider: empty ParentMap (did you forget to rebuild after AST refresh?)"
+            );
+            
+            // Root sanity check - root must have no parent
+            let root_ptr = &*self.ast as *const _;
+            debug_assert!(
+                !parent_map.contains_key(&root_ptr),
+                "Root node must have no parent in the parent map"
+            );
         }
         self.parent_map = Some(parent_map);
         self
+    }
+    
+    pub fn with_doc_version(mut self, version: i32) -> Self {
+        self.doc_version = version;
+        self
+    }
+    
+    #[inline]
+    fn assert_fresh(&self, current_version: i32) {
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(
+            self.doc_version, current_version,
+            "DeclarationProvider used after AST refresh (provider version: {}, current: {})",
+            self.doc_version, current_version
+        );
     }
     
     /// Build a parent map for efficient scope walking
@@ -66,6 +92,9 @@ impl<'a> DeclarationProvider<'a> {
 
     /// Find the declaration of the symbol at the given position
     pub fn find_declaration(&self, offset: usize) -> Option<Vec<LocationLink>> {
+        // Assert this provider is still fresh (not stale after AST refresh)
+        self.assert_fresh(self.doc_version);
+        
         // Find the node at the cursor position
         let node = self.find_node_at_offset(&self.ast, offset)?;
         
