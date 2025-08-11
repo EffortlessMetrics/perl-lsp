@@ -1,7 +1,7 @@
 class PerlLsp < Formula
   desc "Lightning-fast Perl LSP server with 26+ IDE features"
   homepage "https://github.com/EffortlessSteven/tree-sitter-perl"
-  version "0.7.5"
+  version "0.8.0"
   
   if OS.mac? && Hardware::CPU.arm?
     url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v#{version}/perl-lsp-v#{version}-aarch64-apple-darwin.tar.gz"
