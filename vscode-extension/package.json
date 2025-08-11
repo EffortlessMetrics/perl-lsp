@@ -18,7 +18,12 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter"
+    "tree-sitter",
+    "syntax-highlighting",
+    "autocomplete",
+    "refactoring",
+    "cpan",
+    "scripting"
   ],
   "icon": "icon.png",
   "repository": {

@@ -158,6 +158,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
 
 async function restartServer(context: vscode.ExtensionContext) {
     if (client) {
