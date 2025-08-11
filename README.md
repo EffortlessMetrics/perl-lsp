@@ -22,9 +22,17 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.7.5
+## 📦 Latest Release: v0.8.0
 
-### v0.7.5 - Enterprise Release Infrastructure & Enhanced Type System
+### v0.8.0 - Production-Hardened Position Helpers & Breaking API Change
+- ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking - `find_declaration(offset, col, current_version)`
+- ⚡ **40-100x Faster**: LineStartsCache for position conversions (1M lines: 7-20µs)
+- 🛡️ **Production Safety**: Version guards prevent stale provider reuse after AST refresh
+- 🔍 **Semi-Internal API**: positions module marked #[doc(hidden)] for stability
+- ✅ **Cross-Platform CI**: Enhanced with ripgrep, platform guards, resilient checks
+- 🧪 **Fuzz Testing**: Comprehensive Unicode edge case coverage (ZWJ, BOM, surrogates)
+
+### Previous: v0.7.5 - Enterprise Release Infrastructure
 - 🚀 **Enterprise Distribution**: Multi-platform binaries with SHA256 checksums
 - 🔧 **One-liner Install**: `curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash`
 - 🍺 **Homebrew Support**: `brew tap tree-sitter-perl/tap && brew install perl-lsp`
@@ -33,17 +41,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - 📁 **Workspace File Ops**: File watching, rename tracking, multi-file edits
 - 🎯 **100% Edge Cases**: All Perl 5 syntax edge cases handled perfectly
 
-### Previous: v0.7.3
-- **Fixed** Return statement modifier parsing - `return if $cond;` now correctly parsed
-- **Fixed** Die with statement modifiers - Zero-arg builtins properly handled in expression context
-- **Added** Robust error recovery with fallback mechanisms
-- **Implemented** Undefined variable detection under `use strict`
-
-### v0.7.2
-- **Fixed** Operator precedence for word operators (`or`, `and`, `not`, `xor`)
-- **Fixed** Division operator (`/`) parsing - Now correctly recognized in all contexts
-- **Added** Complete signatures for 150+ Perl built-in functions
-- **Enhanced** LSP signature help with comprehensive parameter hints
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 🚀 Features
 
