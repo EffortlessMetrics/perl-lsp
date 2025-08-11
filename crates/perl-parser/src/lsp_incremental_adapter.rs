@@ -202,26 +202,20 @@ mod tests {
     #[cfg(feature = "incremental")]
     fn test_incremental_parsing_enabled() {
         // Set environment variable
-        unsafe {
-            std::env::set_var("PERL_LSP_INCREMENTAL", "1");
-        }
+        std::env::set_var("PERL_LSP_INCREMENTAL", "1");
         
         let config = IncrementalConfig::default();
         assert!(config.enabled);
         
         // Clean up
-        unsafe {
-            std::env::remove_var("PERL_LSP_INCREMENTAL");
-        }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
     }
     
     #[test]
     #[cfg(feature = "incremental")]
     fn test_incremental_parsing_disabled_by_default() {
         // Ensure variable is not set
-        unsafe {
-            std::env::remove_var("PERL_LSP_INCREMENTAL");
-        }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
         
         let config = IncrementalConfig::default();
         assert!(!config.enabled);
