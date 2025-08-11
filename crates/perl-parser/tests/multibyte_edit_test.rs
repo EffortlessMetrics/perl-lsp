@@ -73,17 +73,45 @@ mod multibyte_tests {
     }
 
     #[test]
-    fn position_mapper_char_conversion() {
-        let s = String::from("🦀 Rust\n💖 Perl\n");
+    fn position_mapper_with_rope() {
+        let s = String::from("my $café = 1;\n");
         let mapper = PositionMapper::new(&s);
+        let rope = Rope::from_str(&s);
 
-        // Test lsp_pos_to_char
-        let pos = Position { line: 1, character: 3 }; // After "💖 "
-        let char_idx = mapper.lsp_pos_to_char(pos).unwrap();
+        let pos = Position { line: 0, character: 8 }; // After "café"
         
-        // Convert back and verify round-trip
-        let pos2 = mapper.char_to_lsp_pos(char_idx);
+        // Test byte-to-char conversion through rope
+        let byte_offset = mapper.lsp_pos_to_byte(pos).unwrap();
+        let char_idx = rope.byte_to_char(byte_offset);
+        assert_eq!(char_idx, 8); // "my $café" = 8 chars
+        
+        // Verify the byte offset is correct
+        let pos2 = mapper.byte_to_lsp_pos(byte_offset);
         assert_eq!(pos, pos2);
+    }
+
+    #[test]
+    fn sequential_changes_apply_after_each_other_with_multibyte() {
+        let original = "é\nhello world\n"; // multibyte before target
+        let mut mapper = PositionMapper::new(original);
+        let mut rope = Rope::from_str(original);
+
+        // 1) Replace "world" → "Rust"
+        let s1 = Position { line: 1, character: 6 };
+        let e1 = Position { line: 1, character: 11 };
+        let (sb1, eb1) = (mapper.lsp_pos_to_byte(s1).unwrap(), mapper.lsp_pos_to_byte(e1).unwrap());
+        let (sc1, ec1) = (rope.byte_to_char(sb1), rope.byte_to_char(eb1));
+        rope.remove(sc1..ec1);
+        rope.insert(sc1, "Rust");
+        mapper.apply_edit(sb1, eb1, "Rust");
+
+        // 2) Insert "!" at end of line (now after previous edit)
+        let end = Position { line: 1, character: 10 }; // "hello Rust" → len 10
+        let be = mapper.lsp_pos_to_byte(end).unwrap();
+        let ce = rope.byte_to_char(be);
+        rope.insert(ce, "!");
+
+        assert_eq!(rope.to_string(), "é\nhello Rust!\n");
     }
 
 }
