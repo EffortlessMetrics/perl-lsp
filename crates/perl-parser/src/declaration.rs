@@ -91,9 +91,9 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     /// Find the declaration of the symbol at the given position
-    pub fn find_declaration(&self, offset: usize) -> Option<Vec<LocationLink>> {
+    pub fn find_declaration(&self, offset: usize, current_version: i32) -> Option<Vec<LocationLink>> {
         // Assert this provider is still fresh (not stale after AST refresh)
-        self.assert_fresh(self.doc_version);
+        self.assert_fresh(current_version);
         
         // Find the node at the cursor position
         let node = self.find_node_at_offset(&self.ast, offset)?;

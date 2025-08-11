@@ -1516,7 +1516,7 @@ impl LspServer {
                     .with_doc_version(doc._version);
                     
                     // Find declaration at the position
-                    if let Some(location_links) = provider.find_declaration(offset) {
+                    if let Some(location_links) = provider.find_declaration(offset, doc._version) {
                         // Check client capability and return appropriate format
                         if self.client_capabilities.declaration_link_support {
                             // Return LocationLink format
