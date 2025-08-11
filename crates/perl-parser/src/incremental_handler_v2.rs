@@ -5,9 +5,10 @@
 use crate::{
     lsp_server::{JsonRpcError, LspServer},
     parser::Parser,
-    position_mapper::{PositionMapper, apply_edit_utf8, Position},
+    position_mapper::{PositionMapper, Position},
     positions::LineStartsCache,
 };
+use ropey::Rope;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -35,13 +36,14 @@ impl LspServer {
             if changes.len() == 1 && changes[0].get("range").is_none() {
                 // Full document replacement
                 let text = changes[0]["text"].as_str().unwrap_or_default();
-                doc.content = text.to_string();
+                doc.content = Rope::from_str(text);
             } else {
-                // Incremental updates
+                // Incremental updates using rope
                 for change in changes {
                     if let Some(range) = change.get("range") {
                         let text = change["text"].as_str().unwrap_or_default();
-                        let mapper = PositionMapper::new(&doc.content);
+                        let content_str = doc.content.to_string();
+                        let mapper = PositionMapper::new(&content_str);
                         
                         // Convert LSP positions to byte offsets
                         let start_pos = Position {
@@ -56,13 +58,15 @@ impl LspServer {
                         if let (Some(start_byte), Some(end_byte)) = 
                             (mapper.lsp_pos_to_byte(start_pos), 
                              mapper.lsp_pos_to_byte(end_pos)) {
-                            apply_edit_utf8(&mut doc.content, start_byte, end_byte, text);
+                            // Apply edit to rope (efficient in-place modification)
+                            doc.content.remove(start_byte..end_byte);
+                            doc.content.insert(start_byte, text);
                         }
                     }
                 }
             }
             
-            doc.content.clone()
+            doc.content.to_string()
         }; // lock dropped
         
         // Parse the updated text
@@ -86,7 +90,8 @@ impl LspServer {
                         doc.parse_errors = vec![e];
                     }
                 }
-                doc.line_starts = LineStartsCache::new(&doc.content);
+                let content_str = doc.content.to_string();
+                doc.line_starts = LineStartsCache::new(&content_str);
             }
         }
         

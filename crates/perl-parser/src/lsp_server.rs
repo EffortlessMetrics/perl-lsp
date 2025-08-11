@@ -26,6 +26,7 @@ use crate::{
     declaration::ParentMap,
     positions::LineStartsCache,
 };
+use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -68,8 +69,8 @@ pub struct LspServer {
 /// State of a document
 #[derive(Clone)]
 pub(crate) struct DocumentState {
-    /// Document content
-    pub(crate) content: String,
+    /// Document content (efficient rope for large files)
+    pub(crate) content: Rope,
     /// Version number
     pub(crate) _version: i32,
     /// Parsed AST (cached)
@@ -562,7 +563,7 @@ impl LspServer {
             self.documents.lock().unwrap().insert(
                 uri.to_string(),
                 DocumentState {
-                    content: text.to_string(),
+                    content: Rope::from_str(text),
                     _version: version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
@@ -644,7 +645,7 @@ impl LspServer {
                     self.documents.lock().unwrap().insert(
                         uri.to_string(),
                         DocumentState {
-                            content: text.to_string(),
+                            content: Rope::from_str(text),
                             _version: version,
                             ast: ast_arc.clone(),
                             parse_errors: errors,
