@@ -35,6 +35,7 @@ impl<'a> Parser<'a> {
         self.parse_program()
     }
     
+    
     /// Check recursion depth
     fn check_recursion(&mut self) -> ParseResult<()> {
         self.recursion_depth += 1;
