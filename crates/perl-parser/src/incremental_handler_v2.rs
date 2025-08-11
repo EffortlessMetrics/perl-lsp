@@ -8,9 +8,9 @@ use crate::{
     position_mapper::{PositionMapper, Position},
     positions::LineStartsCache,
 };
-use ropey::Rope;
 use serde_json::Value;
 use std::sync::Arc;
+use ropey::Rope;
 
 impl LspServer {
     /// Handle didChange with incremental text updates
@@ -36,16 +36,17 @@ impl LspServer {
             if changes.len() == 1 && changes[0].get("range").is_none() {
                 // Full document replacement
                 let text = changes[0]["text"].as_str().unwrap_or_default();
-                doc.content = Rope::from_str(text);
+                doc.content = text.to_string();
             } else {
-                // Incremental updates using rope
+                // Incremental updates using rope for efficient editing
+                let mut rope = Rope::from_str(&doc.content);
+                
                 for change in changes {
                     if let Some(range) = change.get("range") {
                         let text = change["text"].as_str().unwrap_or_default();
-                        let content_str = doc.content.to_string();
-                        let mapper = PositionMapper::new(&content_str);
+                        let mapper = PositionMapper::new(&doc.content);
                         
-                        // Convert LSP positions to byte offsets
+                        // Convert LSP positions to char indices
                         let start_pos = Position {
                             line: range["start"]["line"].as_u64().unwrap_or(0) as u32,
                             character: range["start"]["character"].as_u64().unwrap_or(0) as u32,
@@ -55,18 +56,22 @@ impl LspServer {
                             character: range["end"]["character"].as_u64().unwrap_or(0) as u32,
                         };
                         
-                        if let (Some(start_byte), Some(end_byte)) = 
-                            (mapper.lsp_pos_to_byte(start_pos), 
-                             mapper.lsp_pos_to_byte(end_pos)) {
+                        // Use the new lsp_pos_to_char method for direct char conversion
+                        if let (Some(start_char), Some(end_char)) = 
+                            (mapper.lsp_pos_to_char(start_pos), 
+                             mapper.lsp_pos_to_char(end_pos)) {
                             // Apply edit to rope (efficient in-place modification)
-                            doc.content.remove(start_byte..end_byte);
-                            doc.content.insert(start_byte, text);
+                            rope.remove(start_char..end_char);
+                            rope.insert(start_char, text);
                         }
                     }
                 }
+                
+                // Convert rope back to string
+                doc.content = rope.to_string();
             }
             
-            doc.content.to_string()
+            doc.content.clone()
         }; // lock dropped
         
         // Parse the updated text
@@ -90,8 +95,7 @@ impl LspServer {
                         doc.parse_errors = vec![e];
                     }
                 }
-                let content_str = doc.content.to_string();
-                doc.line_starts = LineStartsCache::new(&content_str);
+                doc.line_starts = LineStartsCache::new(&doc.content);
             }
         }
         

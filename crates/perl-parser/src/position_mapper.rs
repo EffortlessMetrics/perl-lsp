@@ -51,17 +51,21 @@ impl PositionMapper {
     /// Apply an incremental edit
     pub fn apply_edit(&mut self, start_byte: usize, end_byte: usize, new_text: &str) {
         // Clamp to valid range
-        let start = start_byte.min(self.rope.len_bytes());
-        let end = end_byte.min(self.rope.len_bytes());
+        let start_byte = start_byte.min(self.rope.len_bytes());
+        let end_byte = end_byte.min(self.rope.len_bytes());
+        
+        // Convert byte offsets to char indices (rope uses chars!)
+        let start_char = self.rope.byte_to_char(start_byte);
+        let end_char = self.rope.byte_to_char(end_byte);
         
         // Remove old text
-        if end > start {
-            self.rope.remove(start..end);
+        if end_char > start_char {
+            self.rope.remove(start_char..end_char);
         }
         
         // Insert new text
         if !new_text.is_empty() {
-            self.rope.insert(start, new_text);
+            self.rope.insert(start_char, new_text);
         }
         
         // Update line ending detection
@@ -147,6 +151,17 @@ impl PositionMapper {
     /// Get total number of lines
     pub fn len_lines(&self) -> usize {
         self.rope.len_lines()
+    }
+
+    /// Convert LSP position to char index (for rope operations)
+    pub fn lsp_pos_to_char(&self, pos: Position) -> Option<usize> {
+        self.lsp_pos_to_byte(pos).map(|byte| self.rope.byte_to_char(byte))
+    }
+
+    /// Convert char index to LSP position
+    pub fn char_to_lsp_pos(&self, char_idx: usize) -> Position {
+        let byte_offset = self.rope.char_to_byte(char_idx);
+        self.byte_to_lsp_pos(byte_offset)
     }
 
     /// Check if empty
