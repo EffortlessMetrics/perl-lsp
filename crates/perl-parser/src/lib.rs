@@ -66,6 +66,8 @@ pub mod incremental_integration;
 pub mod parser;
 pub mod parser_context;
 pub mod position;
+pub mod position_mapper;
+pub mod incremental_parser;
 #[doc(hidden)]
 pub mod positions;
 pub mod recovery_parser;
