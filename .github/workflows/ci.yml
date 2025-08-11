@@ -70,6 +70,10 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
         
+      - name: Install ripgrep (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        
       - name: Assert cached position converters are used
         if: runner.os != 'Windows'
         run: |
@@ -105,7 +109,7 @@ jobs:
           $badLines = @()
           
           for ($i = 0; $i -lt $lines.Count; $i++) {
-              $line = $lines[$i]
+              $line = $lines[$i].TrimEnd("`r")
               if ($line -match "=== BEGIN_TEST_ONLY_POSITION_HELPERS ===") {
                   $inTestBlock = $true
               } elseif ($line -match "=== END_TEST_ONLY_POSITION_HELPERS ===") {
@@ -122,10 +126,12 @@ jobs:
               exit 1
           }
         
-      - name: Install shellcheck
+      - name: Install shellcheck (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y shellcheck
         
-      - name: Check shell scripts
+      - name: Check shell scripts (Linux)
+        if: runner.os == 'Linux'
         run: shellcheck .github/run_all_tests.sh
         
       - name: Install cargo-deny
