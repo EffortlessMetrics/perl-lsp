@@ -9,6 +9,7 @@ import {
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
+import { BinaryDownloader } from './downloader';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -96,8 +97,8 @@ export async function deactivate() {
 
 async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {
     // First check user settings
-    const config = vscode.workspace.getConfiguration('perl');
-    const userPath = config.get<string>('lsp.path');
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const userPath = config.get<string>('serverPath');
     
     if (userPath && fs.existsSync(userPath)) {
         outputChannel.appendLine(`Using user-configured perl-lsp: ${userPath}`);
@@ -139,9 +140,24 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         }
     }
     
-    outputChannel.appendLine('perl-lsp not found');
+    // Check if auto-download is enabled
+    const autoDownload = config.get<boolean>('autoDownload', true);
+    
+    if (autoDownload) {
+        outputChannel.appendLine('perl-lsp not found, attempting to download...');
+        const downloader = new BinaryDownloader(context, outputChannel);
+        const downloadedPath = await downloader.ensureBinary();
+        
+        if (downloadedPath) {
+            outputChannel.appendLine(`Downloaded perl-lsp to: ${downloadedPath}`);
+            return downloadedPath;
+        }
+    } else {
+        outputChannel.appendLine('perl-lsp not found and auto-download is disabled');
+    }
+    
+    outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
-}
 
 async function restartServer(context: vscode.ExtensionContext) {
     if (client) {

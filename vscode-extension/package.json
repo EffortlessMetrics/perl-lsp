@@ -2,7 +2,7 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "publisher": "tree-sitter-perl",
   "engines": {
     "vscode": "^1.75.0"
@@ -23,10 +23,15 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tree-sitter/tree-sitter-perl"
+    "url": "https://github.com/EffortlessSteven/tree-sitter-perl"
   },
   "bugs": {
-    "url": "https://github.com/tree-sitter/tree-sitter-perl/issues"
+    "url": "https://github.com/EffortlessSteven/tree-sitter-perl/issues"
+  },
+  "homepage": "https://github.com/EffortlessSteven/tree-sitter-perl#readme",
+  "galleryBanner": {
+    "color": "#1e3a8a",
+    "theme": "dark"
   },
   "license": "MIT",
   "main": "./out/extension.js",
@@ -46,6 +51,11 @@
     "configuration": {
       "title": "Perl LSP",
       "properties": {
+        "perl-lsp.autoDownload": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically download the language server if not found"
+        },
         "perl-lsp.serverPath": {
           "type": "string",
           "default": "perl-lsp",
