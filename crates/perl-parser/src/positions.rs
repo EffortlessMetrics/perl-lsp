@@ -1,5 +1,7 @@
 /// Utility module for efficient position conversions with line_starts cache
 
+use ropey::Rope;
+
 /// Cache of line start positions for O(log n) position conversion
 #[derive(Debug, Clone)]
 pub struct LineStartsCache {
@@ -29,6 +31,19 @@ impl LineStartsCache {
                 }
             }
             i += 1;
+        }
+        
+        LineStartsCache { line_starts }
+    }
+
+    /// Build a cache from a rope (avoids extra string allocation)
+    pub fn new_rope(rope: &Rope) -> Self {
+        let mut line_starts = vec![0];
+        
+        for line_idx in 0..rope.len_lines() {
+            if line_idx > 0 {
+                line_starts.push(rope.line_to_byte(line_idx));
+            }
         }
         
         LineStartsCache { line_starts }

@@ -26,7 +26,6 @@ use crate::{
     declaration::ParentMap,
     positions::LineStartsCache,
 };
-use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -69,8 +68,9 @@ pub struct LspServer {
 /// State of a document
 #[derive(Clone)]
 pub(crate) struct DocumentState {
-    /// Document content (efficient rope for large files)
-    pub(crate) content: Rope,
+    /// Document content
+    /// TODO: Use Rope for O(1) edits in future optimization
+    pub(crate) content: String,
     /// Version number
     pub(crate) _version: i32,
     /// Parsed AST (cached)
@@ -299,11 +299,14 @@ impl LspServer {
             }
             "textDocument/didChange" => {
                 // Use incremental version if available
-                let result = if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
+                #[cfg(feature = "incremental")]
+                let result = if std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
                     self.handle_did_change_incremental(request.params)
                 } else {
                     self.handle_did_change(request.params)
                 };
+                #[cfg(not(feature = "incremental"))]
+                let result = self.handle_did_change(request.params);
                 match result {
                     Ok(_) => Ok(None),
                     Err(e) => Err(e),
@@ -563,7 +566,7 @@ impl LspServer {
             self.documents.lock().unwrap().insert(
                 uri.to_string(),
                 DocumentState {
-                    content: Rope::from_str(text),
+                    content: text.to_string(),
                     _version: version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
@@ -645,7 +648,7 @@ impl LspServer {
                     self.documents.lock().unwrap().insert(
                         uri.to_string(),
                         DocumentState {
-                            content: Rope::from_str(text),
+                            content: text.to_string(),
                             _version: version,
                             ast: ast_arc.clone(),
                             parse_errors: errors,
