@@ -187,4 +187,42 @@ mod declaration_micro_tests {
         let links = provider.find_declaration(43);
         assert!(links.is_some() && !links.as_ref().unwrap().is_empty(), "Should find B in second hash block");
     }
+
+    #[test]
+    fn constant_options_qw_both_names_exact_spans() {
+        let code = "use constant -strict, qw|FOO BAR|;\nprint FOO, BAR;\n";
+        let (provider, _pm, _ast) = parse_and_get_provider(code);
+
+        // offset for FOO in `print FOO, BAR;`
+        let foo_off = code.find("FOO,").unwrap();
+        let foo_links = provider.find_declaration(foo_off);
+        assert!(foo_links.is_some(), "Should find FOO");
+        let foo_links = foo_links.unwrap();
+        assert!(!foo_links.is_empty(), "Should have at least one link for FOO");
+        let foo_link = &foo_links[0].target_selection_range;
+        assert_eq!(&code[foo_link.0..foo_link.1], "FOO", "FOO span should be exact");
+
+        // offset for BAR
+        let bar_off = code.find(" BAR;").unwrap() + 1;
+        let bar_links = provider.find_declaration(bar_off);
+        assert!(bar_links.is_some(), "Should find BAR");
+        let bar_links = bar_links.unwrap();
+        assert!(!bar_links.is_empty(), "Should have at least one link for BAR");
+        let bar_link = &bar_links[0].target_selection_range;
+        assert_eq!(&code[bar_link.0..bar_link.1], "BAR", "BAR span should be exact");
+    }
+
+    #[test]
+    fn crlf_with_trailing_emoji_clamp_and_roundtrip() {
+        use perl_parser::positions::LineStartsCache;
+        
+        // "A🐍\r\n" — UTF-16 columns: 'A'->1, '🐍'->+2, total line len = 3 before CR
+        let text = "A🐍\r\n";
+        let cache = LineStartsCache::new(text);
+        
+        // place caret far past EOL on line 0, ensure clamp then round-trip
+        let off = cache.position_to_offset(text, 0, 999);
+        let (line, col) = cache.offset_to_position(text, off);
+        assert_eq!((line, col), (0, 3), "Should clamp to end of line which is column 3 in UTF-16");
+    }
 }
