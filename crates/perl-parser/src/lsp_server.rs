@@ -2480,6 +2480,7 @@ impl LspServer {
         (start, end)
     }
 
+    // === BEGIN_TEST_ONLY_POSITION_HELPERS ===
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
     #[cfg(test)]
     #[allow(deprecated)]
@@ -2563,6 +2564,7 @@ impl LspServer {
         // Clamp to end of buffer
         content.len()
     }
+    // === END_TEST_ONLY_POSITION_HELPERS ===
 
     /// Position conversion using cached line starts for O(log n) performance
     #[inline]
