@@ -297,3 +297,27 @@ mod tests {
         assert_eq!(mapper.text(), "hello Rust");
     }
 }
+
+
+/// Apply UTF-8 edit to a string
+pub fn apply_edit_utf8(text: &mut String, start_byte: usize, old_end_byte: usize, replacement: &str) {
+    if !text.is_char_boundary(start_byte) || !text.is_char_boundary(old_end_byte) {
+        // Safety: ensure we're at char boundaries
+        return;
+    }
+    text.replace_range(start_byte..old_end_byte, replacement);
+}
+
+/// Count newlines in text
+pub fn newline_count(text: &str) -> usize {
+    text.chars().filter(|&c| c == '\n').count()
+}
+
+/// Get the column (in UTF-8 bytes) of the last line
+pub fn last_line_column_utf8(text: &str) -> u32 {
+    if let Some(last_newline) = text.rfind('\n') {
+        (text.len() - last_newline - 1) as u32
+    } else {
+        text.len() as u32
+    }
+}
