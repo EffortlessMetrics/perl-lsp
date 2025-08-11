@@ -1,0 +1,303 @@
+{
+    "Perl Package": {
+        "prefix": "package",
+        "body": [
+            "package ${1:Package::Name};",
+            "",
+            "use strict;",
+            "use warnings;",
+            "",
+            "${0:# Package code here}",
+            "",
+            "1;"
+        ],
+        "description": "Create a new Perl package"
+    },
+    "Perl Script Shebang": {
+        "prefix": "shebang",
+        "body": [
+            "#!/usr/bin/env perl",
+            "",
+            "use strict;",
+            "use warnings;",
+            "",
+            "${0}"
+        ],
+        "description": "Perl script with shebang"
+    },
+    "Subroutine": {
+        "prefix": "sub",
+        "body": [
+            "sub ${1:subroutine_name} {",
+            "    my (${2:\\$self}) = @_;",
+            "    ",
+            "    ${0:# subroutine body}",
+            "}"
+        ],
+        "description": "Create a subroutine"
+    },
+    "Subroutine with Signature": {
+        "prefix": "subsig",
+        "body": [
+            "sub ${1:subroutine_name} (${2:\\$arg1, \\$arg2}) {",
+            "    ${0:# subroutine body}",
+            "}"
+        ],
+        "description": "Create a subroutine with modern signatures (Perl 5.20+)"
+    },
+    "If Statement": {
+        "prefix": "if",
+        "body": [
+            "if (${1:condition}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "If statement"
+    },
+    "If-Else Statement": {
+        "prefix": "ifelse",
+        "body": [
+            "if (${1:condition}) {",
+            "    ${2}",
+            "} else {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "If-else statement"
+    },
+    "Unless Statement": {
+        "prefix": "unless",
+        "body": [
+            "unless (${1:condition}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Unless statement"
+    },
+    "While Loop": {
+        "prefix": "while",
+        "body": [
+            "while (${1:condition}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "While loop"
+    },
+    "For Loop": {
+        "prefix": "for",
+        "body": [
+            "for my \\$${1:item} (@${2:array}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "For loop"
+    },
+    "Foreach Loop": {
+        "prefix": "foreach",
+        "body": [
+            "foreach my \\$${1:item} (@${2:array}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Foreach loop"
+    },
+    "Hash Iteration": {
+        "prefix": "forhash",
+        "body": [
+            "for my \\$${1:key} (keys %${2:hash}) {",
+            "    my \\$${3:value} = \\$${2:hash}{\\$${1:key}};",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Iterate over hash keys"
+    },
+    "Try-Catch": {
+        "prefix": "try",
+        "body": [
+            "try {",
+            "    ${1}",
+            "} catch (\\$${2:e}) {",
+            "    ${0:# handle error}",
+            "}"
+        ],
+        "description": "Try-catch block (modern Perl)"
+    },
+    "Eval Block": {
+        "prefix": "eval",
+        "body": [
+            "eval {",
+            "    ${1}",
+            "};",
+            "if (\\$@) {",
+            "    ${0:# handle error}",
+            "}"
+        ],
+        "description": "Eval block with error handling"
+    },
+    "Use Statement": {
+        "prefix": "use",
+        "body": [
+            "use ${1:Module::Name}${2: qw(${3:imports})};"
+        ],
+        "description": "Use statement"
+    },
+    "Require Statement": {
+        "prefix": "require",
+        "body": [
+            "require ${1:Module::Name};"
+        ],
+        "description": "Require statement"
+    },
+    "Hash Reference": {
+        "prefix": "hashref",
+        "body": [
+            "my \\$${1:hash_ref} = {",
+            "    ${2:key1} => '${3:value1}',",
+            "    ${4:key2} => '${5:value2}',",
+            "};"
+        ],
+        "description": "Create a hash reference"
+    },
+    "Array Reference": {
+        "prefix": "arrayref",
+        "body": [
+            "my \\$${1:array_ref} = [",
+            "    '${2:item1}',",
+            "    '${3:item2}',",
+            "];"
+        ],
+        "description": "Create an array reference"
+    },
+    "Regular Expression Match": {
+        "prefix": "match",
+        "body": [
+            "if (\\$${1:string} =~ /${2:pattern}/) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Regular expression match"
+    },
+    "Regular Expression Substitution": {
+        "prefix": "subst",
+        "body": [
+            "\\$${1:string} =~ s/${2:pattern}/${3:replacement}/g;"
+        ],
+        "description": "Regular expression substitution"
+    },
+    "Open File": {
+        "prefix": "open",
+        "body": [
+            "open my \\$${1:fh}, '${2:<}', '${3:filename}' or die \"Cannot open ${3:filename}: \\$!\";"
+        ],
+        "description": "Open a file with error handling"
+    },
+    "Print to File": {
+        "prefix": "print",
+        "body": [
+            "print \\$${1:fh} \"${2:content}\\\\n\";"
+        ],
+        "description": "Print to file handle"
+    },
+    "Read File Lines": {
+        "prefix": "readlines",
+        "body": [
+            "while (my \\$${1:line} = <\\$${2:fh}>) {",
+            "    chomp \\$${1:line};",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Read file line by line"
+    },
+    "Die with Error": {
+        "prefix": "die",
+        "body": [
+            "die \"${1:Error message}: \\$!\";"
+        ],
+        "description": "Die with error message"
+    },
+    "Warn Message": {
+        "prefix": "warn",
+        "body": [
+            "warn \"${1:Warning message}\";"
+        ],
+        "description": "Warn message"
+    },
+    "BEGIN Block": {
+        "prefix": "begin",
+        "body": [
+            "BEGIN {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "BEGIN block"
+    },
+    "END Block": {
+        "prefix": "end",
+        "body": [
+            "END {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "END block"
+    },
+    "My Variable": {
+        "prefix": "my",
+        "body": [
+            "my \\$${1:variable} = ${0:'value'};"
+        ],
+        "description": "Declare a lexical variable"
+    },
+    "Our Variable": {
+        "prefix": "our",
+        "body": [
+            "our \\$${1:variable} = ${0:'value'};"
+        ],
+        "description": "Declare a package variable"
+    },
+    "Constructor": {
+        "prefix": "new",
+        "body": [
+            "sub new {",
+            "    my \\$class = shift;",
+            "    my \\$self = {",
+            "        ${1:# object properties}",
+            "    };",
+            "    bless \\$self, \\$class;",
+            "    return \\$self;",
+            "}"
+        ],
+        "description": "Object constructor"
+    },
+    "Method": {
+        "prefix": "method",
+        "body": [
+            "sub ${1:method_name} {",
+            "    my (\\$self${2:, \\$arg}) = @_;",
+            "    ",
+            "    ${0:# method body}",
+            "}"
+        ],
+        "description": "Object method"
+    },
+    "Getter Method": {
+        "prefix": "getter",
+        "body": [
+            "sub ${1:property} {",
+            "    my \\$self = shift;",
+            "    return \\$self->{${1:property}};",
+            "}"
+        ],
+        "description": "Getter method"
+    },
+    "Setter Method": {
+        "prefix": "setter",
+        "body": [
+            "sub set_${1:property} {",
+            "    my (\\$self, \\$value) = @_;",
+            "    \\$self->{${1:property}} = \\$value;",
+            "    return \\$self;",
+            "}"
+        ],
+        "description": "Setter method"
+    }
+}

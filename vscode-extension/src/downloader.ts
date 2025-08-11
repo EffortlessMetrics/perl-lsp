@@ -63,16 +63,41 @@ export class BinaryDownloader {
             
             // Determine platform and architecture
             const target = this.getPlatformTarget();
-            const assetName = `perl-lsp-${release.tag_name}-${target}.tar.gz`;
-            const checksumName = `perl-lsp-${release.tag_name}-${target}.tar.gz.sha256`;
             
-            // Find asset URLs
-            const asset = release.assets.find(a => a.name === assetName);
-            const checksumAsset = release.assets.find(a => a.name === checksumName);
+            // Try multiple naming patterns that cargo-dist might use
+            const possibleNames = [
+                `perl-lsp-${release.tag_name}-${target}.tar.xz`,
+                `perl-lsp-${release.tag_name}-${target}.tar.gz`,
+                `perl-lsp-${release.tag_name}-${target}.zip`,
+                `perl-lsp-${target}.tar.xz`,
+                `perl-lsp-${target}.tar.gz`,
+                `perl-lsp-${target}.zip`
+            ];
             
-            if (!asset) {
-                throw new Error(`No binary found for platform: ${target}`);
+            let assetName: string | undefined;
+            let asset: ReleaseAsset | undefined;
+            
+            // Find the first matching asset
+            for (const name of possibleNames) {
+                asset = release.assets.find(a => a.name === name);
+                if (asset) {
+                    assetName = name;
+                    break;
+                }
             }
+            
+            if (!asset || !assetName) {
+                const availableAssets = release.assets.map(a => a.name).join(', ');
+                this.outputChannel.appendLine(`Target platform: ${target}`);
+                this.outputChannel.appendLine(`Available assets: ${availableAssets}`);
+                throw new Error(`No binary found for platform: ${target}. Available assets: ${availableAssets}`);
+            }
+            
+            this.outputChannel.appendLine(`Found matching asset: ${assetName}`);
+            
+            // Find checksum file (try both extensions)
+            const checksumName = `${assetName}.sha256`;
+            const checksumAsset = release.assets.find(a => a.name === checksumName);
             
             // Download to temp directory
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-'));
@@ -107,7 +132,19 @@ export class BinaryDownloader {
                 const extractDir = path.join(tempDir, 'extracted');
                 fs.mkdirSync(extractDir);
                 
-                await exec(`tar -xzf "${archivePath}" -C "${extractDir}"`);
+                // Choose extraction command based on file extension
+                let extractCmd: string;
+                if (assetName.endsWith('.tar.xz')) {
+                    extractCmd = `tar -xJf "${archivePath}" -C "${extractDir}"`;
+                } else if (assetName.endsWith('.tar.gz')) {
+                    extractCmd = `tar -xzf "${archivePath}" -C "${extractDir}"`;
+                } else if (assetName.endsWith('.zip')) {
+                    extractCmd = `unzip -q "${archivePath}" -d "${extractDir}"`;
+                } else {
+                    throw new Error(`Unsupported archive format: ${assetName}`);
+                }
+                
+                await exec(extractCmd);
                 
                 // Find the binary
                 const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
@@ -221,7 +258,16 @@ export class BinaryDownloader {
         const platform = process.platform;
         const arch = process.arch;
         
-        // Map Node.js platform/arch to Rust target triples
+        // Map Node.js platform/arch to exact cargo-dist target triples
+        if (platform === 'darwin') {
+            return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
+        } else if (platform === 'linux') {
+            return arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu';
+        } else if (platform === 'win32') {
+            return arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
+        }
+        
+        // Fallback to the old logic
         const platformMap: Record<string, string> = {
             'darwin': 'apple-darwin',
             'linux': 'unknown-linux-gnu',
