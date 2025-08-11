@@ -519,7 +519,7 @@ impl LspServer {
     }
 
     /// Handle didOpen notification
-    fn handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+    pub(crate) fn handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let text = params["textDocument"]["text"].as_str().unwrap_or("");
