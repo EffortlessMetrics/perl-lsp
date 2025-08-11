@@ -70,6 +70,18 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
         
+      - name: Assert cached position converters are used
+        run: |
+          set -euo pipefail
+          # Fail if any old helpers are referenced outside test-only definitions
+          if rg -n "offset_to_position\(|position_to_offset\(" \
+               crates/perl-parser/src/lsp_server.rs \
+               | grep -vE "^(2486|2516):"; then
+            echo "ERROR: Found uncached position conversions in lsp_server.rs"
+            echo "All position conversions must use cached pos16_to_offset() and offset_to_pos16()"
+            exit 1
+          fi
+        
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
         

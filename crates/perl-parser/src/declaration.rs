@@ -70,6 +70,7 @@ impl<'a> DeclarationProvider<'a> {
     }
     
     #[inline]
+    #[track_caller]
     fn assert_fresh(&self, current_version: i32) {
         #[cfg(debug_assertions)]
         debug_assert_eq!(
