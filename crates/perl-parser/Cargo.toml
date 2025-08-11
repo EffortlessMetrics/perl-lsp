@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 authors = ["Tree-sitter Perl Contributors"]
 description = "A high-performance Perl parser with full Language Server Protocol support"
