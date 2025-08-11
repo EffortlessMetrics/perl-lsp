@@ -1,0 +1,83 @@
+name: Publish VSCode Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.8.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: |
+          npm ci
+          npm install -g @vscode/vsce ovsx
+      
+      - name: Set version
+        working-directory: vscode-extension
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          npm version $VERSION --no-git-tag-version
+      
+      - name: Compile extension
+        working-directory: vscode-extension
+        run: npm run compile
+      
+      - name: Package extension
+        working-directory: vscode-extension
+        run: |
+          vsce package --no-dependencies
+          echo "VSIX_FILE=$(ls *.vsix)" >> $GITHUB_ENV
+      
+      - name: Publish to VSCode Marketplace
+        if: env.VSCE_PAT != ''
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          vsce publish --pat $VSCE_PAT --packagePath ${{ env.VSIX_FILE }}
+      
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        working-directory: vscode-extension
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          ovsx publish ${{ env.VSIX_FILE }} --pat $OVSX_PAT
+      
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: perl-lsp-${{ env.VERSION }}.vsix
+          path: vscode-extension/${{ env.VSIX_FILE }}
+      
+      - name: Create GitHub Release asset
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: vscode-extension/${{ env.VSIX_FILE }}
+          fail_on_unmatched_files: true
