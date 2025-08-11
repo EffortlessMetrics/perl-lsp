@@ -2481,7 +2481,8 @@ impl LspServer {
     }
 
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
-    #[deprecated(note = "Use offset_to_pos16() instead for cached O(log n) performance")]
+    #[cfg(test)]
+    #[allow(deprecated)]
     fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
@@ -2511,7 +2512,8 @@ impl LspServer {
     }
 
     /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
-    #[deprecated(note = "Use pos16_to_offset() instead for cached O(log n) performance")]
+    #[cfg(test)]
+    #[allow(deprecated)]
     fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
