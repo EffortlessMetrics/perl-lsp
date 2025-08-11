@@ -1,189 +1,124 @@
-# Perl Language Server for Visual Studio Code
+# Perl Language Server
 
-Advanced Perl language support powered by the tree-sitter-perl v3 parser with full Language Server Protocol (LSP) features.
+Lightning-fast Perl language support with 26+ IDE features powered by tree-sitter-perl.
 
-## Features
+## ✨ Features
 
-### 🚀 Core Features
+### 🎯 Core Intelligence
+- **Go to Definition** - Jump to any symbol declaration
+- **Find References** - Find all usages across your project
+- **Hover Documentation** - Instant docs for functions and variables
+- **Auto-completion** - Smart suggestions for variables, functions, modules
+- **Signature Help** - Real-time parameter hints while typing
+- **Symbol Navigation** - Outline view and breadcrumbs
 
-- **Syntax Highlighting** - Enhanced TextMate grammar for accurate highlighting
-- **Semantic Tokens** - Rich semantic highlighting beyond syntax (NEW!)
-- **Real-time Diagnostics** - Instant syntax error detection and reporting
-- **Code Formatting** - Format your code with Perl::Tidy integration
-- **Auto-completion** - Context-aware completions for variables, functions, and keywords
-- **Signature Help** - Parameter hints while typing function calls
-- **Go to Definition** - Jump to variable and subroutine definitions
-- **Find References** - Find all usages of variables and subroutines
-- **Document Symbols** - Outline view of packages, subroutines, and variables
-- **Workspace Symbols** - Search symbols across your entire project (Ctrl+T) (NEW!)
-- **Code Lens** - Inline actions like "Run Test" and reference counts (NEW!)
-- **Code Actions** - Quick fixes for common issues
-- **Hover Information** - Documentation on hover
-- **Rename Symbol** - Safely rename variables across your codebase
+### 🔧 Refactoring & Code Actions
+- **Rename** - Safe renaming across files
+- **Extract Variable** - Pull out expressions into variables
+- **Extract Subroutine** - Create functions from code blocks
+- **Convert Loops** - Transform between for/while/foreach
+- **Add Error Checking** - Insert error handling automatically
+- **Organize Imports** - Sort and clean use statements
 
-### 🎯 Parser Features
+### 📊 Advanced Features
+- **Semantic Highlighting** - Context-aware syntax coloring
+- **Type Hierarchy** - Navigate inheritance with @ISA
+- **Call Hierarchy** - Trace function calls up and down
+- **CodeLens** - Inline reference counts
+- **Inlay Hints** - Type annotations in editor
+- **Document Highlights** - Highlight symbol occurrences
 
-This extension uses the **tree-sitter-perl v3 parser** which provides:
+### 🐛 Diagnostics & Quality
+- **Real-time Errors** - Syntax and semantic error detection
+- **Undefined Variables** - Catch typos under `use strict`
+- **Unused Variables** - Find dead code
+- **Missing Pragmas** - Suggest strict/warnings
+- **Code Folding** - Collapse code blocks
+- **Format on Type** - Auto-formatting as you code
 
-- **100% Perl 5 syntax coverage** including all edge cases
+## 🚀 Performance
+
 - **4-19x faster** than traditional parsers
-- Support for modern Perl features (signatures, try/catch, class/method)
-- Accurate handling of complex syntax (regex delimiters, indirect object notation)
+- **<50ms response time** for all operations
+- **100% Perl 5 coverage** including edge cases
+- **40-100x faster** position conversions (v0.8.0)
 
-### ✨ New in v0.5.0
+## 📦 Installation
 
-#### Semantic Tokens
-Experience enhanced syntax highlighting that understands your code's semantics:
-- Built-in functions highlighted differently from user functions
-- Variable declarations vs references are visually distinct
-- Parameter highlighting in function signatures
-- Namespace and module highlighting
+The extension automatically downloads the correct language server for your platform:
+- Windows (x64, ARM64)
+- macOS (Intel, Apple Silicon)
+- Linux (x64, ARM64)
 
-#### Workspace Symbols
-Search and navigate across your entire project:
-- Press `Ctrl+T` to search for any symbol
-- Fuzzy matching for quick access
-- Jump to packages, subroutines, or constants instantly
+Manual installation options:
+```bash
+# Homebrew (macOS/Linux)
+brew tap tree-sitter-perl/tap
+brew install perl-lsp
 
-#### Code Lens
-See inline actions and information:
-- "▶ Run Test" appears above test functions (test_*, Test*, *_test)
-- "X references" shows how many times a function is used
-- "▶ Run Script" for files with shebang
-- Click to execute actions directly
+# One-liner (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 
-#### Call Hierarchy
-Navigate through function call relationships:
-- Right-click any function and select "Show Call Hierarchy"
-- See all functions that call the selected function (incoming)
-- See all functions called by the selected function (outgoing)
-- Navigate through complex call chains easily
+# From source
+cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+```
 
-#### Inlay Hints
-Get inline parameter and type information:
-- Parameter names shown inline for function calls
-- Type hints for variable declarations
-- Configurable hints for better code readability
-- Smart filtering to avoid cluttering clear code
-
-#### Test Runner (Coming Soon)
-Run your Perl tests directly from the editor:
-- Automatic test discovery for .t files and test functions
-- Run individual tests or entire test files
-- See test results inline with pass/fail indicators
-- Works with Test::More and standard Perl testing frameworks
-
-## Requirements
-
-### Required
-- Visual Studio Code 1.74.0 or higher
-
-### Optional (for formatting)
-- Perl::Tidy for code formatting support
-  ```bash
-  # Install via CPAN
-  cpan Perl::Tidy
-  
-  # Or via system package manager
-  apt-get install perltidy    # Debian/Ubuntu
-  yum install perltidy         # RedHat/Fedora
-  brew install perltidy        # macOS
-  ```
-
-## Installation
-
-1. Install from the Visual Studio Code Marketplace:
-   - Open VS Code
-   - Go to Extensions (Ctrl+Shift+X)
-   - Search for "Perl Language Server"
-   - Click Install
-
-2. Or install from command line:
-   ```bash
-   code --install-extension tree-sitter-perl.perl-language-server
-   ```
-
-## Configuration
-
-### Basic Settings
+## ⚙️ Configuration
 
 ```json
 {
-  // Path to perl-lsp executable (optional - uses bundled by default)
-  "perl.lsp.path": "",
+  // Auto-download server if not found
+  "perl-lsp.autoDownload": true,
   
-  // Trace server communication for debugging
-  "perl.lsp.trace.server": "off",
+  // Custom server path (optional)
+  "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
   
-  // Path to perltidy for formatting
-  "perl.formatting.perltidyPath": "perltidy",
+  // Enable strict mode warnings
+  "perl-lsp.enableStrictMode": false,
   
-  // Additional perltidy arguments
-  "perl.formatting.perltidyArgs": []
+  // Maximum diagnostics per file
+  "perl-lsp.maxNumberOfProblems": 100
 }
 ```
 
-### Using .perltidyrc
+## 🎯 Supported Perl Features
 
-The extension automatically discovers and uses `.perltidyrc` files in your workspace or home directory for consistent formatting.
+### Modern Perl (5.38+)
+- `class/method/field` keywords
+- `try/catch/finally` blocks  
+- `defer` blocks
+- Subroutine signatures
+- Type constraints
 
-## Usage
+### Complete Syntax Support
+- Regular expressions with any delimiter (`m!pattern!`, `s{}{}`)
+- Heredocs (all variants including indented)
+- Unicode identifiers (`my $café = 'coffee'`)
+- Postfix dereferencing (`$ref->@*`)
+- Smart match operator (`~~`)
+- Indirect object syntax
 
-### Code Formatting
-- **Format Document**: `Shift+Alt+F`
-- **Format Selection**: Select code and `Shift+Alt+F`
+### Built-in Functions
+Complete signatures for 150+ Perl built-ins with parameter documentation.
 
-### Navigation
-- **Go to Definition**: `F12` or `Ctrl+Click`
-- **Find All References**: `Shift+F12`
-- **Symbol Search**: `Ctrl+Shift+O`
-- **Workspace Symbol Search**: `Ctrl+T` - Search across all files
-- **Code Lens Actions**: Click inline actions above functions
+## 🤝 Compatibility
 
-### Code Intelligence
-- **Hover**: Hover over any symbol for information
-- **Signature Help**: Automatically shows while typing function calls
-- **Auto-completion**: Triggered automatically or with `Ctrl+Space`
+Works with any LSP-compatible editor:
+- Visual Studio Code
+- VSCodium  
+- Cursor
+- Gitpod
+- GitHub Codespaces
+- Neovim (via nvim-lspconfig)
+- Emacs (via lsp-mode)
 
-### Diagnostics
-- Syntax errors appear instantly as you type
-- Problems panel shows all diagnostics (`Ctrl+Shift+M`)
+## 📚 Resources
 
-## Commands
+- [Documentation](https://github.com/EffortlessSteven/tree-sitter-perl#readme)
+- [Issue Tracker](https://github.com/EffortlessSteven/tree-sitter-perl/issues)
+- [Changelog](https://github.com/EffortlessSteven/tree-sitter-perl/blob/master/CHANGELOG.md)
+- [Migration Guide](https://github.com/EffortlessSteven/tree-sitter-perl/blob/master/MIGRATION.md)
 
-- `Perl: Restart Language Server` - Restart the language server
-- `Perl: Show Language Server Output` - Show debug output
+## 📄 License
 
-## Troubleshooting
-
-### Language server not starting
-1. Check the output panel: `Perl: Show Language Server Output`
-2. Ensure the bundled binary has execute permissions
-3. Try setting `perl.lsp.path` to a manual installation
-
-### Formatting not working
-1. Install perltidy: `cpan Perl::Tidy`
-2. Check perltidy is in PATH: `which perltidy`
-3. Set `perl.formatting.perltidyPath` if needed
-
-### Performance issues
-- The bundled parser is highly optimized
-- Large files (10K+ lines) should parse in under 100ms
-- Report any performance issues on GitHub
-
-## Contributing
-
-This extension is part of the tree-sitter-perl project. Contributions are welcome!
-
-- GitHub: https://github.com/tree-sitter-perl/tree-sitter-perl
-- Issues: https://github.com/tree-sitter-perl/tree-sitter-perl/issues
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Acknowledgments
-
-- Built on the tree-sitter-perl v3 parser
-- Uses Perl::Tidy for code formatting
-- Powered by the Language Server Protocol
+MIT © Tree-sitter Perl Team
