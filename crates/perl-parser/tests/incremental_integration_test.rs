@@ -11,9 +11,10 @@ mod incremental_tests {
     use std::time::Instant;
 
     #[test]
+    #[serial_test::serial]
     fn test_incremental_parsing_small_edit() {
         // Enable incremental parsing
-        unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1"); }
+        std::env::set_var("PERL_LSP_INCREMENTAL", "1");
         let config = IncrementalConfig::default();
         assert!(config.enabled);
 
@@ -56,12 +57,13 @@ print $x + $y;
             println!("Incremental parse metrics: {}", metrics);
         }
         
-        unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL"); }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_incremental_parsing_multiple_edits() {
-        unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1"); }
+        std::env::set_var("PERL_LSP_INCREMENTAL", "1");
         let config = IncrementalConfig::default();
         
         let initial_code = r#"
@@ -102,7 +104,7 @@ sub world {
         assert!(!doc.content().contains("Hello"));
         assert!(!doc.content().contains("World"));
         
-        unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL"); }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
     }
 
     #[test]
@@ -153,8 +155,9 @@ sub world {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_full_document_replacement() {
-        unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1"); }
+        std::env::set_var("PERL_LSP_INCREMENTAL", "1");
         let config = IncrementalConfig::default();
         
         let initial_code = "my $x = 1;";
@@ -170,13 +173,14 @@ sub world {
         assert_eq!(doc.content(), "my $y = 2;\nmy $z = 3;");
         assert!(doc.ast().is_some());
         
-        unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL"); }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_incremental_disabled_fallback() {
         // Ensure incremental is disabled
-        unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL"); }
+        std::env::remove_var("PERL_LSP_INCREMENTAL");
         let config = IncrementalConfig::default();
         assert!(!config.enabled);
         
