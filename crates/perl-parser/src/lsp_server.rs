@@ -48,11 +48,11 @@ struct ClientCapabilities {
 /// LSP server that handles JSON-RPC communication
 pub struct LspServer {
     /// Document contents indexed by URI
-    documents: Arc<Mutex<HashMap<String, DocumentState>>>,
+    pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
     /// Workspace-wide index for cross-file features
-    workspace_index: Arc<WorkspaceIndex>,
+    pub(crate) workspace_index: Arc<WorkspaceIndex>,
     /// AST cache for performance
     ast_cache: Arc<AstCache>,
     /// Symbol index for fast lookups
@@ -67,20 +67,20 @@ pub struct LspServer {
 
 /// State of a document
 #[derive(Clone)]
-struct DocumentState {
+pub(crate) struct DocumentState {
     /// Document content
-    content: String,
+    pub(crate) content: String,
     /// Version number
-    _version: i32,
+    pub(crate) _version: i32,
     /// Parsed AST (cached)
-    ast: Option<std::sync::Arc<crate::ast::Node>>,
+    pub(crate) ast: Option<std::sync::Arc<crate::ast::Node>>,
     /// Parse errors
-    parse_errors: Vec<crate::error::ParseError>,
+    pub(crate) parse_errors: Vec<crate::error::ParseError>,
     /// Parent map for O(1) scope traversal (built once per AST)
     /// Uses FxHashMap for faster pointer hashing
-    parent_map: ParentMap,
+    pub(crate) parent_map: ParentMap,
     /// Line starts cache for O(log n) position conversion
-    line_starts: LineStartsCache,
+    pub(crate) line_starts: LineStartsCache,
 }
 
 /// Server configuration
@@ -297,7 +297,13 @@ impl LspServer {
                 }
             }
             "textDocument/didChange" => {
-                match self.handle_did_change(request.params) {
+                // Use incremental version if available
+                let result = if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
+                    self.handle_did_change_incremental(request.params)
+                } else {
+                    self.handle_did_change(request.params)
+                };
+                match result {
                     Ok(_) => Ok(None),
                     Err(e) => Err(e),
                 }
@@ -433,10 +439,17 @@ impl LspServer {
         
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
         
+        // Check if incremental parsing is enabled
+        let sync_kind = if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
+            2 // Incremental sync
+        } else {
+            1 // Full document sync
+        };
+        
         let mut capabilities = json!({
             "textDocumentSync": {
                 "openClose": true,
-                "change": 1, // 1 = Full document sync (honest about current implementation)
+                "change": sync_kind, // Dynamic based on incremental feature
                 "willSave": true,
                 "willSaveWaitUntil": false, // Only enable when formatter is available
                 "save": {
@@ -587,7 +600,7 @@ impl LspServer {
     }
 
     /// Handle didChange notification
-    fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+    pub(crate) fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
@@ -659,7 +672,7 @@ impl LspServer {
     }
 
     /// Publish diagnostics for a document
-    fn publish_diagnostics(&self, uri: &str) {
+    pub(crate) fn publish_diagnostics(&self, uri: &str) {
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
             if let Some(ast) = &doc.ast {
