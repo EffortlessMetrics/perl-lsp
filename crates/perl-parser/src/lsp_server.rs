@@ -12,7 +12,6 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     type_hierarchy::TypeHierarchyProvider,
     formatting::{CodeFormatter, FormattingOptions},
-    workspace_index::WorkspaceIndex,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     semantic_tokens_provider::{
         SemanticTokensProvider, 
@@ -31,6 +30,9 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "workspace")]
+use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol, LspWorkspaceSymbol};
 
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
@@ -51,8 +53,9 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
-    /// Workspace-wide index for cross-file features
-    pub(crate) workspace_index: Arc<WorkspaceIndex>,
+    /// Workspace-wide index for cross-file features (enabled via PERL_LSP_WORKSPACE=1)
+    #[cfg(feature = "workspace")]
+    pub(crate) workspace_index: Option<Arc<WorkspaceIndex>>,
     /// AST cache for performance
     ast_cache: Arc<AstCache>,
     /// Symbol index for fast lookups
@@ -149,10 +152,19 @@ pub struct JsonRpcError {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
+        // Check if workspace indexing is enabled
+        #[cfg(feature = "workspace")]
+        let workspace_index = if std::env::var("PERL_LSP_WORKSPACE").is_ok() {
+            Some(Arc::new(WorkspaceIndex::new()))
+        } else {
+            None
+        };
+        
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
-            workspace_index: Arc::new(WorkspaceIndex::new()),
+            #[cfg(feature = "workspace")]
+            workspace_index,
             // Cache up to 100 ASTs with 5 minute TTL
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
@@ -164,10 +176,19 @@ impl LspServer {
 
     /// Create a new LSP server with custom output (for testing)
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        // Check if workspace indexing is enabled
+        #[cfg(feature = "workspace")]
+        let workspace_index = if std::env::var("PERL_LSP_WORKSPACE").is_ok() {
+            Some(Arc::new(WorkspaceIndex::new()))
+        } else {
+            None
+        };
+        
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
-            workspace_index: Arc::new(WorkspaceIndex::new()),
+            #[cfg(feature = "workspace")]
+            workspace_index,
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
@@ -578,21 +599,33 @@ impl LspServer {
             // Index symbols for workspace search
             if let Some(ref _ast) = ast_arc {
                 // Update the fast symbol index with symbols from workspace index
-                let index_symbols = self.workspace_index.find_symbols("");
-                let symbols = index_symbols.into_iter()
-                    .filter(|s| &s.uri == uri)
-                    .map(|s| s.name.clone())
-                    .collect::<Vec<_>>();
-                
-                let mut index = self.symbol_index.lock().unwrap();
-                for symbol in symbols {
-                    index.add_symbol(symbol);
+                #[cfg(feature = "workspace")]
+                if let Some(ref workspace_index) = self.workspace_index {
+                    let index_symbols = workspace_index.find_symbols("");
+                    let symbols = index_symbols.into_iter()
+                        .filter(|s| s.uri == uri)
+                        .map(|s| s.name.clone())
+                        .collect::<Vec<_>>();
+                    
+                    let mut index = self.symbol_index.lock().unwrap();
+                    for symbol in symbols {
+                        index.add_symbol(symbol);
+                    }
+                }
+                #[cfg(not(feature = "workspace"))]
+                {
+                    let _index = self.symbol_index.lock().unwrap();
+                    // Just ensure the index exists even without workspace feature
                 }
                 
                 // Update the workspace-wide index for cross-file features
-                // Note: version defaults to 0 for initial open
-                if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
-                    eprintln!("Failed to index file {}: {}", uri, e);
+                #[cfg(feature = "workspace")]
+                if let Some(ref workspace_index) = self.workspace_index {
+                    if let Ok(url) = url::Url::parse(uri) {
+                        if let Err(e) = workspace_index.index_file(url, text.to_string()) {
+                            eprintln!("Failed to index file {}: {}", uri, e);
+                        }
+                    }
                 }
             }
 
@@ -661,8 +694,13 @@ impl LspServer {
                     if let Some(ref _ast) = ast_arc {
                         // Update the workspace-wide index for cross-file features
                         // Note: version is maintained by the document state
-                        if let Err(e) = self.workspace_index.index_file(uri, text, 0) {
-                            eprintln!("Failed to index file {}: {}", uri, e);
+                        #[cfg(feature = "workspace")]
+                        if let Some(ref workspace_index) = self.workspace_index {
+                            if let Ok(url) = url::Url::parse(uri) {
+                                if let Err(e) = workspace_index.index_file(url, text.to_string()) {
+                                    eprintln!("Failed to index file {}: {}", uri, e);
+                                }
+                            }
                         }
                     }
 
@@ -731,7 +769,12 @@ impl LspServer {
             self.documents.lock().unwrap().remove(uri);
             
             // Clear from workspace index
-            self.workspace_index.clear_file(uri);
+            #[cfg(feature = "workspace")]
+            if let Some(ref workspace_index) = self.workspace_index {
+                if let Ok(url) = url::Url::parse(uri) {
+                    workspace_index.clear_file(&url);
+                }
+            }
             
             // Clear diagnostics for this file using centralized notify
             let _ = self.notify("textDocument/publishDiagnostics", json!({
@@ -2742,40 +2785,53 @@ impl LspServer {
         eprintln!("Workspace symbol search: '{}'", query);
         
         // Use workspace index for all symbol searches
-        let index_symbols = self.workspace_index.find_symbols(query);
+        #[cfg(feature = "workspace")]
+        {
+            let index_symbols = if let Some(ref workspace_index) = self.workspace_index {
+                workspace_index.find_symbols(query)
+            } else {
+                Vec::new()
+            };
+            
+            // Convert workspace index symbols to typed LSP WorkspaceSymbol structs
+            use std::collections::HashSet;
+            let mut seen = HashSet::new();
+            
+            // First deduplicate the internal symbols
+            let deduped_symbols: Vec<WorkspaceSymbol> = index_symbols.into_iter()
+                .filter(|sym| {
+                    // Deduplicate by (uri, start position, name, kind)
+                    seen.insert((
+                        sym.uri.clone(),
+                        sym.range.start.line,
+                        sym.range.start.character,
+                        sym.name.clone(),
+                        sym.kind.clone(),
+                    ))
+                })
+                .collect();
+            
+            // Convert to LSP DTOs (no internal fields)
+            let lsp_symbols: Vec<LspWorkspaceSymbol> = deduped_symbols
+                .iter()
+                .map(|sym| sym.into())
+                .collect();
+            
+            eprintln!("Found {} symbols (after deduplication)", lsp_symbols.len());
+            
+            // Convert to JSON for LSP response
+            // Now we're only serializing LSP-compliant fields
+            let result = serde_json::to_value(&lsp_symbols)
+                .unwrap_or_else(|_| json!([]));
+            
+            return Ok(Some(result));
+        }
         
-        // Convert workspace index symbols to typed LSP WorkspaceSymbol structs
-        use std::collections::HashSet;
-        let mut seen = HashSet::new();
-        
-        // First deduplicate the internal symbols
-        let deduped_symbols: Vec<crate::workspace_index::WorkspaceSymbol> = index_symbols.into_iter()
-            .filter(|sym| {
-                // Deduplicate by (uri, start position, name, kind)
-                seen.insert((
-                    sym.uri.clone(),
-                    sym.range.start.line,
-                    sym.range.start.character,
-                    sym.name.clone(),
-                    sym.kind.clone(),
-                ))
-            })
-            .collect();
-        
-        // Convert to LSP DTOs (no internal fields)
-        let lsp_symbols: Vec<crate::workspace_index::LspWorkspaceSymbol> = deduped_symbols
-            .iter()
-            .map(|sym| sym.into())
-            .collect();
-        
-        eprintln!("Found {} symbols (after deduplication)", lsp_symbols.len());
-        
-        // Convert to JSON for LSP response
-        // Now we're only serializing LSP-compliant fields
-        let result = serde_json::to_value(&lsp_symbols)
-            .unwrap_or_else(|_| json!([]));
-        
-        Ok(Some(result))
+        #[cfg(not(feature = "workspace"))]
+        {
+            // Without workspace feature, return empty results
+            return Ok(Some(json!([])));
+        }
     }
     
     /// Handle textDocument/codeLens request
@@ -3464,37 +3520,56 @@ impl LspServer {
                     match change_type {
                         1 => { // Created
                             // Re-index the file if it's a Perl file
-                            if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
-                                if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
-                                    let _ = self.workspace_index.index_file(uri, &content, 0);
-                                    eprintln!("Indexed new file: {}", uri);
+                            #[cfg(feature = "workspace")]
+                            if let Some(ref workspace_index) = self.workspace_index {
+                                if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                                    if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
+                                        if let Ok(url) = url::Url::parse(uri) {
+                                            let _ = workspace_index.index_file(url, content);
+                                            eprintln!("Indexed new file: {}", uri);
+                                        }
+                                    }
                                 }
                             }
                         }
                         2 => { // Changed
                             // Re-index the file
-                            if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
-                                // Clear old index data
-                                self.workspace_index.clear_file(uri);
-                                // Re-index with new content
-                                let _ = self.workspace_index.index_file(uri, &content, 0);
-                                
-                                // Also update our internal document store if it exists
-                                if let Ok(mut documents) = self.documents.lock() {
-                                    if let Some(doc) = documents.get_mut(uri) {
+                            #[cfg(feature = "workspace")]
+                            if let Some(ref workspace_index) = self.workspace_index {
+                                if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
+                                    if let Ok(url) = url::Url::parse(uri) {
+                                        // Clear old index data
+                                        workspace_index.clear_file(&url);
+                                        // Re-index with new content
+                                        let _ = workspace_index.index_file(url, content.clone());
+                                    }
+                                }
+                            }
+                            
+                            // Also update our internal document store if it exists
+                            if let Ok(mut documents) = self.documents.lock() {
+                                if let Some(doc) = documents.get_mut(uri) {
+                                    // Note: content variable is only available inside the cfg block above
+                                    // We'll need to re-read the file or restructure this
+                                    if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
                                         doc.content = content;
                                         doc._version += 1;
                                         // Clear cached AST
                                         doc.ast = None;
                                     }
                                 }
-                                
-                                eprintln!("Re-indexed changed file: {}", uri);
                             }
+                            
+                            eprintln!("Re-indexed changed file: {}", uri);
                         }
                         3 => { // Deleted
                             // Remove from index
-                            self.workspace_index.remove_file(uri);
+                            #[cfg(feature = "workspace")]
+                            if let Some(ref workspace_index) = self.workspace_index {
+                                if let Ok(url) = url::Url::parse(uri) {
+                                    workspace_index.remove_file(&url);
+                                }
+                            }
                             
                             // Remove from document store
                             if let Ok(mut documents) = self.documents.lock() {
@@ -3537,7 +3612,15 @@ impl LspServer {
                     
                     if !old_module.is_empty() && !new_module.is_empty() {
                         // Find all files that reference the old module
-                        let dependents = self.workspace_index.find_dependents(&old_module);
+                        #[cfg(feature = "workspace")]
+                        let dependents = if let Some(ref workspace_index) = self.workspace_index {
+                            workspace_index.find_dependents(&old_module)
+                        } else {
+                            Vec::new()
+                        };
+                        
+                        #[cfg(not(feature = "workspace"))]
+                        let dependents = Vec::<String>::new();
                         
                         for dependent_uri in dependents {
                             // Get the document content
@@ -3573,9 +3656,16 @@ impl LspServer {
                     }
                     
                     // Update the index for the renamed file
-                    self.workspace_index.remove_file(old_uri);
-                    if let Ok(content) = std::fs::read_to_string(new_uri.trim_start_matches("file://")) {
-                        let _ = self.workspace_index.index_file(new_uri, &content, 0);
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        if let Ok(url) = url::Url::parse(old_uri) {
+                            workspace_index.remove_file(&url);
+                        }
+                        if let Ok(content) = std::fs::read_to_string(new_uri.trim_start_matches("file://")) {
+                            if let Ok(url) = url::Url::parse(new_uri) {
+                                let _ = workspace_index.index_file(url, content.clone());
+                            }
+                        }
                     }
                 }
                 
@@ -3599,7 +3689,12 @@ impl LspServer {
                     eprintln!("File deleted: {}", uri);
                     
                     // Remove from workspace index
-                    self.workspace_index.remove_file(uri);
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        if let Ok(url) = url::Url::parse(uri) {
+                            workspace_index.remove_file(&url);
+                        }
+                    }
                     
                     // Remove from document store
                     if let Ok(mut documents) = self.documents.lock() {
@@ -3688,7 +3783,12 @@ impl LspServer {
                             }
                             
                             // Re-index the file after changes
-                            let _ = self.workspace_index.index_file(uri, &doc.content, doc._version);
+                            #[cfg(feature = "workspace")]
+                            if let Some(ref workspace_index) = self.workspace_index {
+                                if let Ok(url) = url::Url::parse(uri) {
+                                    let _ = workspace_index.index_file(url, doc.content.clone());
+                                }
+                            }
                             
                             // Clear cached AST
                             doc.ast = None;
