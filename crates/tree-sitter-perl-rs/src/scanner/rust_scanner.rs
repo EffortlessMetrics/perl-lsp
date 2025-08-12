@@ -27,10 +27,10 @@ impl RustScanner {
             keyword_cache: HashMap::new(),
             identifier_cache: HashMap::new(),
         };
-        
+
         // Pre-populate keyword cache for faster lookups
         scanner.init_keyword_cache();
-        
+
         scanner
     }
 
@@ -42,9 +42,9 @@ impl RustScanner {
             keyword_cache: HashMap::new(),
             identifier_cache: HashMap::new(),
         };
-        
+
         scanner.init_keyword_cache();
-        
+
         scanner
     }
 
@@ -271,7 +271,7 @@ impl RustScanner {
             }
         }
         Ok(Some(TokenType::Identifier))
-            }
+    }
 
     fn scan_operator(&mut self, _input: &[u8]) -> ParseResult<Option<TokenType>> {
         Ok(Some(TokenType::Plus)) // Simplified
@@ -349,7 +349,7 @@ mod tests {
     fn test_scan_basic() {
         let mut scanner = RustScanner::new();
         let input = b"my $var = 42;";
-        
+
         // This is a simplified test - the actual implementation would be more complex
         let result = scanner.scan(input);
         assert!(result.is_ok());

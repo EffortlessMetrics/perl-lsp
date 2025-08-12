@@ -1,14 +1,9 @@
 //! Debug substitution tokenization
-use perl_parser::{TokenStream, TokenKind};
+use perl_parser::{TokenKind, TokenStream};
 
 fn main() {
-    let tests = vec![
-        "s/old/new/",
-        "s/old/new/g",
-        "tr/a-z/A-Z/",
-        "y/a-z/A-Z/",
-    ];
-    
+    let tests = vec!["s/old/new/", "s/old/new/g", "tr/a-z/A-Z/", "y/a-z/A-Z/"];
+
     for code in tests {
         println!("\nCode: {}", code);
         println!("Parser tokens:");

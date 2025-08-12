@@ -6,8 +6,8 @@
 
 use crate::{
     ast_v2::{Node, NodeKind},
-    position::Range,
     parser_context::ParserContext,
+    position::Range,
 };
 use perl_lexer::TokenType;
 
@@ -32,19 +32,19 @@ impl ParseError {
             recovery_hint: None,
         }
     }
-    
+
     /// Add expected tokens
     pub fn with_expected(mut self, expected: Vec<String>) -> Self {
         self.expected = expected;
         self
     }
-    
+
     /// Add found token
     pub fn with_found(mut self, found: String) -> Self {
         self.found = found;
         self
     }
-    
+
     /// Add recovery hint
     pub fn with_hint(mut self, hint: String) -> Self {
         self.recovery_hint = Some(hint);
@@ -74,16 +74,16 @@ pub trait ErrorRecovery {
         expected: Vec<String>,
         partial: Option<Node>,
     ) -> Node;
-    
+
     /// Synchronize to a recovery point
     fn synchronize(&mut self, sync_points: &[SyncPoint]) -> bool;
-    
+
     /// Try to recover from an error
     fn recover_with_node(&mut self, error: ParseError) -> Node;
-    
+
     /// Skip tokens until a sync point
     fn skip_until(&mut self, sync_points: &[SyncPoint]) -> usize;
-    
+
     /// Check if current token is a sync point
     fn is_sync_point(&self, sync_point: SyncPoint) -> bool;
 }
@@ -102,7 +102,7 @@ impl ErrorRecovery for ParserContext {
             let pos = self.current_position();
             Range::new(pos, pos)
         };
-        
+
         Node::new(
             self.id_generator.next_id(),
             NodeKind::Error {
@@ -113,23 +113,19 @@ impl ErrorRecovery for ParserContext {
             range,
         )
     }
-    
+
     fn synchronize(&mut self, sync_points: &[SyncPoint]) -> bool {
         let skipped = self.skip_until(sync_points);
         skipped > 0
     }
-    
+
     fn recover_with_node(&mut self, error: ParseError) -> Node {
         // Add error to diagnostics
         self.add_error(error.clone());
-        
+
         // Create error node
-        let error_node = self.create_error_node(
-            error.message,
-            error.expected,
-            None,
-        );
-        
+        let error_node = self.create_error_node(error.message, error.expected, None);
+
         // Try to synchronize
         let sync_points = vec![
             SyncPoint::Semicolon,
@@ -137,13 +133,13 @@ impl ErrorRecovery for ParserContext {
             SyncPoint::Keyword,
         ];
         self.synchronize(&sync_points);
-        
+
         error_node
     }
-    
+
     fn skip_until(&mut self, sync_points: &[SyncPoint]) -> usize {
         let mut skipped = 0;
-        
+
         while let Some(_token) = self.current_token() {
             // Check if we've reached a sync point
             for sync_point in sync_points {
@@ -151,20 +147,20 @@ impl ErrorRecovery for ParserContext {
                     return skipped;
                 }
             }
-            
+
             // Skip the current token
             self.advance();
             skipped += 1;
-            
+
             // Prevent infinite loops
             if skipped > 100 {
                 break;
             }
         }
-        
+
         skipped
     }
-    
+
     fn is_sync_point(&self, sync_point: SyncPoint) -> bool {
         match self.current_token() {
             Some(token) => match sync_point {
@@ -190,12 +186,12 @@ impl ErrorRecovery for ParserContext {
 pub trait ParserErrorRecovery {
     /// Parse with error recovery enabled
     fn parse_with_recovery(&mut self) -> (Node, Vec<ParseError>);
-    
+
     /// Try to parse, returning an error node on failure
     fn try_parse<F>(&mut self, parse_fn: F) -> Node
     where
         F: FnOnce(&mut Self) -> Option<Node>;
-    
+
     /// Parse a list with recovery on each element
     fn parse_list_with_recovery<F>(
         &mut self,
@@ -211,10 +207,10 @@ pub trait ParserErrorRecovery {
 pub trait StatementRecovery {
     /// Parse statement with recovery
     fn parse_statement_with_recovery(&mut self) -> Node;
-    
+
     /// Parse expression with recovery
     fn parse_expression_with_recovery(&mut self) -> Node;
-    
+
     /// Parse block with recovery
     fn parse_block_with_recovery(&mut self) -> Node;
 }
@@ -222,23 +218,27 @@ pub trait StatementRecovery {
 /// Common recovery patterns
 pub mod recovery_patterns {
     use super::*;
-    
+
     /// Try to recover a missing semicolon
     pub fn recover_missing_semicolon(ctx: &mut ParserContext) -> Option<ParseError> {
         // Check if we're at a natural statement boundary
-        if ctx.is_sync_point(SyncPoint::Keyword) || 
-           ctx.is_sync_point(SyncPoint::CloseBrace) ||
-           ctx.current_token().is_none() {
-            Some(ParseError::new(
-                "Missing semicolon".to_string(),
-                ctx.current_position_range(),
-            ).with_expected(vec![";".to_string()])
-             .with_hint("Add a semicolon to end the statement".to_string()))
+        if ctx.is_sync_point(SyncPoint::Keyword)
+            || ctx.is_sync_point(SyncPoint::CloseBrace)
+            || ctx.current_token().is_none()
+        {
+            Some(
+                ParseError::new(
+                    "Missing semicolon".to_string(),
+                    ctx.current_position_range(),
+                )
+                .with_expected(vec![";".to_string()])
+                .with_hint("Add a semicolon to end the statement".to_string()),
+            )
         } else {
             None
         }
     }
-    
+
     /// Try to recover from unmatched delimiter
     pub fn recover_unmatched_delimiter(
         ctx: &mut ParserContext,
@@ -249,13 +249,17 @@ pub mod recovery_patterns {
             Some(token) => format!("Expected '{}', found '{:?}'", expected, token),
             None => format!("Expected '{}', found end of file", expected),
         };
-        
+
         ParseError::new(message, ctx.current_position_range())
             .with_expected(vec![expected.to_string()])
-            .with_found(found.map(|t| format!("{:?}", t)).unwrap_or_else(|| "EOF".to_string()))
+            .with_found(
+                found
+                    .map(|t| format!("{:?}", t))
+                    .unwrap_or_else(|| "EOF".to_string()),
+            )
             .with_hint(format!("Add '{}' to match the opening delimiter", expected))
     }
-    
+
     /// Create a placeholder for missing expressions
     pub fn create_missing_expression(ctx: &mut ParserContext) -> Node {
         Node::new(
@@ -264,7 +268,7 @@ pub mod recovery_patterns {
             ctx.current_position_range(),
         )
     }
-    
+
     /// Create a placeholder for missing statements
     pub fn create_missing_statement(ctx: &mut ParserContext) -> Node {
         Node::new(
@@ -279,22 +283,22 @@ pub mod recovery_patterns {
 mod tests {
     use super::*;
     use crate::position::Position;
-    
+
     #[test]
     fn test_error_creation() {
-        let range = Range::new(
-            Position::new(0, 1, 1),
-            Position::new(5, 1, 6),
-        );
-        
+        let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
+
         let error = ParseError::new("Syntax error".to_string(), range)
             .with_expected(vec!["identifier".to_string()])
             .with_found("number".to_string())
             .with_hint("Did you mean to use a variable?".to_string());
-        
+
         assert_eq!(error.message, "Syntax error");
         assert_eq!(error.expected, vec!["identifier"]);
         assert_eq!(error.found, "number");
-        assert_eq!(error.recovery_hint, Some("Did you mean to use a variable?".to_string()));
+        assert_eq!(
+            error.recovery_hint,
+            Some("Did you mean to use a variable?".to_string())
+        );
     }
 }

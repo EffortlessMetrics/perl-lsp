@@ -13,14 +13,14 @@ fn main() {
 
     println!("=== Input length: {} ===", input.len());
     println!("Character at position 112: {:?}", input.chars().nth(112));
-    
+
     // Show context
     let start = 100;
     let end = 125.min(input.len());
     println!("\nContext around position 112:");
     println!("{}", &input[start..end]);
     println!("{}^", " ".repeat(112 - start));
-    
+
     // Find the exact statement
     let lines: Vec<&str> = input.lines().collect();
     let mut pos = 0;
@@ -32,7 +32,7 @@ fn main() {
         }
         pos = line_end;
     }
-    
+
     // Parse
     println!("\nParser output:");
     let mut parser = Parser::new(input);

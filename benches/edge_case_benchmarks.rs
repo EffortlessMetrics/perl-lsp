@@ -1,6 +1,6 @@
 //! Benchmarks for edge case detection and handling performance
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 #[cfg(feature = "pure-rust")]
 use criterion::BenchmarkId;
@@ -10,17 +10,17 @@ use std::hint::black_box;
 
 #[cfg(feature = "pure-rust")]
 use tree_sitter_perl::{
-    edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
     dynamic_delimiter_recovery::RecoveryMode,
-    understanding_parser::UnderstandingParser,
+    edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
     tree_sitter_adapter::TreeSitterAdapter,
+    understanding_parser::UnderstandingParser,
 };
 
 /// Benchmark different types of Perl code
 #[cfg(feature = "pure-rust")]
 fn bench_edge_case_detection(c: &mut Criterion) {
     let mut group = c.benchmark_group("edge_case_detection");
-    
+
     // Test cases with increasing complexity
     let test_cases = vec![
         (
@@ -32,7 +32,7 @@ my $text = <<'EOF';
 Standard heredoc
 with multiple lines
 EOF
-"#
+"#,
         ),
         (
             "dynamic_delimiter",
@@ -46,7 +46,7 @@ my $complex = get_delimiter();
 my $data = <<$complex;
 Unknown delimiter
 UNKNOWN
-"#
+"#,
         ),
         (
             "phase_dependent",
@@ -69,7 +69,7 @@ END {
     cleanup code
 CLEANUP
 }
-"#
+"#,
         ),
         (
             "multiple_edge_cases",
@@ -95,24 +95,20 @@ Tied output
 END
 
 use Filter::Simple;
-"#
+"#,
         ),
     ];
 
     // Benchmark each test case
     for (name, code) in &test_cases {
-        group.bench_with_input(
-            BenchmarkId::new("analyze", name),
-            code,
-            |b, code| {
-                b.iter(|| {
-                    let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
-                    black_box(handler.analyze(code))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("analyze", name), code, |b, code| {
+            b.iter(|| {
+                let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
+                black_box(handler.analyze(code))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -120,7 +116,7 @@ use Filter::Simple;
 #[cfg(feature = "pure-rust")]
 fn bench_recovery_modes(c: &mut Criterion) {
     let mut group = c.benchmark_group("recovery_modes");
-    
+
     let code = r#"
 my $delimiter = "EOF";
 my $text = <<$delimiter;
@@ -157,7 +153,7 @@ UNKNOWN
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -165,7 +161,7 @@ UNKNOWN
 #[cfg(feature = "pure-rust")]
 fn bench_tree_sitter_conversion(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree_sitter_conversion");
-    
+
     let test_cases = vec![
         ("small", generate_perl_code(10)),
         ("medium", generate_perl_code(100)),
@@ -173,25 +169,21 @@ fn bench_tree_sitter_conversion(c: &mut Criterion) {
     ];
 
     for (size, code) in &test_cases {
-        group.bench_with_input(
-            BenchmarkId::new("convert", size),
-            code,
-            |b, code| {
-                // Pre-analyze to separate analysis from conversion time
-                let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
-                let analysis = handler.analyze(code);
-                
-                b.iter(|| {
-                    black_box(TreeSitterAdapter::convert_to_tree_sitter(
-                        analysis.ast.clone(),
-                        analysis.diagnostics.clone(),
-                        code,
-                    ))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("convert", size), code, |b, code| {
+            // Pre-analyze to separate analysis from conversion time
+            let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
+            let analysis = handler.analyze(code);
+
+            b.iter(|| {
+                black_box(TreeSitterAdapter::convert_to_tree_sitter(
+                    analysis.ast.clone(),
+                    analysis.diagnostics.clone(),
+                    code,
+                ))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -199,40 +191,45 @@ fn bench_tree_sitter_conversion(c: &mut Criterion) {
 #[cfg(feature = "pure-rust")]
 fn bench_understanding_parser(c: &mut Criterion) {
     let mut group = c.benchmark_group("understanding_parser");
-    
+
     let test_cases = vec![
-        ("clean_code", r#"
+        (
+            "clean_code",
+            r#"
 my $x = 42;
 sub foo { return $x * 2; }
 print foo();
-"#),
-        ("with_heredocs", r#"
+"#,
+        ),
+        (
+            "with_heredocs",
+            r#"
 my $config = <<'EOF';
 [database]
 host = localhost
 port = 5432
 EOF
-"#),
-        ("with_edge_cases", r#"
+"#,
+        ),
+        (
+            "with_edge_cases",
+            r#"
 BEGIN { $x = <<'E'; data E }
 format F = <<'E' text E .
 my $d = shift; my $t = <<$d; content EOF
-"#),
+"#,
+        ),
     ];
 
     for (name, code) in &test_cases {
-        group.bench_with_input(
-            BenchmarkId::new("parse", name),
-            code,
-            |b, code| {
-                b.iter(|| {
-                    let mut parser = UnderstandingParser::new();
-                    black_box(parser.parse_with_understanding(code))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("parse", name), code, |b, code| {
+            b.iter(|| {
+                let mut parser = UnderstandingParser::new();
+                black_box(parser.parse_with_understanding(code))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -240,13 +237,13 @@ my $d = shift; my $t = <<$d; content EOF
 #[cfg(feature = "pure-rust")]
 fn generate_perl_code(statements: usize) -> String {
     let mut code = String::new();
-    
+
     for i in 0..statements {
         match i % 5 {
             0 => code.push_str(&format!("my $var{} = {};\n", i, i * 42)),
             1 => code.push_str(&format!("print \"Line {}\\n\";\n", i)),
             2 => code.push_str(&format!(
-                "my $text{} = <<'EOF';\nHeredoc content {}\nwith multiple lines\nEOF\n", 
+                "my $text{} = <<'EOF';\nHeredoc content {}\nwith multiple lines\nEOF\n",
                 i, i
             )),
             3 => code.push_str(&format!("sub func{} {{ return {} * 2; }}\n", i, i)),
@@ -264,7 +261,7 @@ fn generate_perl_code(statements: usize) -> String {
             _ => unreachable!(),
         }
     }
-    
+
     code
 }
 
@@ -272,11 +269,11 @@ fn generate_perl_code(statements: usize) -> String {
 #[cfg(feature = "pure-rust")]
 fn bench_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_usage");
-    
+
     // Test with deeply nested structures
     let nested_code = generate_nested_code(10);
     let deep_nested = generate_nested_code(100);
-    
+
     group.bench_function("shallow_nesting", |b| {
         b.iter(|| {
             let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
@@ -284,7 +281,7 @@ fn bench_memory_usage(c: &mut Criterion) {
             black_box(analysis);
         });
     });
-    
+
     group.bench_function("deep_nesting", |b| {
         b.iter(|| {
             let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
@@ -292,31 +289,34 @@ fn bench_memory_usage(c: &mut Criterion) {
             black_box(analysis);
         });
     });
-    
+
     group.finish();
 }
 
 #[cfg(feature = "pure-rust")]
 fn generate_nested_code(depth: usize) -> String {
     let mut code = String::new();
-    
+
     // Generate nested blocks with heredocs
     for i in 0..depth {
         code.push_str(&"  ".repeat(i));
         code.push_str("if ($condition) {\n");
-        
+
         if i % 3 == 0 {
             code.push_str(&"  ".repeat(i + 1));
-            code.push_str(&format!("my $h{} = <<'END';\nNested heredoc at level {}\nEND\n", i, i));
+            code.push_str(&format!(
+                "my $h{} = <<'END';\nNested heredoc at level {}\nEND\n",
+                i, i
+            ));
         }
     }
-    
+
     // Close all blocks
     for i in (0..depth).rev() {
         code.push_str(&"  ".repeat(i));
         code.push_str("}\n");
     }
-    
+
     code
 }
 

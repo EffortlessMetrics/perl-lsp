@@ -1,12 +1,12 @@
 //! Test anonymous subroutines
-use perl_parser::Parser;
 use perl_lexer::PerlLexer;
+use perl_parser::Parser;
 
 fn main() {
     // Test the specific failing case
     let input = r#"my $anon = sub { return "anonymous"; };"#;
     println!("=== Testing: {} ===", input);
-    
+
     // First check lexer output
     println!("\nLexer output:");
     let mut lexer = PerlLexer::new(input);
@@ -16,7 +16,7 @@ fn main() {
             break;
         }
     }
-    
+
     // Then try parser
     println!("\nParser output:");
     let mut parser = Parser::new(input);
@@ -29,27 +29,23 @@ fn main() {
             println!("  Error: {}", e);
         }
     }
-    
+
     let tests = vec![
         // Basic anonymous subs
         "sub { }",
         "sub { return 42 }",
         "sub { my $x = shift; return $x + 1 }",
-        
         // Assigned to variables
         "my $f = sub { }",
         "my $add = sub { $_[0] + $_[1] }",
         "our $handler = sub { die 'Not implemented' }",
-        
         // As arguments
         "map { $_ * 2 } @list",
         "grep { $_ > 10 } @numbers",
         "sort { $a <=> $b } @values",
-        
         // With signatures (modern Perl)
         "sub ($x) { $x * 2 }",
         "sub ($x, $y) { $x + $y }",
-        
         // In expressions
         "(sub { 42 })->()",
         "my $result = (sub { $_[0] ** 2 })->(5)",

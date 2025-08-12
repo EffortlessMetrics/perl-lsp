@@ -2,9 +2,9 @@
 
 #[cfg(feature = "pure-rust")]
 use tree_sitter_perl::{
-    edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
-    tree_sitter_adapter::TreeSitterAdapter,
     dynamic_delimiter_recovery::RecoveryMode,
+    edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
+    tree_sitter_adapter::TreeSitterAdapter,
 };
 
 fn main() {
@@ -13,20 +13,20 @@ fn main() {
         eprintln!("This example requires the pure-rust feature");
         std::process::exit(1);
     }
-    
+
     #[cfg(feature = "pure-rust")]
     {
         println!("=== Tree-sitter Compatible Edge Case Output ===\n");
-        
+
         // Example 1: Standard heredoc (baseline)
         demo_standard_heredoc();
-        
+
         // Example 2: Dynamic delimiter
         demo_dynamic_delimiter();
-        
+
         // Example 3: Phase-dependent heredoc
         demo_phase_dependent_heredoc();
-        
+
         // Example 4: Multiple edge cases
         demo_complex_edge_cases();
     }
@@ -35,14 +35,14 @@ fn main() {
 #[cfg(feature = "pure-rust")]
 fn demo_standard_heredoc() {
     println!("--- Example 1: Standard Heredoc (Baseline) ---");
-    
+
     let code = r#"
 my $text = <<'EOF';
 This is a standard heredoc
 with multiple lines
 EOF
 "#;
-    
+
     let output = analyze_and_convert(code);
     print_tree_sitter_output(&output);
 }
@@ -50,14 +50,14 @@ EOF
 #[cfg(feature = "pure-rust")]
 fn demo_dynamic_delimiter() {
     println!("\n--- Example 2: Dynamic Delimiter ---");
-    
+
     let code = r#"
 my $delimiter = "END";
 my $content = <<$delimiter;
 Dynamic delimiter content
 END
 "#;
-    
+
     let output = analyze_and_convert(code);
     print_tree_sitter_output(&output);
 }
@@ -65,7 +65,7 @@ END
 #[cfg(feature = "pure-rust")]
 fn demo_phase_dependent_heredoc() {
     println!("\n--- Example 3: Phase-Dependent Heredoc ---");
-    
+
     let code = r#"
 BEGIN {
     our $CONFIG = <<'CFG';
@@ -74,7 +74,7 @@ BEGIN {
 CFG
 }
 "#;
-    
+
     let output = analyze_and_convert(code);
     print_tree_sitter_output(&output);
 }
@@ -82,7 +82,7 @@ CFG
 #[cfg(feature = "pure-rust")]
 fn demo_complex_edge_cases() {
     println!("\n--- Example 4: Multiple Edge Cases ---");
-    
+
     let code = r#"
 # Mix of edge cases
 use encoding 'latin1';
@@ -105,7 +105,7 @@ print FH <<'END';
 Tied handle output
 END
 "#;
-    
+
     let output = analyze_and_convert(code);
     print_tree_sitter_output(&output);
 }
@@ -113,23 +113,20 @@ END
 #[cfg(feature = "pure-rust")]
 fn analyze_and_convert(code: &str) -> String {
     use tree_sitter_perl::edge_case_handler::EdgeCaseHandler;
-    
+
     // Analyze with edge case handler
     let config = EdgeCaseConfig {
         recovery_mode: RecoveryMode::BestGuess,
         ..Default::default()
     };
-    
+
     let mut handler = EdgeCaseHandler::new(config);
     let analysis = handler.analyze(code);
-    
+
     // Convert to tree-sitter format
-    let ts_output = TreeSitterAdapter::convert_to_tree_sitter(
-        analysis.ast,
-        analysis.diagnostics,
-        code,
-    );
-    
+    let ts_output =
+        TreeSitterAdapter::convert_to_tree_sitter(analysis.ast, analysis.diagnostics, code);
+
     // Format as JSON-like output
     format_output(&ts_output)
 }
@@ -137,18 +134,20 @@ fn analyze_and_convert(code: &str) -> String {
 #[cfg(feature = "pure-rust")]
 fn format_output(output: &tree_sitter_perl::tree_sitter_adapter::TreeSitterOutput) -> String {
     use std::fmt::Write;
-    
+
     let mut result = String::new();
-    
+
     // Tree structure
     writeln!(&mut result, "Tree:").unwrap();
     format_node(&output.tree.root, &mut result, 0);
-    
+
     // Diagnostics (separate from tree)
     if !output.diagnostics.is_empty() {
         writeln!(&mut result, "\nDiagnostics:").unwrap();
         for (i, diag) in output.diagnostics.iter().enumerate() {
-            writeln!(&mut result, "  {}. [{}] {} at {}:{}", 
+            writeln!(
+                &mut result,
+                "  {}. [{}] {} at {}:{}",
                 i + 1,
                 match diag.severity {
                     tree_sitter_perl::tree_sitter_adapter::DiagnosticSeverity::Error => "ERROR",
@@ -159,32 +158,43 @@ fn format_output(output: &tree_sitter_perl::tree_sitter_adapter::TreeSitterOutpu
                 diag.message,
                 diag.start_point.0,
                 diag.start_point.1
-            ).unwrap();
-            
+            )
+            .unwrap();
+
             if let Some(ref code) = diag.code {
                 writeln!(&mut result, "     Code: {}", code).unwrap();
             }
         }
     }
-    
+
     // Metadata
     writeln!(&mut result, "\nMetadata:").unwrap();
-    writeln!(&mut result, "  Parse coverage: {:.1}%", output.metadata.parse_coverage).unwrap();
-    writeln!(&mut result, "  Edge cases: {}", output.metadata.edge_case_count).unwrap();
-    
+    writeln!(
+        &mut result,
+        "  Parse coverage: {:.1}%",
+        output.metadata.parse_coverage
+    )
+    .unwrap();
+    writeln!(
+        &mut result,
+        "  Edge cases: {}",
+        output.metadata.edge_case_count
+    )
+    .unwrap();
+
     result
 }
 
 #[cfg(feature = "pure-rust")]
 fn format_node(
-    node: &tree_sitter_perl::tree_sitter_adapter::TreeSitterNode, 
-    output: &mut String, 
-    indent: usize
+    node: &tree_sitter_perl::tree_sitter_adapter::TreeSitterNode,
+    output: &mut String,
+    indent: usize,
 ) {
     use std::fmt::Write;
-    
+
     let indent_str = "  ".repeat(indent);
-    
+
     // Node type with error/missing indicators
     let type_str = if node.is_error {
         format!("{} [ERROR]", node.node_type)
@@ -193,14 +203,14 @@ fn format_node(
     } else {
         node.node_type.clone()
     };
-    
+
     writeln!(output, "{}{}", indent_str, type_str).unwrap();
-    
+
     // Text content for leaf nodes
     if let Some(ref text) = node.text {
         writeln!(output, "{}  text: {:?}", indent_str, text).unwrap();
     }
-    
+
     // Children
     for child in &node.children {
         format_node(child, output, indent + 1);
@@ -210,10 +220,11 @@ fn format_node(
 #[cfg(feature = "pure-rust")]
 fn print_tree_sitter_output(output: &str) {
     println!("{}", output);
-    
+
     // Show example JSON output
     println!("\nExample JSON representation:");
-    println!(r#"{{
+    println!(
+        r#"{{
   "type": "source_file",
   "children": [
     {{
@@ -230,6 +241,6 @@ fn print_tree_sitter_output(output: &str) {
       ]
     }}
   ]
-}}"#);
+}}"#
+    );
 }
-

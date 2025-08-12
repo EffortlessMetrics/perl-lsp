@@ -3,7 +3,7 @@
 //! This benchmark suite measures the performance of the modern two-crate
 //! architecture and enables comparison with other implementations.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use perl_parser::Parser;
 
 const SIMPLE_SCRIPT: &str = r#"
@@ -91,7 +91,7 @@ fn benchmark_ast_generation(c: &mut Criterion) {
     c.bench_function("ast_to_sexp", |b| {
         let mut parser = Parser::new(COMPLEX_SCRIPT);
         let ast = parser.parse().unwrap();
-        
+
         b.iter(|| {
             let _ = black_box(ast.to_sexp());
         });
@@ -102,22 +102,22 @@ fn benchmark_isolated_components(c: &mut Criterion) {
     // Benchmark just the lexer phase
     c.bench_function("lexer_only", |b| {
         use perl_lexer::{PerlLexer, TokenType};
-        
+
         b.iter(|| {
             let mut lexer = PerlLexer::new(black_box(COMPLEX_SCRIPT));
             let mut count = 0;
-            
+
             while let Some(token) = lexer.next_token() {
                 if matches!(token.token_type, TokenType::EOF) {
                     break;
                 }
                 count += 1;
             }
-            
+
             black_box(count);
         });
     });
-    
+
     // Benchmark parser with pre-tokenized input (simulated)
     // This would require exposing more internals, so we skip for now
 }

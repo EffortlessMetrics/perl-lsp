@@ -19,10 +19,9 @@ impl LexerMode {
     pub fn is_expect_term(&self) -> bool {
         matches!(self, LexerMode::ExpectTerm)
     }
-    
+
     /// Check if we're expecting an operator
     pub fn is_expect_operator(&self) -> bool {
         matches!(self, LexerMode::ExpectOperator)
     }
 }
-

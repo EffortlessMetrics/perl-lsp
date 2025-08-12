@@ -2,8 +2,8 @@
 
 #[cfg(feature = "pure-rust")]
 use tree_sitter_perl::{
-    edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
     dynamic_delimiter_recovery::RecoveryMode,
+    edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
 };
 
 fn main() {
@@ -12,20 +12,20 @@ fn main() {
         eprintln!("This example requires the pure-rust feature");
         std::process::exit(1);
     }
-    
+
     #[cfg(feature = "pure-rust")]
     {
         println!("=== Perl Heredoc Edge Case Demo ===\n");
-        
+
         // Example 1: Dynamic Delimiters
         demo_dynamic_delimiters();
-        
+
         // Example 2: Phase-Dependent Heredocs
         demo_phase_dependent();
-        
+
         // Example 3: Multiple Edge Cases
         demo_complex_edge_cases();
-        
+
         // Example 4: Recovery Modes
         demo_recovery_modes();
     }
@@ -34,7 +34,7 @@ fn main() {
 #[cfg(feature = "pure-rust")]
 fn demo_dynamic_delimiters() {
     println!("\n--- Example 1: Dynamic Delimiters ---");
-    
+
     let code = r#"
 # Simple dynamic delimiter
 my $delimiter = "EOF";
@@ -55,24 +55,30 @@ my $data = <<$computed;
 Delimiter unknown until runtime
 UNKNOWN
 "#;
-    
+
     let config = EdgeCaseConfig {
         recovery_mode: RecoveryMode::BestGuess,
         ..Default::default()
     };
-    
+
     let mut handler = EdgeCaseHandler::new(config);
     let analysis = handler.analyze(code);
-    
-    println!("Found {} dynamic delimiter issues", 
-        analysis.delimiter_resolutions.len());
-    
+
+    println!(
+        "Found {} dynamic delimiter issues",
+        analysis.delimiter_resolutions.len()
+    );
+
     for resolution in &analysis.delimiter_resolutions {
-        println!("  - {}: {}", 
+        println!(
+            "  - {}: {}",
             resolution.expression,
             if let Some(ref delim) = resolution.resolved_to {
-                format!("resolved to '{}' ({}% confidence)", delim, 
-                    (resolution.confidence * 100.0) as u32)
+                format!(
+                    "resolved to '{}' ({}% confidence)",
+                    delim,
+                    (resolution.confidence * 100.0) as u32
+                )
             } else {
                 "could not resolve".to_string()
             }
@@ -83,7 +89,7 @@ UNKNOWN
 #[cfg(feature = "pure-rust")]
 fn demo_phase_dependent() {
     println!("\n--- Example 2: Phase-Dependent Heredocs ---");
-    
+
     let code = r#"
 # BEGIN block with heredoc
 BEGIN {
@@ -111,15 +117,15 @@ my $runtime = <<'EOF';
 This is fine - runtime heredoc
 EOF
 "#;
-    
+
     let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
     let analysis = handler.analyze(code);
-    
+
     println!("Phase warnings:");
     for warning in &analysis.phase_warnings {
         println!("  ⚠️  {}", warning);
     }
-    
+
     println!("\nRecommended actions:");
     for action in &analysis.recommended_actions {
         println!("  • {:?}", action);
@@ -129,7 +135,7 @@ EOF
 #[cfg(feature = "pure-rust")]
 fn demo_complex_edge_cases() {
     println!("\n--- Example 3: Multiple Edge Cases ---");
-    
+
     let code = r#"
 # Worst case: dynamic delimiter in BEGIN with format
 BEGIN {
@@ -166,18 +172,18 @@ print FH <<'EOF';
 This goes through custom I/O
 EOF
 "#;
-    
+
     let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
     let analysis = handler.analyze(code);
-    
+
     println!("Edge case summary:");
     println!("  Total issues: {}", analysis.diagnostics.len());
-    
+
     // Group by severity
     let mut errors = 0;
     let mut warnings = 0;
     let mut info = 0;
-    
+
     for diag in &analysis.diagnostics {
         match diag.severity {
             tree_sitter_perl::anti_pattern_detector::Severity::Error => errors += 1,
@@ -185,11 +191,11 @@ EOF
             tree_sitter_perl::anti_pattern_detector::Severity::Info => info += 1,
         }
     }
-    
+
     println!("  - {} errors", errors);
     println!("  - {} warnings", warnings);
     println!("  - {} info messages", info);
-    
+
     // Show first few diagnostics
     println!("\nFirst 3 diagnostics:");
     for (i, diag) in analysis.diagnostics.iter().take(3).enumerate() {
@@ -203,14 +209,14 @@ EOF
 #[cfg(feature = "pure-rust")]
 fn demo_recovery_modes() {
     println!("\n--- Example 4: Recovery Modes ---");
-    
+
     let code = r#"
 my $delimiter = "EOF";
 my $text = <<$delimiter;
 Test content
 EOF
 "#;
-    
+
     // Test different recovery modes
     let modes = vec![
         ("Conservative", RecoveryMode::Conservative),
@@ -218,30 +224,31 @@ EOF
         ("Interactive", RecoveryMode::Interactive),
         ("Sandbox", RecoveryMode::Sandbox),
     ];
-    
+
     for (name, mode) in modes {
         println!("\n  Recovery mode: {}", name);
-        
+
         let config = EdgeCaseConfig {
             recovery_mode: mode,
             ..Default::default()
         };
-        
+
         let mut handler = EdgeCaseHandler::new(config);
         let analysis = handler.analyze(code);
-        
+
         if let Some(resolution) = analysis.delimiter_resolutions.first() {
             println!("    Strategy: {}", resolution.method);
-            println!("    Result: {}", 
-                if resolution.resolved_to.is_some() { 
-                    "Success" 
-                } else { 
-                    "Failed" 
+            println!(
+                "    Result: {}",
+                if resolution.resolved_to.is_some() {
+                    "Success"
+                } else {
+                    "Failed"
                 }
             );
         }
     }
-    
+
     println!("\n=== Summary ===");
     println!("The edge case handler can:");
     println!("  ✓ Detect dynamic delimiters and attempt recovery");

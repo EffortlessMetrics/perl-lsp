@@ -10,45 +10,34 @@ pub type ParseResult<T> = Result<T, ParseError>;
 pub enum ParseError {
     #[error("Unexpected end of input")]
     UnexpectedEof,
-    
+
     #[error("Unexpected token: expected {expected}, found {found} at {location}")]
     UnexpectedToken {
         expected: String,
         found: String,
         location: usize,
     },
-    
+
     #[error("Invalid syntax at position {location}: {message}")]
-    SyntaxError {
-        message: String,
-        location: usize,
-    },
-    
+    SyntaxError { message: String, location: usize },
+
     #[error("Lexer error: {message}")]
-    LexerError {
-        message: String,
-    },
-    
+    LexerError { message: String },
+
     #[error("Maximum recursion depth exceeded")]
     RecursionLimit,
-    
+
     #[error("Invalid number literal: {literal}")]
-    InvalidNumber {
-        literal: String,
-    },
-    
+    InvalidNumber { literal: String },
+
     #[error("Invalid string literal")]
     InvalidString,
-    
+
     #[error("Unclosed delimiter: {delimiter}")]
-    UnclosedDelimiter {
-        delimiter: char,
-    },
-    
+    UnclosedDelimiter { delimiter: char },
+
     #[error("Invalid regex: {message}")]
-    InvalidRegex {
-        message: String,
-    },
+    InvalidRegex { message: String },
 }
 
 impl ParseError {
@@ -59,9 +48,13 @@ impl ParseError {
             location,
         }
     }
-    
+
     /// Create a new unexpected token error
-    pub fn unexpected(expected: impl Into<String>, found: impl Into<String>, location: usize) -> Self {
+    pub fn unexpected(
+        expected: impl Into<String>,
+        found: impl Into<String>,
+        location: usize,
+    ) -> Self {
         ParseError::UnexpectedToken {
             expected: expected.into(),
             found: found.into(),

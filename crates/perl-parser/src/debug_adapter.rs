@@ -4,13 +4,13 @@
 //! to enable debugging support in VSCode and other DAP-compatible editors.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
-use std::process::{Command, Stdio, Child};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::sync::mpsc::{channel, Sender};
 
 /// DAP server that handles debug sessions
 pub struct DebugAdapter {
@@ -153,11 +153,11 @@ impl DebugAdapter {
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        
+
         // Create channel for events
         let (tx, rx) = channel::<DapMessage>();
         self.event_sender = Some(tx.clone());
-        
+
         // Start event handler thread
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
@@ -173,7 +173,7 @@ impl DebugAdapter {
         // Read messages from stdin
         let reader = BufReader::new(stdin);
         let mut lines = reader.lines();
-        
+
         loop {
             // Read headers
             let mut headers = HashMap::new();
@@ -187,33 +187,43 @@ impl DebugAdapter {
                     headers.insert(key.to_string(), value.to_string());
                 }
             }
-            
+
             // Read content
             if let Some(content_length) = headers.get("Content-Length") {
                 if let Ok(length) = content_length.parse::<usize>() {
                     let mut buffer = vec![0; length];
                     let handle = lines.by_ref().take(length);
                     let mut bytes_read = 0;
-                    
+
                     // Read the JSON content
                     for line in handle {
                         if let Ok(line) = line {
                             let line_bytes = line.as_bytes();
-                            buffer[bytes_read..bytes_read + line_bytes.len()].copy_from_slice(line_bytes);
+                            buffer[bytes_read..bytes_read + line_bytes.len()]
+                                .copy_from_slice(line_bytes);
                             bytes_read += line_bytes.len();
                             if bytes_read >= length {
                                 break;
                             }
                         }
                     }
-                    
+
                     // Parse and handle the message
                     if let Ok(msg) = serde_json::from_slice::<DapMessage>(&buffer[..bytes_read]) {
-                        if let DapMessage::Request { seq, command, arguments } = msg {
+                        if let DapMessage::Request {
+                            seq,
+                            command,
+                            arguments,
+                        } = msg
+                        {
                             let response = self.handle_request(seq, &command, arguments);
                             if let Ok(json) = serde_json::to_string(&response) {
                                 let content_length = json.len();
-                                writeln!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, json)?;
+                                writeln!(
+                                    stdout,
+                                    "Content-Length: {}\r\n\r\n{}",
+                                    content_length, json
+                                )?;
                                 stdout.flush()?;
                             }
                         }
@@ -224,11 +234,16 @@ impl DebugAdapter {
     }
 
     /// Handle a DAP request
-    fn handle_request(&mut self, request_seq: i64, command: &str, arguments: Option<Value>) -> DapMessage {
+    fn handle_request(
+        &mut self,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> DapMessage {
         eprintln!("DAP request: {} {:?}", command, arguments);
-        
+
         let seq = self.next_seq();
-        
+
         match command {
             "initialize" => self.handle_initialize(seq, request_seq, arguments),
             "launch" => self.handle_launch(seq, request_seq, arguments),
@@ -246,16 +261,14 @@ impl DebugAdapter {
             "stepOut" => self.handle_step_out(seq, request_seq, arguments),
             "pause" => self.handle_pause(seq, request_seq, arguments),
             "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
-            _ => {
-                DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: command.to_string(),
-                    body: None,
-                    message: Some(format!("Unknown command: {}", command)),
-                }
-            }
+            _ => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: command.to_string(),
+                body: None,
+                message: Some(format!("Unknown command: {}", command)),
+            },
         }
     }
 
@@ -270,13 +283,22 @@ impl DebugAdapter {
     fn send_event(&self, event: &str, body: Option<Value>) {
         if let Some(ref sender) = self.event_sender {
             let seq = self.next_seq();
-            let msg = DapMessage::Event { seq, event: event.to_string(), body };
+            let msg = DapMessage::Event {
+                seq,
+                event: event.to_string(),
+                body,
+            };
             let _ = sender.send(msg);
         }
     }
 
     /// Handle initialize request
-    fn handle_initialize(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_initialize(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
         let capabilities = json!({
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": false,
@@ -314,7 +336,7 @@ impl DebugAdapter {
 
         // Send initialized event
         self.send_event("initialized", None);
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -326,36 +348,46 @@ impl DebugAdapter {
     }
 
     /// Handle launch request
-    fn handle_launch(&mut self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+    fn handle_launch(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
         if let Some(args) = arguments {
-            let program = args.get("program")
-                .and_then(|p| p.as_str())
-                .unwrap_or("");
-            
-            let perl_args = args.get("args")
+            let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            let perl_args = args
+                .get("args")
                 .and_then(|a| a.as_array())
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default();
-            
-            let stop_on_entry = args.get("stopOnEntry")
+
+            let stop_on_entry = args
+                .get("stopOnEntry")
                 .and_then(|s| s.as_bool())
                 .unwrap_or(false);
-            
+
             // Launch Perl debugger
             match self.launch_debugger(program, perl_args, stop_on_entry) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
-                        self.send_event("stopped", Some(json!({
-                            "reason": "entry",
-                            "threadId": thread_id,
-                            "allThreadsStopped": true
-                        })));
+                        self.send_event(
+                            "stopped",
+                            Some(json!({
+                                "reason": "entry",
+                                "threadId": thread_id,
+                                "allThreadsStopped": true
+                            })),
+                        );
                     }
-                    
+
                     DapMessage::Response {
                         seq,
                         request_seq,
@@ -365,16 +397,14 @@ impl DebugAdapter {
                         message: None,
                     }
                 }
-                Err(e) => {
-                    DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "launch".to_string(),
-                        body: None,
-                        message: Some(format!("Failed to launch debugger: {}", e)),
-                    }
-                }
+                Err(e) => DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "launch".to_string(),
+                    body: None,
+                    message: Some(format!("Failed to launch debugger: {}", e)),
+                },
             }
         } else {
             DapMessage::Response {
@@ -389,23 +419,28 @@ impl DebugAdapter {
     }
 
     /// Launch the Perl debugger
-    fn launch_debugger(&mut self, program: &str, args: Vec<String>, stop_on_entry: bool) -> Result<i32, String> {
+    fn launch_debugger(
+        &mut self,
+        program: &str,
+        args: Vec<String>,
+        stop_on_entry: bool,
+    ) -> Result<i32, String> {
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
-        
+
         // Add debugger initialization
         if stop_on_entry {
             cmd.arg("-e").arg("$DB::single=1");
         }
-        
+
         cmd.arg(program);
         cmd.args(&args);
-        
+
         // Set up pipes
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        
+
         match cmd.spawn() {
             Ok(child) => {
                 let thread_id = {
@@ -413,7 +448,7 @@ impl DebugAdapter {
                     *counter += 1;
                     *counter
                 };
-                
+
                 let session = DebugSession {
                     process: child,
                     state: DebugState::Running,
@@ -421,12 +456,12 @@ impl DebugAdapter {
                     variables: HashMap::new(),
                     thread_id,
                 };
-                
+
                 *self.session.lock().unwrap() = Some(session);
-                
+
                 // Start output reader thread
                 self.start_output_reader();
-                
+
                 Ok(thread_id)
             }
             Err(e) => Err(e.to_string()),
@@ -453,16 +488,21 @@ impl DebugAdapter {
     }
 
     /// Handle disconnect request
-    fn handle_disconnect(&mut self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_disconnect(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
         // Terminate the debug session
         if let Some(mut session) = self.session.lock().unwrap().take() {
             let _ = session.process.kill();
             session.state = DebugState::Terminated;
         }
-        
+
         // Send terminated event
         self.send_event("terminated", None);
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -474,30 +514,36 @@ impl DebugAdapter {
     }
 
     /// Handle setBreakpoints request
-    fn handle_set_breakpoints(&mut self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+    fn handle_set_breakpoints(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
         if let Some(args) = arguments {
-            let source_path = args.get("source")
+            let source_path = args
+                .get("source")
                 .and_then(|s| s.get("path"))
                 .and_then(|p| p.as_str())
                 .unwrap_or("");
-            
+
             let empty_vec = Vec::new();
-            let breakpoint_requests = args.get("breakpoints")
+            let breakpoint_requests = args
+                .get("breakpoints")
                 .and_then(|b| b.as_array())
                 .unwrap_or(&empty_vec);
-            
+
             let mut verified_breakpoints = Vec::new();
             let mut bp_id = 1;
-            
+
             for bp_req in breakpoint_requests {
-                let line = bp_req.get("line")
-                    .and_then(|l| l.as_i64())
-                    .unwrap_or(0) as i32;
-                
-                let condition = bp_req.get("condition")
+                let line = bp_req.get("line").and_then(|l| l.as_i64()).unwrap_or(0) as i32;
+
+                let condition = bp_req
+                    .get("condition")
                     .and_then(|c| c.as_str())
                     .map(|s| s.to_string());
-                
+
                 // TODO: Actually set breakpoint in Perl debugger
                 let breakpoint = Breakpoint {
                     id: bp_id,
@@ -506,15 +552,17 @@ impl DebugAdapter {
                     column: None,
                     message: condition,
                 };
-                
+
                 verified_breakpoints.push(breakpoint.clone());
                 bp_id += 1;
             }
-            
+
             // Store breakpoints
-            self.breakpoints.lock().unwrap()
+            self.breakpoints
+                .lock()
+                .unwrap()
                 .insert(source_path.to_string(), verified_breakpoints.clone());
-            
+
             DapMessage::Response {
                 seq,
                 request_seq,
@@ -541,7 +589,7 @@ impl DebugAdapter {
     fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
         // Continue execution after configuration
         // TODO: Send continue command to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -562,7 +610,7 @@ impl DebugAdapter {
         } else {
             vec![]
         };
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -576,13 +624,18 @@ impl DebugAdapter {
     }
 
     /// Handle stackTrace request
-    fn handle_stack_trace(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_stack_trace(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
         let stack_frames = if let Some(ref session) = *self.session.lock().unwrap() {
             session.stack_frames.clone()
         } else {
             vec![]
         };
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -599,10 +652,8 @@ impl DebugAdapter {
     /// Handle scopes request
     fn handle_scopes(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
-            let frame_id = args.get("frameId")
-                .and_then(|f| f.as_i64())
-                .unwrap_or(0) as i32;
-            
+            let frame_id = args.get("frameId").and_then(|f| f.as_i64()).unwrap_or(0) as i32;
+
             // Return local scope
             let scopes = vec![json!({
                 "name": "Local",
@@ -610,7 +661,7 @@ impl DebugAdapter {
                 "variablesReference": frame_id,
                 "expensive": false
             })];
-            
+
             DapMessage::Response {
                 seq,
                 request_seq,
@@ -636,18 +687,21 @@ impl DebugAdapter {
     /// Handle variables request
     fn handle_variables(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
-            let variables_ref = args.get("variablesReference")
+            let variables_ref = args
+                .get("variablesReference")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
-            
+
             let variables = if let Some(ref session) = *self.session.lock().unwrap() {
-                session.variables.get(&variables_ref)
+                session
+                    .variables
+                    .get(&variables_ref)
                     .cloned()
                     .unwrap_or_default()
             } else {
                 vec![]
             };
-            
+
             DapMessage::Response {
                 seq,
                 request_seq,
@@ -673,7 +727,7 @@ impl DebugAdapter {
     /// Handle continue request
     fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // TODO: Send continue command to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -689,7 +743,7 @@ impl DebugAdapter {
     /// Handle next request
     fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // TODO: Send next command to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -703,7 +757,7 @@ impl DebugAdapter {
     /// Handle stepIn request
     fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // TODO: Send step command to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -717,7 +771,7 @@ impl DebugAdapter {
     /// Handle stepOut request
     fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // TODO: Send return command to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -731,7 +785,7 @@ impl DebugAdapter {
     /// Handle pause request
     fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // TODO: Send interrupt signal to Perl debugger
-        
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -745,13 +799,14 @@ impl DebugAdapter {
     /// Handle evaluate request
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
-            let expression = args.get("expression")
+            let expression = args
+                .get("expression")
                 .and_then(|e| e.as_str())
                 .unwrap_or("");
-            
+
             // TODO: Evaluate expression in Perl debugger
             let result = format!("({})", expression);
-            
+
             DapMessage::Response {
                 seq,
                 request_seq,
@@ -800,9 +855,14 @@ mod tests {
     fn test_initialize_response() {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(1, "initialize", None);
-        
+
         match response {
-            DapMessage::Response { success, command, body, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                ..
+            } => {
                 assert!(success);
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());

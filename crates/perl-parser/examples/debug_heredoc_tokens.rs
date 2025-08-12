@@ -8,12 +8,12 @@ fn main() {
         "print <<\"TEXT\";",
         "my $x = <<~EOF;",
     ];
-    
+
     for test in tests {
         println!("\nCode: {}", test);
         let mut lexer = PerlLexer::new(test);
         println!("Tokens:");
-        
+
         loop {
             if let Some(token) = lexer.next_token() {
                 println!("  {:?}", token);

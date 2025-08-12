@@ -1,5 +1,5 @@
 //! Corpus test loader
-//! 
+//!
 //! Loads test cases from the tree-sitter corpus format
 
 use crate::TestCase;
@@ -15,7 +15,7 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
     let mut in_output = false;
     let mut input_lines = Vec::new();
     let mut output_lines = Vec::new();
-    
+
     for line in content.lines() {
         if line.starts_with("===") || line.starts_with("---") {
             // New test separator
@@ -28,13 +28,13 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
                 };
                 tests.push(test);
             }
-            
+
             // Reset for new test
             input_lines.clear();
             output_lines.clear();
             in_input = false;
             in_output = false;
-            
+
             if line.starts_with("===") {
                 let name = line.trim_start_matches('=').trim();
                 current_test = Some(TestCase {
@@ -57,7 +57,7 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
             output_lines.push(line);
         }
     }
-    
+
     // Handle last test
     if let Some(mut test) = current_test {
         test.input = input_lines.join("\n");
@@ -68,37 +68,38 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
         };
         tests.push(test);
     }
-    
+
     Ok(tests)
 }
 
 /// Load all corpus tests from a directory
 pub fn load_corpus_directory(dir: &Path) -> Result<Vec<TestCase>> {
     let mut all_tests = Vec::new();
-    
+
     for entry in fs::read_dir(dir).context("Failed to read corpus directory")? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.extension().and_then(|s| s.to_str()) == Some("txt") {
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read {:?}", path))?;
-            
+            let content =
+                fs::read_to_string(&path).with_context(|| format!("Failed to read {:?}", path))?;
+
             let mut tests = parse_corpus_file(&content)
                 .with_context(|| format!("Failed to parse {:?}", path))?;
-            
+
             // Add filename to test names for uniqueness
-            let filename = path.file_stem()
+            let filename = path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("unknown");
-            
+
             for test in &mut tests {
                 test.name = format!("{}::{}", filename, test.name);
             }
-            
+
             all_tests.extend(tests);
         }
     }
-    
+
     Ok(all_tests)
 }

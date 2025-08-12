@@ -6,7 +6,7 @@ use perl_parser::{Parser, SignatureHelpProvider};
 fn test_comprehensive_builtin_coverage() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test that we have signatures for all major built-in functions
     let functions = vec![
         // String functions
@@ -26,17 +26,14 @@ fn test_comprehensive_builtin_coverage() {
         ("index(", "index"),
         ("rindex(", "rindex"),
         ("sprintf(", "sprintf"),
-        
         // Array functions
         ("shift(", "shift"),
         ("unshift(", "unshift"),
         ("splice(", "splice"),
-        
         // Hash functions
         ("each(", "each"),
         ("keys(", "keys"),
         ("values(", "values"),
-        
         // I/O functions
         ("say(", "say"),
         ("read(", "read"),
@@ -46,7 +43,6 @@ fn test_comprehensive_builtin_coverage() {
         ("seek(", "seek"),
         ("tell(", "tell"),
         ("eof(", "eof"),
-        
         // File operations
         ("stat(", "stat"),
         ("lstat(", "lstat"),
@@ -59,7 +55,6 @@ fn test_comprehensive_builtin_coverage() {
         ("unlink(", "unlink"),
         ("mkdir(", "mkdir"),
         ("rmdir(", "rmdir"),
-        
         // Directory functions
         ("opendir(", "opendir"),
         ("readdir(", "readdir"),
@@ -67,7 +62,6 @@ fn test_comprehensive_builtin_coverage() {
         ("rewinddir(", "rewinddir"),
         ("telldir(", "telldir"),
         ("seekdir(", "seekdir"),
-        
         // Process functions
         ("fork(", "fork"),
         ("wait(", "wait"),
@@ -75,14 +69,12 @@ fn test_comprehensive_builtin_coverage() {
         ("kill(", "kill"),
         ("getpid(", "getpid"),
         ("getppid(", "getppid"),
-        
         // Time functions
         ("time(", "time"),
         ("localtime(", "localtime"),
         ("gmtime(", "gmtime"),
         ("sleep(", "sleep"),
         ("alarm(", "alarm"),
-        
         // Math functions
         ("abs(", "abs"),
         ("atan2(", "atan2"),
@@ -94,11 +86,9 @@ fn test_comprehensive_builtin_coverage() {
         ("int(", "int"),
         ("rand(", "rand"),
         ("srand(", "srand"),
-        
         // Type functions
         ("scalar(", "scalar"),
         ("wantarray(", "wantarray"),
-        
         // Control flow
         ("die(", "die"),
         ("warn(", "warn"),
@@ -108,27 +98,22 @@ fn test_comprehensive_builtin_coverage() {
         ("last(", "last"),
         ("redo(", "redo"),
         ("goto(", "goto"),
-        
         // Module functions
         ("require(", "require"),
         ("use(", "use"),
         ("no(", "no"),
         ("import(", "import"),
         ("unimport(", "unimport"),
-        
         // Package functions
         ("package(", "package"),
         ("caller(", "caller"),
-        
         // Eval and do
         ("eval(", "eval"),
         ("do(", "do"),
-        
         // Tied variables
         ("tie(", "tie"),
         ("tied(", "tied"),
         ("untie(", "untie"),
-        
         // Socket functions
         ("socket(", "socket"),
         ("bind(", "bind"),
@@ -138,32 +123,29 @@ fn test_comprehensive_builtin_coverage() {
         ("shutdown(", "shutdown"),
         ("send(", "send"),
         ("recv(", "recv"),
-        
         // Pack/unpack
         ("pack(", "pack"),
         ("unpack(", "unpack"),
-        
         // Regular expression
         ("study(", "study"),
         ("pos(", "pos"),
         ("reset(", "reset"),
-        
         // Miscellaneous
         ("dump(", "dump"),
         ("vec(", "vec"),
         ("prototype(", "prototype"),
         ("lock(", "lock"),
     ];
-    
+
     let mut missing = Vec::new();
-    
+
     for (code, func_name) in functions {
         let help = provider.get_signature_help(code, code.len() - 1);
         if help.is_none() {
             missing.push(func_name);
         }
     }
-    
+
     assert!(missing.is_empty(), "Missing signatures for: {:?}", missing);
 }
 
@@ -171,7 +153,7 @@ fn test_comprehensive_builtin_coverage() {
 fn test_string_function_signatures() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test chomp signature
     let code = "chomp(";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
@@ -179,7 +161,7 @@ fn test_string_function_signatures() {
     let sig = &help.signatures[0];
     assert!(sig.label.contains("chomp"));
     assert!(sig.documentation.is_some());
-    
+
     // Test substr with multiple parameters
     let code = "substr($str, 5, ";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
@@ -190,13 +172,13 @@ fn test_string_function_signatures() {
 fn test_io_function_signatures() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test say (Perl 5.10+)
     let code = "say(";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("say"));
-    
+
     // Test sysread
     let code = "sysread($fh, $buf, ";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
@@ -207,7 +189,7 @@ fn test_io_function_signatures() {
 fn test_math_function_signatures() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test atan2 which takes two parameters
     let code = "atan2($y, ";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
@@ -220,7 +202,7 @@ fn test_math_function_signatures() {
 fn test_socket_function_signatures() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test socket function
     let code = "socket($sock, $domain, ";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
@@ -232,7 +214,7 @@ fn test_socket_function_signatures() {
 fn test_tied_variable_signatures() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // Test tie function
     let code = "tie(%hash, 'Tie::File', ";
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();

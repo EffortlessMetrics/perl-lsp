@@ -7,10 +7,10 @@ fn main() {
         "{ a => 1, b => 2 }",
         "{ 'one', 1, 'two', 2 }",
     ];
-    
+
     for code in test_cases {
         println!("Testing: {}", code);
-        
+
         let mut parser = Parser::new(code);
         match parser.parse() {
             Ok(ast) => {

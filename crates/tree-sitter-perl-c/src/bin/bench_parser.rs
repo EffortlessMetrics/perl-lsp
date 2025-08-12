@@ -17,7 +17,10 @@ fn main() {
     match result {
         Ok(tree) => {
             let has_error = tree.root_node().has_error();
-            println!("status=success error={} duration_us={}", has_error, duration);
+            println!(
+                "status=success error={} duration_us={}",
+                has_error, duration
+            );
             // Always return success (0) - parse errors are indicated in the error field
         }
         Err(e) => {
@@ -26,4 +29,4 @@ fn main() {
             std::process::exit(1);
         }
     }
-} 
+}

@@ -22,9 +22,9 @@ use tree_sitter_perl::scanner::CScanner;
 
 // Common test cases for both scanners
 const TEST_CASES: &[&str] = &[
-        "my $var = 42;",
-        "print 'Hello, World!';",
-        "sub foo { return 1; }",
+    "my $var = 42;",
+    "print 'Hello, World!';",
+    "sub foo { return 1; }",
     "my ($a, $b, $c) = (1, 2, 3);",
     "$hash{key} = 'value';",
     "@array = qw(one two three);",
@@ -155,12 +155,12 @@ fn bench_scanner_basic(c: &mut Criterion) {
     let mut group = c.benchmark_group("scanner_basic");
     for (i, test_case) in TEST_CASES.iter().enumerate() {
         group.bench_function(&format!("case_{}", i), |b| {
-        b.iter(|| {
+            b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_case.as_bytes());
                 scanner.scan(input).unwrap();
+            });
         });
-    });
     }
     group.finish();
 }
@@ -183,12 +183,12 @@ fn bench_scanner_throughput(c: &mut Criterion) {
     for size in sizes {
         let test_input = generate_test_input(size);
         group.bench_function(&format!("{}_bytes", size), |b| {
-        b.iter(|| {
+            b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_input.as_bytes());
                 scanner.scan(input).unwrap();
+            });
         });
-    });
     }
     group.finish();
 }

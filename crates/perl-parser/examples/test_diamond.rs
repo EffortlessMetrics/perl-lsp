@@ -12,7 +12,7 @@ fn main() {
         "print while <>",
         "print for <>",
     ];
-    
+
     for test in tests {
         println!("Testing: {:?}", test);
         let mut parser = Parser::new(test);

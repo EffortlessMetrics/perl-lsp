@@ -2,8 +2,10 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
-    use tree_sitter_perl::context_aware_parser::{ContextAwareHeredocParser, ContextAwareFullParser};
-    
+    use tree_sitter_perl::context_aware_parser::{
+        ContextAwareFullParser, ContextAwareHeredocParser,
+    };
+
     #[test]
     fn test_basic_eval_heredoc() {
         let code = r#"
@@ -15,15 +17,15 @@ EOF
 
 print "After eval\n";
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         assert_eq!(declarations.len(), 1, "Should find one heredoc");
         assert_eq!(declarations[0].terminator, "EOF");
         assert!(declarations[0].content.is_some());
     }
-    
+
     #[test]
     fn test_eval_heredoc_with_interpolation() {
         let code = r#"
@@ -36,22 +38,23 @@ DATA
 print $result;
 CODE
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         // Should find the outer heredoc
         assert!(declarations.iter().any(|d| d.terminator == "CODE"));
-        
+
         // The inner heredoc should be detected when eval content is parsed
-        let eval_content = declarations.iter()
+        let eval_content = declarations
+            .iter()
             .find(|d| d.terminator == "CODE")
             .and_then(|d| d.content.as_ref())
             .unwrap();
-        
+
         assert!(eval_content.contains("<<'DATA'"));
     }
-    
+
     #[test]
     fn test_substitution_with_e_flag() {
         let code = r#"
@@ -64,14 +67,18 @@ REPLACEMENT
 
 print $text;
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         // Should detect heredoc in s///e
-        assert!(declarations.iter().any(|d| d.terminator == "REPLACEMENT" || d.terminator == "EVAL_CONTEXT"));
+        assert!(
+            declarations
+                .iter()
+                .any(|d| d.terminator == "REPLACEMENT" || d.terminator == "EVAL_CONTEXT")
+        );
     }
-    
+
     #[test]
     fn test_complex_substitution_patterns() {
         let test_cases = vec![
@@ -96,14 +103,14 @@ A
 bar content
 B"#,
         ];
-        
+
         for code in test_cases {
             let mut parser = ContextAwareHeredocParser::new(code);
             let (_, declarations) = parser.parse();
             assert!(!declarations.is_empty(), "Should find heredoc in: {}", code);
         }
     }
-    
+
     #[test]
     fn test_nested_eval_contexts() {
         let code = r#"
@@ -118,14 +125,14 @@ INNER
     print "Got: $inner\n";
 OUTER
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         // Should find at least the outer heredoc
         assert!(declarations.iter().any(|d| d.terminator == "OUTER"));
     }
-    
+
     #[test]
     fn test_heredoc_in_qx_eval() {
         let code = r#"
@@ -134,15 +141,15 @@ my $result = `perl -e '<<EOF
 print "Hello from subshell"
 EOF'`;
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         // This is a complex case - heredoc is in a subshell
         // Parser should at least not crash
         assert!(processed.contains("EOF"));
     }
-    
+
     #[test]
     fn test_heredoc_in_regex_match() {
         let code = r#"
@@ -152,14 +159,14 @@ if ($text =~ /<<EOF/) {
 }
 EOF
 "#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code);
         let (processed, declarations) = parser.parse();
-        
+
         // Should NOT treat this as a heredoc (it's in a regex pattern)
         assert!(declarations.is_empty() || !declarations.iter().any(|d| d.terminator == "EOF"));
     }
-    
+
     #[test]
     fn test_full_parser_integration() {
         let code = r#"
@@ -175,44 +182,45 @@ END
 
 print $str;
 "#;
-        
+
         let mut parser = ContextAwareFullParser::new();
         let result = parser.parse(code);
-        
+
         assert!(result.is_ok(), "Full parser should handle special contexts");
-        
+
         // Verify AST contains the eval and substitution nodes
         // In a real implementation, we'd check specific AST structure
     }
-    
+
     #[test]
     fn test_error_cases() {
         let error_cases = vec![
             // Unclosed eval heredoc
             r#"eval <<'EOF';
 never closed"#,
-            
             // Invalid s///e syntax
             r#"s/pattern/<<EOF/e
 missing terminator"#,
-            
             // Nested but malformed
             r#"eval <<'OUTER';
 eval <<'INNER';
 OUTER
 # Missing INNER terminator"#,
         ];
-        
+
         for code in error_cases {
             let mut parser = ContextAwareHeredocParser::new(code);
             let (processed, declarations) = parser.parse();
-            
+
             // Parser should handle errors gracefully
             // May have incomplete declarations but shouldn't panic
-            println!("Processed error case: {} declarations found", declarations.len());
+            println!(
+                "Processed error case: {} declarations found",
+                declarations.len()
+            );
         }
     }
-    
+
     #[test]
     fn test_edge_case_combinations() {
         // Test heredoc after eval on same line
@@ -221,18 +229,21 @@ eval content
 A
 print content
 B"#;
-        
+
         let mut parser = ContextAwareHeredocParser::new(code1);
         let (_, declarations) = parser.parse();
         assert_eq!(declarations.len(), 2, "Should find both heredocs");
-        
+
         // Test heredoc in eval in substitution
         let code2 = r#"$x =~ s/foo/eval <<'E'/e;
 bar
 E"#;
-        
+
         let mut parser2 = ContextAwareHeredocParser::new(code2);
         let (_, declarations2) = parser2.parse();
-        assert!(!declarations2.is_empty(), "Should find heredoc in complex context");
+        assert!(
+            !declarations2.is_empty(),
+            "Should find heredoc in complex context"
+        );
     }
 }

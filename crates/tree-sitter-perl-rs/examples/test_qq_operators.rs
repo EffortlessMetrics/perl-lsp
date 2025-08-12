@@ -1,12 +1,9 @@
 //! Test qq and q operators
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing qq and q Operators ===\n");
-    
+
     let test_cases = vec![
         ("Simple q string", r#"my $str = q(Hello World);"#),
         ("Simple qq string", r#"my $str = qq(Hello World);"#),
@@ -14,15 +11,21 @@ fn main() {
         ("qq with braces", r#"my $str = qq{Hello World};"#),
         ("qq with angles", r#"my $str = qq<Hello World>;"#),
         ("qq with custom delimiter", r#"my $str = qq|Hello World|;"#),
-        ("qq with interpolation", r#"my $str = qq|Path: $ENV{PATH}|;"#),
+        (
+            "qq with interpolation",
+            r#"my $str = qq|Path: $ENV{PATH}|;"#,
+        ),
         ("Nested delimiters", r#"my $str = q(Hello (nested) World);"#),
-        ("q with escaped delimiter", r#"my $str = q(Hello \) World);"#),
+        (
+            "q with escaped delimiter",
+            r#"my $str = q(Hello \) World);"#,
+        ),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {

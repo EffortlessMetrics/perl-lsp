@@ -14,7 +14,7 @@ sub new {
     println!("Testing package code:");
     println!("{}", code);
     println!();
-    
+
     let mut parser = Parser::new(code);
     match parser.parse() {
         Ok(ast) => {

@@ -1,10 +1,10 @@
 //! Execute command support for running tests and debugging
-//! 
+//!
 //! This module provides support for the LSP executeCommand request,
 //! allowing users to run tests directly from their editor.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::process::Command;
 
 /// Commands supported by the Perl LSP
@@ -85,9 +85,8 @@ impl ExecuteCommandProvider {
     /// Run all tests in a file
     fn run_tests(&self, file_path: &str) -> Result<Value, String> {
         // Check if file looks like a test file
-        let is_test_file = file_path.ends_with(".t") 
-            || file_path.contains("/t/")
-            || file_path.contains("test");
+        let is_test_file =
+            file_path.ends_with(".t") || file_path.contains("/t/") || file_path.contains("test");
 
         // Choose the appropriate command
         let result = if is_test_file && self.command_exists("prove") {

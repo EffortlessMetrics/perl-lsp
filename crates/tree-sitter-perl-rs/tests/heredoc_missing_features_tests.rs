@@ -60,7 +60,7 @@ print $config{description};"#;
         let result = parser.parse(input);
         assert!(result.is_ok(), "Failed to parse heredoc as hash value");
     }
-    
+
     #[test]
     fn test_heredoc_in_simple_hash() {
         // Simpler case that should work
@@ -84,7 +84,10 @@ print $spaced;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with whitespace around operator");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with whitespace around operator"
+        );
     }
 
     #[test]
@@ -114,7 +117,10 @@ print $text;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with keyword terminator");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with keyword terminator"
+        );
     }
 
     #[test]
@@ -126,7 +132,10 @@ print $data;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with numeric terminator");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with numeric terminator"
+        );
     }
 
     #[test]
@@ -140,7 +149,10 @@ print get_message();"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc in return statement");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc in return statement"
+        );
     }
 
     #[test]
@@ -153,7 +165,10 @@ print $mixed;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse indented heredoc with mixed whitespace");
+        assert!(
+            result.is_ok(),
+            "Failed to parse indented heredoc with mixed whitespace"
+        );
     }
 
     #[test]
@@ -165,7 +180,10 @@ print $text;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with regex chars in terminator");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with regex chars in terminator"
+        );
     }
 
     #[test]
@@ -177,7 +195,10 @@ print $text;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with very long terminator");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with very long terminator"
+        );
     }
 
     #[test]
@@ -191,7 +212,10 @@ print $nested;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc containing heredoc-like syntax");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc containing heredoc-like syntax"
+        );
     }
 
     #[test]
@@ -203,7 +227,10 @@ print "This should fail";"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_err(), "Should fail with missing heredoc terminator");
+        assert!(
+            result.is_err(),
+            "Should fail with missing heredoc terminator"
+        );
     }
 
     #[test]
@@ -229,6 +256,9 @@ print $text;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with trailing blank lines");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with trailing blank lines"
+        );
     }
 }

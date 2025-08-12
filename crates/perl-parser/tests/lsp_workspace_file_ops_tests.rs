@@ -1,25 +1,31 @@
 //! Tests for workspace file operation handlers
 
-use perl_parser::lsp_server::{LspServer, JsonRpcRequest};
-use serde_json::{json, Value};
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::Mutex;
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     LspServer::with_output(output)
 }
 
 /// Helper to make a request to the server
-fn make_request(server: &mut LspServer, method: &str, params: Option<Value>) -> Result<Option<Value>, String> {
+fn make_request(
+    server: &mut LspServer,
+    method: &str,
+    params: Option<Value>,
+) -> Result<Option<Value>, String> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: method.to_string(),
         params,
     };
-    
+
     match server.handle_request(request) {
         Some(response) => {
             if let Some(error) = response.error {
@@ -35,7 +41,7 @@ fn make_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
 #[test]
 fn test_did_change_watched_files_created() {
     let mut server = create_test_server();
-    
+
     // Initialize the server first
     let init_params = json!({
         "processId": 1234,
@@ -43,7 +49,7 @@ fn test_did_change_watched_files_created() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Send a file created notification
     let params = json!({
         "changes": [
@@ -53,9 +59,9 @@ fn test_did_change_watched_files_created() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
-    
+
     // This is a notification, should return None
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -64,7 +70,7 @@ fn test_did_change_watched_files_created() {
 #[test]
 fn test_did_change_watched_files_changed() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -72,7 +78,7 @@ fn test_did_change_watched_files_changed() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // First open a document
     let open_params = json!({
         "textDocument": {
@@ -83,7 +89,7 @@ fn test_did_change_watched_files_changed() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Send a file changed notification
     let params = json!({
         "changes": [
@@ -93,9 +99,9 @@ fn test_did_change_watched_files_changed() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
-    
+
     // This is a notification, should return None
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -104,7 +110,7 @@ fn test_did_change_watched_files_changed() {
 #[test]
 fn test_did_change_watched_files_deleted() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -112,7 +118,7 @@ fn test_did_change_watched_files_deleted() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // First open a document
     let open_params = json!({
         "textDocument": {
@@ -123,7 +129,7 @@ fn test_did_change_watched_files_deleted() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Send a file deleted notification
     let params = json!({
         "changes": [
@@ -133,9 +139,9 @@ fn test_did_change_watched_files_deleted() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
-    
+
     // This is a notification, should return None
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -144,7 +150,7 @@ fn test_did_change_watched_files_deleted() {
 #[test]
 fn test_did_change_watched_files_invalid_uri() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -152,7 +158,7 @@ fn test_did_change_watched_files_invalid_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Send notification with invalid URI (missing uri field)
     let params = json!({
         "changes": [
@@ -161,9 +167,9 @@ fn test_did_change_watched_files_invalid_uri() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
-    
+
     // Should handle gracefully
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -172,7 +178,7 @@ fn test_did_change_watched_files_invalid_uri() {
 #[test]
 fn test_will_rename_files() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -180,7 +186,7 @@ fn test_will_rename_files() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Open a document that uses a module
     let open_params = json!({
         "textDocument": {
@@ -191,7 +197,7 @@ fn test_will_rename_files() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Request to rename a module file
     let params = json!({
         "files": [
@@ -201,9 +207,9 @@ fn test_will_rename_files() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
-    
+
     // Should return a workspace edit (potentially empty if no references found)
     assert!(result.is_ok());
     let edit = result.unwrap().unwrap();
@@ -214,7 +220,7 @@ fn test_will_rename_files() {
 #[test]
 fn test_will_rename_files_missing_uri() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -222,7 +228,7 @@ fn test_will_rename_files_missing_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Request with missing URIs
     let params = json!({
         "files": [
@@ -231,9 +237,9 @@ fn test_will_rename_files_missing_uri() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
-    
+
     // Should handle gracefully and return empty edit
     assert!(result.is_ok());
     let edit = result.unwrap().unwrap();
@@ -244,7 +250,7 @@ fn test_will_rename_files_missing_uri() {
 #[test]
 fn test_did_delete_files() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -252,7 +258,7 @@ fn test_did_delete_files() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Open a document
     let open_params = json!({
         "textDocument": {
@@ -263,7 +269,7 @@ fn test_did_delete_files() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Send delete notification
     let params = json!({
         "files": [
@@ -272,9 +278,9 @@ fn test_did_delete_files() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didDeleteFiles", Some(params));
-    
+
     // This is a notification, should return None
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -283,7 +289,7 @@ fn test_did_delete_files() {
 #[test]
 fn test_did_delete_files_invalid_uri() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -291,7 +297,7 @@ fn test_did_delete_files_invalid_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Send delete notification with missing URI
     let params = json!({
         "files": [
@@ -300,9 +306,9 @@ fn test_did_delete_files_invalid_uri() {
             }
         ]
     });
-    
+
     let result = make_request(&mut server, "workspace/didDeleteFiles", Some(params));
-    
+
     // Should handle gracefully
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), None);
@@ -311,7 +317,7 @@ fn test_did_delete_files_invalid_uri() {
 #[test]
 fn test_apply_edit_single_line() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -319,7 +325,7 @@ fn test_apply_edit_single_line() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Open a document
     let open_params = json!({
         "textDocument": {
@@ -330,7 +336,7 @@ fn test_apply_edit_single_line() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Apply an edit
     let params = json!({
         "edit": {
@@ -347,9 +353,9 @@ fn test_apply_edit_single_line() {
             }
         }
     });
-    
+
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
-    
+
     // Should return success
     assert!(result.is_ok());
     let response = result.unwrap().unwrap();
@@ -359,7 +365,7 @@ fn test_apply_edit_single_line() {
 #[test]
 fn test_apply_edit_multi_line() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -367,7 +373,7 @@ fn test_apply_edit_multi_line() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Open a document
     let open_params = json!({
         "textDocument": {
@@ -378,7 +384,7 @@ fn test_apply_edit_multi_line() {
         }
     });
     let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
-    
+
     // Apply a multi-line edit
     let params = json!({
         "edit": {
@@ -395,9 +401,9 @@ fn test_apply_edit_multi_line() {
             }
         }
     });
-    
+
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
-    
+
     // Should return success
     assert!(result.is_ok());
     let response = result.unwrap().unwrap();
@@ -407,7 +413,7 @@ fn test_apply_edit_multi_line() {
 #[test]
 fn test_apply_edit_no_document() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -415,7 +421,7 @@ fn test_apply_edit_no_document() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Try to apply edit to non-existent document
     let params = json!({
         "edit": {
@@ -432,9 +438,9 @@ fn test_apply_edit_no_document() {
             }
         }
     });
-    
+
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
-    
+
     // Should still return success (edit was "applied" even if document doesn't exist)
     assert!(result.is_ok());
     let response = result.unwrap().unwrap();
@@ -444,7 +450,7 @@ fn test_apply_edit_no_document() {
 #[test]
 fn test_apply_edit_invalid_params() {
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -452,12 +458,12 @@ fn test_apply_edit_invalid_params() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Send invalid params (no edit field)
     let params = json!({});
-    
+
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
-    
+
     // Should return failure
     assert!(result.is_ok());
     let response = result.unwrap().unwrap();
@@ -469,7 +475,7 @@ fn test_apply_edit_invalid_params() {
 fn test_path_to_module_name() {
     // Test the path_to_module_name function indirectly through willRenameFiles
     let mut server = create_test_server();
-    
+
     // Initialize the server
     let init_params = json!({
         "processId": 1234,
@@ -477,14 +483,17 @@ fn test_path_to_module_name() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
-    
+
     // Test various path patterns
     let test_cases = vec![
         ("file:///test/lib/Foo/Bar.pm", "file:///test/lib/Baz/Qux.pm"),
-        ("file:///test/workspace/lib/Module.pm", "file:///test/workspace/lib/NewModule.pm"),
+        (
+            "file:///test/workspace/lib/Module.pm",
+            "file:///test/workspace/lib/NewModule.pm",
+        ),
         ("file:///test/MyModule.pl", "file:///test/YourModule.pl"),
     ];
-    
+
     for (old_uri, new_uri) in test_cases {
         let params = json!({
             "files": [
@@ -494,9 +503,9 @@ fn test_path_to_module_name() {
                 }
             ]
         });
-        
+
         let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
-        
+
         // Should always succeed and return a workspace edit
         assert!(result.is_ok());
         let edit = result.unwrap().unwrap();

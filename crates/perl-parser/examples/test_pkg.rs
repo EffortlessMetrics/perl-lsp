@@ -7,7 +7,7 @@ fn main() {
         "package Test::Module;",
         "package Foo::Bar::Baz;",
     ];
-    
+
     for code in tests {
         println!("\nTesting: {}", code);
         let mut parser = Parser::new(code);

@@ -6,7 +6,7 @@ use tree_sitter_perl::PureRustPerlParser;
 fn test_basic_parsing() {
     let mut parser = PureRustPerlParser::new();
     let input = r#"my $x = 42; print "Hello, World!";"#;
-    
+
     match parser.parse(input) {
         Ok(ast) => {
             // Just ensure it parses without error
@@ -26,7 +26,7 @@ with multiple lines
 EOF
 print $text;
 "#;
-    
+
     match parser.parse(input) {
         Ok(ast) => {
             let debug_str = format!("{:?}", ast);
@@ -50,7 +50,7 @@ for my $i (1..10) {
     print $i;
 }
 "#;
-    
+
     match parser.parse(input) {
         Ok(_) => {
             // Success - it parsed
@@ -71,7 +71,7 @@ sub hello {
 my $greeting = hello("World");
 print $greeting;
 "#;
-    
+
     match parser.parse(input) {
         Ok(_) => {
             // Success - it parsed
@@ -89,7 +89,7 @@ if ($text =~ /pattern/) {
     print "matched";
 }
 "#;
-    
+
     match parser.parse(input) {
         Ok(_) => {
             // Success - it parsed

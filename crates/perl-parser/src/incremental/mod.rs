@@ -1,12 +1,11 @@
-use std::ops::Range;
+use anyhow::Result;
 use lsp_types::{Diagnostic, TextDocumentContentChangeEvent};
 use ropey::Rope;
-use anyhow::Result;
+use std::ops::Range;
 
-use perl_lexer::{PerlLexer, Token, TokenType, LexerMode};
-use crate::parser::Parser;
 use crate::ast::{Node, NodeKind, SourceLocation};
-
+use crate::parser::Parser;
+use perl_lexer::{LexerMode, PerlLexer, Token, TokenType};
 
 /// Stable restart points to avoid re-lexing the whole world
 #[derive(Clone, Copy, Debug)]
@@ -53,7 +52,9 @@ impl LineIndex {
     }
 
     pub fn byte_to_position(&self, byte: usize) -> (usize, usize) {
-        let line = self.line_starts.binary_search(&byte)
+        let line = self
+            .line_starts
+            .binary_search(&byte)
             .unwrap_or_else(|i| i.saturating_sub(1));
         let column = byte - self.line_starts[line];
         (line, column)
@@ -79,17 +80,22 @@ impl IncrementalState {
     pub fn new(source: String) -> Self {
         let rope = Rope::from_str(&source);
         let line_index = LineIndex::new(&source);
-        
+
         // Parse the initial document
         let mut parser = Parser::new(&source);
         let ast = match parser.parse() {
             Ok(ast) => ast,
             Err(e) => Node::new(
-                NodeKind::Error { message: e.to_string() },
-                SourceLocation { start: 0, end: source.len() }
+                NodeKind::Error {
+                    message: e.to_string(),
+                },
+                SourceLocation {
+                    start: 0,
+                    end: source.len(),
+                },
             ),
         };
-        
+
         // Get tokens from lexer
         let mut lexer = PerlLexer::new(&source);
         let mut tokens = Vec::new();
@@ -104,11 +110,11 @@ impl IncrementalState {
                 None => break,
             }
         }
-        
+
         // Create initial checkpoints
         let lex_checkpoints = Self::create_lex_checkpoints(&tokens);
         let parse_checkpoints = Self::create_parse_checkpoints(&ast);
-        
+
         Self {
             rope,
             line_index,
@@ -128,9 +134,9 @@ impl IncrementalState {
             line: 0,
             column: 0,
         }];
-        
+
         let mut mode = LexerMode::ExpectTerm;
-        
+
         for token in tokens {
             // Update mode based on token
             mode = match token.token_type {
@@ -148,7 +154,7 @@ impl IncrementalState {
                     checkpoints.push(LexCheckpoint {
                         byte: token.start,
                         mode: LexerMode::ExpectTerm, // ExpectIdentifier not available
-                        line: 0, // TODO: Calculate line/column
+                        line: 0,                     // TODO: Calculate line/column
                         column: 0,
                     });
                     LexerMode::ExpectTerm // ExpectIdentifier not available
@@ -160,7 +166,7 @@ impl IncrementalState {
                 _ => mode,
             };
         }
-        
+
         checkpoints
     }
 
@@ -168,7 +174,7 @@ impl IncrementalState {
     fn create_parse_checkpoints(ast: &Node) -> Vec<ParseCheckpoint> {
         let mut checkpoints = vec![];
         let mut scope = ScopeSnapshot::default();
-        
+
         Self::walk_ast_for_checkpoints(ast, &mut checkpoints, &mut scope, 0);
         checkpoints
     }
@@ -213,7 +219,7 @@ impl IncrementalState {
             }
             _ => {}
         }
-        
+
         // Recurse into children based on node kind
         match &node.kind {
             NodeKind::Program { statements } => {
@@ -236,47 +242,90 @@ impl IncrementalState {
                 let child_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(body, checkpoints, &mut local_scope, child_id);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
-                
+
                 // then_branch is Box<Node>, not Option<Box<Node>>
-                Self::walk_ast_for_checkpoints(then_branch, checkpoints, scope, base_id.wrapping_add(1));
-                
+                Self::walk_ast_for_checkpoints(
+                    then_branch,
+                    checkpoints,
+                    scope,
+                    base_id.wrapping_add(1),
+                );
+
                 // elsif_branches is Vec<(Box<Node>, Box<Node>)>
                 for (i, (elsif_cond, elsif_block)) in elsif_branches.iter().enumerate() {
                     let elsif_base = base_id.wrapping_add((i + 2) * 2);
                     Self::walk_ast_for_checkpoints(elsif_cond, checkpoints, scope, elsif_base);
-                    Self::walk_ast_for_checkpoints(elsif_block, checkpoints, scope, elsif_base.wrapping_add(1));
+                    Self::walk_ast_for_checkpoints(
+                        elsif_block,
+                        checkpoints,
+                        scope,
+                        elsif_base.wrapping_add(1),
+                    );
                 }
                 if let Some(else_br) = else_branch {
                     let else_id = base_id.wrapping_add((elsif_branches.len() + 2) * 2);
                     Self::walk_ast_for_checkpoints(else_br, checkpoints, scope, else_id);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
                 // body is Box<Node>, not Option<Box<Node>>
                 Self::walk_ast_for_checkpoints(body, checkpoints, scope, base_id.wrapping_add(1));
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 let mut offset = 0;
                 if let Some(init) = init {
-                    Self::walk_ast_for_checkpoints(init, checkpoints, scope, base_id.wrapping_add(offset));
+                    Self::walk_ast_for_checkpoints(
+                        init,
+                        checkpoints,
+                        scope,
+                        base_id.wrapping_add(offset),
+                    );
                     offset += 1;
                 }
                 if let Some(cond) = condition {
-                    Self::walk_ast_for_checkpoints(cond, checkpoints, scope, base_id.wrapping_add(offset));
+                    Self::walk_ast_for_checkpoints(
+                        cond,
+                        checkpoints,
+                        scope,
+                        base_id.wrapping_add(offset),
+                    );
                     offset += 1;
                 }
                 if let Some(upd) = update {
-                    Self::walk_ast_for_checkpoints(upd, checkpoints, scope, base_id.wrapping_add(offset));
+                    Self::walk_ast_for_checkpoints(
+                        upd,
+                        checkpoints,
+                        scope,
+                        base_id.wrapping_add(offset),
+                    );
                     offset += 1;
                 }
                 // body is Box<Node>, not Option<Box<Node>>
-                Self::walk_ast_for_checkpoints(body, checkpoints, scope, base_id.wrapping_add(offset));
+                Self::walk_ast_for_checkpoints(
+                    body,
+                    checkpoints,
+                    scope,
+                    base_id.wrapping_add(offset),
+                );
             }
             NodeKind::Binary { left, right, .. } => {
                 let base_id = node_id.wrapping_mul(101);
@@ -301,10 +350,7 @@ impl IncrementalState {
 
     /// Find the best checkpoint before a given byte offset
     pub fn find_lex_checkpoint(&self, byte: usize) -> Option<&LexCheckpoint> {
-        self.lex_checkpoints
-            .iter()
-            .rev()
-            .find(|cp| cp.byte <= byte)
+        self.lex_checkpoints.iter().rev().find(|cp| cp.byte <= byte)
     }
 
     /// Find the best parse checkpoint before a given byte offset
@@ -333,16 +379,12 @@ impl Edit {
         old_text: &str,
     ) -> Option<Self> {
         if let Some(range) = change.range {
-            let start_byte = line_index.position_to_byte(
-                range.start.line as usize,
-                range.start.character as usize,
-            )?;
-            let old_end_byte = line_index.position_to_byte(
-                range.end.line as usize,
-                range.end.character as usize,
-            )?;
+            let start_byte = line_index
+                .position_to_byte(range.start.line as usize, range.start.character as usize)?;
+            let old_end_byte = line_index
+                .position_to_byte(range.end.line as usize, range.end.character as usize)?;
             let new_end_byte = start_byte + change.text.len();
-            
+
             Some(Edit {
                 start_byte,
                 old_end_byte,
@@ -370,61 +412,57 @@ pub struct ReparseResult {
 }
 
 /// Apply edits incrementally
-pub fn apply_edits(
-    state: &mut IncrementalState,
-    edits: &[Edit],
-) -> Result<ReparseResult> {
+pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<ReparseResult> {
     // Handle multiple edits by sorting and applying in reverse order
     let mut sorted_edits = edits.to_vec();
     sorted_edits.sort_by_key(|e| e.start_byte);
     sorted_edits.reverse(); // Apply from end to start to avoid offset shifts
-    
+
     // Check if we should fall back to full reparse
-    let total_changed = sorted_edits.iter()
-        .map(|e| e.new_text.len())
-        .sum::<usize>();
-    
+    let total_changed = sorted_edits.iter().map(|e| e.new_text.len()).sum::<usize>();
+
     // Fallback thresholds
     const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
     #[allow(dead_code)] // TODO: Use for checkpoint-based incremental parsing
     const MAX_TOUCHED_CHECKPOINTS: usize = 20;
-    
+
     if total_changed > MAX_EDIT_SIZE {
         return full_reparse(state);
     }
-    
+
     // For MVP, handle single edit with incremental logic
     if sorted_edits.len() == 1 {
         let edit = &sorted_edits[0];
-        
+
         // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
         if edit.new_text.len() > 1024 || edit.new_text.matches('\n').count() > 10 {
             apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
-        
+
         // Find reparse window
         let window = find_reparse_window(state, edit)?;
-        
+
         // If window is too large (>20% of doc), fall back to full parse
         if window.end - window.start > state.source.len() / 5 {
             apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
-        
+
         // Apply the edit to the source
         let mut new_source = String::with_capacity(
-            state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len()
+            state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
         );
         new_source.push_str(&state.source[..edit.start_byte]);
         new_source.push_str(&edit.new_text);
         new_source.push_str(&state.source[edit.old_end_byte..]);
-        
+
         // Re-lex the window
         let _window_text = &new_source[window.clone()];
-        let _checkpoint = state.find_lex_checkpoint(window.start)
+        let _checkpoint = state
+            .find_lex_checkpoint(window.start)
             .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
-        
+
         // For now, fall back to full reparse
         // TODO: Implement actual incremental lexing and parsing
         state.source = new_source;
@@ -443,7 +481,7 @@ pub fn apply_edits(
 /// Apply a single edit to the state
 fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
     let mut new_source = String::with_capacity(
-        state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len()
+        state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
     );
     new_source.push_str(&state.source[..edit.start_byte]);
     new_source.push_str(&edit.new_text);
@@ -457,17 +495,19 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
 /// Find the window to reparse
 fn find_reparse_window(state: &IncrementalState, edit: &Edit) -> Result<Range<usize>> {
     // Find safe boundaries around the edit
-    let start_checkpoint = state.find_lex_checkpoint(edit.start_byte)
+    let start_checkpoint = state
+        .find_lex_checkpoint(edit.start_byte)
         .ok_or_else(|| anyhow::anyhow!("No start checkpoint"))?;
-    
+
     // Find next safe boundary after edit
     let end_byte = edit.new_end_byte;
-    let end_checkpoint = state.lex_checkpoints
+    let end_checkpoint = state
+        .lex_checkpoints
         .iter()
         .find(|cp| cp.byte > end_byte)
         .map(|cp| cp.byte)
         .unwrap_or(state.source.len());
-    
+
     Ok(start_checkpoint.byte..end_checkpoint)
 }
 
@@ -477,11 +517,16 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     state.ast = match parser.parse() {
         Ok(ast) => ast,
         Err(e) => Node::new(
-            NodeKind::Error { message: e.to_string() },
-            SourceLocation { start: 0, end: state.source.len() }
+            NodeKind::Error {
+                message: e.to_string(),
+            },
+            SourceLocation {
+                start: 0,
+                end: state.source.len(),
+            },
         ),
     };
-    
+
     // Re-lex to get tokens
     let mut lexer = PerlLexer::new(&state.source);
     let mut tokens = Vec::new();
@@ -497,17 +542,17 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
         }
     }
     state.tokens = tokens;
-    
+
     state.rope = Rope::from_str(&state.source);
     state.line_index = LineIndex::new(&state.source);
-    
+
     // Rebuild checkpoints
     state.lex_checkpoints = IncrementalState::create_lex_checkpoints(&state.tokens);
     state.parse_checkpoints = IncrementalState::create_parse_checkpoints(&state.ast);
-    
+
     // No diagnostics for now, will be handled by the LSP server
     let diagnostics = vec![];
-    
+
     Ok(ReparseResult {
         changed_ranges: vec![0..state.source.len()],
         diagnostics,

@@ -1,9 +1,6 @@
 //! Test dereferencing edge cases
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Dereferencing ===\n");
@@ -15,13 +12,16 @@ fn main() {
         ("Hash deref", r#"my %h = %{$hash_ref};"#),
         ("Code deref call", r#"$code_ref->();"#),
         ("Code deref with &", r#"&{$code_ref}();"#),
-        ("Complex deref chain", r#"my $val = $hash->{key}->[0]->{nested};"#),
+        (
+            "Complex deref chain",
+            r#"my $val = $hash->{key}->[0]->{nested};"#,
+        ),
     ];
 
     for (name, code) in test_cases {
         println!("Testing: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {
@@ -35,7 +35,7 @@ fn main() {
                     // Extract expected tokens
                     if let Some(start) = error_str.find("positives: [") {
                         if let Some(end) = error_str.find("], negatives") {
-                            let expected = &error_str[start+12..end];
+                            let expected = &error_str[start + 12..end];
                             println!("Expected: {}", expected);
                         }
                     }
@@ -48,7 +48,7 @@ fn main() {
 
 fn print_ast(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program", indent);
@@ -60,7 +60,9 @@ fn print_ast(node: &AstNode, depth: usize) {
             println!("{}Statement", indent);
             print_ast(content, depth + 1);
         }
-        AstNode::VariableDeclaration { scope, initializer, .. } => {
+        AstNode::VariableDeclaration {
+            scope, initializer, ..
+        } => {
             println!("{}VarDecl: {}", indent, scope);
             if let Some(init) = initializer {
                 print_ast(init, depth + 1);

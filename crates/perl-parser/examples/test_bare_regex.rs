@@ -7,25 +7,21 @@ fn main() {
         "if (/pattern/) { }",
         "while (/\\w+/) { }",
         "unless (/error/) { }",
-        
         // With modifiers
         "if (/pattern/i) { }",
         "if (/pattern/gi) { }",
-        
         // Statement modifiers
         "print if /pattern/",
         "next if /skip/",
         "last unless /continue/",
-        
         // In expressions
         "/pattern/ && print",
         "/pattern/ || die",
-        
         // Negated
         "if (!/pattern/) { }",
         "print unless !/found/",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

@@ -1,5 +1,5 @@
-use perl_parser::scope_analyzer::ScopeAnalyzer;
 use perl_parser::Parser;
+use perl_parser::scope_analyzer::ScopeAnalyzer;
 
 fn main() {
     let codes = vec![
@@ -7,7 +7,9 @@ fn main() {
         ("unused", "my $x = 10;"),
         ("undeclared_no_strict", "$x = 10;"),
         ("undeclared_strict", "use strict; $x = 10;"),
-        ("nested", r#"
+        (
+            "nested",
+            r#"
             my $outer = 1;
             {
                 my $middle = 2;
@@ -17,17 +19,21 @@ fn main() {
                 }
                 print $middle;
             }
-        "#),
-        ("package", r#"
+        "#,
+        ),
+        (
+            "package",
+            r#"
             our $pkg_var = 10;
             print $pkg_var;
-        "#),
+        "#,
+        ),
     ];
-    
+
     for (name, code) in codes {
         println!("\n=== {} ===", name);
         println!("Code: {}", code);
-        
+
         // First parse to see the AST
         let mut parser = Parser::new(code);
         let ast = match parser.parse() {
@@ -40,14 +46,17 @@ fn main() {
                 continue;
             }
         };
-        
+
         // Now analyze scoping
         let analyzer = ScopeAnalyzer::new();
         let issues = analyzer.analyze(&ast, code, &[]);
-        
+
         println!("Issues found: {}", issues.len());
         for issue in &issues {
-            println!("  {:?}: {} at line {}", issue.kind, issue.variable_name, issue.line);
+            println!(
+                "  {:?}: {} at line {}",
+                issue.kind, issue.variable_name, issue.line
+            );
         }
     }
 }

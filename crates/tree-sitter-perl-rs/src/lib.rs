@@ -49,31 +49,31 @@ pub mod unicode;
 #[cfg(not(feature = "pure-rust-standalone"))]
 pub mod ast;
 #[cfg(not(feature = "pure-rust-standalone"))]
-pub mod parser;
-#[cfg(not(feature = "pure-rust-standalone"))]
-pub mod token_compat;
-#[cfg(not(feature = "pure-rust-standalone"))]
 pub mod minimal_parser;
 #[cfg(not(feature = "pure-rust-standalone"))]
+pub mod parser;
+#[cfg(not(feature = "pure-rust-standalone"))]
 pub mod parser_v2;
+#[cfg(not(feature = "pure-rust-standalone"))]
+pub mod token_compat;
 #[cfg(not(feature = "pure-rust-standalone"))]
 pub mod working_parser;
 
 #[cfg(feature = "pure-rust")]
-pub mod pure_rust_parser;
-#[cfg(feature = "pure-rust")]
 pub mod benchmark_parser;
+#[cfg(feature = "pure-rust")]
+pub mod perl_lexer;
 #[cfg(feature = "pure-rust-standalone")]
 pub mod pest_only;
 #[cfg(feature = "pure-rust")]
-pub mod perl_lexer;
+pub mod pure_rust_parser;
 
+#[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
+pub use ast::{Node, NodeKind, SourceLocation};
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 pub use parser::Parser;
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 pub use parser_v2::ParserV2;
-#[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
-pub use ast::{Node, NodeKind, SourceLocation};
 
 #[cfg(feature = "token-parser")]
 pub mod simple_token;
@@ -106,12 +106,12 @@ pub mod test_debug;
 pub mod demo_token_parser;
 
 // Re-export the main parser and types for convenience
+#[cfg(feature = "pure-rust-standalone")]
+pub use pest_only::PestOnlyParser as PureRustParser; // Clean Pest-only parser for benchmarks
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::PureRustPerlParser;
-#[cfg(feature = "pure-rust-standalone")]
-pub use pest_only::PestOnlyParser as PureRustParser;  // Clean Pest-only parser for benchmarks
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
-pub use pure_rust_parser::PureRustPerlParser as PureRustParser;  // Original for non-benchmark use
+pub use pure_rust_parser::PureRustPerlParser as PureRustParser; // Original for non-benchmark use
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::{AstNode, PerlParser};
 

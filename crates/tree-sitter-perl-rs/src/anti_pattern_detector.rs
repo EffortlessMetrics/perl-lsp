@@ -3,8 +3,8 @@
 //! This module provides detection and analysis of problematic Perl patterns
 //! that make static parsing difficult or impossible, particularly around heredocs.
 
-use regex::Regex;
 use once_cell::sync::Lazy;
+use regex::Regex;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
@@ -15,9 +15,9 @@ pub struct Location {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Severity {
-    Error,    // Code will likely fail
-    Warning,  // Code works but is problematic
-    Info,     // Code could be improved
+    Error,   // Code will likely fail
+    Warning, // Code works but is problematic
+    Info,    // Code could be improved
 }
 
 #[derive(Debug, Clone)]
@@ -79,36 +79,37 @@ trait PatternDetector: Send + Sync {
 // Format heredoc detector
 struct FormatHeredocDetector;
 
-static FORMAT_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$").unwrap()
-});
+static FORMAT_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$").unwrap());
 
 impl PatternDetector for FormatHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
-        
+
         for cap in FORMAT_PATTERN.captures_iter(code) {
             let match_pos = cap.get(0).unwrap();
             let format_name = cap.get(1).unwrap().as_str().to_string();
-            
+
             // Check if next non-empty line is a heredoc
             let after_format = &code[match_pos.end()..];
             if let Some(heredoc_match) = after_format.lines().next() {
                 if heredoc_match.trim_start().starts_with("<<") {
                     let location = Location {
                         line: code[..match_pos.start()].lines().count(),
-                        column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                        column: match_pos.start()
+                            - code[..match_pos.start()].rfind('\n').unwrap_or(0),
                         offset: offset + match_pos.start(),
                     };
-                    
-                    let delimiter = heredoc_match.trim_start()
+
+                    let delimiter = heredoc_match
+                        .trim_start()
                         .trim_start_matches("<<")
                         .trim_start_matches(['\'', '"', '`'])
                         .split([' ', '\t', ';', '\n'])
                         .next()
                         .unwrap_or("")
                         .to_string();
-                    
+
                     results.push((
                         AntiPattern::FormatHeredoc {
                             location: location.clone(),
@@ -120,10 +121,10 @@ impl PatternDetector for FormatHeredocDetector {
                 }
             }
         }
-        
+
         results
     }
-    
+
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         if let AntiPattern::FormatHeredoc { format_name, .. } = pattern {
             Diagnostic {
@@ -146,21 +147,20 @@ impl PatternDetector for FormatHeredocDetector {
 // BEGIN-time heredoc detector
 struct BeginTimeHeredocDetector;
 
-static BEGIN_BLOCK_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}").unwrap()
-});
+static BEGIN_BLOCK_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}").unwrap());
 
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
-        
+
         for cap in BEGIN_BLOCK_PATTERN.captures_iter(code) {
             let match_pos = cap.get(0).unwrap();
             let block_content = cap.get(1).unwrap().as_str();
-            
+
             // Detect side effects in BEGIN block
             let mut side_effects = Vec::new();
-            
+
             if block_content.contains('$') && block_content.contains('=') {
                 side_effects.push("Global variable modification".to_string());
             }
@@ -173,13 +173,13 @@ impl PatternDetector for BeginTimeHeredocDetector {
             if block_content.contains("open ") {
                 side_effects.push("File operations".to_string());
             }
-            
+
             let location = Location {
                 line: code[..match_pos.start()].lines().count(),
                 column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
                 offset: offset + match_pos.start(),
             };
-            
+
             results.push((
                 AntiPattern::BeginTimeHeredoc {
                     location: location.clone(),
@@ -189,10 +189,10 @@ impl PatternDetector for BeginTimeHeredocDetector {
                 location,
             ));
         }
-        
+
         results
     }
-    
+
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         if let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern {
             let effects_str = if side_effects.is_empty() {
@@ -200,7 +200,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
             } else {
                 format!("Detected side effects: {}", side_effects.join(", "))
             };
-            
+
             Diagnostic {
                 severity: Severity::Warning,
                 pattern: pattern.clone(),
@@ -220,21 +220,20 @@ impl PatternDetector for BeginTimeHeredocDetector {
 // Dynamic heredoc delimiter detector
 struct DynamicDelimiterDetector;
 
-static DYNAMIC_DELIMITER_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`").unwrap()
-});
+static DYNAMIC_DELIMITER_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`").unwrap());
 
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
-        
+
         for match_pos in DYNAMIC_DELIMITER_PATTERN.find_iter(code) {
             let location = Location {
                 line: code[..match_pos.start()].lines().count(),
                 column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
                 offset: offset + match_pos.start(),
             };
-            
+
             results.push((
                 AntiPattern::DynamicHeredocDelimiter {
                     location: location.clone(),
@@ -243,10 +242,10 @@ impl PatternDetector for DynamicDelimiterDetector {
                 location,
             ));
         }
-        
+
         results
     }
-    
+
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         if let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern {
             Diagnostic {
@@ -275,78 +274,86 @@ impl AntiPatternDetector {
             ],
         }
     }
-    
+
     pub fn detect_all(&self, code: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
-        
+
         for detector in &self.patterns {
             let patterns = detector.detect(code, 0);
             for (pattern, _) in patterns {
                 diagnostics.push(detector.diagnose(&pattern));
             }
         }
-        
+
         diagnostics.sort_by_key(|d| match &d.pattern {
-            AntiPattern::FormatHeredoc { location, .. } |
-            AntiPattern::BeginTimeHeredoc { location, .. } |
-            AntiPattern::DynamicHeredocDelimiter { location, .. } |
-            AntiPattern::SourceFilterHeredoc { location, .. } |
-            AntiPattern::RegexCodeBlockHeredoc { location, .. } |
-            AntiPattern::EvalStringHeredoc { location, .. } |
-            AntiPattern::TiedHandleHeredoc { location, .. } => location.offset,
+            AntiPattern::FormatHeredoc { location, .. }
+            | AntiPattern::BeginTimeHeredoc { location, .. }
+            | AntiPattern::DynamicHeredocDelimiter { location, .. }
+            | AntiPattern::SourceFilterHeredoc { location, .. }
+            | AntiPattern::RegexCodeBlockHeredoc { location, .. }
+            | AntiPattern::EvalStringHeredoc { location, .. }
+            | AntiPattern::TiedHandleHeredoc { location, .. } => location.offset,
         });
-        
+
         diagnostics
     }
-    
+
     pub fn format_report(&self, diagnostics: &[Diagnostic]) -> String {
         let mut report = String::from("Anti-Pattern Analysis Report\n");
         report.push_str("============================\n\n");
-        
+
         if diagnostics.is_empty() {
             report.push_str("No problematic patterns detected.\n");
             return report;
         }
-        
-        report.push_str(&format!("Found {} problematic patterns:\n\n", diagnostics.len()));
-        
+
+        report.push_str(&format!(
+            "Found {} problematic patterns:\n\n",
+            diagnostics.len()
+        ));
+
         for (i, diag) in diagnostics.iter().enumerate() {
-            report.push_str(&format!("{}. {} ({})\n", i + 1, diag.message, 
+            report.push_str(&format!(
+                "{}. {} ({})\n",
+                i + 1,
+                diag.message,
                 match diag.severity {
                     Severity::Error => "ERROR",
                     Severity::Warning => "WARNING",
                     Severity::Info => "INFO",
                 }
             ));
-            
-            report.push_str(&format!("   Location: {}\n", 
+
+            report.push_str(&format!(
+                "   Location: {}\n",
                 match &diag.pattern {
-                    AntiPattern::FormatHeredoc { location, .. } |
-                    AntiPattern::BeginTimeHeredoc { location, .. } |
-                    AntiPattern::DynamicHeredocDelimiter { location, .. } |
-                    AntiPattern::SourceFilterHeredoc { location, .. } |
-                    AntiPattern::RegexCodeBlockHeredoc { location, .. } |
-                    AntiPattern::EvalStringHeredoc { location, .. } |
-                    AntiPattern::TiedHandleHeredoc { location, .. } => 
+                    AntiPattern::FormatHeredoc { location, .. }
+                    | AntiPattern::BeginTimeHeredoc { location, .. }
+                    | AntiPattern::DynamicHeredocDelimiter { location, .. }
+                    | AntiPattern::SourceFilterHeredoc { location, .. }
+                    | AntiPattern::RegexCodeBlockHeredoc { location, .. }
+                    | AntiPattern::EvalStringHeredoc { location, .. }
+                    | AntiPattern::TiedHandleHeredoc { location, .. } =>
                         format!("line {}, column {}", location.line, location.column),
                 }
             ));
-            
+
             report.push_str(&format!("   Explanation: {}\n", diag.explanation));
-            
+
             if let Some(fix) = &diag.suggested_fix {
-                report.push_str(&format!("   Suggested fix:\n     {}\n", 
+                report.push_str(&format!(
+                    "   Suggested fix:\n     {}\n",
                     fix.lines().collect::<Vec<_>>().join("\n     ")
                 ));
             }
-            
+
             if !diag.references.is_empty() {
                 report.push_str(&format!("   References: {}\n", diag.references.join(", ")));
             }
-            
+
             report.push_str("\n");
         }
-        
+
         report
     }
 }
@@ -354,7 +361,7 @@ impl AntiPatternDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_format_heredoc_detection() {
         let detector = AntiPatternDetector::new();
@@ -366,12 +373,15 @@ $name
 END
 .
 "#;
-        
+
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::FormatHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::FormatHeredoc { .. }
+        ));
     }
-    
+
     #[test]
     fn test_begin_heredoc_detection() {
         let detector = AntiPatternDetector::new();
@@ -382,12 +392,15 @@ BEGIN {
 END
 }
 "#;
-        
+
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::BeginTimeHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::BeginTimeHeredoc { .. }
+        ));
     }
-    
+
     #[test]
     fn test_dynamic_delimiter_detection() {
         let detector = AntiPatternDetector::new();
@@ -397,9 +410,12 @@ my $content = <<$delimiter;
 This is dynamic
 EOF
 "#;
-        
+
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::DynamicHeredocDelimiter { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::DynamicHeredocDelimiter { .. }
+        ));
     }
 }

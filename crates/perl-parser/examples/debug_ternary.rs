@@ -1,5 +1,5 @@
 //! Debug ternary operator tokenization
-use perl_parser::{TokenStream, TokenKind};
+use perl_parser::{TokenKind, TokenStream};
 
 fn main() {
     let code = "$x ? $y : $z";

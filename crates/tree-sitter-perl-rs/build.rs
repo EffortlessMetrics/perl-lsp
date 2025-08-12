@@ -12,7 +12,7 @@ fn main() {
 
     // Conditionally build scanner based on features
     if cfg!(feature = "c-scanner") {
-    build_c_scanner();
+        build_c_scanner();
     } else {
         // Default to rust-scanner
         build_rust_scanner_stub();
@@ -26,7 +26,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/scanner.c");
     println!("cargo:rerun-if-changed=src/tree_sitter/");
     println!("cargo:rerun-if-changed=grammar.js");
-    
+
     // Set feature flags for conditional compilation
     if cfg!(feature = "rust-scanner") {
         println!("cargo:rustc-cfg=rust_scanner");
@@ -83,7 +83,7 @@ fn build_rust_scanner_stub() {
     // Create a minimal stub that redirects to Rust scanner
     // This ensures the C scanner functions exist but delegate to Rust
     let mut build = cc::Build::new();
-    
+
     // Create a simple stub implementation
     let stub_code = r#"
 #include <stdint.h>

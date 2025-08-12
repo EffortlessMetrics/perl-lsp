@@ -2,11 +2,8 @@
 use perl_parser::Parser;
 
 fn main() {
-    let tests = vec![
-        "use v5.36",
-        "use 5.036",
-    ];
-    
+    let tests = vec!["use v5.36", "use 5.036"];
+
     for test in tests {
         println!("Testing: {}", test);
         let mut parser = Parser::new(test);

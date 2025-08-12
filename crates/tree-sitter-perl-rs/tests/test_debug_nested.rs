@@ -2,7 +2,7 @@
 
 use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 
-#[test] 
+#[test]
 fn test_nested_heredoc() {
     let input = r#"
 my $outer = 'EOF';
@@ -11,9 +11,9 @@ my $doc = <<${inner};
 Nested content
 EOF
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
-    
+
     println!("=== Tokenizing nested heredoc ===");
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next_token() {
@@ -26,8 +26,10 @@ EOF
         }
         tokens.push(token);
     }
-    
+
     // Check if we found a HeredocStart token
-    let has_heredoc = tokens.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     println!("\nFound HeredocStart: {}", has_heredoc);
 }

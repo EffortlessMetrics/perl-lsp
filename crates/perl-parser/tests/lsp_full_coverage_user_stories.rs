@@ -1,12 +1,10 @@
 //! Comprehensive User Story Tests with Real Operations
-//! 
+//!
 //! This file provides complete test coverage for all user stories,
 //! using actual LSP operations and real-world scenarios.
 
-use perl_parser::{
-    LspServer, JsonRpcRequest
-};
-use serde_json::{json, Value};
+use perl_parser::{JsonRpcRequest, LspServer};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
@@ -28,7 +26,7 @@ struct TestContext {
 impl TestContext {
     fn new() -> Self {
         let server = LspServer::new();
-        
+
         Self {
             server,
             documents: HashMap::new(),
@@ -36,7 +34,7 @@ impl TestContext {
             request_id: 1,
         }
     }
-    
+
     fn initialize(&mut self) {
         let params = json!({
             "processId": 1234,
@@ -54,11 +52,11 @@ impl TestContext {
                 }
             }
         });
-        
+
         self.send_request("initialize", Some(params));
         self.send_notification("initialized", None);
     }
-    
+
     fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
@@ -67,11 +65,12 @@ impl TestContext {
             params,
         };
         self.request_id += 1;
-        
-        self.server.handle_request(request)
+
+        self.server
+            .handle_request(request)
             .and_then(|response| response.result)
     }
-    
+
     fn send_notification(&mut self, method: &str, params: Option<Value>) {
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
@@ -81,63 +80,71 @@ impl TestContext {
         };
         self.server.handle_request(request);
     }
-    
+
     fn open_document(&mut self, uri: &str, content: &str) {
         self.documents.insert(uri.to_string(), content.to_string());
-        
-        self.send_notification("textDocument/didOpen", Some(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": content
-            }
-        })));
+
+        self.send_notification(
+            "textDocument/didOpen",
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": content
+                }
+            })),
+        );
     }
-    
+
     fn change_document(&mut self, uri: &str, new_content: &str) {
-        self.documents.insert(uri.to_string(), new_content.to_string());
-        
-        self.send_notification("textDocument/didChange", Some(json!({
-            "textDocument": {
-                "uri": uri,
-                "version": 2
-            },
-            "contentChanges": [{
-                "text": new_content
-            }]
-        })));
+        self.documents
+            .insert(uri.to_string(), new_content.to_string());
+
+        self.send_notification(
+            "textDocument/didChange",
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": 2
+                },
+                "contentChanges": [{
+                    "text": new_content
+                }]
+            })),
+        );
     }
-    
+
     fn get_completions(&mut self, uri: &str, line: u32, character: u32) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character }
         });
-        
+
         let result = self.send_request("textDocument/completion", Some(params));
-        result.as_ref()
+        result
+            .as_ref()
             .and_then(|r| r.get("items"))
             .and_then(|i| i.as_array())
             .cloned()
             .unwrap_or_default()
     }
-    
+
     fn get_hover(&mut self, uri: &str, line: u32, character: u32) -> Option<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character }
         });
-        
+
         self.send_request("textDocument/hover", Some(params))
     }
-    
+
     fn get_definition(&mut self, uri: &str, line: u32, character: u32) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character }
         });
-        
+
         let result = self.send_request("textDocument/definition", Some(params));
         if let Some(arr) = result.as_ref().and_then(|r| r.as_array()) {
             arr.clone()
@@ -147,8 +154,14 @@ impl TestContext {
             vec![]
         }
     }
-    
-    fn get_references(&mut self, uri: &str, line: u32, character: u32, include_declaration: bool) -> Vec<Value> {
+
+    fn get_references(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character },
@@ -156,14 +169,15 @@ impl TestContext {
                 "includeDeclaration": include_declaration
             }
         });
-        
+
         let result = self.send_request("textDocument/references", Some(params));
-        result.as_ref()
+        result
+            .as_ref()
             .and_then(|r| r.as_array())
             .cloned()
             .unwrap_or_default()
     }
-    
+
     fn get_code_actions(&mut self, uri: &str, start_line: u32, end_line: u32) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
@@ -175,36 +189,38 @@ impl TestContext {
                 "diagnostics": []
             }
         });
-        
+
         let result = self.send_request("textDocument/codeAction", Some(params));
-        result.as_ref()
+        result
+            .as_ref()
             .and_then(|r| r.as_array())
             .cloned()
             .unwrap_or_default()
     }
-    
+
     fn rename(&mut self, uri: &str, line: u32, character: u32, new_name: &str) -> Option<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character },
             "newName": new_name
         });
-        
+
         self.send_request("textDocument/rename", Some(params))
     }
-    
+
     fn get_workspace_symbols(&mut self, query: &str) -> Vec<Value> {
         let params = json!({
             "query": query
         });
-        
+
         let result = self.send_request("workspace/symbol", Some(params));
-        result.as_ref()
+        result
+            .as_ref()
             .and_then(|r| r.as_array())
             .cloned()
             .unwrap_or_default()
     }
-    
+
     fn format_document(&mut self, uri: &str) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
@@ -213,9 +229,10 @@ impl TestContext {
                 "insertSpaces": true
             }
         });
-        
+
         let result = self.send_request("textDocument/formatting", Some(params));
-        result.as_ref()
+        result
+            .as_ref()
             .and_then(|r| r.as_array())
             .cloned()
             .unwrap_or_default()
@@ -228,7 +245,7 @@ impl TestContext {
 fn test_user_story_debugging_workflow() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Debug a complex Perl script with breakpoints and variable inspection
     let code = r#"#!/usr/bin/perl
 use strict;
@@ -251,17 +268,17 @@ sub calculate_fibonacci {
 my $result = calculate_fibonacci(10);
 print "Fibonacci(10) = $result\n";
 "#;
-    
+
     ctx.open_document("file:///workspace/debug_test.pl", code);
-    
+
     // Get hover info at function call
     let hover = ctx.get_hover("file:///workspace/debug_test.pl", 17, 20);
     assert_hover_has_text(&hover);
-    
+
     // Get references to the function
     let refs = ctx.get_references("file:///workspace/debug_test.pl", 4, 4, true);
     assert!(!refs.is_empty(), "Should find function references");
-    
+
     // Get code actions for adding debug statements
     let actions = ctx.get_code_actions("file:///workspace/debug_test.pl", 10, 14);
     // Should offer debug-related actions
@@ -277,7 +294,7 @@ print "Fibonacci(10) = $result\n";
 fn test_user_story_refactoring_legacy_code() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Refactor legacy Perl code to modern best practices
     let legacy_code = r#"#!/usr/bin/perl
 
@@ -296,34 +313,40 @@ foreach $item (@array) {
     print "$item\n";
 }
 "#;
-    
+
     ctx.open_document("file:///workspace/legacy.pl", legacy_code);
-    
+
     // Get code actions for modernization
     let actions = ctx.get_code_actions("file:///workspace/legacy.pl", 0, 15);
-    
+
     // Should suggest adding strict/warnings
-    assert!(actions.iter().any(|a| {
-        a.get("title")
-            .and_then(|t| t.as_str())
-            .map(|s| s.contains("strict") || s.contains("warnings"))
-            .unwrap_or(false)
-    }), "Should suggest adding strict/warnings");
-    
+    assert!(
+        actions.iter().any(|a| {
+            a.get("title")
+                .and_then(|t| t.as_str())
+                .map(|s| s.contains("strict") || s.contains("warnings"))
+                .unwrap_or(false)
+        }),
+        "Should suggest adding strict/warnings"
+    );
+
     // Should suggest converting to 'my' declarations
-    assert!(actions.iter().any(|a| {
-        a.get("title")
-            .and_then(|t| t.as_str())
-            .map(|s| s.contains("my") || s.contains("declare"))
-            .unwrap_or(false)
-    }), "Should suggest proper variable declarations");
+    assert!(
+        actions.iter().any(|a| {
+            a.get("title")
+                .and_then(|t| t.as_str())
+                .map(|s| s.contains("my") || s.contains("declare"))
+                .unwrap_or(false)
+        }),
+        "Should suggest proper variable declarations"
+    );
 }
 
 #[test]
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Navigate between modules in a large project
     let main_script = r#"#!/usr/bin/perl
 use strict;
@@ -339,7 +362,7 @@ my $logger = MyApp::Logger->new();
 $db->connect();
 $logger->info("Connected to database");
 "#;
-    
+
     let database_module = r#"package MyApp::Database;
 use strict;
 use warnings;
@@ -357,21 +380,24 @@ sub connect {
 
 1;
 "#;
-    
+
     ctx.open_document("file:///workspace/main.pl", main_script);
     ctx.open_document("file:///workspace/lib/MyApp/Database.pm", database_module);
-    
+
     // Test go-to-definition from use statement
     let defs = ctx.get_definition("file:///workspace/main.pl", 5, 10);
     assert!(!defs.is_empty(), "Should find module definition");
-    
+
     // Test go-to-definition for method call
     let _method_defs = ctx.get_definition("file:///workspace/main.pl", 11, 6);
     // Should navigate to the connect method
-    
+
     // Test workspace symbols
     let symbols = ctx.get_workspace_symbols("Database");
-    assert!(!symbols.is_empty(), "Should find Database in workspace symbols");
+    assert!(
+        !symbols.is_empty(),
+        "Should find Database in workspace symbols"
+    );
     assert!(symbols.iter().any(|s| {
         s.get("name")
             .and_then(|n| n.as_str())
@@ -384,7 +410,7 @@ sub connect {
 fn test_user_story_test_driven_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Write tests first, then implementation
     let test_file = r#"#!/usr/bin/perl
 use strict;
@@ -397,18 +423,21 @@ my $calc = Calculator->new();
 is($calc->add(2, 3), 5, 'Addition works');
 is($calc->multiply(3, 4), 12, 'Multiplication works');
 "#;
-    
+
     ctx.open_document("file:///workspace/t/calculator.t", test_file);
-    
+
     // Get completions for Test::More functions
     let completions = ctx.get_completions("file:///workspace/t/calculator.t", 7, 0);
-    assert!(completions.iter().any(|c| {
-        c.get("label")
-            .and_then(|l| l.as_str())
-            .map(|l| l == "ok" || l == "is" || l == "like")
-            .unwrap_or(false)
-    }), "Should provide Test::More completions");
-    
+    assert!(
+        completions.iter().any(|c| {
+            c.get("label")
+                .and_then(|l| l.as_str())
+                .map(|l| l == "ok" || l == "is" || l == "like")
+                .unwrap_or(false)
+        }),
+        "Should provide Test::More completions"
+    );
+
     // Get hover for test functions
     let hover = ctx.get_hover("file:///workspace/t/calculator.t", 7, 0);
     assert_hover_has_text(&hover);
@@ -418,7 +447,7 @@ is($calc->multiply(3, 4), 12, 'Multiplication works');
 fn test_user_story_performance_profiling() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Profile and optimize slow code
     let slow_code = r#"#!/usr/bin/perl
 use strict;
@@ -443,27 +472,27 @@ my $result = slow_function(1000);
 my $elapsed = time() - $start;
 print "Result: $result, Time: $elapsed seconds\n";
 "#;
-    
+
     ctx.open_document("file:///workspace/slow.pl", slow_code);
-    
+
     // Get code actions for optimization
     let actions = ctx.get_code_actions("file:///workspace/slow.pl", 9, 14);
-    
+
     // Should suggest loop optimizations
-    let has_optimization_suggestions = actions.iter().any(|a| {
-        a.get("title")
-            .and_then(|t| t.as_str())
-            .is_some()
-    });
-    assert!(has_optimization_suggestions || actions.is_empty(), 
-            "Should provide code actions or recognize no optimizations available");
+    let has_optimization_suggestions = actions
+        .iter()
+        .any(|a| a.get("title").and_then(|t| t.as_str()).is_some());
+    assert!(
+        has_optimization_suggestions || actions.is_empty(),
+        "Should provide code actions or recognize no optimizations available"
+    );
 }
 
 #[test]
 fn test_user_story_regex_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Develop and test complex regular expressions
     let regex_code = r#"#!/usr/bin/perl
 use strict;
@@ -488,13 +517,13 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
     print "Class: $1, Content: $2\n";
 }
 "#;
-    
+
     ctx.open_document("file:///workspace/regex.pl", regex_code);
-    
+
     // Get hover on regex to see explanation
     let _hover = ctx.get_hover("file:///workspace/regex.pl", 7, 20);
     // Should provide regex pattern info
-    
+
     // Get completions for regex modifiers
     let _completions = ctx.get_completions("file:///workspace/regex.pl", 19, 55);
     // Should suggest regex modifiers like 'g', 'm', 's', 'x'
@@ -504,7 +533,7 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
 fn test_user_story_database_integration() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Work with database queries and DBI
     let db_code = r#"#!/usr/bin/perl
 use strict;
@@ -527,18 +556,21 @@ while (my $row = $sth->fetchrow_hashref()) {
 $sth->finish();
 $dbh->disconnect();
 "#;
-    
+
     ctx.open_document("file:///workspace/database.pl", db_code);
-    
+
     // Get completions for DBI methods
     let completions = ctx.get_completions("file:///workspace/database.pl", 11, 16);
-    assert!(completions.iter().any(|c| {
-        c.get("label")
-            .and_then(|l| l.as_str())
-            .map(|l| l.contains("prepare") || l.contains("execute") || l.contains("fetch"))
-            .unwrap_or(false)
-    }) || completions.is_empty(), "Should provide DBI method completions");
-    
+    assert!(
+        completions.iter().any(|c| {
+            c.get("label")
+                .and_then(|l| l.as_str())
+                .map(|l| l.contains("prepare") || l.contains("execute") || l.contains("fetch"))
+                .unwrap_or(false)
+        }) || completions.is_empty(),
+        "Should provide DBI method completions"
+    );
+
     // Get hover for DBI methods
     let hover = ctx.get_hover("file:///workspace/database.pl", 11, 16);
     assert!(hover.is_some(), "Hover should return information");
@@ -548,7 +580,7 @@ $dbh->disconnect();
 fn test_user_story_web_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Develop web applications with Mojolicious/Dancer
     let web_code = r#"#!/usr/bin/perl
 use Mojolicious::Lite;
@@ -578,13 +610,13 @@ post '/api/users' => sub {
 
 app->start;
 "#;
-    
+
     ctx.open_document("file:///workspace/web_app.pl", web_code);
-    
+
     // Get completions for Mojolicious methods
     let _completions = ctx.get_completions("file:///workspace/web_app.pl", 7, 8);
     // Should provide render options
-    
+
     // Get definition for route handlers
     let _defs = ctx.get_definition("file:///workspace/web_app.pl", 5, 0);
     // Should find 'get' function definition
@@ -594,7 +626,7 @@ app->start;
 fn test_user_story_live_collaboration() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Multiple developers working on the same file
     let initial_code = r#"#!/usr/bin/perl
 use strict;
@@ -606,21 +638,25 @@ sub process_data {
     return $data;
 }
 "#;
-    
+
     ctx.open_document("file:///workspace/shared.pl", initial_code);
-    
+
     // Simulate multiple developers making changes
     for i in 0..3 {
         thread::sleep(Duration::from_millis(10));
-        
+
         // Each developer adds their function
-        let new_content = format!("{}
-# Developer {} was here", 
-            ctx.documents.get("file:///workspace/shared.pl").unwrap_or(&String::new()),
-            i);
+        let new_content = format!(
+            "{}
+# Developer {} was here",
+            ctx.documents
+                .get("file:///workspace/shared.pl")
+                .unwrap_or(&String::new()),
+            i
+        );
         ctx.change_document("file:///workspace/shared.pl", &new_content);
     }
-    
+
     // Verify the document state is consistent
     let _hover = ctx.get_hover("file:///workspace/shared.pl", 4, 4);
     // Document should still be parseable
@@ -630,7 +666,7 @@ sub process_data {
 fn test_user_story_package_management() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Manage CPAN dependencies and local modules
     let makefile = r#"use ExtUtils::MakeMaker;
 
@@ -647,13 +683,13 @@ WriteMakefile(
     LICENSE => 'perl',
 );
 "#;
-    
+
     ctx.open_document("file:///workspace/Makefile.PL", makefile);
-    
+
     // Get hover for module versions
     let _hover = ctx.get_hover("file:///workspace/Makefile.PL", 6, 10);
     // Should show DBI module info
-    
+
     // Get completions for common CPAN modules
     let _completions = ctx.get_completions("file:///workspace/Makefile.PL", 10, 8);
     // Could suggest other common modules
@@ -663,7 +699,7 @@ WriteMakefile(
 fn test_user_story_documentation_generation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Generate and maintain POD documentation
     let module_with_pod = r#"package MyModule;
 use strict;
@@ -717,23 +753,29 @@ This is free software.
 
 =cut
 "#;
-    
+
     ctx.open_document("file:///workspace/lib/MyModule.pm", module_with_pod);
-    
+
     // Get outline/symbols including POD sections
-    let symbols = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": { "uri": "file:///workspace/lib/MyModule.pm" }
-    })));
+    let symbols = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": { "uri": "file:///workspace/lib/MyModule.pm" }
+        })),
+    );
     assert!(symbols.is_some(), "Should provide document symbols");
-    
+
     if let Some(syms) = symbols.as_ref().and_then(|s| s.as_array()) {
         // Should include both code symbols and POD sections
-        assert!(syms.iter().any(|s| {
-            s.get("name")
-                .and_then(|n| n.as_str())
-                .map(|n| n == "new" || n == "process")
-                .unwrap_or(false)
-        }), "Should find method symbols");
+        assert!(
+            syms.iter().any(|s| {
+                s.get("name")
+                    .and_then(|n| n.as_str())
+                    .map(|n| n == "new" || n == "process")
+                    .unwrap_or(false)
+            }),
+            "Should find method symbols"
+        );
     }
 }
 
@@ -741,7 +783,7 @@ This is free software.
 fn test_user_story_error_handling() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Robust error handling with Try::Tiny and custom exceptions
     let error_handling_code = r#"#!/usr/bin/perl
 use strict;
@@ -774,13 +816,13 @@ finally {
     print "Cleanup operations\n";
 };
 "#;
-    
+
     ctx.open_document("file:///workspace/errors.pl", error_handling_code);
-    
+
     // Get completions for Try::Tiny blocks
     let _completions = ctx.get_completions("file:///workspace/errors.pl", 17, 0);
     // Should suggest catch, finally blocks
-    
+
     // Get hover for error handling constructs
     let _hover = ctx.get_hover("file:///workspace/errors.pl", 13, 0);
     // Should explain try block
@@ -790,7 +832,7 @@ finally {
 fn test_user_story_configuration_management() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // User story: Manage application configuration with Config modules
     let config_code = r#"#!/usr/bin/perl
 use strict;
@@ -820,13 +862,13 @@ print "Database: $db_host:$db_port\n";
 print "App: $app_name (log level: $log_level)\n";
 print "API Key: $api_key\n";
 "#;
-    
+
     ctx.open_document("file:///workspace/config.pl", config_code);
-    
+
     // Get completions for config methods
     let _completions = ctx.get_completions("file:///workspace/config.pl", 9, 16);
     // Should suggest Config::Simple methods
-    
+
     // Get hover for config modules
     let _hover = ctx.get_hover("file:///workspace/config.pl", 4, 4);
     // Should provide module documentation
@@ -839,7 +881,7 @@ fn test_comprehensive_integration() {
     // This test ensures all components work together
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Create a mini project structure
     let main = r#"#!/usr/bin/perl
 use strict;
@@ -850,7 +892,7 @@ use Project::Main;
 my $app = Project::Main->new();
 $app->run();
 "#;
-    
+
     let main_module = r#"package Project::Main;
 use strict;
 use warnings;
@@ -875,27 +917,30 @@ sub run {
 
 1;
 "#;
-    
+
     // Open all project files
     ctx.open_document("file:///workspace/app.pl", main);
     ctx.open_document("file:///workspace/lib/Project/Main.pm", main_module);
-    
+
     // Test cross-file navigation
     let defs = ctx.get_definition("file:///workspace/app.pl", 4, 20);
     assert!(!defs.is_empty(), "Definition lookup should find target");
-    
+
     // Test project-wide refactoring
     let rename_result = ctx.rename("file:///workspace/lib/Project/Main.pm", 6, 4, "initialize");
-    assert!(rename_result.is_some(), "Rename should return workspace edits");
-    
+    assert!(
+        rename_result.is_some(),
+        "Rename should return workspace edits"
+    );
+
     // Test workspace symbols
     let symbols = ctx.get_workspace_symbols("Project");
     assert!(!symbols.is_empty(), "Should find project symbols");
-    
+
     // Test formatting
     let _edits = ctx.format_document("file:///workspace/lib/Project/Main.pm");
     // Should return formatting edits or empty if already formatted
-    
+
     // Verify all operations complete without panic
     assert!(true, "All integration operations completed successfully");
 }
@@ -906,47 +951,68 @@ sub run {
 fn test_performance_large_file() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Generate a large file
     let mut large_code = String::from("#!/usr/bin/perl\nuse strict;\nuse warnings;\n\n");
     for i in 0..1000 {
-        large_code.push_str(&format!("sub function_{} {{\n    my ($x) = @_;\n    return $x * {};\n}}\n\n", i, i));
+        large_code.push_str(&format!(
+            "sub function_{} {{\n    my ($x) = @_;\n    return $x * {};\n}}\n\n",
+            i, i
+        ));
     }
-    
+
     ctx.open_document("file:///workspace/large.pl", &large_code);
-    
+
     // Test operations on large file
     let start = std::time::Instant::now();
-    
+
     // Get completions
     let _ = ctx.get_completions("file:///workspace/large.pl", 500, 10);
-    assert!(start.elapsed() < Duration::from_secs(2), "Completions should be fast even on large files");
-    
+    assert!(
+        start.elapsed() < Duration::from_secs(2),
+        "Completions should be fast even on large files"
+    );
+
     // Get symbols
     let _ = ctx.get_workspace_symbols("function_500");
-    assert!(start.elapsed() < Duration::from_secs(3), "Symbol search should be fast");
+    assert!(
+        start.elapsed() < Duration::from_secs(3),
+        "Symbol search should be fast"
+    );
 }
 
 #[test]
 fn test_concurrent_operations() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Open a document
-    ctx.open_document("file:///workspace/concurrent.pl", 
-        "#!/usr/bin/perl\nuse strict;\nmy $x = 42;\n");
-    
+    ctx.open_document(
+        "file:///workspace/concurrent.pl",
+        "#!/usr/bin/perl\nuse strict;\nmy $x = 42;\n",
+    );
+
     // Perform multiple operations sequentially (thread safety is handled by the server)
     for i in 0..5 {
         match i {
-            0 => { let _ = ctx.get_hover("file:///workspace/concurrent.pl", 2, 4); },
-            1 => { let _ = ctx.get_completions("file:///workspace/concurrent.pl", 2, 8); },
-            2 => { let _ = ctx.get_definition("file:///workspace/concurrent.pl", 1, 4); },
-            3 => { let _ = ctx.get_references("file:///workspace/concurrent.pl", 2, 4, true); },
-            4 => { let _ = ctx.get_code_actions("file:///workspace/concurrent.pl", 0, 3); },
+            0 => {
+                let _ = ctx.get_hover("file:///workspace/concurrent.pl", 2, 4);
+            }
+            1 => {
+                let _ = ctx.get_completions("file:///workspace/concurrent.pl", 2, 8);
+            }
+            2 => {
+                let _ = ctx.get_definition("file:///workspace/concurrent.pl", 1, 4);
+            }
+            3 => {
+                let _ = ctx.get_references("file:///workspace/concurrent.pl", 2, 4, true);
+            }
+            4 => {
+                let _ = ctx.get_code_actions("file:///workspace/concurrent.pl", 0, 3);
+            }
             _ => {}
         }
     }
-    
+
     assert!(true, "Multiple operations completed successfully");
 }

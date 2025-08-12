@@ -1,12 +1,9 @@
 //! Debug qw tokenization
-use perl_parser::{TokenStream, TokenKind};
+use perl_parser::{TokenKind, TokenStream};
 
 fn main() {
-    let tests = vec![
-        "qw(foo bar)",
-        "qw/foo bar/",
-    ];
-    
+    let tests = vec!["qw(foo bar)", "qw/foo bar/"];
+
     for code in tests {
         println!("\nCode: {}", code);
         println!("Parser tokens:");

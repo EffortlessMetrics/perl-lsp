@@ -14,22 +14,26 @@ impl PerlModernizer {
     pub fn new() -> Self {
         Self {}
     }
-    
+
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
-        
+
         // Check for missing strict/warnings (only if not already present and file looks like a script)
-        if code.starts_with("#!/usr/bin/perl") && !code.contains("use strict") && !code.contains("use warnings") {
+        if code.starts_with("#!/usr/bin/perl")
+            && !code.contains("use strict")
+            && !code.contains("use warnings")
+        {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: String::new(),
                 new_pattern: "use strict;\nuse warnings;".to_string(),
-                description: "Add 'use strict' and 'use warnings' for better code quality".to_string(),
+                description: "Add 'use strict' and 'use warnings' for better code quality"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         // Check for bareword filehandles
         if let Some(pos) = code.find("open FH") {
             suggestions.push(ModernizationSuggestion {
@@ -41,7 +45,7 @@ impl PerlModernizer {
                 end: pos + 7,
             });
         }
-        
+
         // Check for two-argument open
         if code.contains("open(FH, 'file.txt')") {
             suggestions.push(ModernizationSuggestion {
@@ -53,25 +57,27 @@ impl PerlModernizer {
                 end: 0,
             });
         }
-        
+
         // Check for defined on arrays
         if code.contains("defined @array") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "defined @array".to_string(),
                 new_pattern: "@array".to_string(),
-                description: "defined(@array) is deprecated, use @array in boolean context".to_string(),
+                description: "defined(@array) is deprecated, use @array in boolean context"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         // Check for indirect object notation - handle both Class and MyClass
         if let Some(pos) = code.find("new MyClass") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "new MyClass".to_string(),
                 new_pattern: "MyClass->new".to_string(),
-                description: "Use direct method call instead of indirect object notation".to_string(),
+                description: "Use direct method call instead of indirect object notation"
+                    .to_string(),
                 manual_review_required: false,
                 start: pos,
                 end: pos + 11,
@@ -80,25 +86,27 @@ impl PerlModernizer {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "new Class".to_string(),
                 new_pattern: "Class->new".to_string(),
-                description: "Use direct method call instead of indirect object notation".to_string(),
+                description: "Use direct method call instead of indirect object notation"
+                    .to_string(),
                 manual_review_required: false,
                 start: pos,
                 end: pos + 9,
             });
         }
-        
+
         // Check for each on arrays
         if code.contains("each @array") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "each @array".to_string(),
                 new_pattern: "0..$#array".to_string(),
-                description: "each(@array) can cause unexpected behavior, use foreach with index".to_string(),
+                description: "each(@array) can cause unexpected behavior, use foreach with index"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         // Check for string eval (requires manual review)
         if code.contains("eval \"") {
             suggestions.push(ModernizationSuggestion {
@@ -110,36 +118,37 @@ impl PerlModernizer {
                 end: 0,
             });
         }
-        
+
         // Check for print with \n
         if code.contains("print \"Hello\\n\"") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "print \"Hello\\n\"".to_string(),
                 new_pattern: "say \"Hello\"".to_string(),
-                description: "Use 'say' instead of print with \\n (requires use feature 'say')".to_string(),
+                description: "Use 'say' instead of print with \\n (requires use feature 'say')"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         suggestions
     }
-    
+
     pub fn apply(&self, code: &str) -> String {
         let suggestions = self.analyze(code);
         let mut result = code.to_string();
-        
+
         // Apply suggestions in reverse order to preserve positions
         let mut sorted_suggestions = suggestions.clone();
         sorted_suggestions.sort_by_key(|s| std::cmp::Reverse(s.start));
-        
+
         for suggestion in sorted_suggestions {
             // Skip manual review items
             if suggestion.manual_review_required {
                 continue;
             }
-            
+
             // Handle specific patterns
             if suggestion.description.contains("strict") {
                 // Add after shebang if present
@@ -167,7 +176,7 @@ impl PerlModernizer {
             } else if suggestion.old_pattern.contains("each @array") {
                 result = result.replace(
                     "while (my ($i, $val) = each @array) { }",
-                    "foreach my $i (0..$#array) { my $val = $array[$i]; }"
+                    "foreach my $i (0..$#array) { my $val = $array[$i]; }",
                 );
             } else if suggestion.old_pattern.contains("print \"Hello\\n\"") {
                 result = result.replace("print \"Hello\\n\"", "say \"Hello\"");
@@ -175,7 +184,7 @@ impl PerlModernizer {
                 result = result.replace("print FH \"Hello\\n\"", "print $fh \"Hello\\n\"");
             }
         }
-        
+
         result
     }
 }

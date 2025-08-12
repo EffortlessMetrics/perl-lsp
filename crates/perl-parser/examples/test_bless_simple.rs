@@ -8,13 +8,12 @@ fn main() {
         "bless",
         "$ref",
         "'MyClass'",
-        
         // Test step by step
         "bless []",
         "bless([])",
         "bless([], 'MyClass')",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

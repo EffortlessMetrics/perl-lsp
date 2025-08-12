@@ -4,12 +4,12 @@
 //! syntax checking, code completion, and navigation features.
 
 use crate::enhanced_full_parser::EnhancedFullParser;
-use crate::incremental_parser::{IncrementalParser, Edit, Position as ParsePosition};
 use crate::error_recovery::ErrorRecoveryParser;
+use crate::incremental_parser::{Edit, IncrementalParser, Position as ParsePosition};
 use crate::pure_rust_parser::AstNode;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use serde::{Deserialize, Serialize};
 
 /// LSP Position
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -158,14 +158,14 @@ impl PerlLanguageServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             builtin_functions: vec![
-                "print", "say", "die", "warn", "open", "close", "read", "write",
-                "push", "pop", "shift", "unshift", "splice", "sort", "grep", "map",
-                "split", "join", "substr", "index", "rindex", "length", "chomp",
-                "sprintf", "printf", "ref", "defined", "undef", "bless", "eval",
+                "print", "say", "die", "warn", "open", "close", "read", "write", "push", "pop",
+                "shift", "unshift", "splice", "sort", "grep", "map", "split", "join", "substr",
+                "index", "rindex", "length", "chomp", "sprintf", "printf", "ref", "defined",
+                "undef", "bless", "eval",
             ],
             builtin_variables: vec![
-                "$_", "@_", "$!", "$@", "$?", "$$", "$0", "@ARGV", "%ENV",
-                "$^O", "$^V", "@INC", "%INC", "$.", "$,", "$/", "$\\",
+                "$_", "@_", "$!", "$@", "$?", "$$", "$0", "@ARGV", "%ENV", "$^O", "$^V", "@INC",
+                "%INC", "$.", "$,", "$/", "$\\",
             ],
         }
     }
@@ -204,8 +204,14 @@ impl PerlLanguageServer {
             Err(e) => {
                 diagnostics.push(Diagnostic {
                     range: Range {
-                        start: Position { line: 0, character: 0 },
-                        end: Position { line: 0, character: 1 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 0,
+                            character: 1,
+                        },
                     },
                     severity: Some(DiagnosticSeverity::Error),
                     code: None,
@@ -232,7 +238,12 @@ impl PerlLanguageServer {
     }
 
     /// Handle document change
-    pub fn did_change(&self, uri: String, changes: Vec<TextDocumentContentChangeEvent>, version: i32) {
+    pub fn did_change(
+        &self,
+        uri: String,
+        changes: Vec<TextDocumentContentChangeEvent>,
+        version: i32,
+    ) {
         let mut docs = self.documents.lock().unwrap();
         if let Some(state) = docs.get_mut(&uri) {
             // Apply changes
@@ -241,7 +252,7 @@ impl PerlLanguageServer {
                     // Incremental change
                     let edit = self.range_to_edit(&range, &state.content, &change.text);
                     state.content = self.apply_text_edit(&state.content, &range, &change.text);
-                    
+
                     // Re-parse incrementally
                     match state.parser.apply_edit(edit, &state.content) {
                         Ok(_) => {
@@ -265,8 +276,14 @@ impl PerlLanguageServer {
                         Err(e) => {
                             state.diagnostics = vec![Diagnostic {
                                 range: Range {
-                                    start: Position { line: 0, character: 0 },
-                                    end: Position { line: 0, character: 1 },
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: 1,
+                                    },
                                 },
                                 severity: Some(DiagnosticSeverity::Error),
                                 code: None,
@@ -376,8 +393,14 @@ impl PerlLanguageServer {
                     location: Location {
                         uri: uri.to_string(),
                         range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: 0,
+                                character: 0,
+                            },
                         },
                     },
                     container_name: container.map(|s| s.to_string()),
@@ -391,8 +414,14 @@ impl PerlLanguageServer {
                     location: Location {
                         uri: uri.to_string(),
                         range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: 0,
+                                character: 0,
+                            },
                         },
                     },
                     container_name: container.map(|s| s.to_string()),
@@ -403,17 +432,24 @@ impl PerlLanguageServer {
             }
             AstNode::VariableDeclaration { variables, .. } => {
                 for var in variables {
-                    if let AstNode::ScalarVariable(name) | 
-                           AstNode::ArrayVariable(name) | 
-                           AstNode::HashVariable(name) = var {
+                    if let AstNode::ScalarVariable(name)
+                    | AstNode::ArrayVariable(name)
+                    | AstNode::HashVariable(name) = var
+                    {
                         symbols.push(SymbolInformation {
                             name: name.to_string(),
                             kind: SymbolKind::Variable,
                             location: Location {
                                 uri: uri.to_string(),
                                 range: Range {
-                                    start: Position { line: 0, character: 0 },
-                                    end: Position { line: 0, character: 0 },
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
                                 },
                             },
                             container_name: container.map(|s| s.to_string()),
@@ -437,7 +473,7 @@ impl PerlLanguageServer {
     fn range_to_edit(&self, range: &Range, content: &str, new_text: &str) -> Edit {
         let start_byte = self.position_to_byte(&range.start, content);
         let end_byte = self.position_to_byte(&range.end, content);
-        
+
         Edit {
             start_byte,
             old_end_byte: end_byte,
@@ -461,7 +497,7 @@ impl PerlLanguageServer {
     fn position_to_byte(&self, pos: &Position, content: &str) -> usize {
         let mut line = 0;
         let mut byte = 0;
-        
+
         for ch in content.chars() {
             if line == pos.line as usize {
                 if byte == pos.character as usize {
@@ -473,7 +509,7 @@ impl PerlLanguageServer {
             }
             byte += ch.len_utf8();
         }
-        
+
         byte
     }
 
@@ -481,7 +517,7 @@ impl PerlLanguageServer {
     fn apply_text_edit(&self, content: &str, range: &Range, new_text: &str) -> String {
         let start = self.position_to_byte(&range.start, content);
         let end = self.position_to_byte(&range.end, content);
-        
+
         let mut result = String::new();
         result.push_str(&content[..start]);
         result.push_str(new_text);
@@ -519,12 +555,12 @@ mod tests {
         let server = PerlLanguageServer::new();
         let uri = "file:///test.pl".to_string();
         let text = "my $x = 42;\nprint $x;".to_string();
-        
+
         server.did_open(uri.clone(), text, 1);
-        
+
         let diagnostics = server.get_diagnostics(&uri);
         assert_eq!(diagnostics.len(), 0);
-        
+
         let symbols = server.get_document_symbols(&uri);
         assert!(symbols.iter().any(|s| s.name == "$x"));
     }
@@ -534,10 +570,16 @@ mod tests {
         let server = PerlLanguageServer::new();
         let uri = "file:///test.pl".to_string();
         let text = "sub test { }\nmy $var = 1;".to_string();
-        
+
         server.did_open(uri.clone(), text, 1);
-        
-        let completions = server.get_completions(&uri, Position { line: 1, character: 5 });
+
+        let completions = server.get_completions(
+            &uri,
+            Position {
+                line: 1,
+                character: 5,
+            },
+        );
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "$_"));
         assert!(completions.iter().any(|c| c.label == "test"));

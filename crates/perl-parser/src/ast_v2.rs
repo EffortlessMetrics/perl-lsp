@@ -24,7 +24,7 @@ impl Node {
     pub fn new(id: NodeId, kind: NodeKind, range: Range) -> Self {
         Node { id, kind, range }
     }
-    
+
     /// Convert to tree-sitter compatible S-expression
     pub fn to_sexp(&self) -> String {
         // Delegate to existing implementation
@@ -36,9 +36,13 @@ impl Node {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     // Program structure
-    Program { statements: Vec<Node> },
-    Block { statements: Vec<Node> },
-    
+    Program {
+        statements: Vec<Node>,
+    },
+    Block {
+        statements: Vec<Node>,
+    },
+
     // Declarations
     VariableDeclaration {
         declarator: String, // my, our, local, state
@@ -46,47 +50,47 @@ pub enum NodeKind {
         attributes: Vec<String>,
         initializer: Option<Box<Node>>,
     },
-    
+
     VariableListDeclaration {
         declarator: String,
         variables: Vec<Node>,
         attributes: Vec<String>,
         initializer: Option<Box<Node>>,
     },
-    
+
     // Variables
     Variable {
         sigil: String, // $, @, %, *, &
         name: String,
     },
-    
+
     // Error recovery nodes
     Error {
         message: String,
         expected: Vec<String>,
         partial: Option<Box<Node>>,
     },
-    
+
     MissingExpression,
     MissingStatement,
     MissingIdentifier,
     MissingBlock,
-    
+
     // Include all other variants from original AST...
     // (Abbreviated for example - would include all original variants)
-    
+
     // Expressions
     Binary {
         op: String,
         left: Box<Node>,
         right: Box<Node>,
     },
-    
+
     Unary {
         op: String,
         operand: Box<Node>,
     },
-    
+
     // Control flow
     If {
         condition: Box<Node>,
@@ -94,12 +98,18 @@ pub enum NodeKind {
         elsif_branches: Vec<(Node, Node)>,
         else_branch: Option<Box<Node>>,
     },
-    
+
     // Literals
-    Number { value: String },
-    String { value: String, interpolated: bool },
-    Identifier { name: String },
-    
+    Number {
+        value: String,
+    },
+    String {
+        value: String,
+        interpolated: bool,
+    },
+    Identifier {
+        name: String,
+    },
     // Other essential variants...
 }
 
@@ -107,7 +117,7 @@ impl NodeKind {
     /// Convert to S-expression format
     pub fn to_sexp(&self) -> String {
         use NodeKind::*;
-        
+
         match self {
             Program { statements } => {
                 let stmts = statements
@@ -117,7 +127,7 @@ impl NodeKind {
                     .join(" ");
                 format!("(program {})", stmts)
             }
-            
+
             Block { statements } => {
                 let stmts = statements
                     .iter()
@@ -126,30 +136,33 @@ impl NodeKind {
                     .join(" ");
                 format!("(block {})", stmts)
             }
-            
+
             Variable { sigil, name } => {
                 format!("(variable {} {})", sigil, name)
             }
-            
+
             Number { value } => format!("(number {})", value),
-            
-            String { value, interpolated } => {
+
+            String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated {
                     format!("(string_interpolated {:?})", value)
                 } else {
                     format!("(string {:?})", value)
                 }
             }
-            
+
             Binary { op, left, right } => {
                 format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
             }
-            
+
             Error { message, .. } => format!("(ERROR {})", message),
-            
+
             MissingExpression => "(MISSING_EXPRESSION)".to_string(),
             MissingStatement => "(MISSING_STATEMENT)".to_string(),
-            
+
             // Add other variants...
             _ => format!("({:?})", self),
         }
@@ -165,7 +178,7 @@ impl NodeIdGenerator {
     pub fn new() -> Self {
         NodeIdGenerator { next_id: 0 }
     }
-    
+
     pub fn next_id(&mut self) -> NodeId {
         let id = self.next_id;
         self.next_id += 1;
@@ -183,33 +196,29 @@ impl Default for NodeIdGenerator {
 mod tests {
     use super::*;
     use crate::position::Position;
-    
+
     #[test]
     fn test_node_creation() {
         let mut id_gen = NodeIdGenerator::new();
-        let range = Range::new(
-            Position::new(0, 1, 1),
-            Position::new(5, 1, 6)
-        );
-        
+        let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
+
         let node = Node::new(
             id_gen.next_id(),
-            NodeKind::Number { value: "42".to_string() },
-            range
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
+            range,
         );
-        
+
         assert_eq!(node.id, 0);
         assert_eq!(node.to_sexp(), "(number 42)");
     }
-    
+
     #[test]
     fn test_error_nodes() {
         let mut id_gen = NodeIdGenerator::new();
-        let range = Range::new(
-            Position::new(0, 1, 1),
-            Position::new(0, 1, 1)
-        );
-        
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+
         let error = Node::new(
             id_gen.next_id(),
             NodeKind::Error {
@@ -217,9 +226,9 @@ mod tests {
                 expected: vec!["identifier".to_string()],
                 partial: None,
             },
-            range
+            range,
         );
-        
+
         assert_eq!(error.to_sexp(), "(ERROR Unexpected token)");
     }
 }

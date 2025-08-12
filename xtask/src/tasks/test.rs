@@ -70,27 +70,27 @@ pub fn run(
             TestSuite::Heredoc => {
                 // Run heredoc-specific tests one by one
                 spinner.set_message("Running heredoc tests");
-                
+
                 // We need to run each test file separately
                 let heredoc_tests = vec![
                     "heredoc_missing_features_tests",
                     "heredoc_integration_tests",
                     "comprehensive_heredoc_tests",
                 ];
-                
+
                 let mut all_passed = true;
-                
+
                 // Features are available from the function parameter
-                
+
                 for test_name in heredoc_tests {
                     spinner.set_message(format!("Running {}", test_name));
-                    
+
                     // Build args for this specific test
                     let mut test_args = vec!["test".to_string()];
                     if release {
                         test_args.push("--release".to_string());
                     }
-                    
+
                     // Add features
                     if let Some(ref feat) = features {
                         if !feat.is_empty() {
@@ -98,29 +98,29 @@ pub fn run(
                             test_args.push(feat.join(","));
                         }
                     }
-                    
+
                     test_args.push("--test".to_string());
                     test_args.push(test_name.to_string());
-                    
+
                     if verbose {
                         test_args.push("--".to_string());
                         test_args.push("--nocapture".to_string());
                     }
-                    
+
                     // Convert to &str for cmd
                     let test_args_refs: Vec<&str> = test_args.iter().map(|s| s.as_str()).collect();
-                    
+
                     let status = cmd("cargo", &test_args_refs)
                         .run()
                         .context(format!("Failed to run {}", test_name))?;
-                    
+
                     if !status.status.success() {
                         all_passed = false;
                         spinner.finish_with_message(format!("❌ {} failed", test_name));
                         break;
                     }
                 }
-                
+
                 if all_passed {
                     spinner.finish_with_message("✅ All heredoc tests passed");
                 }

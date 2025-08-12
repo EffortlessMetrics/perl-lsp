@@ -1,12 +1,12 @@
 //! Debug multiplication parsing
 
-use perl_parser::Parser;
 use perl_lexer::PerlLexer;
+use perl_parser::Parser;
 
 fn main() {
     let code = "$result = ($a + $b) * $c;";
     println!("Code: {}", code);
-    
+
     // Show lexer output
     println!("\nLexer tokens:");
     let mut lexer = PerlLexer::new(code);
@@ -16,10 +16,10 @@ fn main() {
             break;
         }
     }
-    
+
     // Show what parser sees via token stream
     println!("\nToken stream:");
-    use perl_parser::token_stream::{TokenStream, TokenKind};
+    use perl_parser::token_stream::{TokenKind, TokenStream};
     let mut stream = TokenStream::new(code);
     loop {
         match stream.next() {

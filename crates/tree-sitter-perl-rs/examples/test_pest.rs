@@ -4,10 +4,10 @@ use tree_sitter_perl::PureRustParser;
 
 fn main() {
     println!("Testing Pest parser...");
-    
+
     let code = "my $x = 42; print $x;";
     let parser = PureRustParser::new();
-    
+
     match parser.parse(code) {
         Ok(ast) => {
             println!("✅ Success! AST: {:?}", ast);

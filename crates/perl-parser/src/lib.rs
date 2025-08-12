@@ -18,10 +18,10 @@
 //!
 //! ```rust
 //! use perl_parser::Parser;
-//! 
+//!
 //! let code = "my $x = 42;";
 //! let mut parser = Parser::new(code);
-//! 
+//!
 //! match parser.parse() {
 //!     Ok(ast) => println!("AST: {}", ast.to_sexp()),
 //!     Err(e) => eprintln!("Parse error: {}", e),
@@ -34,14 +34,14 @@ pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod code_actions;
 pub mod code_actions_enhanced;
+pub mod code_actions_provider;
 pub mod completion;
 pub mod diagnostics;
-pub mod execute_command;
 pub mod edit;
 pub mod error;
 pub mod error_classifier;
 pub mod error_recovery;
-pub mod code_actions_provider;
+pub mod execute_command;
 pub mod formatting;
 #[cfg(feature = "incremental")]
 pub mod incremental;
@@ -50,112 +50,113 @@ pub mod incremental_document;
 #[cfg(feature = "incremental")]
 pub mod incremental_edit;
 // pub mod refactoring; // TODO: Fix compilation errors
+pub mod call_hierarchy_provider;
+pub mod code_lens_provider;
+pub mod dead_code_detector;
+pub mod declaration;
+pub mod document_highlight;
+pub mod document_store;
+pub mod folding;
+pub mod import_optimizer;
 #[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
+#[cfg(feature = "incremental")]
+pub mod incremental_handler_v2;
+#[cfg(feature = "incremental")]
+pub mod incremental_integration;
 #[cfg(feature = "incremental")]
 pub mod incremental_simple;
 #[cfg(feature = "incremental")]
 pub mod incremental_v2;
+pub mod inlay_hints_provider;
+pub mod line_index;
 pub mod lsp_server;
-#[cfg(feature = "incremental")]
-pub mod incremental_integration;
 pub mod parser;
 pub mod parser_context;
+pub mod perl_critic;
+pub mod perltidy;
 pub mod position;
 pub mod position_mapper;
-#[cfg(feature = "incremental")]
-pub mod incremental_handler_v2;
 #[doc(hidden)]
 pub mod positions;
 pub mod recovery_parser;
 pub mod rename;
 pub mod semantic;
+pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
-pub mod folding;
+pub mod test_runner;
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
-pub mod workspace_symbols;
-pub mod code_lens_provider;
-pub mod line_index;
-pub mod document_store;
+pub mod type_hierarchy;
+pub mod type_inference;
 pub mod workspace_index;
 pub mod workspace_refactor;
-pub mod import_optimizer;
-pub mod dead_code_detector;
-pub mod type_inference;
-pub mod perl_critic;
-pub mod perltidy;
-pub mod semantic_tokens_provider;
-pub mod call_hierarchy_provider;
-pub mod document_highlight;
-pub mod declaration;
-pub mod type_hierarchy;
-pub mod inlay_hints_provider;
-pub mod test_runner;
+pub mod workspace_symbols;
 // pub mod test_generator;  // TODO: Fix compilation
 // pub mod tdd_workflow;    // TODO: Fix compilation
-pub mod tdd_basic;
-pub mod performance;
 pub mod debug_adapter;
 pub mod modernize;
 pub mod modernize_refactored;
-pub mod scope_analyzer;
+pub mod performance;
 pub mod pragma_tracker;
+pub mod scope_analyzer;
+pub mod tdd_basic;
 
 // Compatibility module for tests using old API
 #[cfg(any(test, feature = "test-compat"))]
 pub mod compat;
 
 pub use ast::{Node, NodeKind, SourceLocation};
-pub use pragma_tracker::{PragmaTracker, PragmaState};
 pub use error::{ParseError, ParseResult};
-pub use recovery_parser::RecoveryParser;
-pub use token_stream::{Token, TokenKind, TokenStream};
-pub use trivia::{Trivia, TriviaToken, NodeWithTrivia};
-pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 #[cfg(feature = "incremental")]
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
+pub use pragma_tracker::{PragmaState, PragmaTracker};
+pub use recovery_parser::RecoveryParser;
+pub use token_stream::{Token, TokenKind, TokenStream};
+pub use trivia::{NodeWithTrivia, Trivia, TriviaToken};
+pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 
 // Incremental parsing exports (feature-gated)
 #[cfg(feature = "incremental")]
-pub use incremental::{IncrementalState, Edit, apply_edits};
+pub use incremental::{Edit, IncrementalState, apply_edits};
 
 // IDE feature exports
-pub use symbol::{Symbol, SymbolKind, SymbolTable, SymbolExtractor, SymbolReference};
-pub use semantic::{SemanticAnalyzer, SemanticToken, SemanticTokenType, SemanticTokenModifier, HoverInfo};
+pub use semantic::{
+    HoverInfo, SemanticAnalyzer, SemanticToken, SemanticTokenModifier, SemanticTokenType,
+};
+pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
 
 #[cfg(test)]
 mod workspace_index_utf16_test;
-pub use completion::{CompletionProvider, CompletionItem, CompletionItemKind, CompletionContext};
-pub use signature_help::{SignatureHelpProvider, SignatureHelp, SignatureInfo, ParameterInfo};
-pub use rename::{RenameProvider, RenameResult, RenameOptions, TextEdit, apply_rename_edits};
-pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
-pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind, CodeActionEdit};
+pub use code_actions::{CodeAction, CodeActionEdit, CodeActionKind, CodeActionsProvider};
 pub use code_actions_enhanced::EnhancedCodeActionsProvider;
-pub use lsp_server::{LspServer, JsonRpcRequest, JsonRpcResponse};
-pub use formatting::{CodeFormatter, FormattingOptions, FormatTextEdit};
-pub use workspace_symbols::{WorkspaceSymbolsProvider, WorkspaceSymbol};
-pub use code_lens_provider::{CodeLensProvider, CodeLens, resolve_code_lens, get_shebang_lens};
-pub use semantic_tokens_provider::{
-    SemanticTokensProvider, SemanticToken as SemanticTokenV2, 
-    SemanticTokenType as SemanticTokenTypeV2, SemanticTokenModifier as SemanticTokenModifierV2,
-    encode_semantic_tokens
-};
-pub use folding::{FoldingRangeExtractor, FoldingRange, FoldingRangeKind};
-pub use type_inference::{
-    TypeInferenceEngine, PerlType, ScalarType, TypeEnvironment,
-    TypeConstraint, TypeLocation, TypeBasedCompletion
-};
-pub use scope_analyzer::{ScopeAnalyzer, IssueKind, ScopeIssue};
 pub use code_actions_provider::{
-    CodeActionsProvider as CodeActionsProviderV2, 
-    CodeAction as CodeActionV2, 
-    CodeActionKind as CodeActionKindV2,
-    TextEdit as TextEditV2
+    CodeAction as CodeActionV2, CodeActionKind as CodeActionKindV2,
+    CodeActionsProvider as CodeActionsProviderV2, TextEdit as TextEditV2,
 };
+pub use code_lens_provider::{CodeLens, CodeLensProvider, get_shebang_lens, resolve_code_lens};
+pub use completion::{CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider};
+pub use diagnostics::{
+    Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider, RelatedInformation,
+};
+pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
+pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
+pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};
+pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
+pub use semantic_tokens_provider::{
+    SemanticToken as SemanticTokenV2, SemanticTokenModifier as SemanticTokenModifierV2,
+    SemanticTokenType as SemanticTokenTypeV2, SemanticTokensProvider, encode_semantic_tokens,
+};
+pub use signature_help::{ParameterInfo, SignatureHelp, SignatureHelpProvider, SignatureInfo};
+pub use type_inference::{
+    PerlType, ScalarType, TypeBasedCompletion, TypeConstraint, TypeEnvironment,
+    TypeInferenceEngine, TypeLocation,
+};
+pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
 
 #[cfg(test)]
 mod tests {
@@ -166,7 +167,7 @@ mod tests {
         let mut parser = Parser::new("my $x = 42;");
         let result = parser.parse();
         assert!(result.is_ok());
-        
+
         let ast = result.unwrap();
         assert!(matches!(ast.kind, NodeKind::Program { .. }));
     }
@@ -184,11 +185,14 @@ mod tests {
             let mut parser = Parser::new(code);
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
-            
+
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
-                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind {
+                if let NodeKind::VariableDeclaration {
+                    declarator: decl, ..
+                } = &statements[0].kind
+                {
                     assert_eq!(decl, declarator);
                 } else {
                     panic!("Expected VariableDeclaration for: {}", code);
@@ -213,7 +217,7 @@ mod tests {
             let mut parser = Parser::new(code);
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
-            
+
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
                 assert!(!statements.is_empty());
@@ -232,7 +236,7 @@ mod tests {
         let _cases: Vec<(&str, &str)> = vec![
             // ("2 / 3", "/"), // Slash disambiguation issue
             // ("$a % $b", "%"), // Percent vs hash sigil issue
-            // ("$a ** $b", "**"), // Glob pattern issue  
+            // ("$a ** $b", "**"), // Glob pattern issue
             // ("$a // $b", "//"), // Defined-or vs regex issue
         ];
         // TODO: Implement proper context-aware parsing for these operators
@@ -240,12 +244,7 @@ mod tests {
 
     #[test]
     fn test_string_literals() {
-        let cases = vec![
-            r#""hello""#,
-            r#"'world'"#,
-            r#"qq{foo}"#,
-            r#"q{bar}"#,
-        ];
+        let cases = vec![r#""hello""#, r#"'world'"#, r#"qq{foo}"#, r#"q{bar}"#];
 
         for code in cases {
             let mut parser = Parser::new(code);
@@ -285,7 +284,7 @@ mod tests {
             let mut parser = Parser::new(code);
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
-            
+
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
@@ -372,19 +371,15 @@ mod tests {
             // Indirect object syntax
             "print STDOUT 'hello';",
             "new Class;",
-            
             // Multi-variable declarations
             "my ($x, $y) = (1, 2);",
             "my ($a :shared, $b :locked);",
-            
             // Complex expressions
             "$x->@*",
             "$x->%*",
             "$x->$*",
-            
             // Defined-or
             "$x // 'default'",
-            
             // ISA operator
             "$obj ISA 'Class'",
         ];

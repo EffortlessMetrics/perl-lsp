@@ -1,5 +1,5 @@
 //! Tests for word operator precedence (or, xor, and, not)
-//! 
+//!
 //! According to Perl documentation, word operators have very low precedence,
 //! lower than assignment operators. The precedence from highest to lowest is:
 //! 1. Assignment operators (=, +=, etc.)
@@ -17,7 +17,7 @@ fn test_or_lower_than_assignment() {
     let input = "$a = 1 or $b = 2";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     // Check that 'or' is at the top level by examining the S-expression
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(binary_or"));
@@ -31,7 +31,7 @@ fn test_and_lower_than_assignment() {
     let input = "$a = 1 and $b = 2";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     // Check that 'and' is at the top level by examining the S-expression
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(binary_and"));
@@ -45,7 +45,7 @@ fn test_not_in_assignment() {
     let input = "$a = not 0";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     // Check that assignment contains 'not' as its RHS
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(assignment_assign"));
@@ -59,7 +59,7 @@ fn test_or_and_precedence() {
     let input = "$a = 1 and $b = 2 or $c = 3";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     // The top level should be 'or'
     assert!(sexp.starts_with("(program (binary_or"));
@@ -73,7 +73,7 @@ fn test_statement_with_or_modifier() {
     let input = "open FILE, \"test.txt\" or die \"error\"";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(binary_or"));
     assert!(sexp.contains("(call open"));
@@ -86,7 +86,7 @@ fn test_complex_word_operators() {
     let input = "$result = $foo = 42 and $bar = 84 or $baz = 126";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     // Should parse as: (($result = ($foo = 42)) and ($bar = 84)) or ($baz = 126)
     assert!(sexp.contains("(binary_or"));
@@ -99,7 +99,7 @@ fn test_not_not_double_negation() {
     let input = "not not $x";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(unary_not (unary_not"));
 }
@@ -110,7 +110,7 @@ fn test_xor_precedence() {
     let input = "$a = 1 xor $b = 2";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(binary_xor"));
     assert!(sexp.contains("(assignment_assign (variable $ a) (number 1))"));
@@ -124,7 +124,7 @@ fn test_word_vs_symbolic_operators() {
     let input = "$a = 0 || $b = 1";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     // The assignment should contain the || expression
     assert!(sexp.contains("(assignment_assign"));
@@ -138,7 +138,7 @@ fn test_list_context_with_word_operators() {
     let input = "($a = 1, $b = 2) or die";
     let mut parser = Parser::new(input);
     let ast = parser.parse().unwrap();
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(binary_or"));
     // Parenthesized list expressions are parsed as arrays

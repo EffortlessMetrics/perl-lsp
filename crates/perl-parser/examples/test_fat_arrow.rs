@@ -11,17 +11,20 @@ fn main() {
         ("Mixed commas and arrows", "{ 'one', 1, two => 2 }"),
         ("Nested hash refs", "{ outer => { inner => 'value' } }"),
         ("Array with fat arrows", "(a => 1, b => 2)"),
-        ("Function call with arrows", "print(foo => 'bar', baz => 'qux')"),
+        (
+            "Function call with arrows",
+            "print(foo => 'bar', baz => 'qux')",
+        ),
     ];
-    
+
     println!("=== Testing Fat Arrow (=>) Operator ===\n");
-    
+
     for (name, code) in test_cases {
         println!("Test: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = Parser::new(code);
-        
+
         match parser.parse() {
             Ok(ast) => {
                 println!("✅ Success!");
@@ -31,19 +34,19 @@ fn main() {
                 println!("❌ Error: {}", e);
             }
         }
-        
+
         println!();
     }
-    
+
     // Test with file if provided
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
         println!("=== Testing file: {} ===\n", args[1]);
-        
+
         match fs::read_to_string(&args[1]) {
             Ok(content) => {
                 let mut parser = Parser::new(&content);
-                
+
                 match parser.parse() {
                     Ok(ast) => {
                         println!("✅ Successfully parsed file!");

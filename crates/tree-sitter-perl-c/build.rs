@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    
+
     // Build the C scanner
     let mut build = cc::Build::new();
     build
@@ -38,10 +38,10 @@ fn main() {
 
     // Tell cargo to look for shared libraries in the specified directory
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    
+
     // Tell cargo to tell rustc to link our C library
     println!("cargo:rustc-link-lib=static=tree-sitter-perl-c");
-    
+
     // Only rerun this script if the C source files change
     println!("cargo:rerun-if-changed=../../tree-sitter-perl/src/scanner.c");
     println!("cargo:rerun-if-changed=../../tree-sitter-perl/src/parser.c");
@@ -58,5 +58,7 @@ fn main() {
     // - FFI-safety for u128 (not used in our FFI boundary)
     //
     // These are logged for traceability and explicitly ignored for CI and audit purposes.
-    println!("cargo:warning=Ignoring legacy C/bindgen warnings: type naming, non_upper_case_globals, FFI u128");
-} 
+    println!(
+        "cargo:warning=Ignoring legacy C/bindgen warnings: type naming, non_upper_case_globals, FFI u128"
+    );
+}

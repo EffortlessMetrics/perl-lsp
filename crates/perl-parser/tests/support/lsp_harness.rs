@@ -5,11 +5,11 @@
 #![allow(dead_code)]
 
 use perl_parser::lsp_server::LspServer;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
+use std::collections::VecDeque;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::VecDeque;
 
 /// LSP Test Harness for testing with real JSON-RPC protocol
 pub struct LspHarness {
@@ -24,13 +24,14 @@ impl LspHarness {
     pub fn new() -> Self {
         let output_buffer = Arc::new(Mutex::new(Vec::new()));
         let notification_buffer = Arc::new(Mutex::new(VecDeque::new()));
-        
+
         // Create server with captured output
         let server = LspServer::with_output(Arc::new(Mutex::new(Box::new(TestWriter {
             buffer: output_buffer.clone(),
             notifications: notification_buffer.clone(),
-        }) as Box<dyn Write + Send>)));
-        
+        })
+            as Box<dyn Write + Send>)));
+
         Self {
             server,
             output_buffer,
@@ -41,23 +42,25 @@ impl LspHarness {
 
     /// Initialize the LSP server
     pub fn initialize(&mut self, capabilities: Option<Value>) -> Result<Value, String> {
-        let caps = capabilities.unwrap_or_else(|| json!({
-            "textDocument": {
-                "completion": {
-                    "completionItem": {
-                        "snippetSupport": true
-                    }
-                },
-                "hover": {
-                    "contentFormat": ["markdown", "plaintext"]
-                },
-                "signatureHelp": {
-                    "signatureInformation": {
-                        "documentationFormat": ["markdown", "plaintext"]
+        let caps = capabilities.unwrap_or_else(|| {
+            json!({
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true
+                        }
+                    },
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
+                    },
+                    "signatureHelp": {
+                        "signatureInformation": {
+                            "documentationFormat": ["markdown", "plaintext"]
+                        }
                     }
                 }
-            }
-        }));
+            })
+        });
 
         let init_request = json!({
             "jsonrpc": "2.0",
@@ -72,23 +75,26 @@ impl LspHarness {
         self.next_request_id += 1;
 
         let response = self.send_request(init_request)?;
-        
+
         // Send initialized notification
         self.notify("initialized", json!({}));
-        
+
         Ok(response)
     }
 
     /// Open a document
     pub fn open(&mut self, uri: &str, text: &str) -> Result<(), String> {
-        self.notify("textDocument/didOpen", json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": text
-            }
-        }));
+        self.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            }),
+        );
         Ok(())
     }
 
@@ -101,7 +107,7 @@ impl LspHarness {
             "params": params
         });
         self.next_request_id += 1;
-        
+
         self.send_request(request)
     }
 
@@ -112,14 +118,14 @@ impl LspHarness {
             "method": method,
             "params": params
         });
-        
+
         let request_str = format!("{}\r\n", notification.to_string());
         let content = format!(
             "Content-Length: {}\r\n\r\n{}",
             request_str.len(),
             request_str
         );
-        
+
         let mut input = Cursor::new(content.into_bytes());
         let _result = self.server.handle_message(&mut input);
     }
@@ -128,20 +134,20 @@ impl LspHarness {
     pub fn drain_notifications(&mut self, method: Option<&str>, timeout_ms: u64) -> Vec<Value> {
         let start = Instant::now();
         let timeout = Duration::from_millis(timeout_ms);
-        
+
         // Wait a bit for notifications to arrive
         while start.elapsed() < timeout {
             std::thread::sleep(Duration::from_millis(10));
-            
+
             let notifications = self.notification_buffer.lock().unwrap();
             if !notifications.is_empty() {
                 break;
             }
         }
-        
+
         let mut notifications = self.notification_buffer.lock().unwrap();
         let mut result = Vec::new();
-        
+
         while let Some(notif) = notifications.pop_front() {
             if let Some(filter_method) = method {
                 if notif["method"].as_str() == Some(filter_method) {
@@ -155,12 +161,16 @@ impl LspHarness {
                 result.push(notif);
             }
         }
-        
+
         result
     }
 
     /// Get performance timing for a request
-    pub fn timed_request(&mut self, method: &str, params: Value) -> Result<(Value, Duration), String> {
+    pub fn timed_request(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<(Value, Duration), String> {
         let start = Instant::now();
         let result = self.request(method, params)?;
         let duration = start.elapsed();
@@ -171,7 +181,7 @@ impl LspHarness {
     fn send_request(&mut self, request: Value) -> Result<Value, String> {
         // Clear output buffer
         self.output_buffer.lock().unwrap().clear();
-        
+
         // Format request with Content-Length header
         let request_str = request.to_string();
         let content = format!(
@@ -179,19 +189,19 @@ impl LspHarness {
             request_str.len(),
             request_str
         );
-        
+
         // Send to server
         let mut input = Cursor::new(content.into_bytes());
         let result = self.server.handle_message(&mut input);
-        
+
         if let Err(e) = result {
             return Err(format!("Server error: {:?}", e));
         }
-        
+
         // Parse response from output buffer
         let output = self.output_buffer.lock().unwrap();
         let output_str = String::from_utf8_lossy(&output);
-        
+
         // Find the JSON response after headers
         if let Some(json_start) = output_str.find("{") {
             let json_str = &output_str[json_start..];
@@ -204,7 +214,7 @@ impl LspHarness {
                 }
             }
         }
-        
+
         Err("No valid response received".to_string())
     }
 }
@@ -219,7 +229,7 @@ impl Write for TestWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut buffer = self.buffer.lock().unwrap();
         buffer.extend_from_slice(buf);
-        
+
         // Try to parse as notification
         let content = String::from_utf8_lossy(buf);
         if let Some(json_start) = content.find("{") {
@@ -231,10 +241,10 @@ impl Write for TestWriter {
                 }
             }
         }
-        
+
         Ok(buf.len())
     }
-    
+
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
@@ -245,14 +255,12 @@ impl Write for TestWriter {
 /// Macro for setting up a test with an open document
 #[macro_export]
 macro_rules! with_open_doc {
-    ($uri:expr, $text:expr, $harness:ident, $body:block) => {
-        {
-            let mut $harness = LspHarness::new();
-            $harness.initialize(None).expect("Failed to initialize");
-            $harness.open($uri, $text).expect("Failed to open document");
-            $body
-        }
-    };
+    ($uri:expr, $text:expr, $harness:ident, $body:block) => {{
+        let mut $harness = LspHarness::new();
+        $harness.initialize(None).expect("Failed to initialize");
+        $harness.open($uri, $text).expect("Failed to open document");
+        $body
+    }};
 }
 
 /// Macro for asserting response contains expected locations
@@ -268,9 +276,9 @@ macro_rules! assert_locations {
                     ($el, $ec)
                 ) ),*
             ];
-            
+
             assert_eq!(locations.len(), expected.len(), "Location count mismatch");
-            
+
             for (i, (uri, (sl, sc), (el, ec))) in expected.iter().enumerate() {
                 let loc = &locations[i];
                 assert_eq!(loc["uri"].as_str(), Some(*uri));
@@ -296,16 +304,16 @@ macro_rules! assert_highlights {
                     $kind
                 ) ),*
             ];
-            
+
             assert_eq!(highlights.len(), expected.len(), "Highlight count mismatch");
-            
+
             for (i, ((sl, sc), (el, ec), kind)) in expected.iter().enumerate() {
                 let hl = &highlights[i];
                 assert_eq!(hl["range"]["start"]["line"].as_u64(), Some(*sl as u64));
                 assert_eq!(hl["range"]["start"]["character"].as_u64(), Some(*sc as u64));
                 assert_eq!(hl["range"]["end"]["line"].as_u64(), Some(*el as u64));
                 assert_eq!(hl["range"]["end"]["character"].as_u64(), Some(*ec as u64));
-                
+
                 let actual_kind = hl["kind"].as_u64().unwrap_or(1);
                 let expected_kind = match kind.as_str() {
                     "Read" => 1,
@@ -322,26 +330,26 @@ macro_rules! assert_highlights {
 /// Assert no diagnostics were published
 #[macro_export]
 macro_rules! assert_no_diags {
-    ($harness:expr) => {
-        {
-            let diags = $harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
-            assert!(diags.is_empty(), "Expected no diagnostics, got: {:?}", diags);
-        }
-    };
+    ($harness:expr) => {{
+        let diags = $harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
+        assert!(
+            diags.is_empty(),
+            "Expected no diagnostics, got: {:?}",
+            diags
+        );
+    }};
 }
 
 /// Assert performance timing
 #[macro_export]
 macro_rules! assert_perf {
-    ($duration:expr, < $max_ms:expr) => {
-        {
-            let max = std::time::Duration::from_millis($max_ms);
-            assert!(
-                $duration < max,
-                "Performance assertion failed: {:?} >= {:?}ms",
-                $duration,
-                $max_ms
-            );
-        }
-    };
+    ($duration:expr, < $max_ms:expr) => {{
+        let max = std::time::Duration::from_millis($max_ms);
+        assert!(
+            $duration < max,
+            "Performance assertion failed: {:?} >= {:?}ms",
+            $duration,
+            $max_ms
+        );
+    }};
 }

@@ -1,10 +1,10 @@
 //! Run unified parser tests
-//! 
+//!
 //! This binary runs the same test suite against all three Perl parsers
 
 use anyhow::Result;
 use colored::*;
-use parser_tests::{corpus, corpus_converter, run_test_on_all_parsers, TestCase};
+use parser_tests::{TestCase, corpus, corpus_converter, run_test_on_all_parsers};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -12,13 +12,13 @@ fn main() -> Result<()> {
     println!("{}", "Perl Parser Test Suite".bold().blue());
     println!("{}", "======================".blue());
     println!();
-    
+
     // Load tests
     let mut tests = vec![];
-    
+
     // Add some basic tests
     tests.extend(basic_tests());
-    
+
     // Load converted corpus tests
     match corpus_converter::convert_perl_parser_tests() {
         Ok(converted_tests) => {
@@ -29,13 +29,17 @@ fn main() -> Result<()> {
             eprintln!("Warning: Failed to load converted tests: {}", e);
         }
     }
-    
+
     // Load corpus tests if available
     let corpus_path = PathBuf::from("test/corpus");
     if corpus_path.exists() {
         match corpus::load_corpus_directory(&corpus_path) {
             Ok(corpus_tests) => {
-                println!("Loaded {} corpus tests from {:?}", corpus_tests.len(), corpus_path);
+                println!(
+                    "Loaded {} corpus tests from {:?}",
+                    corpus_tests.len(),
+                    corpus_path
+                );
                 tests.extend(corpus_tests);
             }
             Err(e) => {
@@ -43,40 +47,41 @@ fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Run tests
     let mut results_by_parser: HashMap<String, Vec<bool>> = HashMap::new();
-    
+
     println!("\nRunning {} tests...\n", tests.len());
-    
+
     for test in &tests {
         println!("Test: {}", test.name.bold());
         if let Some(desc) = &test.description {
             println!("  {}", desc.dimmed());
         }
-        
+
         let results = run_test_on_all_parsers(test);
-        
+
         for result in results {
             let status = if result.success {
                 "PASS".green()
             } else {
                 "FAIL".red()
             };
-            
-            println!("  {} {}: {} ({:?})",
+
+            println!(
+                "  {} {}: {} ({:?})",
                 status,
                 result.parser_name.cyan(),
                 status,
                 result.parse_time
             );
-            
+
             if !result.success {
                 if let Some(error) = &result.error {
                     println!("    Error: {}", error.red());
                 }
             }
-            
+
             // Track results
             results_by_parser
                 .entry(result.parser_name)
@@ -85,16 +90,16 @@ fn main() -> Result<()> {
         }
         println!();
     }
-    
+
     // Summary
     println!("{}", "Summary".bold().blue());
     println!("{}", "-------".blue());
-    
+
     for (parser, results) in &results_by_parser {
         let passed = results.iter().filter(|&&x| x).count();
         let total = results.len();
         let percentage = (passed as f64 / total as f64) * 100.0;
-        
+
         let status = if percentage >= 95.0 {
             format!("{:.1}%", percentage).green()
         } else if percentage >= 80.0 {
@@ -102,15 +107,16 @@ fn main() -> Result<()> {
         } else {
             format!("{:.1}%", percentage).red()
         };
-        
-        println!("{}: {}/{} tests passed ({})",
+
+        println!(
+            "{}: {}/{} tests passed ({})",
             parser.cyan(),
             passed,
             total,
             status
         );
     }
-    
+
     Ok(())
 }
 
@@ -178,7 +184,8 @@ fn basic_tests() -> Vec<TestCase> {
             input: r#"my $text = <<EOF;
 Hello, world!
 This is a heredoc.
-EOF"#.to_string(),
+EOF"#
+                .to_string(),
             description: Some("Simple heredoc".to_string()),
             should_parse: true,
             expected_sexp: None,

@@ -1,8 +1,5 @@
 //! Test example for formatting features
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Tree-sitter Perl Formatting Demo ===\n");
@@ -31,7 +28,7 @@ hello_world("World");
 
 fn print_ast(node: &AstNode, indent: usize) {
     let prefix = "  ".repeat(indent);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program ({} items)", prefix, items.len());
@@ -53,7 +50,11 @@ fn print_ast(node: &AstNode, indent: usize) {
                 print_ast(stmt, indent + 1);
             }
         }
-        AstNode::VariableDeclaration { scope, variables, initializer } => {
+        AstNode::VariableDeclaration {
+            scope,
+            variables,
+            initializer,
+        } => {
             println!("{}VariableDeclaration: {}", prefix, scope);
             for var in variables {
                 print_ast(var, indent + 1);
@@ -62,7 +63,13 @@ fn print_ast(node: &AstNode, indent: usize) {
                 print_ast(init, indent + 1);
             }
         }
-        AstNode::ForStatement { label, init, condition, update, block } => {
+        AstNode::ForStatement {
+            label,
+            init,
+            condition,
+            update,
+            block,
+        } => {
             println!("{}ForStatement", prefix);
             if let Some(label) = label {
                 println!("{}  Label: {}", prefix, label);

@@ -1,12 +1,12 @@
 //! Integration tests for the perl-parser crate
 
-use perl_parser::{Parser, NodeKind};
+use perl_parser::{NodeKind, Parser};
 
 #[test]
 fn test_variable_declaration() {
     let mut parser = Parser::new("my $x = 42;");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("my_declaration"));
     assert!(sexp.contains("variable"));
@@ -17,7 +17,7 @@ fn test_variable_declaration() {
 fn test_array_declaration() {
     let mut parser = Parser::new("my @array = (1, 2, 3);");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("my_declaration"));
     assert!(sexp.contains("array"));
@@ -27,7 +27,7 @@ fn test_array_declaration() {
 fn test_if_statement() {
     let mut parser = Parser::new("if ($x > 10) { print $x; }");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("if"));
     assert!(sexp.contains("binary_>"));
@@ -37,7 +37,7 @@ fn test_if_statement() {
 fn test_while_loop() {
     let mut parser = Parser::new("while ($i < 10) { $i++; }");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("while"));
     assert!(sexp.contains("binary_<"));
@@ -47,7 +47,7 @@ fn test_while_loop() {
 fn test_function_definition() {
     let mut parser = Parser::new("sub hello { return \"world\"; }");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("sub hello"));
     assert!(sexp.contains("return"));
@@ -57,7 +57,7 @@ fn test_function_definition() {
 fn test_complex_expression() {
     let mut parser = Parser::new("$result = ($a + $b) * $c;");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("assignment"));
     assert!(sexp.contains("binary_*"));
@@ -68,7 +68,7 @@ fn test_complex_expression() {
 fn test_method_call() {
     let mut parser = Parser::new("$obj->method($arg);");
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("method_call"));
 }
@@ -84,10 +84,10 @@ if ($x) {
     }
 }
 "#;
-    
+
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Failed to parse");
-    
+
     let sexp = ast.to_sexp();
     assert!(sexp.contains("if"));
     assert!(sexp.contains("while"));
@@ -99,7 +99,7 @@ fn test_error_recovery() {
     // Missing semicolon - parser should still work
     let mut parser = Parser::new("my $x = 42\nmy $y = 84;");
     let result = parser.parse();
-    
+
     // Should still parse successfully
     assert!(result.is_ok());
 }
@@ -108,7 +108,7 @@ fn test_error_recovery() {
 fn test_empty_program() {
     let mut parser = Parser::new("");
     let ast = parser.parse().expect("Failed to parse empty program");
-    
+
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 0);
     } else {

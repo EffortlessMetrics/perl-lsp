@@ -7,13 +7,13 @@
 //! - Format declarations
 //! - Context-sensitive parsing
 
-use crate::pure_rust_parser::{PerlParser, Rule, AstNode, PureRustPerlParser};
-use crate::lexer_adapter::LexerAdapter;
-use crate::enhanced_heredoc_lexer::{process_with_enhanced_heredocs, HeredocDeclaration};
+use crate::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
 use crate::error::ParseError;
+use crate::lexer_adapter::LexerAdapter;
+use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
 use pest::Parser;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Enhanced parser with comprehensive edge case support
 pub struct EnhancedFullParser {
@@ -38,35 +38,36 @@ impl EnhancedFullParser {
     pub fn parse(&mut self, input: &str) -> Result<AstNode, ParseError> {
         // Phase 1: Extract special sections (DATA/END, POD)
         let (main_code, data_content) = self.extract_special_sections(input);
-        
+
         // Phase 2: Handle enhanced heredocs
         let (heredoc_processed, declarations) = process_with_enhanced_heredocs(&main_code);
         self.heredoc_declarations = declarations;
-        
+
         // Phase 3: Handle slash disambiguation
         let fully_processed = LexerAdapter::preprocess(&heredoc_processed);
-        
+
         // Phase 4: Parse with Pest
-        let pairs = PerlParser::parse(Rule::program, &fully_processed)
-            .map_err(|e| {
-                eprintln!("Enhanced parser error: {:?}", e);
-                ParseError::ParseFailed
-            })?;
-        
+        let pairs = PerlParser::parse(Rule::program, &fully_processed).map_err(|e| {
+            eprintln!("Enhanced parser error: {:?}", e);
+            ParseError::ParseFailed
+        })?;
+
         // Phase 5: Build AST
         let mut parser = PureRustPerlParser::new();
         let mut ast = None;
         for pair in pairs {
-            ast = parser.build_node(pair).map_err(|_| ParseError::ParseFailed)?;
+            ast = parser
+                .build_node(pair)
+                .map_err(|_| ParseError::ParseFailed)?;
         }
-        
+
         // Phase 6: Postprocess and enrich AST
         if let Some(ref mut node) = ast {
             LexerAdapter::postprocess(node);
             self.restore_heredoc_content(node);
             self.add_data_section(node, data_content);
         }
-        
+
         ast.ok_or(ParseError::ParseFailed)
     }
 
@@ -82,8 +83,11 @@ impl EnhancedFullParser {
 
         for (i, line) in lines.iter().enumerate() {
             // Check for POD start
-            if !in_pod && line.starts_with('=') && line.len() > 1 && 
-               line.chars().nth(1).map_or(false, |c| c.is_alphabetic()) {
+            if !in_pod
+                && line.starts_with('=')
+                && line.len() > 1
+                && line.chars().nth(1).map_or(false, |c| c.is_alphabetic())
+            {
                 in_pod = true;
                 pod_start = i;
                 pod_content.clear();
@@ -130,21 +134,26 @@ impl EnhancedFullParser {
 
     /// Restore heredoc content in the AST
     fn restore_heredoc_content(&self, node: &mut AstNode) {
-        let placeholder_map: HashMap<String, Arc<str>> = self.heredoc_declarations
+        let placeholder_map: HashMap<String, Arc<str>> = self
+            .heredoc_declarations
             .iter()
             .filter_map(|decl| {
-                decl.content.as_ref().map(|content| {
-                    (decl.placeholder_id.clone(), content.clone())
-                })
+                decl.content
+                    .as_ref()
+                    .map(|content| (decl.placeholder_id.clone(), content.clone()))
             })
             .collect();
-        
+
         self.restore_node_content(node, &placeholder_map);
     }
 
-    fn restore_node_content(&self, node: &mut AstNode, placeholder_map: &HashMap<String, Arc<str>>) {
+    fn restore_node_content(
+        &self,
+        node: &mut AstNode,
+        placeholder_map: &HashMap<String, Arc<str>>,
+    ) {
         use AstNode::*;
-        
+
         match node {
             String(value) => {
                 if let Some(content) = placeholder_map.get(value.as_ref()) {
@@ -166,7 +175,11 @@ impl EnhancedFullParser {
             UnaryOp { operand, .. } => {
                 self.restore_node_content(operand, placeholder_map);
             }
-            TernaryOp { condition, true_expr, false_expr } => {
+            TernaryOp {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(true_expr, placeholder_map);
                 self.restore_node_content(false_expr, placeholder_map);
@@ -187,11 +200,11 @@ impl EnhancedFullParser {
                     self.restore_node_content(arg, placeholder_map);
                 }
             }
-            IfStatement { 
-                condition, 
-                then_block, 
-                elsif_clauses, 
-                else_block 
+            IfStatement {
+                condition,
+                then_block,
+                elsif_clauses,
+                else_block,
             } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(then_block, placeholder_map);
@@ -203,12 +216,21 @@ impl EnhancedFullParser {
                     self.restore_node_content(block, placeholder_map);
                 }
             }
-            WhileStatement { condition, block, .. } |
-            UntilStatement { condition, block, .. } => {
+            WhileStatement {
+                condition, block, ..
+            }
+            | UntilStatement {
+                condition, block, ..
+            } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(block, placeholder_map);
             }
-            ForeachStatement { variable, list, block, .. } => {
+            ForeachStatement {
+                variable,
+                list,
+                block,
+                ..
+            } => {
                 if let Some(var) = variable {
                     self.restore_node_content(var, placeholder_map);
                 }

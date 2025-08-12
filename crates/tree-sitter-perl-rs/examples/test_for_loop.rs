@@ -1,50 +1,65 @@
 //! Test for loop parsing
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing For Loops ===\n");
 
     let test_cases = vec![
-        ("Simple for with range", r#"
+        (
+            "Simple for with range",
+            r#"
 for my $i (0..10) {
     print $i;
 }
-"#),
-        ("For without my", r#"
+"#,
+        ),
+        (
+            "For without my",
+            r#"
 for $i (0..10) {
     print $i;
 }
-"#),
-        ("For with list", r#"
+"#,
+        ),
+        (
+            "For with list",
+            r#"
 for my $item (@list) {
     print $item;
 }
-"#),
-        ("For with expression", r#"
+"#,
+        ),
+        (
+            "For with expression",
+            r#"
 for my $x (1, 2, 3, 4, 5) {
     print $x;
 }
-"#),
-        ("C-style for", r#"
+"#,
+        ),
+        (
+            "C-style for",
+            r#"
 for (my $i = 0; $i < 10; $i++) {
     print $i;
 }
-"#),
-        ("For without variable", r#"
+"#,
+        ),
+        (
+            "For without variable",
+            r#"
 for (1..10) {
     print $_;
 }
-"#),
+"#,
+        ),
     ];
 
     for (name, code) in test_cases {
         println!("Testing: {}", name);
         println!("Code: {}", code.trim());
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {
@@ -57,13 +72,13 @@ for (1..10) {
                 let error_str = format!("{:?}", e);
                 if let Some(start) = error_str.find("positives: [") {
                     if let Some(end) = error_str.find("], negatives") {
-                        let expected = &error_str[start+12..end];
+                        let expected = &error_str[start + 12..end];
                         println!("Expected tokens: {}", expected);
                     }
                 }
                 if let Some(loc) = error_str.find("line_col: Pos(") {
                     if let Some(end) = error_str[loc..].find(")") {
-                        let pos = &error_str[loc+14..loc+end];
+                        let pos = &error_str[loc + 14..loc + end];
                         println!("Error position: {}", pos);
                     }
                 }
@@ -75,7 +90,7 @@ for (1..10) {
 
 fn print_ast(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program ({} items)", indent, items.len());

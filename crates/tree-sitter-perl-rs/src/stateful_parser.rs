@@ -1,5 +1,5 @@
 //! Stateful parser wrapper for handling Perl constructs that require state
-//! 
+//!
 //! This module provides a stateful wrapper around the Pest parser to handle
 //! constructs like heredocs that require maintaining state across lines.
 
@@ -71,7 +71,7 @@ impl StatefulPerlParser {
 
         while i < lines.len() {
             let line = lines[i];
-            
+
             match self.state {
                 ParserState::Normal => {
                     // Check if this line contains a format declaration
@@ -87,7 +87,7 @@ impl StatefulPerlParser {
                         self.pending_heredocs.push_back(heredoc_info);
                         processed_lines.push(line.to_string());
                         i += 1;
-                        
+
                         // Start collecting heredoc content
                         if !self.pending_heredocs.is_empty() {
                             self.state = ParserState::CollectingHeredoc;
@@ -104,14 +104,14 @@ impl StatefulPerlParser {
                             // Collect all content up to this point
                             let content = self.line_buffer.join("\n");
                             heredoc_contents.push((heredoc.marker.clone(), content));
-                            
+
                             self.line_buffer.clear();
                             self.pending_heredocs.pop_front();
-                            
+
                             // Add the terminator line to processed lines
                             processed_lines.push(line.to_string());
                             i += 1;
-                            
+
                             // Check if we have more heredocs to collect
                             if self.pending_heredocs.is_empty() {
                                 self.state = ParserState::Normal;
@@ -128,10 +128,8 @@ impl StatefulPerlParser {
                     if line.trim() == "." {
                         if let Some(format_info) = &self.current_format {
                             // Save the collected format content
-                            self.format_contents.push((
-                                format_info.name.clone(),
-                                self.line_buffer.clone()
-                            ));
+                            self.format_contents
+                                .push((format_info.name.clone(), self.line_buffer.clone()));
                             self.line_buffer.clear();
                             self.current_format = None;
                             self.state = ParserState::Normal;
@@ -149,37 +147,37 @@ impl StatefulPerlParser {
 
         // Join processed lines and parse
         let processed_input = processed_lines.join("\n");
-        
+
         // Build AST and inject heredoc and format contents
         let mut ast = self.build_ast_from_processed_input(&processed_input)?;
         self.inject_heredoc_contents(&mut ast, heredoc_contents);
         self.inject_format_contents(&mut ast);
-        
+
         Ok(ast)
     }
-    
+
     /// Extract format declaration information from a line
     pub fn extract_format_declaration(&self, line: &str) -> Option<FormatInfo> {
         let trimmed = line.trim();
-        
+
         // Check if line starts with "format"
         if !trimmed.starts_with("format") {
             return None;
         }
-        
+
         let after_format = &trimmed[6..].trim_start();
-        
+
         // Check for equals sign
         if let Some(eq_pos) = after_format.find('=') {
             let name_part = after_format[..eq_pos].trim();
-            
+
             // If no name specified, use empty string (parser will use default)
             let name = if name_part.is_empty() {
                 String::new()
             } else {
                 name_part.to_string()
             };
-            
+
             Some(FormatInfo {
                 name,
                 _start_line: 0, // Not used in current implementation
@@ -193,7 +191,7 @@ impl StatefulPerlParser {
     pub fn extract_heredoc_declaration(&self, line: &str) -> Option<HeredocMarker> {
         // Simple regex-like pattern matching for heredoc declarations
         // This is a simplified version - a full implementation would be more robust
-        
+
         if let Some(pos) = line.find("<<") {
             let after_marker = &line[pos + 2..];
             let (indented, rest) = if after_marker.starts_with('~') {
@@ -201,13 +199,13 @@ impl StatefulPerlParser {
             } else {
                 (false, after_marker)
             };
-            
+
             // Extract the marker and quote type
             let trimmed = rest.trim_start();
             if trimmed.is_empty() {
                 return None;
             }
-            
+
             let (marker, quote_type) = if trimmed.starts_with('\'') {
                 // Single quoted
                 if let Some(end) = trimmed[1..].find('\'') {
@@ -231,20 +229,22 @@ impl StatefulPerlParser {
                 }
             } else if trimmed.starts_with('\\') {
                 // Escaped
-                let end = trimmed[1..].find(|c: char| !c.is_alphanumeric() && c != '_')
+                let end = trimmed[1..]
+                    .find(|c: char| !c.is_alphanumeric() && c != '_')
                     .unwrap_or(trimmed[1..].len());
                 (trimmed[1..=end].to_string(), HeredocQuoteType::Escaped)
             } else {
                 // Bare marker
-                let end = trimmed.find(|c: char| !c.is_alphanumeric() && c != '_')
+                let end = trimmed
+                    .find(|c: char| !c.is_alphanumeric() && c != '_')
                     .unwrap_or(trimmed.len());
                 (trimmed[..end].to_string(), HeredocQuoteType::None)
             };
-            
+
             if marker.is_empty() {
                 return None;
             }
-            
+
             Some(HeredocMarker {
                 marker,
                 indented,
@@ -263,14 +263,17 @@ impl StatefulPerlParser {
         } else {
             line
         };
-        
+
         trimmed == heredoc.marker
     }
 
     /// Build AST from processed input
-    fn build_ast_from_processed_input(&self, input: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
+    fn build_ast_from_processed_input(
+        &self,
+        input: &str,
+    ) -> Result<AstNode, Box<dyn std::error::Error>> {
         use crate::pure_rust_parser::PureRustPerlParser;
-        
+
         let mut parser = PureRustPerlParser::new();
         parser.parse(input)
     }
@@ -280,57 +283,71 @@ impl StatefulPerlParser {
         if contents.is_empty() {
             return;
         }
-        
+
         // Create a map for quick lookup
-        let mut content_map: std::collections::HashMap<Arc<str>, String> = 
-            contents.into_iter().map(|(k, v)| (Arc::from(k), v)).collect();
-        
+        let mut content_map: std::collections::HashMap<Arc<str>, String> = contents
+            .into_iter()
+            .map(|(k, v)| (Arc::from(k), v))
+            .collect();
+
         // Recursively walk the AST and update heredoc nodes
         self.update_heredoc_nodes(ast, &mut content_map);
     }
-    
+
     /// Inject collected format contents into the AST
     fn inject_format_contents(&self, ast: &mut AstNode) {
         if self.format_contents.is_empty() {
             return;
         }
-        
+
         // Create a map for quick lookup
-        let content_map: std::collections::HashMap<Arc<str>, Vec<Arc<str>>> = 
-            self.format_contents.clone().into_iter()
-                .map(|(k, v)| (Arc::from(k), v.into_iter().map(Arc::from).collect()))
-                .collect();
-        
+        let content_map: std::collections::HashMap<Arc<str>, Vec<Arc<str>>> = self
+            .format_contents
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (Arc::from(k), v.into_iter().map(Arc::from).collect()))
+            .collect();
+
         // Recursively walk the AST and update format nodes
         self.update_format_nodes(ast, &content_map);
     }
-    
+
     /// Recursively update heredoc nodes with their content
-    fn update_heredoc_nodes(&self, node: &mut AstNode, content_map: &mut std::collections::HashMap<Arc<str>, String>) {
+    fn update_heredoc_nodes(
+        &self,
+        node: &mut AstNode,
+        content_map: &mut std::collections::HashMap<Arc<str>, String>,
+    ) {
         match node {
-            AstNode::Heredoc { marker, content, .. } => {
+            AstNode::Heredoc {
+                marker, content, ..
+            } => {
                 if let Some(collected_content) = content_map.remove(marker) {
                     *content = Arc::from(collected_content);
                 }
             }
-            AstNode::Program(nodes) | 
-            AstNode::Block(nodes) => {
+            AstNode::Program(nodes) | AstNode::Block(nodes) => {
                 for child in nodes {
                     self.update_heredoc_nodes(child, content_map);
                 }
             }
-            AstNode::Statement(inner) |
-            AstNode::BeginBlock(inner) |
-            AstNode::EndBlock(inner) |
-            AstNode::CheckBlock(inner) |
-            AstNode::InitBlock(inner) |
-            AstNode::UnitcheckBlock(inner) |
-            AstNode::DoBlock(inner) |
-            AstNode::EvalBlock(inner) |
-            AstNode::EvalString(inner) => {
+            AstNode::Statement(inner)
+            | AstNode::BeginBlock(inner)
+            | AstNode::EndBlock(inner)
+            | AstNode::CheckBlock(inner)
+            | AstNode::InitBlock(inner)
+            | AstNode::UnitcheckBlock(inner)
+            | AstNode::DoBlock(inner)
+            | AstNode::EvalBlock(inner)
+            | AstNode::EvalString(inner) => {
                 self.update_heredoc_nodes(inner, content_map);
             }
-            AstNode::IfStatement { then_block, elsif_clauses, else_block, .. } => {
+            AstNode::IfStatement {
+                then_block,
+                elsif_clauses,
+                else_block,
+                ..
+            } => {
                 self.update_heredoc_nodes(then_block, content_map);
                 for (_, block) in elsif_clauses {
                     self.update_heredoc_nodes(block, content_map);
@@ -339,15 +356,17 @@ impl StatefulPerlParser {
                     self.update_heredoc_nodes(else_block, content_map);
                 }
             }
-            AstNode::UnlessStatement { block, else_block, .. } => {
+            AstNode::UnlessStatement {
+                block, else_block, ..
+            } => {
                 self.update_heredoc_nodes(block, content_map);
                 if let Some(else_block) = else_block {
                     self.update_heredoc_nodes(else_block, content_map);
                 }
             }
-            AstNode::WhileStatement { block, .. } |
-            AstNode::ForeachStatement { block, .. } |
-            AstNode::ForStatement { block, .. } => {
+            AstNode::WhileStatement { block, .. }
+            | AstNode::ForeachStatement { block, .. }
+            | AstNode::ForStatement { block, .. } => {
                 self.update_heredoc_nodes(block, content_map);
             }
             AstNode::SubDeclaration { body, .. } => {
@@ -372,13 +391,21 @@ impl StatefulPerlParser {
             AstNode::UnaryOp { operand, .. } => {
                 self.update_heredoc_nodes(operand, content_map);
             }
-            AstNode::TernaryOp { condition, true_expr, false_expr } => {
+            AstNode::TernaryOp {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
                 self.update_heredoc_nodes(condition, content_map);
                 self.update_heredoc_nodes(true_expr, content_map);
                 self.update_heredoc_nodes(false_expr, content_map);
             }
-            AstNode::FunctionCall { function, args } |
-            AstNode::MethodCall { object: function, args, .. } => {
+            AstNode::FunctionCall { function, args }
+            | AstNode::MethodCall {
+                object: function,
+                args,
+                ..
+            } => {
                 self.update_heredoc_nodes(function, content_map);
                 for arg in args {
                     self.update_heredoc_nodes(arg, content_map);
@@ -390,9 +417,7 @@ impl StatefulPerlParser {
             AstNode::HashElement { key, .. } => {
                 self.update_heredoc_nodes(key, content_map);
             }
-            AstNode::List(items) | 
-            AstNode::ArrayRef(items) |
-            AstNode::HashRef(items) => {
+            AstNode::List(items) | AstNode::ArrayRef(items) | AstNode::HashRef(items) => {
                 for item in items {
                     self.update_heredoc_nodes(item, content_map);
                 }
@@ -407,33 +432,41 @@ impl StatefulPerlParser {
             }
         }
     }
-    
+
     /// Recursively update format nodes with their content
-    fn update_format_nodes(&self, node: &mut AstNode, content_map: &std::collections::HashMap<Arc<str>, Vec<Arc<str>>>) {
+    fn update_format_nodes(
+        &self,
+        node: &mut AstNode,
+        content_map: &std::collections::HashMap<Arc<str>, Vec<Arc<str>>>,
+    ) {
         match node {
             AstNode::FormatDeclaration { name, format_lines } => {
                 if let Some(collected_lines) = content_map.get(name) {
                     *format_lines = collected_lines.clone();
                 }
             }
-            AstNode::Program(nodes) | 
-            AstNode::Block(nodes) => {
+            AstNode::Program(nodes) | AstNode::Block(nodes) => {
                 for child in nodes {
                     self.update_format_nodes(child, content_map);
                 }
             }
-            AstNode::Statement(inner) |
-            AstNode::BeginBlock(inner) |
-            AstNode::EndBlock(inner) |
-            AstNode::CheckBlock(inner) |
-            AstNode::InitBlock(inner) |
-            AstNode::UnitcheckBlock(inner) |
-            AstNode::DoBlock(inner) |
-            AstNode::EvalBlock(inner) |
-            AstNode::EvalString(inner) => {
+            AstNode::Statement(inner)
+            | AstNode::BeginBlock(inner)
+            | AstNode::EndBlock(inner)
+            | AstNode::CheckBlock(inner)
+            | AstNode::InitBlock(inner)
+            | AstNode::UnitcheckBlock(inner)
+            | AstNode::DoBlock(inner)
+            | AstNode::EvalBlock(inner)
+            | AstNode::EvalString(inner) => {
                 self.update_format_nodes(inner, content_map);
             }
-            AstNode::IfStatement { then_block, elsif_clauses, else_block, .. } => {
+            AstNode::IfStatement {
+                then_block,
+                elsif_clauses,
+                else_block,
+                ..
+            } => {
                 self.update_format_nodes(then_block, content_map);
                 for (_, block) in elsif_clauses {
                     self.update_format_nodes(block, content_map);
@@ -442,15 +475,17 @@ impl StatefulPerlParser {
                     self.update_format_nodes(else_block, content_map);
                 }
             }
-            AstNode::UnlessStatement { block, else_block, .. } => {
+            AstNode::UnlessStatement {
+                block, else_block, ..
+            } => {
                 self.update_format_nodes(block, content_map);
                 if let Some(else_block) = else_block {
                     self.update_format_nodes(else_block, content_map);
                 }
             }
-            AstNode::WhileStatement { block, .. } |
-            AstNode::ForeachStatement { block, .. } |
-            AstNode::ForStatement { block, .. } => {
+            AstNode::WhileStatement { block, .. }
+            | AstNode::ForeachStatement { block, .. }
+            | AstNode::ForStatement { block, .. } => {
                 self.update_format_nodes(block, content_map);
             }
             AstNode::SubDeclaration { body, .. } => {
@@ -518,7 +553,7 @@ INTERP"#;
 
         // Test different quote types
     }
-    
+
     #[test]
     fn test_format_declaration() {
         let _parser = StatefulPerlParser::new();
@@ -531,7 +566,7 @@ print "after format";"#;
         // Test format parsing
         // let ast = parser.parse(input).unwrap();
     }
-    
+
     #[test]
     fn test_named_format() {
         let _parser = StatefulPerlParser::new();

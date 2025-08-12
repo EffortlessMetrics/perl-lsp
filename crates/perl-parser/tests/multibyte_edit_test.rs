@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod multibyte_tests {
-    use perl_parser::position_mapper::{PositionMapper, Position};
+    use perl_parser::position_mapper::{Position, PositionMapper};
     use ropey::Rope;
 
     #[test]
@@ -11,11 +11,17 @@ mod multibyte_tests {
         let mapper = PositionMapper::new(&s);
 
         // Replace "world" with "Rust" on line 1
-        let start = Position { line: 1, character: 6 };
-        let end = Position { line: 1, character: 11 };
+        let start = Position {
+            line: 1,
+            character: 6,
+        };
+        let end = Position {
+            line: 1,
+            character: 11,
+        };
         let (sb, eb) = (
             mapper.lsp_pos_to_byte(start).unwrap(),
-            mapper.lsp_pos_to_byte(end).unwrap()
+            mapper.lsp_pos_to_byte(end).unwrap(),
         );
 
         // Apply via Rope using byte_to_char (the bug is passing sb/eb directly)
@@ -34,12 +40,18 @@ mod multibyte_tests {
 
         // Replace "Hello" with "Hi" on line 0
         // Note: emoji takes 2 UTF-16 code units
-        let start = Position { line: 0, character: 3 }; // After "👋 "
-        let end = Position { line: 0, character: 8 };   // After "Hello"
-        
+        let start = Position {
+            line: 0,
+            character: 3,
+        }; // After "👋 "
+        let end = Position {
+            line: 0,
+            character: 8,
+        }; // After "Hello"
+
         let (sb, eb) = (
             mapper.lsp_pos_to_byte(start).unwrap(),
-            mapper.lsp_pos_to_byte(end).unwrap()
+            mapper.lsp_pos_to_byte(end).unwrap(),
         );
 
         let mut rope = Rope::from_str(&s);
@@ -56,12 +68,18 @@ mod multibyte_tests {
         let mapper = PositionMapper::new(&s);
 
         // Replace "1" with "42" on line 0
-        let start = Position { line: 0, character: 10 }; // Position of "1"
-        let end = Position { line: 0, character: 11 };
-        
+        let start = Position {
+            line: 0,
+            character: 10,
+        }; // Position of "1"
+        let end = Position {
+            line: 0,
+            character: 11,
+        };
+
         let (sb, eb) = (
             mapper.lsp_pos_to_byte(start).unwrap(),
-            mapper.lsp_pos_to_byte(end).unwrap()
+            mapper.lsp_pos_to_byte(end).unwrap(),
         );
 
         let mut rope = Rope::from_str(&s);
@@ -78,13 +96,16 @@ mod multibyte_tests {
         let mapper = PositionMapper::new(&s);
         let rope = Rope::from_str(&s);
 
-        let pos = Position { line: 0, character: 8 }; // After "café"
-        
+        let pos = Position {
+            line: 0,
+            character: 8,
+        }; // After "café"
+
         // Test byte-to-char conversion through rope
         let byte_offset = mapper.lsp_pos_to_byte(pos).unwrap();
         let char_idx = rope.byte_to_char(byte_offset);
         assert_eq!(char_idx, 8); // "my $café" = 8 chars
-        
+
         // Verify the byte offset is correct
         let pos2 = mapper.byte_to_lsp_pos(byte_offset);
         assert_eq!(pos, pos2);
@@ -97,16 +118,28 @@ mod multibyte_tests {
         let mut rope = Rope::from_str(original);
 
         // 1) Replace "world" → "Rust"
-        let s1 = Position { line: 1, character: 6 };
-        let e1 = Position { line: 1, character: 11 };
-        let (sb1, eb1) = (mapper.lsp_pos_to_byte(s1).unwrap(), mapper.lsp_pos_to_byte(e1).unwrap());
+        let s1 = Position {
+            line: 1,
+            character: 6,
+        };
+        let e1 = Position {
+            line: 1,
+            character: 11,
+        };
+        let (sb1, eb1) = (
+            mapper.lsp_pos_to_byte(s1).unwrap(),
+            mapper.lsp_pos_to_byte(e1).unwrap(),
+        );
         let (sc1, ec1) = (rope.byte_to_char(sb1), rope.byte_to_char(eb1));
         rope.remove(sc1..ec1);
         rope.insert(sc1, "Rust");
         mapper.apply_edit(sb1, eb1, "Rust");
 
         // 2) Insert "!" at end of line (now after previous edit)
-        let end = Position { line: 1, character: 10 }; // "hello Rust" → len 10
+        let end = Position {
+            line: 1,
+            character: 10,
+        }; // "hello Rust" → len 10
         let be = mapper.lsp_pos_to_byte(end).unwrap();
         let ce = rope.byte_to_char(be);
         rope.insert(ce, "!");
@@ -118,25 +151,36 @@ mod multibyte_tests {
     fn multi_change_crlf_with_multibyte() {
         let text = "café\r\nhello world\r\n";
         let mut mapper = PositionMapper::new(text);
-        let mut rope   = Rope::from_str(text);
+        let mut rope = Rope::from_str(text);
 
         // 1) Replace "world" -> "Rust"
-        let s1 = Position { line: 1, character: 6 };
-        let e1 = Position { line: 1, character: 11 };
-        let (sb1, eb1) = (mapper.lsp_pos_to_byte(s1).unwrap(), mapper.lsp_pos_to_byte(e1).unwrap());
+        let s1 = Position {
+            line: 1,
+            character: 6,
+        };
+        let e1 = Position {
+            line: 1,
+            character: 11,
+        };
+        let (sb1, eb1) = (
+            mapper.lsp_pos_to_byte(s1).unwrap(),
+            mapper.lsp_pos_to_byte(e1).unwrap(),
+        );
         let (sc1, ec1) = (rope.byte_to_char(sb1), rope.byte_to_char(eb1));
         rope.remove(sc1..ec1);
         rope.insert(sc1, "Rust");
         mapper.apply_edit(sb1, eb1, "Rust");
 
         // 2) Insert "!" at end of line 1 (after CRLF accounting)
-        let end = Position { line: 1, character: 10 }; // "hello Rust"
-        let be   = mapper.lsp_pos_to_byte(end).unwrap();
+        let end = Position {
+            line: 1,
+            character: 10,
+        }; // "hello Rust"
+        let be = mapper.lsp_pos_to_byte(end).unwrap();
         let ce = rope.byte_to_char(be);
         rope.insert(ce, "!");
         mapper.apply_edit(be, be, "!");
 
         assert_eq!(rope.to_string(), "café\r\nhello Rust!\r\n");
     }
-
 }

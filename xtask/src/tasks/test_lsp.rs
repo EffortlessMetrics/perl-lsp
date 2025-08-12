@@ -8,45 +8,45 @@ use std::process::Command;
 /// Run LSP feature tests
 pub fn run(create_only: bool, test: Option<String>, cleanup: bool) -> Result<()> {
     println!("🧪 Testing Perl Language Server v0.6.0 features...");
-    
+
     // Create test directory
     let test_dir = Path::new("lsp_test");
     if test_dir.exists() && cleanup {
         println!("Cleaning up existing test directory...");
         fs::remove_dir_all(test_dir)?;
     }
-    
+
     fs::create_dir_all(test_dir)?;
-    
+
     // Create test files
     create_test_files(test_dir)?;
-    
+
     if create_only {
         println!("✅ Test files created in 'lsp_test' directory");
         print_instructions();
         return Ok(());
     }
-    
+
     // Run specific test or all tests
     if let Some(test_name) = test {
         run_specific_test(test_dir, &test_name)?;
     } else {
         run_all_tests(test_dir)?;
     }
-    
+
     // Cleanup if requested
     if cleanup {
         println!("Cleaning up test files...");
         fs::remove_dir_all(test_dir)?;
     }
-    
+
     Ok(())
 }
 
 /// Create test files for LSP features
 fn create_test_files(test_dir: &Path) -> Result<()> {
     println!("Creating test files...");
-    
+
     // Main test file with various features
     let test_features = r#"#!/usr/bin/env perl
 use strict;
@@ -95,9 +95,9 @@ test_string_operations();
 
 done_testing();
 "#;
-    
+
     fs::write(test_dir.join("test_features.pl"), test_features)?;
-    
+
     // Package file for workspace symbols
     let package_file = r#"package MyPackage;
 use strict;
@@ -120,9 +120,9 @@ sub method_two {
 
 1;
 "#;
-    
+
     fs::write(test_dir.join("MyPackage.pm"), package_file)?;
-    
+
     // Test file for Test Explorer
     let test_suite = r#"#!/usr/bin/env perl
 use strict;
@@ -143,9 +143,9 @@ is(scalar(@arr), 3, "Array has correct size");
 
 done_testing();
 "#;
-    
+
     fs::write(test_dir.join("test_suite.t"), test_suite)?;
-    
+
     // Advanced features test
     let advanced_test = r#"#!/usr/bin/env perl
 use strict;
@@ -200,15 +200,15 @@ sub free_resources { }
 
 main();
 "#;
-    
+
     fs::write(test_dir.join("advanced_features.pl"), advanced_test)?;
-    
+
     println!("✅ Created test files:");
     println!("   - test_features.pl (call hierarchy, basic tests)");
     println!("   - MyPackage.pm (workspace symbols)");
     println!("   - test_suite.t (Test Explorer)");
     println!("   - advanced_features.pl (inlay hints, complex hierarchy)");
-    
+
     Ok(())
 }
 
@@ -222,14 +222,17 @@ fn run_specific_test(test_dir: &Path, test_name: &str) -> Result<()> {
         "test" => test_test_runner(test_dir),
         "symbols" => test_workspace_symbols(test_dir),
         "completion" => test_completion(test_dir),
-        _ => bail!("Unknown test: {}. Available tests: syntax, hover, hierarchy, inlay, test, symbols, completion", test_name),
+        _ => bail!(
+            "Unknown test: {}. Available tests: syntax, hover, hierarchy, inlay, test, symbols, completion",
+            test_name
+        ),
     }
 }
 
 /// Run all tests
 fn run_all_tests(test_dir: &Path) -> Result<()> {
     println!("\n📋 Running all LSP feature tests...\n");
-    
+
     test_syntax_highlighting(test_dir)?;
     test_hover_functionality(test_dir)?;
     test_call_hierarchy(test_dir)?;
@@ -237,7 +240,7 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
     test_test_runner(test_dir)?;
     test_workspace_symbols(test_dir)?;
     test_completion(test_dir)?;
-    
+
     println!("\n✅ All tests completed!");
     Ok(())
 }
@@ -245,20 +248,20 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
 /// Test syntax highlighting
 fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
-    
+
     // Check if LSP server is available
-    let output = Command::new("perl-lsp")
-        .arg("--version")
-        .output();
-    
+    let output = Command::new("perl-lsp").arg("--version").output();
+
     match output {
         Ok(_) => println!("   ✓ LSP server is available"),
-        Err(_) => println!("   ⚠ LSP server not found. Run: cargo install --path crates/perl-parser --bin perl-lsp"),
+        Err(_) => println!(
+            "   ⚠ LSP server not found. Run: cargo install --path crates/perl-parser --bin perl-lsp"
+        ),
     }
-    
+
     // TODO: Add actual syntax highlighting test
     println!("   ℹ Open test_features.pl in VSCode to verify semantic tokens");
-    
+
     Ok(())
 }
 
@@ -289,19 +292,19 @@ fn test_inlay_hints(_test_dir: &Path) -> Result<()> {
 /// Test test runner
 fn test_test_runner(test_dir: &Path) -> Result<()> {
     println!("🧪 Testing test runner...");
-    
+
     // Run the actual test file
     let output = Command::new("perl")
         .arg(test_dir.join("test_suite.t").to_str().unwrap())
         .output()?;
-    
+
     if output.status.success() {
         println!("   ✓ Test file executes successfully");
         println!("   ℹ Open Testing panel in VSCode to see discovered tests");
     } else {
         println!("   ✗ Test file failed to execute");
     }
-    
+
     Ok(())
 }
 

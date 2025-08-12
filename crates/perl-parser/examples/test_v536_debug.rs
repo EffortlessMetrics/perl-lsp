@@ -30,14 +30,14 @@ class Point {
 
     println!("=== Input length: {} ===", input.len());
     println!("Character at position 128: {:?}", input.chars().nth(128));
-    
+
     // Show context around position 128
     let start = 120.max(0);
     let end = 140.min(input.len());
     println!("\nContext around position 128:");
     println!("{}", &input[start..end]);
     println!("{}^", " ".repeat(128 - start));
-    
+
     // Lexer output
     println!("\nLexer output around position 128:");
     let mut lexer = PerlLexer::new(input);

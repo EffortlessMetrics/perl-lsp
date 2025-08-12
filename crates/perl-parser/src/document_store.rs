@@ -3,9 +3,9 @@
 //! Maintains the current state of all open documents, tracking
 //! versions and content without relying on filesystem state.
 
+use crate::line_index::LineIndex;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use crate::line_index::LineIndex;
 
 /// A document in the store
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ impl Document {
             line_index,
         }
     }
-    
+
     /// Update the document content
     pub fn update(&mut self, version: i32, text: String) {
         self.version = version;
@@ -53,7 +53,7 @@ impl DocumentStore {
             documents: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Normalize a URI to a consistent key
     /// This handles platform differences and ensures consistent lookups
     pub fn uri_key(uri: &str) -> String {
@@ -61,20 +61,20 @@ impl DocumentStore {
         // TODO: Add normalization for Windows drive letters if needed
         uri.to_string()
     }
-    
+
     /// Open or update a document
     pub fn open(&self, uri: String, version: i32, text: String) {
         let key = Self::uri_key(&uri);
         let doc = Document::new(uri, version, text);
-        
+
         let mut docs = self.documents.write().unwrap();
         docs.insert(key, doc);
     }
-    
+
     /// Update a document's content
     pub fn update(&self, uri: &str, version: i32, text: String) -> bool {
         let key = Self::uri_key(uri);
-        
+
         let mut docs = self.documents.write().unwrap();
         if let Some(doc) = docs.get_mut(&key) {
             doc.update(version, text);
@@ -83,39 +83,39 @@ impl DocumentStore {
             false
         }
     }
-    
+
     /// Close a document
     pub fn close(&self, uri: &str) -> bool {
         let key = Self::uri_key(uri);
         let mut docs = self.documents.write().unwrap();
         docs.remove(&key).is_some()
     }
-    
+
     /// Get a document by URI
     pub fn get(&self, uri: &str) -> Option<Document> {
         let key = Self::uri_key(uri);
         let docs = self.documents.read().unwrap();
         docs.get(&key).cloned()
     }
-    
+
     /// Get the text content of a document
     pub fn get_text(&self, uri: &str) -> Option<String> {
         self.get(uri).map(|doc| doc.text)
     }
-    
+
     /// Get all open documents
     pub fn all_documents(&self) -> Vec<Document> {
         let docs = self.documents.read().unwrap();
         docs.values().cloned().collect()
     }
-    
+
     /// Check if a document is open
     pub fn is_open(&self, uri: &str) -> bool {
         let key = Self::uri_key(uri);
         let docs = self.documents.read().unwrap();
         docs.contains_key(&key)
     }
-    
+
     /// Get the count of open documents
     pub fn count(&self) -> usize {
         let docs = self.documents.read().unwrap();
@@ -132,69 +132,69 @@ impl Default for DocumentStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_document_lifecycle() {
         let store = DocumentStore::new();
         let uri = "file:///test.pl".to_string();
-        
+
         // Open document
         store.open(uri.clone(), 1, "print 'hello';".to_string());
         assert!(store.is_open(&uri));
         assert_eq!(store.count(), 1);
-        
+
         // Get document
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.version, 1);
         assert_eq!(doc.text, "print 'hello';");
-        
+
         // Update document
         assert!(store.update(&uri, 2, "print 'world';".to_string()));
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.version, 2);
         assert_eq!(doc.text, "print 'world';");
-        
+
         // Close document
         assert!(store.close(&uri));
         assert!(!store.is_open(&uri));
         assert_eq!(store.count(), 0);
     }
-    
+
     #[test]
     fn test_uri_normalization() {
         // Test that URIs with different formats map to same key
         let uri1 = "file:///test.pl";
         let uri2 = "file:///test.pl";
-        
+
         assert_eq!(DocumentStore::uri_key(uri1), DocumentStore::uri_key(uri2));
     }
-    
+
     #[test]
     fn test_multiple_documents() {
         let store = DocumentStore::new();
-        
+
         let uri1 = "file:///a.pl".to_string();
         let uri2 = "file:///b.pl".to_string();
-        
+
         store.open(uri1.clone(), 1, "# file a".to_string());
         store.open(uri2.clone(), 1, "# file b".to_string());
-        
+
         assert_eq!(store.count(), 2);
         assert_eq!(store.get_text(&uri1), Some("# file a".to_string()));
         assert_eq!(store.get_text(&uri2), Some("# file b".to_string()));
-        
+
         let all = store.all_documents();
         assert_eq!(all.len(), 2);
     }
-    
+
     #[test]
     fn test_uri_with_spaces() {
         let store = DocumentStore::new();
         let uri = "file:///path%20with%20spaces/test.pl".to_string();
-        
+
         store.open(uri.clone(), 1, "# test".to_string());
         assert!(store.is_open(&uri));
-        
+
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.text, "# test");
     }

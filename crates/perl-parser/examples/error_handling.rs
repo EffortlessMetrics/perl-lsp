@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to handle parse errors gracefully.
 
-use perl_parser::{Parser, ParseError};
+use perl_parser::{ParseError, Parser};
 
 fn main() {
     // Examples of code with various syntax errors
@@ -14,12 +14,12 @@ fn main() {
         ("Unmatched bracket", "my @arr = [1, 2, 3;"),
         ("Missing closing brace", "if ($x) { print 'yes';"),
     ];
-    
+
     for (name, code) in test_cases {
         println!("\n📝 Test: {}", name);
         println!("Code: {}", code);
         println!("{}", "─".repeat(50));
-        
+
         let mut parser = Parser::new(code);
         match parser.parse() {
             Ok(ast) => {
@@ -32,11 +32,11 @@ fn main() {
             }
         }
     }
-    
+
     // Example of handling errors programmatically
     println!("\n\n🔧 Programmatic Error Handling Example");
     println!("{}", "─".repeat(50));
-    
+
     let code = r#"
 sub calculate {
     my ($a, $b) = @_;
@@ -46,7 +46,7 @@ sub calculate {
 my $result = calculate(10, 20)
 print "Result: $result\n";  # This line won't parse due to previous error
 "#;
-    
+
     let mut parser = Parser::new(code);
     match parser.parse() {
         Ok(_) => {
@@ -54,15 +54,19 @@ print "Result: $result\n";  # This line won't parse due to previous error
         }
         Err(e) => {
             println!("Found parse error:");
-            
+
             // Extract error information
             match e {
-                ParseError::UnexpectedToken { expected, found, location } => {
+                ParseError::UnexpectedToken {
+                    expected,
+                    found,
+                    location,
+                } => {
                     println!("  Type: Unexpected token");
                     println!("  Expected: {}", expected);
                     println!("  Found: {}", found);
                     println!("  Location: {}", location);
-                    
+
                     // Show context
                     show_error_context(code, location);
                 }
@@ -74,7 +78,7 @@ print "Result: $result\n";  # This line won't parse due to previous error
                     println!("  Type: Syntax error");
                     println!("  Message: {}", message);
                     println!("  Location: {}", location);
-                    
+
                     show_error_context(code, location);
                 }
                 _ => {
@@ -87,14 +91,15 @@ print "Result: $result\n";  # This line won't parse due to previous error
 
 fn print_error(code: &str, error: &ParseError) {
     println!("Error: {}", error);
-    
+
     // Try to extract position information
     let position = match error {
-        ParseError::UnexpectedToken { location, .. } |
-        ParseError::SyntaxError { location, .. } => Some(*location),
+        ParseError::UnexpectedToken { location, .. } | ParseError::SyntaxError { location, .. } => {
+            Some(*location)
+        }
         _ => None,
     };
-    
+
     if let Some(pos) = position {
         show_error_context(code, pos);
     }
@@ -105,7 +110,7 @@ fn show_error_context(code: &str, position: usize) {
     let mut line = 1;
     let mut col = 1;
     let mut _line_start = 0;
-    
+
     for (i, ch) in code.chars().enumerate() {
         if i == position {
             break;
@@ -118,7 +123,7 @@ fn show_error_context(code: &str, position: usize) {
             col += 1;
         }
     }
-    
+
     // Show the error line
     if let Some(line_text) = code.lines().nth(line - 1) {
         println!("\n  Line {}: {}", line, line_text);

@@ -9,12 +9,10 @@ fn main() {
         } catch ($e) {
             warn $e;
         }",
-        
         // Try without catch
         "try {
             something();
         }",
-        
         // Try/catch with finally
         "try {
             open_file();
@@ -23,7 +21,6 @@ fn main() {
         } finally {
             cleanup();
         }",
-        
         // Nested try/catch
         "try {
             try {
@@ -34,10 +31,8 @@ fn main() {
         } catch ($outer_e) {
             handle_outer($outer_e);
         }",
-        
         // Try in expression context
         "my $result = try { compute() } catch ($e) { default_value() }",
-        
         // Multiple catch blocks (not standard Perl, but some modules support it)
         "try {
             operation();
@@ -47,7 +42,7 @@ fn main() {
             handle_generic($e);
         }",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test.lines().next().unwrap_or(""));
         let mut parser = Parser::new(test);

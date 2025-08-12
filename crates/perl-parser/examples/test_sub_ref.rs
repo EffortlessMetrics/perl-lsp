@@ -7,16 +7,13 @@ fn main() {
         "\\&sub",
         "\\&main::foo",
         "\\&Package::method",
-        
         // In assignments
         "my $ref = \\&mysub",
         "$coderef = \\&handler",
-        
         // With sigils
         "&sub",
         "&main::foo",
         "&{$coderef}",
-        
         // Calling through references
         "&$coderef()",
         "$coderef->()",

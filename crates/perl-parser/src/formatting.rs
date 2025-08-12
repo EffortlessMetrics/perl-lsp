@@ -2,10 +2,10 @@
 //!
 //! This module provides integration with perltidy for code formatting.
 
-use std::process::{Command, Stdio};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
+use std::process::{Command, Stdio};
 
 /// Text edit for formatting
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,22 +72,28 @@ impl CodeFormatter {
     ) -> Result<Vec<FormatTextEdit>, FormatError> {
         // Format using perltidy
         let formatted = self.run_perltidy(content, options)?;
-        
+
         // If nothing changed, return empty edits
         if formatted == content {
             return Ok(vec![]);
         }
-        
+
         // Calculate the full document range
         let lines: Vec<&str> = content.lines().collect();
         let last_line = lines.len().saturating_sub(1) as u32;
         let last_char = lines.last().map(|l| l.len()).unwrap_or(0) as u32;
-        
+
         // Return a single edit that replaces the entire document
         Ok(vec![FormatTextEdit {
             range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: last_line, character: last_char },
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: last_line,
+                    character: last_char,
+                },
             },
             new_text: formatted,
         }])
@@ -104,35 +110,35 @@ impl CodeFormatter {
         let lines: Vec<&str> = content.lines().collect();
         let start_line = range.start.line as usize;
         let end_line = (range.end.line as usize).min(lines.len().saturating_sub(1));
-        
+
         if start_line >= lines.len() {
             return Ok(vec![]);
         }
-        
+
         // Get the text to format
         let text_to_format = lines[start_line..=end_line].join("\n");
-        
+
         // Format using perltidy
         let formatted = self.run_perltidy(&text_to_format, options)?;
-        
+
         // If nothing changed, return empty edits
         if formatted == text_to_format {
             return Ok(vec![]);
         }
-        
+
         // Calculate the range to replace
         let start_char = if start_line == 0 { 0 } else { 0 }; // Always start at beginning of line
         let end_char = lines[end_line].len() as u32;
-        
+
         Ok(vec![FormatTextEdit {
             range: Range {
-                start: Position { 
-                    line: start_line as u32, 
-                    character: start_char 
+                start: Position {
+                    line: start_line as u32,
+                    character: start_char,
                 },
-                end: Position { 
-                    line: end_line as u32, 
-                    character: end_char 
+                end: Position {
+                    line: end_line as u32,
+                    character: end_char,
                 },
             },
             new_text: formatted,
@@ -145,21 +151,21 @@ impl CodeFormatter {
         if self.command_exists("perltidy") {
             return "perltidy".to_string();
         }
-        
+
         // Common locations to check
         let common_paths = [
             "/usr/bin/perltidy",
             "/usr/local/bin/perltidy",
-            "/opt/local/bin/perltidy",  // MacPorts
-            "/usr/local/opt/perl/bin/perltidy",  // Homebrew
+            "/opt/local/bin/perltidy",          // MacPorts
+            "/usr/local/opt/perl/bin/perltidy", // Homebrew
         ];
-        
+
         for path in &common_paths {
             if Path::new(path).exists() {
                 return path.to_string();
             }
         }
-        
+
         // Check perlbrew
         if let Ok(home) = std::env::var("HOME") {
             let perlbrew_path = format!("{}/.perlbrew/perls/current/bin/perltidy", home);
@@ -167,11 +173,11 @@ impl CodeFormatter {
                 return perlbrew_path;
             }
         }
-        
+
         // Default to perltidy and let it fail with helpful error
         "perltidy".to_string()
     }
-    
+
     /// Check if a command exists
     fn command_exists(&self, cmd: &str) -> bool {
         Command::new("which")
@@ -180,18 +186,18 @@ impl CodeFormatter {
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
-    
+
     /// Find .perltidyrc file in the workspace
     fn find_perltidyrc(&self, starting_path: Option<&Path>) -> Option<PathBuf> {
         let start = starting_path.unwrap_or(Path::new("."));
         let mut current = start;
-        
+
         loop {
             let perltidyrc = current.join(".perltidyrc");
             if perltidyrc.exists() {
                 return Some(perltidyrc);
             }
-            
+
             // Check parent directory
             if let Some(parent) = current.parent() {
                 current = parent;
@@ -199,7 +205,7 @@ impl CodeFormatter {
                 break;
             }
         }
-        
+
         // Check home directory
         if let Ok(home) = std::env::var("HOME") {
             let home_perltidyrc = Path::new(&home).join(".perltidyrc");
@@ -207,10 +213,10 @@ impl CodeFormatter {
                 return Some(home_perltidyrc);
             }
         }
-        
+
         None
     }
-    
+
     /// Run perltidy on the given text
     fn run_perltidy(
         &self,
@@ -219,7 +225,7 @@ impl CodeFormatter {
     ) -> Result<String, FormatError> {
         self.run_perltidy_with_config(content, options, None)
     }
-    
+
     /// Run perltidy with optional config file
     pub fn run_perltidy_with_config(
         &self,
@@ -229,30 +235,30 @@ impl CodeFormatter {
     ) -> Result<String, FormatError> {
         // Build perltidy arguments
         let mut args = vec![
-            "-st".to_string(),      // Output to stdout
-            "-se".to_string(),      // Errors to stderr
+            "-st".to_string(), // Output to stdout
+            "-se".to_string(), // Errors to stderr
         ];
-        
+
         // Check for .perltidyrc file
         if let Some(config_path) = self.find_perltidyrc(workspace_path) {
             eprintln!("Using .perltidyrc from: {:?}", config_path);
             args.push(format!("-pro={}", config_path.display()));
         } else {
-            args.push("-npro".to_string());    // Don't read .perltidyrc
+            args.push("-npro".to_string()); // Don't read .perltidyrc
         }
-        
+
         // Add formatting options
         if options.insert_spaces {
             args.push(format!("-et={}", options.tab_size)); // Expand tabs
-            args.push(format!("-i={}", options.tab_size));  // Indent size
+            args.push(format!("-i={}", options.tab_size)); // Indent size
         } else {
             args.push("-dt".to_string()); // Use tabs
             args.push(format!("-i={}", options.tab_size)); // Tab size
         }
-        
+
         // Try to find perltidy in various locations
         let perltidy_cmd = self.find_perltidy_command();
-        
+
         // Try to run perltidy
         let mut child = Command::new(&perltidy_cmd)
             .args(&args)
@@ -261,22 +267,24 @@ impl CodeFormatter {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| FormatError::PerltidyNotFound(e.to_string()))?;
-        
+
         // Write input
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(content.as_bytes())
+            stdin
+                .write_all(content.as_bytes())
                 .map_err(|e| FormatError::IoError(e.to_string()))?;
         }
-        
+
         // Get output
-        let output = child.wait_with_output()
+        let output = child
+            .wait_with_output()
             .map_err(|e| FormatError::IoError(e.to_string()))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(FormatError::PerltidyError(stderr.to_string()));
         }
-        
+
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
@@ -284,12 +292,14 @@ impl CodeFormatter {
 /// Formatting error
 #[derive(Debug, thiserror::Error)]
 pub enum FormatError {
-    #[error("perltidy not found: {0}\n\nTo install perltidy:\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpan Perl::Tidy")]
+    #[error(
+        "perltidy not found: {0}\n\nTo install perltidy:\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpan Perl::Tidy"
+    )]
     PerltidyNotFound(String),
-    
+
     #[error("perltidy error: {0}")]
     PerltidyError(String),
-    
+
     #[error("IO error: {0}")]
     IoError(String),
 }
@@ -313,11 +323,11 @@ mod tests {
             insert_final_newline: Some(true),
             trim_final_newlines: Some(true),
         };
-        
+
         assert_eq!(options.tab_size, 4);
         assert!(options.insert_spaces);
     }
-    
+
     // Integration test (requires perltidy to be installed)
     #[test]
     #[ignore] // Run with: cargo test --ignored
@@ -330,14 +340,14 @@ mod tests {
             insert_final_newline: None,
             trim_final_newlines: None,
         };
-        
+
         let code = "sub test{my$x=1;print$x;}";
         let result = formatter.format_document(code, &options);
-        
+
         assert!(result.is_ok());
         let edits = result.unwrap();
         assert!(!edits.is_empty());
-        
+
         // The formatted code should have proper spacing
         let formatted = &edits[0].new_text;
         assert!(formatted.contains("sub test"));

@@ -18,14 +18,14 @@ fn main() {
     for code in examples {
         println!("\n--- Perl Code ---");
         println!("{}", code);
-        
+
         let mut parser = Parser::new(code);
         match parser.parse() {
             Ok(ast) => {
                 let our_format = ast.to_sexp();
                 println!("\nOur Format:");
                 println!("{}", our_format);
-                
+
                 let standard_format = transform_to_standard(&our_format);
                 println!("\nStandard Tree-sitter Format:");
                 println!("{}", standard_format);
@@ -40,43 +40,71 @@ fn main() {
 /// Transform our S-expression format to standard Tree-sitter format
 fn transform_to_standard(sexp: &str) -> String {
     let mut result = sexp.to_string();
-    
+
     // Transform variables: (variable $ x) -> (variable name: "$x")
     let var_re = Regex::new(r"\(variable (\S) (\w+)\)").unwrap();
-    result = var_re.replace_all(&result, "(variable name: \"$1$2\")").to_string();
-    
+    result = var_re
+        .replace_all(&result, "(variable name: \"$1$2\")")
+        .to_string();
+
     // Transform binary operators: (binary_+ ...) -> (binary_expression operator: "+" ...)
     let binary_re = Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = binary_re.replace_all(&result, "(binary_expression left: $2 operator: \"$1\" right: $3)").to_string();
-    
+    result = binary_re
+        .replace_all(
+            &result,
+            "(binary_expression left: $2 operator: \"$1\" right: $3)",
+        )
+        .to_string();
+
     // Transform declarations: (my_declaration ...) -> (variable_declaration kind: "my" ...)
-    let decl_re = Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)").unwrap();
-    result = decl_re.replace_all(&result, |caps: &regex::Captures| {
-        let kind = &caps[1];
-        let var = &caps[2];
-        if let Some(init) = caps.get(3) {
-            format!("(variable_declaration kind: \"{}\" name: {} value: {})", kind, var, init.as_str())
-        } else {
-            format!("(variable_declaration kind: \"{}\" name: {})", kind, var)
-        }
-    }).to_string();
-    
+    let decl_re =
+        Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)").unwrap();
+    result = decl_re
+        .replace_all(&result, |caps: &regex::Captures| {
+            let kind = &caps[1];
+            let var = &caps[2];
+            if let Some(init) = caps.get(3) {
+                format!(
+                    "(variable_declaration kind: \"{}\" name: {} value: {})",
+                    kind,
+                    var,
+                    init.as_str()
+                )
+            } else {
+                format!("(variable_declaration kind: \"{}\" name: {})", kind, var)
+            }
+        })
+        .to_string();
+
     // Transform function calls: (call func (...)) -> (call_expression function: func arguments: (...))
     let call_re = Regex::new(r"\(call (\w+) \(([^)]*)\)\)").unwrap();
-    result = call_re.replace_all(&result, "(call_expression function: (identifier \"$1\") arguments: (argument_list $2))").to_string();
-    
+    result = call_re
+        .replace_all(
+            &result,
+            "(call_expression function: (identifier \"$1\") arguments: (argument_list $2))",
+        )
+        .to_string();
+
     // Transform method calls: (method_call obj method (...)) -> (method_call_expression object: obj method: method arguments: (...))
     let method_re = Regex::new(r"\(method_call ([^()]+|\([^)]*\)) (\w+) \(([^)]*)\)\)").unwrap();
     result = method_re.replace_all(&result, "(method_call_expression object: $1 method: (identifier \"$2\") arguments: (argument_list $3))").to_string();
-    
+
     // Transform assignments: (assignment_assign ...) -> (assignment_expression operator: "=" ...)
-    let assign_re = Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = assign_re.replace_all(&result, "(assignment_expression left: $2 operator: \"$1\" right: $3)").to_string();
-    
+    let assign_re =
+        Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
+    result = assign_re
+        .replace_all(
+            &result,
+            "(assignment_expression left: $2 operator: \"$1\" right: $3)",
+        )
+        .to_string();
+
     // Transform conditionals: (if cond then) -> (if_statement condition: cond consequence: then)
     let if_re = Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = if_re.replace_all(&result, "(if_statement condition: $1 consequence: $2)").to_string();
-    
+    result = if_re
+        .replace_all(&result, "(if_statement condition: $1 consequence: $2)")
+        .to_string();
+
     result
 }
 

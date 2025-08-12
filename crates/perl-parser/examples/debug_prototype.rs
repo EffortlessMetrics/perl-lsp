@@ -1,10 +1,10 @@
-use perl_parser::Parser;
 use perl_lexer::{PerlLexer, TokenType};
+use perl_parser::Parser;
 
 fn main() {
     let code = "sub foo ($$$) { }";
     println!("Debugging: {}\n", code);
-    
+
     // First, let's see what tokens the lexer produces
     println!("Lexer tokens:");
     let mut lexer = PerlLexer::new(code);
@@ -19,7 +19,7 @@ fn main() {
             None => break,
         }
     }
-    
+
     // Now let's try parsing
     println!("\nParser result:");
     let mut parser = Parser::new(code);

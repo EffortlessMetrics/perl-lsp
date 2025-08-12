@@ -1,20 +1,22 @@
 //! Demo showing how to add workspace symbols to the LSP server
 
 use perl_parser::{JsonRpcRequest, JsonRpcResponse, WorkspaceSymbolsProvider};
-use std::collections::HashMap;
 use serde_json::json;
+use std::collections::HashMap;
 
 fn main() {
     println!("=== LSP Workspace Symbols Demo ===\n");
-    
+
     // This demonstrates how to extend the LSP server with workspace symbols
-    
+
     // 1. Create the workspace symbols provider
     let mut workspace_symbols = WorkspaceSymbolsProvider::new();
-    
+
     // 2. Index some sample files
     let files = vec![
-        ("file:///project/lib/Utils.pm", r#"
+        (
+            "file:///project/lib/Utils.pm",
+            r#"
 package Utils;
 
 sub trim {
@@ -29,8 +31,11 @@ sub encode_html {
 }
 
 1;
-"#),
-        ("file:///project/lib/Database.pm", r#"
+"#,
+        ),
+        (
+            "file:///project/lib/Database.pm",
+            r#"
 package Database;
 
 sub connect {
@@ -44,8 +49,11 @@ sub query {
 }
 
 1;
-"#),
-        ("file:///project/scripts/main.pl", r#"
+"#,
+        ),
+        (
+            "file:///project/scripts/main.pl",
+            r#"
 #!/usr/bin/perl
 use strict;
 use warnings;
@@ -65,9 +73,10 @@ sub process_data {
 }
 
 main();
-"#),
+"#,
+        ),
     ];
-    
+
     // Index each file
     for (uri, content) in &files {
         println!("Indexing: {}", uri);
@@ -76,9 +85,9 @@ main();
             workspace_symbols.index_document(uri, &ast, content);
         }
     }
-    
+
     println!("\n--- Testing workspace symbol searches ---\n");
-    
+
     // Test various searches
     let searches = vec![
         ("", "All symbols"),
@@ -87,12 +96,13 @@ main();
         ("db", "Fuzzy match"),
         ("Utils", "Package name"),
     ];
-    
+
     // Create source map for search
-    let source_map: HashMap<String, String> = files.iter()
+    let source_map: HashMap<String, String> = files
+        .iter()
         .map(|(uri, content)| (uri.to_string(), content.to_string()))
         .collect();
-    
+
     for (query, description) in searches {
         println!("Search '{}' ({})", query, description);
         let results = workspace_symbols.search(query, &source_map);
@@ -101,10 +111,10 @@ main();
         }
         println!();
     }
-    
+
     // 3. Show how to handle LSP request
     println!("--- Handling LSP workspace/symbol request ---\n");
-    
+
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -113,13 +123,16 @@ main();
             "query": "connect"
         })),
     };
-    
+
     // In a real implementation, add this to LspServer::handle_request:
     // "workspace/symbol" => self.handle_workspace_symbols(request.params),
-    
+
     let response = handle_workspace_symbols(&workspace_symbols, request.params, &source_map);
     println!("Request: workspace/symbol with query 'connect'");
-    println!("Response: {}", serde_json::to_string_pretty(&response).unwrap());
+    println!(
+        "Response: {}",
+        serde_json::to_string_pretty(&response).unwrap()
+    );
 }
 
 fn handle_workspace_symbols(
@@ -132,9 +145,9 @@ fn handle_workspace_symbols(
         .and_then(|p| p.get("query"))
         .and_then(|q| q.as_str())
         .unwrap_or("");
-    
+
     let symbols = provider.search(query, source_map);
-    
+
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),

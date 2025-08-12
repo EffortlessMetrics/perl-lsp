@@ -1,9 +1,9 @@
 //! Critical Missing User Stories - Part 2
-//! 
+//!
 //! Additional high-priority user stories for LSP features that Perl developers
 //! need in production environments.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 /// Extended test context for additional user stories
@@ -35,7 +35,7 @@ impl ExtendedTestContext {
                 "executeCommandProvider": {
                     "commands": [
                         "perl.runTests",
-                        "perl.showCoverage", 
+                        "perl.showCoverage",
                         "perl.installCpanModule",
                         "perl.formatWithPerltidy",
                         "perl.runPerlCritic"
@@ -50,7 +50,8 @@ impl ExtendedTestContext {
     }
 
     fn create_file(&mut self, path: &str, content: &str) {
-        self.workspace_files.insert(path.to_string(), content.to_string());
+        self.workspace_files
+            .insert(path.to_string(), content.to_string());
         println!("Created file: {}", path);
     }
 
@@ -172,29 +173,44 @@ print $obj->to_json();
     ]);
 
     // TEST 2: Module Installation Command
-    let install_module = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.installCpanModule",
-        "arguments": ["Some::NonExistent::Module"]
-    })));
+    let install_module = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.installCpanModule",
+            "arguments": ["Some::NonExistent::Module"]
+        })),
+    );
 
-    assert!(install_module.is_some(), "Should handle module installation");
+    assert!(
+        install_module.is_some(),
+        "Should handle module installation"
+    );
     println!("✓ CPAN module installation works");
 
     // TEST 3: Completion for Module Methods
     // When user types DateTime->, should show available methods
-    let module_completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {"uri": "file:///workspace/cpan_example.pl"},
-        "position": {"line": 24, "character": 65} // After DateTime->
-    })));
+    let module_completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/cpan_example.pl"},
+            "position": {"line": 24, "character": 65} // After DateTime->
+        })),
+    );
 
-    assert!(module_completion.is_some(), "Should provide module method completion");
+    assert!(
+        module_completion.is_some(),
+        "Should provide module method completion"
+    );
     println!("✓ CPAN module method completion works");
 
     // TEST 4: Module Documentation on Hover
-    let module_hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {"uri": "file:///workspace/cpan_example.pl"},
-        "position": {"line": 6, "character": 8} // On "DateTime"
-    })));
+    let module_hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/cpan_example.pl"},
+            "position": {"line": 6, "character": 8} // On "DateTime"
+        })),
+    );
 
     assert!(module_hover.is_some(), "Should show module documentation");
     println!("✓ CPAN module documentation works");
@@ -373,8 +389,9 @@ sub insecure_query {
     ]);
 
     // TEST 2: Code Duplication Detection
-    ctx.publish_diagnostics("file:///workspace/lib/BadCode.pm", vec![
-        json!({
+    ctx.publish_diagnostics(
+        "file:///workspace/lib/BadCode.pm",
+        vec![json!({
             "range": {
                 "start": {"line": 32, "character": 8},
                 "end": {"line": 50, "character": 9}
@@ -382,21 +399,28 @@ sub insecure_query {
             "severity": 3,
             "message": "Code duplication detected. This logic appears 3 times in this function.",
             "code": "duplication.high"
-        })
-    ]);
+        })],
+    );
 
     // TEST 3: Perl::Critic Integration
-    let perlcritic_analysis = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.runPerlCritic",
-        "arguments": ["file:///workspace/lib/BadCode.pm"]
-    })));
+    let perlcritic_analysis = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.runPerlCritic",
+            "arguments": ["file:///workspace/lib/BadCode.pm"]
+        })),
+    );
 
-    assert!(perlcritic_analysis.is_some(), "Should run Perl::Critic analysis");
+    assert!(
+        perlcritic_analysis.is_some(),
+        "Should run Perl::Critic analysis"
+    );
     println!("✓ Perl::Critic integration works");
 
     // TEST 4: Security Vulnerability Detection
-    ctx.publish_diagnostics("file:///workspace/lib/BadCode.pm", vec![
-        json!({
+    ctx.publish_diagnostics(
+        "file:///workspace/lib/BadCode.pm",
+        vec![json!({
             "range": {
                 "start": {"line": 99, "character": 13},
                 "end": {"line": 99, "character": 65}
@@ -407,8 +431,8 @@ sub insecure_query {
             "codeDescription": {
                 "href": "https://owasp.org/www-community/attacks/SQL_Injection"
             }
-        })
-    ]);
+        })],
+    );
 
     // TEST 5: Best Practice Suggestions
     ctx.publish_diagnostics("file:///workspace/lib/BadCode.pm", vec![
@@ -583,7 +607,10 @@ it under the same terms as Perl itself.
 1;
 "#;
 
-    ctx.create_file("file:///workspace/lib/Calculator/Advanced.pm", pod_documented_code);
+    ctx.create_file(
+        "file:///workspace/lib/Calculator/Advanced.pm",
+        pod_documented_code,
+    );
 
     println!("\n=== Testing POD Documentation Support ===");
 
@@ -592,25 +619,37 @@ it under the same terms as Perl itself.
     println!("✓ POD syntax highlighting (handled by editor)");
 
     // TEST 2: Hover Documentation from POD
-    let pod_hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/Calculator/Advanced.pm"},
-        "position": {"line": 51, "character": 5} // On "power" method
-    })));
+    let pod_hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/Calculator/Advanced.pm"},
+            "position": {"line": 51, "character": 5} // On "power" method
+        })),
+    );
 
     // Should show POD documentation for the method
-    assert!(pod_hover.is_some(), "Should show POD documentation on hover");
+    assert!(
+        pod_hover.is_some(),
+        "Should show POD documentation on hover"
+    );
     println!("✓ POD documentation in hover works");
 
     // TEST 3: POD Validation
-    ctx.publish_diagnostics("file:///workspace/lib/Calculator/Advanced.pm", vec![
-        // No POD errors in this well-formatted example
-    ]);
+    ctx.publish_diagnostics(
+        "file:///workspace/lib/Calculator/Advanced.pm",
+        vec![
+            // No POD errors in this well-formatted example
+        ],
+    );
 
     // TEST 4: POD Preview/Rendering
-    let pod_preview = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.previewPod",
-        "arguments": ["file:///workspace/lib/Calculator/Advanced.pm"]
-    })));
+    let pod_preview = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.previewPod",
+            "arguments": ["file:///workspace/lib/Calculator/Advanced.pm"]
+        })),
+    );
 
     assert!(pod_preview.is_some(), "Should generate POD preview");
     println!("✓ POD preview generation works");
@@ -631,8 +670,9 @@ Broken link: L</nonexistent_method>
 
     ctx.create_file("file:///workspace/pod_with_links.pl", pod_with_links);
 
-    ctx.publish_diagnostics("file:///workspace/pod_with_links.pl", vec![
-        json!({
+    ctx.publish_diagnostics(
+        "file:///workspace/pod_with_links.pl",
+        vec![json!({
             "range": {
                 "start": {"line": 8, "character": 14},
                 "end": {"line": 8, "character": 35}
@@ -640,15 +680,18 @@ Broken link: L</nonexistent_method>
             "severity": 2,
             "message": "POD link target 'nonexistent_method' not found",
             "code": "pod.broken_link"
-        })
-    ]);
+        })],
+    );
 
     // TEST 6: POD Completion
     // When typing POD commands, should get completion
-    let pod_completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/Calculator/Advanced.pm"},
-        "position": {"line": 10, "character": 6} // After "=head"
-    })));
+    let pod_completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/Calculator/Advanced.pm"},
+            "position": {"line": 10, "character": 6} // After "=head"
+        })),
+    );
 
     assert!(pod_completion.is_some(), "Should complete POD commands");
     println!("✓ POD command completion works");
@@ -688,52 +731,62 @@ sub incomplete_function {
     ctx.create_file("file:///workspace/broken.pl", broken_perl);
 
     // LSP should provide diagnostics but not crash
-    ctx.publish_diagnostics("file:///workspace/broken.pl", vec![
-        json!({
-            "range": {
-                "start": {"line": 5, "character": 30},
-                "end": {"line": 5, "character": 31}
-            },
-            "severity": 1,
-            "message": "Syntax error: Expected closing parenthesis",
-            "code": "syntax.missing_paren"
-        }),
-        json!({
-            "range": {
-                "start": {"line": 7, "character": 20},
-                "end": {"line": 7, "character": 21}
-            },
-            "severity": 1,
-            "message": "Syntax error: Expected closing parenthesis",
-            "code": "syntax.missing_paren"
-        }),
-        json!({
-            "range": {
-                "start": {"line": 9, "character": 20},
-                "end": {"line": 9, "character": 21}
-            },
-            "severity": 1,
-            "message": "Syntax error: Expected semicolon",
-            "code": "syntax.missing_semicolon"
-        })
-    ]);
+    ctx.publish_diagnostics(
+        "file:///workspace/broken.pl",
+        vec![
+            json!({
+                "range": {
+                    "start": {"line": 5, "character": 30},
+                    "end": {"line": 5, "character": 31}
+                },
+                "severity": 1,
+                "message": "Syntax error: Expected closing parenthesis",
+                "code": "syntax.missing_paren"
+            }),
+            json!({
+                "range": {
+                    "start": {"line": 7, "character": 20},
+                    "end": {"line": 7, "character": 21}
+                },
+                "severity": 1,
+                "message": "Syntax error: Expected closing parenthesis",
+                "code": "syntax.missing_paren"
+            }),
+            json!({
+                "range": {
+                    "start": {"line": 9, "character": 20},
+                    "end": {"line": 9, "character": 21}
+                },
+                "severity": 1,
+                "message": "Syntax error: Expected semicolon",
+                "code": "syntax.missing_semicolon"
+            }),
+        ],
+    );
 
     // Should still provide some functionality despite errors
-    let completion_in_broken = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {"uri": "file:///workspace/broken.pl"},
-        "position": {"line": 8, "character": 30}
-    })));
+    let completion_in_broken = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/broken.pl"},
+            "position": {"line": 8, "character": 30}
+        })),
+    );
 
-    assert!(completion_in_broken.is_some(), "Should provide completion even with syntax errors");
+    assert!(
+        completion_in_broken.is_some(),
+        "Should provide completion even with syntax errors"
+    );
     println!("✓ Graceful handling of malformed code");
 
     // TEST 2: Invalid UTF-8 Handling
     // Simulate file with invalid UTF-8 encoding
     let invalid_utf8_notice = "# File contains invalid UTF-8 sequences";
     ctx.create_file("file:///workspace/invalid_encoding.pl", invalid_utf8_notice);
-    
-    ctx.publish_diagnostics("file:///workspace/invalid_encoding.pl", vec![
-        json!({
+
+    ctx.publish_diagnostics(
+        "file:///workspace/invalid_encoding.pl",
+        vec![json!({
             "range": {
                 "start": {"line": 0, "character": 0},
                 "end": {"line": 0, "character": 1}
@@ -741,8 +794,8 @@ sub incomplete_function {
             "severity": 2,
             "message": "File contains invalid UTF-8 sequences. Some features may be limited.",
             "code": "encoding.invalid_utf8"
-        })
-    ]);
+        })],
+    );
 
     println!("✓ Invalid UTF-8 handling");
 
@@ -766,29 +819,44 @@ sub incomplete_function {
     println!("✓ Large file timeout handling");
 
     // TEST 4: Memory Pressure Recovery
-    let memory_recovery = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.recoverFromMemoryPressure"
-    })));
+    let memory_recovery = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.recoverFromMemoryPressure"
+        })),
+    );
 
-    assert!(memory_recovery.is_some(), "Should handle memory pressure recovery");
+    assert!(
+        memory_recovery.is_some(),
+        "Should handle memory pressure recovery"
+    );
     println!("✓ Memory pressure recovery");
 
     // TEST 5: Server Restart Recovery
     // Simulate server restart and state recovery
-    let server_restart = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.restartServer"
-    })));
+    let server_restart = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.restartServer"
+        })),
+    );
 
     assert!(server_restart.is_some(), "Should handle server restart");
     println!("✓ Server restart recovery");
 
     // TEST 6: Partial File Analysis
     // Even with errors, should analyze what's possible
-    let partial_analysis = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {"uri": "file:///workspace/broken.pl"}
-    })));
+    let partial_analysis = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/broken.pl"}
+        })),
+    );
 
-    assert!(partial_analysis.is_some(), "Should provide partial analysis despite errors");
+    assert!(
+        partial_analysis.is_some(),
+        "Should provide partial analysis despite errors"
+    );
     println!("✓ Partial file analysis in error conditions");
 
     println!("✅ Error recovery user story test complete");
@@ -800,16 +868,16 @@ sub incomplete_function {
 fn test_critical_missing_user_stories_summary() {
     println!("\n🎯 CRITICAL MISSING USER STORIES - TEST RESULTS");
     println!("===============================================");
-    
+
     println!("\n📋 TESTED USER STORIES:");
-    
+
     println!("\n1. 🔗 CPAN Module Integration");
     println!("   ✅ Module installation detection");
     println!("   ✅ Installation command handling");
     println!("   ✅ Module method completion");
     println!("   ✅ Module documentation on hover");
     println!("   ✅ Deprecated module warnings");
-    
+
     println!("\n2. 📊 Code Quality & Metrics");
     println!("   ✅ Cyclomatic complexity analysis");
     println!("   ✅ Code duplication detection");
@@ -817,7 +885,7 @@ fn test_critical_missing_user_stories_summary() {
     println!("   ✅ Security vulnerability detection");
     println!("   ✅ Best practice suggestions");
     println!("   ✅ Performance warnings");
-    
+
     println!("\n3. 📚 POD Documentation Support");
     println!("   ✅ POD syntax highlighting");
     println!("   ✅ POD documentation in hover");
@@ -825,7 +893,7 @@ fn test_critical_missing_user_stories_summary() {
     println!("   ✅ POD preview generation");
     println!("   ✅ POD link validation");
     println!("   ✅ POD command completion");
-    
+
     println!("\n4. 🛡️ Error Recovery & Robustness");
     println!("   ✅ Malformed code handling");
     println!("   ✅ Invalid UTF-8 handling");
@@ -833,22 +901,22 @@ fn test_critical_missing_user_stories_summary() {
     println!("   ✅ Memory pressure recovery");
     println!("   ✅ Server restart recovery");
     println!("   ✅ Partial analysis in errors");
-    
+
     println!("\n📈 COMBINED COVERAGE IMPACT:");
     println!("Previous coverage: ~40% of LSP user stories");
     println!("With Part 1 tests: ~75% coverage");
     println!("With Part 2 tests: ~85% coverage");
-    
+
     println!("\n🔄 REMAINING GAPS (15%):");
     println!("• Advanced debugging (DAP protocol)");
     println!("• Real-time collaboration features");
     println!("• Custom snippet systems");
     println!("• Version control decorations");
     println!("• Advanced workspace configuration");
-    
+
     println!("\n⭐ IMPLEMENTATION PRIORITY ORDER:");
     println!("1. Multi-file navigation (CRITICAL - from Part 1)");
-    println!("2. Test integration (HIGH VALUE - from Part 1)"); 
+    println!("2. Test integration (HIGH VALUE - from Part 1)");
     println!("3. CPAN integration (PERL-SPECIFIC - from Part 2)");
     println!("4. Code quality analysis (PRODUCTION - from Part 2)");
     println!("5. Advanced refactoring (HIGH VALUE - from Part 1)");
@@ -856,7 +924,7 @@ fn test_critical_missing_user_stories_summary() {
     println!("7. POD documentation (MAINTENANCE - from Part 2)");
     println!("8. Performance monitoring (SCALABILITY - from Part 1)");
     println!("9. Regex support (PERL-SPECIFIC - from Part 1)");
-    
+
     println!("\n🚀 NEXT STEPS RECOMMENDATION:");
     println!("These test cases define the roadmap for achieving");
     println!("production-ready Perl LSP with 85%+ user story coverage.");

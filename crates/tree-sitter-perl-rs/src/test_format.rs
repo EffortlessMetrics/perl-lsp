@@ -8,16 +8,16 @@ mod tests {
         // Test just the keyword
         let result = PerlParser::parse(Rule::reserved_word, "format");
         println!("Reserved word 'format': {:?}", result);
-        
+
         // Test format as a literal in a simple rule
         // Create a test rule that just matches "format"
         println!("\nDirect parsing tests:");
-        
+
         // Test if it's being parsed as "for"
         let for_result = PerlParser::parse(Rule::for_statement, "format STDOUT =");
         println!("As for_statement: {:?}", for_result.err());
     }
-    
+
     #[test]
     fn test_format_parsing_debug() {
         // First test if reserved_word works
@@ -26,7 +26,7 @@ mod tests {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }
-        
+
         // Test minimal format declaration
         println!("\nTesting minimal format declaration:");
         let minimal = "format\n.\n";
@@ -34,7 +34,7 @@ mod tests {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }
-        
+
         // Test format with space
         println!("\nTesting 'format ' as format_declaration start:");
         let with_space = "format \n.\n";
@@ -42,7 +42,7 @@ mod tests {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }
-        
+
         // Test with equals
         println!("\nTesting with equals:");
         let with_equals = "format =\n.\n";
@@ -50,7 +50,7 @@ mod tests {
             Ok(pairs) => println!("  SUCCESS: {:?}", pairs.collect::<Vec<_>>()),
             Err(e) => println!("  FAILED: {:?}", e),
         }
-        
+
         // Test the actual format declaration
         let format_decl = "format STDOUT =\ntest\n.\n";
         println!("\nTesting complete format declaration:");
@@ -67,14 +67,14 @@ mod tests {
             }
         }
     }
-    
-    #[test] 
+
+    #[test]
     fn test_format_name() {
         let result = PerlParser::parse(Rule::format_name, "STDOUT");
         println!("Format name 'STDOUT': {:?}", result);
         assert!(result.is_ok(), "Failed to parse format name");
     }
-    
+
     #[test]
     fn test_format_lines() {
         let input = "test line\n";
@@ -82,7 +82,7 @@ mod tests {
         println!("Format lines: {:?}", result);
         assert!(result.is_ok(), "Failed to parse format lines");
     }
-    
+
     #[test]
     fn test_format_end() {
         let result = PerlParser::parse(Rule::format_end, ".\n");
@@ -96,58 +96,75 @@ mod tests {
 test line
 .
 "#;
-        
+
         // Test individual components first
         println!("Testing components:");
-        println!("  format keyword: {:?}", PerlParser::parse(Rule::reserved_word, "format"));
-        println!("  format_name: {:?}", PerlParser::parse(Rule::format_name, "STDOUT"));
-        println!("  format_end: {:?}", PerlParser::parse(Rule::format_end, ".\n"));
-        
+        println!(
+            "  format keyword: {:?}",
+            PerlParser::parse(Rule::reserved_word, "format")
+        );
+        println!(
+            "  format_name: {:?}",
+            PerlParser::parse(Rule::format_name, "STDOUT")
+        );
+        println!(
+            "  format_end: {:?}",
+            PerlParser::parse(Rule::format_end, ".\n")
+        );
+
         // Try parsing each line separately
         println!("\nTrying first line:");
         let first_line = "format STDOUT =\n";
         println!("  Input: {:?}", first_line);
-        
+
         // Try parsing statement
         println!("\nTrying as statement:");
         let stmt_result = PerlParser::parse(Rule::statement, input);
         println!("  Statement result: {:?}", stmt_result);
-        
+
         // Try parsing just the first word
         println!("\nTrying to parse 'format' as identifier:");
         let id_result = PerlParser::parse(Rule::identifier, "format");
         println!("  Identifier result: {:?}", id_result);
-        
+
         // Try parsing format_declaration directly
         println!("\nTrying format_declaration directly:");
         let fd_result = PerlParser::parse(Rule::format_declaration, input);
         println!("  Format declaration result: {:?}", fd_result);
-        
+
         // Try parsing just the first part
         println!("\nTrying to parse just 'format STDOUT =':");
         let partial = "format STDOUT =\n";
         let partial_result = PerlParser::parse(Rule::format_declaration, partial);
         println!("  Partial result: {:?}", partial_result);
-        
+
         let pairs = PerlParser::parse(Rule::format_declaration, input);
-        assert!(pairs.is_ok(), "Failed to parse format declaration: {:?}", pairs.err());
-        
+        assert!(
+            pairs.is_ok(),
+            "Failed to parse format declaration: {:?}",
+            pairs.err()
+        );
+
         let pairs = pairs.unwrap();
         for pair in pairs {
             println!("Rule: {:?}, Text: {}", pair.as_rule(), pair.as_str());
             for inner in pair.into_inner() {
-                println!("  Inner - Rule: {:?}, Text: {}", inner.as_rule(), inner.as_str());
+                println!(
+                    "  Inner - Rule: {:?}, Text: {}",
+                    inner.as_rule(),
+                    inner.as_str()
+                );
             }
         }
     }
-    
+
     #[test]
     fn test_format_in_program() {
         let input = r#"format STDOUT =
 test line
 .
 "#;
-        
+
         println!("Testing format in program context:");
         match PerlParser::parse(Rule::program, input) {
             Ok(pairs) => {

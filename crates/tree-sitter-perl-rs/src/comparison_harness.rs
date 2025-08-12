@@ -3,14 +3,14 @@
 //! This module provides a unified interface to test and benchmark
 //! both the C/tree-sitter parser and the pure Rust parser
 
-use std::time::Instant;
 use std::collections::HashMap;
+use std::time::Instant;
 
 #[cfg(feature = "pure-rust")]
 use crate::pure_rust_parser::PureRustPerlParser;
 
 #[cfg(not(feature = "pure-rust"))]
-use tree_sitter::{Parser, Node};
+use tree_sitter::{Node, Parser};
 
 pub struct ParseResult {
     pub parser_type: String,
@@ -39,12 +39,14 @@ impl ComparisonHarness {
         {
             let mut parser = Parser::new();
             let language = crate::language();
-            parser.set_language(&language).expect("Failed to set language");
+            parser
+                .set_language(&language)
+                .expect("Failed to set language");
             Self {
                 tree_sitter_parser: parser,
             }
         }
-        
+
         #[cfg(feature = "pure-rust")]
         {
             Self {
@@ -52,14 +54,14 @@ impl ComparisonHarness {
             }
         }
     }
-    
+
     pub fn parse_with_tree_sitter(&mut self, source: &str) -> ParseResult {
         #[cfg(not(feature = "pure-rust"))]
         {
             let start = Instant::now();
             let tree_result = self.tree_sitter_parser.parse(source, None);
             let parse_time = start.elapsed();
-            
+
             match tree_result {
                 Some(tree) => {
                     let root = tree.root_node();
@@ -81,7 +83,7 @@ impl ComparisonHarness {
                 },
             }
         }
-        
+
         #[cfg(feature = "pure-rust")]
         {
             let _ = source; // Avoid unused variable warning
@@ -94,14 +96,14 @@ impl ComparisonHarness {
             }
         }
     }
-    
+
     pub fn parse_with_pure_rust(&mut self, source: &str) -> ParseResult {
         #[cfg(feature = "pure-rust")]
         {
             let start = Instant::now();
             let parse_result = self.pure_rust_parser.parse(source);
             let parse_time = start.elapsed();
-            
+
             match parse_result {
                 Ok(ast) => {
                     let s_expr = self.pure_rust_parser.to_sexp(&ast);
@@ -122,7 +124,7 @@ impl ComparisonHarness {
                 },
             }
         }
-        
+
         #[cfg(not(feature = "pure-rust"))]
         {
             ParseResult {
@@ -134,16 +136,20 @@ impl ComparisonHarness {
             }
         }
     }
-    
+
     pub fn compare_parsers(&mut self, source: &str) -> (ParseResult, ParseResult) {
         let tree_sitter_result = self.parse_with_tree_sitter(source);
         let pure_rust_result = self.parse_with_pure_rust(source);
         (tree_sitter_result, pure_rust_result)
     }
-    
-    pub fn run_benchmark(&mut self, source: &str, iterations: usize) -> HashMap<String, Vec<std::time::Duration>> {
+
+    pub fn run_benchmark(
+        &mut self,
+        source: &str,
+        iterations: usize,
+    ) -> HashMap<String, Vec<std::time::Duration>> {
         let mut results = HashMap::new();
-        
+
         // Benchmark tree-sitter parser
         let mut tree_sitter_times = Vec::new();
         for _ in 0..iterations {
@@ -153,7 +159,7 @@ impl ComparisonHarness {
             }
         }
         results.insert("tree-sitter".to_string(), tree_sitter_times);
-        
+
         // Benchmark pure Rust parser
         let mut pure_rust_times = Vec::new();
         for _ in 0..iterations {
@@ -163,18 +169,22 @@ impl ComparisonHarness {
             }
         }
         results.insert("pure-rust".to_string(), pure_rust_times);
-        
+
         results
     }
-    
+
     #[cfg(not(feature = "pure-rust"))]
     fn node_to_sexp(&self, node: Node, source: &str) -> String {
         let kind = node.kind();
         let child_count = node.child_count();
-        
+
         if child_count == 0 {
             if node.is_named() {
-                format!("({} {})", kind, node.utf8_text(source.as_bytes()).unwrap_or(""))
+                format!(
+                    "({} {})",
+                    kind,
+                    node.utf8_text(source.as_bytes()).unwrap_or("")
+                )
             } else {
                 node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
             }
@@ -193,14 +203,14 @@ impl ComparisonHarness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_comparison_harness() {
         let mut harness = ComparisonHarness::new();
         let source = "$var = 42;";
-        
+
         let (tree_sitter_result, pure_rust_result) = harness.compare_parsers(source);
-        
+
         println!("Tree-sitter result:");
         println!("  Success: {}", tree_sitter_result.success);
         println!("  Time: {:?}", tree_sitter_result.parse_time);
@@ -208,7 +218,7 @@ mod tests {
         if let Some(error) = &tree_sitter_result.error {
             println!("  Error: {}", error);
         }
-        
+
         println!("\nPure Rust result:");
         println!("  Success: {}", pure_rust_result.success);
         println!("  Time: {:?}", pure_rust_result.parse_time);
@@ -217,19 +227,24 @@ mod tests {
             println!("  Error: {}", error);
         }
     }
-    
+
     #[test]
     fn test_benchmark() {
         let mut harness = ComparisonHarness::new();
         let source = "my $x = 10; sub foo { return $x * 2; } foo();";
-        
+
         let results = harness.run_benchmark(source, 100);
-        
+
         for (parser, times) in &results {
             if !times.is_empty() {
                 let total: std::time::Duration = times.iter().sum();
                 let avg = total / times.len() as u32;
-                println!("{} parser - Average time: {:?} over {} iterations", parser, avg, times.len());
+                println!(
+                    "{} parser - Average time: {:?} over {} iterations",
+                    parser,
+                    avg,
+                    times.len()
+                );
             } else {
                 println!("{} parser - No successful parses", parser);
             }

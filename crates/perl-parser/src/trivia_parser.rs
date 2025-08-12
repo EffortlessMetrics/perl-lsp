@@ -4,9 +4,9 @@
 //! by attaching them to AST nodes as leading/trailing trivia.
 
 use crate::{
-    ast_v2::{Node, NodeKind, NodeIdGenerator},
+    ast_v2::{Node, NodeIdGenerator, NodeKind},
     position::{Position, Range},
-    trivia::{Trivia, TriviaToken, NodeWithTrivia},
+    trivia::{NodeWithTrivia, Trivia, TriviaToken},
 };
 use perl_lexer::{PerlLexer, Token, TokenType};
 use std::collections::VecDeque;
@@ -52,9 +52,11 @@ impl PositionTracker {
         }
         PositionTracker { line_starts }
     }
-    
+
     fn offset_to_position(&self, offset: usize) -> Position {
-        let line = self.line_starts.binary_search(&offset)
+        let line = self
+            .line_starts
+            .binary_search(&offset)
             .unwrap_or_else(|i| i.saturating_sub(1));
         let line_start = self.line_starts[line];
         let column = offset - line_start + 1;
@@ -67,30 +69,30 @@ impl TriviaParserContext {
     pub fn new(source: String) -> Self {
         let position_tracker = PositionTracker::new(&source);
         let mut tokens = VecDeque::new();
-        
+
         // Custom tokenization that preserves trivia
         let mut position = 0;
         let _source_bytes = source.as_bytes();
-        
+
         while position < source.len() {
             // Collect leading trivia
             let _trivia_start = position;
             let leading_trivia = Self::collect_trivia_at(&source, &mut position);
-            
+
             if position >= source.len() {
                 break;
             }
-            
+
             // Get next meaningful token using the lexer
             let token_source = &source[position..];
             let mut lexer = PerlLexer::new(token_source);
-            
+
             if let Some(token) = lexer.next_token() {
                 // Skip EOF tokens
                 if matches!(token.token_type, TokenType::EOF) {
                     break;
                 }
-                
+
                 // Adjust token positions to be relative to the full source
                 let adjusted_token = Token::new(
                     token.token_type.clone(),
@@ -98,25 +100,25 @@ impl TriviaParserContext {
                     position + token.start,
                     position + token.end,
                 );
-                
+
                 // Create range with proper line/column info
                 let start_pos = position_tracker.offset_to_position(adjusted_token.start);
                 let end_pos = position_tracker.offset_to_position(adjusted_token.end);
                 let range = Range::new(start_pos, end_pos);
-                
+
                 tokens.push_back(TokenWithTrivia {
                     token: adjusted_token.clone(),
                     leading_trivia,
                     range,
                 });
-                
+
                 // Advance position
                 position = adjusted_token.end;
             } else {
                 break;
             }
         }
-        
+
         TriviaParserContext {
             _source: source,
             tokens,
@@ -125,25 +127,26 @@ impl TriviaParserContext {
             position_tracker,
         }
     }
-    
+
     /// Collect trivia at the given position
     fn collect_trivia_at(source: &str, position: &mut usize) -> Vec<TriviaToken> {
         let mut trivia = Vec::new();
         let bytes = source.as_bytes();
-        
+
         while *position < source.len() {
             let _start = *position;
             let ch = bytes[*position];
-            
+
             match ch {
                 // Whitespace
                 b' ' | b'\t' | b'\r' => {
                     let ws_start = *position;
-                    while *position < source.len() && 
-                          matches!(bytes[*position], b' ' | b'\t' | b'\r') {
+                    while *position < source.len()
+                        && matches!(bytes[*position], b' ' | b'\t' | b'\r')
+                    {
                         *position += 1;
                     }
-                    
+
                     let ws = &source[ws_start..*position];
                     trivia.push(TriviaToken::new(
                         Trivia::Whitespace(ws.to_string()),
@@ -153,7 +156,7 @@ impl TriviaParserContext {
                         ),
                     ));
                 }
-                
+
                 // Newline
                 b'\n' => {
                     trivia.push(TriviaToken::new(
@@ -165,7 +168,7 @@ impl TriviaParserContext {
                     ));
                     *position += 1;
                 }
-                
+
                 // Comment
                 b'#' => {
                     let comment_start = *position;
@@ -173,7 +176,7 @@ impl TriviaParserContext {
                     while *position < source.len() && bytes[*position] != b'\n' {
                         *position += 1;
                     }
-                    
+
                     let comment = &source[comment_start..*position];
                     trivia.push(TriviaToken::new(
                         Trivia::LineComment(comment.to_string()),
@@ -183,28 +186,30 @@ impl TriviaParserContext {
                         ),
                     ));
                 }
-                
+
                 // POD documentation
                 b'=' if *position == 0 || (*position > 0 && bytes[*position - 1] == b'\n') => {
                     // Check if this starts a POD section
                     let remaining = &source[*position..];
-                    if remaining.starts_with("=pod") || 
-                       remaining.starts_with("=head") || 
-                       remaining.starts_with("=over") ||
-                       remaining.starts_with("=item") ||
-                       remaining.starts_with("=back") ||
-                       remaining.starts_with("=begin") ||
-                       remaining.starts_with("=end") ||
-                       remaining.starts_with("=for") ||
-                       remaining.starts_with("=encoding") {
-                        
+                    if remaining.starts_with("=pod")
+                        || remaining.starts_with("=head")
+                        || remaining.starts_with("=over")
+                        || remaining.starts_with("=item")
+                        || remaining.starts_with("=back")
+                        || remaining.starts_with("=begin")
+                        || remaining.starts_with("=end")
+                        || remaining.starts_with("=for")
+                        || remaining.starts_with("=encoding")
+                    {
                         let pod_start = *position;
-                        
+
                         // Find =cut
                         let mut found_cut = false;
                         while *position < source.len() {
-                            if *position > 0 && bytes[*position - 1] == b'\n' &&
-                               source[*position..].starts_with("=cut") {
+                            if *position > 0
+                                && bytes[*position - 1] == b'\n'
+                                && source[*position..].starts_with("=cut")
+                            {
                                 *position += 4; // Skip "=cut"
                                 // Skip to end of line
                                 while *position < source.len() && bytes[*position] != b'\n' {
@@ -218,11 +223,11 @@ impl TriviaParserContext {
                             }
                             *position += 1;
                         }
-                        
+
                         if !found_cut {
                             *position = source.len();
                         }
-                        
+
                         let pod = &source[pod_start..*position];
                         trivia.push(TriviaToken::new(
                             Trivia::PodComment(pod.to_string()),
@@ -236,7 +241,7 @@ impl TriviaParserContext {
                         break;
                     }
                 }
-                
+
                 // Non-trivia character
                 _ => {
                     // Check for Unicode whitespace
@@ -257,21 +262,21 @@ impl TriviaParserContext {
                             }
                         }
                     }
-                    
+
                     // Not trivia, stop collecting
                     break;
                 }
             }
         }
-        
+
         trivia
     }
-    
+
     /// Get current token with trivia
     pub(crate) fn current_token(&self) -> Option<&TokenWithTrivia> {
         self.tokens.get(self.current)
     }
-    
+
     /// Advance to next token
     pub(crate) fn advance(&mut self) -> Option<&TokenWithTrivia> {
         if self.current < self.tokens.len() {
@@ -279,7 +284,7 @@ impl TriviaParserContext {
         }
         self.current_token()
     }
-    
+
     /// Check if at end of tokens
     pub fn is_eof(&self) -> bool {
         self.current >= self.tokens.len()
@@ -298,44 +303,46 @@ impl TriviaPreservingParser {
             context: TriviaParserContext::new(source),
         }
     }
-    
+
     /// Parse the source, preserving trivia
     pub fn parse(mut self) -> NodeWithTrivia {
         let start_pos = Position::new(0, 1, 1);
         let mut statement_nodes = Vec::new();
-        
+
         // Collect any leading trivia before first statement
         let mut leading_trivia = Vec::new();
         if let Some(first_token) = self.context.current_token() {
             leading_trivia = first_token.leading_trivia.clone();
         }
-        
+
         // Parse statements
         while !self.context.is_eof() {
             if let Some(stmt) = self.parse_statement() {
                 statement_nodes.push(stmt.node);
             }
         }
-        
+
         let end_pos = if let Some(last_token) = self.context.tokens.back() {
             last_token.range.end
         } else {
             start_pos
         };
-        
+
         let program = Node::new(
             self.context.id_generator.next_id(),
-            NodeKind::Program { statements: statement_nodes },
+            NodeKind::Program {
+                statements: statement_nodes,
+            },
             Range::new(start_pos, end_pos),
         );
-        
+
         NodeWithTrivia {
             node: program,
             leading_trivia,
             trailing_trivia: Vec::new(),
         }
     }
-    
+
     /// Parse a statement with trivia
     fn parse_statement(&mut self) -> Option<NodeWithTrivia> {
         let (token, leading_trivia, _token_range) = {
@@ -346,26 +353,27 @@ impl TriviaPreservingParser {
                 token_with_trivia.range,
             )
         };
-        
+
         // Simple demonstration: parse variable declarations
         match &token.token_type {
             TokenType::Keyword(kw) if matches!(kw.as_ref(), "my" | "our" | "local" | "state") => {
-                let start_pos = self.context.position_tracker
+                let start_pos = self
+                    .context
+                    .position_tracker
                     .offset_to_position(token.start);
-                
+
                 let declarator = kw.to_string();
                 self.context.advance();
-                
+
                 // For demonstration, create a simple node
-                let end_pos = self.context.position_tracker
-                    .offset_to_position(token.end);
-                
+                let end_pos = self.context.position_tracker.offset_to_position(token.end);
+
                 let node = Node::new(
                     self.context.id_generator.next_id(),
                     NodeKind::Identifier { name: declarator },
                     Range::new(start_pos, end_pos),
                 );
-                
+
                 // Skip to next statement for demo
                 while !self.context.is_eof() {
                     if let Some(t) = self.context.current_token() {
@@ -376,7 +384,7 @@ impl TriviaPreservingParser {
                     }
                     self.context.advance();
                 }
-                
+
                 Some(NodeWithTrivia {
                     node,
                     leading_trivia,
@@ -395,27 +403,27 @@ impl TriviaPreservingParser {
 /// Format an AST with trivia back to source code
 pub fn format_with_trivia(node: &NodeWithTrivia) -> String {
     let mut result = String::new();
-    
+
     // Add leading trivia
     for trivia in &node.leading_trivia {
         result.push_str(trivia.trivia.as_str());
     }
-    
+
     // Add node content (simplified)
     result.push_str(&format!("{:?}", node.node.kind));
-    
+
     // Add trailing trivia
     for trivia in &node.trailing_trivia {
         result.push_str(trivia.trivia.as_str());
     }
-    
+
     result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_trivia_preservation() {
         let source = r#"#!/usr/bin/perl
@@ -427,26 +435,27 @@ my $x = 42;  # end of line comment
 This is POD documentation
 =cut
 
-our $y;"#.to_string();
-        
+our $y;"#
+            .to_string();
+
         let parser = TriviaPreservingParser::new(source);
         let result = parser.parse();
-        
+
         // Check that we have leading trivia
         assert!(!result.leading_trivia.is_empty());
-        
+
         // First trivia should be the shebang comment
         assert!(matches!(
             &result.leading_trivia[0].trivia,
             Trivia::LineComment(s) if s.starts_with("#!/usr/bin/perl")
         ));
     }
-    
+
     #[test]
     fn test_whitespace_preservation() {
         let source = "  \t  my $x;".to_string();
         let ctx = TriviaParserContext::new(source);
-        
+
         let first_token = ctx.current_token().unwrap();
         assert!(!first_token.leading_trivia.is_empty());
         assert!(matches!(

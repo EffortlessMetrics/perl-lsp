@@ -2,7 +2,7 @@
 //!
 //! This example shows how to implement a visitor pattern for the Perl AST.
 
-use perl_parser::{Parser, Node, NodeKind};
+use perl_parser::{Node, NodeKind, Parser};
 use std::collections::HashMap;
 
 /// A trait for visiting AST nodes
@@ -11,9 +11,9 @@ trait AstVisitor {
         self.visit(&node.kind);
         self.visit_children(node);
     }
-    
+
     fn visit(&mut self, kind: &NodeKind);
-    
+
     fn visit_children(&mut self, node: &Node) {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
@@ -28,7 +28,12 @@ trait AstVisitor {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -74,7 +79,7 @@ impl VariableUsageCollector {
             current_scope: vec!["global".to_string()],
         }
     }
-    
+
     fn get_variable_name(node: &Node) -> Option<String> {
         if let NodeKind::Variable { sigil, name } = &node.kind {
             Some(format!("{}{}", sigil, name))
@@ -107,13 +112,13 @@ impl AstVisitor for VariableUsageCollector {
             _ => {}
         }
     }
-    
+
     fn visit_children(&mut self, node: &Node) {
         let pushed_scope = matches!(
             &node.kind,
             NodeKind::Subroutine { .. } | NodeKind::Block { .. }
         );
-        
+
         // Call default implementation
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
@@ -128,7 +133,12 @@ impl AstVisitor for VariableUsageCollector {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -154,7 +164,11 @@ impl AstVisitor for VariableUsageCollector {
                     self.visit_node(arg);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.visit_node(variable);
                 if let Some(init) = initializer {
                     self.visit_node(init);
@@ -165,7 +179,7 @@ impl AstVisitor for VariableUsageCollector {
             }
             _ => {}
         }
-        
+
         if pushed_scope {
             self.current_scope.pop();
         }
@@ -198,33 +212,33 @@ my $unused = 42;
 "#;
 
     let mut parser = Parser::new(code);
-    
+
     match parser.parse() {
         Ok(ast) => {
             println!("🔍 Variable Usage Analysis\n");
-            
+
             let mut collector = VariableUsageCollector::new();
             collector.visit_node(&ast);
-            
+
             println!("📊 Variable Declarations:");
             for (var, count) in &collector.declarations {
                 println!("  {} - declared {} time(s)", var, count);
             }
-            
+
             println!("\n📈 Variable Usages:");
             for (var, count) in &collector.usages {
                 println!("  {} - used {} time(s)", var, count);
             }
-            
+
             println!("\n⚠️  Potential Issues:");
-            
+
             // Find unused variables
             for (var, _) in &collector.declarations {
                 if !collector.usages.contains_key(var) {
                     println!("  Unused variable: {}", var);
                 }
             }
-            
+
             // Find undefined variables
             for (var, _) in &collector.usages {
                 if !collector.declarations.contains_key(var) {

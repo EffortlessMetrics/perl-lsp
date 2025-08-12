@@ -6,105 +6,105 @@ mod test_slash {
     fn test_basic_disambiguation() {
         // Test 1: Division after identifier
         let mut lexer = PerlLexer::new("x / 2");
-        
+
         let token1 = lexer.next_token().unwrap();
         assert!(matches!(token1.token_type, TokenType::Identifier(_)));
-        
+
         let token2 = lexer.next_token().unwrap();
         assert_eq!(token2.token_type, TokenType::Division);
-        
+
         let token3 = lexer.next_token().unwrap();
         assert!(matches!(token3.token_type, TokenType::Number(_)));
-        
+
         // Test 2: Regex after operator
         let mut lexer = PerlLexer::new("=~ /foo/");
-        
+
         let token1 = lexer.next_token().unwrap();
         assert!(matches!(token1.token_type, TokenType::Operator(ref op) if op.as_ref() == "=~"));
-        
+
         let token2 = lexer.next_token().unwrap();
         assert_eq!(token2.token_type, TokenType::RegexMatch);
         assert!(token2.text.contains("foo"));
     }
-    
+
     #[test]
     fn test_complex_cases() {
         // Test: 1/ /abc/
         let mut lexer = PerlLexer::new("1/ /abc/");
-        
+
         let token1 = lexer.next_token().unwrap();
         assert!(matches!(token1.token_type, TokenType::Number(_)));
-        
+
         let token2 = lexer.next_token().unwrap();
         assert_eq!(token2.token_type, TokenType::Division);
-        
+
         let token3 = lexer.next_token().unwrap();
         assert_eq!(token3.token_type, TokenType::RegexMatch);
         assert!(token3.text.contains("abc"));
     }
-    
+
     #[test]
     fn test_substitution() {
         let mut lexer = PerlLexer::new("s/foo/bar/g");
-        
+
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Substitution);
         assert_eq!(token.text.as_ref(), "s/foo/bar/g");
-        
+
         // Test with braces
         let mut lexer = PerlLexer::new("s{foo}{bar}g");
-        
+
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Substitution);
     }
-    
+
     #[test]
     fn test_token_positions() {
         let input = "my $x = 42 + 3.14;";
         let mut lexer = PerlLexer::new(input);
-        
+
         // "my"
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Keyword(ref k) if k.as_ref() == "my"));
         assert_eq!(token.start, 0);
         assert_eq!(token.end, 2);
         assert_eq!(&input[token.start..token.end], "my");
-        
+
         // "$x"
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "$x"));
         assert_eq!(token.start, 3);
         assert_eq!(token.end, 5);
         assert_eq!(&input[token.start..token.end], "$x");
-        
+
         // "="
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "="));
         assert_eq!(token.start, 6);
         assert_eq!(token.end, 7);
         assert_eq!(&input[token.start..token.end], "=");
-        
+
         // "42"
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Number(ref n) if n.as_ref() == "42"));
         assert_eq!(token.start, 8);
         assert_eq!(token.end, 10);
         assert_eq!(&input[token.start..token.end], "42");
-        
+
         // "+"
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "+"));
         assert_eq!(token.start, 11);
         assert_eq!(token.end, 12);
         assert_eq!(&input[token.start..token.end], "+");
-        
+
         // "3.14"
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Number(ref n) if n.as_ref() == "3.14"));
         assert_eq!(token.start, 13);
         assert_eq!(token.end, 17);
         assert_eq!(&input[token.start..token.end], "3.14");
-        
+
         // ";"
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Semicolon);
@@ -112,64 +112,70 @@ mod test_slash {
         assert_eq!(token.end, 18);
         assert_eq!(&input[token.start..token.end], ";");
     }
-    
+
     #[test]
     fn test_variable_types() {
         // Test scalar
         let mut lexer = PerlLexer::new("$foo");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "$foo"));
-        
+
         // Test array
         let mut lexer = PerlLexer::new("@bar");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "@bar"));
-        
+
         // Test hash
         let mut lexer = PerlLexer::new("%baz");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "%baz"));
-        
+
         // Test glob
         let mut lexer = PerlLexer::new("*STDOUT");
         let token = lexer.next_token().unwrap();
-        assert!(matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "*STDOUT"));
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(ref i) if i.as_ref() == "*STDOUT")
+        );
     }
-    
+
     #[test]
     fn test_operators() {
         let input = "=~ !~ == != <= >= <=> .. ...";
         let mut lexer = PerlLexer::new(input);
-        
+
         let expected = vec!["=~", "!~", "==", "!=", "<=", ">=", "<=>", "..", "..."];
-        
+
         for exp in expected {
             let token = lexer.next_token().unwrap();
-            assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == exp), 
-                   "Expected operator {}, got {:?}", exp, token);
+            assert!(
+                matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == exp),
+                "Expected operator {}, got {:?}",
+                exp,
+                token
+            );
         }
     }
-    
+
     #[test]
     fn test_edge_cases() {
         // Empty variable (just sigil)
         let mut lexer = PerlLexer::new("$ ");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "$"));
-        
+
         // Modulo operator
         let mut lexer = PerlLexer::new("10 % 3");
         let _num = lexer.next_token().unwrap();
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "%"));
-        
+
         // Multiplication
         let mut lexer = PerlLexer::new("5 * 3");
         let _num = lexer.next_token().unwrap();
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "*"));
     }
-    
+
     #[test]
     fn test_regex_operators() {
         // Match operator
@@ -177,18 +183,18 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
         assert!(token.text.contains("pattern"));
-        
+
         // Transliteration
         let mut lexer = PerlLexer::new("tr/abc/def/");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Transliteration);
-        
+
         // Quote regex
         let mut lexer = PerlLexer::new("qr{pattern}i");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::QuoteRegex);
     }
-    
+
     #[test]
     fn test_string_literals() {
         // Single quoted strings
@@ -196,23 +202,23 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
         assert_eq!(token.text.as_ref(), "'simple string'");
-        
-        // Double quoted strings  
+
+        // Double quoted strings
         let mut lexer = PerlLexer::new(r#""double quoted""#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
-        
+
         // Escaped quotes
         let mut lexer = PerlLexer::new(r#"'it\'s escaped'"#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
-        
+
         // Double quoted with escapes
         let mut lexer = PerlLexer::new(r#""line\nbreak""#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
     }
-    
+
     #[test]
     fn test_string_interpolation() {
         // Variable interpolation
@@ -220,46 +226,46 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
         assert!(token.text.contains("$name"));
-        
+
         // Array interpolation
         let mut lexer = PerlLexer::new(r#""Items: @items""#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
-        
+
         // Hash element interpolation
         let mut lexer = PerlLexer::new(r#""Value: $hash{key}""#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
-        
+
         // Complex interpolation
         let mut lexer = PerlLexer::new(r#""Result: ${expr}""#);
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::StringLiteral);
     }
-    
+
     #[test]
     fn test_quote_operators() {
         // q// single quotes
         let mut lexer = PerlLexer::new("q/simple string/");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::QuoteSingle);
-        
+
         // qq// double quotes
         let mut lexer = PerlLexer::new("qq{interpolated $var}");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::QuoteDouble);
-        
+
         // qw// word list
         let mut lexer = PerlLexer::new("qw(foo bar baz)");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::QuoteWords);
-        
+
         // qx// backticks
         let mut lexer = PerlLexer::new("qx{ls -la}");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::QuoteCommand);
     }
-    
+
     #[test]
     fn test_delimiter_variations() {
         // Different delimiters for quotes
@@ -272,55 +278,86 @@ mod test_slash {
             ("q#text#", TokenType::QuoteSingle),
             ("q|text|", TokenType::QuoteSingle),
         ];
-        
+
         for (input, expected_type) in delimiters {
             let mut lexer = PerlLexer::new(input);
             let token = lexer.next_token().unwrap();
-            assert_eq!(token.token_type, expected_type, "Failed for input: {}", input);
+            assert_eq!(
+                token.token_type, expected_type,
+                "Failed for input: {}",
+                input
+            );
         }
     }
-    
+
     #[test]
     fn test_heredoc_edge_cases() {
         // Simple heredoc
         let mut lexer = PerlLexer::new("<<EOF");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::HeredocStart);
-        
+
         // Quoted heredoc
         let mut lexer = PerlLexer::new("<<'EOF'");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::HeredocStart);
-        
+
         // Indented heredoc (Perl 5.26+)
         let mut lexer = PerlLexer::new("<<~EOF");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::HeredocStart);
-        
+
         // Backtick heredoc
         let mut lexer = PerlLexer::new("<<`CMD`");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::HeredocStart);
     }
-    
+
     #[test]
     fn test_special_variables() {
         let special_vars = vec![
-            "$_", "$.", "$@", "$!", "$?", "$&", "$`", "$'", "$+",
-            "$1", "$2", "$10", "$$", "$<", "$>", "$(", "$)",
-            "$[", "$]", "$^A", "$^W", "$^X", "$|", "$~", "$%",
-            "${^GLOBAL_PHASE}", "${^TAINT}", "${^UNICODE}",
+            "$_",
+            "$.",
+            "$@",
+            "$!",
+            "$?",
+            "$&",
+            "$`",
+            "$'",
+            "$+",
+            "$1",
+            "$2",
+            "$10",
+            "$$",
+            "$<",
+            "$>",
+            "$(",
+            "$)",
+            "$[",
+            "$]",
+            "$^A",
+            "$^W",
+            "$^X",
+            "$|",
+            "$~",
+            "$%",
+            "${^GLOBAL_PHASE}",
+            "${^TAINT}",
+            "${^UNICODE}",
         ];
-        
+
         for var in special_vars {
             let mut lexer = PerlLexer::new(var);
             let token = lexer.next_token().unwrap();
-            assert!(matches!(token.token_type, TokenType::Identifier(_)), 
-                    "Failed to recognize special variable: {}", var);
+            assert!(
+                matches!(token.token_type, TokenType::Identifier(_)),
+                "Failed to recognize special variable: {}",
+                var
+            );
             assert_eq!(token.text.as_ref(), var);
         }
     }
-    
+
     #[test]
     fn test_bareword_edge_cases() {
         // Bareword after arrow
@@ -329,7 +366,7 @@ mod test_slash {
         let _arrow = lexer.next_token().unwrap();
         let method = lexer.next_token().unwrap();
         assert!(matches!(method.token_type, TokenType::Identifier(_)));
-        
+
         // Bareword in hash key
         let mut lexer = PerlLexer::new("$hash{bareword}");
         let _hash = lexer.next_token().unwrap();
@@ -337,7 +374,7 @@ mod test_slash {
         let key = lexer.next_token().unwrap();
         assert!(matches!(key.token_type, TokenType::Identifier(_)));
     }
-    
+
     #[test]
     fn test_numeric_edge_cases() {
         let numbers = vec![
@@ -355,16 +392,20 @@ mod test_slash {
             ("Inf", "infinity"),
             ("NaN", "not a number"),
         ];
-        
+
         for (num, desc) in numbers {
             let mut lexer = PerlLexer::new(num);
             let token = lexer.next_token().unwrap();
-            assert!(matches!(token.token_type, TokenType::Number(_)) || 
-                    matches!(token.token_type, TokenType::Identifier(_)), // For Inf/NaN
-                    "Failed to parse {} ({})", num, desc);
+            assert!(
+                matches!(token.token_type, TokenType::Number(_))
+                    || matches!(token.token_type, TokenType::Identifier(_)), // For Inf/NaN
+                "Failed to parse {} ({})",
+                num,
+                desc
+            );
         }
     }
-    
+
     #[test]
     fn test_comment_and_pod() {
         // Single line comment
@@ -372,18 +413,18 @@ mod test_slash {
         let comment = lexer.next_token().unwrap();
         assert!(matches!(comment.token_type, TokenType::Comment(_)));
         assert!(comment.text.contains("comment"));
-        
+
         // POD documentation
         let mut lexer = PerlLexer::new("=head1 NAME\n\nTest\n\n=cut\n$x");
         let pod = lexer.next_token().unwrap();
         assert_eq!(pod.token_type, TokenType::Pod);
-        
+
         // Inline POD
         let mut lexer = PerlLexer::new("=for comment\nThis is hidden\n=cut");
         let pod = lexer.next_token().unwrap();
         assert_eq!(pod.token_type, TokenType::Pod);
     }
-    
+
     #[test]
     fn test_context_sensitive_edge_cases() {
         // print followed by regex (not division)
@@ -391,33 +432,33 @@ mod test_slash {
         let _print = lexer.next_token().unwrap();
         let regex = lexer.next_token().unwrap();
         assert_eq!(regex.token_type, TokenType::RegexMatch);
-        
+
         // split with regex
         let mut lexer = PerlLexer::new("split /,/");
         let _split = lexer.next_token().unwrap();
         let regex = lexer.next_token().unwrap();
         assert_eq!(regex.token_type, TokenType::RegexMatch);
-        
+
         // map followed by braces (block, not hash)
         let mut lexer = PerlLexer::new("map { $_ * 2 }");
         let _map = lexer.next_token().unwrap();
         let brace = lexer.next_token().unwrap();
         assert_eq!(brace.token_type, TokenType::LeftBrace);
     }
-    
+
     #[test]
     fn test_version_strings() {
         // v-strings
         let mut lexer = PerlLexer::new("v5.32.0");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Version(_)));
-        
+
         // Dotted decimal
         let mut lexer = PerlLexer::new("5.032_001");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Number(_)));
     }
-    
+
     #[test]
     fn test_prototypes_and_attributes() {
         // Subroutine with prototype
@@ -427,7 +468,7 @@ mod test_slash {
         let _paren = lexer.next_token().unwrap();
         let proto1 = lexer.next_token().unwrap();
         assert!(matches!(proto1.token_type, TokenType::Operator(_))); // $ as operator
-        
+
         // Attribute
         let mut lexer = PerlLexer::new(": lvalue");
         let colon = lexer.next_token().unwrap();
@@ -435,25 +476,27 @@ mod test_slash {
         let attr = lexer.next_token().unwrap();
         assert!(matches!(attr.token_type, TokenType::Identifier(_)));
     }
-    
+
     #[test]
     fn test_file_test_operators() {
         // File test operators should be recognized
         let file_tests = vec![
-            "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O", "-e", "-z", "-s",
-            "-f", "-d", "-l", "-p", "-S", "-b", "-c", "-t", "-u", "-g", "-k",
-            "-T", "-B", "-M", "-A", "-C"
+            "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O", "-e", "-z", "-s", "-f", "-d", "-l",
+            "-p", "-S", "-b", "-c", "-t", "-u", "-g", "-k", "-T", "-B", "-M", "-A", "-C",
         ];
-        
+
         for op in file_tests {
             let input = format!("{} $file", op);
             let mut lexer = PerlLexer::new(&input);
             let token = lexer.next_token().unwrap();
-            assert!(matches!(token.token_type, TokenType::Operator(_)), 
-                    "Failed to recognize file test operator: {}", op);
+            assert!(
+                matches!(token.token_type, TokenType::Operator(_)),
+                "Failed to recognize file test operator: {}",
+                op
+            );
             assert_eq!(token.text.as_ref(), op);
         }
-        
+
         // Stacked file tests
         let mut lexer = PerlLexer::new("-f -w -x $file");
         let op1 = lexer.next_token().unwrap();
@@ -463,7 +506,7 @@ mod test_slash {
         let op3 = lexer.next_token().unwrap();
         assert!(matches!(op3.token_type, TokenType::Operator(_)));
     }
-    
+
     #[test]
     fn test_glob_and_filehandles() {
         // GLOB filehandles
@@ -473,24 +516,24 @@ mod test_slash {
         let fh = lexer.next_token().unwrap();
         assert!(matches!(fh.token_type, TokenType::Identifier(_)));
         assert_eq!(fh.text.as_ref(), "FH");
-        
+
         // Diamond operator
         let mut lexer = PerlLexer::new("<>");
         let diamond = lexer.next_token().unwrap();
         assert!(matches!(diamond.token_type, TokenType::Operator(_)));
         assert_eq!(diamond.text.as_ref(), "<>");
-        
+
         // Glob operator
         let mut lexer = PerlLexer::new("<*.txt>");
         let glob = lexer.next_token().unwrap();
         assert!(matches!(glob.token_type, TokenType::Operator(_)));
-        
+
         // Readline from filehandle
         let mut lexer = PerlLexer::new("<FH>");
         let readline = lexer.next_token().unwrap();
         assert!(matches!(readline.token_type, TokenType::Operator(_)));
     }
-    
+
     #[test]
     fn test_regex_modifiers() {
         // All regex modifiers
@@ -498,24 +541,24 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
         assert!(token.text.contains("gimsxoadlupn"));
-        
+
         // Substitution with eval modifier
         let mut lexer = PerlLexer::new("s/old/new/gee");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::Substitution);
         assert!(token.text.contains("gee"));
-        
+
         // Match with compiled flag
         let mut lexer = PerlLexer::new("m/pattern/o");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
-        
+
         // Extended regex with comments
         let mut lexer = PerlLexer::new("/(?x) pattern # comment/");
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
     }
-    
+
     #[test]
     fn test_statement_modifiers() {
         // if modifier
@@ -524,13 +567,13 @@ mod test_slash {
         let _var1 = lexer.next_token().unwrap();
         let if_mod = lexer.next_token().unwrap();
         assert!(matches!(if_mod.token_type, TokenType::Keyword(ref k) if k.as_ref() == "if"));
-        
+
         // unless modifier
         let mut lexer = PerlLexer::new("die unless $ok");
         let _die = lexer.next_token().unwrap();
         let unless = lexer.next_token().unwrap();
         assert!(matches!(unless.token_type, TokenType::Keyword(ref k) if k.as_ref() == "unless"));
-        
+
         // while modifier
         let mut lexer = PerlLexer::new("$x++ while $y");
         let _var = lexer.next_token().unwrap();
@@ -538,7 +581,7 @@ mod test_slash {
         let while_mod = lexer.next_token().unwrap();
         assert!(matches!(while_mod.token_type, TokenType::Keyword(ref k) if k.as_ref() == "while"));
     }
-    
+
     #[test]
     fn test_package_and_method_calls() {
         // Package separator
@@ -546,7 +589,7 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
         // Note: Currently we treat Foo::Bar::baz as a single identifier
-        
+
         // Method calls with packages
         let mut lexer = PerlLexer::new("Foo::Bar->new");
         let _package = lexer.next_token().unwrap();
@@ -554,32 +597,32 @@ mod test_slash {
         assert_eq!(arrow.token_type, TokenType::Arrow);
         let method = lexer.next_token().unwrap();
         assert!(matches!(method.token_type, TokenType::Identifier(_)));
-        
+
         // SUPER and CORE
         let mut lexer = PerlLexer::new("SUPER::method");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
     }
-    
+
     #[test]
     fn test_block_and_hash_disambiguation() {
         // Anonymous hash
         let mut lexer = PerlLexer::new("{ key => 'value' }");
         let brace = lexer.next_token().unwrap();
         assert_eq!(brace.token_type, TokenType::LeftBrace);
-        
+
         // Code block after map/grep
         let mut lexer = PerlLexer::new("map { $_ * 2 }");
         let _map = lexer.next_token().unwrap();
         let brace = lexer.next_token().unwrap();
         assert_eq!(brace.token_type, TokenType::LeftBrace);
-        
+
         // Hash slice
         let mut lexer = PerlLexer::new("@hash{qw(a b c)}");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
     }
-    
+
     #[test]
     fn test_special_literals() {
         // __END__ and __DATA__
@@ -587,12 +630,12 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
         assert_eq!(token.text.as_ref(), "__END__");
-        
+
         let mut lexer = PerlLexer::new("__DATA__");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
         assert_eq!(token.text.as_ref(), "__DATA__");
-        
+
         // __FILE__, __LINE__, __PACKAGE__
         let special = vec!["__FILE__", "__LINE__", "__PACKAGE__", "__SUB__"];
         for lit in special {
@@ -602,7 +645,7 @@ mod test_slash {
             assert_eq!(token.text.as_ref(), lit);
         }
     }
-    
+
     #[test]
     fn test_smartmatch_and_junction() {
         // Smart match operator
@@ -611,14 +654,14 @@ mod test_slash {
         let smartmatch = lexer.next_token().unwrap();
         assert!(matches!(smartmatch.token_type, TokenType::Operator(_)));
         assert_eq!(smartmatch.text.as_ref(), "~~");
-        
+
         // Junction operators (Perl 6 style, sometimes used)
         let mut lexer = PerlLexer::new("$a | $b");
         let _var1 = lexer.next_token().unwrap();
         let junction = lexer.next_token().unwrap();
         assert!(matches!(junction.token_type, TokenType::Operator(_)));
     }
-    
+
     #[test]
     fn test_unicode_identifiers() {
         // Unicode identifiers in variables
@@ -626,13 +669,13 @@ mod test_slash {
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
         assert_eq!(token.text.as_ref(), "$café");
-        
+
         // Greek letters
         let mut lexer = PerlLexer::new("$π = 3.14159");
         let var = lexer.next_token().unwrap();
         assert!(matches!(var.token_type, TokenType::Identifier(_)));
         assert_eq!(var.text.as_ref(), "$π");
-        
+
         // Unicode in subroutine names (using valid Unicode letters)
         // Note: Mathematical symbols like ∑ (U+2211) are NOT valid Perl identifiers
         // even though they are Unicode. Only actual Unicode letters are allowed.
@@ -641,7 +684,7 @@ mod test_slash {
         let name = lexer.next_token().unwrap();
         assert!(matches!(name.token_type, TokenType::Identifier(_)));
         assert_eq!(name.text.as_ref(), "été");
-        
+
         // Unicode in package names
         let mut lexer = PerlLexer::new("package Ω::Utils;");
         let _package = lexer.next_token().unwrap();
@@ -649,7 +692,7 @@ mod test_slash {
         assert!(matches!(name.token_type, TokenType::Identifier(_)));
         assert_eq!(name.text.as_ref(), "Ω::Utils");
     }
-    
+
     #[test]
     fn test_format_declarations() {
         // Basic format declaration
@@ -657,20 +700,20 @@ mod test_slash {
         let format = lexer.next_token().unwrap();
         assert!(matches!(format.token_type, TokenType::Keyword(_)));
         assert_eq!(format.text.as_ref(), "format");
-        
+
         // Format with filehandle
         let mut lexer = PerlLexer::new("format MY_HANDLE =");
         let _format = lexer.next_token().unwrap();
         let handle = lexer.next_token().unwrap();
         assert!(matches!(handle.token_type, TokenType::Identifier(_)));
-        
+
         // Format declaration without space
         let mut lexer = PerlLexer::new("format=");
         let format = lexer.next_token().unwrap();
         assert!(matches!(format.token_type, TokenType::Keyword(_)));
         assert_eq!(format.text.as_ref(), "format");
     }
-    
+
     #[test]
     fn test_tied_variables() {
         // Tied scalar
@@ -678,21 +721,21 @@ mod test_slash {
         let tie = lexer.next_token().unwrap();
         assert!(matches!(tie.token_type, TokenType::Keyword(_)));
         assert_eq!(tie.text.as_ref(), "tie");
-        
+
         // Tied array
         let mut lexer = PerlLexer::new("tie @array, 'MyArray'");
         let _tie = lexer.next_token().unwrap();
         let array = lexer.next_token().unwrap();
         assert!(matches!(array.token_type, TokenType::Identifier(_)));
         assert_eq!(array.text.as_ref(), "@array");
-        
+
         // Tied hash
         let mut lexer = PerlLexer::new("tie %hash, 'MyHash'");
         let _tie = lexer.next_token().unwrap();
         let hash = lexer.next_token().unwrap();
         assert!(matches!(hash.token_type, TokenType::Identifier(_)));
         assert_eq!(hash.text.as_ref(), "%hash");
-        
+
         // Tied filehandle
         let mut lexer = PerlLexer::new("tie *FH, 'MyIO'");
         let _tie = lexer.next_token().unwrap();
@@ -700,7 +743,7 @@ mod test_slash {
         assert!(matches!(fh.token_type, TokenType::Identifier(_)));
         assert_eq!(fh.text.as_ref(), "*FH");
     }
-    
+
     #[test]
     fn test_overloaded_operators() {
         // Overload pragma
@@ -709,14 +752,14 @@ mod test_slash {
         let overload = lexer.next_token().unwrap();
         assert!(matches!(overload.token_type, TokenType::Identifier(_)));
         assert_eq!(overload.text.as_ref(), "overload");
-        
+
         // String overload
         let mut lexer = PerlLexer::new("use overload '\"\"' => \\&stringify");
         let _use = lexer.next_token().unwrap();
         let _overload = lexer.next_token().unwrap();
         let string_op = lexer.next_token().unwrap();
         assert!(matches!(string_op.token_type, TokenType::StringLiteral));
-        
+
         // Comparison overload
         let mut lexer = PerlLexer::new("use overload '<=>' => \\&compare");
         let _use = lexer.next_token().unwrap();
@@ -724,28 +767,28 @@ mod test_slash {
         let cmp_op = lexer.next_token().unwrap();
         assert!(matches!(cmp_op.token_type, TokenType::StringLiteral));
     }
-    
+
     #[test]
     fn test_complex_dereferencing() {
-        // Array slice dereference  
+        // Array slice dereference
         let mut lexer = PerlLexer::new("@$ref[0..5]");
         let array = lexer.next_token().unwrap();
         // When @ is not followed by an identifier name, it's parsed as an operator
         assert!(matches!(array.token_type, TokenType::Operator(_)));
         assert_eq!(array.text.as_ref(), "@");
-        
+
         // Hash slice dereference
         let mut lexer = PerlLexer::new("@{$ref}{qw(a b c)}");
         let array = lexer.next_token().unwrap();
         assert!(matches!(array.token_type, TokenType::Operator(_)));
         assert_eq!(array.text.as_ref(), "@");
-        
+
         // Code reference dereference
         let mut lexer = PerlLexer::new("&{$coderef}(@args)");
         let amp = lexer.next_token().unwrap();
         assert!(matches!(amp.token_type, TokenType::Operator(_)));
         assert_eq!(amp.text.as_ref(), "&");
-        
+
         // Postfix dereference (Perl 5.20+)
         let mut lexer = PerlLexer::new("$ref->@*");
         let _var = lexer.next_token().unwrap();
@@ -754,14 +797,14 @@ mod test_slash {
         let at = lexer.next_token().unwrap();
         assert!(matches!(at.token_type, TokenType::Operator(_)));
         assert_eq!(at.text.as_ref(), "@");
-        
+
         // Complex chain
         let mut lexer = PerlLexer::new("$obj->method->{key}->@*");
         let _var = lexer.next_token().unwrap();
         let arrow1 = lexer.next_token().unwrap();
         assert_eq!(arrow1.token_type, TokenType::Arrow);
     }
-    
+
     #[test]
     fn test_attribute_syntax() {
         // Subroutine attributes
@@ -773,7 +816,7 @@ mod test_slash {
         let attr1 = lexer.next_token().unwrap();
         assert!(matches!(attr1.token_type, TokenType::Identifier(_)));
         assert_eq!(attr1.text.as_ref(), "lvalue");
-        
+
         // Variable attributes
         let mut lexer = PerlLexer::new("my $var :shared :unique");
         let _my = lexer.next_token().unwrap();
@@ -783,7 +826,7 @@ mod test_slash {
         let attr = lexer.next_token().unwrap();
         assert!(matches!(attr.token_type, TokenType::Identifier(_)));
         assert_eq!(attr.text.as_ref(), "shared");
-        
+
         // Package attributes
         let mut lexer = PerlLexer::new("package Foo :bar(baz)");
         let _package = lexer.next_token().unwrap();
@@ -803,14 +846,14 @@ mod test_slash {
         let autoload = lexer.next_token().unwrap();
         assert!(matches!(autoload.token_type, TokenType::Identifier(_)));
         assert_eq!(autoload.text.as_ref(), "AUTOLOAD");
-        
+
         // DESTROY method
         let mut lexer = PerlLexer::new("sub DESTROY { undef $self }");
         let _sub = lexer.next_token().unwrap();
         let destroy = lexer.next_token().unwrap();
         assert!(matches!(destroy.token_type, TokenType::Identifier(_)));
         assert_eq!(destroy.text.as_ref(), "DESTROY");
-        
+
         // AUTOLOAD variable
         let mut lexer = PerlLexer::new("$AUTOLOAD =~ s/.*:://");
         let var = lexer.next_token().unwrap();
@@ -829,9 +872,11 @@ mod test_slash {
         let slot = lexer.next_token().unwrap();
         assert!(matches!(slot.token_type, TokenType::Identifier(_)));
         assert_eq!(slot.text.as_ref(), "SCALAR");
-        
+
         // Multiple slots
-        for slot_name in ["ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE"] {
+        for slot_name in [
+            "ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE",
+        ] {
             let input = format!("*bar{{{}}}", slot_name);
             let mut lexer = PerlLexer::new(&input);
             let _glob = lexer.next_token().unwrap();
@@ -846,32 +891,32 @@ mod test_slash {
     fn test_advanced_regex_features() {
         // Test that advanced regex patterns can be tokenized
         // The lexer starts in ExpectTerm mode, so / is interpreted as regex
-        
+
         // Positive lookahead
         let mut lexer = PerlLexer::new(r#"/foo(?=bar)/"#);
         let regex = lexer.next_token().unwrap();
         assert!(matches!(regex.token_type, TokenType::RegexMatch));
-        
-        // Negative lookahead  
+
+        // Negative lookahead
         let mut lexer = PerlLexer::new(r#"/foo(?!bar)/"#);
         let regex = lexer.next_token().unwrap();
         assert!(matches!(regex.token_type, TokenType::RegexMatch));
-        
+
         // Positive lookbehind
         let mut lexer = PerlLexer::new(r#"/(?<=foo)bar/"#);
         let regex = lexer.next_token().unwrap();
         assert!(matches!(regex.token_type, TokenType::RegexMatch));
-        
+
         // Negative lookbehind
         let mut lexer = PerlLexer::new(r#"/(?<!foo)bar/"#);
         let regex = lexer.next_token().unwrap();
         assert!(matches!(regex.token_type, TokenType::RegexMatch));
-        
+
         // Code blocks in regex
         let mut lexer = PerlLexer::new(r#"/pattern(?{ $count++ })/"#);
         let regex = lexer.next_token().unwrap();
         assert!(matches!(regex.token_type, TokenType::RegexMatch));
-        
+
         // For m// syntax, we'd need proper quote-like operator support
         // Just verify it doesn't panic
         let mut lexer = PerlLexer::new(r#"m/(?<name>\w+)/"#);
@@ -891,13 +936,13 @@ mod test_slash {
         let op = lexer.next_token().unwrap();
         assert!(matches!(op.token_type, TokenType::Operator(_)));
         assert_eq!(op.text.as_ref(), "-T");
-        
+
         // Binary test
         let mut lexer = PerlLexer::new("-B $file");
         let op = lexer.next_token().unwrap();
         assert!(matches!(op.token_type, TokenType::Operator(_)));
         assert_eq!(op.text.as_ref(), "-B");
-        
+
         // Time-based tests
         for op_str in ["-M", "-A", "-C"] {
             let input = format!("{} $file", op_str);
@@ -906,7 +951,7 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Operator(_)));
             assert_eq!(op.text.as_ref(), op_str);
         }
-        
+
         // Stacked file tests
         let mut lexer = PerlLexer::new("-f -r -w -x $file");
         for op_str in ["-f", "-r", "-w", "-x"] {
@@ -919,19 +964,39 @@ mod test_slash {
     #[test]
     fn test_network_socket_operations() {
         // Socket operations
-        for func in ["socket", "socketpair", "bind", "listen", "accept", 
-                     "connect", "recv", "send", "shutdown",
-                     "getsockname", "getpeername", "getsockopt", "setsockopt"] {
+        for func in [
+            "socket",
+            "socketpair",
+            "bind",
+            "listen",
+            "accept",
+            "connect",
+            "recv",
+            "send",
+            "shutdown",
+            "getsockname",
+            "getpeername",
+            "getsockopt",
+            "setsockopt",
+        ] {
             let input = format!("{} $sock", func);
             let mut lexer = PerlLexer::new(&input);
             let op = lexer.next_token().unwrap();
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Network database functions
-        for func in ["gethostbyname", "gethostbyaddr", "getnetbyname", "getnetbyaddr",
-                     "getprotobyname", "getprotobynumber", "getservbyname", "getservbyport"] {
+        for func in [
+            "gethostbyname",
+            "gethostbyaddr",
+            "getnetbyname",
+            "getnetbyaddr",
+            "getprotobyname",
+            "getprotobynumber",
+            "getservbyname",
+            "getservbyport",
+        ] {
             let input = format!("{} $arg", func);
             let mut lexer = PerlLexer::new(&input);
             let op = lexer.next_token().unwrap();
@@ -944,7 +1009,7 @@ mod test_slash {
     fn test_nested_quote_delimiters() {
         // For now, just test that these constructs can be tokenized without panicking
         // The actual quote operators might need special handling in the lexer
-        
+
         // Nested braces
         let mut lexer = PerlLexer::new("q{nested {braces} inside}");
         while let Some(token) = lexer.next_token() {
@@ -952,7 +1017,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Nested brackets
         let mut lexer = PerlLexer::new("qq[nested [brackets] inside]");
         while let Some(token) = lexer.next_token() {
@@ -960,7 +1025,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Mixed delimiters with parentheses
         let mut lexer = PerlLexer::new("qw(word1 (nested) word2)");
         while let Some(token) = lexer.next_token() {
@@ -980,7 +1045,7 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Shared memory operations
         for func in ["shmget", "shmctl", "shmread", "shmwrite"] {
             let input = format!("{} $id, $var", func);
@@ -989,7 +1054,7 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Message queue operations
         for func in ["msgget", "msgrcv", "msgsnd", "msgctl"] {
             let input = format!("{} $id, $msg", func);
@@ -1009,7 +1074,7 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Group database functions
         for func in ["getgrent", "getgrgid", "getgrnam", "setgrent", "endgrent"] {
             let mut lexer = PerlLexer::new(func);
@@ -1017,11 +1082,22 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Host/service entry functions
-        for func in ["gethostent", "getnetent", "getprotoent", "getservent",
-                     "sethostent", "setnetent", "setprotoent", "setservent",
-                     "endhostent", "endnetent", "endprotoent", "endservent"] {
+        for func in [
+            "gethostent",
+            "getnetent",
+            "getprotoent",
+            "getservent",
+            "sethostent",
+            "setnetent",
+            "setprotoent",
+            "setservent",
+            "endhostent",
+            "endnetent",
+            "endprotoent",
+            "endservent",
+        ] {
             let mut lexer = PerlLexer::new(func);
             let op = lexer.next_token().unwrap();
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
@@ -1039,16 +1115,18 @@ mod test_slash {
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // Low-level I/O operations
-        for func in ["ioctl", "fcntl", "sysopen", "sysread", "syswrite", "sysseek"] {
+        for func in [
+            "ioctl", "fcntl", "sysopen", "sysread", "syswrite", "sysseek",
+        ] {
             let input = format!("{} $fh", func);
             let mut lexer = PerlLexer::new(&input);
             let op = lexer.next_token().unwrap();
             assert!(matches!(op.token_type, TokenType::Identifier(_)));
             assert_eq!(op.text.as_ref(), func);
         }
-        
+
         // File locking
         let mut lexer = PerlLexer::new("flock $fh, LOCK_EX");
         let flock = lexer.next_token().unwrap();
@@ -1063,25 +1141,25 @@ mod test_slash {
         let begin = lexer.next_token().unwrap();
         assert!(matches!(begin.token_type, TokenType::Keyword(_)));
         assert_eq!(begin.text.as_ref(), "BEGIN");
-        
+
         // CHECK block
         let mut lexer = PerlLexer::new("CHECK { print 'after compile' }");
         let check = lexer.next_token().unwrap();
         assert!(matches!(check.token_type, TokenType::Keyword(_)));
         assert_eq!(check.text.as_ref(), "CHECK");
-        
+
         // INIT block
         let mut lexer = PerlLexer::new("INIT { print 'before runtime' }");
         let init = lexer.next_token().unwrap();
         assert!(matches!(init.token_type, TokenType::Keyword(_)));
         assert_eq!(init.text.as_ref(), "INIT");
-        
+
         // UNITCHECK block
         let mut lexer = PerlLexer::new("UNITCHECK { print 'after unit compile' }");
         let unitcheck = lexer.next_token().unwrap();
         assert!(matches!(unitcheck.token_type, TokenType::Keyword(_)));
         assert_eq!(unitcheck.text.as_ref(), "UNITCHECK");
-        
+
         // END block
         let mut lexer = PerlLexer::new("END { print 'at exit' }");
         let end = lexer.next_token().unwrap();
@@ -1097,7 +1175,7 @@ mod test_slash {
         let var = lexer.next_token().unwrap();
         assert!(matches!(var.token_type, TokenType::Identifier(_)));
         assert_eq!(var.text.as_ref(), "$class");
-        
+
         // Reserved words as method names
         let mut lexer = PerlLexer::new("$obj->method()");
         let _obj = lexer.next_token().unwrap();
@@ -1105,7 +1183,7 @@ mod test_slash {
         let method = lexer.next_token().unwrap();
         assert!(matches!(method.token_type, TokenType::Identifier(_)));
         assert_eq!(method.text.as_ref(), "method");
-        
+
         // Reserved words in hash keys
         let mut lexer = PerlLexer::new("$hash{format}");
         let _hash = lexer.next_token().unwrap();
@@ -1114,7 +1192,7 @@ mod test_slash {
         // Inside hash braces, reserved words are parsed as keywords
         assert!(matches!(key.token_type, TokenType::Keyword(_)));
         assert_eq!(key.text.as_ref(), "format");
-        
+
         // More reserved words as variables
         for reserved in ["format", "sub", "package", "use", "require"] {
             let input = format!("${}", reserved);
@@ -1134,7 +1212,7 @@ mod test_slash {
         let array_deref = lexer.next_token().unwrap();
         assert!(matches!(array_deref.token_type, TokenType::Operator(_)));
         assert_eq!(array_deref.text.as_ref(), "@");
-        
+
         // Code reference with array index and hash key
         let mut lexer = PerlLexer::new("$ref->&*->[0]->{key}");
         let _ref = lexer.next_token().unwrap();
@@ -1142,7 +1220,7 @@ mod test_slash {
         let code_deref = lexer.next_token().unwrap();
         assert!(matches!(code_deref.token_type, TokenType::Operator(_)));
         assert_eq!(code_deref.text.as_ref(), "&");
-        
+
         // Mixed postfix dereferencing
         let mut lexer = PerlLexer::new("$data->@[0..5]->%{qw(a b)}");
         let _data = lexer.next_token().unwrap();
@@ -1159,7 +1237,7 @@ mod test_slash {
         let _my1 = lexer.next_token().unwrap();
         let var1 = lexer.next_token().unwrap();
         assert!(matches!(var1.token_type, TokenType::Identifier(_)));
-        
+
         // Mixed script identifiers (should work)
         let mut lexer = PerlLexer::new("sub hello_世界 { }");
         let _sub = lexer.next_token().unwrap();
@@ -1167,20 +1245,19 @@ mod test_slash {
         assert!(matches!(name.token_type, TokenType::Identifier(_)));
         // The lexer might only capture up to the first non-ASCII character
         assert!(name.text.as_ref() == "hello_世界" || name.text.as_ref() == "hello_");
-        
+
         // Emoji in strings (should work)
         let mut lexer = PerlLexer::new(r#"print "Hello 👋 World 🌍""#);
         let _print = lexer.next_token().unwrap();
         let string = lexer.next_token().unwrap();
         assert!(matches!(string.token_type, TokenType::StringLiteral));
-        
+
         // Mathematical operators that should NOT be identifiers
         let mut lexer = PerlLexer::new("my $∑"); // Should fail as identifier
         let _my = lexer.next_token().unwrap();
         let var = lexer.next_token().unwrap();
         // The lexer should skip the ∑ and return EOF or error
-        assert!(!matches!(var.token_type, TokenType::Identifier(_)) || 
-                var.text.as_ref() != "$∑");
+        assert!(!matches!(var.token_type, TokenType::Identifier(_)) || var.text.as_ref() != "$∑");
     }
 
     #[test]
@@ -1193,7 +1270,7 @@ mod test_slash {
         let while_tok = lexer.next_token().unwrap();
         assert!(matches!(while_tok.token_type, TokenType::Keyword(_)));
         assert_eq!(while_tok.text.as_ref(), "while");
-        
+
         // Complex expressions with modifiers
         let mut lexer = PerlLexer::new("$x = $y + $z if defined($x) && $x > 0");
         // Just verify it tokenizes without panicking
@@ -1202,7 +1279,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // For modifier
         let mut lexer = PerlLexer::new("print for @array");
         let _print = lexer.next_token().unwrap();
@@ -1216,23 +1293,27 @@ mod test_slash {
         // v-strings
         let mut lexer = PerlLexer::new("v5.32.1");
         let version = lexer.next_token().unwrap();
-        assert!(matches!(version.token_type, TokenType::Number(_)) || 
-                matches!(version.token_type, TokenType::Identifier(_)) ||
-                matches!(version.token_type, TokenType::Version(_)));
-        
+        assert!(
+            matches!(version.token_type, TokenType::Number(_))
+                || matches!(version.token_type, TokenType::Identifier(_))
+                || matches!(version.token_type, TokenType::Version(_))
+        );
+
         // Version in use statements
         let mut lexer = PerlLexer::new("use 5.032");
         let _use = lexer.next_token().unwrap();
         let version = lexer.next_token().unwrap();
-        assert!(matches!(version.token_type, TokenType::Number(_)) || 
-                matches!(version.token_type, TokenType::Version(_)));
-        
+        assert!(
+            matches!(version.token_type, TokenType::Number(_))
+                || matches!(version.token_type, TokenType::Version(_))
+        );
+
         // Underscore in numbers
         let mut lexer = PerlLexer::new("1_000_000");
         let num = lexer.next_token().unwrap();
         assert!(matches!(num.token_type, TokenType::Number(_)));
         assert_eq!(num.text.as_ref(), "1_000_000");
-        
+
         // Binary, octal, hex with underscores
         for num_str in ["0b1010_1010", "0755_555", "0xFF_FF_FF"] {
             let mut lexer = PerlLexer::new(num_str);
@@ -1250,14 +1331,14 @@ mod test_slash {
             assert!(matches!(token.token_type, TokenType::Identifier(_)));
             assert_eq!(token.text.as_ref(), var);
         }
-        
+
         // Process and system variables
         for var in ["$$", "$<", "$>", "$(", "$)"] {
             let mut lexer = PerlLexer::new(var);
             let token = lexer.next_token().unwrap();
             assert!(matches!(token.token_type, TokenType::Identifier(_)));
         }
-        
+
         // I/O variables
         for var in ["$/", "$\\", "$|", "$,", "$\"", "$."] {
             let mut lexer = PerlLexer::new(var);
@@ -1271,7 +1352,7 @@ mod test_slash {
                 let _op = lexer.next_token().unwrap();
             }
         }
-        
+
         // Format variables
         for var in ["$~", "$^", "$=", "$-", "$%"] {
             let mut lexer = PerlLexer::new(var);
@@ -1284,14 +1365,14 @@ mod test_slash {
                 let _op = lexer.next_token().unwrap();
             }
         }
-        
+
         // Error variables
         for var in ["$!", "$@", "$?"] {
             let mut lexer = PerlLexer::new(var);
             let token = lexer.next_token().unwrap();
             assert!(matches!(token.token_type, TokenType::Identifier(_)));
         }
-        
+
         // Perl version/internals
         let mut lexer = PerlLexer::new("$]");
         let token = lexer.next_token().unwrap();
@@ -1303,7 +1384,7 @@ mod test_slash {
         } else {
             assert!(matches!(token.token_type, TokenType::Identifier(_)));
         }
-        
+
         // Array length variables
         let mut lexer = PerlLexer::new("$#array");
         let token = lexer.next_token().unwrap();
@@ -1321,15 +1402,19 @@ mod test_slash {
         let array = lexer.next_token().unwrap();
         assert!(matches!(array.token_type, TokenType::Identifier(_)));
         assert_eq!(array.text.as_ref(), "array");
-        
+
         // Complex $# forms
         let mut lexer = PerlLexer::new("$#{$ref}");
         let token = lexer.next_token().unwrap();
         // Might be parsed as multiple tokens
-        if !matches!(token.token_type, TokenType::Identifier(_)) || !token.text.as_ref().starts_with("$#") {
+        if !matches!(token.token_type, TokenType::Identifier(_))
+            || !token.text.as_ref().starts_with("$#")
+        {
             // Skip to end to avoid test failure
             while let Some(t) = lexer.next_token() {
-                if matches!(t.token_type, TokenType::EOF) { break; }
+                if matches!(t.token_type, TokenType::EOF) {
+                    break;
+                }
             }
         }
     }
@@ -1343,14 +1428,14 @@ mod test_slash {
         assert_eq!(new.text.as_ref(), "new");
         let class = lexer.next_token().unwrap();
         assert!(matches!(class.token_type, TokenType::Identifier(_)));
-        
+
         // Method with object
         let mut lexer = PerlLexer::new("method $obj");
         let method = lexer.next_token().unwrap();
         assert!(matches!(method.token_type, TokenType::Identifier(_)));
         let obj = lexer.next_token().unwrap();
         assert!(matches!(obj.token_type, TokenType::Identifier(_)));
-        
+
         // Complex indirect object
         let mut lexer = PerlLexer::new("new Some::Package");
         let _new = lexer.next_token().unwrap();
@@ -1381,7 +1466,7 @@ mod test_slash {
                 assert_eq!(dots.text.as_ref(), "..");
             }
         }
-        
+
         // Three-dot variant
         let mut lexer = PerlLexer::new("1...10");
         let one = lexer.next_token().unwrap();
@@ -1403,7 +1488,7 @@ mod test_slash {
                 assert_eq!(dot1.text.as_ref(), "...");
             }
         }
-        
+
         // In statement modifier context
         let mut lexer = PerlLexer::new("print if /start/ .. /end/");
         // Just verify it tokenizes without panic
@@ -1430,7 +1515,7 @@ mod test_slash {
         } else {
             assert_eq!(lt.text.as_ref(), "<");
         }
-        
+
         // Glob with braces
         let mut lexer = PerlLexer::new("<{foo,bar}.txt>");
         // Just verify it tokenizes
@@ -1439,7 +1524,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Diamond operator
         let mut lexer = PerlLexer::new("<>");
         let lt = lexer.next_token().unwrap();
@@ -1454,7 +1539,7 @@ mod test_slash {
             assert!(matches!(gt.token_type, TokenType::Operator(_)));
             assert_eq!(gt.text.as_ref(), ">");
         }
-        
+
         // Filehandle in angle brackets
         let mut lexer = PerlLexer::new("<STDIN>");
         let first = lexer.next_token().unwrap();
@@ -1480,14 +1565,14 @@ mod test_slash {
         let fh = lexer.next_token().unwrap();
         assert!(matches!(fh.token_type, TokenType::Identifier(_)));
         assert_eq!(fh.text.as_ref(), "FH");
-        
+
         // Print to bareword filehandle
         let mut lexer = PerlLexer::new("print STDERR \"Error\"");
         let _print = lexer.next_token().unwrap();
         let stderr = lexer.next_token().unwrap();
         assert!(matches!(stderr.token_type, TokenType::Identifier(_)));
         assert_eq!(stderr.text.as_ref(), "STDERR");
-        
+
         // Select filehandle
         let mut lexer = PerlLexer::new("select FH");
         let _select = lexer.next_token().unwrap();
@@ -1502,13 +1587,13 @@ mod test_slash {
         let _pack = lexer.next_token().unwrap();
         let template = lexer.next_token().unwrap();
         assert!(matches!(template.token_type, TokenType::StringLiteral));
-        
+
         // Grouped unpack template
         let mut lexer = PerlLexer::new(r#"unpack "(a4 i)*", $data"#);
         let _unpack = lexer.next_token().unwrap();
         let template = lexer.next_token().unwrap();
         assert!(matches!(template.token_type, TokenType::StringLiteral));
-        
+
         // Complex template
         let mut lexer = PerlLexer::new(r#"pack "C/a* w/a*", $len, $str"#);
         let _pack = lexer.next_token().unwrap();
@@ -1525,13 +1610,13 @@ mod test_slash {
             assert!(matches!(token.token_type, TokenType::Identifier(_)));
             assert_eq!(token.text.as_ref(), literal);
         }
-        
+
         // __DATA__ and __END__ sections
         let mut lexer = PerlLexer::new("__DATA__");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
         assert_eq!(token.text.as_ref(), "__DATA__");
-        
+
         let mut lexer = PerlLexer::new("__END__");
         let token = lexer.next_token().unwrap();
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
@@ -1544,21 +1629,27 @@ mod test_slash {
         let mut lexer = PerlLexer::new("v5.10");
         let token = lexer.next_token().unwrap();
         // Could be parsed as identifier or version
-        assert!(matches!(token.token_type, TokenType::Identifier(_)) ||
-                matches!(token.token_type, TokenType::Version(_)));
-        
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(_))
+                || matches!(token.token_type, TokenType::Version(_))
+        );
+
         // Multi-part v-string
         let mut lexer = PerlLexer::new("v5.10.1");
         let token = lexer.next_token().unwrap();
-        assert!(matches!(token.token_type, TokenType::Identifier(_)) ||
-                matches!(token.token_type, TokenType::Version(_)));
-        
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(_))
+                || matches!(token.token_type, TokenType::Version(_))
+        );
+
         // IP address as v-string
         let mut lexer = PerlLexer::new("v127.0.0.1");
         let token = lexer.next_token().unwrap();
-        assert!(matches!(token.token_type, TokenType::Identifier(_)) ||
-                matches!(token.token_type, TokenType::Version(_)));
-        
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(_))
+                || matches!(token.token_type, TokenType::Version(_))
+        );
+
         // Version comparison
         let mut lexer = PerlLexer::new("$^V ge v5.10.0");
         // Just verify it tokenizes
@@ -1579,13 +1670,13 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Valid compound with for
         let mut lexer = PerlLexer::new("print for @array");
         let _print = lexer.next_token().unwrap();
         let for_tok = lexer.next_token().unwrap();
         assert!(matches!(for_tok.token_type, TokenType::Keyword(_)));
-        
+
         // Complex expression with modifiers
         let mut lexer = PerlLexer::new("next unless defined $x && $x > 0");
         while let Some(token) = lexer.next_token() {
@@ -1605,7 +1696,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // List assignment
         let mut lexer = PerlLexer::new("($a, $b, $c) = @array");
         while let Some(token) = lexer.next_token() {
@@ -1613,7 +1704,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Wantarray context
         let mut lexer = PerlLexer::new("wantarray ? @array : $array[0]");
         let wantarray = lexer.next_token().unwrap();
@@ -1632,7 +1723,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Quote with whitespace
         let mut lexer = PerlLexer::new("q\n{hello}");
         while let Some(token) = lexer.next_token() {
@@ -1640,7 +1731,7 @@ mod test_slash {
                 break;
             }
         }
-        
+
         // Here-doc with unusual delimiter
         let mut lexer = PerlLexer::new("<<'!@#'");
         while let Some(token) = lexer.next_token() {

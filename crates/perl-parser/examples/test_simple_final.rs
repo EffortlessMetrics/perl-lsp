@@ -13,7 +13,7 @@ fn main() {
         "qw(a b c)",
         "BEGIN { }",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

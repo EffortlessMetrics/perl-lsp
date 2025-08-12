@@ -1,8 +1,8 @@
 /// Unicode character classification for Perl identifiers
-/// 
+///
 /// Perl allows a wide range of Unicode characters in identifiers,
 /// including emoji and other symbols.
-use unicode_ident::{is_xid_start, is_xid_continue};
+use unicode_ident::{is_xid_continue, is_xid_start};
 
 /// Check if a character can start a Perl identifier
 pub fn is_perl_identifier_start(ch: char) -> bool {
@@ -11,7 +11,7 @@ pub fn is_perl_identifier_start(ch: char) -> bool {
     if ch == '_' || is_xid_start(ch) {
         return true;
     }
-    
+
     // Check additional Unicode blocks that Perl allows
     // but aren't included in XID_Start (primarily emoji)
     matches!(ch as u32,

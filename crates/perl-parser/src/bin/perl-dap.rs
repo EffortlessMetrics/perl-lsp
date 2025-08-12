@@ -9,7 +9,7 @@ use std::io;
 fn main() -> io::Result<()> {
     eprintln!("Perl Debug Adapter v0.6.0");
     eprintln!("Starting DAP server...");
-    
+
     let mut adapter = DebugAdapter::new();
     adapter.run()
 }

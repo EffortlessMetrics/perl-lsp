@@ -3,13 +3,13 @@
 //! This module provides a complete Perl parser that handles both
 //! context-sensitive slash disambiguation and multi-line heredoc parsing.
 
-use crate::pure_rust_parser::{PerlParser, Rule, AstNode, PureRustPerlParser};
-use crate::lexer_adapter::LexerAdapter;
-use crate::heredoc_parser::{parse_with_heredocs, HeredocDeclaration};
 use crate::error::ParseError;
+use crate::heredoc_parser::{HeredocDeclaration, parse_with_heredocs};
+use crate::lexer_adapter::LexerAdapter;
+use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
 use pest::Parser;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// A complete Perl parser that handles all context-sensitive features
 pub struct FullPerlParser {
@@ -30,67 +30,78 @@ impl FullPerlParser {
         // Phase 1: Handle heredocs
         let (heredoc_processed, declarations) = parse_with_heredocs(input);
         self.heredoc_declarations = declarations;
-        
+
         // Phase 2: Handle slash disambiguation
         let fully_processed = LexerAdapter::preprocess(&heredoc_processed);
-        
+
         // Phase 3: Parse with Pest
-        let pairs = PerlParser::parse(Rule::program, &fully_processed)
-            .map_err(|e| {
-                eprintln!("Pest parse error: {:?}", e);
-                eprintln!("Input after preprocessing: {:?}", fully_processed);
-                ParseError::ParseFailed
-            })?;
-        
+        let pairs = PerlParser::parse(Rule::program, &fully_processed).map_err(|e| {
+            eprintln!("Pest parse error: {:?}", e);
+            eprintln!("Input after preprocessing: {:?}", fully_processed);
+            ParseError::ParseFailed
+        })?;
+
         // Phase 4: Build AST
         let mut parser = PureRustPerlParser::new();
         let mut ast = None;
         for pair in pairs {
-            ast = parser.build_node(pair).map_err(|_| ParseError::ParseFailed)?;
+            ast = parser
+                .build_node(pair)
+                .map_err(|_| ParseError::ParseFailed)?;
         }
-        
+
         // Phase 5: Postprocess to restore original tokens and heredoc content
         if let Some(ref mut node) = ast {
             LexerAdapter::postprocess(node);
             self.restore_heredoc_content(node);
         }
-        
+
         ast.ok_or(ParseError::ParseFailed)
     }
-    
+
     /// Parse and return S-expression format
     pub fn parse_to_sexp(&mut self, input: &str) -> Result<String, ParseError> {
         let ast = self.parse(input)?;
         let parser = PureRustPerlParser::new();
         Ok(parser.to_sexp(&ast))
     }
-    
+
     /// Restore heredoc content in the AST
     fn restore_heredoc_content(&self, node: &mut AstNode) {
         // Map placeholder IDs to heredoc content
-        let placeholder_map: HashMap<String, Arc<str>> = self.heredoc_declarations
+        let placeholder_map: HashMap<String, Arc<str>> = self
+            .heredoc_declarations
             .iter()
             .filter_map(|decl| {
-                decl.content.as_ref().map(|content| {
-                    (decl.placeholder_id.clone(), content.clone())
-                })
+                decl.content
+                    .as_ref()
+                    .map(|content| (decl.placeholder_id.clone(), content.clone()))
             })
             .collect();
-        
+
         self.restore_node_content(node, &placeholder_map);
     }
-    
-    fn restore_node_content(&self, node: &mut AstNode, placeholder_map: &HashMap<String, Arc<str>>) {
+
+    fn restore_node_content(
+        &self,
+        node: &mut AstNode,
+        placeholder_map: &HashMap<String, Arc<str>>,
+    ) {
         self.restore_node_content_with_depth(node, placeholder_map, 0);
     }
-    
-    fn restore_node_content_with_depth(&self, node: &mut AstNode, placeholder_map: &HashMap<String, Arc<str>>, depth: usize) {
+
+    fn restore_node_content_with_depth(
+        &self,
+        node: &mut AstNode,
+        placeholder_map: &HashMap<String, Arc<str>>,
+        depth: usize,
+    ) {
         if depth > 100 {
             eprintln!("WARNING: Deep recursion detected at depth {}", depth);
             eprintln!("Node type: {:?}", std::mem::discriminant(node));
             return;
         }
-        
+
         let next_depth = depth + 1;
         match node {
             AstNode::String(value) => {
@@ -99,8 +110,7 @@ impl FullPerlParser {
                     *value = content.clone();
                 }
             }
-            AstNode::Block(statements) |
-            AstNode::Program(statements) => {
+            AstNode::Block(statements) | AstNode::Program(statements) => {
                 for stmt in statements {
                     self.restore_node_content_with_depth(stmt, placeholder_map, next_depth);
                 }
@@ -123,7 +133,12 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(elem, placeholder_map, next_depth);
                 }
             }
-            AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+            AstNode::IfStatement {
+                condition,
+                then_block,
+                elsif_clauses,
+                else_block,
+            } => {
                 self.restore_node_content_with_depth(condition, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(then_block, placeholder_map, next_depth);
                 for (cond, block) in elsif_clauses {
@@ -134,7 +149,11 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(block, placeholder_map, next_depth);
                 }
             }
-            AstNode::VariableDeclaration { variables, initializer, .. } => {
+            AstNode::VariableDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 for var in variables {
                     self.restore_node_content_with_depth(var, placeholder_map, next_depth);
                 }
@@ -146,19 +165,33 @@ impl FullPerlParser {
                 self.restore_node_content_with_depth(inner, placeholder_map, next_depth);
             }
             // Handle more control flow structures
-            AstNode::UnlessStatement { condition, block, else_block } => {
+            AstNode::UnlessStatement {
+                condition,
+                block,
+                else_block,
+            } => {
                 self.restore_node_content_with_depth(condition, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(block, placeholder_map, next_depth);
                 if let Some(else_blk) = else_block {
                     self.restore_node_content_with_depth(else_blk, placeholder_map, next_depth);
                 }
             }
-            AstNode::WhileStatement { condition, block, .. } |
-            AstNode::UntilStatement { condition, block, .. } => {
+            AstNode::WhileStatement {
+                condition, block, ..
+            }
+            | AstNode::UntilStatement {
+                condition, block, ..
+            } => {
                 self.restore_node_content_with_depth(condition, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(block, placeholder_map, next_depth);
             }
-            AstNode::ForStatement { init, condition, update, block, .. } => {
+            AstNode::ForStatement {
+                init,
+                condition,
+                update,
+                block,
+                ..
+            } => {
                 if let Some(i) = init {
                     self.restore_node_content_with_depth(i, placeholder_map, next_depth);
                 }
@@ -170,25 +203,37 @@ impl FullPerlParser {
                 }
                 self.restore_node_content_with_depth(block, placeholder_map, next_depth);
             }
-            AstNode::ForeachStatement { variable, list, block, .. } => {
+            AstNode::ForeachStatement {
+                variable,
+                list,
+                block,
+                ..
+            } => {
                 if let Some(var) = variable {
                     self.restore_node_content_with_depth(var, placeholder_map, next_depth);
                 }
                 self.restore_node_content_with_depth(list, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(block, placeholder_map, next_depth);
             }
-            
+
             // Handle more expression types
             AstNode::UnaryOp { operand, .. } => {
                 self.restore_node_content_with_depth(operand, placeholder_map, next_depth);
             }
-            AstNode::TernaryOp { condition, true_expr, false_expr } => {
+            AstNode::TernaryOp {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
                 self.restore_node_content_with_depth(condition, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(true_expr, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(false_expr, placeholder_map, next_depth);
             }
-            AstNode::ArrayAccess { array, index } |
-            AstNode::HashAccess { hash: array, key: index } => {
+            AstNode::ArrayAccess { array, index }
+            | AstNode::HashAccess {
+                hash: array,
+                key: index,
+            } => {
                 self.restore_node_content_with_depth(array, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(index, placeholder_map, next_depth);
             }
@@ -203,80 +248,77 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(arg, placeholder_map, next_depth);
                 }
             }
-            
+
             // Handle various block types
-            AstNode::DoBlock(block) |
-            AstNode::EvalBlock(block) |
-            AstNode::EvalString(block) |
-            AstNode::BeginBlock(block) |
-            AstNode::EndBlock(block) |
-            AstNode::CheckBlock(block) |
-            AstNode::InitBlock(block) |
-            AstNode::UnitcheckBlock(block) => {
+            AstNode::DoBlock(block)
+            | AstNode::EvalBlock(block)
+            | AstNode::EvalString(block)
+            | AstNode::BeginBlock(block)
+            | AstNode::EndBlock(block)
+            | AstNode::CheckBlock(block)
+            | AstNode::InitBlock(block)
+            | AstNode::UnitcheckBlock(block) => {
                 self.restore_node_content_with_depth(block, placeholder_map, next_depth);
             }
-            
+
             // Handle sub declarations
-            AstNode::SubDeclaration { body, .. } |
-            AstNode::AnonymousSub { body, .. } => {
+            AstNode::SubDeclaration { body, .. } | AstNode::AnonymousSub { body, .. } => {
                 self.restore_node_content_with_depth(body, placeholder_map, next_depth);
             }
-            
+
             // Handle collections
-            AstNode::ArrayRef(elements) |
-            AstNode::HashRef(elements) => {
+            AstNode::ArrayRef(elements) | AstNode::HashRef(elements) => {
                 for elem in elements {
                     self.restore_node_content_with_depth(elem, placeholder_map, next_depth);
                 }
             }
-            
+
             // Handle special statements
             AstNode::ReturnStatement { value } => {
                 if let Some(val) = value {
                     self.restore_node_content_with_depth(val, placeholder_map, next_depth);
                 }
             }
-            
+
             // Handle literals and simple types that don't need recursion
-            AstNode::Number(_) |
-            AstNode::Identifier(_) |
-            AstNode::SpecialLiteral(_) |
-            AstNode::Bareword(_) |
-            AstNode::EmptyExpression |
-            AstNode::Comment(_) |
-            AstNode::Label(_) |
-            AstNode::ScalarVariable(_) |
-            AstNode::ArrayVariable(_) |
-            AstNode::HashVariable(_) |
-            AstNode::TypeglobVariable(_) |
-            AstNode::ScalarReference(_) |
-            AstNode::ArrayReference(_) |
-            AstNode::HashReference(_) |
-            AstNode::SubroutineReference(_) |
-            AstNode::GlobReference(_) |
-            AstNode::Glob(_) |
-            AstNode::Regex { .. } |
-            AstNode::Substitution { .. } |
-            AstNode::Transliteration { .. } |
-            AstNode::QwList(_) |
-            AstNode::QqString(_) |
-            AstNode::QxString(_) |
-            AstNode::QrRegex { .. } |
-            AstNode::Heredoc { .. } |
-            AstNode::Readline { .. } |
-            AstNode::LastStatement { .. } |
-            AstNode::NextStatement { .. } |
-            AstNode::GotoStatement { .. } => {
+            AstNode::Number(_)
+            | AstNode::Identifier(_)
+            | AstNode::SpecialLiteral(_)
+            | AstNode::Bareword(_)
+            | AstNode::EmptyExpression
+            | AstNode::Comment(_)
+            | AstNode::Label(_)
+            | AstNode::ScalarVariable(_)
+            | AstNode::ArrayVariable(_)
+            | AstNode::HashVariable(_)
+            | AstNode::TypeglobVariable(_)
+            | AstNode::ScalarReference(_)
+            | AstNode::ArrayReference(_)
+            | AstNode::HashReference(_)
+            | AstNode::SubroutineReference(_)
+            | AstNode::GlobReference(_)
+            | AstNode::Glob(_)
+            | AstNode::Regex { .. }
+            | AstNode::Substitution { .. }
+            | AstNode::Transliteration { .. }
+            | AstNode::QwList(_)
+            | AstNode::QqString(_)
+            | AstNode::QxString(_)
+            | AstNode::QrRegex { .. }
+            | AstNode::Heredoc { .. }
+            | AstNode::Readline { .. }
+            | AstNode::LastStatement { .. }
+            | AstNode::NextStatement { .. }
+            | AstNode::GotoStatement { .. } => {
                 // These are leaf nodes, no recursion needed
             }
-            
+
             // Handle remaining complex types
-            AstNode::ArrayElement { index, .. } |
-            AstNode::HashElement { key: index, .. } => {
+            AstNode::ArrayElement { index, .. } | AstNode::HashElement { key: index, .. } => {
                 self.restore_node_content_with_depth(index, placeholder_map, next_depth);
             }
-            AstNode::PostfixDereference { expr, .. } |
-            AstNode::TypeglobSlotAccess { typeglob: expr, .. } => {
+            AstNode::PostfixDereference { expr, .. }
+            | AstNode::TypeglobSlotAccess { typeglob: expr, .. } => {
                 self.restore_node_content_with_depth(expr, placeholder_map, next_depth);
             }
             AstNode::PackageDeclaration { block, .. } => {
@@ -284,18 +326,25 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(blk, placeholder_map, next_depth);
                 }
             }
-            AstNode::TieStatement { variable, class, args } => {
+            AstNode::TieStatement {
+                variable,
+                class,
+                args,
+            } => {
                 self.restore_node_content_with_depth(variable, placeholder_map, next_depth);
                 self.restore_node_content_with_depth(class, placeholder_map, next_depth);
                 for arg in args {
                     self.restore_node_content_with_depth(arg, placeholder_map, next_depth);
                 }
             }
-            AstNode::UntieStatement { variable } |
-            AstNode::TiedExpression { variable } => {
+            AstNode::UntieStatement { variable } | AstNode::TiedExpression { variable } => {
                 self.restore_node_content_with_depth(variable, placeholder_map, next_depth);
             }
-            AstNode::GivenStatement { expression, when_clauses, default_block } => {
+            AstNode::GivenStatement {
+                expression,
+                when_clauses,
+                default_block,
+            } => {
                 self.restore_node_content_with_depth(expression, placeholder_map, next_depth);
                 for (cond, block) in when_clauses {
                     self.restore_node_content_with_depth(cond, placeholder_map, next_depth);
@@ -313,14 +362,14 @@ impl FullPerlParser {
                     self.restore_node_content_with_depth(part, placeholder_map, next_depth);
                 }
             }
-            
+
             // These should not appear in parsed AST but handle them just in case
-            AstNode::UseStatement { .. } |
-            AstNode::RequireStatement { .. } |
-            AstNode::FormatDeclaration { .. } => {
+            AstNode::UseStatement { .. }
+            | AstNode::RequireStatement { .. }
+            | AstNode::FormatDeclaration { .. } => {
                 // No nested expressions in these
             }
-            
+
             // Handle additional node types
             AstNode::ClassDeclaration { body, .. } => {
                 for member in body {
@@ -330,12 +379,14 @@ impl FullPerlParser {
             AstNode::MethodDeclaration { body, .. } => {
                 self.restore_node_content_with_depth(body, placeholder_map, next_depth);
             }
-            AstNode::EndSection(_) |
-            AstNode::Pod(_) |
-            AstNode::DataSection(_) => {
+            AstNode::EndSection(_) | AstNode::Pod(_) | AstNode::DataSection(_) => {
                 // These are documentation/data sections, no recursion needed
             }
-            AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
+            AstNode::TryCatch {
+                try_block,
+                catch_clauses,
+                finally_block,
+            } => {
                 self.restore_node_content_with_depth(try_block, placeholder_map, next_depth);
                 for (_exception_var, catch_block) in catch_clauses {
                     // exception_var is Arc<str>, not AstNode, so we don't need to recurse
@@ -403,7 +454,7 @@ EOF"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse_to_sexp(input).unwrap();
-        
+
         // Should parse both heredoc and regex match
         assert!(result.contains("Test content"));
         assert!(result.contains("regex_match"));

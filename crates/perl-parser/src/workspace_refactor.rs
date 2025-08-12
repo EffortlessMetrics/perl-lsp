@@ -3,9 +3,9 @@
 //! This module provides refactoring capabilities that span multiple files.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use std::path::{Path, PathBuf};
 use crate::workspace_index::WorkspaceIndex;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// A file edit as part of a refactoring operation
 #[derive(Debug, Clone, Serialize, Deserialize)]

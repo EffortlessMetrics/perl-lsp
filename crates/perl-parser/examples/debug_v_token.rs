@@ -2,11 +2,8 @@
 use perl_parser::token_stream::TokenStream;
 
 fn main() {
-    let tests = vec![
-        "use v5.36",
-        "use 5.036",
-    ];
-    
+    let tests = vec!["use v5.36", "use 5.036"];
+
     for test in tests {
         println!("Input: {:?}", test);
         let mut stream = TokenStream::new(test);

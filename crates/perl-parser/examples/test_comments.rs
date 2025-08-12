@@ -10,7 +10,7 @@ my $x = 1;
 # Second comment
 my $y = 2;"#,
     ];
-    
+
     for test in tests {
         println!("\nTesting: {:?}", test);
         let mut parser = Parser::new(test);
