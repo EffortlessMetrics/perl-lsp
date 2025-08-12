@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{env, ffi::OsString};
 
 /// Guard for temporarily setting environment variables in tests
