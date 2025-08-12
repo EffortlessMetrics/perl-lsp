@@ -958,6 +958,42 @@ impl Default for WorkspaceIndex {
     }
 }
 
+/// LSP adapter for converting internal Location types to LSP types
+#[cfg(feature = "workspace")]
+pub mod lsp_adapter {
+    use super::Location as IxLocation;
+    use lsp_types::{Location as LspLocation};
+    // lsp_types uses Uri, not Url
+    type LspUrl = lsp_types::Uri;
+
+    pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
+        parse_url(&ix.uri).map(|uri| LspLocation { uri, range: ix.range })
+    }
+
+    pub fn to_lsp_locations(all: impl IntoIterator<Item = IxLocation>) -> Vec<LspLocation> {
+        all.into_iter()
+            .filter_map(|ix| to_lsp_location(&ix))
+            .collect()
+    }
+
+    fn parse_url(s: &str) -> Option<LspUrl> {
+        // lsp_types::Uri uses FromStr, not TryFrom
+        use std::str::FromStr;
+        
+        // Try parsing as URI first
+        LspUrl::from_str(s).ok().or_else(|| {
+            // Try as a file path if URI parsing fails
+            std::path::Path::new(s).canonicalize()
+                .ok()
+                .and_then(|p| {
+                    // Convert path to file:// URI string
+                    let uri_string = format!("file://{}", p.display());
+                    LspUrl::from_str(&uri_string).ok()
+                })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -977,7 +1013,7 @@ sub hello {
 my $var = 42;
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         // Should have indexed the package and subroutine
         let symbols = index.file_symbols(uri);
@@ -999,7 +1035,7 @@ sub test {
 }
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
@@ -1016,7 +1052,7 @@ use warnings;
 use Data::Dumper;
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let deps = index.file_dependencies(uri);
         assert!(deps.contains("strict"));

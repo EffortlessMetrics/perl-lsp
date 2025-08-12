@@ -936,8 +936,63 @@ impl LspServer {
                 if let Some(ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
                     
+                    // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    let completions = provider.get_completions(&doc.content, offset);
+                    let mut completions = provider.get_completions(&doc.content, offset);
+
+                    // Add workspace-wide completions (functions and modules from other files)
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        // Get the current context to filter relevant completions
+                        let text_before = &doc.content[..offset.min(doc.content.len())];
+                        let prefix = text_before.chars().rev()
+                            .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
+                            .collect::<String>()
+                            .chars()
+                            .rev()
+                            .collect::<String>();
+                        
+                        // Find matching symbols in the workspace
+                        let workspace_symbols = workspace_index.find_symbols(&prefix);
+                        
+                        // Add unique workspace symbols as completions
+                        use std::collections::HashSet;
+                        let mut seen = HashSet::new();
+                        for completion in &completions {
+                            seen.insert(completion.label.clone());
+                        }
+                        
+                        for symbol in workspace_symbols {
+                            // Skip if already in local completions
+                            if seen.contains(&symbol.name) {
+                                continue;
+                            }
+                            
+                            // Add workspace symbol as completion
+                            let kind = match symbol.kind {
+                                crate::workspace_index::SymbolKind::Package => CompletionItemKind::Module,
+                                crate::workspace_index::SymbolKind::Subroutine => CompletionItemKind::Function,
+                                crate::workspace_index::SymbolKind::Variable => CompletionItemKind::Variable,
+                                crate::workspace_index::SymbolKind::Class => CompletionItemKind::Module,
+                                crate::workspace_index::SymbolKind::Method => CompletionItemKind::Function,
+                                crate::workspace_index::SymbolKind::Constant => CompletionItemKind::Constant,
+                                crate::workspace_index::SymbolKind::Role => CompletionItemKind::Module,
+                                crate::workspace_index::SymbolKind::Import => CompletionItemKind::Module,
+                                crate::workspace_index::SymbolKind::Export => CompletionItemKind::Function,
+                            };
+                            
+                            completions.push(crate::completion::CompletionItem {
+                                label: symbol.name.clone(),
+                                kind,
+                                detail: symbol.qualified_name,
+                                insert_text: Some(symbol.name),
+                                sort_text: None,
+                                filter_text: None,
+                                documentation: None,
+                                additional_edits: Vec::new(),
+                            });
+                        }
+                    }
 
                     let items: Vec<Value> = completions
                         .into_iter()
@@ -1692,13 +1747,41 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
             
-            
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
                     
-                    // Create semantic analyzer
+                    // Try workspace index first for cross-file definitions
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        // Get the symbol at the current position
+                        let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                        let source_loc = crate::SourceLocation {
+                            start: offset,
+                            end: offset + 1,
+                        };
+                        if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
+                            // Look for qualified name (e.g., Module::function)
+                            let symbol_name = if symbol_info.name.contains("::") {
+                                symbol_info.name.clone()
+                            } else {
+                                // Check if it's a method call or qualified reference
+                                // TODO: Extract package context from analyzer
+                                symbol_info.name.clone()
+                            };
+                            
+                            // Find definition in workspace
+                            if let Some(def_location) = workspace_index.find_definition(&symbol_name) {
+                                // Convert internal Location to LSP Location
+                                if let Some(lsp_location) = crate::workspace_index::lsp_adapter::to_lsp_location(&def_location) {
+                                    return Ok(Some(json!([lsp_location])));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Fall back to same-file definition
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
                     
                     // Find definition at the position
@@ -1743,7 +1826,38 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
                     
-                    // Create semantic analyzer
+                    // Try workspace index first for cross-file references
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        // Get the symbol at the current position
+                        let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                        let source_loc = crate::SourceLocation {
+                            start: offset,
+                            end: offset + 1,
+                        };
+                        if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
+                            // Look for qualified name (e.g., Module::function)
+                            let symbol_name = if symbol_info.name.contains("::") {
+                                symbol_info.name.clone()
+                            } else {
+                                // Check if it's a method call or qualified reference
+                                // TODO: Extract package context from analyzer
+                                symbol_info.name.clone()
+                            };
+                            
+                            // Find all references in workspace
+                            let refs = workspace_index.find_references(&symbol_name);
+                            if !refs.is_empty() {
+                                // Convert internal Locations to LSP Locations
+                                let lsp_locations = crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
+                                if !lsp_locations.is_empty() {
+                                    return Ok(Some(json!(lsp_locations)));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Fall back to same-file references
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
                     
                     // Find all references at the position
@@ -3802,6 +3916,27 @@ impl LspServer {
         }
         
         Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
+    }
+
+    // Test-only public methods (enabled for workspace feature tests)
+    #[cfg(all(feature = "workspace", test))]
+    pub fn test_handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        self.handle_did_open(params)
+    }
+
+    #[cfg(all(feature = "workspace", test))]
+    pub fn test_handle_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_definition(params)
+    }
+
+    #[cfg(all(feature = "workspace", test))]
+    pub fn test_handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_references(params)
+    }
+
+    #[cfg(all(feature = "workspace", test))]
+    pub fn test_handle_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_completion(params)
     }
 }
 
