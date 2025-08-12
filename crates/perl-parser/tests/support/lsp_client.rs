@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};

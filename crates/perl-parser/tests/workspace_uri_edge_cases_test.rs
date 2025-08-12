@@ -60,8 +60,7 @@ print "Result: $result\n";
         let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
         
         // Open both files to index them
-        srv.handle_request(
-            "textDocument/didOpen",
+        srv.test_handle_did_open(
             Some(json!({
                 "textDocument": {
                     "uri": module_uri.clone(),
@@ -71,8 +70,7 @@ print "Result: $result\n";
             }))
         ).unwrap();
         
-        srv.handle_request(
-            "textDocument/didOpen",
+        srv.test_handle_did_open(
             Some(json!({
                 "textDocument": {
                     "uri": main_uri.clone(),
@@ -85,8 +83,7 @@ print "Result: $result\n";
         // Test: Go to definition on "calculate_🚀" with emoji
         // Position is line 4, character 30 (inside 'calculate_🚀')
         let pos = Position { line: 4, character: 30 };
-        let result = srv.handle_request(
-            "textDocument/definition",
+        let result = srv.test_handle_definition(
             Some(json!({
                 "textDocument": {"uri": main_uri.clone()},
                 "position": pos
@@ -148,8 +145,7 @@ sub use_emoji {
         let emoji_uri = url::Url::from_file_path(&emoji_file).unwrap().to_string();
         
         // Open file to index it
-        srv.handle_request(
-            "textDocument/didOpen",
+        srv.test_handle_did_open(
             Some(json!({
                 "textDocument": {
                     "uri": emoji_uri.clone(),
@@ -162,8 +158,7 @@ sub use_emoji {
         // Test: Find references to "process_♥" 
         // Position is line 4, character 5 (inside 'process_♥' definition)
         let pos = Position { line: 4, character: 5 };
-        let result = srv.handle_request(
-            "textDocument/references",
+        let result = srv.test_handle_references(
             Some(json!({
                 "textDocument": {"uri": emoji_uri.clone()},
                 "position": pos,
@@ -227,8 +222,7 @@ Unicode::
         let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
         
         // Open both files
-        srv.handle_request(
-            "textDocument/didOpen",
+        srv.test_handle_did_open(
             Some(json!({
                 "textDocument": {
                     "uri": unicode_uri.clone(),
@@ -238,8 +232,7 @@ Unicode::
             }))
         ).unwrap();
         
-        srv.handle_request(
-            "textDocument/didOpen",
+        srv.test_handle_did_open(
             Some(json!({
                 "textDocument": {
                     "uri": main_uri.clone(),
@@ -252,8 +245,7 @@ Unicode::
         // Test: Get completions after "Unicode::"
         // Position is line 3, character 9 (after '::')
         let pos = Position { line: 3, character: 9 };
-        let result = srv.handle_request(
-            "textDocument/completion",
+        let result = srv.test_handle_completion(
             Some(json!({
                 "textDocument": {"uri": main_uri.clone()},
                 "position": pos

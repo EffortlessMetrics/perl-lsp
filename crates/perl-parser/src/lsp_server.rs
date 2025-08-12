@@ -3664,6 +3664,7 @@ impl LspServer {
                             }
                             
                             // Also update our internal document store if it exists
+                            #[cfg(feature = "workspace")]
                             if let Ok(mut documents) = self.documents.lock() {
                                 if let Some(doc) = documents.get_mut(uri) {
                                     // Note: content variable is only available inside the cfg block above
@@ -3943,12 +3944,15 @@ impl LspServer {
 
 /// Convert a file path to a Perl module name
 fn path_to_module_name(uri: &str) -> String {
+    #[cfg(feature = "workspace")]
     let path = uri_to_fs_path(uri)
         .and_then(|p| p.to_str().map(|s| s.to_string()))
         .unwrap_or_else(|| {
             // Fallback to trim_start_matches for backward compatibility
             uri.trim_start_matches("file://").to_string()
         });
+    #[cfg(not(feature = "workspace"))]
+    let path = uri.trim_start_matches("file://").to_string();
     let path = path.as_str();
     let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
     
