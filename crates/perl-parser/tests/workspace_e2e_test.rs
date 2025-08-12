@@ -12,7 +12,8 @@ fn test_goto_definition_across_files() {
     use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+    // SAFETY: Test runs single-threaded with #[serial_test::serial]
+    let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -91,7 +92,8 @@ fn test_find_references_across_files() {
     use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+    // SAFETY: Test runs single-threaded with #[serial_test::serial]
+    let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -191,7 +193,8 @@ fn test_workspace_symbol_completion() {
     use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+    // SAFETY: Test runs single-threaded with #[serial_test::serial]
+    let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
