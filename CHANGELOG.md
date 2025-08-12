@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.2] - 2025-02-02
+## [0.8.2] - 2025-08-12
 
 ### Added
 - **Incremental Parsing Infrastructure** - Production-ready incremental parsing support
@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental parsing infrastructure adds no overhead when disabled
 - All 78 test files passing with full feature set enabled
 
-## [0.8.0] - 2025-02-13
+## [0.8.0] - Closed Beta
 
 ### ⚠️ Breaking Changes
 - **Declaration Provider API** - Production-hardened with mandatory version tracking
@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Column clamping on extremely long lines (20k+ chars)
   - Property tests verifying cache matches slow path exactly
 
-## [0.7.5] - 2025-02-09
+## [0.7.5] - Closed Beta
 
 ### 🚀 Release Infrastructure
 - **Enterprise-grade Distribution** - Professional release automation
@@ -174,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multi-file edit application
   - Error cases with missing URIs and invalid parameters
 
-## [0.7.4] - 2025-02-08
+## [0.7.4] - Closed Beta
 
 ### Fixed
 - **Test Infrastructure** - Complete overhaul of test assertions
@@ -200,7 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `assert_code_actions_available()` - Validates title + command/edit
   - `assert_folding_ranges_valid()` - Ensures multi-line spans
 
-## [0.7.3] - 2025-02-07
+## [0.7.3] - Closed Beta
 
 ### Added
 - **Incremental Parsing** - Lightning-fast incremental updates with <1ms performance
@@ -266,7 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed unnecessary borrows from `format!()` expressions
   - Overall memory usage and performance improvements from avoiding unnecessary allocations
 
-## [0.7.2] - 2025-01-31
+## [0.7.2] - Closed Beta
 
 ### Fixed
 - **Parser**: Fixed incorrect operator precedence for word operators (`or`, `and`, `not`, `xor`)
@@ -286,7 +286,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Functions now covered include: `chomp`, `chop`, `chr`, `ord`, `hex`, `oct`, `length`, `lc`, `uc`, `ucfirst`, `lcfirst`, `quotemeta`, `index`, `rindex`, `sprintf`, `say`, `read`, `sysread`, `write`, `syswrite`, `seek`, `tell`, `eof`, `stat`, `lstat`, `chmod`, `chown`, `link`, `symlink`, `readlink`, `rename`, `unlink`, `mkdir`, `rmdir`, `opendir`, `readdir`, `closedir`, `fork`, `wait`, `waitpid`, `kill`, `getpid`, `getppid`, `time`, `localtime`, `gmtime`, `sleep`, `alarm`, `abs`, `atan2`, `cos`, `sin`, `exp`, `log`, `sqrt`, `int`, `rand`, `srand`, `scalar`, `wantarray`, `caller`, `eval`, `do`, `tie`, `tied`, `untie`, `socket`, `bind`, `listen`, `accept`, `connect`, `shutdown`, `send`, `recv`, `pack`, `unpack`, `study`, `pos`, `reset`, `vec`, `prototype`, `lock`, and many more
   - Improves IDE experience with accurate parameter hints and documentation
 
-## [0.7.1] - 2025-01-30
+## [0.7.1] - Closed Beta
 
 ### Fixed
 - **Parser**: Fixed incorrect parsing of `bless {}` syntax which was being treated as hash element access instead of a function call with empty hash argument
@@ -298,7 +298,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added support for both empty blocks and blocks with expressions
   - Added 15 new test cases covering various builtin functions with empty arguments
 
-## [0.7.0] - TBD
+## [0.7.0] - Closed Alpha
 
 ### Next Release Planning
 - Debugger Adapter Protocol (DAP) support
@@ -307,7 +307,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom snippets system
 - Perl::Critic integration
 
-## [0.6.0] - 2025-01-29
+## [0.6.0] - Closed Alpha
 
 ### 🎉 Production-Ready LSP with Comprehensive Testing
 
@@ -359,7 +359,7 @@ This release marks a major milestone with comprehensive end-to-end testing, maki
 - Efficient AST traversal for feature extraction
 - Optimized inlay hint filtering
 
-## [0.5.0] - 2025-01-28
+## [0.5.0] - Internal Alpha
 
 ### 🚀 Major Release: Complete LSP Implementation with VSCode Extension
 
@@ -416,7 +416,7 @@ This release delivers a production-ready Language Server Protocol implementation
 - Improved error handling in LSP request processing
 - Fixed private method visibility in workspace symbols
 
-## [0.4.0] - 2025-01-25
+## [0.4.0] - Internal Alpha
 
 ### 🎉 v3 Parser Complete - 100% Edge Case Coverage
 
@@ -457,7 +457,7 @@ This release marks the completion of the v3 native parser (perl-lexer + perl-par
 - **Perl 5 coverage**: ~100%
 - **Dependencies**: Zero
 
-## [0.3.0] - 2025-01-23
+## [0.3.0] - Internal Alpha
 
 ### Added
 - Initial v3 parser implementation (perl-lexer + perl-parser)
@@ -471,7 +471,7 @@ This release marks the completion of the v3 native parser (perl-lexer + perl-par
 - Achieved 4-19x speedup over C implementation
 - Benchmarking infrastructure for all three parsers
 
-## [0.2.0] - 2025-01-22
+## [0.2.0] - Internal Alpha
 
 ### 🎉 Major Improvements: Edge Case Coverage Increased to 94.5%
 
@@ -507,7 +507,7 @@ The following edge cases still need implementation:
 - All new features have comprehensive test coverage
 - Performance characteristics maintained (~180 µs/KB)
 
-## [0.1.0] - 2025-01-21
+## [0.1.0] - Internal Alpha
 
 ### 🎉 Major Milestone: 99.995% Perl 5 Coverage
 
@@ -602,7 +602,7 @@ The following edge cases still need implementation:
 
 ---
 
-## [1.0.0] - 2024-01-XX - Legacy C Implementation
+## [Evaluation] - Legacy C Implementation
 
 ### 🎉 Initial Release
 - Initial tree-sitter Perl parser implementation
