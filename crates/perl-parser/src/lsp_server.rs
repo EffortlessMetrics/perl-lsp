@@ -911,6 +911,7 @@ impl LspServer {
     }
 
     /// Get the end position of a document
+    #[allow(dead_code)]
     fn get_document_end_position(&self, content: &str) -> Value {
         let lines: Vec<&str> = content.lines().collect();
         let last_line = lines.len().saturating_sub(1);

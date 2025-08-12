@@ -336,6 +336,19 @@ impl WorkspaceIndex {
         self.clear_file(uri.as_str())
     }
     
+    /// Index a file from a URI string (convenience method)
+    /// Accepts either a proper URI (file://...) or a file path
+    pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
+        // Try parsing as URI first
+        let url = url::Url::parse(uri)
+            .or_else(|_| {
+                // If not a valid URI, try as file path
+                url::Url::from_file_path(uri)
+                    .map_err(|_| format!("Invalid URI or file path: {}", uri))
+            })?;
+        self.index_file(url, text.to_string())
+    }
+    
     /// Find all references to a symbol
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();

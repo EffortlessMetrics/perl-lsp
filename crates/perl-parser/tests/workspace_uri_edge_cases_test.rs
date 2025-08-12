@@ -109,6 +109,7 @@ print "Result: $result\n";
     }
     
     #[test]
+    #[serial_test::serial]
     fn test_references_with_emoji_on_line() {
         use tempfile::tempdir;
         use std::fs;
@@ -187,6 +188,7 @@ sub use_emoji {
     }
     
     #[test]
+    #[serial_test::serial]
     fn test_completion_with_utf16_columns() {
         use tempfile::tempdir;
         use std::fs;
