@@ -32,7 +32,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol, LspWorkspaceSymbol};
+use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol, LspWorkspaceSymbol, uri_to_fs_path};
 
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
@@ -3637,10 +3637,12 @@ impl LspServer {
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
                                 if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
-                                    if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
-                                        if let Ok(url) = url::Url::parse(uri) {
-                                            let _ = workspace_index.index_file(url, content);
-                                            eprintln!("Indexed new file: {}", uri);
+                                    if let Some(path) = uri_to_fs_path(uri) {
+                                        if let Ok(content) = std::fs::read_to_string(&path) {
+                                            if let Ok(url) = url::Url::parse(uri) {
+                                                let _ = workspace_index.index_file(url, content);
+                                                eprintln!("Indexed new file: {}", uri);
+                                            }
                                         }
                                     }
                                 }
@@ -3650,12 +3652,14 @@ impl LspServer {
                             // Re-index the file
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
-                                if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
-                                    if let Ok(url) = url::Url::parse(uri) {
-                                        // Clear old index data
-                                        workspace_index.clear_file(&url);
-                                        // Re-index with new content
-                                        let _ = workspace_index.index_file(url, content.clone());
+                                if let Some(path) = uri_to_fs_path(uri) {
+                                    if let Ok(content) = std::fs::read_to_string(&path) {
+                                        if let Ok(url) = url::Url::parse(uri) {
+                                            // Clear old index data
+                                            workspace_index.clear_file(&url);
+                                            // Re-index with new content
+                                            let _ = workspace_index.index_file(url, content.clone());
+                                        }
                                     }
                                 }
                             }
@@ -3665,11 +3669,13 @@ impl LspServer {
                                 if let Some(doc) = documents.get_mut(uri) {
                                     // Note: content variable is only available inside the cfg block above
                                     // We'll need to re-read the file or restructure this
-                                    if let Ok(content) = std::fs::read_to_string(uri.trim_start_matches("file://")) {
-                                        doc.content = content;
-                                        doc._version += 1;
-                                        // Clear cached AST
-                                        doc.ast = None;
+                                    if let Some(path) = uri_to_fs_path(uri) {
+                                        if let Ok(content) = std::fs::read_to_string(&path) {
+                                            doc.content = content;
+                                            doc._version += 1;
+                                            // Clear cached AST
+                                            doc.ast = None;
+                                        }
                                     }
                                 }
                             }
@@ -3775,9 +3781,11 @@ impl LspServer {
                         if let Ok(url) = url::Url::parse(old_uri) {
                             workspace_index.remove_file(&url);
                         }
-                        if let Ok(content) = std::fs::read_to_string(new_uri.trim_start_matches("file://")) {
-                            if let Ok(url) = url::Url::parse(new_uri) {
-                                let _ = workspace_index.index_file(url, content.clone());
+                        if let Some(path) = uri_to_fs_path(new_uri) {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                if let Ok(url) = url::Url::parse(new_uri) {
+                                    let _ = workspace_index.index_file(url, content.clone());
+                                }
                             }
                         }
                     }
@@ -3942,7 +3950,13 @@ impl LspServer {
 
 /// Convert a file path to a Perl module name
 fn path_to_module_name(uri: &str) -> String {
-    let path = uri.trim_start_matches("file://");
+    let path = uri_to_fs_path(uri)
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| {
+            // Fallback to trim_start_matches for backward compatibility
+            uri.trim_start_matches("file://").to_string()
+        });
+    let path = path.as_str();
     let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
     
     // Find the lib directory and extract module path

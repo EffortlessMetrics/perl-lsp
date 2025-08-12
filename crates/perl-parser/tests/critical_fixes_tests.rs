@@ -1,4 +1,5 @@
 use perl_parser::workspace_index::{WorkspaceIndex, LspWorkspaceSymbol};
+use url::Url;
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -9,14 +10,17 @@ fn test_document_store_close_uses_normalized_uri() {
     // Index a file with a non-normalized URI (missing file://)
     let uri = "/home/user/test.pl";
     let text = "sub test_func { my $x = 42; }";
-    index.index_file(uri, text, 1).unwrap();
+    index.index_file(
+        Url::from_file_path(uri).unwrap(),
+        text.to_string()
+    ).unwrap();
     
     // The file should be indexed (accessible with both normalized and non-normalized)
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 1);
     
     // Remove the file with the original URI (should work due to normalization)
-    index.remove_file(uri);
+    index.remove_file(&Url::from_file_path(uri).unwrap());
     
     // The file should be completely removed
     let symbols = index.find_symbols("test_func");
@@ -24,12 +28,15 @@ fn test_document_store_close_uses_normalized_uri() {
     
     // Re-index with file:// prefix
     let normalized_uri = "file:///home/user/test.pl";
-    index.index_file(normalized_uri, text, 2).unwrap();
+    index.index_file(
+        Url::parse(normalized_uri).unwrap(),
+        text.to_string()
+    ).unwrap();
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 1);
     
     // Remove with non-normalized URI should still work
-    index.remove_file(uri);
+    index.remove_file(&Url::from_file_path(uri).unwrap());
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 0);
 }
@@ -41,7 +48,10 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
     // Index a file with a regular subroutine that has internal 'has_body' field
     let uri = "file:///test.pl";
     let text = "sub test_func { return 42; } my $x = 'test';";
-    index.index_file(uri, text, 1).unwrap();
+    index.index_file(
+        Url::parse(uri).unwrap(),
+        text.to_string()
+    ).unwrap();
     
     // Get symbols and convert to LSP DTOs
     let internal_symbols = index.find_symbols("test_func");
@@ -119,7 +129,10 @@ fn test_workspace_symbol_deduplication() {
     // Index a file with duplicate symbol definitions (shouldn't happen, but test dedup)
     let uri = "file:///test.pl";
     let text = "sub dup_func { } sub dup_func { }"; // Parser might produce duplicates
-    index.index_file(uri, text, 1).unwrap();
+    index.index_file(
+        Url::parse(uri).unwrap(),
+        text.to_string()
+    ).unwrap();
     
     // Get symbols - should be deduplicated
     let symbols = index.find_symbols("dup_func");
@@ -157,7 +170,12 @@ fn test_uri_normalization_consistency() {
         let text = format!("sub test_{} {{ }}", input_uri.len());
         
         // Index with various formats
-        index.index_file(input_uri, &text, 1).unwrap();
+        let url = if input_uri.starts_with("file://") || input_uri.starts_with("untitled:") {
+            Url::parse(input_uri).unwrap()
+        } else {
+            Url::from_file_path(input_uri).unwrap()
+        };
+        index.index_file(url, text.clone()).unwrap();
         
         // Should be able to find the symbol
         let func_name = format!("test_{}", input_uri.len());
@@ -165,7 +183,12 @@ fn test_uri_normalization_consistency() {
         assert!(!symbols.is_empty(), "Failed to find symbol indexed with URI: {}", input_uri);
         
         // Remove and verify it's gone
-        index.remove_file(input_uri);
+        let url = if input_uri.starts_with("file://") || input_uri.starts_with("untitled:") {
+            Url::parse(input_uri).unwrap()
+        } else {
+            Url::from_file_path(input_uri).unwrap()
+        };
+        index.remove_file(&url);
         let symbols = index.find_symbols(&func_name);
         assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
     }
@@ -180,7 +203,10 @@ fn test_utf16_position_encoding() {
     // Index a file with emoji (multi-byte UTF-8, different in UTF-16)
     let uri = "file:///emoji.pl";
     let text = "my $♥ = 'love'; sub test { }";
-    index.index_file(uri, text, 1).unwrap();
+    index.index_file(
+        Url::parse(uri).unwrap(),
+        text.to_string()
+    ).unwrap();
     
     // Find the subroutine
     let symbols = index.find_symbols("test");
