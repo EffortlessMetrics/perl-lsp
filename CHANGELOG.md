@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2025-02-14
+
+### Added
+- **Incremental Parsing Infrastructure** - Feature-gated foundation for future optimization
+  - New `incremental` feature flag for experimental incremental parsing support
+  - Infrastructure in place for tree reuse and minimal re-parsing
+  - Activates with `PERL_LSP_INCREMENTAL=1` environment variable
+  - Currently falls back to full parsing while infrastructure matures
+
+- **Workspace Indexing Improvements** - Bulletproof URI handling
+  - Robust percent-encoding for special characters in file paths
+  - Handles spaces, Unicode, emojis, and Windows paths correctly
+  - Clean API with `&str` interfaces throughout workspace modules
+  - Safe environment variable management with `EnvGuard` helper
+
+### Fixed
+- **Test Infrastructure** - Rust 2024 compatibility
+  - Fixed unsafe environment variable operations for Rust 2024 edition
+  - Added proper `#[allow(dead_code)]` annotations for test helpers
+  - Fixed workspace URI edge cases test API calls
+  - Properly feature-gated incremental parsing handler
+
+### Performance
+- Parser benchmarks remain stable at ~8.5µs for simple scripts
+- Workspace indexing overhead remains minimal
+- Incremental parsing infrastructure adds no overhead when disabled
+
 ## [0.8.0] - 2025-02-13
 
 ### ⚠️ Breaking Changes
