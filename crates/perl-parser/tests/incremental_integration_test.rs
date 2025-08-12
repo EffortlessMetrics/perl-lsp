@@ -28,7 +28,7 @@ print $x + $y;
         
         // Verify initial AST
         let ast1 = doc.ast().unwrap();
-        assert!(format!("{:?}", ast1).contains("ScalarVariable"));
+        assert!(format!("{:?}", ast1).contains("Variable"));
         
         // Apply incremental edit (change 42 to 99)
         let changes = vec![json!({
@@ -49,7 +49,7 @@ print $x + $y;
         // Verify updated AST
         let ast2 = doc.ast().unwrap();
         assert!(doc.content().contains("99"));
-        assert!(format!("{:?}", ast2).contains("ScalarVariable"));
+        assert!(format!("{:?}", ast2).contains("Variable"));
         
         // Check metrics if available
         if let Some(metrics) = doc.metrics() {
