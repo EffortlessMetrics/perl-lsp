@@ -1,5 +1,6 @@
 #[cfg(feature = "workspace")]
 #[test]
+#[serial_test::serial]
 fn test_goto_definition_across_files() {
     use tempfile::tempdir;
     use std::fs;
@@ -8,6 +9,8 @@ fn test_goto_definition_across_files() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
+    // Save original value
+    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
     unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
@@ -75,11 +78,13 @@ fn test_goto_definition_across_files() {
     }
 
     // Clean up
+    // Restore environment
     unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
 #[test]
+#[serial_test::serial]
 fn test_find_references_across_files() {
     use tempfile::tempdir;
     use std::fs;
@@ -88,6 +93,8 @@ fn test_find_references_across_files() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
+    // Save original value
+    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
     unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
@@ -176,11 +183,13 @@ fn test_find_references_across_files() {
     }
 
     // Clean up
+    // Restore environment
     unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
 #[test]
+#[serial_test::serial]
 fn test_workspace_symbol_completion() {
     use tempfile::tempdir;
     use std::fs;
@@ -189,6 +198,8 @@ fn test_workspace_symbol_completion() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
+    // Save original value
+    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
     unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
@@ -261,5 +272,6 @@ fn test_workspace_symbol_completion() {
     }
 
     // Clean up
+    // Restore environment
     unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
