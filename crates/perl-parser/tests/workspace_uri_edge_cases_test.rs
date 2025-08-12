@@ -1,3 +1,5 @@
+mod support;
+
 #[cfg(feature = "workspace")]
 #[cfg(test)]
 mod tests {
@@ -7,8 +9,11 @@ mod tests {
     use serde_json::json;
     use perl_parser::lsp_server::LspServer;
     use std::sync::Arc;
+    use serial_test::serial;
+    use crate::support::env_guard::EnvGuard;
     
     #[test]
+    #[serial]
     fn test_cross_file_with_spaces_in_directory() {
         use tempfile::tempdir;
         use std::fs;
@@ -46,7 +51,7 @@ print "Result: $result\n";
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server with workspace indexing
-        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
@@ -104,12 +109,10 @@ print "Result: $result\n";
         } else {
             panic!("Expected definition result");
         }
-        
-        std::env::remove_var("PERL_LSP_WORKSPACE");
     }
     
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_references_with_emoji_on_line() {
         use tempfile::tempdir;
         use std::fs;
@@ -138,7 +141,7 @@ sub use_emoji {
         fs::write(&emoji_file, emoji_content).unwrap();
         
         // Set up LSP server
-        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
@@ -183,12 +186,10 @@ sub use_emoji {
         } else {
             panic!("Expected references result");
         }
-        
-        std::env::remove_var("PERL_LSP_WORKSPACE");
     }
     
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_completion_with_utf16_columns() {
         use tempfile::tempdir;
         use std::fs;
@@ -218,7 +219,7 @@ Unicode::
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server
-        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
@@ -279,7 +280,5 @@ Unicode::
         } else {
             panic!("Expected completion result");
         }
-        
-        std::env::remove_var("PERL_LSP_WORKSPACE");
     }
 }
