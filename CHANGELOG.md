@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Test Infrastructure** - Rust 2024 Edition compatibility
-  - Fixed environment variable operations to use required `unsafe` blocks (Rust 2024 edition requirement)
+  - Added required `unsafe` blocks for `env::set_var`/`remove_var` (breaking change in Rust 2024 edition for thread safety)
   - Serialized environment variable usage in tests with `EnvGuard` helper
   - Added proper `#[allow(dead_code)]` annotations for test helpers
   - Fixed workspace URI edge cases test API calls
