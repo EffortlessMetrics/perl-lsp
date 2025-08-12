@@ -46,6 +46,7 @@ cli = []
 incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
+expose_lsp_test_api = []  # Expose test helpers for integration tests
 
 [dev-dependencies]
 criterion = "0.7.0"

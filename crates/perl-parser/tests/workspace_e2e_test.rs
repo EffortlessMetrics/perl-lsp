@@ -8,7 +8,7 @@ fn test_goto_definition_across_files() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
-    std::env::set_var("PERL_LSP_WORKSPACE", "1");
+    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -26,9 +26,9 @@ fn test_goto_definition_across_files() {
     let main_file = script_dir.join("main.pl");
     fs::write(&main_file, "use lib 'lib';\nuse Foo::Bar;\n\nmy $result = Foo::Bar::baz();\nprint $result;\n").unwrap();
 
-    // Create URIs
-    let bar_uri = format!("file://{}", bar_file.display());
-    let main_uri = format!("file://{}", main_file.display());
+    // Create URIs with proper encoding
+    let bar_uri = url::Url::from_file_path(&bar_file).unwrap().to_string();
+    let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
 
     // Create LSP server with test output
     use std::sync::{Arc, Mutex};
@@ -75,7 +75,7 @@ fn test_goto_definition_across_files() {
     }
 
     // Clean up
-    std::env::remove_var("PERL_LSP_WORKSPACE");
+    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
@@ -88,7 +88,7 @@ fn test_find_references_across_files() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
-    std::env::set_var("PERL_LSP_WORKSPACE", "1");
+    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -108,10 +108,10 @@ fn test_find_references_across_files() {
     let script2_file = root.join("script2.pl");
     fs::write(&script2_file, "use lib 'lib';\nuse Utils;\n\nmy $value = Utils::process_data(100);\nmy $doubled = Utils::process_data($value);\nprint $doubled;\n").unwrap();
 
-    // Create URIs
-    let utils_uri = format!("file://{}", utils_file.display());
-    let script1_uri = format!("file://{}", script1_file.display());
-    let script2_uri = format!("file://{}", script2_file.display());
+    // Create URIs with proper encoding
+    let utils_uri = url::Url::from_file_path(&utils_file).unwrap().to_string();
+    let script1_uri = url::Url::from_file_path(&script1_file).unwrap().to_string();
+    let script2_uri = url::Url::from_file_path(&script2_file).unwrap().to_string();
 
     // Create LSP server
     use std::sync::{Arc, Mutex};
@@ -176,7 +176,7 @@ fn test_find_references_across_files() {
     }
 
     // Clean up
-    std::env::remove_var("PERL_LSP_WORKSPACE");
+    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
@@ -189,7 +189,7 @@ fn test_workspace_symbol_completion() {
     use perl_parser::lsp_server::LspServer;
 
     // Enable workspace indexing
-    std::env::set_var("PERL_LSP_WORKSPACE", "1");
+    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -207,9 +207,9 @@ fn test_workspace_symbol_completion() {
     let main_file = root.join("main.pl");
     fs::write(&main_file, "use lib 'lib';\nuse Math::Advanced;\n\nmy $result = Math::Advanced::calc").unwrap();
 
-    // Create URIs
-    let advanced_uri = format!("file://{}", advanced_file.display());
-    let main_uri = format!("file://{}", main_file.display());
+    // Create URIs with proper encoding
+    let advanced_uri = url::Url::from_file_path(&advanced_file).unwrap().to_string();
+    let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
 
     // Create LSP server
     use std::sync::{Arc, Mutex};
@@ -261,5 +261,5 @@ fn test_workspace_symbol_completion() {
     }
 
     // Clean up
-    std::env::remove_var("PERL_LSP_WORKSPACE");
+    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }

@@ -46,13 +46,13 @@ print "Result: $result\n";
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server with workspace indexing
-        std::env::set_var("PERL_LSP_WORKSPACE", "1");
+        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
         // Convert paths to URIs (with proper percent-encoding for spaces)
-        let module_uri = format!("file://{}", module_file.display()).replace(' ', "%20");
-        let main_uri = format!("file://{}", main_file.display()).replace(' ', "%20");
+        let module_uri = url::Url::from_file_path(&module_file).unwrap().to_string();
+        let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
         
         // Open both files to index them
         srv.handle_request(
@@ -137,11 +137,11 @@ sub use_emoji {
         fs::write(&emoji_file, emoji_content).unwrap();
         
         // Set up LSP server
-        std::env::set_var("PERL_LSP_WORKSPACE", "1");
+        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
-        let emoji_uri = format!("file://{}", emoji_file.display());
+        let emoji_uri = url::Url::from_file_path(&emoji_file).unwrap().to_string();
         
         // Open file to index it
         srv.handle_request(
@@ -216,12 +216,12 @@ Unicode::
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server
-        std::env::set_var("PERL_LSP_WORKSPACE", "1");
+        unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
         let output = Arc::new(std::sync::Mutex::new(Vec::new()));
         let srv = LspServer::with_output(output.clone());
         
-        let unicode_uri = format!("file://{}", unicode_file.display());
-        let main_uri = format!("file://{}", main_file.display());
+        let unicode_uri = url::Url::from_file_path(&unicode_file).unwrap().to_string();
+        let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
         
         // Open both files
         srv.handle_request(

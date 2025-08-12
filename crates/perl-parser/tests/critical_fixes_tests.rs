@@ -20,7 +20,7 @@ fn test_document_store_close_uses_normalized_uri() {
     assert_eq!(symbols.len(), 1);
     
     // Remove the file with the original URI (should work due to normalization)
-    index.remove_file(&Url::from_file_path(uri).unwrap());
+    index.remove_file(uri);
     
     // The file should be completely removed
     let symbols = index.find_symbols("test_func");
@@ -36,7 +36,7 @@ fn test_document_store_close_uses_normalized_uri() {
     assert_eq!(symbols.len(), 1);
     
     // Remove with non-normalized URI should still work
-    index.remove_file(&Url::from_file_path(uri).unwrap());
+    index.remove_file(uri);
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 0);
 }
@@ -183,12 +183,7 @@ fn test_uri_normalization_consistency() {
         assert!(!symbols.is_empty(), "Failed to find symbol indexed with URI: {}", input_uri);
         
         // Remove and verify it's gone
-        let url = if input_uri.starts_with("file://") || input_uri.starts_with("untitled:") {
-            Url::parse(input_uri).unwrap()
-        } else {
-            Url::from_file_path(input_uri).unwrap()
-        };
-        index.remove_file(&url);
+        index.remove_file(input_uri);
         let symbols = index.find_symbols(&func_name);
         assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
     }

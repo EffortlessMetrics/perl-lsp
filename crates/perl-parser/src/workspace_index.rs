@@ -299,8 +299,8 @@ impl WorkspaceIndex {
     }
     
     /// Remove a file from the index
-    pub fn remove_file(&self, uri: &Url) {
-        let uri_str = uri.to_string();
+    pub fn remove_file(&self, uri: &str) {
+        let uri_str = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&uri_str);
         
         // Remove from document store
@@ -321,9 +321,19 @@ impl WorkspaceIndex {
         }
     }
     
+    /// Remove a file from the index (URL variant for compatibility)
+    pub fn remove_file_url(&self, uri: &Url) {
+        self.remove_file(uri.as_str())
+    }
+    
     /// Clear a file from the index (alias for remove_file)
-    pub fn clear_file(&self, uri: &Url) {
+    pub fn clear_file(&self, uri: &str) {
         self.remove_file(uri);
+    }
+    
+    /// Clear a file from the index (URL variant for compatibility)
+    pub fn clear_file_url(&self, uri: &Url) {
+        self.clear_file(uri.as_str())
     }
     
     /// Find all references to a symbol

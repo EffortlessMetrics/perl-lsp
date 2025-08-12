@@ -225,7 +225,7 @@ sub test_sub { }"#;
         assert!(!symbols.is_empty());
         
         // Clear the file
-        index.clear_file(&url::Url::parse(uri).unwrap());
+        index.clear_file(uri);
         
         // Verify symbols are gone
         let symbols_after = index.file_symbols(uri);
