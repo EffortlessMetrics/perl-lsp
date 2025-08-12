@@ -232,7 +232,7 @@ fn test_classify_with_context() {
 #[test]
 fn test_error_classifier_default() {
     // Test that Default trait is implemented correctly
-    let classifier1 = ErrorClassifier::default();
+    let classifier1 = ErrorClassifier;
     let classifier2 = ErrorClassifier::new();
 
     // Both should behave the same

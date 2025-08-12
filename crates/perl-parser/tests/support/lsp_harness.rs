@@ -119,7 +119,7 @@ impl LspHarness {
             "params": params
         });
 
-        let request_str = format!("{}\r\n", notification.to_string());
+        let request_str = format!("{}\r\n", notification);
         let content = format!(
             "Content-Length: {}\r\n\r\n{}",
             request_str.len(),

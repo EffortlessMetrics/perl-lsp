@@ -672,7 +672,7 @@ fn test_semantic_tokens_consistency() {
                     "params": {
                         "textDocument": {
                             "uri": uri,
-                            "version": id as i32 + 1
+                            "version": id + 1
                         },
                         "contentChanges": [{
                             "text": format!("package Test;\nuse strict;\nmy $var = {};\nsub func {{ return $var; }}", id * 10)

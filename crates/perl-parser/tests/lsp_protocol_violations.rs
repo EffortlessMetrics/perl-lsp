@@ -279,7 +279,7 @@ fn test_invalid_method_name_format() {
     initialize_lsp(&mut server);
 
     // Test various invalid method names
-    let invalid_methods = vec![
+    let invalid_methods = [
         "",
         " ",
         "123",

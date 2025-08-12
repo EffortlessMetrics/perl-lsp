@@ -622,9 +622,9 @@ fn test_diagnostic_explosion() {
     for i in 0..1000 {
         // Each line has an error
         content.push_str(&format!("my $var_{} = \n", i)); // Missing semicolon
-        content.push_str(&format!("print 'test' \n",)); // Missing semicolon
-        content.push_str(&format!("sub {{ }}\n",)); // Missing name
-        content.push_str(&format!("if () {{ }}\n",)); // Empty condition
+        content.push_str(&"print 'test' \n".to_string()); // Missing semicolon
+        content.push_str(&"sub { }\n".to_string()); // Missing name
+        content.push_str(&"if () { }\n".to_string()); // Empty condition
     }
 
     let uri = "file:///many_errors.pl";

@@ -1,6 +1,5 @@
 #![cfg(feature = "incremental")]
 
-use perl_parser::ast::Node;
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 
 #[test]

@@ -524,7 +524,7 @@ if ($processed > 100) {
     let actions = response["result"].as_array().unwrap();
 
     // Should have multiple refactoring options
-    assert!(actions.len() > 0);
+    assert!(!actions.is_empty());
     assert!(
         actions
             .iter()

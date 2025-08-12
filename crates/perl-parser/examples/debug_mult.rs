@@ -1,7 +1,6 @@
 //! Debug multiplication parsing
 
 use perl_lexer::PerlLexer;
-use perl_parser::Parser;
 
 fn main() {
     let code = "$result = ($a + $b) * $c;";

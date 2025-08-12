@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use perl_lexer::{PerlLexer, Token};
 
 fn collect_all_tokens(mut lexer: PerlLexer) -> Vec<Token> {

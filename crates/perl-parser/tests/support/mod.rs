@@ -441,15 +441,15 @@ pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&
 fn assert_range_valid(range: &Value, context: &str) {
     let range_obj = range
         .as_object()
-        .expect(&format!("{} must be object", context));
+        .unwrap_or_else(|| panic!("{} must be object", context));
 
     // Check start position
     let start = range_obj
         .get("start")
-        .expect(&format!("{} must have start", context));
+        .unwrap_or_else(|| panic!("{} must have start", context));
     let start_obj = start
         .as_object()
-        .expect(&format!("{} start must be object", context));
+        .unwrap_or_else(|| panic!("{} start must be object", context));
     assert!(
         start_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} start must have line number",
@@ -467,10 +467,10 @@ fn assert_range_valid(range: &Value, context: &str) {
     // Check end position
     let end = range_obj
         .get("end")
-        .expect(&format!("{} must have end", context));
+        .unwrap_or_else(|| panic!("{} must have end", context));
     let end_obj = end
         .as_object()
-        .expect(&format!("{} end must be object", context));
+        .unwrap_or_else(|| panic!("{} end must be object", context));
     assert!(
         end_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} end must have line number",
@@ -488,7 +488,7 @@ fn assert_range_valid(range: &Value, context: &str) {
 fn assert_location_valid(location: &Value, context: &str) {
     let loc_obj = location
         .as_object()
-        .expect(&format!("{} must be object", context));
+        .unwrap_or_else(|| panic!("{} must be object", context));
     assert!(loc_obj.contains_key("uri"), "{} must have uri", context);
     assert!(
         loc_obj.get("uri").and_then(|v| v.as_str()).is_some(),

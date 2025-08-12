@@ -190,10 +190,10 @@ sub TestPackage::test_method {
 
     // Code lenses may be empty if parsing failed or no test functions found
     // Just check that we got a valid array response
-    assert!(lenses_array.is_empty() || lenses_array.len() >= 1);
+    assert!(lenses_array.is_empty() || !lenses_array.is_empty());
 
     // Check shebang lens is first
-    if lenses_array.len() > 0 {
+    if !lenses_array.is_empty() {
         let first_lens = &lenses_array[0];
         if let Some(cmd) = first_lens.get("command") {
             if let Some(title) = cmd.get("title") {
@@ -428,7 +428,7 @@ package MyPkg;
         let test_lens = lenses.iter().find(|l| {
             l.command
                 .as_ref()
-                .map_or(false, |c| c.title.contains("Run Test"))
+                .is_some_and(|c| c.title.contains("Run Test"))
         });
         assert!(test_lens.is_some());
     }
@@ -586,7 +586,7 @@ print $var3;
     // Should only have tokens from lines 1-3, not the print statements
     // Line 1: $var2 declaration
     // Line 2: $var3 declaration
-    assert!(data.len() > 0);
+    assert!(!data.is_empty());
     assert!(data.len() < 30); // Should not include all tokens
 }
 
@@ -896,7 +896,7 @@ my $hash = { key => "value" };
     let hints_array = hints.as_array().unwrap();
 
     // Should have parameter hints and type hints
-    assert!(hints_array.len() > 0);
+    assert!(!hints_array.is_empty());
 
     // Check for parameter hints
     let param_hints: Vec<_> = hints_array
@@ -973,6 +973,6 @@ push(@array4, "value4");  # Line 4
     // Should only have hints for lines 2-3
     for hint in hints_array {
         let line = hint["position"]["line"].as_u64().unwrap();
-        assert!(line >= 2 && line <= 3);
+        assert!((2..=3).contains(&line));
     }
 }

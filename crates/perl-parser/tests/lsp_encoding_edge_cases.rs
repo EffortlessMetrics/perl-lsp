@@ -180,8 +180,8 @@ my $hebrew = 'שלום';
 my $arabic = 'مرحبا';
 
 # Invisible characters
-my $zero_width = 'a​b'; # Zero-width space
-my $soft_hyphen = 'soft­hyphen';
+my $zero_width = 'a\u{200B}b'; # Zero-width space
+my $soft_hyphen = 'soft\u{AD}hyphen';
 
 # Control characters
 my $tab = "	tab";

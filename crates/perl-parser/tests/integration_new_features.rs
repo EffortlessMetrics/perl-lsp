@@ -42,7 +42,9 @@ fn test_substitution_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", desc));
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -65,7 +67,9 @@ fn test_transliteration_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", desc));
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -90,7 +94,9 @@ fn test_qw_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", desc));
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -114,7 +120,9 @@ fn test_statement_modifiers_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", desc));
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -139,7 +147,7 @@ fn test_isa_operator_integration() {
         let mut parser = Parser::new(code);
         let ast = parser
             .parse()
-            .expect(&format!("Failed to parse ISA: {}", code));
+            .unwrap_or_else(|_| panic!("Failed to parse ISA: {}", code));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -160,7 +168,7 @@ fn test_file_test_operators_integration() {
         let mut parser = Parser::new(code);
         let ast = parser
             .parse()
-            .expect(&format!("Failed to parse file test: {}", code));
+            .unwrap_or_else(|_| panic!("Failed to parse file test: {}", code));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -184,7 +192,7 @@ fn test_smart_match_integration() {
         let mut parser = Parser::new(code);
         let ast = parser
             .parse()
-            .expect(&format!("Failed to parse smart match: {}", code));
+            .unwrap_or_else(|_| panic!("Failed to parse smart match: {}", code));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -209,7 +217,7 @@ fn test_special_blocks_integration() {
         let mut parser = Parser::new(code);
         let ast = parser
             .parse()
-            .expect(&format!("Failed to parse {} block", block_type));
+            .unwrap_or_else(|_| panic!("Failed to parse {} block", block_type));
         let sexp = ast.to_sexp();
 
         assert!(
@@ -232,7 +240,9 @@ fn test_attributes_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", desc));
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
         let sexp = ast.to_sexp();
 
         // Attributes should be present in the output

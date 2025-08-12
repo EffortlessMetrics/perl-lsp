@@ -161,16 +161,16 @@ fn test_permission_denied_directory() {
 
     let temp_dir = std::env::temp_dir();
     let restricted_dir = &temp_dir.join("restricted");
-    fs::create_dir(&restricted_dir).unwrap();
+    fs::create_dir(restricted_dir).unwrap();
 
     // Create file in directory
     let file_path = restricted_dir.join("file.pl");
     fs::write(&file_path, "print 'test';").unwrap();
 
     // Remove read permission from directory
-    let mut perms = fs::metadata(&restricted_dir).unwrap().permissions();
+    let mut perms = fs::metadata(restricted_dir).unwrap().permissions();
     perms.set_mode(0o000);
-    fs::set_permissions(&restricted_dir, perms.clone()).unwrap();
+    fs::set_permissions(restricted_dir, perms.clone()).unwrap();
 
     let uri = format!("file://{}", file_path.display());
 
@@ -190,7 +190,7 @@ fn test_permission_denied_directory() {
 
     // Restore permissions for cleanup
     perms.set_mode(0o755);
-    fs::set_permissions(&restricted_dir, perms).unwrap();
+    fs::set_permissions(restricted_dir, perms).unwrap();
 
     let response = read_response(&mut server);
     assert!(response.is_object());
@@ -206,8 +206,8 @@ fn test_symlink_loop() {
     let link2 = &temp_dir.join("link2.pl");
 
     // Create symlink loop
-    std::os::unix::fs::symlink(&link2, &link1).unwrap();
-    std::os::unix::fs::symlink(&link1, &link2).unwrap();
+    std::os::unix::fs::symlink(link2, link1).unwrap();
+    std::os::unix::fs::symlink(link1, link2).unwrap();
 
     let uri = format!("file://{}", link1.display());
 
@@ -255,11 +255,11 @@ fn test_broken_symlink() {
     let link = &temp_dir.join("link.pl");
 
     // Create file and symlink
-    fs::write(&target, "print 'target';").unwrap();
-    std::os::unix::fs::symlink(&target, &link).unwrap();
+    fs::write(target, "print 'target';").unwrap();
+    std::os::unix::fs::symlink(target, link).unwrap();
 
     // Delete target, leaving broken symlink
-    fs::remove_file(&target).unwrap();
+    fs::remove_file(target).unwrap();
 
     let uri = format!("file://{}", link.display());
 
@@ -394,7 +394,7 @@ fn test_special_filename_characters() {
         let file_path = &temp_dir.join(name);
 
         // Try to create file (may fail on some filesystems)
-        if fs::write(&file_path, "print 'special';").is_ok() {
+        if fs::write(file_path, "print 'special';").is_ok() {
             let uri = format!("file://{}", file_path.display());
 
             send_notification(
@@ -425,13 +425,13 @@ fn test_case_sensitive_filesystem() {
     let file_lower = &temp_dir.join("test.pl");
     let file_upper = &temp_dir.join("TEST.pl");
 
-    fs::write(&file_lower, "print 'lowercase';").unwrap();
+    fs::write(file_lower, "print 'lowercase';").unwrap();
 
     // Check if filesystem is case-sensitive
     let is_case_sensitive = !file_upper.exists();
 
     if is_case_sensitive {
-        fs::write(&file_upper, "print 'uppercase';").unwrap();
+        fs::write(file_upper, "print 'uppercase';").unwrap();
     }
 
     // Open with different case
@@ -494,7 +494,7 @@ fn test_file_deleted_while_open() {
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("delete_me.pl");
-    fs::write(&file_path, "print 'delete me';").unwrap();
+    fs::write(file_path, "print 'delete me';").unwrap();
 
     let uri = format!("file://{}", file_path.display());
 
@@ -516,7 +516,7 @@ fn test_file_deleted_while_open() {
     );
 
     // Delete file while it's open
-    fs::remove_file(&file_path).unwrap();
+    fs::remove_file(file_path).unwrap();
 
     // Try to perform operations on deleted file
     send_request(
@@ -556,7 +556,7 @@ fn test_file_modified_externally() {
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("external.pl");
-    fs::write(&file_path, "print 'original';").unwrap();
+    fs::write(file_path, "print 'original';").unwrap();
 
     let uri = format!("file://{}", file_path.display());
 
@@ -578,7 +578,7 @@ fn test_file_modified_externally() {
     );
 
     // Modify file externally
-    fs::write(&file_path, "print 'modified externally';").unwrap();
+    fs::write(file_path, "print 'modified externally';").unwrap();
 
     // Server state may be out of sync
     send_request(
@@ -680,7 +680,7 @@ fn test_hidden_files() {
 
     let temp_dir = std::env::temp_dir();
     let hidden_file = &temp_dir.join(".hidden.pl");
-    fs::write(&hidden_file, "print 'hidden';").unwrap();
+    fs::write(hidden_file, "print 'hidden';").unwrap();
 
     let uri = format!("file://{}", hidden_file.display());
 
@@ -758,9 +758,7 @@ fn test_fifo_pipe() {
     let fifo_path = &temp_dir.join("pipe.pl");
 
     // Create FIFO (named pipe)
-    let _ = std::process::Command::new("mkfifo")
-        .arg(&fifo_path)
-        .output();
+    let _ = std::process::Command::new("mkfifo").arg(fifo_path).output();
 
     if fifo_path.exists() {
         let uri = format!("file://{}", fifo_path.display());

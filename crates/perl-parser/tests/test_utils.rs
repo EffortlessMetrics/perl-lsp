@@ -14,6 +14,12 @@ pub struct TestServerBuilder {
     workspace_folders: Vec<String>,
 }
 
+impl Default for TestServerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestServerBuilder {
     pub fn new() -> Self {
         Self {
@@ -279,7 +285,7 @@ pub mod assertions {
     /// Assert that the response contains no errors
     pub fn assert_no_error(response: &Value) {
         assert!(
-            !response.get("error").is_some(),
+            response.get("error").is_none(),
             "Expected no error, got: {:?}",
             response.get("error")
         );
@@ -426,7 +432,7 @@ pub mod generators {
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
     let process = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "-p",
             "perl-parser",

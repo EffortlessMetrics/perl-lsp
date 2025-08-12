@@ -19,7 +19,7 @@ impl TestContext {
     fn new() -> Self {
         // Start LSP server
         let mut server = std::process::Command::new("cargo")
-            .args(&[
+            .args([
                 "run",
                 "-p",
                 "perl-parser",

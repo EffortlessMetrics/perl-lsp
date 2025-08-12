@@ -596,7 +596,7 @@ impl LspServer {
             let mut parent_map = ParentMap::default();
             if let Some(ref arc) = ast_arc {
                 crate::declaration::DeclarationProvider::build_parent_map(
-                    &**arc,
+                    arc,
                     &mut parent_map,
                     None,
                 );
@@ -696,14 +696,14 @@ impl LspServer {
                     let mut parent_map = ParentMap::default();
                     if let Some(ref arc) = ast_arc {
                         crate::declaration::DeclarationProvider::build_parent_map(
-                            &**arc,
+                            arc,
                             &mut parent_map,
                             None,
                         );
                     }
 
                     // Build line starts cache for O(log n) position conversion
-                    let line_starts = LineStartsCache::new(&text);
+                    let line_starts = LineStartsCache::new(text);
 
                     // Update document state
                     self.documents.lock().unwrap().insert(
@@ -990,7 +990,7 @@ impl LspServer {
 
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    let mut completions = provider.get_completions(&doc.content, offset);
+                    let completions = provider.get_completions(&doc.content, offset);
 
                     // Add workspace-wide completions (functions and modules from other files)
                     #[cfg(feature = "workspace")]
@@ -1892,7 +1892,7 @@ impl LspServer {
                 // Performance monitoring
                 let dt = t0.elapsed();
                 if doc.content.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
-                    eprintln!("[warn] slow {}: {:?} (uri={})", "declaration", dt, uri);
+                    eprintln!("[warn] slow declaration: {:?} (uri={})", dt, uri);
                 }
             }
         }
@@ -3186,7 +3186,7 @@ impl LspServer {
                         sym.range.start.line,
                         sym.range.start.character,
                         sym.name.clone(),
-                        sym.kind.clone(),
+                        sym.kind,
                     ))
                 })
                 .collect();
@@ -3201,7 +3201,7 @@ impl LspServer {
             // Now we're only serializing LSP-compliant fields
             let result = serde_json::to_value(&lsp_symbols).unwrap_or_else(|_| json!([]));
 
-            return Ok(Some(result));
+            Ok(Some(result))
         }
 
         #[cfg(not(feature = "workspace"))]

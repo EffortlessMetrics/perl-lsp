@@ -72,6 +72,12 @@ impl HierarchyIndex {
 /// Provider for type hierarchy (inheritance) information
 pub struct TypeHierarchyProvider;
 
+impl Default for TypeHierarchyProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeHierarchyProvider {
     pub fn new() -> Self {
         Self
@@ -260,11 +266,11 @@ impl TypeHierarchyProvider {
         // Check if it's a package or class declaration
         match &target_node.kind {
             NodeKind::Package { name, .. } => {
-                let item = self.create_type_item(name, &target_node, code, SymbolKind::Class);
+                let item = self.create_type_item(name, target_node, code, SymbolKind::Class);
                 Some(vec![item])
             }
             NodeKind::Class { name, .. } => {
-                let item = self.create_type_item(name, &target_node, code, SymbolKind::Class);
+                let item = self.create_type_item(name, target_node, code, SymbolKind::Class);
                 Some(vec![item])
             }
             NodeKind::Identifier { name } => {
@@ -274,8 +280,8 @@ impl TypeHierarchyProvider {
                         name: name.clone(),
                         kind: SymbolKind::Class,
                         uri: "file:///current".to_string(),
-                        range: self.node_to_range(&target_node, code),
-                        selection_range: self.node_to_range(&target_node, code),
+                        range: self.node_to_range(target_node, code),
+                        selection_range: self.node_to_range(target_node, code),
                         detail: Some("Perl Package".to_string()),
                         data: None,
                     };

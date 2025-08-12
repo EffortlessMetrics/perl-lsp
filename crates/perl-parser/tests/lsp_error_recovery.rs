@@ -70,7 +70,7 @@ fn test_recover_from_parse_errors() {
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
     let symbols = response["result"].as_array().unwrap();
-    assert!(symbols.len() > 0);
+    assert!(!symbols.is_empty());
 }
 
 #[test]
