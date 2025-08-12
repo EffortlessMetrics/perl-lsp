@@ -4,8 +4,8 @@
 //! that tracks definitions, references, and scopes for IDE features like
 //! go-to-definition, find-all-references, and semantic highlighting.
 
-use crate::ast::{Node, NodeKind};
 use crate::SourceLocation;
+use crate::ast::{Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
@@ -139,30 +139,33 @@ impl SymbolTable {
             next_scope_id: 1,
             current_package: "main".to_string(),
         };
-        
+
         // Create global scope
-        table.scopes.insert(0, Scope {
-            id: 0,
-            parent: None,
-            kind: ScopeKind::Global,
-            location: SourceLocation { start: 0, end: 0 },
-            symbols: HashSet::new(),
-        });
-        
+        table.scopes.insert(
+            0,
+            Scope {
+                id: 0,
+                parent: None,
+                kind: ScopeKind::Global,
+                location: SourceLocation { start: 0, end: 0 },
+                symbols: HashSet::new(),
+            },
+        );
+
         table
     }
-    
+
     /// Get the current scope ID
     fn current_scope(&self) -> ScopeId {
         *self.scope_stack.last().unwrap_or(&0)
     }
-    
+
     /// Push a new scope
     fn push_scope(&mut self, kind: ScopeKind, location: SourceLocation) -> ScopeId {
         let parent = self.current_scope();
         let scope_id = self.next_scope_id;
         self.next_scope_id += 1;
-        
+
         let scope = Scope {
             id: scope_id,
             parent: Some(parent),
@@ -170,35 +173,39 @@ impl SymbolTable {
             location,
             symbols: HashSet::new(),
         };
-        
+
         self.scopes.insert(scope_id, scope);
         self.scope_stack.push(scope_id);
         scope_id
     }
-    
+
     /// Pop the current scope
     fn pop_scope(&mut self) {
         self.scope_stack.pop();
     }
-    
+
     /// Add a symbol definition
     fn add_symbol(&mut self, symbol: Symbol) {
         let name = symbol.name.clone();
-        self.scopes.get_mut(&symbol.scope_id).unwrap().symbols.insert(name.clone());
+        self.scopes
+            .get_mut(&symbol.scope_id)
+            .unwrap()
+            .symbols
+            .insert(name.clone());
         self.symbols.entry(name).or_default().push(symbol);
     }
-    
+
     /// Add a symbol reference
     fn add_reference(&mut self, reference: SymbolReference) {
         let name = reference.name.clone();
         self.references.entry(name).or_default().push(reference);
     }
-    
+
     /// Find symbol definitions visible from a given scope
     pub fn find_symbol(&self, name: &str, from_scope: ScopeId, kind: SymbolKind) -> Vec<&Symbol> {
         let mut results = Vec::new();
         let mut current_scope_id = Some(from_scope);
-        
+
         // Walk up the scope chain
         while let Some(scope_id) = current_scope_id {
             if let Some(scope) = self.scopes.get(&scope_id) {
@@ -212,7 +219,7 @@ impl SymbolTable {
                         }
                     }
                 }
-                
+
                 // For 'our' variables, also check package scope
                 if scope.kind != ScopeKind::Package {
                     if let Some(symbols) = self.symbols.get(name) {
@@ -223,16 +230,16 @@ impl SymbolTable {
                         }
                     }
                 }
-                
+
                 current_scope_id = scope.parent;
             } else {
                 break;
             }
         }
-        
+
         results
     }
-    
+
     /// Get all references to a symbol
     pub fn find_references(&self, symbol: &Symbol) -> Vec<&SymbolReference> {
         self.references
@@ -260,13 +267,13 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
         }
     }
-    
+
     /// Extract symbols from an AST node
     pub fn extract(mut self, node: &Node) -> SymbolTable {
         self.visit_node(node);
         self.table
     }
-    
+
     /// Visit a node and extract symbols
     fn visit_node(&mut self, node: &Node) {
         match &node.kind {
@@ -275,15 +282,30 @@ impl SymbolExtractor {
                     self.visit_node(stmt);
                 }
             }
-            
-            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                self.handle_variable_declaration(declarator, variable, attributes, variable.location);
+
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes,
+                initializer,
+            } => {
+                self.handle_variable_declaration(
+                    declarator,
+                    variable,
+                    attributes,
+                    variable.location,
+                );
                 if let Some(init) = initializer {
                     self.visit_node(init);
                 }
             }
-            
-            NodeKind::VariableListDeclaration { declarator, variables, attributes, initializer } => {
+
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                attributes,
+                initializer,
+            } => {
                 for var in variables {
                     self.handle_variable_declaration(declarator, var, attributes, var.location);
                 }
@@ -291,7 +313,7 @@ impl SymbolExtractor {
                     self.visit_node(init);
                 }
             }
-            
+
             NodeKind::Variable { sigil, name } => {
                 let kind = match sigil.as_str() {
                     "$" => SymbolKind::ScalarVariable,
@@ -299,7 +321,7 @@ impl SymbolExtractor {
                     "%" => SymbolKind::HashVariable,
                     _ => return,
                 };
-                
+
                 let reference = SymbolReference {
                     name: name.clone(),
                     kind,
@@ -307,13 +329,21 @@ impl SymbolExtractor {
                     scope_id: self.table.current_scope(),
                     is_write: false, // Will be updated based on context
                 };
-                
+
                 self.table.add_reference(reference);
             }
-            
-            NodeKind::Subroutine { name, params: _, attributes, body } => {
-                let sub_name = name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
-                
+
+            NodeKind::Subroutine {
+                name,
+                params: _,
+                attributes,
+                body,
+            } => {
+                let sub_name = name
+                    .as_ref()
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| "<anon>".to_string());
+
                 if name.is_some() {
                     let symbol = Symbol {
                         name: sub_name.clone(),
@@ -325,24 +355,24 @@ impl SymbolExtractor {
                         documentation: None, // TODO: Extract from preceding comments
                         attributes: attributes.clone(),
                     };
-                    
+
                     self.table.add_symbol(symbol);
                 }
-                
+
                 // Create subroutine scope
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
-                
+
                 {
                     self.visit_node(body);
                 }
-                
+
                 self.table.pop_scope();
             }
-            
+
             NodeKind::Package { name, block } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
-                
+
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -353,9 +383,9 @@ impl SymbolExtractor {
                     documentation: None,
                     attributes: vec![],
                 };
-                
+
                 self.table.add_symbol(symbol);
-                
+
                 if let Some(block_node) = block {
                     // Package with block - create a new scope
                     self.table.push_scope(ScopeKind::Package, node.location);
@@ -366,7 +396,7 @@ impl SymbolExtractor {
                 // If no block, package declaration affects rest of file
                 // Don't change scope or restore package name
             }
-            
+
             NodeKind::Block { statements } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
                 for stmt in statements {
@@ -374,32 +404,48 @@ impl SymbolExtractor {
                 }
                 self.table.pop_scope();
             }
-            
-            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
+
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches: _,
+                else_branch,
+            } => {
                 self.visit_node(condition);
-                
-                self.table.push_scope(ScopeKind::Block, then_branch.location);
+
+                self.table
+                    .push_scope(ScopeKind::Block, then_branch.location);
                 self.visit_node(then_branch);
                 self.table.pop_scope();
-                
+
                 if let Some(else_node) = else_branch {
                     self.table.push_scope(ScopeKind::Block, else_node.location);
                     self.visit_node(else_node);
                     self.table.pop_scope();
                 }
             }
-            
-            NodeKind::While { condition, body, continue_block: _ } => {
+
+            NodeKind::While {
+                condition,
+                body,
+                continue_block: _,
+            } => {
                 self.visit_node(condition);
-                
+
                 self.table.push_scope(ScopeKind::Block, body.location);
                 self.visit_node(body);
                 self.table.pop_scope();
             }
-            
-            NodeKind::For { init, condition, update, body, .. } => {
+
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
-                
+
                 if let Some(init_node) = init {
                     self.visit_node(init_node);
                 }
@@ -410,21 +456,25 @@ impl SymbolExtractor {
                     self.visit_node(update_node);
                 }
                 self.visit_node(body);
-                
+
                 self.table.pop_scope();
             }
-            
-            NodeKind::Foreach { variable, list, body } => {
+
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+            } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
-                
+
                 // The loop variable is implicitly declared
                 self.handle_variable_declaration("my", variable, &[], variable.location);
                 self.visit_node(list);
                 self.visit_node(body);
-                
+
                 self.table.pop_scope();
             }
-            
+
             // Handle other node types by visiting children
             NodeKind::Assignment { lhs, rhs, .. } => {
                 // Mark LHS as write reference
@@ -432,16 +482,16 @@ impl SymbolExtractor {
                 self.visit_node(lhs);
                 self.visit_node(rhs);
             }
-            
+
             NodeKind::Binary { left, right, .. } => {
                 self.visit_node(left);
                 self.visit_node(right);
             }
-            
+
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            
+
             NodeKind::FunctionCall { name, args } => {
                 // Track function call as a reference
                 let reference = SymbolReference {
@@ -452,40 +502,47 @@ impl SymbolExtractor {
                     is_write: false,
                 };
                 self.table.add_reference(reference);
-                
+
                 for arg in args {
                     self.visit_node(arg);
                 }
             }
-            
-            NodeKind::MethodCall { object, method: _, args } => {
+
+            NodeKind::MethodCall {
+                object,
+                method: _,
+                args,
+            } => {
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
                 }
             }
-            
+
             // ArrayRef and HashRef are handled as Binary operations with [] or {}
-            
             NodeKind::ArrayLiteral { elements } => {
                 for elem in elements {
                     self.visit_node(elem);
                 }
             }
-            
+
             NodeKind::HashLiteral { pairs } => {
                 for (key, value) in pairs {
                     self.visit_node(key);
                     self.visit_node(value);
                 }
             }
-            
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 self.visit_node(condition);
                 self.visit_node(then_expr);
                 self.visit_node(else_expr);
             }
-            
+
             NodeKind::LabeledStatement { label, statement } => {
                 let symbol = Symbol {
                     name: label.clone(),
@@ -497,44 +554,53 @@ impl SymbolExtractor {
                     documentation: None,
                     attributes: vec![],
                 };
-                
+
                 self.table.add_symbol(symbol);
-                
+
                 {
                     self.visit_node(statement);
                 }
             }
-            
+
             // Handle interpolated strings specially to extract variable references
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated {
                     // Extract variable references from interpolated strings
                     self.extract_vars_from_string(value, node.location);
                 }
             }
-            
-            NodeKind::Use { module: _, args: _ } |
-            NodeKind::No { module: _, args: _ } => {
+
+            NodeKind::Use { module: _, args: _ } | NodeKind::No { module: _, args: _ } => {
                 // Use and No statements don't directly contain symbols we track
                 // (constants from use constant are handled differently)
             }
-            
+
             NodeKind::PhaseBlock { phase: _, block } => {
                 // BEGIN, END, CHECK, INIT blocks
                 self.visit_node(block);
             }
-            
-            NodeKind::StatementModifier { statement, modifier: _, condition } => {
+
+            NodeKind::StatementModifier {
+                statement,
+                modifier: _,
+                condition,
+            } => {
                 self.visit_node(statement);
                 self.visit_node(condition);
             }
-            
-            NodeKind::Do { block } |
-            NodeKind::Eval { block } => {
+
+            NodeKind::Do { block } | NodeKind::Eval { block } => {
                 self.visit_node(block);
             }
-            
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 self.visit_node(body);
                 for (_, catch_block) in catch_blocks {
                     self.visit_node(catch_block);
@@ -543,21 +609,21 @@ impl SymbolExtractor {
                     self.visit_node(finally);
                 }
             }
-            
+
             NodeKind::Given { expr, body } => {
                 self.visit_node(expr);
                 self.visit_node(body);
             }
-            
+
             NodeKind::When { condition, body } => {
                 self.visit_node(condition);
                 self.visit_node(body);
             }
-            
+
             NodeKind::Default { body } => {
                 self.visit_node(body);
             }
-            
+
             NodeKind::Class { name, body } => {
                 let symbol = Symbol {
                     name: name.clone(),
@@ -572,8 +638,12 @@ impl SymbolExtractor {
                 self.table.add_symbol(symbol);
                 self.visit_node(body);
             }
-            
-            NodeKind::Method { name, params: _, body } => {
+
+            NodeKind::Method {
+                name,
+                params: _,
+                body,
+            } => {
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
@@ -585,12 +655,12 @@ impl SymbolExtractor {
                     attributes: vec!["method".to_string()],
                 };
                 self.table.add_symbol(symbol);
-                
+
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
                 self.visit_node(body);
                 self.table.pop_scope();
             }
-            
+
             NodeKind::Format { name, body: _ } => {
                 let symbol = Symbol {
                     name: name.clone(),
@@ -604,49 +674,66 @@ impl SymbolExtractor {
                 };
                 self.table.add_symbol(symbol);
             }
-            
+
             NodeKind::Return { value } => {
                 if let Some(val) = value {
                     self.visit_node(val);
                 }
             }
-            
-            NodeKind::Match { expr, pattern: _, modifiers: _ } => {
+
+            NodeKind::Match {
+                expr,
+                pattern: _,
+                modifiers: _,
+            } => {
                 self.visit_node(expr);
             }
-            
-            NodeKind::IndirectCall { method: _, object, args } => {
+
+            NodeKind::IndirectCall {
+                method: _,
+                object,
+                args,
+            } => {
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
                 }
             }
-            
+
             // Leaf nodes - no children to visit
-            NodeKind::Number { .. } |
-            NodeKind::Heredoc { .. } |
-            NodeKind::Regex { .. } |
-            NodeKind::Substitution { .. } |
-            NodeKind::Transliteration { .. } |
-            NodeKind::Undef |
-            NodeKind::Diamond |
-            NodeKind::Ellipsis |
-            NodeKind::Glob { .. } |
-            NodeKind::Readline { .. } |
-            NodeKind::Identifier { .. } |
-            NodeKind::Error { .. } => {
+            NodeKind::Number { .. }
+            | NodeKind::Heredoc { .. }
+            | NodeKind::Regex { .. }
+            | NodeKind::Substitution { .. }
+            | NodeKind::Transliteration { .. }
+            | NodeKind::Undef
+            | NodeKind::Diamond
+            | NodeKind::Ellipsis
+            | NodeKind::Glob { .. }
+            | NodeKind::Readline { .. }
+            | NodeKind::Identifier { .. }
+            | NodeKind::Error { .. } => {
                 // No symbols to extract
             }
-            
+
             _ => {
                 // For any unhandled node types, log a warning
-                eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
+                eprintln!(
+                    "Warning: Unhandled node type in symbol extractor: {:?}",
+                    node.kind
+                );
             }
         }
     }
-    
+
     /// Handle variable declaration
-    fn handle_variable_declaration(&mut self, declarator: &str, variable: &Node, attributes: &[String], location: SourceLocation) {
+    fn handle_variable_declaration(
+        &mut self,
+        declarator: &str,
+        variable: &Node,
+        attributes: &[String],
+        location: SourceLocation,
+    ) {
         if let NodeKind::Variable { sigil, name } = &variable.kind {
             let kind = match sigil.as_str() {
                 "$" => SymbolKind::ScalarVariable,
@@ -654,7 +741,7 @@ impl SymbolExtractor {
                 "%" => SymbolKind::HashVariable,
                 _ => return,
             };
-            
+
             let symbol = Symbol {
                 name: name.clone(),
                 qualified_name: if declarator == "our" {
@@ -669,11 +756,11 @@ impl SymbolExtractor {
                 documentation: None, // TODO: Extract from preceding comments
                 attributes: attributes.to_vec(),
             };
-            
+
             self.table.add_symbol(symbol);
         }
     }
-    
+
     /// Mark a node as a write reference (used in assignments)
     fn mark_write_reference(&mut self, node: &Node) {
         // This is a simplified version - in practice we'd need to handle
@@ -683,35 +770,35 @@ impl SymbolExtractor {
             // This would require passing context down through visit_node
         }
     }
-    
+
     /// Extract variable references from an interpolated string
     fn extract_vars_from_string(&mut self, value: &str, string_location: SourceLocation) {
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
         let scalar_re = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})").unwrap();
-        
+
         // The value includes quotes, so strip them
         let content = if value.len() >= 2 {
-            &value[1..value.len()-1]
+            &value[1..value.len() - 1]
         } else {
             value
         };
-        
+
         for cap in scalar_re.captures_iter(content) {
             if let Some(m) = cap.get(0) {
                 let var_name = if m.as_str().starts_with("${") && m.as_str().ends_with("}") {
                     // Handle ${var} format
-                    &m.as_str()[2..m.as_str().len()-1]
+                    &m.as_str()[2..m.as_str().len() - 1]
                 } else {
                     // Handle $var format
                     &m.as_str()[1..]
                 };
-                
+
                 // Calculate the location within the original string
                 // This is approximate - in the actual string location
                 let start_offset = string_location.start + 1 + m.start(); // +1 for opening quote
                 let end_offset = start_offset + m.len();
-                
+
                 let reference = SymbolReference {
                     name: var_name.to_string(),
                     kind: SymbolKind::ScalarVariable,
@@ -722,7 +809,7 @@ impl SymbolExtractor {
                     scope_id: self.table.current_scope(),
                     is_write: false,
                 };
-                
+
                 self.table.add_reference(reference);
             }
         }
@@ -733,7 +820,7 @@ impl SymbolExtractor {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    
+
     #[test]
     fn test_symbol_extraction() {
         let code = r#"
@@ -747,24 +834,24 @@ sub bar {
     return $z;
 }
 "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
-        
+
         let extractor = SymbolExtractor::new();
         let table = extractor.extract(&ast);
-        
+
         // Check package symbol
         assert!(table.symbols.contains_key("Foo"));
         let foo_symbols = &table.symbols["Foo"];
         assert_eq!(foo_symbols.len(), 1);
         assert_eq!(foo_symbols[0].kind, SymbolKind::Package);
-        
+
         // Check variable symbols
         assert!(table.symbols.contains_key("x"));
         assert!(table.symbols.contains_key("y"));
         assert!(table.symbols.contains_key("z"));
-        
+
         // Check subroutine symbol
         assert!(table.symbols.contains_key("bar"));
         let bar_symbols = &table.symbols["bar"];

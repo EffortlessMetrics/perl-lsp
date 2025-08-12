@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use perl_lexer::{PerlLexer, Token};
 
 fn collect_all_tokens(mut lexer: PerlLexer) -> Vec<Token> {
@@ -7,7 +7,7 @@ fn collect_all_tokens(mut lexer: PerlLexer) -> Vec<Token> {
 
 fn bench_simple_tokens(c: &mut Criterion) {
     let input = "my $x = 42; print $x;";
-    
+
     c.bench_function("simple_tokens", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));
@@ -24,7 +24,7 @@ fn bench_slash_disambiguation(c: &mut Criterion) {
         }
         print 1/ /abc/;
     "#;
-    
+
     c.bench_function("slash_disambiguation", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));
@@ -40,7 +40,7 @@ fn bench_string_interpolation(c: &mut Criterion) {
         print "The answer is ${count + 1}\n";
         print "Array: @items\n";
     "#;
-    
+
     c.bench_function("string_interpolation", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));
@@ -61,7 +61,7 @@ fn bench_large_file(c: &mut Criterion) {
             input.push_str("}\n");
         }
     }
-    
+
     c.bench_function("large_file", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(&input));
@@ -79,7 +79,7 @@ fn bench_whitespace_heavy(c: &mut Criterion) {
     
     # More comments
     "#;
-    
+
     c.bench_function("whitespace_heavy", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));
@@ -90,7 +90,7 @@ fn bench_whitespace_heavy(c: &mut Criterion) {
 
 fn bench_operator_heavy(c: &mut Criterion) {
     let input = "$a += $b -= $c *= $d /= $e %= $f **= $g &&= $h ||= $i //= $j";
-    
+
     c.bench_function("operator_heavy", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));
@@ -101,7 +101,7 @@ fn bench_operator_heavy(c: &mut Criterion) {
 
 fn bench_number_parsing(c: &mut Criterion) {
     let input = "123 456.789 1_234_567 1.23e45 0xFF 0377 0b1010";
-    
+
     c.bench_function("number_parsing", |b| {
         b.iter(|| {
             let lexer = PerlLexer::new(black_box(input));

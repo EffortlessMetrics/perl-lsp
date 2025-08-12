@@ -1,13 +1,9 @@
 //! Debug compound assignment tokenization
-use perl_parser::{TokenStream, TokenKind};
+use perl_parser::{TokenKind, TokenStream};
 
 fn main() {
-    let tests = vec![
-        "$x += 5",
-        "$x .= 'str'",
-        "$x ||= 1",
-    ];
-    
+    let tests = vec!["$x += 5", "$x .= 'str'", "$x ||= 1"];
+
     for code in tests {
         println!("\nCode: {}", code);
         println!("Parser tokens:");

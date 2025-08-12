@@ -12,11 +12,11 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HeredocQuoteType {
-    Bare,       // <<EOF
-    Single,     // <<'EOF'
-    Double,     // <<"EOF" 
-    Backtick,   // <<`CMD`
-    Escaped,    // <<\EOF
+    Bare,     // <<EOF
+    Single,   // <<'EOF'
+    Double,   // <<"EOF"
+    Backtick, // <<`CMD`
+    Escaped,  // <<\EOF
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +75,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
     pub fn tokenize(&mut self) -> Vec<HeredocToken> {
         let mut tokens = Vec::new();
-        
+
         while !self.is_at_end() {
             // Check if we're collecting heredoc content
             if let Some(ref heredoc) = self.active_heredoc.clone() {
@@ -89,7 +89,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
             if self.current_char() == Some('\n') {
                 tokens.push(self.make_token(HeredocTokenKind::Newline, "\n"));
                 self.advance();
-                
+
                 // Activate the next pending heredoc if any
                 if let Some(heredoc) = self.pending_heredocs.pop_front() {
                     self.active_heredoc = Some(heredoc);
@@ -119,7 +119,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
         let start_pos = self.position;
         let start_line = self.line;
-        
+
         self.advance(); // First <
         self.advance(); // Second <
 
@@ -210,7 +210,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
             let _line_start = self.position;
             let mut line_content = String::new();
-            
+
             // Read the line
             while !self.is_at_end() && self.current_char() != Some('\n') {
                 line_content.push(self.current_char()?);
@@ -229,7 +229,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
                 if self.current_char() == Some('\n') {
                     self.advance();
                 }
-                
+
                 // Create content token
                 let token = HeredocToken {
                     kind: HeredocTokenKind::HeredocContent,
@@ -244,7 +244,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
             // Add line to content
             lines.push(line_content);
-            
+
             // Handle newline
             if self.current_char() == Some('\n') {
                 self.advance();
@@ -261,7 +261,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
             if !lines.is_empty() {
                 content.push_str(&lines.join("\n"));
             }
-            
+
             Some(HeredocToken {
                 kind: HeredocTokenKind::HeredocContent,
                 text: content,
@@ -334,7 +334,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
 pub fn process_with_enhanced_heredocs(input: &str) -> (String, Vec<HeredocDeclaration>) {
     let mut lexer = EnhancedHeredocLexer::new(input);
     let tokens = lexer.tokenize();
-    
+
     let mut output = String::new();
     let mut declarations = Vec::new();
     let mut content_map = HashMap::new();

@@ -1,7 +1,7 @@
 //! Tests for dynamic heredoc delimiter recovery
 
-use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 use tree_sitter_perl::heredoc_recovery::{HeredocRecovery, RecoveryConfig};
+use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 
 #[test]
 fn test_static_delimiter_recovery() {
@@ -12,10 +12,10 @@ my $text = <<$delimiter;
 This is heredoc content
 EOF
 "#;
-    
+
     let mut lexer = PerlLexer::new(code);
     let mut tokens = Vec::new();
-    
+
     // Collect all tokens
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::EOF) {
@@ -23,12 +23,13 @@ EOF
         }
         tokens.push(token);
     }
-    
+
     // Find the heredoc token
-    let heredoc_token = tokens.iter()
+    let heredoc_token = tokens
+        .iter()
         .find(|t| matches!(t.token_type, TokenType::HeredocStart))
         .expect("Should find heredoc token");
-    
+
     // Should have recovered to <<EOF
     assert_eq!(heredoc_token.text.as_ref(), "<<EOF");
 }
@@ -42,11 +43,11 @@ my $text = <<$end_delimiter;
 Content here
 END
 "#;
-    
+
     let mut lexer = PerlLexer::new(code);
     let mut found_heredoc = false;
     let mut found_error = false;
-    
+
     while let Some(token) = lexer.next_token() {
         match &token.token_type {
             TokenType::HeredocStart => {
@@ -65,7 +66,7 @@ END
             _ => {}
         }
     }
-    
+
     // Should either recover or generate error
     assert!(found_heredoc || found_error);
 }
@@ -78,10 +79,10 @@ my $text = <<$config->delimiter();
 Some content
 EOF
 "#;
-    
+
     let mut lexer = PerlLexer::new(code);
     let mut found_token = false;
-    
+
     while let Some(token) = lexer.next_token() {
         match &token.token_type {
             TokenType::HeredocStart | TokenType::Error(_) => {
@@ -93,7 +94,7 @@ EOF
             _ => {}
         }
     }
-    
+
     assert!(found_token);
 }
 
@@ -103,7 +104,7 @@ fn test_recovery_confidence_levels() {
         confidence_threshold: 0.7,
         ..Default::default()
     });
-    
+
     // Test various expressions and their recovery confidence
     let test_cases = vec![
         ("$eof", vec!["EOF"]),
@@ -111,16 +112,20 @@ fn test_recovery_confidence_levels() {
         ("$sql_delimiter", vec!["SQL"]),
         ("$unknown_var", vec!["EOF", "END", "EOT"]),
     ];
-    
+
     for (expr, expected_alternatives) in test_cases {
         let input = format!("<<{}", expr);
         let result = recovery.recover_dynamic_heredoc(&input, 0, &[]);
-        
+
         // Check alternatives are suggested
         for expected in expected_alternatives {
             assert!(
-                result.alternatives.iter().any(|a| a.as_ref() == expected) ||
-                result.delimiter.as_ref().map(|d| d.as_ref() == expected).unwrap_or(false),
+                result.alternatives.iter().any(|a| a.as_ref() == expected)
+                    || result
+                        .delimiter
+                        .as_ref()
+                        .map(|d| d.as_ref() == expected)
+                        .unwrap_or(false),
                 "Expected '{}' in alternatives for expression '{}'",
                 expected,
                 expr
@@ -133,10 +138,10 @@ fn test_recovery_confidence_levels() {
 fn test_error_token_generation() {
     // Test that proper error tokens are generated
     let code = "my $text = <<$unknown_runtime_var;";
-    
+
     let mut lexer = PerlLexer::new(code);
     let mut error_found = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if let TokenType::Error(msg) = &token.token_type {
             if msg.contains("heredoc") {
@@ -151,8 +156,11 @@ fn test_error_token_generation() {
             break;
         }
     }
-    
-    assert!(error_found, "Should generate error token for unresolvable delimiter");
+
+    assert!(
+        error_found,
+        "Should generate error token for unresolvable delimiter"
+    );
 }
 
 #[test]
@@ -168,10 +176,10 @@ my $text2 = <<$delim;
 Second heredoc
 END
 "#;
-    
+
     let mut lexer = PerlLexer::new(code);
     let mut heredoc_count = 0;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             heredoc_count += 1;
@@ -182,6 +190,6 @@ END
             break;
         }
     }
-    
+
     assert_eq!(heredoc_count, 2, "Should find both heredocs");
 }

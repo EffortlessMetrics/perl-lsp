@@ -3,8 +3,8 @@
 //! This module ensures all our advanced parsing features output
 //! tree-sitter compatible AST nodes, with diagnostics kept separate.
 
-use crate::partial_parse_ast::ExtendedAstNode;
 use crate::anti_pattern_detector::{AntiPattern, Diagnostic};
+use crate::partial_parse_ast::ExtendedAstNode;
 
 /// Tree-sitter compatible node types for edge cases
 #[derive(Debug, Clone)]
@@ -14,14 +14,14 @@ pub enum EdgeCaseNodeType {
     HeredocOpener,
     HeredocBody,
     HeredocDelimiter,
-    
+
     // Edge case nodes (tree-sitter compatible)
     DynamicHeredocDelimiter,
     PhaseDependendHeredoc,
     TiedHandleHeredoc,
     SourceFilteredHeredoc,
     EncodingAffectedHeredoc,
-    
+
     // Error recovery nodes
     HeredocError,
     UnresolvedDelimiter,
@@ -37,14 +37,14 @@ impl EdgeCaseNodeType {
             EdgeCaseNodeType::HeredocOpener => "heredoc_opener",
             EdgeCaseNodeType::HeredocBody => "heredoc_body",
             EdgeCaseNodeType::HeredocDelimiter => "heredoc_delimiter",
-            
+
             // Edge case nodes use clear naming
             EdgeCaseNodeType::DynamicHeredocDelimiter => "dynamic_heredoc_delimiter",
             EdgeCaseNodeType::PhaseDependendHeredoc => "phase_dependent_heredoc",
             EdgeCaseNodeType::TiedHandleHeredoc => "tied_handle_heredoc",
             EdgeCaseNodeType::SourceFilteredHeredoc => "source_filtered_heredoc",
             EdgeCaseNodeType::EncodingAffectedHeredoc => "encoding_affected_heredoc",
-            
+
             // Error nodes follow tree-sitter convention
             EdgeCaseNodeType::HeredocError => "ERROR",
             EdgeCaseNodeType::UnresolvedDelimiter => "MISSING",
@@ -123,22 +123,22 @@ impl TreeSitterAdapter {
     ) -> TreeSitterOutput {
         let mut ts_diagnostics = Vec::new();
         let mut metadata = TreeSitterMetadata::default();
-        
+
         // Convert AST
         let root = Self::convert_node(&extended_ast, source, &mut ts_diagnostics, &mut metadata);
-        
+
         // Convert diagnostics
         for diag in diagnostics {
             ts_diagnostics.push(Self::convert_diagnostic(diag));
         }
-        
+
         TreeSitterOutput {
             tree: TreeSitterAST { root },
             diagnostics: ts_diagnostics,
             metadata,
         }
     }
-    
+
     fn convert_node(
         node: &ExtendedAstNode,
         source: &str,
@@ -150,40 +150,49 @@ impl TreeSitterAdapter {
                 // Standard nodes remain unchanged
                 Self::convert_normal_node(ast_node, source)
             }
-            
-            ExtendedAstNode::WithWarning { node, diagnostics: node_diags } => {
+
+            ExtendedAstNode::WithWarning {
+                node,
+                diagnostics: node_diags,
+            } => {
                 // Convert node normally but add diagnostics
                 let ts_node = Self::convert_normal_node(node, source);
-                
+
                 // Add warnings to diagnostic list
                 for diag in node_diags {
                     diagnostics.push(Self::convert_diagnostic(diag.clone()));
                 }
-                
+
                 ts_node
             }
-            
-            ExtendedAstNode::PartialParse { pattern, parsed_fragments, .. } => {
+
+            ExtendedAstNode::PartialParse {
+                pattern,
+                parsed_fragments,
+                ..
+            } => {
                 // Create error node with recoverable children
                 metadata.edge_case_count += 1;
-                
+
                 let node_type = match pattern {
-                    AntiPattern::DynamicHeredocDelimiter { .. } => 
-                        EdgeCaseNodeType::DynamicHeredocDelimiter,
-                    AntiPattern::BeginTimeHeredoc { .. } => 
-                        EdgeCaseNodeType::PhaseDependendHeredoc,
-                    AntiPattern::SourceFilterHeredoc { .. } => 
-                        EdgeCaseNodeType::SourceFilteredHeredoc,
+                    AntiPattern::DynamicHeredocDelimiter { .. } => {
+                        EdgeCaseNodeType::DynamicHeredocDelimiter
+                    }
+                    AntiPattern::BeginTimeHeredoc { .. } => EdgeCaseNodeType::PhaseDependendHeredoc,
+                    AntiPattern::SourceFilterHeredoc { .. } => {
+                        EdgeCaseNodeType::SourceFilteredHeredoc
+                    }
                     _ => EdgeCaseNodeType::PartialHeredoc,
                 };
-                
+
                 TreeSitterNode {
                     node_type: node_type.as_str().to_string(),
                     start_byte: 0, // Would calculate from source
                     end_byte: 0,
                     start_point: (0, 0),
                     end_point: (0, 0),
-                    children: parsed_fragments.iter()
+                    children: parsed_fragments
+                        .iter()
                         .map(|f| Self::convert_node(f, source, diagnostics, metadata))
                         .collect(),
                     is_error: true,
@@ -192,11 +201,11 @@ impl TreeSitterAdapter {
                     text: None,
                 }
             }
-            
-            ExtendedAstNode::Unparseable {  raw_text, .. } => {
+
+            ExtendedAstNode::Unparseable { raw_text, .. } => {
                 // Create ERROR node
                 metadata.edge_case_count += 1;
-                
+
                 TreeSitterNode {
                     node_type: "ERROR".to_string(),
                     start_byte: 0,
@@ -210,27 +219,32 @@ impl TreeSitterAdapter {
                     text: Some(raw_text.to_string()),
                 }
             }
-            
-            ExtendedAstNode::RuntimeDependentParse { construct_type, static_parts, .. } => {
+
+            ExtendedAstNode::RuntimeDependentParse {
+                construct_type,
+                static_parts,
+                ..
+            } => {
                 // Create specialized node type
                 metadata.edge_case_count += 1;
-                
+
                 let node_type = if construct_type.contains("BEGIN") {
                     EdgeCaseNodeType::PhaseDependendHeredoc
                 } else {
                     EdgeCaseNodeType::PartialHeredoc
                 };
-                
+
                 TreeSitterNode {
                     node_type: node_type.as_str().to_string(),
                     start_byte: 0,
                     end_byte: 0,
                     start_point: (0, 0),
                     end_point: (0, 0),
-                    children: static_parts.iter()
+                    children: static_parts
+                        .iter()
                         .map(|p| Self::convert_node(p, source, diagnostics, metadata))
                         .collect(),
-                    is_error: false, // Not an error, just needs runtime
+                    is_error: false,  // Not an error, just needs runtime
                     is_missing: true, // Missing runtime information
                     field_name: None,
                     text: None,
@@ -238,8 +252,11 @@ impl TreeSitterAdapter {
             }
         }
     }
-    
-    fn convert_normal_node(ast_node: &crate::pure_rust_parser::AstNode, source: &str) -> TreeSitterNode {
+
+    fn convert_normal_node(
+        ast_node: &crate::pure_rust_parser::AstNode,
+        source: &str,
+    ) -> TreeSitterNode {
         // Convert our pure Rust AST nodes to tree-sitter format
         // This would map to the actual tree-sitter node types from grammar.js
         TreeSitterNode {
@@ -248,7 +265,8 @@ impl TreeSitterAdapter {
             end_byte: 0,
             start_point: (0, 0),
             end_point: (0, 0),
-            children: Self::get_children(ast_node).into_iter()
+            children: Self::get_children(ast_node)
+                .into_iter()
                 .map(|child| Self::convert_normal_node(child, source))
                 .collect(),
             is_error: false,
@@ -257,11 +275,11 @@ impl TreeSitterAdapter {
             text: Self::get_node_text(ast_node),
         }
     }
-    
+
     fn get_tree_sitter_type(node: &crate::pure_rust_parser::AstNode) -> String {
         // Map our AST nodes to tree-sitter node types
         use crate::pure_rust_parser::AstNode;
-        
+
         match node {
             AstNode::Program(_) => "source_file",
             AstNode::Statement(_) => "statement",
@@ -273,24 +291,27 @@ impl TreeSitterAdapter {
             AstNode::ArrayVariable(_) => "array_variable",
             AstNode::HashVariable(_) => "hash_variable",
             _ => "unknown",
-        }.to_string()
+        }
+        .to_string()
     }
-    
-    fn get_children(node: &crate::pure_rust_parser::AstNode) -> Vec<&crate::pure_rust_parser::AstNode> {
+
+    fn get_children(
+        node: &crate::pure_rust_parser::AstNode,
+    ) -> Vec<&crate::pure_rust_parser::AstNode> {
         // Extract children from composite nodes
         use crate::pure_rust_parser::AstNode;
-        
+
         match node {
             AstNode::Program(children) => children.iter().collect(),
             AstNode::List(children) => children.iter().collect(),
             _ => vec![],
         }
     }
-    
+
     fn get_node_text(node: &crate::pure_rust_parser::AstNode) -> Option<String> {
         // Get text content for leaf nodes
         use crate::pure_rust_parser::AstNode;
-        
+
         match node {
             AstNode::Identifier(s) => Some(s.to_string()),
             AstNode::Number(s) => Some(s.to_string()),
@@ -301,18 +322,18 @@ impl TreeSitterAdapter {
             _ => None,
         }
     }
-    
+
     fn convert_diagnostic(diag: Diagnostic) -> TreeSitterDiagnostic {
         let location = match &diag.pattern {
-            AntiPattern::FormatHeredoc { location, .. } |
-            AntiPattern::BeginTimeHeredoc { location, .. } |
-            AntiPattern::DynamicHeredocDelimiter { location, .. } |
-            AntiPattern::SourceFilterHeredoc { location, .. } |
-            AntiPattern::RegexCodeBlockHeredoc { location, .. } |
-            AntiPattern::EvalStringHeredoc { location, .. } |
-            AntiPattern::TiedHandleHeredoc { location, .. } => location,
+            AntiPattern::FormatHeredoc { location, .. }
+            | AntiPattern::BeginTimeHeredoc { location, .. }
+            | AntiPattern::DynamicHeredocDelimiter { location, .. }
+            | AntiPattern::SourceFilterHeredoc { location, .. }
+            | AntiPattern::RegexCodeBlockHeredoc { location, .. }
+            | AntiPattern::EvalStringHeredoc { location, .. }
+            | AntiPattern::TiedHandleHeredoc { location, .. } => location,
         };
-        
+
         TreeSitterDiagnostic {
             severity: match diag.severity {
                 crate::anti_pattern_detector::Severity::Error => DiagnosticSeverity::Error,
@@ -324,11 +345,14 @@ impl TreeSitterAdapter {
             end_byte: location.offset, // Would calculate actual end
             start_point: (location.line, location.column),
             end_point: (location.line, location.column),
-            code: Some(format!("PERL{:03}", Self::get_diagnostic_code(&diag.pattern))),
+            code: Some(format!(
+                "PERL{:03}",
+                Self::get_diagnostic_code(&diag.pattern)
+            )),
             source: Some("tree-sitter-perl".to_string()),
         }
     }
-    
+
     fn get_diagnostic_code(pattern: &AntiPattern) -> u32 {
         match pattern {
             AntiPattern::FormatHeredoc { .. } => 101,
@@ -346,7 +370,7 @@ impl TreeSitterAdapter {
 impl TreeSitterNode {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
-        
+
         let mut obj = json!({
             "type": self.node_type,
             "startPosition": {
@@ -360,25 +384,28 @@ impl TreeSitterNode {
             "startIndex": self.start_byte,
             "endIndex": self.end_byte,
         });
-        
+
         if self.is_error {
             obj["isError"] = json!(true);
         }
-        
+
         if self.is_missing {
             obj["isMissing"] = json!(true);
         }
-        
+
         if !self.children.is_empty() {
-            obj["children"] = json!(self.children.iter()
-                .map(|c| c.to_json())
-                .collect::<Vec<_>>());
+            obj["children"] = json!(
+                self.children
+                    .iter()
+                    .map(|c| c.to_json())
+                    .collect::<Vec<_>>()
+            );
         }
-        
+
         if let Some(ref text) = self.text {
             obj["text"] = json!(text);
         }
-        
+
         obj
     }
 }
@@ -389,20 +416,18 @@ mod tests {
     use crate::partial_parse_ast::ExtendedAstNode;
     use crate::pure_rust_parser::AstNode;
     use std::sync::Arc;
-    
+
     #[test]
     fn test_normal_node_conversion() {
-        let ast = ExtendedAstNode::Normal(
-            AstNode::Identifier(Arc::from("test"))
-        );
-        
+        let ast = ExtendedAstNode::Normal(AstNode::Identifier(Arc::from("test")));
+
         let output = TreeSitterAdapter::convert_to_tree_sitter(ast, vec![], "test");
-        
+
         assert_eq!(output.tree.root.node_type, "identifier");
         assert!(!output.tree.root.is_error);
         assert_eq!(output.diagnostics.len(), 0);
     }
-    
+
     #[test]
     fn test_error_node_conversion() {
         let ast = ExtendedAstNode::Unparseable {
@@ -419,9 +444,9 @@ mod tests {
             diagnostics: vec![],
             recovery_point: 0,
         };
-        
+
         let output = TreeSitterAdapter::convert_to_tree_sitter(ast, vec![], "<<$var");
-        
+
         assert_eq!(output.tree.root.node_type, "ERROR");
         assert!(output.tree.root.is_error);
         assert_eq!(output.metadata.edge_case_count, 1);

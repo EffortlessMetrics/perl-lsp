@@ -1,25 +1,25 @@
 //! Showcase of enhanced tree-sitter-perl features
 
+use std::io::Cursor;
 use tree_sitter_perl::{
     EnhancedFullParser,
     error_recovery::{ErrorRecoveryParser, RecoveryStrategy},
-    streaming_parser::{StreamingParser, StreamConfig, ParseEvent},
     sexp_formatter::SexpFormatter,
+    streaming_parser::{ParseEvent, StreamConfig, StreamingParser},
 };
-use std::io::Cursor;
 
 fn main() {
     println!("=== Tree-sitter-perl Enhanced Features Showcase ===\n");
 
     // 1. Enhanced Parser with Heredocs and Special Sections
     showcase_enhanced_parser();
-    
+
     // 2. Error Recovery
     showcase_error_recovery();
-    
+
     // 3. Streaming Parser
     showcase_streaming_parser();
-    
+
     // 4. S-expression Formatting
     showcase_sexp_formatting();
 }
@@ -27,7 +27,7 @@ fn main() {
 fn showcase_enhanced_parser() {
     println!("1. Enhanced Parser Demo");
     println!("-----------------------");
-    
+
     let complex_perl = r#"#!/usr/bin/perl
 use strict;
 use warnings;
@@ -103,7 +103,7 @@ Multiple lines supported
 fn showcase_error_recovery() {
     println!("2. Error Recovery Demo");
     println!("----------------------");
-    
+
     let malformed_perl = r#"
 # Missing closing quote
 my $str = "unclosed string
@@ -131,14 +131,18 @@ sub valid_function {
             RecoveryStrategy::SkipLine,
         ])
         .with_max_attempts(10);
-    
+
     match parser.parse(malformed_perl) {
         Ok(ast) => {
             println!("✓ Parsed with error recovery");
             println!("  - Recovered from {} errors", parser.errors().len());
             for (i, error) in parser.errors().iter().enumerate() {
-                println!("  - Error {}: Line {}, Strategy: {:?}", 
-                    i + 1, error.line, error.recovery_used);
+                println!(
+                    "  - Error {}: Line {}, Strategy: {:?}",
+                    i + 1,
+                    error.line,
+                    error.recovery_used
+                );
             }
             println!("  - Successfully parsed nodes: {}", count_nodes(&ast));
         }
@@ -150,7 +154,7 @@ sub valid_function {
 fn showcase_streaming_parser() {
     println!("3. Streaming Parser Demo");
     println!("------------------------");
-    
+
     let large_perl = r#"
 print "Starting file\n";
 
@@ -188,18 +192,20 @@ Line 3 of data
 
     let cursor = Cursor::new(large_perl);
     let mut parser = StreamingParser::new(cursor, StreamConfig::default());
-    
+
     println!("✓ Streaming parse events:");
     let events: Vec<_> = parser.parse().collect();
-    
+
     let mut statement_count = 0;
     let mut special_sections = 0;
     let mut errors = 0;
-    
+
     for event in &events {
         match event {
             ParseEvent::Node(_) => statement_count += 1,
-            ParseEvent::SpecialSection { kind, start_line, .. } => {
+            ParseEvent::SpecialSection {
+                kind, start_line, ..
+            } => {
                 special_sections += 1;
                 println!("  - Found {:?} section at line {}", kind, start_line);
             }
@@ -207,7 +213,7 @@ Line 3 of data
             _ => {}
         }
     }
-    
+
     println!("  - Total statements parsed: {}", statement_count);
     println!("  - Special sections found: {}", special_sections);
     println!("  - Parse errors: {}", errors);
@@ -217,7 +223,7 @@ Line 3 of data
 fn showcase_sexp_formatting() {
     println!("4. S-expression Formatter Demo");
     println!("------------------------------");
-    
+
     let simple_perl = r#"
 sub greet {
     my $name = shift;
@@ -231,7 +237,7 @@ greet("World");
     match parser.parse(simple_perl) {
         Ok(ast) => {
             let formatter = SexpFormatter::new(simple_perl);
-            
+
             println!("✓ Tree-sitter compatible S-expression:");
             let sexp = formatter.format(&ast);
             // Print first few lines of S-expression
@@ -241,7 +247,7 @@ greet("World");
             if sexp.lines().count() > 10 {
                 println!("  ...");
             }
-            
+
             // Compact mode
             let compact_formatter = SexpFormatter::new(simple_perl).compact(true);
             let compact = compact_formatter.format(&ast);
@@ -258,26 +264,27 @@ greet("World");
 
 fn count_nodes(ast: &tree_sitter_perl::AstNode) -> usize {
     use tree_sitter_perl::AstNode;
-    
+
     match ast {
         AstNode::Program(nodes) | AstNode::Block(nodes) => {
             1 + nodes.iter().map(count_nodes).sum::<usize>()
         }
         AstNode::Statement(inner) => 1 + count_nodes(inner),
-        AstNode::BinaryOp { left, right, .. } => {
-            1 + count_nodes(left) + count_nodes(right)
-        }
+        AstNode::BinaryOp { left, right, .. } => 1 + count_nodes(left) + count_nodes(right),
         AstNode::UnaryOp { operand, .. } => 1 + count_nodes(operand),
-        AstNode::Assignment { target, value, .. } => {
-            1 + count_nodes(target) + count_nodes(value)
-        }
+        AstNode::Assignment { target, value, .. } => 1 + count_nodes(target) + count_nodes(value),
         AstNode::FunctionCall { function, args } => {
             1 + count_nodes(function) + args.iter().map(count_nodes).sum::<usize>()
         }
         AstNode::MethodCall { object, args, .. } => {
             1 + count_nodes(object) + args.iter().map(count_nodes).sum::<usize>()
         }
-        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+        AstNode::IfStatement {
+            condition,
+            then_block,
+            elsif_clauses,
+            else_block,
+        } => {
             let mut count = 1 + count_nodes(condition) + count_nodes(then_block);
             for (cond, block) in elsif_clauses {
                 count += count_nodes(cond) + count_nodes(block);

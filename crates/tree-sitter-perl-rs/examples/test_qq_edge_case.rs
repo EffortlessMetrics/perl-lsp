@@ -1,8 +1,5 @@
 //! Test specific qq edge case
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     let code = r#"
@@ -10,10 +7,10 @@ my $interpolated = qq{Hello $name};
 my $literal = q{Hello $name};
 my $custom = qq|Path: $ENV{PATH}|;
 "#;
-    
+
     println!("Testing qq and q operators edge case:");
     println!("Code: {}", code);
-    
+
     let mut parser = EnhancedFullParser::new();
     match parser.parse(code) {
         Ok(ast) => {

@@ -7,13 +7,10 @@ fn test_var_decl_in_same_block() {
     let content = "my $x = 5;\n$x + 1;";
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Find the usage of $x at position 11 (the $x in "$x + 1")
     let links = provider.find_declaration(11, 0);
     assert!(links.is_some(), "Should find declaration");
@@ -34,24 +31,25 @@ my $x = 1;
 "#;
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Find the usage of $x inside the block
     let usage_pos = content.find("$x;").expect("Could not find usage");
     let links = provider.find_declaration(usage_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
-    
+
     // Should point to the inner declaration, not the outer one
-    let inner_decl_pos = content.rfind("my $x = 2").expect("Could not find inner decl");
-    assert!(links[0].target_selection_range.0 >= inner_decl_pos, 
-            "Should resolve to inner declaration");
+    let inner_decl_pos = content
+        .rfind("my $x = 2")
+        .expect("Could not find inner decl");
+    assert!(
+        links[0].target_selection_range.0 >= inner_decl_pos,
+        "Should resolve to inner declaration"
+    );
 }
 
 #[test]
@@ -66,20 +64,17 @@ foo();
 "#;
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Find the call to foo()
     let call_pos = content.find("foo()").expect("Could not find call");
     let links = provider.find_declaration(call_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
-    
+
     // Should point to the sub declaration
     let sub_pos = content.find("sub foo").expect("Could not find sub");
     assert_eq!(links[0].target_selection_range.0, sub_pos + 4); // Points to "foo" after "sub "
@@ -97,24 +92,23 @@ Foo::bar();
 "#;
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Find the call to Foo::bar()
     let call_pos = content.find("bar()").expect("Could not find call");
     let links = provider.find_declaration(call_pos, 0);
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
-    
+
     // Should point to sub bar in package Foo
     let sub_pos = content.find("sub bar").expect("Could not find sub");
-    assert!(links[0].target_selection_range.0 >= sub_pos, 
-            "Should resolve to sub bar");
+    assert!(
+        links[0].target_selection_range.0 >= sub_pos,
+        "Should resolve to sub bar"
+    );
 }
 
 #[test]
@@ -131,13 +125,10 @@ print QUX;
 "#;
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Test FOO (simple form)
     let foo_usage = content.rfind("FOO").expect("Could not find FOO usage");
     let links = provider.find_declaration(foo_usage, 0);
@@ -146,15 +137,17 @@ print QUX;
     assert_eq!(links.len(), 1);
     // Check that it points to the constant name, not the whole `use` statement
     let foo_decl = content.find("FOO =>").expect("Could not find FOO decl");
-    assert!(links[0].target_selection_range.0 >= foo_decl && 
-            links[0].target_selection_range.1 <= foo_decl + 3,
-            "Should point to FOO name specifically");
-    
+    assert!(
+        links[0].target_selection_range.0 >= foo_decl
+            && links[0].target_selection_range.1 <= foo_decl + 3,
+        "Should point to FOO name specifically"
+    );
+
     // Test BAR (hash form)
     let bar_usage = content.rfind("BAR").expect("Could not find BAR usage");
     let links = provider.find_declaration(bar_usage, 0);
     assert!(links.is_some(), "Should find BAR declaration");
-    
+
     // Test QUX (qw form)
     let qux_usage = content.rfind("QUX").expect("Could not find QUX usage");
     let links = provider.find_declaration(qux_usage, 0);
@@ -167,30 +160,29 @@ fn test_unicode_and_crlf() {
     let content = "my $π = 3.14;\r\n$π++;\r\nmy $🐍 = 'snake';\r\n$🐍;";
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Find usage of $π
     let pi_usage = content.rfind("$π++").expect("Could not find π usage");
     let links = provider.find_declaration(pi_usage, 0);
     assert!(links.is_some(), "Should find π declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
-    
+
     // Should point to the declaration
     let pi_decl = content.find("my $π").expect("Could not find π decl");
-    assert!(links[0].target_selection_range.0 >= pi_decl,
-            "Should find π declaration");
-    
+    assert!(
+        links[0].target_selection_range.0 >= pi_decl,
+        "Should find π declaration"
+    );
+
     // Find usage of $🐍 (snake emoji - surrogate pair)
     let snake_usage = content.rfind("$🐍;").expect("Could not find snake usage");
     let links = provider.find_declaration(snake_usage, 0);
     assert!(links.is_some(), "Should find snake declaration");
-    
+
     // Test UTF-16 position round-trip
     // The server needs to handle CRLF and surrogate pairs correctly
     // This is tested implicitly by the declaration provider working correctly
@@ -209,20 +201,19 @@ métód_π();
 "#;
     let mut parser = Parser::new(content);
     let ast = parser.parse().expect("Failed to parse");
-    
-    let provider = DeclarationProvider::new(
-        Arc::new(ast),
-        content.to_string(),
-        "test.pl".to_string()
-    );
-    
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
     // Test _priv (private sub with underscore)
     let priv_call = content.rfind("_priv()").expect("Could not find _priv call");
     let links = provider.find_declaration(priv_call, 0);
     assert!(links.is_some(), "Should find _priv declaration");
-    
+
     // Test métód_π (unicode method name)
-    let unicode_call = content.rfind("métód_π()").expect("Could not find unicode call");
+    let unicode_call = content
+        .rfind("métód_π()")
+        .expect("Could not find unicode call");
     let links = provider.find_declaration(unicode_call, 0);
     assert!(links.is_some(), "Should find unicode method declaration");
 }

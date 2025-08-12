@@ -9,7 +9,7 @@ fn main() {
         "no utf8;",
         "no feature;",
     ];
-    
+
     for code in tests {
         println!("\nTesting: {}", code);
         let mut parser = Parser::new(code);

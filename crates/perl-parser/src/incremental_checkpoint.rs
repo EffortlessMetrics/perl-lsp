@@ -3,13 +3,8 @@
 //! This module provides a fully incremental parser that uses lexer checkpoints
 //! to efficiently re-lex only the changed portions of the input.
 
-use crate::{
-    ast::Node,
-    edit::Edit as OriginalEdit,
-    error::ParseResult,
-    parser::Parser,
-};
-use perl_lexer::{LexerCheckpoint, CheckpointCache, Checkpointable, PerlLexer, Token};
+use crate::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
+use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer, Token};
 use std::collections::HashMap;
 
 /// Incremental parser with lexer checkpointing
@@ -41,7 +36,7 @@ impl TokenCache {
             valid_range: None,
         }
     }
-    
+
     /// Get cached tokens starting at position
     fn get_tokens_at(&self, position: usize) -> Option<&[Token]> {
         if let Some((start, end)) = self.valid_range {
@@ -51,7 +46,7 @@ impl TokenCache {
         }
         None
     }
-    
+
     /// Cache tokens for a range
     fn cache_tokens(&mut self, start: usize, end: usize, tokens: Vec<Token>) {
         // Group tokens by start position
@@ -59,7 +54,7 @@ impl TokenCache {
         let mut current_pos = start;
         let mut token_groups = Vec::new();
         let mut current_group = Vec::new();
-        
+
         for token in tokens {
             if token.start != current_pos && !current_group.is_empty() {
                 token_groups.push((current_pos, current_group));
@@ -68,19 +63,19 @@ impl TokenCache {
             }
             current_group.push(token);
         }
-        
+
         if !current_group.is_empty() {
             token_groups.push((current_pos, current_group));
         }
-        
+
         // Store in map
         for (pos, tokens) in token_groups {
             self.tokens.insert(pos, tokens);
         }
-        
+
         self.valid_range = Some((start, end));
     }
-    
+
     /// Invalidate cache for an edit
     fn invalidate_range(&mut self, start: usize, end: usize) {
         if let Some((valid_start, valid_end)) = self.valid_range {
@@ -145,39 +140,40 @@ impl CheckpointedIncrementalParser {
             stats: IncrementalStats::default(),
         }
     }
-    
+
     /// Parse the initial source
     pub fn parse(&mut self, source: String) -> ParseResult<Node> {
         self.source = source;
         self.stats.total_parses += 1;
-        
+
         // Full parse with checkpoint collection
         let tree = self.parse_with_checkpoints()?;
         self.tree = Some(tree.clone());
-        
+
         Ok(tree)
     }
-    
+
     /// Apply an edit and reparse incrementally
     pub fn apply_edit(&mut self, edit: &SimpleEdit) -> ParseResult<Node> {
         self.stats.total_parses += 1;
         self.stats.incremental_parses += 1;
-        
+
         // Apply edit to source
         let new_content = &edit.new_text;
         self.source.replace_range(edit.start..edit.end, new_content);
-        
+
         // Invalidate token cache for edited range
         self.token_cache.invalidate_range(edit.start, edit.end);
-        
+
         // Update checkpoint cache
         let old_len = edit.end - edit.start;
         let new_len = new_content.len();
-        self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
-        
+        self.checkpoint_cache
+            .apply_edit(edit.start, old_len, new_len);
+
         // Find nearest checkpoint before edit
         let checkpoint = self.checkpoint_cache.find_before(edit.start);
-        
+
         if let Some(checkpoint) = checkpoint {
             self.stats.checkpoints_used += 1;
             self.reparse_from_checkpoint(checkpoint.clone(), edit)
@@ -186,13 +182,13 @@ impl CheckpointedIncrementalParser {
             self.parse_with_checkpoints()
         }
     }
-    
+
     /// Parse with checkpoint collection
     fn parse_with_checkpoints(&mut self) -> ParseResult<Node> {
         let mut lexer = PerlLexer::new(&self.source);
         let mut tokens = Vec::new();
         let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
-        
+
         // Collect tokens and checkpoints
         let mut position = 0;
         while let Some(token) = lexer.next_token() {
@@ -202,38 +198,42 @@ impl CheckpointedIncrementalParser {
                 let checkpoint = lexer.checkpoint();
                 self.checkpoint_cache.add(checkpoint);
             }
-            
+
             position = token.end;
-            
+
             // Skip EOF
             if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                 break;
             }
-            
+
             tokens.push(token);
         }
-        
+
         // Cache all tokens
         if !tokens.is_empty() {
             let start = tokens.first().unwrap().start;
             let end = tokens.last().unwrap().end;
             self.token_cache.cache_tokens(start, end, tokens);
         }
-        
+
         // Parse using regular parser
         let mut parser = Parser::new(&self.source);
         parser.parse()
     }
-    
+
     /// Reparse from a checkpoint
-    fn reparse_from_checkpoint(&mut self, checkpoint: LexerCheckpoint, edit: &SimpleEdit) -> ParseResult<Node> {
+    fn reparse_from_checkpoint(
+        &mut self,
+        checkpoint: LexerCheckpoint,
+        edit: &SimpleEdit,
+    ) -> ParseResult<Node> {
         // Create lexer and restore checkpoint
         let mut lexer = PerlLexer::new(&self.source);
         lexer.restore(&checkpoint);
-        
+
         let mut tokens = Vec::new();
         let relex_start = checkpoint.position;
-        
+
         // Try to reuse tokens before the checkpoint
         if let Some(cached) = self.token_cache.get_tokens_at(0) {
             for token in cached {
@@ -245,7 +245,7 @@ impl CheckpointedIncrementalParser {
                 }
             }
         }
-        
+
         // Lex from checkpoint to end of affected region
         let relex_end = edit.start + edit.new_text.len() + 100; // Some lookahead
         loop {
@@ -256,7 +256,7 @@ impl CheckpointedIncrementalParser {
                 let token_end = token.end;
                 tokens.push(token);
                 self.stats.tokens_relexed += 1;
-                
+
                 // Check if we've lexed past the affected region
                 if token_end >= relex_end {
                     break;
@@ -265,7 +265,7 @@ impl CheckpointedIncrementalParser {
                 break;
             }
         }
-        
+
         // Try to reuse tokens after the affected region
         let after_edit_pos = edit.start + edit.new_text.len();
         if let Some(cached) = self.token_cache.get_tokens_at(after_edit_pos) {
@@ -290,27 +290,27 @@ impl CheckpointedIncrementalParser {
                 self.stats.tokens_relexed += 1;
             }
         }
-        
+
         // Cache the new tokens
         if !tokens.is_empty() {
             let start = tokens.first().unwrap().start;
             let end = tokens.last().unwrap().end;
             self.token_cache.cache_tokens(start, end, tokens);
         }
-        
+
         // Parse with the mixed token stream
         let mut parser = Parser::new(&self.source);
         let tree = parser.parse()?;
         self.tree = Some(tree.clone());
-        
+
         Ok(tree)
     }
-    
+
     /// Get parsing statistics
     pub fn stats(&self) -> &IncrementalStats {
         &self.stats
     }
-    
+
     /// Clear all caches
     pub fn clear_caches(&mut self) {
         self.checkpoint_cache.clear();
@@ -322,24 +322,24 @@ impl CheckpointedIncrementalParser {
 mod tests {
     use super::*;
     use crate::NodeKind;
-    
+
     #[test]
     fn test_checkpoint_incremental_parsing() {
         let mut parser = CheckpointedIncrementalParser::new();
-        
+
         // Initial parse
         let source = "my $x = 42;\nmy $y = 99;\n".to_string();
         let tree1 = parser.parse(source).unwrap();
-        
+
         // Edit: change 42 to 4242
         let edit = SimpleEdit {
             start: 8,
             end: 10,
             new_text: "4242".to_string(),
         };
-        
+
         let tree2 = parser.apply_edit(&edit).unwrap();
-        
+
         // Check stats
         let stats = parser.stats();
         assert_eq!(stats.total_parses, 2);
@@ -347,7 +347,7 @@ mod tests {
         // Token caching is not yet implemented in the initial parse
         // assert!(stats.tokens_reused > 0);
         assert!(stats.checkpoints_used > 0 || stats.tokens_relexed > 0);
-        
+
         // Trees should be structurally similar
         match (&tree1.kind, &tree2.kind) {
             (NodeKind::Program { statements: s1 }, NodeKind::Program { statements: s2 }) => {
@@ -356,15 +356,15 @@ mod tests {
             _ => panic!("Expected program nodes"),
         }
     }
-    
-    #[test] 
+
+    #[test]
     fn test_checkpoint_cache_update() {
         let mut parser = CheckpointedIncrementalParser::new();
-        
+
         // Parse a larger file
         let source = "my $x = 1;\n".repeat(20);
         parser.parse(source).unwrap();
-        
+
         // Multiple edits
         let edit1 = SimpleEdit {
             start: 8,
@@ -372,14 +372,14 @@ mod tests {
             new_text: "42".to_string(),
         };
         parser.apply_edit(&edit1).unwrap();
-        
+
         let edit2 = SimpleEdit {
             start: 20,
             end: 21,
             new_text: "99".to_string(),
         };
         parser.apply_edit(&edit2).unwrap();
-        
+
         let stats = parser.stats();
         assert_eq!(stats.incremental_parses, 2);
         // Token caching is not yet implemented in the initial parse

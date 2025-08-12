@@ -1,15 +1,13 @@
 //! Comprehensive end-to-end test suite for all LSP features
-//! 
+//!
 //! This test suite provides full coverage of all 25+ LSP features with real-world scenarios.
 //! Each test represents a complete user workflow, ensuring the LSP server delivers
 //! a professional IDE experience.
 
 mod support;
 
-use perl_parser::{
-    LspServer, JsonRpcRequest, Parser
-};
-use serde_json::{json, Value};
+use perl_parser::{JsonRpcRequest, LspServer, Parser};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 // ======================== TEST INFRASTRUCTURE ========================
@@ -32,32 +30,35 @@ impl TestContext {
     }
 
     fn initialize(&mut self) -> Value {
-        let result = self.send_request("initialize", Some(json!({
-            "processId": null,
-            "capabilities": {
-                "textDocument": {
-                    "completion": {
-                        "completionItem": {
-                            "snippetSupport": true,
-                            "documentationFormat": ["markdown", "plaintext"]
-                        }
-                    },
-                    "hover": {
-                        "contentFormat": ["markdown", "plaintext"]
-                    },
-                    "signatureHelp": {
-                        "signatureInformation": {
-                            "documentationFormat": ["markdown", "plaintext"],
-                            "parameterInformation": {
-                                "labelOffsetSupport": true
+        let result = self.send_request(
+            "initialize",
+            Some(json!({
+                "processId": null,
+                "capabilities": {
+                    "textDocument": {
+                        "completion": {
+                            "completionItem": {
+                                "snippetSupport": true,
+                                "documentationFormat": ["markdown", "plaintext"]
+                            }
+                        },
+                        "hover": {
+                            "contentFormat": ["markdown", "plaintext"]
+                        },
+                        "signatureHelp": {
+                            "signatureInformation": {
+                                "documentationFormat": ["markdown", "plaintext"],
+                                "parameterInformation": {
+                                    "labelOffsetSupport": true
+                                }
                             }
                         }
                     }
-                }
-            },
-            "rootUri": "file:///test"
-        })));
-        
+                },
+                "rootUri": "file:///test"
+            })),
+        );
+
         self.send_notification("initialized", None);
         result.unwrap_or_else(|| json!({"capabilities": {}}))
     }
@@ -70,8 +71,9 @@ impl TestContext {
             params,
         };
         self.version_counter += 1;
-        
-        self.server.handle_request(request)
+
+        self.server
+            .handle_request(request)
             .and_then(|response| response.result)
     }
 
@@ -87,37 +89,46 @@ impl TestContext {
 
     fn open_document(&mut self, uri: &str, text: &str) {
         self.documents.insert(uri.to_string(), text.to_string());
-        self.send_notification("textDocument/didOpen", Some(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": text
-            }
-        })));
+        self.send_notification(
+            "textDocument/didOpen",
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            })),
+        );
     }
 
     fn update_document(&mut self, uri: &str, text: &str) {
         self.documents.insert(uri.to_string(), text.to_string());
         self.version_counter += 1;
-        self.send_notification("textDocument/didChange", Some(json!({
-            "textDocument": {
-                "uri": uri,
-                "version": self.version_counter
-            },
-            "contentChanges": [{
-                "text": text
-            }]
-        })));
+        self.send_notification(
+            "textDocument/didChange",
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": self.version_counter
+                },
+                "contentChanges": [{
+                    "text": text
+                }]
+            })),
+        );
     }
 
     fn close_document(&mut self, uri: &str) {
         self.documents.remove(uri);
-        self.send_notification("textDocument/didClose", Some(json!({
-            "textDocument": {
-                "uri": uri
-            }
-        })));
+        self.send_notification(
+            "textDocument/didClose",
+            Some(json!({
+                "textDocument": {
+                    "uri": uri
+                }
+            })),
+        );
     }
 }
 
@@ -128,7 +139,7 @@ impl TestContext {
 fn test_e2e_initialization_and_capabilities() {
     let mut ctx = TestContext::new();
     let response = ctx.initialize();
-    
+
     // Verify all 25+ capabilities are advertised
     let capabilities = &response["capabilities"];
     assert!(capabilities["completionProvider"].is_object());
@@ -138,11 +149,16 @@ fn test_e2e_initialization_and_capabilities() {
     assert!(capabilities["referencesProvider"].is_boolean());
     assert!(capabilities["documentSymbolProvider"].is_boolean());
     assert!(capabilities["workspaceSymbolProvider"].is_boolean());
-    assert!(capabilities["codeActionProvider"].is_boolean() || capabilities["codeActionProvider"].is_object());
+    assert!(
+        capabilities["codeActionProvider"].is_boolean()
+            || capabilities["codeActionProvider"].is_object()
+    );
     assert!(capabilities["codeLensProvider"].is_object());
     assert!(capabilities["documentFormattingProvider"].is_boolean());
     assert!(capabilities["documentRangeFormattingProvider"].is_boolean());
-    assert!(capabilities["renameProvider"].is_boolean() || capabilities["renameProvider"].is_object());
+    assert!(
+        capabilities["renameProvider"].is_boolean() || capabilities["renameProvider"].is_object()
+    );
     assert!(capabilities["foldingRangeProvider"].is_boolean());
     assert!(capabilities["executeCommandProvider"].is_object());
     assert!(capabilities["semanticTokensProvider"].is_object());
@@ -155,7 +171,7 @@ fn test_e2e_initialization_and_capabilities() {
 fn test_e2e_real_time_diagnostics() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Test various error scenarios
     let test_cases = vec![
         (
@@ -167,7 +183,7 @@ sub test {
     }
 }
 "#,
-            true,  // Should have error
+            true, // Should have error
         ),
         (
             "undefined_variable",
@@ -179,7 +195,7 @@ sub test {
     return $y;  # Undefined
 }
 "#,
-            true,  // Should have warning
+            true, // Should have warning
         ),
         (
             "valid_code",
@@ -189,22 +205,22 @@ sub test {
     return $x + $y;
 }
 "#,
-            false,  // Should be clean
+            false, // Should be clean
         ),
     ];
-    
+
     for (name, code, should_have_diagnostic) in test_cases {
         let uri = format!("file:///test/{}.pl", name);
         ctx.open_document(&uri, code);
-        
-        // Wait briefly for diagnostics to be generated  
+
+        // Wait briefly for diagnostics to be generated
         std::thread::sleep(std::time::Duration::from_millis(50));
-        
+
         // For now, we just check if parsing succeeds/fails for syntax errors
         // The undefined variable case will be detected via scope analysis
         let mut parser = Parser::new(code);
         let result = parser.parse();
-        
+
         if should_have_diagnostic {
             // For syntax errors, the parser should fail
             // For undefined variables with 'use strict', the parser succeeds but diagnostics are generated
@@ -226,7 +242,7 @@ sub test {
 fn test_e2e_code_completion() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Scenario 1: Variable completion
     let code = r#"
 my $user_name = "Alice";
@@ -235,44 +251,50 @@ my @user_roles = ("admin");
 
 $us  # Complete here
 "#;
-    
+
     ctx.open_document("file:///test/completion.pl", code);
-    
-    let result = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/completion.pl"
-        },
-        "position": {
-            "line": 5,
-            "character": 3
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/completion.pl"
+            },
+            "position": {
+                "line": 5,
+                "character": 3
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let result_value = result.unwrap();
     let items = result_value["items"].as_array().unwrap();
     assert!(items.iter().any(|i| i["label"] == "$user_name"));
     assert!(items.iter().any(|i| i["label"] == "$user_email"));
-    
+
     // Scenario 2: Built-in function completion
     let code2 = r#"pri  # Complete 'print'"#;
     ctx.open_document("file:///test/builtin.pl", code2);
-    
-    let result = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtin.pl"
-        },
-        "position": {
-            "line": 0,
-            "character": 3
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/builtin.pl"
+            },
+            "position": {
+                "line": 0,
+                "character": 3
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let result_value = result.unwrap();
     let items = result_value["items"].as_array().unwrap();
     assert!(items.iter().any(|i| i["label"] == "print"));
-    
+
     // Scenario 3: Method completion
     let code3 = r#"
 package MyClass;
@@ -283,19 +305,22 @@ sub method2 { }
 my $obj = MyClass->new();
 $obj->  # Complete methods
 "#;
-    
+
     ctx.open_document("file:///test/method.pl", code3);
-    
-    let result = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/method.pl"
-        },
-        "position": {
-            "line": 7,
-            "character": 6
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/method.pl"
+            },
+            "position": {
+                "line": 7,
+                "character": 6
+            }
+        })),
+    );
+
     assert!(result.is_some());
 }
 
@@ -304,7 +329,7 @@ $obj->  # Complete methods
 fn test_e2e_go_to_definition() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub calculate_tax {
     my ($amount) = @_;
@@ -317,19 +342,22 @@ sub process_order {
     return $total + $tax;
 }
 "#;
-    
+
     ctx.open_document("file:///test/definition.pl", code);
-    
-    let result = ctx.send_request("textDocument/definition", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/definition.pl"
-        },
-        "position": {
-            "line": 8,
-            "character": 15  // On 'calculate_tax'
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/definition.pl"
+            },
+            "position": {
+                "line": 8,
+                "character": 15  // On 'calculate_tax'
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let locations = result.unwrap();
     assert!(locations.is_array());
@@ -341,7 +369,7 @@ sub process_order {
 fn test_e2e_find_all_references() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 my $config = load_config();
 
@@ -358,26 +386,29 @@ sub reload_config {
     $config = load_config();
 }
 "#;
-    
+
     ctx.open_document("file:///test/references.pl", code);
-    
-    let result = ctx.send_request("textDocument/references", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/references.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 4  // On '$config'
-        },
-        "context": {
-            "includeDeclaration": true
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/references",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/references.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 4  // On '$config'
+            },
+            "context": {
+                "includeDeclaration": true
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let result_value = result.unwrap();
     let refs = result_value.as_array().unwrap();
-    assert!(refs.len() >= 3);  // Declaration + 2 uses
+    assert!(refs.len() >= 3); // Declaration + 2 uses
 }
 
 /// Test 6: Hover Information
@@ -385,7 +416,7 @@ sub reload_config {
 fn test_e2e_hover_information() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 use strict;
 use warnings;
@@ -398,20 +429,23 @@ sub process_data {
 
 print process_data("test", { debug => 1 });
 "#;
-    
+
     ctx.open_document("file:///test/hover.pl", code);
-    
+
     // Hover over 'print' built-in
-    let result = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/hover.pl"
-        },
-        "position": {
-            "line": 10,
-            "character": 2  // On 'print'
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/hover.pl"
+            },
+            "position": {
+                "line": 10,
+                "character": 2  // On 'print'
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let hover = result.unwrap();
     assert!(hover["contents"].is_object() || hover["contents"].is_string());
@@ -422,7 +456,7 @@ print process_data("test", { debug => 1 });
 fn test_e2e_signature_help() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub connect_db {
     my ($host, $port, $username, $password) = @_;
@@ -431,19 +465,22 @@ sub connect_db {
 
 connect_db("localhost",   # Signature help here
 "#;
-    
+
     ctx.open_document("file:///test/signature.pl", code);
-    
-    let result = ctx.send_request("textDocument/signatureHelp", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/signature.pl"
-        },
-        "position": {
-            "line": 6,
-            "character": 23
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/signatureHelp",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/signature.pl"
+            },
+            "position": {
+                "line": 6,
+                "character": 23
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let sig_help = result.unwrap();
     assert!(sig_help["signatures"].is_array());
@@ -455,7 +492,7 @@ connect_db("localhost",   # Signature help here
 fn test_e2e_document_symbols() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 package MyApp;
 
@@ -479,19 +516,22 @@ sub helper_function {
 
 1;
 "#;
-    
+
     ctx.open_document("file:///test/symbols.pl", code);
-    
-    let result = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/symbols.pl"
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/symbols.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     assert!(symbols.is_array());
-    
+
     let syms = symbols.as_array().unwrap();
     assert!(syms.iter().any(|s| s["name"] == "MyApp"));
     assert!(syms.iter().any(|s| s["name"] == "new"));
@@ -503,29 +543,32 @@ sub helper_function {
 fn test_e2e_code_actions() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 my $x = 10;
 if ($x = 20) {  # Should be ==
     print "x is 20";
 }
 "#;
-    
+
     ctx.open_document("file:///test/codeaction.pl", code);
-    
-    let result = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/codeaction.pl"
-        },
-        "range": {
-            "start": { "line": 2, "character": 0 },
-            "end": { "line": 2, "character": 20 }
-        },
-        "context": {
-            "diagnostics": []
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/codeaction.pl"
+            },
+            "range": {
+                "start": { "line": 2, "character": 0 },
+                "end": { "line": 2, "character": 20 }
+            },
+            "context": {
+                "diagnostics": []
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let actions = result.unwrap();
     assert!(actions.is_array());
@@ -536,7 +579,7 @@ if ($x = 20) {  # Should be ==
 fn test_e2e_rename_symbol() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 my $old_name = 42;
 
@@ -547,34 +590,40 @@ sub process {
 
 print "Value: $old_name\n";
 "#;
-    
+
     ctx.open_document("file:///test/rename.pl", code);
-    
+
     // First, prepare rename to check if it's valid
-    let prepare_result = ctx.send_request("textDocument/prepareRename", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/rename.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 4  // On '$old_name'
-        }
-    })));
-    
+    let prepare_result = ctx.send_request(
+        "textDocument/prepareRename",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/rename.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 4  // On '$old_name'
+            }
+        })),
+    );
+
     assert!(prepare_result.is_some());
-    
+
     // Then perform the rename
-    let result = ctx.send_request("textDocument/rename", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/rename.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 4
-        },
-        "newName": "new_name"
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/rename",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/rename.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 4
+            },
+            "newName": "new_name"
+        })),
+    );
+
     assert!(result.is_some());
     let edit = result.unwrap();
     assert!(edit["changes"].is_object() || edit["documentChanges"].is_array());
@@ -585,7 +634,7 @@ print "Value: $old_name\n";
 fn test_e2e_semantic_tokens() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 package MyClass;
 use strict;
@@ -602,15 +651,18 @@ sub method {
 
 1;
 "#;
-    
+
     ctx.open_document("file:///test/semantic.pl", code);
-    
-    let result = ctx.send_request("textDocument/semanticTokens/full", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/semantic.pl"
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/semanticTokens/full",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/semantic.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let tokens = result.unwrap();
     assert!(tokens["data"].is_array());
@@ -622,7 +674,7 @@ sub method {
 fn test_e2e_code_lens() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub frequently_used {
     return 42;
@@ -637,15 +689,18 @@ frequently_used();
 frequently_used();
 rarely_used();
 "#;
-    
+
     ctx.open_document("file:///test/codelens.pl", code);
-    
-    let result = ctx.send_request("textDocument/codeLens", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/codelens.pl"
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/codeLens",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/codelens.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let lenses = result.unwrap();
     assert!(lenses.is_array());
@@ -656,7 +711,7 @@ rarely_used();
 fn test_e2e_folding_ranges() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub long_function {
     my ($x, $y) = @_;
@@ -678,15 +733,18 @@ sub another_function {
 
 1;
 "#;
-    
+
     ctx.open_document("file:///test/folding.pl", code);
-    
-    let result = ctx.send_request("textDocument/foldingRange", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/folding.pl"
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/foldingRange",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/folding.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let ranges = result.unwrap();
     assert!(ranges.is_array());
@@ -698,7 +756,7 @@ sub another_function {
 fn test_e2e_call_hierarchy() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub main {
     helper1();
@@ -719,30 +777,36 @@ sub common_function {
 
 main();
 "#;
-    
+
     ctx.open_document("file:///test/callhierarchy.pl", code);
-    
+
     // Prepare call hierarchy
-    let prepare = ctx.send_request("textDocument/prepareCallHierarchy", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/callhierarchy.pl"
-        },
-        "position": {
-            "line": 14,
-            "character": 5  // On 'common_function'
-        }
-    })));
-    
+    let prepare = ctx.send_request(
+        "textDocument/prepareCallHierarchy",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/callhierarchy.pl"
+            },
+            "position": {
+                "line": 14,
+                "character": 5  // On 'common_function'
+            }
+        })),
+    );
+
     assert!(prepare.is_some());
     let items = prepare.unwrap();
     assert!(items.is_array());
-    
+
     if let Some(item) = items.as_array().unwrap().first() {
         // Get incoming calls
-        let incoming = ctx.send_request("callHierarchy/incomingCalls", Some(json!({
-            "item": item
-        })));
-        
+        let incoming = ctx.send_request(
+            "callHierarchy/incomingCalls",
+            Some(json!({
+                "item": item
+            })),
+        );
+
         assert!(incoming.is_some());
         let calls = incoming.unwrap();
         assert!(calls.is_array());
@@ -754,7 +818,7 @@ main();
 fn test_e2e_inlay_hints() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 sub complex_function {
     my ($host, $port, $username, $password, $database) = @_;
@@ -763,19 +827,22 @@ sub complex_function {
 
 complex_function("localhost", 5432, "admin", "secret", "mydb");
 "#;
-    
+
     ctx.open_document("file:///test/inlayhints.pl", code);
-    
-    let result = ctx.send_request("textDocument/inlayHint", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/inlayhints.pl"
-        },
-        "range": {
-            "start": { "line": 0, "character": 0 },
-            "end": { "line": 10, "character": 0 }
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/inlayHint",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/inlayhints.pl"
+            },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 10, "character": 0 }
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let hints = result.unwrap();
     assert!(hints.is_array());
@@ -786,20 +853,29 @@ complex_function("localhost", 5432, "admin", "secret", "mydb");
 fn test_e2e_workspace_symbols() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Open multiple documents
-    ctx.open_document("file:///test/file1.pl", r#"
+    ctx.open_document(
+        "file:///test/file1.pl",
+        r#"
 sub function_in_file1 { }
-"#);
-    
-    ctx.open_document("file:///test/file2.pl", r#"
+"#,
+    );
+
+    ctx.open_document(
+        "file:///test/file2.pl",
+        r#"
 sub function_in_file2 { }
-"#);
-    
-    let result = ctx.send_request("workspace/symbol", Some(json!({
-        "query": "function"
-    })));
-    
+"#,
+    );
+
+    let result = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "function"
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     assert!(symbols.is_array());
@@ -810,26 +886,29 @@ sub function_in_file2 { }
 fn test_e2e_document_formatting() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let unformatted = r#"
 sub messy_code{
 my$x=10;
 if($x>5){print"big"}
 return$x*2}
 "#;
-    
+
     ctx.open_document("file:///test/format.pl", unformatted);
-    
-    let result = ctx.send_request("textDocument/formatting", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/format.pl"
-        },
-        "options": {
-            "tabSize": 4,
-            "insertSpaces": true
-        }
-    })));
-    
+
+    let result = ctx.send_request(
+        "textDocument/formatting",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/format.pl"
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        })),
+    );
+
     // Formatting returns an array of text edits or null
     if let Some(res) = result {
         if res.is_array() {
@@ -841,7 +920,10 @@ return$x*2}
                 assert!(!formatted.is_empty(), "Formatted code should not be empty");
             }
         } else {
-            assert!(res.is_null(), "Formatting should return array of text edits or null");
+            assert!(
+                res.is_null(),
+                "Formatting should return array of text edits or null"
+            );
         }
     }
 }
@@ -851,30 +933,36 @@ return$x*2}
 fn test_e2e_execute_command() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 my $x = 10;
 my $y = $x * 2;
 "#;
-    
+
     ctx.open_document("file:///test/command.pl", code);
-    
+
     // Example: Extract variable command
-    let result = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.extractVariable",
-        "arguments": [{
-            "uri": "file:///test/command.pl",
-            "range": {
-                "start": { "line": 2, "character": 8 },
-                "end": { "line": 2, "character": 14 }
-            }
-        }]
-    })));
-    
+    let result = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.extractVariable",
+            "arguments": [{
+                "uri": "file:///test/command.pl",
+                "range": {
+                    "start": { "line": 2, "character": 8 },
+                    "end": { "line": 2, "character": 14 }
+                }
+            }]
+        })),
+    );
+
     // Command execution might return edits or nothing
     // Execute command might return various result types or null
     if let Some(res) = result {
-        assert!(res.is_object() || res.is_array() || res.is_null(), "Command result should be object, array, or null");
+        assert!(
+            res.is_object() || res.is_array() || res.is_null(),
+            "Command result should be object, array, or null"
+        );
     }
 }
 
@@ -883,9 +971,11 @@ my $y = $x * 2;
 fn test_e2e_multi_file_support() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // File 1: Module definition
-    ctx.open_document("file:///test/MyModule.pm", r#"
+    ctx.open_document(
+        "file:///test/MyModule.pm",
+        r#"
 package MyModule;
 use strict;
 use warnings;
@@ -896,27 +986,34 @@ sub exported_function {
 }
 
 1;
-"#);
-    
+"#,
+    );
+
     // File 2: Uses the module
-    ctx.open_document("file:///test/main.pl", r#"
+    ctx.open_document(
+        "file:///test/main.pl",
+        r#"
 use MyModule;
 
 my $result = MyModule::exported_function(21);
 print "Result: $result\n";
-"#);
-    
+"#,
+    );
+
     // Test cross-file go to definition
-    let result = ctx.send_request("textDocument/definition", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/main.pl"
-        },
-        "position": {
-            "line": 3,
-            "character": 25  // On 'exported_function'
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/main.pl"
+            },
+            "position": {
+                "line": 3,
+                "character": 25  // On 'exported_function'
+            }
+        })),
+    );
+
     assert!(result.is_some());
 }
 
@@ -925,27 +1022,30 @@ print "Result: $result\n";
 fn test_e2e_incremental_parsing() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let initial_code = r#"
 sub test {
     my $x = 10;
     return $x;
 }
 "#;
-    
+
     ctx.open_document("file:///test/incremental.pl", initial_code);
-    
+
     // Make multiple small changes
     for i in 1..5 {
-        let updated_code = format!(r#"
+        let updated_code = format!(
+            r#"
 sub test {{
     my $x = {};
     return $x;
 }}
-"#, 10 + i);
-        
+"#,
+            10 + i
+        );
+
         ctx.update_document("file:///test/incremental.pl", &updated_code);
-        
+
         // Verify parsing still works
         let mut parser = Parser::new(&updated_code);
         assert!(parser.parse().is_ok());
@@ -957,7 +1057,7 @@ sub test {{
 fn test_e2e_error_recovery() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Code with multiple errors
     let code = r#"
 sub function1 {
@@ -977,20 +1077,23 @@ sub function2 {
     return $y;
 }
 "#;
-    
+
     ctx.open_document("file:///test/errors.pl", code);
-    
+
     // Should still provide symbols despite errors
-    let result = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/errors.pl"
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/errors.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     assert!(symbols.is_array());
-    
+
     // Should find both functions
     let syms = symbols.as_array().unwrap();
     assert!(syms.iter().any(|s| s["name"] == "function1"));
@@ -1002,11 +1105,12 @@ sub function2 {
 fn test_e2e_performance_large_files() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Generate a large file
     let mut large_code = String::new();
     for i in 0..100 {
-        large_code.push_str(&format!(r#"
+        large_code.push_str(&format!(
+            r#"
 sub function_{} {{
     my ($param1, $param2) = @_;
     my $result = $param1 + $param2;
@@ -1018,24 +1122,33 @@ sub function_{} {{
     }}
 }}
 
-"#, i));
+"#,
+            i
+        ));
     }
-    
+
     ctx.open_document("file:///test/large.pl", &large_code);
-    
+
     // Test that operations complete in reasonable time
     use std::time::Instant;
-    
+
     let start = Instant::now();
-    let result = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/large.pl"
-        }
-    })));
+    let result = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/large.pl"
+            }
+        })),
+    );
     let elapsed = start.elapsed();
-    
+
     assert!(result.is_some());
-    assert!(elapsed.as_millis() < 100, "Symbol request took too long: {:?}", elapsed);
+    assert!(
+        elapsed.as_millis() < 100,
+        "Symbol request took too long: {:?}",
+        elapsed
+    );
 }
 
 /// Test 23: Unicode Support
@@ -1043,7 +1156,7 @@ sub function_{} {{
 fn test_e2e_unicode_support() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 # Unicode identifiers
 my $café = "coffee";
@@ -1058,16 +1171,19 @@ sub 日本語 {
 my $message = "Hello 世界 🌍";
 print "Café: $café\n";
 "#;
-    
+
     ctx.open_document("file:///test/unicode.pl", code);
-    
+
     // Should handle unicode identifiers
-    let result = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/unicode.pl"
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/unicode.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     assert!(symbols.is_array());
@@ -1078,7 +1194,7 @@ print "Café: $café\n";
 fn test_e2e_modern_perl_features() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 use v5.36;
 use feature 'signatures';
@@ -1108,13 +1224,13 @@ class Point {
     }
 }
 "#;
-    
+
     ctx.open_document("file:///test/modern.pl", code);
-    
+
     // Should parse modern features
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    
+
     // Modern features might not all be supported yet
     assert!(result.is_ok() || result.is_err());
 }
@@ -1124,7 +1240,7 @@ class Point {
 fn test_e2e_refactoring_support() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = r#"
 # Extract variable refactoring
 sub calculate {
@@ -1148,26 +1264,32 @@ for (my $i = 0; $i < 10; $i++) {
     print "$i\n";
 }
 "#;
-    
+
     ctx.open_document("file:///test/refactor.pl", code);
-    
+
     // Request code actions for refactoring
-    let result = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/refactor.pl"
-        },
-        "range": {
-            "start": { "line": 4, "character": 11 },
-            "end": { "line": 4, "character": 20 }
-        },
-        "context": {
-            "only": ["refactor.extract"]
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/refactor.pl"
+            },
+            "range": {
+                "start": { "line": 4, "character": 11 },
+                "end": { "line": 4, "character": 20 }
+            },
+            "context": {
+                "only": ["refactor.extract"]
+            }
+        })),
+    );
+
     // Code actions might return an array of actions or null
     if let Some(res) = result {
-        assert!(res.is_array() || res.is_null(), "Code actions should return array of actions or null");
+        assert!(
+            res.is_array() || res.is_null(),
+            "Code actions should return array of actions or null"
+        );
     }
 }
 
@@ -1178,7 +1300,7 @@ for (my $i = 0; $i < 10; $i++) {
 fn test_user_story_developer_onboarding() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Step 1: Developer opens existing project file
     let legacy_code = r#"
 #!/usr/bin/perl
@@ -1211,30 +1333,38 @@ foreach my $user (@$users) {
     print "User: $user->{name}\n" if $DEBUG;
 }
 "#;
-    
+
     ctx.open_document("file:///project/legacy.pl", legacy_code);
-    
+
     // Step 2: Developer explores code structure
-    let symbols = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///project/legacy.pl"
-        }
-    }))).unwrap();
-    
+    let symbols = ctx
+        .send_request(
+            "textDocument/documentSymbol",
+            Some(json!({
+                "textDocument": {
+                    "uri": "file:///project/legacy.pl"
+                }
+            })),
+        )
+        .unwrap();
+
     assert!(symbols.is_array());
     assert!(symbols.as_array().unwrap().len() >= 2); // At least 2 functions
-    
+
     // Step 3: Developer hovers over DBI to understand what it is
-    let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///project/legacy.pl"
-        },
-        "position": {
-            "line": 6,
-            "character": 5  // On 'DBI'
-        }
-    })));
-    
+    let hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///project/legacy.pl"
+            },
+            "position": {
+                "line": 6,
+                "character": 5  // On 'DBI'
+            }
+        })),
+    );
+
     // Hover might not have docs for external modules
     if let Some(h) = hover {
         if !h.is_null() {
@@ -1242,21 +1372,24 @@ foreach my $user (@$users) {
             assert!(obj.contains_key("contents"), "Hover must have contents");
         }
     }
-    
+
     // Step 4: Developer finds all uses of $DEBUG
-    let refs = ctx.send_request("textDocument/references", Some(json!({
-        "textDocument": {
-            "uri": "file:///project/legacy.pl"
-        },
-        "position": {
-            "line": 8,
-            "character": 5  // On '$DEBUG'
-        },
-        "context": {
-            "includeDeclaration": true
-        }
-    })));
-    
+    let refs = ctx.send_request(
+        "textDocument/references",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///project/legacy.pl"
+            },
+            "position": {
+                "line": 8,
+                "character": 5  // On '$DEBUG'
+            },
+            "context": {
+                "includeDeclaration": true
+            }
+        })),
+    );
+
     // References might not be fully implemented yet or variable tracking might not be complete
     if let Some(refs) = refs {
         assert!(refs.is_array());
@@ -1274,7 +1407,7 @@ foreach my $user (@$users) {
 fn test_user_story_bug_fixing() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Step 1: Developer opens buggy code
     let buggy_code = r#"
 use strict;
@@ -1295,9 +1428,9 @@ my $discount_rate = 0.2;  # 20% discount
 my $final_price = calculate_discount($original_price, $discount_rate);
 print "Final price: $final_price\n";  # Shows wrong result
 "#;
-    
+
     ctx.open_document("file:///test/buggy.pl", buggy_code);
-    
+
     // Step 2: Developer gets completion while fixing
     let fixed_code = r#"
 use strict;
@@ -1318,9 +1451,9 @@ my $discount_rate = 0.2;  # 20% discount
 my $final_price = calculate_discount($original_price, $discount_rate);
 print "Final price: $final_price\n";  # Now shows $80
 "#;
-    
+
     ctx.update_document("file:///test/buggy.pl", fixed_code);
-    
+
     // Step 3: Verify no syntax errors
     let mut parser = Parser::new(fixed_code);
     assert!(parser.parse().is_ok());
@@ -1331,7 +1464,7 @@ print "Final price: $final_price\n";  # Now shows $80
 fn test_user_story_tdd_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Step 1: Developer writes test first
     let test_code = r#"
 use Test::More;
@@ -1347,9 +1480,9 @@ ok(EmailValidator::is_valid('user+tag@example.co.uk'), 'Email with + and subdoma
 
 done_testing();
 "#;
-    
+
     ctx.open_document("file:///test/t/email_validator.t", test_code);
-    
+
     // Step 2: Developer creates implementation with assistance
     let implementation = r#"
 package EmailValidator;
@@ -1365,23 +1498,29 @@ sub is_valid {
 
 1;
 "#;
-    
+
     ctx.open_document("file:///test/EmailValidator.pm", implementation);
-    
+
     // Step 3: Developer navigates between test and implementation
-    let definition = ctx.send_request("textDocument/definition", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/t/email_validator.t"
-        },
-        "position": {
-            "line": 6,
-            "character": 20  // On 'is_valid'
-        }
-    })));
-    
+    let definition = ctx.send_request(
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/t/email_validator.t"
+            },
+            "position": {
+                "line": 6,
+                "character": 20  // On 'is_valid'
+            }
+        })),
+    );
+
     // Definition might be empty for external modules
     if let Some(def) = definition {
-        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
+        assert!(
+            def.is_array() || def.is_object(),
+            "Definition should be array or LocationLink"
+        );
     }
 }
 
@@ -1390,7 +1529,7 @@ sub is_valid {
 fn test_user_story_legacy_refactoring() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Step 1: Open legacy procedural code
     let legacy = r#"
 #!/usr/bin/perl
@@ -1417,23 +1556,26 @@ foreach my $item (@result) {
 
 print "Sum: $sum\n";
 "#;
-    
+
     ctx.open_document("file:///test/legacy_proc.pl", legacy);
-    
+
     // Step 2: Get refactoring suggestions
-    let _actions = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/legacy_proc.pl"
-        },
-        "range": {
-            "start": { "line": 10, "character": 0 },
-            "end": { "line": 14, "character": 0 }
-        },
-        "context": {
-            "only": ["refactor"]
-        }
-    })));
-    
+    let _actions = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/legacy_proc.pl"
+            },
+            "range": {
+                "start": { "line": 10, "character": 0 },
+                "end": { "line": 14, "character": 0 }
+            },
+            "context": {
+                "only": ["refactor"]
+            }
+        })),
+    );
+
     // Step 3: Apply modern Perl idioms
     let modernized = r#"
 #!/usr/bin/perl
@@ -1452,9 +1594,9 @@ my $sum = sum(@result);
 
 say "Sum: $sum";
 "#;
-    
+
     ctx.update_document("file:///test/legacy_proc.pl", modernized);
-    
+
     // Verify modernized code parses correctly
     let mut parser = Parser::new(modernized);
     // Modern features might not all be supported
@@ -1468,20 +1610,25 @@ say "Sum: $sum";
 fn test_edge_case_malformed_requests() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Missing required fields
-    let result = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/missing.pl"
-        }
-        // Missing position
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/missing.pl"
+            }
+            // Missing position
+        })),
+    );
+
     // Should handle gracefully - either no result, an error, or null response
     // Some LSP implementations return null for missing parameters instead of errors
-    assert!(result.is_none() || 
-           result.as_ref().unwrap().get("error").is_some() || 
-           result.as_ref().unwrap().is_null());
+    assert!(
+        result.is_none()
+            || result.as_ref().unwrap().get("error").is_some()
+            || result.as_ref().unwrap().is_null()
+    );
 }
 
 /// Test concurrent document modifications
@@ -1489,23 +1636,26 @@ fn test_edge_case_malformed_requests() {
 fn test_edge_case_concurrent_modifications() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     let code = "my $x = 10;";
     ctx.open_document("file:///test/concurrent.pl", code);
-    
+
     // Rapid successive updates
     for i in 0..10 {
         let updated = format!("my $x = {};", i);
         ctx.update_document("file:///test/concurrent.pl", &updated);
     }
-    
+
     // Server should remain stable
-    let result = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/concurrent.pl"
-        }
-    })));
-    
+    let result = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/concurrent.pl"
+            }
+        })),
+    );
+
     assert!(result.is_some());
 }
 
@@ -1514,21 +1664,24 @@ fn test_edge_case_concurrent_modifications() {
 fn test_edge_case_memory_pressure() {
     let mut ctx = TestContext::new();
     ctx.initialize();
-    
+
     // Open many documents
     for i in 0..50 {
         let uri = format!("file:///test/file_{}.pl", i);
         let code = format!("sub function_{} {{ return {}; }}", i, i);
         ctx.open_document(&uri, &code);
     }
-    
+
     // Should still respond
-    let result = ctx.send_request("workspace/symbol", Some(json!({
-        "query": "function"
-    })));
-    
+    let result = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "function"
+        })),
+    );
+
     assert!(result.is_some());
-    
+
     // Clean up
     for i in 0..50 {
         let uri = format!("file:///test/file_{}.pl", i);

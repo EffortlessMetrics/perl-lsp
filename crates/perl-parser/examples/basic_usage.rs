@@ -25,15 +25,15 @@ print "\n";
 
     // Create a parser and parse the code
     let mut parser = Parser::new(code);
-    
+
     match parser.parse() {
         Ok(ast) => {
             println!("✅ Parse successful!\n");
-            
+
             // Output the S-expression representation
             println!("S-Expression:");
             println!("{}\n", ast.to_sexp());
-            
+
             // Count different node types
             let stats = analyze_ast(&ast);
             println!("AST Statistics:");
@@ -42,7 +42,7 @@ print "\n";
             println!("  Function calls: {}", stats.function_calls);
             println!("  Subroutines: {}", stats.subroutines);
             println!("  Loops: {}", stats.loops);
-            
+
             // Walk the AST and print variable declarations
             println!("\nVariable Declarations:");
             walk_variables(&ast, 0);
@@ -70,9 +70,9 @@ fn analyze_ast(node: &perl_parser::Node) -> AstStats {
 
 fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
     use perl_parser::NodeKind;
-    
+
     stats.total_nodes += 1;
-    
+
     match &node.kind {
         NodeKind::Variable { .. } => stats.variables += 1,
         NodeKind::FunctionCall { args, .. } => {
@@ -85,7 +85,14 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             stats.subroutines += 1;
             count_nodes(body, stats);
         }
-        NodeKind::For { body, init, condition, update, continue_block, .. } => {
+        NodeKind::For {
+            body,
+            init,
+            condition,
+            update,
+            continue_block,
+            ..
+        } => {
             stats.loops += 1;
             if let Some(i) = init {
                 count_nodes(i, stats);
@@ -105,7 +112,7 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             stats.loops += 1;
             count_nodes(body, stats);
         }
-        
+
         // Recurse into child nodes
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
             for stmt in statements {
@@ -116,7 +123,12 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             count_nodes(left, stats);
             count_nodes(right, stats);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             count_nodes(condition, stats);
             count_nodes(then_branch, stats);
             for (cond, branch) in elsif_branches {
@@ -131,7 +143,11 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             count_nodes(lhs, stats);
             count_nodes(rhs, stats);
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             count_nodes(variable, stats);
             if let Some(init) = initializer {
                 count_nodes(init, stats);
@@ -143,11 +159,16 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
 
 fn walk_variables(node: &perl_parser::Node, depth: usize) {
     use perl_parser::NodeKind;
-    
+
     let indent = "  ".repeat(depth);
-    
+
     match &node.kind {
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
             print!("{}{}  ", indent, declarator);
             if let NodeKind::Variable { sigil, name } = &variable.kind {
                 print!("{}{}", sigil, name);
@@ -158,7 +179,7 @@ fn walk_variables(node: &perl_parser::Node, depth: usize) {
                 println!();
             }
         }
-        
+
         // Recurse into compound nodes
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
             for stmt in statements {
@@ -168,7 +189,12 @@ fn walk_variables(node: &perl_parser::Node, depth: usize) {
         NodeKind::Subroutine { body, .. } => {
             walk_variables(body, depth + 1);
         }
-        NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+        NodeKind::If {
+            then_branch,
+            elsif_branches,
+            else_branch,
+            ..
+        } => {
             walk_variables(then_branch, depth);
             for (_, branch) in elsif_branches {
                 walk_variables(branch, depth);
@@ -186,9 +212,12 @@ fn walk_variables(node: &perl_parser::Node, depth: usize) {
 
 fn print_value(node: &perl_parser::Node) {
     use perl_parser::NodeKind;
-    
+
     match &node.kind {
-        NodeKind::String { value, interpolated: _ } => print!("{:?}", value),
+        NodeKind::String {
+            value,
+            interpolated: _,
+        } => print!("{:?}", value),
         NodeKind::Number { value } => print!("{}", value),
         NodeKind::Variable { sigil, name } => print!("{}{}", sigil, name),
         _ => print!("<expression>"),

@@ -5,8 +5,8 @@
 
 use crate::{
     ast::{Node, NodeKind},
-    incremental_edit::{IncrementalEdit, IncrementalEditSet},
     error::ParseResult,
+    incremental_edit::{IncrementalEdit, IncrementalEditSet},
     parser::Parser,
 };
 use std::collections::{HashMap, VecDeque};
@@ -57,7 +57,7 @@ impl IncrementalDocument {
         let start = Instant::now();
         let mut parser = Parser::new(&source);
         let root = parser.parse()?;
-        
+
         let mut doc = IncrementalDocument {
             root: Arc::new(root),
             source,
@@ -65,62 +65,62 @@ impl IncrementalDocument {
             subtree_cache: SubtreeCache::new(1000),
             metrics: ParseMetrics::default(),
         };
-        
+
         doc.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
         doc.cache_subtrees();
-        
+
         Ok(doc)
     }
-    
+
     /// Apply an edit and incrementally reparse
     pub fn apply_edit(&mut self, edit: IncrementalEdit) -> ParseResult<()> {
         let start = Instant::now();
         self.version += 1;
-        
+
         // Apply the edit to the source
         let new_source = self.apply_edit_to_source(&edit);
-        
+
         // Find affected subtrees
         let affected_range = (edit.start_byte, edit.old_end_byte);
         let reusable_subtrees = self.find_reusable_subtrees(affected_range, &edit);
-        
+
         // Incrementally parse with subtree reuse
         let new_root = self.incremental_parse(&new_source, &edit, reusable_subtrees)?;
-        
+
         // Update state
         self.source = new_source;
         self.root = Arc::new(new_root);
         self.cache_subtrees();
-        
+
         self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
-        
+
         Ok(())
     }
-    
+
     /// Apply multiple edits in a batch
     pub fn apply_edits(&mut self, edits: &IncrementalEditSet) -> ParseResult<()> {
         let start = Instant::now();
         self.version += 1;
-        
+
         // Sort edits by position (reverse order for correct application)
         let mut sorted_edits = edits.edits.clone();
         sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
-        
+
         // Apply all edits to source
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
             new_source = self.apply_edit_to_string(&new_source, edit);
         }
-        
+
         // Find all affected ranges
         let affected_ranges: Vec<_> = sorted_edits
             .iter()
             .map(|e| (e.start_byte, e.old_end_byte))
             .collect();
-        
+
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
-        
+
         // Parse with reuse
         let new_root = if reusable.len() > 10 {
             // Significant reuse possible
@@ -130,22 +130,22 @@ impl IncrementalDocument {
             let mut parser = Parser::new(&new_source);
             parser.parse()?
         };
-        
+
         // Update state
         self.source = new_source;
         self.root = Arc::new(new_root);
         self.cache_subtrees();
-        
+
         self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
-        
+
         Ok(())
     }
-    
+
     /// Apply edit to source string
     fn apply_edit_to_source(&self, edit: &IncrementalEdit) -> String {
         self.apply_edit_to_string(&self.source, edit)
     }
-    
+
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
         result.push_str(&source[..edit.start_byte]);
@@ -153,7 +153,7 @@ impl IncrementalDocument {
         result.push_str(&source[edit.old_end_byte..]);
         result
     }
-    
+
     /// Find subtrees that can be reused (outside the edited range)
     fn find_reusable_subtrees(
         &mut self,
@@ -162,7 +162,7 @@ impl IncrementalDocument {
     ) -> Vec<Arc<Node>> {
         let mut reusable = Vec::new();
         let delta = edit.byte_shift();
-        
+
         // Collect subtrees before the edit (unchanged positions)
         for ((start, end), node) in &self.subtree_cache.by_range {
             if *end <= affected_range.0 {
@@ -181,20 +181,20 @@ impl IncrementalDocument {
                 self.metrics.cache_misses += 1;
             }
         }
-        
+
         reusable
     }
-    
+
     /// Find reusable subtrees for multiple affected ranges
     fn find_reusable_for_ranges(&mut self, ranges: &[(usize, usize)]) -> Vec<Arc<Node>> {
         let mut reusable = Vec::new();
-        
+
         for ((start, end), node) in &self.subtree_cache.by_range {
             let affected = ranges.iter().any(|(r_start, r_end)| {
                 // Check if this subtree overlaps with any affected range
                 *start < *r_end && *end > *r_start
             });
-            
+
             if !affected {
                 reusable.push(node.clone());
                 self.metrics.cache_hits += 1;
@@ -203,10 +203,10 @@ impl IncrementalDocument {
                 self.metrics.cache_misses += 1;
             }
         }
-        
+
         reusable
     }
-    
+
     /// Incrementally parse with subtree reuse
     fn incremental_parse(
         &mut self,
@@ -221,18 +221,18 @@ impl IncrementalDocument {
                 return Ok(node);
             }
         }
-        
+
         // Otherwise use partial parsing with reuse
         self.parse_with_reuse(source, _reusable)
     }
-    
+
     /// Check if edit affects only a single token
     fn is_single_token_edit(&self, edit: &IncrementalEdit) -> bool {
         // Check if edit is small and contained within a single literal
         if edit.old_end_byte - edit.start_byte > 100 {
             return false; // Too large
         }
-        
+
         // Find the containing node
         if let Some(node) = self.find_node_at_position(edit.start_byte) {
             matches!(
@@ -243,12 +243,12 @@ impl IncrementalDocument {
             false
         }
     }
-    
+
     /// Fast path for single token updates
     fn fast_token_update(&self, source: &str, edit: &IncrementalEdit) -> Option<Node> {
         // Clone the tree and update just the affected token
         let mut new_root = (*self.root).clone();
-        
+
         // Find and update the affected token
         if self.update_token_in_tree(&mut new_root, source, edit) {
             Some(new_root)
@@ -256,7 +256,7 @@ impl IncrementalDocument {
             None
         }
     }
-    
+
     /// Update a single token in the tree
     fn update_token_in_tree(&self, node: &mut Node, source: &str, edit: &IncrementalEdit) -> bool {
         // Check if this node contains the edit
@@ -266,11 +266,13 @@ impl IncrementalDocument {
                     // Re-parse just this number
                     let delta = edit.byte_shift();
                     node.location.end = (node.location.end as isize + delta) as usize;
-                    
+
                     // Update the value
                     let new_text = &source[node.location.start..node.location.end];
                     if let Ok(value) = new_text.parse::<f64>() {
-                        node.kind = NodeKind::Number { value: value.to_string() };
+                        node.kind = NodeKind::Number {
+                            value: value.to_string(),
+                        };
                         return true;
                     }
                 }
@@ -278,7 +280,7 @@ impl IncrementalDocument {
                     // Update string content
                     let delta = edit.byte_shift();
                     node.location.end = (node.location.end as isize + delta) as usize;
-                    
+
                     // Extract new string value
                     let new_text = &source[node.location.start..node.location.end];
                     *value = new_text.to_string();
@@ -288,7 +290,7 @@ impl IncrementalDocument {
                     // Update identifier
                     let delta = edit.byte_shift();
                     node.location.end = (node.location.end as isize + delta) as usize;
-                    
+
                     *name = source[node.location.start..node.location.end].to_string();
                     return true;
                 }
@@ -298,15 +300,19 @@ impl IncrementalDocument {
                 }
             }
         }
-        
+
         false
     }
-    
+
     /// Update token in child nodes
-    fn update_token_in_children(&self, node: &mut Node, source: &str, edit: &IncrementalEdit) -> bool {
+    fn update_token_in_children(
+        &self,
+        node: &mut Node,
+        source: &str,
+        edit: &IncrementalEdit,
+    ) -> bool {
         match &mut node.kind {
-            NodeKind::Program { statements } |
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     if self.update_token_in_tree(stmt, source, edit) {
                         return true;
@@ -323,33 +329,32 @@ impl IncrementalDocument {
             }
             _ => {}
         }
-        
+
         false
     }
-    
+
     /// Parse with reusable subtrees
     fn parse_with_reuse(&mut self, source: &str, _reusable: Vec<Arc<Node>>) -> ParseResult<Node> {
         // Create a custom parser that can use cached subtrees
         let mut parser = Parser::new(source);
-        
+
         // For now, do a full parse but track metrics
         let root = parser.parse()?;
-        
+
         self.metrics.nodes_reparsed = self.count_nodes(&root) - self.metrics.nodes_reused;
-        
+
         Ok(root)
     }
-    
+
     /// Adjust node positions after an edit
     fn adjust_node_position(&self, node: &Node, delta: isize) -> Option<Node> {
         let mut adjusted = node.clone();
         adjusted.location.start = (adjusted.location.start as isize + delta) as usize;
         adjusted.location.end = (adjusted.location.end as isize + delta) as usize;
-        
+
         // Recursively adjust children
         match &mut adjusted.kind {
-            NodeKind::Program { statements } |
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     *stmt = self.adjust_node_position(stmt, delta)?;
                 }
@@ -360,21 +365,20 @@ impl IncrementalDocument {
             }
             _ => {}
         }
-        
+
         Some(adjusted)
     }
-    
+
     /// Find node at a specific byte position
     fn find_node_at_position(&self, pos: usize) -> Option<&Node> {
         self.find_in_node(&self.root, pos)
     }
-    
+
     fn find_in_node<'a>(&self, node: &'a Node, pos: usize) -> Option<&'a Node> {
         if node.location.start <= pos && node.location.end > pos {
             // Check children for more specific match
             match &node.kind {
-                NodeKind::Program { statements } |
-                NodeKind::Block { statements } => {
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
                     for stmt in statements {
                         if let Some(found) = self.find_in_node(stmt, pos) {
                             return Some(found);
@@ -391,34 +395,37 @@ impl IncrementalDocument {
                 }
                 _ => {}
             }
-            
+
             // No more specific child, return this node
             Some(node)
         } else {
             None
         }
     }
-    
+
     /// Cache subtrees for reuse
     fn cache_subtrees(&mut self) {
         self.subtree_cache.clear();
         let root = self.root.clone();
         self.cache_node(&root);
     }
-    
+
     fn cache_node(&mut self, node: &Node) {
         // Cache this subtree by range
         let range = (node.location.start, node.location.end);
-        self.subtree_cache.by_range.insert(range, Arc::new(node.clone()));
-        
+        self.subtree_cache
+            .by_range
+            .insert(range, Arc::new(node.clone()));
+
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
-        self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
-        
+        self.subtree_cache
+            .by_content
+            .insert(hash, Arc::new(node.clone()));
+
         // Recursively cache children
         match &node.kind {
-            NodeKind::Program { statements } |
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     self.cache_node(stmt);
                 }
@@ -430,17 +437,17 @@ impl IncrementalDocument {
             _ => {}
         }
     }
-    
+
     /// Generate hash for a node (for content-based caching)
     fn hash_node(&self, node: &Node) -> u64 {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
-        
+        use std::hash::{Hash, Hasher};
+
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash node kind discriminant
         std::mem::discriminant(&node.kind).hash(&mut hasher);
-        
+
         // Hash node content
         match &node.kind {
             NodeKind::Number { value } => value.hash(&mut hasher),
@@ -448,17 +455,16 @@ impl IncrementalDocument {
             NodeKind::Identifier { name } => name.hash(&mut hasher),
             _ => {}
         }
-        
+
         hasher.finish()
     }
-    
+
     /// Count nodes in a subtree
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1;
-        
+
         match &node.kind {
-            NodeKind::Program { statements } |
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     count += self.count_nodes(stmt);
                 }
@@ -469,20 +475,20 @@ impl IncrementalDocument {
             }
             _ => {}
         }
-        
+
         count
     }
-    
+
     /// Get current parse tree
     pub fn tree(&self) -> &Node {
         &self.root
     }
-    
+
     /// Get current source text
     pub fn text(&self) -> &str {
         &self.source
     }
-    
+
     /// Get performance metrics
     pub fn metrics(&self) -> &ParseMetrics {
         &self.metrics
@@ -498,13 +504,13 @@ impl SubtreeCache {
             max_size,
         }
     }
-    
+
     fn clear(&mut self) {
         self.by_content.clear();
         self.by_range.clear();
         self.lru.clear();
     }
-    
+
     #[allow(dead_code)]
     fn evict_if_needed(&mut self) {
         while self.by_content.len() > self.max_size {
@@ -519,7 +525,7 @@ impl SubtreeCache {
 mod tests {
     use super::*;
     use crate::incremental_edit::IncrementalEdit;
-    
+
     #[test]
     fn test_incremental_single_token_edit() {
         let source = r#"
@@ -527,24 +533,24 @@ mod tests {
             my $y = 100;
             print $x + $y;
         "#;
-        
+
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Change 42 to 43
         let edit = IncrementalEdit::new(
             source.find("42").unwrap() + 1,
             source.find("42").unwrap() + 2,
             "3".to_string(),
         );
-        
+
         doc.apply_edit(edit).unwrap();
-        
+
         // Should have high reuse
         assert!(doc.metrics.nodes_reused > 0);
         assert!(doc.metrics.nodes_reparsed < 5);
         assert!(doc.metrics.last_parse_time_ms < 1.0);
     }
-    
+
     #[test]
     fn test_incremental_multiple_edits() {
         let source = r#"
@@ -554,38 +560,38 @@ mod tests {
                 return $a + $b;
             }
         "#;
-        
+
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         let mut edits = IncrementalEditSet::new();
-        
+
         // Change 10 to 15
         edits.add(IncrementalEdit::new(
             source.find("10").unwrap(),
             source.find("10").unwrap() + 2,
             "15".to_string(),
         ));
-        
+
         // Change 20 to 25
         edits.add(IncrementalEdit::new(
             source.find("20").unwrap(),
             source.find("20").unwrap() + 2,
             "25".to_string(),
         ));
-        
+
         doc.apply_edits(&edits).unwrap();
-        
+
         // TODO: Once incremental parsing is fully implemented, these should pass
         // For now, we're falling back to full reparse so no nodes are reused
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
     }
-    
+
     #[test]
     fn test_cache_eviction() {
         let source = "my $x = 1;";
         let doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Cache should have entries
         assert!(!doc.subtree_cache.by_range.is_empty());
         assert!(!doc.subtree_cache.by_content.is_empty());

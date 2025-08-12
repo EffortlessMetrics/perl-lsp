@@ -4,13 +4,13 @@
 //! without loading them entirely into memory. It processes files in chunks
 //! and emits parse events as it goes.
 
-use std::io::{BufRead, BufReader, Read};
-use std::collections::VecDeque;
-use crate::pure_rust_parser::{AstNode, PerlParser, Rule};
 use crate::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
-use crate::lexer_adapter::LexerAdapter;
 use crate::error::ParseError;
+use crate::lexer_adapter::LexerAdapter;
+use crate::pure_rust_parser::{AstNode, PerlParser, Rule};
 use pest::Parser;
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader, Read};
 
 /// Events emitted by the streaming parser
 #[derive(Debug, Clone)]
@@ -24,7 +24,11 @@ pub enum ParseEvent {
     /// Parse error encountered
     Error { line: usize, message: String },
     /// Special section found
-    SpecialSection { kind: SectionKind, start_line: usize, content: String },
+    SpecialSection {
+        kind: SectionKind,
+        start_line: usize,
+        content: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,8 +62,8 @@ pub struct StreamConfig {
 impl Default for StreamConfig {
     fn default() -> Self {
         Self {
-            buffer_size: 8192,  // 8KB chunks
-            max_statement_size: 65536,  // 64KB max statement
+            buffer_size: 8192,         // 8KB chunks
+            max_statement_size: 65536, // 64KB max statement
             emit_partial: false,
         }
     }
@@ -111,28 +115,28 @@ impl<R: Read> StreamingParser<R> {
                 }
                 Ok(_) => {
                     self.line_number += 1;
-                    
+
                     // Check for special sections
                     if let Some(event) = self.check_special_sections(&line) {
                         return Some(event);
                     }
-                    
+
                     // Skip if in special section
                     if self.in_pod || self.in_data_section {
                         continue;
                     }
-                    
+
                     // Add to statement buffer
                     if self.statement_buffer.is_empty() {
                         self.statement_start_line = self.line_number;
                     }
                     self.statement_buffer.push_str(&line);
-                    
+
                     // Check if we have a complete statement
                     if self.is_complete_statement(&self.statement_buffer) {
                         return self.flush_statement();
                     }
-                    
+
                     // Force parse if statement is too large
                     if self.statement_buffer.len() > self.config.max_statement_size {
                         return self.flush_statement();
@@ -150,10 +154,13 @@ impl<R: Read> StreamingParser<R> {
 
     fn check_special_sections(&mut self, line: &str) -> Option<ParseEvent> {
         let trimmed = line.trim();
-        
+
         // Check for POD start
-        if !self.in_pod && trimmed.starts_with('=') && trimmed.len() > 1 && 
-           trimmed.chars().nth(1).map_or(false, |c| c.is_alphabetic()) {
+        if !self.in_pod
+            && trimmed.starts_with('=')
+            && trimmed.len() > 1
+            && trimmed.chars().nth(1).map_or(false, |c| c.is_alphabetic())
+        {
             self.in_pod = true;
             return Some(ParseEvent::SpecialSection {
                 kind: SectionKind::Pod,
@@ -161,24 +168,28 @@ impl<R: Read> StreamingParser<R> {
                 content: line.to_string(),
             });
         }
-        
+
         // Check for POD end
         if self.in_pod && trimmed == "=cut" {
             self.in_pod = false;
             return None;
         }
-        
+
         // Check for DATA/END section
         if !self.in_data_section && (trimmed == "__DATA__" || trimmed == "__END__") {
             self.in_data_section = true;
-            let kind = if trimmed == "__DATA__" { SectionKind::Data } else { SectionKind::End };
+            let kind = if trimmed == "__DATA__" {
+                SectionKind::Data
+            } else {
+                SectionKind::End
+            };
             return Some(ParseEvent::SpecialSection {
                 kind,
                 start_line: self.line_number,
                 content: String::new(),
             });
         }
-        
+
         None
     }
 
@@ -186,7 +197,7 @@ impl<R: Read> StreamingParser<R> {
         // Simple heuristic: check for statement terminators
         // In a real implementation, we'd use more sophisticated parsing
         let trimmed = buffer.trim_end();
-        
+
         // Check for common statement endings
         if trimmed.ends_with(';') || trimmed.ends_with('}') {
             // Make sure we're not in a string or regex
@@ -194,17 +205,16 @@ impl<R: Read> StreamingParser<R> {
                 return true;
             }
         }
-        
+
         // Check for block statements that don't need semicolons
         if trimmed.starts_with("sub ") && trimmed.ends_with('}') {
             return true;
         }
-        
-        if trimmed.starts_with("package ") && 
-           (trimmed.ends_with(';') || trimmed.ends_with('}')) {
+
+        if trimmed.starts_with("package ") && (trimmed.ends_with(';') || trimmed.ends_with('}')) {
             return true;
         }
-        
+
         false
     }
 
@@ -213,13 +223,13 @@ impl<R: Read> StreamingParser<R> {
         let mut in_single_quote = false;
         let mut in_double_quote = false;
         let mut escaped = false;
-        
+
         for ch in text.chars() {
             if escaped {
                 escaped = false;
                 continue;
             }
-            
+
             match ch {
                 '\\' => escaped = true,
                 '\'' if !in_double_quote => in_single_quote = !in_single_quote,
@@ -227,7 +237,7 @@ impl<R: Read> StreamingParser<R> {
                 _ => {}
             }
         }
-        
+
         in_single_quote || in_double_quote
     }
 
@@ -235,41 +245,43 @@ impl<R: Read> StreamingParser<R> {
         if self.statement_buffer.is_empty() {
             return None;
         }
-        
+
         let statement = std::mem::take(&mut self.statement_buffer);
         let start_line = self.statement_start_line;
-        
+
         // Determine statement kind
         let _kind = self.detect_statement_kind(&statement);
-        
+
         // Try to parse the statement
         match self.parse_statement(&statement) {
-            Ok(ast) => {
-                Some(ParseEvent::Node(ast))
-            }
-            Err(e) => {
-                Some(ParseEvent::Error {
-                    line: start_line,
-                    message: format!("Parse error: {:?}", e),
-                })
-            }
+            Ok(ast) => Some(ParseEvent::Node(ast)),
+            Err(e) => Some(ParseEvent::Error {
+                line: start_line,
+                message: format!("Parse error: {:?}", e),
+            }),
         }
     }
 
     fn detect_statement_kind(&self, statement: &str) -> StatementKind {
         let trimmed = statement.trim();
-        
+
         if trimmed.starts_with("sub ") {
             StatementKind::SubDeclaration
         } else if trimmed.starts_with("package ") {
             StatementKind::PackageDeclaration
         } else if trimmed.starts_with("use ") || trimmed.starts_with("require ") {
             StatementKind::UseStatement
-        } else if trimmed.starts_with("my ") || trimmed.starts_with("our ") || 
-                  trimmed.starts_with("local ") || trimmed.starts_with("state ") {
+        } else if trimmed.starts_with("my ")
+            || trimmed.starts_with("our ")
+            || trimmed.starts_with("local ")
+            || trimmed.starts_with("state ")
+        {
             StatementKind::Variable
-        } else if trimmed.starts_with("if ") || trimmed.starts_with("while ") ||
-                  trimmed.starts_with("for ") || trimmed.starts_with("foreach ") {
+        } else if trimmed.starts_with("if ")
+            || trimmed.starts_with("while ")
+            || trimmed.starts_with("for ")
+            || trimmed.starts_with("foreach ")
+        {
             StatementKind::ControlFlow
         } else {
             StatementKind::Expression
@@ -279,14 +291,14 @@ impl<R: Read> StreamingParser<R> {
     fn parse_statement(&mut self, statement: &str) -> Result<AstNode, ParseError> {
         // Process heredocs
         let (processed, _declarations) = process_with_enhanced_heredocs(statement);
-        
+
         // Handle slash disambiguation
         let disambiguated = LexerAdapter::preprocess(&processed);
-        
+
         // Parse with Pest
         let pairs = PerlParser::parse(Rule::statement, &disambiguated)
             .map_err(|_| ParseError::ParseFailed)?;
-        
+
         // Build AST
         let mut parser = crate::pure_rust_parser::PureRustPerlParser::new();
         for pair in pairs {
@@ -294,7 +306,7 @@ impl<R: Read> StreamingParser<R> {
                 return Ok(node);
             }
         }
-        
+
         Err(ParseError::ParseFailed)
     }
 }
@@ -329,11 +341,11 @@ mod tests {
 my $x = 42;
 print $x;
 "#;
-        
+
         let cursor = Cursor::new(input);
         let mut parser = StreamingParser::new(cursor, StreamConfig::default());
         let events: Vec<_> = parser.parse().collect();
-        
+
         assert!(!events.is_empty());
         assert!(events.iter().any(|e| matches!(e, ParseEvent::Node(_))));
     }
@@ -351,24 +363,47 @@ Test
 
 print "After POD\n";
 "#;
-        
+
         let cursor = Cursor::new(input);
         let mut parser = StreamingParser::new(cursor, StreamConfig::default());
         let events: Vec<_> = parser.parse().collect();
-        
-        assert!(events.iter().any(|e| matches!(e, 
-            ParseEvent::SpecialSection { kind: SectionKind::Pod, .. })));
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            ParseEvent::SpecialSection {
+                kind: SectionKind::Pod,
+                ..
+            }
+        )));
     }
 
     #[test]
     fn test_statement_detection() {
         let parser = StreamingParser::new(Cursor::new(""), StreamConfig::default());
-        
-        assert_eq!(parser.detect_statement_kind("sub foo { }"), StatementKind::SubDeclaration);
-        assert_eq!(parser.detect_statement_kind("package Foo;"), StatementKind::PackageDeclaration);
-        assert_eq!(parser.detect_statement_kind("use strict;"), StatementKind::UseStatement);
-        assert_eq!(parser.detect_statement_kind("my $x = 42;"), StatementKind::Variable);
-        assert_eq!(parser.detect_statement_kind("if ($x) { }"), StatementKind::ControlFlow);
-        assert_eq!(parser.detect_statement_kind("print $x;"), StatementKind::Expression);
+
+        assert_eq!(
+            parser.detect_statement_kind("sub foo { }"),
+            StatementKind::SubDeclaration
+        );
+        assert_eq!(
+            parser.detect_statement_kind("package Foo;"),
+            StatementKind::PackageDeclaration
+        );
+        assert_eq!(
+            parser.detect_statement_kind("use strict;"),
+            StatementKind::UseStatement
+        );
+        assert_eq!(
+            parser.detect_statement_kind("my $x = 42;"),
+            StatementKind::Variable
+        );
+        assert_eq!(
+            parser.detect_statement_kind("if ($x) { }"),
+            StatementKind::ControlFlow
+        );
+        assert_eq!(
+            parser.detect_statement_kind("print $x;"),
+            StatementKind::Expression
+        );
     }
 }

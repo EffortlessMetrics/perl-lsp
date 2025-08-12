@@ -8,7 +8,7 @@ mod tests {
     #[test]
     fn test_complex_perl_code() {
         let mut parser = PureRustPerlParser::new();
-        
+
         let code = r#"
 package MyModule 1.0 {
     use strict;
@@ -67,10 +67,10 @@ my %hash = $ref->%*;
 
 print "Done\n";
 "#;
-        
+
         let ast = parser.parse(code).unwrap();
         let sexp = parser.to_sexp(&ast);
-        
+
         // Verify key features are parsed
         assert!(sexp.contains("package_declaration"));
         assert!(sexp.contains("subroutine"));
@@ -84,7 +84,7 @@ print "Done\n";
     #[test]
     fn test_stateful_parsing_heredoc_and_format() {
         let mut parser = StatefulPerlParser::new();
-        
+
         let code = r#"
 # Heredoc followed by format
 my $message = <<'END_MESSAGE';
@@ -107,7 +107,7 @@ print <<~EOF;
 
 print "Done\n";
 "#;
-        
+
         let ast = parser.parse(code).unwrap();
         // The stateful parser should properly handle both heredocs and format
     }
@@ -115,17 +115,17 @@ print "Done\n";
     #[test]
     fn test_operator_precedence_complex() {
         let mut parser = PureRustPerlParser::new();
-        
+
         // Complex expression testing all precedence levels
         let code = r#"
 my $x = !$a && $b || $c // $d ? $e + $f * $g ** 2 : $h <=> $i;
 my $y = $obj isa Class && $val ~~ @list or $flag;
 my $z = $bits &. $mask |. $other ^. $toggle;
 "#;
-        
+
         let ast = parser.parse(code).unwrap();
         let sexp = parser.to_sexp(&ast);
-        
+
         // Verify operators are parsed
         assert!(sexp.contains("&&"));
         assert!(sexp.contains("||"));
@@ -138,7 +138,7 @@ my $z = $bits &. $mask |. $other ^. $toggle;
     #[test]
     fn test_real_world_perl_patterns() {
         let mut parser = PureRustPerlParser::new();
-        
+
         // Common Perl idioms using new features
         let code = r#"
 # Modern Perl OO with signatures
@@ -181,10 +181,10 @@ my $status = do {
     }
 };
 "#;
-        
+
         let ast = parser.parse(code).unwrap();
         let sexp = parser.to_sexp(&ast);
-        
+
         // Verify parsing succeeded with complex real-world patterns
         assert!(sexp.contains("source_file"));
         assert!(!sexp.contains("ERROR"));
@@ -193,9 +193,9 @@ my $status = do {
     #[test]
     fn test_edge_case_integration() {
         use tree_sitter_perl::{
-            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
-            tree_sitter_adapter::TreeSitterAdapter,
             dynamic_delimiter_recovery::RecoveryMode,
+            edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
+            tree_sitter_adapter::TreeSitterAdapter,
         };
 
         let code = r#"
@@ -236,22 +236,19 @@ print "Done\n";
 
         let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
         let analysis = handler.analyze(code);
-        
+
         // Should detect multiple edge cases
         assert!(!analysis.diagnostics.is_empty());
         assert!(analysis.delimiter_resolutions.len() > 0);
-        
+
         // Convert to tree-sitter format
-        let ts_output = TreeSitterAdapter::convert_to_tree_sitter(
-            analysis.ast,
-            analysis.diagnostics,
-            code,
-        );
-        
+        let ts_output =
+            TreeSitterAdapter::convert_to_tree_sitter(analysis.ast, analysis.diagnostics, code);
+
         // Verify tree-sitter compatibility
         assert_eq!(ts_output.tree.root.node_type, "source_file");
         assert!(ts_output.metadata.edge_case_count > 0);
-        
+
         // Should have both clean and problematic nodes
         assert!(ts_output.metadata.parse_coverage > 50.0);
     }
@@ -259,8 +256,8 @@ print "Done\n";
     #[test]
     fn test_recovery_mode_effectiveness() {
         use tree_sitter_perl::{
-            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
             dynamic_delimiter_recovery::RecoveryMode,
+            edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
         };
 
         let code = r#"
@@ -275,24 +272,25 @@ EOF
             recovery_mode: RecoveryMode::BestGuess,
             ..Default::default()
         };
-        
+
         let mut handler = EdgeCaseHandler::new(config);
         let analysis = handler.analyze(code);
-        
+
         // Should successfully recover the delimiter
         assert_eq!(analysis.delimiter_resolutions.len(), 1);
         assert!(analysis.delimiter_resolutions[0].resolved_to.is_some());
         assert_eq!(
-            analysis.delimiter_resolutions[0].resolved_to.as_ref().unwrap(),
+            analysis.delimiter_resolutions[0]
+                .resolved_to
+                .as_ref()
+                .unwrap(),
             "EOF"
         );
     }
 
     #[test]
     fn test_encoding_aware_heredocs() {
-        use tree_sitter_perl::{
-            edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
-        };
+        use tree_sitter_perl::edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler};
 
         let code = r#"
 use encoding 'latin1';
@@ -313,12 +311,14 @@ BYTES
 
         let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
         let analysis = handler.analyze(code);
-        
+
         // Should have encoding-related diagnostics
-        let encoding_diagnostics = analysis.diagnostics.iter()
+        let encoding_diagnostics = analysis
+            .diagnostics
+            .iter()
             .filter(|d| d.message.contains("encoding") || d.message.contains("utf8"))
             .count();
-        
+
         assert!(encoding_diagnostics > 0);
     }
 }

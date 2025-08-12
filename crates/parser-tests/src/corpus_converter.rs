@@ -1,14 +1,14 @@
 //! Convert existing test files to unified test format
 
 use crate::TestCase;
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
-use anyhow::Result;
 
 /// Convert perl-parser test files
 pub fn convert_perl_parser_tests() -> Result<Vec<TestCase>> {
     let mut tests = vec![];
-    
+
     // These are based on the test files we've seen in perl-parser
     tests.push(TestCase {
         name: "perl_parser::variables".to_string(),
@@ -19,12 +19,14 @@ my %hash = (key => 'value');
 our $global = 'global';
 local $package::var = 'local';
 state $persistent = 0;
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Variable declarations".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::operators".to_string(),
         input: r#"
@@ -36,12 +38,14 @@ $i % $j;
 $base ** $exp;
 $str . $str2;
 $str x 3;
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Basic operators".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::control_flow".to_string(),
         input: r#"
@@ -68,12 +72,14 @@ for (my $i = 0; $i < 10; $i++) {
 foreach my $item (@list) {
     process($item);
 }
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Control flow structures".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::regex".to_string(),
         input: r#"
@@ -83,12 +89,14 @@ $text =~ s/old/new/g;
 $text =~ tr/a-z/A-Z/;
 $text =~ m{pattern}x;
 $text =~ s{old}{new}gi;
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Regular expressions".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::subroutines".to_string(),
         input: r#"
@@ -108,12 +116,14 @@ sub with_signature ($x, $y) {
 my $anon = sub {
     return "anonymous";
 };
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Subroutine definitions".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::modern_perl".to_string(),
         input: r#"
@@ -141,12 +151,14 @@ class Point {
         return $self;
     }
 }
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Modern Perl features".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::references".to_string(),
         input: r#"
@@ -161,12 +173,14 @@ $hash_ref->{key} = 'value';
 $sub_ref->();
 
 my $nested = $hash_ref->{data}->[0]->{name};
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("References and dereferencing".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::strings".to_string(),
         input: r#"
@@ -180,12 +194,14 @@ my $heredoc = <<'EOF';
 Heredoc content
 Multiple lines
 EOF
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("String types and quoting".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::special_variables".to_string(),
         input: r#"
@@ -200,12 +216,14 @@ $1;
 %ENV;
 $^O;
 $#array;
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Special Perl variables".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     tests.push(TestCase {
         name: "perl_parser::packages".to_string(),
         input: r#"
@@ -227,11 +245,13 @@ package Bar {
 
 Foo->new();
 Bar->new()->method();
-"#.trim().to_string(),
+"#
+        .trim()
+        .to_string(),
         description: Some("Package and OO features".to_string()),
         should_parse: true,
         expected_sexp: None,
     });
-    
+
     Ok(tests)
 }

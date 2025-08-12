@@ -9,26 +9,21 @@ fn main() {
         "CHECK { }",
         "INIT { }",
         "UNITCHECK { }",
-        
         // With code
         "BEGIN { print 'starting' }",
         "END { print 'cleanup' }",
-        
         // Multiple statements
         "BEGIN { $x = 1; $y = 2; }",
-        
         // In context
         "BEGIN { use strict; }",
         "END { close(FILEHANDLE); }",
-        
         // Multiple blocks
         "BEGIN { } BEGIN { }",
         "END { } END { }",
-        
         // Mixed with regular code
         "my $x = 1; BEGIN { print 'init' } print $x;",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

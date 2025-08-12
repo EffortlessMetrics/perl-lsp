@@ -4,13 +4,13 @@
 //! re-parsing only the changed portions of a document, significantly
 //! improving performance for real-time editing scenarios.
 
-use crate::pure_rust_parser::{AstNode, PerlParser, Rule, PureRustPerlParser};
 use crate::enhanced_full_parser::EnhancedFullParser;
 use crate::error::ParseError;
+use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
 use pest::Parser;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 /// Edit operation representing a change to the document
 #[derive(Debug, Clone)]
@@ -92,8 +92,8 @@ impl IncrementalParser {
             let mut parser = EnhancedFullParser::new();
             parser.parse(source)?
         } else {
-            let pairs = PerlParser::parse(Rule::program, source)
-                .map_err(|_| ParseError::ParseFailed)?;
+            let pairs =
+                PerlParser::parse(Rule::program, source).map_err(|_| ParseError::ParseFailed)?;
             let mut parser = PureRustPerlParser::new();
             let mut result = None;
             for pair in pairs {
@@ -108,7 +108,13 @@ impl IncrementalParser {
         let line_breaks = find_line_breaks(source);
         let mut node_positions = HashMap::new();
         let mut id_counter = 0;
-        collect_node_positions(&ast, &mut node_positions, &mut id_counter, source, &line_breaks);
+        collect_node_positions(
+            &ast,
+            &mut node_positions,
+            &mut id_counter,
+            source,
+            &line_breaks,
+        );
 
         self.current_tree = Some(ParseTree {
             root: ast,
@@ -135,7 +141,7 @@ impl IncrementalParser {
 
         // Determine affected regions
         let affected_nodes = self.find_affected_nodes(&edit);
-        
+
         // If too many nodes affected, re-parse from scratch
         if affected_nodes.len() > 10 {
             return self.parse_initial(new_source);
@@ -161,7 +167,7 @@ impl IncrementalParser {
         };
 
         let mut affected = Vec::new();
-        
+
         for (id, pos) in &tree.node_positions {
             // Node is affected if edit intersects with it
             if edit.start_byte <= pos.end_byte && edit.old_end_byte >= pos.start_byte {
@@ -175,14 +181,14 @@ impl IncrementalParser {
     /// Find the optimal range to re-parse
     fn find_reparse_range(&self, _affected_nodes: &[NodeId], edit: &Edit) -> Range<usize> {
         let tree = self.current_tree.as_ref().unwrap();
-        
+
         // Find the smallest enclosing statement or block
         let mut min_start = edit.start_byte;
         let mut max_end = edit.new_end_byte;
 
         // Extend to statement boundaries
         let source_bytes = tree.source.as_bytes();
-        
+
         // Find previous statement boundary
         while min_start > 0 {
             if min_start >= 2 && source_bytes[min_start - 1] == b';' {
@@ -191,8 +197,10 @@ impl IncrementalParser {
             if min_start >= 2 && source_bytes[min_start - 1] == b'}' {
                 break;
             }
-            if min_start >= 2 && source_bytes[min_start - 1] == b'\n' && 
-               (min_start == 1 || source_bytes[min_start - 2] == b'\n') {
+            if min_start >= 2
+                && source_bytes[min_start - 1] == b'\n'
+                && (min_start == 1 || source_bytes[min_start - 2] == b'\n')
+            {
                 break;
             }
             min_start -= 1;
@@ -217,7 +225,7 @@ impl IncrementalParser {
     /// Parse a specific region of the source
     fn parse_region(&self, source: &str, range: &Range<usize>) -> Result<AstNode, ParseError> {
         let region = &source[range.clone()];
-        
+
         // Try to parse as a statement first
         if let Ok(pairs) = PerlParser::parse(Rule::statement, region) {
             let mut parser = PureRustPerlParser::new();
@@ -252,9 +260,12 @@ impl IncrementalParser {
     }
 
     /// Splice a new AST node into the existing tree
-    fn splice_ast(&mut self, _new_node: AstNode, _range: &Range<usize>, new_source: &str) 
-        -> Result<(), ParseError> {
-        
+    fn splice_ast(
+        &mut self,
+        _new_node: AstNode,
+        _range: &Range<usize>,
+        new_source: &str,
+    ) -> Result<(), ParseError> {
         // For now, just re-parse the whole document
         // A full implementation would surgically replace the affected nodes
         self.parse_initial(new_source)?;
@@ -285,7 +296,8 @@ fn find_line_breaks(source: &str) -> Vec<usize> {
 
 /// Calculate position from byte offset
 fn byte_to_position(byte_offset: usize, line_breaks: &[usize]) -> Position {
-    let line = line_breaks.binary_search(&byte_offset)
+    let line = line_breaks
+        .binary_search(&byte_offset)
         .unwrap_or_else(|i| i.saturating_sub(1));
     let line_start = line_breaks[line];
     let column = byte_offset - line_start;
@@ -306,12 +318,15 @@ fn collect_node_positions(
     *id_counter += 1;
 
     // For now, store dummy positions
-    positions.insert(node_id, NodePosition {
-        start_byte: 0,
-        end_byte: source.len(),
-        start_position: Position { line: 0, column: 0 },
-        end_position: byte_to_position(source.len(), line_breaks),
-    });
+    positions.insert(
+        node_id,
+        NodePosition {
+            start_byte: 0,
+            end_byte: source.len(),
+            start_position: Position { line: 0, column: 0 },
+            end_position: byte_to_position(source.len(), line_breaks),
+        },
+    );
 
     // Recursively process child nodes
     match node {
@@ -345,7 +360,7 @@ mod tests {
     fn test_initial_parse() {
         let mut parser = IncrementalParser::new();
         let source = "my $x = 42;\nprint $x;";
-        
+
         let tree = parser.parse_initial(source).unwrap();
         assert!(matches!(&tree.root, AstNode::Program(_)));
         assert_eq!(tree.line_breaks.len(), 3); // Start, after first line, end
@@ -363,8 +378,14 @@ mod tests {
             old_end_byte: 10,
             new_end_byte: 10,
             start_position: Position { line: 0, column: 8 },
-            old_end_position: Position { line: 0, column: 10 },
-            new_end_position: Position { line: 0, column: 10 },
+            old_end_position: Position {
+                line: 0,
+                column: 10,
+            },
+            new_end_position: Position {
+                line: 0,
+                column: 10,
+            },
         };
 
         let new_source = "my $x = 43;";

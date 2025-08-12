@@ -10,17 +10,20 @@ my $template = "$prefix<<$end_tag
 Template content here
 $end_tag";
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
-    assert!(found_heredoc, "Should recover heredoc inside interpolated string");
+
+    assert!(
+        found_heredoc,
+        "Should recover heredoc inside interpolated string"
+    );
 }
 
 #[test]
@@ -33,16 +36,20 @@ my $doc = <<${${inner}};
 Nested content
 EOF
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut tokens = Vec::new();
-    
+
     while let Some(token) = lexer.next_token() {
         tokens.push(token);
     }
-    
+
     // Should recover to EOF based on static analysis
-    assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart)));
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::HeredocStart))
+    );
 }
 
 #[test]
@@ -53,11 +60,11 @@ my $content = <<$self->delimiter->value;
 Dynamic content based on object state
 END
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut error_count = 0;
     let mut heredoc_count = 0;
-    
+
     while let Some(token) = lexer.next_token() {
         match &token.token_type {
             TokenType::Error(_) => error_count += 1,
@@ -65,8 +72,11 @@ END
             _ => {}
         }
     }
-    
-    assert!(heredoc_count > 0 || error_count > 0, "Should either recover or error gracefully");
+
+    assert!(
+        heredoc_count > 0 || error_count > 0,
+        "Should either recover or error gracefully"
+    );
 }
 
 #[test]
@@ -77,17 +87,20 @@ my $doc = <<($debug ? 'DEBUG' : 'PROD');
 Configuration data
 DEBUG
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
-    assert!(found_heredoc, "Should recover heredoc with ternary expression");
+
+    assert!(
+        found_heredoc,
+        "Should recover heredoc with ternary expression"
+    );
 }
 
 #[test]
@@ -99,16 +112,16 @@ my $log = <<$markers[1];
 Log entry
 END
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
+
     assert!(found_heredoc, "Should recover heredoc with array element");
 }
 
@@ -121,16 +134,16 @@ my $data = <<$delims{sql};
 SELECT * FROM table;
 SQL
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
+
     assert!(found_heredoc, "Should recover heredoc with hash lookup");
 }
 
@@ -146,16 +159,16 @@ my $doc2 = <<$@;
 Error variable content
 ERROR
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut heredoc_count = 0;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             heredoc_count += 1;
         }
     }
-    
+
     assert_eq!(heredoc_count, 2, "Should handle special variable heredocs");
 }
 
@@ -169,10 +182,10 @@ my $doc = <<$prefix . $suffix;
 Content
 BEGIN_END
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut has_heredoc_or_error = false;
-    
+
     while let Some(token) = lexer.next_token() {
         match token.token_type {
             TokenType::HeredocStart | TokenType::Error(_) => {
@@ -181,8 +194,11 @@ BEGIN_END
             _ => {}
         }
     }
-    
-    assert!(has_heredoc_or_error, "Should handle or error on concatenated delimiter");
+
+    assert!(
+        has_heredoc_or_error,
+        "Should handle or error on concatenated delimiter"
+    );
 }
 
 #[test]
@@ -194,16 +210,16 @@ my $content = <<get_marker();
 Function-determined content
 MARKER
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
+
     assert!(found_heredoc, "Should recover heredoc with function call");
 }
 
@@ -219,11 +235,11 @@ EOF1
 Second document
 EOF2
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut heredoc_count = 0;
     let mut error_count = 0;
-    
+
     while let Some(token) = lexer.next_token() {
         match token.token_type {
             TokenType::HeredocStart => heredoc_count += 1,
@@ -231,9 +247,12 @@ EOF2
             _ => {}
         }
     }
-    
+
     // Should handle at least one heredoc or error gracefully
-    assert!(heredoc_count > 0 || error_count > 0, "Should handle multiple dynamic heredocs");
+    assert!(
+        heredoc_count > 0 || error_count > 0,
+        "Should handle multiple dynamic heredocs"
+    );
 }
 
 #[test]
@@ -246,17 +265,23 @@ my $doc = <<$1;
 Content based on regex capture
 DATA
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_token = false;
-    
+
     while let Some(token) = lexer.next_token() {
-        if matches!(token.token_type, TokenType::HeredocStart | TokenType::Error(_)) {
+        if matches!(
+            token.token_type,
+            TokenType::HeredocStart | TokenType::Error(_)
+        ) {
             found_token = true;
         }
     }
-    
-    assert!(found_token, "Should handle heredoc with regex capture variable");
+
+    assert!(
+        found_token,
+        "Should handle heredoc with regex capture variable"
+    );
 }
 
 #[test]
@@ -269,14 +294,14 @@ Generated content
 $delimiter
 ";
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut token_count = 0;
-    
+
     while let Some(_token) = lexer.next_token() {
         token_count += 1;
     }
-    
+
     // Should at least tokenize without panic
     assert!(token_count > 0, "Should tokenize eval with heredoc");
 }
@@ -293,17 +318,20 @@ my $config = <<$My::Config::END_MARKER;
 Configuration data
 END_CONFIG
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut found_heredoc = false;
-    
+
     while let Some(token) = lexer.next_token() {
         if matches!(token.token_type, TokenType::HeredocStart) {
             found_heredoc = true;
         }
     }
-    
-    assert!(found_heredoc, "Should handle package-qualified variable heredocs");
+
+    assert!(
+        found_heredoc,
+        "Should handle package-qualified variable heredocs"
+    );
 }
 
 #[test]
@@ -315,16 +343,19 @@ my $doc = <<$magic;
 Content with tied variable delimiter
 TIED_END
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut has_token = false;
-    
+
     while let Some(token) = lexer.next_token() {
-        if matches!(token.token_type, TokenType::HeredocStart | TokenType::Error(_)) {
+        if matches!(
+            token.token_type,
+            TokenType::HeredocStart | TokenType::Error(_)
+        ) {
             has_token = true;
         }
     }
-    
+
     assert!(has_token, "Should handle tied variable heredocs gracefully");
 }
 
@@ -336,18 +367,21 @@ my $doc = <<$complex->expression->{that}->cannot_resolve;
 Content
 END
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
     let mut error_msg = None;
-    
+
     while let Some(token) = lexer.next_token() {
         if let TokenType::Error(msg) = &token.token_type {
             error_msg = Some(msg.clone());
         }
     }
-    
+
     if let Some(msg) = error_msg {
-        assert!(msg.contains("heredoc") || msg.contains("delimiter"), 
-                "Error message should be descriptive: {}", msg);
+        assert!(
+            msg.contains("heredoc") || msg.contains("delimiter"),
+            "Error message should be descriptive: {}",
+            msg
+        );
     }
 }

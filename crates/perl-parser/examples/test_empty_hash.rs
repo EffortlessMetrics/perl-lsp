@@ -3,13 +3,13 @@ use perl_parser::{Parser, ast::NodeKind};
 fn main() {
     let code = "{}";
     println!("Testing: {}", code);
-    
+
     let mut parser = Parser::new(code);
     match parser.parse() {
         Ok(ast) => {
             println!("AST: {:?}", ast);
             println!("S-expr: {}", ast.to_sexp());
-            
+
             // Check what kind of node it really is
             if let NodeKind::Program { statements } = &ast.kind {
                 if let Some(stmt) = statements.first() {

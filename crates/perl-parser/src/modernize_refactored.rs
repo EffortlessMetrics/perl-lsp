@@ -63,56 +63,58 @@ impl PerlModernizer {
                 manual_review: false,
             },
         ];
-        
-        Self { _patterns: patterns }
+
+        Self {
+            _patterns: patterns,
+        }
     }
-    
+
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
-        
+
         // Check for missing pragmas in scripts
         if self.looks_like_script(code) && self.missing_pragmas(code) {
             suggestions.push(self.create_pragma_suggestion());
         }
-        
+
         // Check for bareword filehandles
         if let Some(suggestion) = self.check_bareword_filehandle(code) {
             suggestions.push(suggestion);
         }
-        
+
         // Check for two-arg open
         if let Some(suggestion) = self.check_two_arg_open(code) {
             suggestions.push(suggestion);
         }
-        
+
         // Check for deprecated patterns
         suggestions.extend(self.check_deprecated_patterns(code));
-        
+
         // Check for indirect object notation
         if let Some(suggestion) = self.check_indirect_notation(code) {
             suggestions.push(suggestion);
         }
-        
+
         // Check for risky patterns
         suggestions.extend(self.check_risky_patterns(code));
-        
+
         suggestions
     }
-    
+
     pub fn apply(&self, code: &str) -> String {
         let suggestions = self.analyze(code);
         self.apply_suggestions(code, suggestions)
     }
-    
+
     // Helper methods
     fn looks_like_script(&self, code: &str) -> bool {
         code.starts_with("#!/usr/bin/perl")
     }
-    
+
     fn missing_pragmas(&self, code: &str) -> bool {
         !code.contains("use strict") && !code.contains("use warnings")
     }
-    
+
     fn create_pragma_suggestion(&self) -> ModernizationSuggestion {
         ModernizationSuggestion {
             old_pattern: String::new(),
@@ -123,18 +125,18 @@ impl PerlModernizer {
             end: 0,
         }
     }
-    
+
     fn check_bareword_filehandle(&self, code: &str) -> Option<ModernizationSuggestion> {
         code.find("open FH").map(|pos| ModernizationSuggestion {
-                old_pattern: "open FH".to_string(),
-                new_pattern: "open my $fh".to_string(),
-                description: "Use lexical filehandles instead of barewords".to_string(),
-                manual_review_required: false,
-                start: pos,
-                end: pos + 7,
-            })
+            old_pattern: "open FH".to_string(),
+            new_pattern: "open my $fh".to_string(),
+            description: "Use lexical filehandles instead of barewords".to_string(),
+            manual_review_required: false,
+            start: pos,
+            end: pos + 7,
+        })
     }
-    
+
     fn check_two_arg_open(&self, code: &str) -> Option<ModernizationSuggestion> {
         if code.contains("open(FH, 'file.txt')") {
             Some(ModernizationSuggestion {
@@ -149,72 +151,76 @@ impl PerlModernizer {
             None
         }
     }
-    
+
     fn check_deprecated_patterns(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
-        
+
         if code.contains("defined @array") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "defined @array".to_string(),
                 new_pattern: "@array".to_string(),
-                description: "defined(@array) is deprecated, use @array in boolean context".to_string(),
+                description: "defined(@array) is deprecated, use @array in boolean context"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         if code.contains("each @array") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "each @array".to_string(),
                 new_pattern: "0..$#array".to_string(),
-                description: "each(@array) can cause unexpected behavior, use foreach with index".to_string(),
+                description: "each(@array) can cause unexpected behavior, use foreach with index"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         if code.contains("print \"Hello\\n\"") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "print \"Hello\\n\"".to_string(),
                 new_pattern: "say \"Hello\"".to_string(),
-                description: "Use 'say' instead of print with \\n (requires use feature 'say')".to_string(),
+                description: "Use 'say' instead of print with \\n (requires use feature 'say')"
+                    .to_string(),
                 manual_review_required: false,
                 start: 0,
                 end: 0,
             });
         }
-        
+
         suggestions
     }
-    
+
     fn check_indirect_notation(&self, code: &str) -> Option<ModernizationSuggestion> {
         // Check for common indirect object notation patterns
         let indirect_patterns = [
             ("new MyClass", "MyClass->new", 11),
             ("new Class", "Class->new", 9),
         ];
-        
+
         for (pattern, replacement, len) in &indirect_patterns {
             if let Some(pos) = code.find(pattern) {
                 return Some(ModernizationSuggestion {
                     old_pattern: pattern.to_string(),
                     new_pattern: replacement.to_string(),
-                    description: "Use direct method call instead of indirect object notation".to_string(),
+                    description: "Use direct method call instead of indirect object notation"
+                        .to_string(),
                     manual_review_required: false,
                     start: pos,
                     end: pos + len,
                 });
             }
         }
-        
+
         None
     }
-    
+
     fn check_risky_patterns(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
-        
+
         if code.contains("eval \"") {
             suggestions.push(ModernizationSuggestion {
                 old_pattern: "eval \"...\"".to_string(),
@@ -225,61 +231,82 @@ impl PerlModernizer {
                 end: 0,
             });
         }
-        
+
         suggestions
     }
-    
+
     fn apply_suggestions(&self, code: &str, suggestions: Vec<ModernizationSuggestion>) -> String {
         let mut result = code.to_string();
-        
+
         // Sort suggestions by position (reverse) to maintain string positions
         let mut sorted_suggestions = suggestions.clone();
         sorted_suggestions.sort_by_key(|s| std::cmp::Reverse(s.start));
-        
+
         for suggestion in sorted_suggestions {
             // Skip manual review items
             if suggestion.manual_review_required {
                 continue;
             }
-            
+
             result = self.apply_single_suggestion(result, &suggestion);
         }
-        
+
         result
     }
-    
-    fn apply_single_suggestion(&self, mut code: String, suggestion: &ModernizationSuggestion) -> String {
+
+    fn apply_single_suggestion(
+        &self,
+        mut code: String,
+        suggestion: &ModernizationSuggestion,
+    ) -> String {
         // Handle pragma additions
         if suggestion.description.contains("strict") {
             return self.add_pragmas(code);
         }
-        
+
         // Handle specific replacements
         let replacements: HashMap<&str, (&str, &str)> = [
             ("open FH", ("open FH", "open my $fh")),
-            ("open(FH, 'file.txt')", ("open(FH, 'file.txt')", "open(my $fh, '<', 'file.txt')")),
+            (
+                "open(FH, 'file.txt')",
+                ("open(FH, 'file.txt')", "open(my $fh, '<', 'file.txt')"),
+            ),
             ("defined @array", ("defined @array", "@array")),
             ("new Class", ("new Class(", "Class->new(")),
             ("new MyClass", ("new MyClass(", "MyClass->new(")),
-            ("each @array", ("while (my ($i, $val) = each @array) { }", 
-                           "foreach my $i (0..$#array) { my $val = $array[$i]; }")),
-            ("print \"Hello\\n\"", ("print \"Hello\\n\"", "say \"Hello\"")),
-        ].into_iter().collect();
-        
+            (
+                "each @array",
+                (
+                    "while (my ($i, $val) = each @array) { }",
+                    "foreach my $i (0..$#array) { my $val = $array[$i]; }",
+                ),
+            ),
+            (
+                "print \"Hello\\n\"",
+                ("print \"Hello\\n\"", "say \"Hello\""),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
         for (key, (from, to)) in replacements {
             if suggestion.old_pattern.contains(key) {
                 code = code.replace(from, to);
                 break;
             }
         }
-        
+
         code
     }
-    
+
     fn add_pragmas(&self, code: String) -> String {
         if let Some(pos) = code.find('\n') {
             if code.starts_with("#!") {
-                format!("{}\nuse strict;\nuse warnings;{}", &code[..pos], &code[pos..])
+                format!(
+                    "{}\nuse strict;\nuse warnings;{}",
+                    &code[..pos],
+                    &code[pos..]
+                )
             } else {
                 format!("use strict;\nuse warnings;\n{}", code)
             }

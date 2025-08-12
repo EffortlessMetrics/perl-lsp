@@ -10,8 +10,8 @@ use std::path::PathBuf;
 mod tasks;
 mod types;
 use tasks::*;
-use types::*;
 use types::TestSuite;
+use types::*;
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -199,7 +199,6 @@ enum Commands {
         port: u16,
     },
 
-
     /// Run pure Rust parser
     ParseRust {
         /// Source file to parse
@@ -264,49 +263,49 @@ enum Commands {
         #[arg(long, default_value = "table")]
         format: String,
     },
-    
+
     /// Test LSP features with demo scripts
     TestLsp {
         /// Create test files only (don't run tests)
         #[arg(long)]
         create_only: bool,
-        
+
         /// Run specific test
         #[arg(long)]
         test: Option<String>,
-        
+
         /// Clean up test files after running
         #[arg(long)]
         cleanup: bool,
     },
-    
+
     /// Bump version numbers across the project
     BumpVersion {
         /// New version to set
         version: String,
-        
+
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
     },
-    
+
     /// Publish crates to crates.io
     PublishCrates {
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
-        
+
         /// Dry run (don't actually publish)
         #[arg(long)]
         dry_run: bool,
     },
-    
+
     /// Publish VSCode extension to marketplace
     PublishVscode {
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
-        
+
         /// PAT token for authentication
         #[arg(long)]
         token: Option<String>,
@@ -363,29 +362,38 @@ fn main() -> Result<()> {
         Commands::Clean { all } => clean::run(all),
         Commands::Bindings { output } => bindings::run(output),
         Commands::Dev { watch, port } => dev::run(watch, port),
-        Commands::ParseRust { source, sexp, ast, bench } => parse_rust::run(source, sexp, ast, bench),
+        Commands::ParseRust {
+            source,
+            sexp,
+            ast,
+            bench,
+        } => parse_rust::run(source, sexp, ast, bench),
         Commands::Release { version, yes } => release::run(version, yes),
         Commands::TestHeredoc { release, verbose } => {
             // Run heredoc tests using the test module with heredoc suite
-            test::run(release, Some(TestSuite::Heredoc), Some(vec!["pure-rust".to_string()]), verbose, false)
-        },
-        Commands::TestEdgeCases { bench, coverage, test } => {
-            edge_cases::run(bench, coverage, test)
-        },
+            test::run(
+                release,
+                Some(TestSuite::Heredoc),
+                Some(vec!["pure-rust".to_string()]),
+                verbose,
+                false,
+            )
+        }
+        Commands::TestEdgeCases {
+            bench,
+            coverage,
+            test,
+        } => edge_cases::run(bench, coverage, test),
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
-        },
-        Commands::TestLsp { create_only, test, cleanup } => {
-            test_lsp::run(create_only, test, cleanup)
-        },
-        Commands::BumpVersion { version, yes } => {
-            bump_version::run(version, yes)
-        },
-        Commands::PublishCrates { yes, dry_run } => {
-            publish::publish_crates(yes, dry_run)
-        },
-        Commands::PublishVscode { yes, token } => {
-            publish::publish_vscode(yes, token)
-        },
+        }
+        Commands::TestLsp {
+            create_only,
+            test,
+            cleanup,
+        } => test_lsp::run(create_only, test, cleanup),
+        Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
+        Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
+        Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
     }
 }

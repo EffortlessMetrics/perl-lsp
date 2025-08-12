@@ -1,9 +1,6 @@
 //! Debug heredoc parsing to understand AST structure
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Heredoc Debugging ===\n");
@@ -22,7 +19,7 @@ print $text;
             println!("Parse successful!");
             println!("\nFull AST structure:");
             print_full_ast(&ast, 0);
-            
+
             println!("\n\nSearching for heredoc content...");
             find_string_content(&ast, 0);
         }
@@ -34,7 +31,7 @@ print $text;
 
 fn print_full_ast(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program ({} items)", indent, items.len());
@@ -47,7 +44,11 @@ fn print_full_ast(node: &AstNode, depth: usize) {
             println!("{}Statement", indent);
             print_full_ast(content, depth + 1);
         }
-        AstNode::VariableDeclaration { scope, variables, initializer } => {
+        AstNode::VariableDeclaration {
+            scope,
+            variables,
+            initializer,
+        } => {
             println!("{}VariableDeclaration", indent);
             println!("{}  scope: {}", indent, scope);
             println!("{}  variables: {} items", indent, variables.len());
@@ -74,7 +75,12 @@ fn print_full_ast(node: &AstNode, depth: usize) {
                 print_full_ast(arg, depth + 2);
             }
         }
-        AstNode::Heredoc { marker, indented, quoted, content } => {
+        AstNode::Heredoc {
+            marker,
+            indented,
+            quoted,
+            content,
+        } => {
             println!("{}Heredoc", indent);
             println!("{}  marker: {}", indent, marker);
             println!("{}  indented: {}", indent, indented);
@@ -89,7 +95,7 @@ fn print_full_ast(node: &AstNode, depth: usize) {
 
 fn find_string_content(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
         AstNode::String(s) => {
             if s.contains('\n') {

@@ -14,9 +14,13 @@ pub struct Position {
 impl Position {
     /// Create a position at the start of input
     pub fn start() -> Self {
-        Position { byte: 0, line: 1, column: 1 }
+        Position {
+            byte: 0,
+            line: 1,
+            column: 1,
+        }
     }
-    
+
     /// Advance position by a character
     pub fn advance(&mut self, ch: char) {
         self.byte += ch.len_utf8();
@@ -27,7 +31,7 @@ impl Position {
             self.column += 1;
         }
     }
-    
+
     /// Advance position by a string slice
     pub fn advance_str(&mut self, text: &str) {
         for ch in text.chars() {

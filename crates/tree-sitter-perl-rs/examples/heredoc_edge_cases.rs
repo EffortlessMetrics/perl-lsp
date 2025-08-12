@@ -1,69 +1,82 @@
 //! Specific tests for heredoc edge cases
-//! 
+//!
 //! Heredocs are one of the most complex features in Perl parsing
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Heredoc Edge Case Tests ===\n");
 
     let test_cases = vec![
-        ("Simple unquoted heredoc", r#"
+        (
+            "Simple unquoted heredoc",
+            r#"
 my $text = <<EOF;
 This is a simple heredoc
 with multiple lines
 EOF
-"#),
-
-        ("Single-quoted heredoc", r#"
+"#,
+        ),
+        (
+            "Single-quoted heredoc",
+            r#"
 my $text = <<'EOF';
 No interpolation here: $var @array
 Literal text only
 EOF
-"#),
-
-        ("Double-quoted heredoc", r#"
+"#,
+        ),
+        (
+            "Double-quoted heredoc",
+            r#"
 my $var = "World";
 my $text = <<"EOF";
 Hello, $var!
 Interpolation works here
 EOF
-"#),
-
-        ("Backtick heredoc", r#"
+"#,
+        ),
+        (
+            "Backtick heredoc",
+            r#"
 my $output = <<`CMD`;
 echo "Command execution"
 date
 CMD
-"#),
-
-        ("Indented heredoc (Perl 5.26+)", r#"
+"#,
+        ),
+        (
+            "Indented heredoc (Perl 5.26+)",
+            r#"
 my $indented = <<~EOF;
     This text
     is indented
     consistently
     EOF
-"#),
-
-        ("Heredoc with spaces around marker", r#"
+"#,
+        ),
+        (
+            "Heredoc with spaces around marker",
+            r#"
 my $text = << "EOF" ;
 Content with spaces
 around the marker
 EOF
-"#),
-
-        ("Multiple heredocs in assignment", r#"
+"#,
+        ),
+        (
+            "Multiple heredocs in assignment",
+            r#"
 my ($first, $second) = (<<'FIRST', <<'SECOND');
 First heredoc content
 FIRST
 Second heredoc content
 SECOND
-"#),
-
-        ("Heredoc in list context", r#"
+"#,
+        ),
+        (
+            "Heredoc in list context",
+            r#"
 my @parts = (
     "prefix",
     <<'MIDDLE',
@@ -71,16 +84,20 @@ Middle content
 MIDDLE
     "suffix"
 );
-"#),
-
-        ("Heredoc as function argument", r#"
+"#,
+        ),
+        (
+            "Heredoc as function argument",
+            r#"
 print <<'EOF';
 Direct heredoc
 as print argument
 EOF
-"#),
-
-        ("Heredoc with empty lines", r#"
+"#,
+        ),
+        (
+            "Heredoc with empty lines",
+            r#"
 my $text = <<'EOF';
 Line 1
 
@@ -88,57 +105,73 @@ Line 3 (after empty line)
 
 Line 5
 EOF
-"#),
-
-        ("Heredoc with special characters", r#"
+"#,
+        ),
+        (
+            "Heredoc with special characters",
+            r#"
 my $text = <<'!@#';
 Special delimiter chars
 work too
 !@#
-"#),
-
-        ("Empty heredoc", r#"
+"#,
+        ),
+        (
+            "Empty heredoc",
+            r#"
 my $empty = <<'EMPTY';
 EMPTY
 print "done";
-"#),
-
-        ("Heredoc followed by code", r#"
+"#,
+        ),
+        (
+            "Heredoc followed by code",
+            r#"
 my $x = <<EOF . " suffix";
 Heredoc content
 EOF
 print $x;
-"#),
-
-        ("Nested-looking heredoc", r#"
+"#,
+        ),
+        (
+            "Nested-looking heredoc",
+            r#"
 my $text = <<'OUTER';
 This looks like <<'INNER';
 but it's not a nested heredoc
 INNER
 Just regular content
 OUTER
-"#),
-
-        ("Unicode heredoc marker", r#"
+"#,
+        ),
+        (
+            "Unicode heredoc marker",
+            r#"
 my $text = <<'τέλος';
 Greek marker
 τέλος
-"#),
-
-        ("Numeric heredoc marker", r#"
+"#,
+        ),
+        (
+            "Numeric heredoc marker",
+            r#"
 my $text = <<'123';
 Numeric marker
 123
-"#),
-
-        ("Heredoc in conditional", r#"
+"#,
+        ),
+        (
+            "Heredoc in conditional",
+            r#"
 my $msg = $verbose ? <<'VERBOSE' : "brief";
 Detailed message
 with multiple lines
 VERBOSE
-"#),
-
-        ("Heredoc in hash", r#"
+"#,
+        ),
+        (
+            "Heredoc in hash",
+            r#"
 my %config = (
     header => <<'HEADER',
 === Configuration ===
@@ -147,7 +180,8 @@ HEADER
 === End ===
 FOOTER
 );
-"#),
+"#,
+        ),
     ];
 
     let mut passed = 0;
@@ -156,7 +190,7 @@ FOOTER
 
     for (name, code) in test_cases {
         print!("{:<35}", format!("{}:", name));
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {
@@ -191,9 +225,17 @@ FOOTER
 
     println!("\n=== Summary ===");
     println!("Total heredoc tests: {}", passed + failed);
-    println!("Passed: {} ({}%)", passed, (passed * 100) / (passed + failed));
-    println!("Failed: {} ({}%)", failed, (failed * 100) / (passed + failed));
-    
+    println!(
+        "Passed: {} ({}%)",
+        passed,
+        (passed * 100) / (passed + failed)
+    );
+    println!(
+        "Failed: {} ({}%)",
+        failed,
+        (failed * 100) / (passed + failed)
+    );
+
     if failed == 0 {
         println!("\n🎉 All heredoc tests passed!");
     } else if passed > failed * 2 {
@@ -209,7 +251,7 @@ my $text = <<'EOF';
 Example content
 EOF
 "#;
-    
+
     let mut parser = EnhancedFullParser::new();
     if let Ok(ast) = parser.parse(example) {
         print_heredoc_nodes(&ast, 0);
@@ -255,9 +297,14 @@ fn find_heredoc_node(node: &AstNode) -> bool {
 
 fn print_heredoc_nodes(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
-        AstNode::Heredoc { marker, indented, quoted, content } => {
+        AstNode::Heredoc {
+            marker,
+            indented,
+            quoted,
+            content,
+        } => {
             println!("{}Heredoc {{", indent);
             println!("{}  marker: \"{}\"", indent, marker);
             println!("{}  indented: {}", indent, indented);

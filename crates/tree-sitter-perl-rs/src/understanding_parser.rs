@@ -3,9 +3,9 @@
 //! This parser extends the pure Rust parser to detect, analyze, and provide
 //! insights about problematic Perl constructs, particularly heredoc edge cases.
 
-use crate::pure_rust_parser::{PureRustPerlParser, PerlParser, Rule, AstNode};
-use crate::anti_pattern_detector::{AntiPatternDetector, AntiPattern, Diagnostic};
-use crate::partial_parse_ast::{ExtendedAstNode, ExtendedAstBuilder, RecoveryState};
+use crate::anti_pattern_detector::{AntiPattern, AntiPatternDetector, Diagnostic};
+use crate::partial_parse_ast::{ExtendedAstBuilder, ExtendedAstNode, RecoveryState};
+use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
 use pest::Parser;
 use std::sync::Arc;
 
@@ -23,12 +23,12 @@ impl UnderstandingParser {
             recovery_enabled: true,
         }
     }
-    
+
     /// Parse code with full anti-pattern detection and recovery
     pub fn parse_with_understanding(&mut self, code: &str) -> Result<ParseResult, String> {
         // First, detect all anti-patterns
         let diagnostics = self.anti_pattern_detector.detect_all(code);
-        
+
         // Try normal parsing
         match PerlParser::parse(Rule::program, code) {
             Ok(pairs) => {
@@ -51,7 +51,7 @@ impl UnderstandingParser {
             }
         }
     }
-    
+
     /// Build extended AST with anti-pattern annotations
     fn build_extended_ast(
         &mut self,
@@ -60,12 +60,12 @@ impl UnderstandingParser {
         code: &str,
     ) -> ExtendedAstNode {
         let mut builder = ExtendedAstBuilder::new();
-        
+
         // Add relevant diagnostics to builder
         for diag in diagnostics {
             builder.add_diagnostic(diag.clone());
         }
-        
+
         // Build normal AST
         if let Ok(ast) = self.base_parser.build_ast(pairs) {
             builder.build_normal(ast)
@@ -86,7 +86,7 @@ impl UnderstandingParser {
             }
         }
     }
-    
+
     /// Attempt to parse with recovery from anti-patterns
     fn parse_with_recovery(
         &self,
@@ -100,30 +100,32 @@ impl UnderstandingParser {
             active_anti_patterns: vec![],
             deferred_heredocs: vec![],
         };
-        
+
         let mut parsed_fragments = vec![];
         let mut recovery_points = vec![];
         let mut current_pos = 0;
-        
+
         // Try to parse in chunks, recovering from errors
         while current_pos < code.len() {
             let chunk = &code[current_pos..];
-            
+
             // Look for anti-patterns in the current chunk
             let chunk_patterns = self.anti_pattern_detector.detect_all(chunk);
-            
+
             if let Some(first_pattern) = chunk_patterns.first() {
                 // Found an anti-pattern, parse up to it
                 let pattern_offset = match &first_pattern.pattern {
-                    AntiPattern::FormatHeredoc { location, .. } |
-                    AntiPattern::BeginTimeHeredoc { location, .. } |
-                    AntiPattern::DynamicHeredocDelimiter { location, .. } |
-                    AntiPattern::SourceFilterHeredoc { location, .. } |
-                    AntiPattern::RegexCodeBlockHeredoc { location, .. } |
-                    AntiPattern::EvalStringHeredoc { location, .. } |
-                    AntiPattern::TiedHandleHeredoc { location, .. } => location.offset - current_pos,
+                    AntiPattern::FormatHeredoc { location, .. }
+                    | AntiPattern::BeginTimeHeredoc { location, .. }
+                    | AntiPattern::DynamicHeredocDelimiter { location, .. }
+                    | AntiPattern::SourceFilterHeredoc { location, .. }
+                    | AntiPattern::RegexCodeBlockHeredoc { location, .. }
+                    | AntiPattern::EvalStringHeredoc { location, .. }
+                    | AntiPattern::TiedHandleHeredoc { location, .. } => {
+                        location.offset - current_pos
+                    }
                 };
-                
+
                 if pattern_offset > 0 {
                     // Parse the clean part before the anti-pattern
                     let clean_chunk = &chunk[..pattern_offset];
@@ -134,18 +136,18 @@ impl UnderstandingParser {
                         }
                     }
                 }
-                
+
                 // Handle the anti-pattern
                 let (handled_node, skip_length) = self.handle_anti_pattern(
                     &first_pattern.pattern,
                     &code[current_pos + pattern_offset..],
                     &mut recovery_state,
                 );
-                
+
                 parsed_fragments.push(handled_node);
                 recovery_points.push(current_pos + pattern_offset);
                 current_pos += pattern_offset + skip_length;
-                
+
                 // Add the diagnostic
                 diagnostics.push(first_pattern.clone());
             } else {
@@ -163,7 +165,8 @@ impl UnderstandingParser {
                             pattern: AntiPattern::DynamicHeredocDelimiter {
                                 location: crate::anti_pattern_detector::Location {
                                     line: code[..current_pos].lines().count(),
-                                    column: current_pos - code[..current_pos].rfind('\n').unwrap_or(0),
+                                    column: current_pos
+                                        - code[..current_pos].rfind('\n').unwrap_or(0),
                                     offset: current_pos,
                                 },
                                 expression: "parse_error".to_string(),
@@ -178,12 +181,12 @@ impl UnderstandingParser {
                 }
             }
         }
-        
+
         // Calculate parse coverage
         let total_length = code.len();
         let parsed_length = recovery_state.last_good_position;
         let parse_coverage = (parsed_length as f64 / total_length as f64) * 100.0;
-        
+
         // Build final AST
         let final_ast = if parsed_fragments.len() == 1 {
             parsed_fragments.into_iter().next().unwrap()
@@ -202,7 +205,7 @@ impl UnderstandingParser {
                 diagnostics: vec![],
             }
         };
-        
+
         Ok(ParseResult {
             ast: final_ast,
             diagnostics,
@@ -210,7 +213,7 @@ impl UnderstandingParser {
             recovery_points,
         })
     }
-    
+
     /// Handle a specific anti-pattern and return a node representing it
     fn handle_anti_pattern(
         &self,
@@ -219,25 +222,35 @@ impl UnderstandingParser {
         recovery_state: &mut RecoveryState,
     ) -> (ExtendedAstNode, usize) {
         match pattern {
-            AntiPattern::FormatHeredoc { format_name, heredoc_delimiter, .. } => {
+            AntiPattern::FormatHeredoc {
+                format_name,
+                heredoc_delimiter,
+                ..
+            } => {
                 // Find the end of the format
                 let end_pos = code.find("\n.").unwrap_or(code.len());
                 let format_text = &code[..end_pos];
-                
+
                 let node = ExtendedAstNode::PartialParse {
                     pattern: pattern.clone(),
                     raw_text: Arc::from(format_text),
                     parsed_fragments: vec![
-                        ExtendedAstNode::Normal(AstNode::Identifier(Arc::from(format_name.clone()))),
-                        ExtendedAstNode::Normal(AstNode::String(Arc::from(heredoc_delimiter.clone()))),
+                        ExtendedAstNode::Normal(AstNode::Identifier(Arc::from(
+                            format_name.clone(),
+                        ))),
+                        ExtendedAstNode::Normal(AstNode::String(Arc::from(
+                            heredoc_delimiter.clone(),
+                        ))),
                     ],
                     diagnostics: vec![],
                 };
-                
+
                 (node, end_pos + 2) // +2 for "\n."
             }
-            
-            AntiPattern::BeginTimeHeredoc { heredoc_content,  .. } => {
+
+            AntiPattern::BeginTimeHeredoc {
+                heredoc_content, ..
+            } => {
                 // Create a runtime-dependent node
                 let node = ExtendedAstNode::RuntimeDependentParse {
                     construct_type: "BEGIN_heredoc".to_string(),
@@ -249,12 +262,12 @@ impl UnderstandingParser {
                     }],
                     diagnostics: vec![],
                 };
-                
+
                 // Find the end of the BEGIN block
                 let end_pos = code.find('}').unwrap_or(code.len()) + 1;
                 (node, end_pos)
             }
-            
+
             AntiPattern::DynamicHeredocDelimiter { expression, .. } => {
                 // Mark as unparseable but try to find where it ends
                 let delimiter_guess = expression
@@ -263,10 +276,10 @@ impl UnderstandingParser {
                     .split(['{', '}', '(', ')'])
                     .next()
                     .unwrap_or("EOF");
-                
+
                 let end_pattern = format!("\n{}\n", delimiter_guess);
                 let end_pos = code.find(&end_pattern).unwrap_or(code.len());
-                
+
                 let node = ExtendedAstNode::Unparseable {
                     pattern: pattern.clone(),
                     raw_text: Arc::from(&code[..end_pos]),
@@ -274,10 +287,10 @@ impl UnderstandingParser {
                     diagnostics: vec![],
                     recovery_point: end_pos,
                 };
-                
+
                 (node, end_pos)
             }
-            
+
             _ => {
                 // Default handling for other patterns
                 let node = ExtendedAstNode::Unparseable {
@@ -287,7 +300,7 @@ impl UnderstandingParser {
                     diagnostics: vec![],
                     recovery_point: 0,
                 };
-                
+
                 (node, 0)
             }
         }
@@ -306,36 +319,27 @@ impl ParseResult {
     /// Generate a comprehensive report
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
-        
+
         // Summary
-        report.push_str(&format!(
-            "Parse Coverage: {:.1}%\n",
-            self.parse_coverage
-        ));
-        
+        report.push_str(&format!("Parse Coverage: {:.1}%\n", self.parse_coverage));
+
         if !self.diagnostics.is_empty() {
-            report.push_str(&format!(
-                "Issues Found: {}\n\n",
-                self.diagnostics.len()
-            ));
-            
+            report.push_str(&format!("Issues Found: {}\n\n", self.diagnostics.len()));
+
             // Anti-pattern report
             let detector = AntiPatternDetector::new();
             report.push_str(&detector.format_report(&self.diagnostics));
         }
-        
+
         if !self.recovery_points.is_empty() {
-            report.push_str(&format!(
-                "\nRecovery Points: {:?}\n",
-                self.recovery_points
-            ));
+            report.push_str(&format!("\nRecovery Points: {:?}\n", self.recovery_points));
         }
-        
+
         // AST summary
         report.push_str("\nAST Structure:\n");
         report.push_str(&self.ast.to_sexp());
         report.push('\n');
-        
+
         report
     }
 }
@@ -343,7 +347,7 @@ impl ParseResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_understanding_parser_clean_code() {
         let mut parser = UnderstandingParser::new();
@@ -351,12 +355,12 @@ mod tests {
 my $x = 42;
 print "Hello, world!\n";
 "#;
-        
+
         let result = parser.parse_with_understanding(code).unwrap();
         assert_eq!(result.parse_coverage, 100.0);
         assert!(result.diagnostics.is_empty());
     }
-    
+
     #[test]
     fn test_understanding_parser_with_format() {
         let mut parser = UnderstandingParser::new();
@@ -368,12 +372,12 @@ $name
 END
 .
 "#;
-        
+
         let result = parser.parse_with_understanding(code).unwrap();
         assert!(!result.diagnostics.is_empty());
         assert!(result.ast.has_anti_patterns());
     }
-    
+
     #[test]
     fn test_understanding_parser_with_begin_heredoc() {
         let mut parser = UnderstandingParser::new();
@@ -384,7 +388,7 @@ BEGIN {
 END
 }
 "#;
-        
+
         let result = parser.parse_with_understanding(code).unwrap();
         assert!(!result.diagnostics.is_empty());
         let report = result.generate_report();

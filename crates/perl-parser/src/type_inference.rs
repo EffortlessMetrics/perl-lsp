@@ -10,7 +10,10 @@ pub enum PerlType {
     /// Array type
     Array(Box<PerlType>),
     /// Hash type with key and value types
-    Hash { key: Box<PerlType>, value: Box<PerlType> },
+    Hash {
+        key: Box<PerlType>,
+        value: Box<PerlType>,
+    },
     /// Reference to another type
     Reference(Box<PerlType>),
     /// Subroutine type with parameter and return types
@@ -97,9 +100,9 @@ impl TypeEnvironment {
     }
 
     pub fn get_variable(&self, name: &str) -> Option<&PerlType> {
-        self.variables.get(name).or_else(|| {
-            self.parent.as_ref().and_then(|p| p.get_variable(name))
-        })
+        self.variables
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
     }
 
     pub fn set_subroutine(&mut self, name: String, ty: PerlType) {
@@ -107,9 +110,9 @@ impl TypeEnvironment {
     }
 
     pub fn get_subroutine(&self, name: &str) -> Option<&PerlType> {
-        self.subroutines.get(name).or_else(|| {
-            self.parent.as_ref().and_then(|p| p.get_subroutine(name))
-        })
+        self.subroutines
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_subroutine(name)))
     }
 }
 
@@ -139,114 +142,129 @@ impl TypeInferenceEngine {
             builtins: HashMap::new(),
             _type_aliases: HashMap::new(),
         };
-        
+
         // Initialize built-in function types
         engine.init_builtins();
-        
+
         engine
     }
 
     fn init_builtins(&mut self) {
         use PerlType::*;
         use ScalarType::*;
-        
+
         // String functions
-        self.builtins.insert("length".to_string(), 
+        self.builtins.insert(
+            "length".to_string(),
             Subroutine {
                 params: vec![Scalar(String)],
                 returns: vec![Scalar(Integer)],
-            }
+            },
         );
-        
-        self.builtins.insert("substr".to_string(),
+
+        self.builtins.insert(
+            "substr".to_string(),
             Subroutine {
                 params: vec![Scalar(String), Scalar(Integer), Scalar(Integer)],
                 returns: vec![Scalar(String)],
-            }
+            },
         );
-        
+
         // Array functions
-        self.builtins.insert("push".to_string(),
+        self.builtins.insert(
+            "push".to_string(),
             Subroutine {
                 params: vec![Array(Box::new(Any)), Any],
                 returns: vec![Scalar(Integer)],
-            }
+            },
         );
-        
-        self.builtins.insert("pop".to_string(),
+
+        self.builtins.insert(
+            "pop".to_string(),
             Subroutine {
                 params: vec![Array(Box::new(Any))],
                 returns: vec![Any],
-            }
+            },
         );
-        
+
         // Hash functions
-        self.builtins.insert("keys".to_string(),
+        self.builtins.insert(
+            "keys".to_string(),
             Subroutine {
-                params: vec![Hash { 
-                    key: Box::new(Scalar(String)), 
-                    value: Box::new(Any) 
+                params: vec![Hash {
+                    key: Box::new(Scalar(String)),
+                    value: Box::new(Any),
                 }],
                 returns: vec![Array(Box::new(Scalar(String)))],
-            }
+            },
         );
-        
+
         // I/O functions
-        self.builtins.insert("print".to_string(),
+        self.builtins.insert(
+            "print".to_string(),
             Subroutine {
                 params: vec![Any],
                 returns: vec![Scalar(Boolean)],
-            }
+            },
         );
-        
-        self.builtins.insert("open".to_string(),
+
+        self.builtins.insert(
+            "open".to_string(),
             Subroutine {
                 params: vec![Glob, Scalar(String), Scalar(String)],
                 returns: vec![Scalar(Boolean)],
-            }
+            },
         );
-        
+
         // Reference functions
-        self.builtins.insert("ref".to_string(),
+        self.builtins.insert(
+            "ref".to_string(),
             Subroutine {
                 params: vec![Any],
                 returns: vec![Scalar(String)],
-            }
+            },
         );
-        
+
         // Type checking functions
-        self.builtins.insert("defined".to_string(),
+        self.builtins.insert(
+            "defined".to_string(),
             Subroutine {
                 params: vec![Any],
                 returns: vec![Scalar(Boolean)],
-            }
+            },
         );
     }
 
     /// Infer types for an AST
     pub fn infer(&mut self, ast: &Node) -> Result<PerlType, Vec<TypeConstraint>> {
         let ty = self.infer_node(ast, &mut self.global_env.clone())?;
-        
+
         // Check constraints
         if !self.constraints.is_empty() {
-            let violations: Vec<_> = self.constraints.iter()
+            let violations: Vec<_> = self
+                .constraints
+                .iter()
                 .filter(|c| !self.types_compatible(&c.expected, &c.actual))
                 .cloned()
                 .collect();
-            
+
             if !violations.is_empty() {
                 return Err(violations);
             }
         }
-        
+
         Ok(ty)
     }
 
     /// Infer type for a single node
-    fn infer_node(&mut self, node: &Node, env: &mut TypeEnvironment) -> Result<PerlType, Vec<TypeConstraint>> {
+    fn infer_node(
+        &mut self,
+        node: &Node,
+        env: &mut TypeEnvironment,
+    ) -> Result<PerlType, Vec<TypeConstraint>> {
         use PerlType::*;
         use ScalarType::*;
-        
+
         match &node.kind {
             NodeKind::Program { statements } => {
                 let mut last_type = Void;
@@ -255,7 +273,7 @@ impl TypeInferenceEngine {
                 }
                 Ok(last_type)
             }
-            
+
             NodeKind::Number { value } => {
                 if value.contains('.') || value.contains('e') || value.contains('E') {
                     Ok(Scalar(Float))
@@ -263,17 +281,17 @@ impl TypeInferenceEngine {
                     Ok(Scalar(Integer))
                 }
             }
-            
+
             NodeKind::String { .. } => Ok(Scalar(String)),
-            
+
             NodeKind::Undef => Ok(Scalar(Undef)),
-            
+
             NodeKind::Variable { sigil, name } => {
                 // First check if we have a known type for this variable (use name without sigil)
                 if let Some(ty) = env.get_variable(name) {
                     return Ok(ty.clone());
                 }
-                
+
                 // Otherwise, infer from sigil
                 match sigil.as_str() {
                     "$" => {
@@ -283,7 +301,8 @@ impl TypeInferenceEngine {
                     "@" => {
                         // Array variable - store type for later retrieval
                         let array_type = Array(Box::new(Any));
-                        self.global_env.set_variable(name.to_string(), array_type.clone());
+                        self.global_env
+                            .set_variable(name.to_string(), array_type.clone());
                         Ok(array_type)
                     }
                     "%" => {
@@ -292,7 +311,8 @@ impl TypeInferenceEngine {
                             key: Box::new(Scalar(String)),
                             value: Box::new(Any),
                         };
-                        self.global_env.set_variable(name.to_string(), hash_type.clone());
+                        self.global_env
+                            .set_variable(name.to_string(), hash_type.clone());
                         Ok(hash_type)
                     }
                     "*" => {
@@ -305,14 +325,14 @@ impl TypeInferenceEngine {
                     }
                 }
             }
-            
+
             NodeKind::ArrayLiteral { elements } => {
                 if elements.is_empty() {
                     Ok(Array(Box::new(Any)))
                 } else {
                     // Infer element type from first element
                     let elem_type = self.infer_node(&elements[0], env)?;
-                    
+
                     // Check all elements have compatible types
                     for elem in &elements[1..] {
                         let ty = self.infer_node(elem, env)?;
@@ -321,11 +341,11 @@ impl TypeInferenceEngine {
                             return Ok(Array(Box::new(Any)));
                         }
                     }
-                    
+
                     Ok(Array(Box::new(elem_type)))
                 }
             }
-            
+
             NodeKind::HashLiteral { pairs } => {
                 if pairs.is_empty() {
                     return Ok(Hash {
@@ -333,32 +353,32 @@ impl TypeInferenceEngine {
                         value: Box::new(Any),
                     });
                 }
-                
+
                 // Collect all key and value types
                 let mut key_types = Vec::new();
                 let mut value_types = Vec::new();
-                
+
                 for (key, val) in pairs {
                     key_types.push(self.infer_node(key, env)?);
                     value_types.push(self.infer_node(val, env)?);
                 }
-                
+
                 // Unify key types (typically strings)
                 let key_type = self.unify_types(&key_types);
-                
+
                 // Unify value types - use smart unification
                 let value_type = self.unify_types(&value_types);
-                
+
                 Ok(Hash {
                     key: Box::new(key_type),
                     value: Box::new(value_type),
                 })
             }
-            
+
             NodeKind::Binary { left, op, right } => {
                 let left_ty = self.infer_node(left, env)?;
                 let right_ty = self.infer_node(right, env)?;
-                
+
                 match op.as_str() {
                     // Arithmetic operators
                     "+" | "-" | "*" | "/" | "%" | "**" => {
@@ -367,38 +387,33 @@ impl TypeInferenceEngine {
                         self.add_constraint(Scalar(Mixed), right_ty.clone(), "arithmetic operator");
                         Ok(Scalar(Float))
                     }
-                    
+
                     // String operators
                     "." | "x" => {
                         self.add_constraint(Scalar(String), left_ty.clone(), "string operator");
                         Ok(Scalar(String))
                     }
-                    
+
                     // Comparison operators
-                    "==" | "!=" | "<" | ">" | "<=" | ">=" | 
-                    "eq" | "ne" | "lt" | "gt" | "le" | "ge" |
-                    "<=>" | "cmp" => {
-                        Ok(Scalar(Boolean))
-                    }
-                    
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "eq" | "ne" | "lt" | "gt" | "le"
+                    | "ge" | "<=>" | "cmp" => Ok(Scalar(Boolean)),
+
                     // Logical operators
-                    "&&" | "||" | "and" | "or" | "xor" => {
-                        Ok(Scalar(Boolean))
-                    }
-                    
+                    "&&" | "||" | "and" | "or" | "xor" => Ok(Scalar(Boolean)),
+
                     // Assignment operators
                     "=" | "+=" | "-=" | "*=" | "/=" | ".=" => {
                         env.set_variable(self.extract_var_name(left), right_ty.clone());
                         Ok(right_ty)
                     }
-                    
-                    _ => Ok(Any)
+
+                    _ => Ok(Any),
                 }
             }
-            
+
             NodeKind::Unary { op, operand } => {
                 let operand_ty = self.infer_node(operand, env)?;
-                
+
                 match op.as_str() {
                     "!" | "not" => Ok(Scalar(Boolean)),
                     "-" | "+" => {
@@ -406,13 +421,13 @@ impl TypeInferenceEngine {
                         Ok(operand_ty)
                     }
                     "\\" => Ok(Reference(Box::new(operand_ty))),
-                    _ => Ok(Any)
+                    _ => Ok(Any),
                 }
             }
-            
+
             NodeKind::FunctionCall { name, args: _ } => {
                 let func_name = name.clone();
-                
+
                 // Check built-in functions
                 if let Some(sig) = self.builtins.get(&func_name) {
                     if let Subroutine { returns, .. } = sig {
@@ -425,7 +440,7 @@ impl TypeInferenceEngine {
                         }
                     }
                 }
-                
+
                 // Check user-defined functions
                 if let Some(ty) = env.get_subroutine(&func_name) {
                     if let Subroutine { returns, .. } = ty {
@@ -438,35 +453,39 @@ impl TypeInferenceEngine {
                         }
                     }
                 }
-                
+
                 // Unknown function, return Any
                 Ok(Any)
             }
-            
+
             NodeKind::Subroutine { name, body, .. } => {
                 // Create new scope for subroutine
                 let mut sub_env = TypeEnvironment::with_parent(env.clone());
-                
+
                 // Default to accepting any parameters for now
                 let param_types = vec![Any];
-                
+
                 // Infer return type from body
                 let return_type = self.infer_node(body, &mut sub_env)?;
-                
+
                 let sub_type = Subroutine {
                     params: param_types,
                     returns: vec![return_type],
                 };
-                
+
                 // Register subroutine in environment
                 if let Some(sub_name) = name {
                     env.set_subroutine(sub_name.clone(), sub_type.clone());
                 }
-                
+
                 Ok(sub_type)
             }
-            
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 // Determine type from variable sigil and initializer
                 let var_type = if let NodeKind::Variable { sigil, name } = &variable.kind {
                     // Use the sigil field to determine type
@@ -488,30 +507,36 @@ impl TypeInferenceEngine {
                             PerlType::Scalar(ScalarType::Undef)
                         }
                     };
-                    
+
                     // Store in both environments using the name (without sigil)
-                    self.global_env.set_variable(name.to_string(), inferred_type.clone());
+                    self.global_env
+                        .set_variable(name.to_string(), inferred_type.clone());
                     env.set_variable(name.to_string(), inferred_type.clone());
-                    
+
                     inferred_type
                 } else {
                     PerlType::Any
                 };
-                
+
                 Ok(var_type)
             }
-            
-            NodeKind::If { condition, then_branch, else_branch, .. } => {
+
+            NodeKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 let _cond_ty = self.infer_node(condition, env)?;
-                
+
                 let then_ty = self.infer_node(then_branch, env)?;
-                
+
                 let else_ty = if let Some(else_node) = else_branch {
                     self.infer_node(else_node, env)?
                 } else {
                     Void
                 };
-                
+
                 // Return union type if branches have different types
                 if self.types_compatible(&then_ty, &else_ty) {
                     Ok(then_ty)
@@ -523,7 +548,7 @@ impl TypeInferenceEngine {
                     Ok(Union(vec![then_ty, else_ty]))
                 }
             }
-            
+
             NodeKind::Return { value } => {
                 if let Some(val) = value {
                     self.infer_node(val, env)
@@ -531,7 +556,7 @@ impl TypeInferenceEngine {
                     Ok(Void)
                 }
             }
-            
+
             NodeKind::Block { statements } => {
                 let mut last_type = Void;
                 for stmt in statements {
@@ -539,14 +564,18 @@ impl TypeInferenceEngine {
                 }
                 Ok(last_type)
             }
-            
-            _ => Ok(Any) // Default for unhandled nodes
+
+            _ => Ok(Any), // Default for unhandled nodes
         }
     }
 
     /// Parse a subroutine signature
     #[allow(dead_code)]
-    fn parse_signature(&mut self, _sig: &Node, _env: &mut TypeEnvironment) -> Result<Vec<PerlType>, Vec<TypeConstraint>> {
+    fn parse_signature(
+        &mut self,
+        _sig: &Node,
+        _env: &mut TypeEnvironment,
+    ) -> Result<Vec<PerlType>, Vec<TypeConstraint>> {
         // Simplified signature parsing
         // In a full implementation, this would parse Perl 5.20+ signatures
         Ok(vec![PerlType::Any])
@@ -555,10 +584,8 @@ impl TypeInferenceEngine {
     /// Extract variable name from a node
     fn extract_var_name(&self, node: &Node) -> String {
         match &node.kind {
-            NodeKind::Variable { name, .. } => {
-                name.trim_start_matches(['$', '@', '%']).to_string()
-            }
-            _ => String::new()
+            NodeKind::Variable { name, .. } => name.trim_start_matches(['$', '@', '%']).to_string(),
+            _ => String::new(),
         }
     }
 
@@ -567,7 +594,7 @@ impl TypeInferenceEngine {
     fn extract_func_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Identifier { name } => name.clone(),
-            _ => String::new()
+            _ => String::new(),
         }
     }
 
@@ -590,28 +617,28 @@ impl TypeInferenceEngine {
     fn unify_types(&self, types: &[PerlType]) -> PerlType {
         use PerlType::*;
         use ScalarType::*;
-        
+
         if types.is_empty() {
             return Any;
         }
-        
+
         if types.len() == 1 {
             return types[0].clone();
         }
-        
+
         // Check if all types are the same
         let first = &types[0];
         if types.iter().all(|t| self.types_compatible(first, t)) {
             return first.clone();
         }
-        
+
         // Special case: all scalar types
         let all_scalars = types.iter().all(|t| matches!(t, Scalar(_)));
         if all_scalars {
             // Check if all are numeric
-            let all_numeric = types.iter().all(|t| {
-                matches!(t, Scalar(Integer) | Scalar(Float))
-            });
+            let all_numeric = types
+                .iter()
+                .all(|t| matches!(t, Scalar(Integer) | Scalar(Float)));
             if all_numeric {
                 // If any float, return float, else integer
                 if types.iter().any(|t| matches!(t, Scalar(Float))) {
@@ -620,21 +647,22 @@ impl TypeInferenceEngine {
                     return Scalar(Integer);
                 }
             }
-            
+
             // Check if all are strings
             let all_strings = types.iter().all(|t| matches!(t, Scalar(String)));
             if all_strings {
                 return Scalar(String);
             }
-            
+
             // Mixed scalar types
             return Scalar(Mixed);
         }
-        
+
         // Special case: all arrays with same element type
         let all_arrays = types.iter().all(|t| matches!(t, Array(_)));
         if all_arrays {
-            let element_types: Vec<PerlType> = types.iter()
+            let element_types: Vec<PerlType> = types
+                .iter()
                 .filter_map(|t| {
                     if let Array(elem) = t {
                         Some(elem.as_ref().clone())
@@ -643,29 +671,29 @@ impl TypeInferenceEngine {
                     }
                 })
                 .collect();
-            
+
             return Array(Box::new(self.unify_types(&element_types)));
         }
-        
+
         // Special case: all hashes
         let all_hashes = types.iter().all(|t| matches!(t, Hash { .. }));
         if all_hashes {
             let mut key_types = Vec::new();
             let mut value_types = Vec::new();
-            
+
             for t in types {
                 if let Hash { key, value } = t {
                     key_types.push(key.as_ref().clone());
                     value_types.push(value.as_ref().clone());
                 }
             }
-            
+
             return Hash {
                 key: Box::new(self.unify_types(&key_types)),
                 value: Box::new(self.unify_types(&value_types)),
             };
         }
-        
+
         // Heterogeneous types - create union or return Any
         if types.len() <= 3 {
             // Small number of types, use union
@@ -675,11 +703,11 @@ impl TypeInferenceEngine {
             Any
         }
     }
-    
+
     /// Check if two types are compatible
     fn types_compatible(&self, t1: &PerlType, t2: &PerlType) -> bool {
         use PerlType::*;
-        
+
         match (t1, t2) {
             (Any, _) | (_, Any) => true,
             (Scalar(s1), Scalar(s2)) => self.scalars_compatible(s1, s2),
@@ -691,31 +719,32 @@ impl TypeInferenceEngine {
             (Union(types), other) | (other, Union(types)) => {
                 types.iter().any(|t| self.types_compatible(t, other))
             }
-            _ => t1 == t2
+            _ => t1 == t2,
         }
     }
 
     /// Check if two scalar types are compatible
     fn scalars_compatible(&self, s1: &ScalarType, s2: &ScalarType) -> bool {
         use ScalarType::*;
-        
+
         match (s1, s2) {
             (Mixed, _) | (_, Mixed) => true,
             (Integer, Float) | (Float, Integer) => true, // Numeric coercion
             (String, Integer) | (Integer, String) => true, // String-number coercion in Perl
             (String, Float) | (Float, String) => true,
-            _ => s1 == s2
+            _ => s1 == s2,
         }
     }
-    
+
     /// Get type information for a variable at a specific location
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
     }
-    
+
     /// Get all type errors/warnings
     pub fn get_type_errors(&self) -> Vec<TypeConstraint> {
-        self.constraints.iter()
+        self.constraints
+            .iter()
             .filter(|c| !self.types_compatible(&c.expected, &c.actual))
             .cloned()
             .collect()
@@ -731,11 +760,11 @@ impl TypeBasedCompletion {
     pub fn new(engine: Arc<TypeInferenceEngine>) -> Self {
         Self { engine }
     }
-    
+
     /// Get completions based on variable type
     pub fn get_completions(&self, var_name: &str, _context: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        
+
         if let Some(var_type) = self.engine.get_type_at(var_name) {
             match var_type {
                 PerlType::Array(_) => {
@@ -828,7 +857,7 @@ impl TypeBasedCompletion {
                 _ => {}
             }
         }
-        
+
         completions
     }
 }
@@ -844,41 +873,50 @@ pub struct CompletionItem {
 mod tests {
     use super::*;
     use crate::Parser;
-    
+
     #[test]
     fn test_scalar_type_inference() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             my $x = 42;
             my $y = "hello";
             my $z = 3.14;
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let result = engine.infer(&ast);
-        
+
         assert!(result.is_ok());
-        assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
-        assert_eq!(engine.get_type_at("y"), Some(PerlType::Scalar(ScalarType::String)));
-        assert_eq!(engine.get_type_at("z"), Some(PerlType::Scalar(ScalarType::Float)));
+        assert_eq!(
+            engine.get_type_at("x"),
+            Some(PerlType::Scalar(ScalarType::Integer))
+        );
+        assert_eq!(
+            engine.get_type_at("y"),
+            Some(PerlType::Scalar(ScalarType::String))
+        );
+        assert_eq!(
+            engine.get_type_at("z"),
+            Some(PerlType::Scalar(ScalarType::Float))
+        );
     }
-    
+
     #[test]
     fn test_array_type_inference() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             my @numbers = (1, 2, 3);
             my @strings = ("a", "b", "c");
             my @mixed = (1, "hello", 3.14);
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
-        
+
         assert!(matches!(
             engine.get_type_at("numbers"),
             Some(PerlType::Array(_))
@@ -892,109 +930,124 @@ mod tests {
             Some(PerlType::Array(_))
         ));
     }
-    
+
     #[test]
     fn test_hash_type_inference() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             my %numbers = (a => 1, b => 2, c => 3);
             my %strings = (x => "hello", y => "world");
             my %mixed = (num => 42, str => "text", float => 3.14);
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
-        
+
         // Check that hash types are properly inferred
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("numbers") {
-            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+            assert!(matches!(
+                value.as_ref(),
+                &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any
+            ));
         } else {
             panic!("Expected hash type for numbers");
         }
-        
+
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("strings") {
-            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::String) | &PerlType::Any));
+            assert!(matches!(
+                value.as_ref(),
+                &PerlType::Scalar(ScalarType::String) | &PerlType::Any
+            ));
         } else {
             panic!("Expected hash type for strings");
         }
-        
+
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("mixed") {
             // Mixed types should unify to Mixed or Any
-            assert!(matches!(value.as_ref(), 
+            assert!(matches!(
+                value.as_ref(),
                 &PerlType::Scalar(ScalarType::Mixed) | &PerlType::Any | &PerlType::Union(_)
             ));
         } else {
             panic!("Expected hash type for mixed");
         }
     }
-    
+
     #[test]
     fn test_hash_merge_type_inference() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             my %base = (a => 1, b => 2);
             my %extended = (%base, c => 3, d => 4);
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
-        
+
         // Both hashes should have integer values
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("base") {
-            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+            assert!(matches!(
+                value.as_ref(),
+                &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any
+            ));
         }
-        
+
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("extended") {
-            assert!(matches!(value.as_ref(), &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any));
+            assert!(matches!(
+                value.as_ref(),
+                &PerlType::Scalar(ScalarType::Integer) | &PerlType::Any
+            ));
         }
     }
-    
+
     #[test]
     fn test_function_return_type() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             sub get_length {
                 my $str = shift;
                 return length($str);
             }
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
-        
+
         // Check that get_length returns an integer
-        if let Some(PerlType::Subroutine { returns, .. }) = engine.global_env.get_subroutine("get_length") {
+        if let Some(PerlType::Subroutine { returns, .. }) =
+            engine.global_env.get_subroutine("get_length")
+        {
             assert_eq!(returns.len(), 1);
             assert_eq!(returns[0], PerlType::Scalar(ScalarType::Integer));
         }
     }
-    
+
     #[test]
     fn test_type_based_completions() {
         let mut engine = TypeInferenceEngine::new();
-        
+
         let code = r#"
             my @items = (1, 2, 3);
             my %config = (name => "test", value => 42);
         "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
-        
+
         let completion = TypeBasedCompletion::new(Arc::new(engine));
-        
+
         // Get array completions
         let array_completions = completion.get_completions("items", "");
         assert!(array_completions.iter().any(|c| c.label == "push"));
         assert!(array_completions.iter().any(|c| c.label == "pop"));
-        
+
         // Get hash completions
         let hash_completions = completion.get_completions("config", "");
         assert!(hash_completions.iter().any(|c| c.label == "keys"));

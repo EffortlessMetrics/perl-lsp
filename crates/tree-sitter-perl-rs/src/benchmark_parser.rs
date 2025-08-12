@@ -1,11 +1,11 @@
 //! Simplified parser interface for benchmarking
-//! 
+//!
 //! This module provides a clean interface to the Pest-based parser
 //! without dependencies on perl-lexer.
 
-use crate::pure_rust_parser::{PerlParser, AstNode, PureRustPerlParser};
-use pest::Parser;
 use crate::error::ParseError;
+use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser};
+use pest::Parser;
 
 /// Benchmark-friendly wrapper for the Pure Rust Pest parser
 /// This wrapper provides an immutable parse method for benchmarking
@@ -16,7 +16,7 @@ impl BenchmarkPureRustParser {
     pub fn new() -> Self {
         BenchmarkPureRustParser
     }
-    
+
     /// Parse Perl code (immutable interface for benchmarking)
     pub fn parse(&self, input: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
         // Create a new mutable parser instance for each parse

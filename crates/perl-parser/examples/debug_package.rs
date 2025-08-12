@@ -1,18 +1,18 @@
 //! Debug package parsing
-use perl_parser::{Parser, TokenStream, TokenKind};
 use perl_lexer::PerlLexer;
+use perl_parser::{Parser, TokenKind, TokenStream};
 
 fn main() {
     let code = "package Test::Module;";
     println!("Code: {}", code);
-    
+
     // Show lexer output
     println!("\nLexer tokens:");
     let mut lexer = PerlLexer::new(code);
     while let Some(token) = lexer.next_token() {
         println!("  {:?}", token);
     }
-    
+
     // Show parser tokens
     println!("\nParser tokens:");
     let mut stream = TokenStream::new(code);
@@ -30,7 +30,7 @@ fn main() {
             }
         }
     }
-    
+
     // Try parsing
     println!("\nParsing result:");
     let mut parser = Parser::new(code);

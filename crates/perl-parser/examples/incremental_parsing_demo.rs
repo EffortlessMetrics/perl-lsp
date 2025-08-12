@@ -25,7 +25,7 @@ use yansi::Paint;
 fn main() {
     println!("🚀 {} {}", "Incremental Parsing Demo".bold().cyan(), "- Achieving <1ms updates".yellow());
     println!("{}", "=".repeat(60));
-    
+
     // ... rest of the original demo code ...
 }
 */

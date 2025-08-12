@@ -6,20 +6,24 @@ fn main() {
         // Traditional package declaration
         ("package Foo;", "simple package"),
         ("package Foo::Bar;", "package with namespace"),
-        
         // Package blocks (Perl 5.14+)
         ("package Foo { }", "empty package block"),
-        ("package Bar { sub method { } }", "package block with method"),
-        
+        (
+            "package Bar { sub method { } }",
+            "package block with method",
+        ),
         // The test case
-        (r#"package Bar {
+        (
+            r#"package Bar {
     use parent 'Foo';
     
     sub method {
         my $self = shift;
         $self->SUPER::method();
     }
-}"#, "package block with use and method"),
+}"#,
+            "package block with use and method",
+        ),
     ];
 
     for (test, desc) in tests {

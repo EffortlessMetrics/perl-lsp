@@ -122,7 +122,7 @@ return $value;
             println!("✅ Successfully parsed!");
             println!("\nS-expression output:");
             println!("{}", ast.to_sexp());
-            
+
             // Count statements
             if let perl_parser::ast::NodeKind::Program { statements } = &ast.kind {
                 println!("\nStatistics:");

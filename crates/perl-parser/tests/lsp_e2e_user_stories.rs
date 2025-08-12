@@ -1,15 +1,13 @@
 //! End-to-end tests for LSP user stories
-//! 
+//!
 //! Each test represents a complete user story, simulating real-world usage patterns
 //! to ensure the LSP server provides a smooth developer experience.
 
 mod support;
 
+use perl_parser::{JsonRpcRequest, LspServer, Parser};
+use serde_json::{Value, json};
 use support::*;
-use perl_parser::{
-    LspServer, JsonRpcRequest, Parser,
-};
-use serde_json::{json, Value};
 
 /// Helper to create a test LSP server instance
 fn create_test_server() -> LspServer {
@@ -24,44 +22,57 @@ fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
         method: method.to_string(),
         params,
     };
-    
-    server.handle_request(request)
+
+    server
+        .handle_request(request)
         .and_then(|response| response.result)
 }
 
 /// Initialize the LSP server
 fn initialize_server(server: &mut LspServer) {
-    send_request(server, "initialize", Some(json!({
-        "processId": null,
-        "capabilities": {},
-        "rootUri": "file:///test"
-    })));
+    send_request(
+        server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
     send_request(server, "initialized", None);
 }
 
 /// Open a document in the server
 fn open_document(server: &mut LspServer, uri: &str, text: &str) {
-    send_request(server, "textDocument/didOpen", Some(json!({
-        "textDocument": {
-            "uri": uri,
-            "languageId": "perl",
-            "version": 1,
-            "text": text
-        }
-    })));
+    send_request(
+        server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })),
+    );
 }
 
 /// Update a document in the server
 fn update_document(server: &mut LspServer, uri: &str, version: i32, text: &str) {
-    send_request(server, "textDocument/didChange", Some(json!({
-        "textDocument": {
-            "uri": uri,
-            "version": version
-        },
-        "contentChanges": [{
-            "text": text
-        }]
-    })));
+    send_request(
+        server,
+        "textDocument/didChange",
+        Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "version": version
+            },
+            "contentChanges": [{
+                "text": text
+            }]
+        })),
+    );
 }
 
 // ==================== USER STORY 1: REAL-TIME SYNTAX DIAGNOSTICS ====================
@@ -72,7 +83,7 @@ fn update_document(server: &mut LspServer, uri: &str, version: i32, text: &str) 
 fn test_user_story_real_time_diagnostics() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Scenario 1: Developer opens a file with syntax error
     let code_with_error = r#"
 sub process_data {
@@ -82,16 +93,16 @@ sub process_data {
     }
 }
 "#;
-    
+
     open_document(&mut server, "file:///test/syntax_error.pl", code_with_error);
-    
+
     // The server should have published diagnostics
     // In a real implementation, we'd check the diagnostics notification
     // For this test, we'll directly parse and check for errors
     let mut parser = Parser::new(code_with_error);
     let result = parser.parse();
     assert!(result.is_err());
-    
+
     // Scenario 2: Developer fixes the syntax error
     let fixed_code = r#"
 sub process_data {
@@ -101,12 +112,12 @@ sub process_data {
     }
 }
 "#;
-    
+
     update_document(&mut server, "file:///test/syntax_error.pl", 2, fixed_code);
-    
+
     // Wait a moment for diagnostics to be updated
     std::thread::sleep(std::time::Duration::from_millis(100));
-    
+
     // Scenario 3: Developer uses undefined variable
     let code_with_warning = r#"
 use strict;
@@ -117,8 +128,12 @@ sub calculate {
     return $y + $x;  # $y is undefined
 }
 "#;
-    
-    open_document(&mut server, "file:///test/undefined_var.pl", code_with_warning);
+
+    open_document(
+        &mut server,
+        "file:///test/undefined_var.pl",
+        code_with_warning,
+    );
     // In a full implementation, the diagnostics provider would detect undefined $y
 }
 
@@ -130,7 +145,7 @@ sub calculate {
 fn test_user_story_code_completion() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Scenario 1: Developer types '$' and wants to see available variables
     let code = r#"
 my $user_name = "Alice";
@@ -140,44 +155,52 @@ my @user_roles = ("admin", "editor");
 # Developer types $ here
 $
 "#;
-    
+
     open_document(&mut server, "file:///test/completion.pl", code);
-    
-    let result = send_request(&mut server, "textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/completion.pl"
-        },
-        "position": {
-            "line": 6,
-            "character": 1
-        }
-    })));
-    
+
+    let result = send_request(
+        &mut server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/completion.pl"
+            },
+            "position": {
+                "line": 6,
+                "character": 1
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let completions = result.unwrap();
     assert!(completions["items"].is_array());
-    
+
     let items = completions["items"].as_array().unwrap();
     assert!(items.iter().any(|item| item["label"] == "$user_name"));
     assert!(items.iter().any(|item| item["label"] == "$user_age"));
-    
+
     // Scenario 2: Developer types 'print' and wants to see builtin functions
     let code2 = r#"
 pri  # Developer is typing 'print'
 "#;
-    
+
     open_document(&mut server, "file:///test/builtin.pl", code2);
-    
-    let result = send_request(&mut server, "textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtin.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 3
-        }
-    })));
-    
+
+    let result = send_request(
+        &mut server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/builtin.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 3
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let completions = result.unwrap();
     let items = completions["items"].as_array().unwrap();
@@ -192,7 +215,7 @@ pri  # Developer is typing 'print'
 fn test_user_story_go_to_definition() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 package UserManager;
 
@@ -212,27 +235,31 @@ sub generate_id {
 # Later in the code...
 my $user = create_user("Bob", "bob@example.com");
 "#;
-    
+
     open_document(&mut server, "file:///test/definitions.pl", code);
-    
+
     // Developer ctrl+clicks on 'create_user' on line 17
-    let result = send_request(&mut server, "textDocument/definition", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/definitions.pl"
-        },
-        "position": {
-            "line": 17,
-            "character": 12  // On 'create_user'
-        }
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/definitions.pl"
+            },
+            "position": {
+                "line": 17,
+                "character": 12  // On 'create_user'
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let locations = result.unwrap();
     assert!(locations.is_array());
-    
+
     let locs = locations.as_array().unwrap();
     assert!(!locs.is_empty());
-    
+
     // Should point to line 3 where create_user is defined
     assert_eq!(locs[0]["range"]["start"]["line"], 3);
 }
@@ -245,7 +272,7 @@ my $user = create_user("Bob", "bob@example.com");
 fn test_user_story_find_references() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 my $config_file = "/etc/app.conf";
 
@@ -261,27 +288,31 @@ sub backup_config {
 
 print "Using config: $config_file\n";
 "#;
-    
+
     open_document(&mut server, "file:///test/references.pl", code);
-    
+
     // Developer wants to find all references to $config_file
-    let result = send_request(&mut server, "textDocument/references", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/references.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 4  // On $config_file declaration
-        },
-        "context": {
-            "includeDeclaration": true
-        }
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/references",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/references.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 4  // On $config_file declaration
+            },
+            "context": {
+                "includeDeclaration": true
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let references = result.unwrap();
     assert!(references.is_array());
-    
+
     let refs = references.as_array().unwrap();
     // We expect 5 references total: 1 declaration + 4 uses
     // Note: We modified the test to use || instead of 'or' due to parser limitations
@@ -291,7 +322,11 @@ print "Using config: $config_file\n";
     // 3. Use in die string: "Cannot open $config_file: $!"
     // 4. Use in backup string: "$config_file.bak"
     // 5. Use in print: "Using config: $config_file\n"
-    assert_eq!(refs.len(), 5, "Expected 5 references (1 declaration + 4 uses)");
+    assert_eq!(
+        refs.len(),
+        5,
+        "Expected 5 references (1 declaration + 4 uses)"
+    );
 }
 
 // ==================== USER STORY 5: HOVER INFORMATION ====================
@@ -302,27 +337,31 @@ print "Using config: $config_file\n";
 fn test_user_story_hover_information() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 use List::Util qw(max min sum);
 
 my @numbers = (5, 2, 8, 1, 9);
 my $total = sum(@numbers);  # Developer hovers over 'sum'
 "#;
-    
+
     open_document(&mut server, "file:///test/hover.pl", code);
-    
+
     // Developer hovers over 'sum'
-    let result = send_request(&mut server, "textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/hover.pl"
-        },
-        "position": {
-            "line": 4,
-            "character": 13  // On 'sum'
-        }
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/hover.pl"
+            },
+            "position": {
+                "line": 4,
+                "character": 13  // On 'sum'
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let hover = result.unwrap();
     assert!(hover["contents"].is_object() || hover["contents"].is_string());
@@ -336,7 +375,7 @@ my $total = sum(@numbers);  # Developer hovers over 'sum'
 fn test_user_story_document_symbols() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 package MyApp::Controller;
 
@@ -362,25 +401,27 @@ sub render_response {
 
 1;
 "#;
-    
+
     open_document(&mut server, "file:///test/outline.pl", code);
-    
+
     // Developer opens the outline view (using workspace symbols since documentSymbol is not implemented)
-    let result = send_request(&mut server, "workspace/symbol", Some(json!({
-        "query": ""  // Empty query to get all symbols
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": ""  // Empty query to get all symbols
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     assert!(symbols.is_array());
-    
+
     let syms = symbols.as_array().unwrap();
-    
+
     // Should have package, variable, and subroutines
-    let names: Vec<&str> = syms.iter()
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
-    
+    let names: Vec<&str> = syms.iter().map(|s| s["name"].as_str().unwrap()).collect();
+
     assert!(names.contains(&"MyApp::Controller"));
     assert!(names.contains(&"new"));
     assert!(names.contains(&"process_request"));
@@ -395,41 +436,45 @@ sub render_response {
 fn test_user_story_signature_help() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Test with a built-in function first
     let code = r#"
 my $text = "Hello World";
 my $result = substr($text, 6, );  # <- cursor is here after comma
 "#;
-    
+
     open_document(&mut server, "file:///test/signature.pl", code);
-    
+
     // Developer just typed the comma after "6"
-    let result = send_request(&mut server, "textDocument/signatureHelp", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/signature.pl"
-        },
-        "position": {
-            "line": 2,
-            "character": 30  // After the comma following "6"
-        }
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/signatureHelp",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/signature.pl"
+            },
+            "position": {
+                "line": 2,
+                "character": 30  // After the comma following "6"
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let sig_help = result.unwrap();
-    
+
     // Verify we got signature information
     assert!(sig_help["signatures"].is_array());
     let signatures = sig_help["signatures"].as_array().unwrap();
     assert!(!signatures.is_empty());
-    
+
     // Check that we have the substr signature
     let signature = &signatures[0];
     assert!(signature["label"].as_str().unwrap().contains("substr"));
-    
+
     // Check we have parameters
     assert!(signature["parameters"].is_array());
-    
+
     // Check the active parameter is set correctly (should be 2 for LENGTH parameter)
     assert_eq!(sig_help["activeParameter"].as_u64().unwrap(), 2);
 }
@@ -442,7 +487,7 @@ my $result = substr($text, 6, );  # <- cursor is here after comma
 fn test_user_story_rename_symbol() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 sub calculate_total {
     my ($items) = @_;
@@ -461,24 +506,28 @@ my $items = [
 my $sum = calculate_total($items);
 print "Total: $sum\n";
 "#;
-    
+
     open_document(&mut server, "file:///test/rename.pl", code);
-    
+
     // Developer wants to rename 'calculate_total' to 'compute_sum'
-    let result = send_request(&mut server, "textDocument/rename", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/rename.pl"
-        },
-        "position": {
-            "line": 1,
-            "character": 5  // On 'calculate_total'
-        },
-        "newName": "compute_sum"
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/rename",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/rename.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 5  // On 'calculate_total'
+            },
+            "newName": "compute_sum"
+        })),
+    );
+
     assert!(result.is_some());
     let edits = result.unwrap();
-    
+
     // Check if it's a WorkspaceEdit with changes or documentChanges
     if let Some(changes) = edits.get("changes") {
         assert!(changes.is_object());
@@ -499,7 +548,7 @@ print "Total: $sum\n";
 fn test_user_story_code_actions() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code = r#"
 use strict;
 use warnings;
@@ -511,34 +560,38 @@ sub process {
     }
 }
 "#;
-    
+
     open_document(&mut server, "file:///test/actions.pl", code);
-    
+
     // Developer sees a warning and requests code actions
-    let result = send_request(&mut server, "textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/actions.pl"
-        },
-        "range": {
-            "start": { "line": 6, "character": 8 },
-            "end": { "line": 6, "character": 18 }
-        },
-        "context": {
-            "diagnostics": [{
-                "range": {
-                    "start": { "line": 6, "character": 8 },
-                    "end": { "line": 6, "character": 18 }
-                },
-                "severity": 2,
-                "message": "Assignment in condition - did you mean '=='?"
-            }]
-        }
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/actions.pl"
+            },
+            "range": {
+                "start": { "line": 6, "character": 8 },
+                "end": { "line": 6, "character": 18 }
+            },
+            "context": {
+                "diagnostics": [{
+                    "range": {
+                        "start": { "line": 6, "character": 8 },
+                        "end": { "line": 6, "character": 18 }
+                    },
+                    "severity": 2,
+                    "message": "Assignment in condition - did you mean '=='?"
+                }]
+            }
+        })),
+    );
+
     assert!(result.is_some());
     let actions = result.unwrap();
     assert!(actions.is_array());
-    
+
     // Should offer to change = to == (if code actions are provided)
     let acts = actions.as_array().unwrap();
     // Code actions may be empty if the diagnostic provider doesn't detect this specific issue
@@ -554,45 +607,50 @@ sub process {
 fn test_user_story_incremental_parsing() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Large file with many functions
     let mut large_code = String::from("package LargeModule;\n\n");
     for i in 0..100 {
-        large_code.push_str(&format!(
-            "sub function_{} {{\n    return {};\n}}\n\n",
-            i, i
-        ));
+        large_code.push_str(&format!("sub function_{} {{\n    return {};\n}}\n\n", i, i));
     }
-    
+
     open_document(&mut server, "file:///test/large.pl", &large_code);
-    
+
     // Developer makes a small edit in the middle
     let edited_code = large_code.replace("function_50", "function_fifty");
-    
+
     // The edit is incremental - only one function name changed
     update_document(&mut server, "file:///test/large.pl", 2, &edited_code);
-    
+
     // Request symbols to verify parsing still works (using workspace symbols)
-    let result = send_request(&mut server, "workspace/symbol", Some(json!({
-        "query": "function_"  // Search for functions
-    })));
-    
+    let result = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "function_"  // Search for functions
+        })),
+    );
+
     assert!(result.is_some());
     let symbols = result.unwrap();
     let syms = symbols.as_array().unwrap();
-    
+
     // Should have found many functions
     assert!(syms.len() > 50); // We created 100 functions, should find most of them
-    
+
     // Verify the renamed function exists by searching specifically for it
-    let fifty_result = send_request(&mut server, "workspace/symbol", Some(json!({
-        "query": "fifty"
-    })));
-    
+    let fifty_result = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "fifty"
+        })),
+    );
+
     assert!(fifty_result.is_some());
     let fifty_symbols = fifty_result.unwrap();
     let fifty_syms = fifty_symbols.as_array().unwrap();
-    
+
     // Should find the renamed function
     assert_eq!(fifty_syms.len(), 1);
     assert_eq!(fifty_syms[0]["name"], "function_fifty");
@@ -605,7 +663,7 @@ fn test_user_story_incremental_parsing() {
 fn test_complete_development_workflow() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Step 1: Developer creates a new Perl module
     let initial_code = r#"
 package Calculator;
@@ -620,9 +678,9 @@ sub add {
 
 1;
 "#;
-    
+
     open_document(&mut server, "file:///test/Calculator.pm", initial_code);
-    
+
     // Step 2: Developer creates a script that uses the module
     let script_code = r#"
 use lib '.';
@@ -631,19 +689,23 @@ use Calculator;
 my $result = Calculator::add(5, 3);
 print "Result: $result\n";
 "#;
-    
+
     open_document(&mut server, "file:///test/script.pl", script_code);
-    
+
     // Step 3: Developer wants to see all available functions in Calculator
-    let symbols_result = send_request(&mut server, "workspace/symbol", Some(json!({
-        "query": "add"
-    })));
-    
+    let symbols_result = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "add"
+        })),
+    );
+
     assert!(symbols_result.is_some());
-    
+
     // Step 4: Developer would navigate to the add function definition
     // (Skipping since textDocument/definition is not implemented)
-    
+
     // Step 5: Developer adds a new function to Calculator
     let updated_calculator = r#"
 package Calculator;
@@ -663,22 +725,31 @@ sub multiply {
 
 1;
 "#;
-    
-    update_document(&mut server, "file:///test/Calculator.pm", 2, updated_calculator);
-    
+
+    update_document(
+        &mut server,
+        "file:///test/Calculator.pm",
+        2,
+        updated_calculator,
+    );
+
     // Step 6: Developer gets completion for the new function
-    let completion_result = send_request(&mut server, "textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/script.pl"
-        },
-        "position": {
-            "line": 5,
-            "character": 0  // At the end of the script
-        }
-    })));
-    
+    let completion_result = send_request(
+        &mut server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/script.pl"
+            },
+            "position": {
+                "line": 5,
+                "character": 0  // At the end of the script
+            }
+        })),
+    );
+
     assert!(completion_result.is_some());
-    
+
     // This workflow demonstrates how multiple LSP features work together
     // to provide a smooth development experience
 }
@@ -691,7 +762,7 @@ sub multiply {
 fn test_user_story_debugging_workflow() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Developer is debugging a complex data processing script
     let debug_code = r#"
 use strict;
@@ -737,49 +808,61 @@ my $data = [
 my $results = process_records($data);
 print Dumper($results);
 "#;
-    
+
     open_document(&mut server, "file:///test/debug.pl", debug_code);
-    
+
     // Scenario 1: Developer hovers over transform_record to understand what it does
-    let hover_result = send_request(&mut server, "textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/debug.pl"
-        },
-        "position": {
-            "line": 13,
-            "character": 25  // On 'transform_record'
-        }
-    })));
-    
+    let hover_result = send_request(
+        &mut server,
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/debug.pl"
+            },
+            "position": {
+                "line": 13,
+                "character": 25  // On 'transform_record'
+            }
+        })),
+    );
+
     assert_hover_has_text(&hover_result);
-    
+
     // Scenario 2: Developer finds all references to see where function is called
-    let refs = send_request(&mut server, "textDocument/references", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/debug.pl"
-        },
-        "position": {
-            "line": 24,
-            "character": 5  // On 'transform_record' definition
-        },
-        "context": {
-            "includeDeclaration": true
-        }
-    })));
-    
+    let refs = send_request(
+        &mut server,
+        "textDocument/references",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/debug.pl"
+            },
+            "position": {
+                "line": 24,
+                "character": 5  // On 'transform_record' definition
+            },
+            "context": {
+                "includeDeclaration": true
+            }
+        })),
+    );
+
     assert_references_found(&refs);
-    
+
     // Scenario 3: Developer uses call hierarchy to understand call flow
-    let call_hierarchy = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/debug.pl"
-        },
-        "position": {
-            "line": 6,
-            "character": 5  // On 'process_records'
-        }
-    })));
-    
+    let call_hierarchy = send_request(
+        &mut server,
+        "textDocument/prepareCallHierarchy",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/debug.pl"
+            },
+            "position": {
+                "line": 6,
+                "character": 5  // On 'process_records'
+            }
+        })),
+    );
+
     assert_call_hierarchy_items(&call_hierarchy, Some("process_records"));
 }
 
@@ -791,7 +874,7 @@ print Dumper($results);
 fn test_user_story_module_navigation() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Scenario: Developer working with custom modules
     let main_script = r#"
 #!/usr/bin/perl
@@ -821,9 +904,9 @@ sub process_user {
     return $user;
 }
 "#;
-    
+
     open_document(&mut server, "file:///test/main.pl", main_script);
-    
+
     // Module file
     let module_code = r#"
 package MyApp::Database;
@@ -843,36 +926,54 @@ sub fetch_all {
 
 1;
 "#;
-    
-    open_document(&mut server, "file:///test/lib/MyApp/Database.pm", module_code);
-    
+
+    open_document(
+        &mut server,
+        "file:///test/lib/MyApp/Database.pm",
+        module_code,
+    );
+
     // Developer wants to navigate to Database module definition
-    let definition = send_request(&mut server, "textDocument/definition", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/main.pl"
-        },
-        "position": {
-            "line": 12,
-            "character": 15  // On 'MyApp::Database'
-        }
-    })));
-    
+    let definition = send_request(
+        &mut server,
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/main.pl"
+            },
+            "position": {
+                "line": 12,
+                "character": 15  // On 'MyApp::Database'
+            }
+        })),
+    );
+
     // Definition might not be found if module isn't in path
     if let Some(def) = definition {
-        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
+        assert!(
+            def.is_array() || def.is_object(),
+            "Definition should be array or LocationLink"
+        );
     }
-    
+
     // Developer wants to find all uses of the Database module
-    let workspace_symbols = send_request(&mut server, "workspace/symbol", Some(json!({
-        "query": "Database"
-    })));
-    
+    let workspace_symbols = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "Database"
+        })),
+    );
+
     if let Some(symbols) = workspace_symbols {
-        let arr = symbols.as_array().expect("workspace symbols should be array");
+        let arr = symbols
+            .as_array()
+            .expect("workspace symbols should be array");
         // Module search might return empty if not in workspace
         if !arr.is_empty() {
             let has_database = arr.iter().any(|s| {
-                s.get("name").and_then(|n| n.as_str())
+                s.get("name")
+                    .and_then(|n| n.as_str())
                     .map(|n| n.contains("Database"))
                     .unwrap_or(false)
             });
@@ -889,7 +990,7 @@ sub fetch_all {
 fn test_user_story_code_review_workflow() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     // Code being reviewed with potential issues
     let review_code = r#"
 use strict;
@@ -946,48 +1047,60 @@ sub save_users {
     die "save_users not implemented";
 }
 "#;
-    
+
     open_document(&mut server, "file:///test/auth.pl", review_code);
-    
+
     // Reviewer uses document symbols to understand structure
-    let symbols = send_request(&mut server, "textDocument/documentSymbol", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/auth.pl"
-        }
-    })));
-    
+    let symbols = send_request(
+        &mut server,
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/auth.pl"
+            }
+        })),
+    );
+
     assert!(symbols.is_some());
-    
+
     // Reviewer checks for code issues
-    let code_actions = send_request(&mut server, "textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/auth.pl"
-        },
-        "range": {
-            "start": { "line": 0, "character": 0 },
-            "end": { "line": 55, "character": 0 }
-        },
-        "context": {
-            "diagnostics": []
-        }
-    })));
-    
+    let code_actions = send_request(
+        &mut server,
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/auth.pl"
+            },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 55, "character": 0 }
+            },
+            "context": {
+                "diagnostics": []
+            }
+        })),
+    );
+
     // Code actions might be empty for valid code
     if let Some(actions) = code_actions {
         assert_code_actions_available(&Some(actions));
     }
-    
+
     // Reviewer uses call hierarchy to understand impact
-    let prepare_call = send_request(&mut server, "textDocument/prepareCallHierarchy", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/auth.pl"
-        },
-        "position": {
-            "line": 24,
-            "character": 5  // On 'load_users'
-        }
-    })));
-    
+    let prepare_call = send_request(
+        &mut server,
+        "textDocument/prepareCallHierarchy",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/auth.pl"
+            },
+            "position": {
+                "line": 24,
+                "character": 5  // On 'load_users'
+            }
+        })),
+    );
+
     assert_call_hierarchy_items(&prepare_call, Some("process_user_input"));
 }
 
@@ -999,7 +1112,7 @@ sub save_users {
 fn test_user_story_api_documentation() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let code_with_builtins = r#"
 use strict;
 use warnings;
@@ -1027,50 +1140,62 @@ sub process_data {
     return \@sorted;
 }
 "#;
-    
+
     open_document(&mut server, "file:///test/builtins.pl", code_with_builtins);
-    
+
     // Scenario 1: Hover over 'map' for documentation
-    let map_hover = send_request(&mut server, "textDocument/hover", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtins.pl"
-        },
-        "position": {
-            "line": 10,
-            "character": 18  // On 'map'
-        }
-    })));
-    
+    let map_hover = send_request(
+        &mut server,
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/builtins.pl"
+            },
+            "position": {
+                "line": 10,
+                "character": 18  // On 'map'
+            }
+        })),
+    );
+
     assert!(map_hover.is_some());
-    
+
     // Scenario 2: Signature help for sprintf
-    let sprintf_sig = send_request(&mut server, "textDocument/signatureHelp", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtins.pl"
-        },
-        "position": {
-            "line": 13,
-            "character": 35  // Inside sprintf arguments
-        }
-    })));
-    
+    let sprintf_sig = send_request(
+        &mut server,
+        "textDocument/signatureHelp",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/builtins.pl"
+            },
+            "position": {
+                "line": 13,
+                "character": 35  // Inside sprintf arguments
+            }
+        })),
+    );
+
     assert!(sprintf_sig.is_some());
-    
+
     // Scenario 3: Completion for List::Util functions
-    let completion = send_request(&mut server, "textDocument/completion", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/builtins.pl"
-        },
-        "position": {
-            "line": 13,
-            "character": 45  // After 'sum'
-        }
-    })));
-    
+    let completion = send_request(
+        &mut server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/builtins.pl"
+            },
+            "position": {
+                "line": 13,
+                "character": 45  // After 'sum'
+            }
+        })),
+    );
+
     assert_completion_has_items(&completion);
 }
 
-// ==================== USER STORY 15: PERFORMANCE OPTIMIZATION WORKFLOW ====================  
+// ==================== USER STORY 15: PERFORMANCE OPTIMIZATION WORKFLOW ====================
 // As a Perl developer optimizing code, I want insights about performance implications
 // and suggestions for improvements.
 
@@ -1078,7 +1203,7 @@ sub process_data {
 fn test_user_story_performance_optimization() {
     let mut server = create_test_server();
     initialize_server(&mut server);
-    
+
     let performance_code = r#"
 use strict;
 use warnings;
@@ -1138,16 +1263,20 @@ sub process_large_dataset_optimized {
 sub transform_a { return $_[0] }
 sub transform_b { return $_[0] }
 "#;
-    
+
     open_document(&mut server, "file:///test/performance.pl", performance_code);
-    
+
     // Developer uses code lens to see complexity/usage hints
-    let code_lens = send_request(&mut server, "textDocument/codeLens", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/performance.pl"
-        }
-    })));
-    
+    let code_lens = send_request(
+        &mut server,
+        "textDocument/codeLens",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/performance.pl"
+            }
+        })),
+    );
+
     if let Some(lens) = code_lens {
         let lenses = lens.as_array().expect("code lens should be array");
         // Code lens might be empty if not implemented for this code pattern
@@ -1155,21 +1284,25 @@ sub transform_b { return $_[0] }
             assert!(l.get("range").is_some(), "Code lens must have range");
         }
     }
-    
+
     // Developer gets suggestions for optimization
-    let actions = send_request(&mut server, "textDocument/codeAction", Some(json!({
-        "textDocument": {
-            "uri": "file:///test/performance.pl"
-        },
-        "range": {
-            "start": { "line": 10, "character": 0 },
-            "end": { "line": 28, "character": 0 }
-        },
-        "context": {
-            "only": ["refactor"]
-        }
-    })));
-    
+    let actions = send_request(
+        &mut server,
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/performance.pl"
+            },
+            "range": {
+                "start": { "line": 10, "character": 0 },
+                "end": { "line": 28, "character": 0 }
+            },
+            "context": {
+                "only": ["refactor"]
+            }
+        })),
+    );
+
     if let Some(acts) = actions {
         assert_code_actions_available(&Some(acts));
     }

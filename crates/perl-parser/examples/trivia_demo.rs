@@ -3,19 +3,19 @@
 //! This example shows how the parser preserves comments and formatting,
 //! which is essential for code formatting and refactoring tools.
 
-use perl_parser::trivia_parser::{TriviaPreservingParser, format_with_trivia};
 use perl_parser::trivia::Trivia;
+use perl_parser::trivia_parser::{TriviaPreservingParser, format_with_trivia};
 
 fn main() {
     println!("=== Trivia Preservation Demo ===\n");
-    
+
     // Test cases showing various trivia types
     let test_cases = vec![
         (
             "Simple comment and whitespace",
             r#"# This is a file header
 my $x = 42;  # inline comment
-"#
+"#,
         ),
         (
             "Multiple comment types",
@@ -37,7 +37,7 @@ This demonstrates trivia preservation.
 =cut
 
 my $var = "hello";  # String variable
-"#
+"#,
         ),
         (
             "Formatting preservation",
@@ -46,7 +46,7 @@ my $var = "hello";  # String variable
     # Blank lines above
     
 my   $y   =   99;  # Weird spacing
-"#
+"#,
         ),
         (
             "POD in middle of code",
@@ -60,19 +60,19 @@ my   $y   =   99;  # Weird spacing
     
     return $x * 2;
 }
-"#
+"#,
         ),
     ];
-    
+
     for (description, source) in test_cases {
         println!("Test: {}", description);
         println!("Original source:");
         println!("{}", source);
         println!("---");
-        
+
         let parser = TriviaPreservingParser::new(source.to_string());
         let result = parser.parse();
-        
+
         // Show collected trivia
         println!("Leading trivia collected:");
         for (i, trivia_token) in result.leading_trivia.iter().enumerate() {
@@ -88,36 +88,36 @@ my   $y   =   99;  # Weird spacing
             };
             println!("  {}. {} - {}", i + 1, kind, content);
         }
-        
+
         // Show AST structure
         println!("\nAST structure:");
         println!("  {:?}", result.node.kind);
-        
+
         println!("\n---\n");
     }
-    
+
     // Demonstrate round-trip formatting
     println!("=== Round-trip Formatting Demo ===\n");
-    
+
     let format_test = r#"# Header comment
     my $x = 42;  # Set x
     
     # Another statement
     our $y = 99;
 "#;
-    
+
     println!("Original:");
     println!("{}", format_test);
-    
+
     let parser = TriviaPreservingParser::new(format_test.to_string());
     let ast_with_trivia = parser.parse();
-    
+
     // In a real implementation, this would perfectly reconstruct the source
     println!("After parsing (simplified):");
     println!("{}", format_with_trivia(&ast_with_trivia));
-    
+
     println!("\n=== Trivia Statistics ===\n");
-    
+
     // Analyze a larger example
     let large_example = r#"#!/usr/bin/perl
 #
@@ -179,16 +179,16 @@ Example Author <author@example.com>
 
 # End of file
 "#;
-    
+
     let parser = TriviaPreservingParser::new(large_example.to_string());
     let result = parser.parse();
-    
+
     // Count trivia types
     let mut comment_count = 0;
     let mut whitespace_count = 0;
     let mut newline_count = 0;
     let mut pod_count = 0;
-    
+
     for trivia_token in &result.leading_trivia {
         match &trivia_token.trivia {
             Trivia::LineComment(_) => comment_count += 1,
@@ -197,14 +197,14 @@ Example Author <author@example.com>
             Trivia::PodComment(_) => pod_count += 1,
         }
     }
-    
+
     println!("Trivia statistics for large example:");
     println!("  Line comments: {}", comment_count);
     println!("  Whitespace nodes: {}", whitespace_count);
     println!("  Newlines: {}", newline_count);
     println!("  POD sections: {}", pod_count);
     println!("  Total trivia nodes: {}", result.leading_trivia.len());
-    
+
     println!("\n=== Benefits of Trivia Preservation ===\n");
     println!("1. **Code Formatting**: Preserve original formatting when refactoring");
     println!("2. **Documentation**: Keep comments and POD with associated code");

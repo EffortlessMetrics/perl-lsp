@@ -1,13 +1,13 @@
 //! Multi-phase heredoc parser for Perl
-//! 
+//!
 //! This module implements a three-phase approach to handle Perl's heredocs:
 //! 1. Detection - Identify heredoc declarations and mark boundaries
 //! 2. Collection - Extract heredoc content from subsequent lines
 //! 3. Integration - Replace markers with content for PEG parsing
 
+use crate::statement_tracker::find_statement_end_line;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use crate::statement_tracker::find_statement_end_line;
 
 /// Represents a heredoc declaration found during Phase 1
 #[derive(Debug, Clone)]
@@ -57,28 +57,31 @@ impl<'a> HeredocScanner<'a> {
         let lines: Vec<&str> = self.input.lines().collect();
         let mut declarations = Vec::new();
         let chars: Vec<char> = self.input.chars().collect();
-        
+
         // Scan for heredocs and mark content lines to skip
         let mut temp_position = 0;
         let mut temp_line = 1;
-        
+
         while temp_position < chars.len() {
-            if temp_position + 1 < chars.len() && chars[temp_position] == '<' && chars[temp_position + 1] == '<' {
+            if temp_position + 1 < chars.len()
+                && chars[temp_position] == '<'
+                && chars[temp_position + 1] == '<'
+            {
                 let saved_pos = temp_position;
                 let _saved_line = temp_line;
-                
+
                 // Try to parse heredoc
                 self.position = temp_position;
                 self.line_number = temp_line;
-                
+
                 if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
                     // Store the actual positions for replacement
                     decl.declaration_pos = saved_pos;
                     decl.declaration_end = self.position;
-                    
+
                     // Don't mark lines to skip yet - we need to know where the statement ends first
                     // Just store the declaration for now
-                    
+
                     declarations.push(decl);
                     temp_position = self.position;
                     temp_line = self.line_number;
@@ -92,13 +95,12 @@ impl<'a> HeredocScanner<'a> {
                 temp_position += 1;
             }
         }
-        
+
         // Now mark lines to skip based on statement boundaries
         for decl in &declarations {
             let statement_end_line = find_statement_end_line(self.input, decl.declaration_line);
             let content_start_line = statement_end_line + 1;
-            
-            
+
             // Mark lines from content start to terminator
             for i in content_start_line..=lines.len() {
                 if i > lines.len() {
@@ -110,21 +112,21 @@ impl<'a> HeredocScanner<'a> {
                 } else {
                     line == decl.terminator
                 };
-                
+
                 self.skip_lines.insert(i);
-                
+
                 if is_terminator {
                     break;
                 }
             }
         }
-        
+
         // Second pass: build output, skipping marked lines and replacing heredocs
         let mut output = String::with_capacity(self.input.len());
         self.position = 0;
         self.line_number = 1;
         let mut decl_index = 0;
-        
+
         while self.position < chars.len() {
             // Skip lines marked for skipping
             if self.skip_lines.contains(&self.line_number) {
@@ -138,9 +140,11 @@ impl<'a> HeredocScanner<'a> {
                 }
                 continue;
             }
-            
+
             // Check if we're at a heredoc declaration
-            if decl_index < declarations.len() && self.position == declarations[decl_index].declaration_pos {
+            if decl_index < declarations.len()
+                && self.position == declarations[decl_index].declaration_pos
+            {
                 let decl = &declarations[decl_index];
                 output.push_str(&decl.placeholder_id);
                 self.position = decl.declaration_end;
@@ -160,8 +164,8 @@ impl<'a> HeredocScanner<'a> {
     }
 
     fn _check_heredoc_start(&self, chars: &[char]) -> bool {
-        self.position + 1 < chars.len() 
-            && chars[self.position] == '<' 
+        self.position + 1 < chars.len()
+            && chars[self.position] == '<'
             && chars[self.position + 1] == '<'
     }
 
@@ -178,7 +182,10 @@ impl<'a> HeredocScanner<'a> {
         };
 
         // Skip whitespace
-        while self.position < chars.len() && chars[self.position].is_whitespace() && chars[self.position] != '\n' {
+        while self.position < chars.len()
+            && chars[self.position].is_whitespace()
+            && chars[self.position] != '\n'
+        {
             self.position += 1;
         }
 
@@ -245,8 +252,9 @@ impl<'a> HeredocScanner<'a> {
 
     fn read_bareword(&mut self, chars: &[char]) -> Option<String> {
         let mut result = String::new();
-        while self.position < chars.len() 
-            && (chars[self.position].is_alphanumeric() || chars[self.position] == '_') {
+        while self.position < chars.len()
+            && (chars[self.position].is_alphanumeric() || chars[self.position] == '_')
+        {
             result.push(chars[self.position]);
             self.position += 1;
         }
@@ -276,9 +284,10 @@ impl<'a> HeredocCollector<'a> {
     pub fn collect(&self, declarations: &mut Vec<HeredocDeclaration>) {
         // Map declaration line to heredocs declared on that line
         let mut line_to_heredocs: HashMap<usize, Vec<usize>> = HashMap::new();
-        
+
         for (idx, decl) in declarations.iter().enumerate() {
-            line_to_heredocs.entry(decl.declaration_line)
+            line_to_heredocs
+                .entry(decl.declaration_line)
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -293,18 +302,20 @@ impl<'a> HeredocCollector<'a> {
             // - statement_end_line=2 (1-based) means line 2 ends the statement
             // - content starts on line 3 (1-based) = index 2 (0-based) = statement_end_line
             let mut content_line = statement_end_line; // This is the 0-based index where content starts
-            
+
             // Debug logging
             #[cfg(test)]
             {
-                eprintln!("Line {} has heredocs, statement ends at line {}", line_num, statement_end_line);
+                eprintln!(
+                    "Line {} has heredocs, statement ends at line {}",
+                    line_num, statement_end_line
+                );
                 eprintln!("Total lines available: {}", self.lines.len());
                 if content_line < self.lines.len() {
                     eprintln!("Content starts with: {:?}", self.lines[content_line]);
                 }
             }
-            
-            
+
             for &idx in &heredoc_indices {
                 let decl = &declarations[idx];
                 let mut content = String::new();
@@ -314,10 +325,10 @@ impl<'a> HeredocCollector<'a> {
                 // For indented heredocs, first collect all lines to find common whitespace
                 let mut heredoc_lines = Vec::new();
                 let mut temp_content_line = content_line;
-                
+
                 while temp_content_line < self.lines.len() {
                     let line = self.lines[temp_content_line];
-                    
+
                     // Check if this line is the terminator
                     let is_terminator = if decl.indented {
                         line.trim() == decl.terminator
@@ -330,20 +341,21 @@ impl<'a> HeredocCollector<'a> {
                         content_line = temp_content_line + 1;
                         break;
                     }
-                    
+
                     heredoc_lines.push(line);
                     temp_content_line += 1;
                 }
-                
+
                 if found_terminator {
                     if decl.indented {
                         // Calculate common leading whitespace
-                        let common_indent = heredoc_lines.iter()
+                        let common_indent = heredoc_lines
+                            .iter()
                             .filter(|line| !line.trim().is_empty())
                             .map(|line| line.len() - line.trim_start().len())
                             .min()
                             .unwrap_or(0);
-                        
+
                         // Build content with common indent removed
                         for (i, line) in heredoc_lines.iter().enumerate() {
                             if i > 0 {
@@ -395,14 +407,14 @@ pub fn parse_with_heredocs(input: &str) -> (String, Vec<HeredocDeclaration>) {
     // Phase 1: Detect heredocs
     let scanner = HeredocScanner::new(input);
     let (processed_input, mut declarations) = scanner.scan();
-    
+
     // Phase 2: Collect content
     let collector = HeredocCollector::new(input);
     collector.collect(&mut declarations);
-    
+
     // Phase 3: Integrate for parsing
     let final_input = HeredocIntegrator::integrate(&processed_input, &declarations);
-    
+
     (final_input, declarations)
 }
 
@@ -419,11 +431,14 @@ EOF
 print $text;"#;
 
         let (processed, declarations) = parse_with_heredocs(input);
-        
+
         assert_eq!(declarations.len(), 1);
         assert_eq!(declarations[0].terminator, "EOF");
         assert!(!declarations[0].interpolated);
-        assert_eq!(declarations[0].content.as_deref(), Some("Hello, World!\nThis is a heredoc."));
+        assert_eq!(
+            declarations[0].content.as_deref(),
+            Some("Hello, World!\nThis is a heredoc.")
+        );
         assert!(processed.contains("__HEREDOC__"));
     }
 
@@ -436,7 +451,7 @@ Content B
 B"#;
 
         let (_, declarations) = parse_with_heredocs(input);
-        
+
         assert_eq!(declarations.len(), 2);
         assert_eq!(declarations[0].content.as_deref(), Some("Content A"));
         assert_eq!(declarations[1].content.as_deref(), Some("Content B"));
@@ -451,16 +466,19 @@ B"#;
 print $text;"#;
 
         let (processed, declarations) = parse_with_heredocs(input);
-        
+
         println!("Processed input: {:?}", processed);
         println!("Declarations: {:?}", declarations);
-        
+
         assert_eq!(declarations.len(), 1);
         assert!(declarations[0].indented);
         assert_eq!(declarations[0].terminator, "EOF");
-        assert_eq!(declarations[0].content.as_deref(), Some("Indented content\nMore content"));
+        assert_eq!(
+            declarations[0].content.as_deref(),
+            Some("Indented content\nMore content")
+        );
     }
-    
+
     #[test]
     fn test_indented_heredoc_in_block() {
         // This is the original failing test - kept for future fix
@@ -472,7 +490,7 @@ print $text;"#;
 }"#;
 
         let (_processed, declarations) = parse_with_heredocs(input);
-        
+
         assert_eq!(declarations.len(), 1);
         assert!(declarations[0].indented);
         assert_eq!(declarations[0].terminator, "EOF");

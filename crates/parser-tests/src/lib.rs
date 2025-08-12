@@ -1,5 +1,5 @@
 //! Unified test framework for all Perl parsers
-//! 
+//!
 //! This crate provides a common test infrastructure to test:
 //! 1. perl-lexer + perl-parser (Modern Rust)
 //! 2. tree-sitter-perl-rs (Pure Rust Pest)
@@ -36,7 +36,7 @@ pub struct TestResult {
 pub trait TestableParser {
     /// Name of the parser for reporting
     fn name(&self) -> &'static str;
-    
+
     /// Parse the input and return S-expression output
     fn parse_to_sexp(&self, input: &str) -> Result<String>;
 }
@@ -48,10 +48,10 @@ impl TestableParser for PerlParserWrapper {
     fn name(&self) -> &'static str {
         "perl-parser"
     }
-    
+
     fn parse_to_sexp(&self, input: &str) -> Result<String> {
         use perl_parser::Parser;
-        
+
         let mut parser = Parser::new(input);
         let ast = parser.parse()?;
         Ok(ast.to_sexp())
@@ -65,12 +65,13 @@ impl TestableParser for TreeSitterPerlRsWrapper {
     fn name(&self) -> &'static str {
         "tree-sitter-perl-rs"
     }
-    
+
     fn parse_to_sexp(&self, input: &str) -> Result<String> {
         use tree_sitter_perl::PureRustParser;
-        
+
         let parser = PureRustParser::new();
-        let ast = parser.parse(input)
+        let ast = parser
+            .parse(input)
             .map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
         // The Pest parser returns an AstNode, need to convert to S-expression
         Ok(format!("{:?}", ast)) // TODO: Implement proper to_sexp for Pest AST
@@ -84,14 +85,15 @@ impl TestableParser for TreeSitterPerlCWrapper {
     fn name(&self) -> &'static str {
         "tree-sitter-perl-c"
     }
-    
+
     fn parse_to_sexp(&self, input: &str) -> Result<String> {
         use tree_sitter_perl_c::create_parser;
-        
+
         let mut parser = create_parser();
-        let tree = parser.parse(input, None)
+        let tree = parser
+            .parse(input, None)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse"))?;
-        
+
         let sexp = tree.root_node().to_sexp();
         Ok(sexp)
     }
@@ -104,14 +106,14 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
         Box::new(TreeSitterPerlRsWrapper),
         Box::new(TreeSitterPerlCWrapper),
     ];
-    
+
     let mut results = Vec::new();
-    
+
     for parser in parsers {
         let start = std::time::Instant::now();
         let parse_result = parser.parse_to_sexp(&test.input);
         let parse_time = start.elapsed();
-        
+
         let (success, output, error) = match parse_result {
             Ok(sexp) => {
                 let success = if test.should_parse {
@@ -131,7 +133,7 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
                 (success, None, Some(e.to_string()))
             }
         };
-        
+
         results.push(TestResult {
             parser_name: parser.name().to_string(),
             test_name: test.name.clone(),
@@ -141,7 +143,7 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
             error,
         });
     }
-    
+
     results
 }
 
@@ -154,7 +156,7 @@ pub fn load_corpus_tests() -> Result<Vec<TestCase>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_simple_parse() {
         let test = TestCase {
@@ -164,12 +166,13 @@ mod tests {
             should_parse: true,
             expected_sexp: None,
         };
-        
+
         let results = run_test_on_all_parsers(&test);
-        
+
         for result in &results {
-            println!("{}: {} ({:?})", 
-                result.parser_name, 
+            println!(
+                "{}: {} ({:?})",
+                result.parser_name,
                 if result.success { "PASS" } else { "FAIL" },
                 result.parse_time
             );

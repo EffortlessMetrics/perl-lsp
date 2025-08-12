@@ -20,7 +20,9 @@ fn main() {
     };
 
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_perl_c::language()).expect("Error loading Perl C grammar");
+    parser
+        .set_language(&tree_sitter_perl_c::language())
+        .expect("Error loading Perl C grammar");
 
     match parser.parse(&source_code, None) {
         Some(_tree) => {

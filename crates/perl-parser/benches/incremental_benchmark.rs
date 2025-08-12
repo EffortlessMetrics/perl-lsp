@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
-use perl_parser::incremental::{IncrementalState, Edit, apply_edits};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
     let source = r#"
@@ -25,15 +25,16 @@ sub transform {
 
 my $items = [1, 2, 3, 4, 5];
 process_data($items);
-"#.to_string();
+"#
+    .to_string();
 
     let mut state = IncrementalState::new(source);
-    
+
     c.bench_function("incremental small edit", |b| {
         b.iter(|| {
             // Edit line 9: change "transform" to "process"
             let edit = Edit {
-                start_byte: 180,  // approximate position
+                start_byte: 180, // approximate position
                 old_end_byte: 189,
                 new_end_byte: 187,
                 new_text: "process".to_string(),
@@ -68,7 +69,8 @@ sub transform {
 
 my $items = [1, 2, 3, 4, 5];
 process_data($items);
-"#.to_string();
+"#
+    .to_string();
 
     c.bench_function("full reparse", |b| {
         b.iter(|| {
@@ -84,10 +86,11 @@ my $x = 1;
 my $y = 2;
 my $z = 3;
 print "$x $y $z\n";
-"#.to_string();
+"#
+    .to_string();
 
     let mut state = IncrementalState::new(source);
-    
+
     c.bench_function("incremental multiple edits", |b| {
         b.iter(|| {
             let edits = vec![
@@ -110,5 +113,10 @@ print "$x $y $z\n";
     });
 }
 
-criterion_group!(benches, bench_incremental_small_edit, bench_full_reparse, bench_multiple_edits);
+criterion_group!(
+    benches,
+    bench_incremental_small_edit,
+    bench_full_reparse,
+    bench_multiple_edits
+);
 criterion_main!(benches);

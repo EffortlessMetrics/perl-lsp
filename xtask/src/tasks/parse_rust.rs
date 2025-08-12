@@ -20,29 +20,30 @@ pub fn run(source: PathBuf, sexp: bool, ast: bool, bench: bool) -> Result<()> {
         "compare_parsers",
         "--",
     ]);
-    
+
     // Add the source file
     cmd.arg(&source);
-    
+
     // If benchmarking, run multiple iterations
     if bench {
         cmd.arg("1000");
     } else {
         cmd.arg("1");
     }
-    
+
     // Run the command
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .context("Failed to run compare_parsers binary")?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(color_eyre::eyre::eyre!("Parser failed: {}", stderr));
     }
-    
+
     // Print the output
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Filter output based on flags
     if sexp || ast {
         for line in stdout.lines() {
@@ -57,6 +58,6 @@ pub fn run(source: PathBuf, sexp: bool, ast: bool, bench: bool) -> Result<()> {
         // Print all output
         print!("{}", stdout);
     }
-    
+
     Ok(())
 }

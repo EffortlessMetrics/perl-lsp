@@ -8,14 +8,14 @@ use std::sync::Arc;
 /// Quote-like operators in Perl
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuoteOperator {
-    Match,          // m//
-    Substitute,     // s///
-    QuoteRegex,     // qr//
-    Transliterate,  // tr/// or y///
-    Quote,          // q//
-    QuoteDouble,    // qq//
-    QuoteWords,     // qw//
-    QuoteExec,      // qx//
+    Match,         // m//
+    Substitute,    // s///
+    QuoteRegex,    // qr//
+    Transliterate, // tr/// or y///
+    Quote,         // q//
+    QuoteDouble,   // qq//
+    QuoteWords,    // qw//
+    QuoteExec,     // qx//
 }
 
 /// Result of parsing a quote-like construct
@@ -41,17 +41,17 @@ impl<'source> RegexParser<'source> {
             position: start_position,
         }
     }
-    
+
     /// Parse a bare regex starting with /
     pub fn parse_bare_regex(&mut self) -> Result<QuoteConstruct, String> {
         if !self.current_char_is('/') {
             return Err("Expected / to start regex".to_string());
         }
-        
+
         self.advance(); // Skip initial /
         let pattern = self.parse_until_delimiter('/')?;
         let modifiers = self.parse_modifiers();
-        
+
         Ok(QuoteConstruct {
             operator: QuoteOperator::Match,
             delimiter: '/',
@@ -60,7 +60,7 @@ impl<'source> RegexParser<'source> {
             modifiers,
         })
     }
-    
+
     /// Parse a quote-like operator (m//, s///, etc.)
     pub fn parse_quote_operator(&mut self, op: Token) -> Result<QuoteConstruct, String> {
         let operator = match op {
@@ -70,16 +70,16 @@ impl<'source> RegexParser<'source> {
             }
             _ => return Err(format!("Unexpected token for quote operator: {:?}", op)),
         };
-        
+
         // Skip optional whitespace
         self.skip_whitespace();
-        
+
         // Get delimiter
         let delimiter = self.parse_delimiter()?;
-        
+
         // Parse pattern
         let pattern = self.parse_until_delimiter(delimiter)?;
-        
+
         // For substitution and transliteration, parse replacement
         let replacement = match operator {
             QuoteOperator::Substitute | QuoteOperator::Transliterate => {
@@ -87,10 +87,10 @@ impl<'source> RegexParser<'source> {
             }
             _ => None,
         };
-        
+
         // Parse modifiers
         let modifiers = self.parse_modifiers();
-        
+
         Ok(QuoteConstruct {
             operator,
             delimiter,
@@ -99,22 +99,22 @@ impl<'source> RegexParser<'source> {
             modifiers,
         })
     }
-    
+
     /// Parse m// operator
     pub fn parse_match_operator(&mut self) -> Result<QuoteConstruct, String> {
         // Skip optional whitespace after 'm'
         self.skip_whitespace();
-        
+
         let delimiter = if self.current_char_is('/') {
             '/'
         } else {
             self.parse_delimiter()?
         };
-        
+
         self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
         let modifiers = self.parse_modifiers();
-        
+
         Ok(QuoteConstruct {
             operator: QuoteOperator::Match,
             delimiter,
@@ -123,23 +123,23 @@ impl<'source> RegexParser<'source> {
             modifiers,
         })
     }
-    
+
     /// Parse s/// operator
     pub fn parse_substitute_operator(&mut self) -> Result<QuoteConstruct, String> {
         // Skip optional whitespace after 's'
         self.skip_whitespace();
-        
+
         let delimiter = if self.current_char_is('/') {
             '/'
         } else {
             self.parse_delimiter()?
         };
-        
+
         self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
         let replacement = self.parse_until_delimiter(delimiter)?;
         let modifiers = self.parse_modifiers();
-        
+
         Ok(QuoteConstruct {
             operator: QuoteOperator::Substitute,
             delimiter,
@@ -148,15 +148,15 @@ impl<'source> RegexParser<'source> {
             modifiers,
         })
     }
-    
+
     /// Parse content until the given delimiter, handling escapes
     fn parse_until_delimiter(&mut self, delimiter: char) -> Result<String, String> {
         let mut result = String::new();
         let mut escaped = false;
-        
+
         while self.position < self.input.len() {
             let ch = self.current_char();
-            
+
             if escaped {
                 result.push(ch);
                 escaped = false;
@@ -169,38 +169,54 @@ impl<'source> RegexParser<'source> {
             } else {
                 result.push(ch);
             }
-            
+
             self.advance();
         }
-        
+
         Err(format!("Unterminated pattern, expected {}", delimiter))
     }
-    
+
     /// Parse regex modifiers
     fn parse_modifiers(&mut self) -> String {
         let mut modifiers = String::new();
-        
+
         while self.position < self.input.len() {
             let ch = self.current_char();
-            if matches!(ch, 'i' | 'm' | 's' | 'x' | 'g' | 'o' | 'c' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'p' | 'n') {
+            if matches!(
+                ch,
+                'i' | 'm'
+                    | 's'
+                    | 'x'
+                    | 'g'
+                    | 'o'
+                    | 'c'
+                    | 'e'
+                    | 'r'
+                    | 'a'
+                    | 'd'
+                    | 'l'
+                    | 'u'
+                    | 'p'
+                    | 'n'
+            ) {
                 modifiers.push(ch);
                 self.advance();
             } else {
                 break;
             }
         }
-        
+
         modifiers
     }
-    
+
     /// Parse delimiter for quote-like operators
     fn parse_delimiter(&mut self) -> Result<char, String> {
         if self.position >= self.input.len() {
             return Err("Expected delimiter".to_string());
         }
-        
+
         let ch = self.current_char();
-        
+
         // Check for paired delimiters
         let delimiter = match ch {
             '(' => ')',
@@ -209,35 +225,35 @@ impl<'source> RegexParser<'source> {
             '<' => '>',
             _ => ch, // Use same character for both open and close
         };
-        
+
         self.advance();
         Ok(delimiter)
     }
-    
+
     /// Skip whitespace
     fn skip_whitespace(&mut self) {
         while self.position < self.input.len() && self.current_char().is_whitespace() {
             self.advance();
         }
     }
-    
+
     /// Get current character
     fn current_char(&self) -> char {
         self.input.chars().nth(self.position).unwrap_or('\0')
     }
-    
+
     /// Check if current character matches
     fn current_char_is(&self, ch: char) -> bool {
         self.current_char() == ch
     }
-    
+
     /// Advance position by one character
     fn advance(&mut self) {
         if self.position < self.input.len() {
             self.position += self.current_char().len_utf8();
         }
     }
-    
+
     /// Get current position
     pub fn position(&self) -> usize {
         self.position
@@ -247,53 +263,53 @@ impl<'source> RegexParser<'source> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_bare_regex() {
         let input = "/test/i";
         let mut parser = RegexParser::new(input, 0);
-        
+
         let result = parser.parse_bare_regex().unwrap();
         assert_eq!(result.pattern, "test");
         assert_eq!(result.modifiers, "i");
         assert_eq!(result.delimiter, '/');
     }
-    
+
     #[test]
     fn test_parse_regex_with_escapes() {
         let input = r"/test\/path/";
         let mut parser = RegexParser::new(input, 0);
-        
+
         let result = parser.parse_bare_regex().unwrap();
         assert_eq!(result.pattern, r"test\/path");
     }
-    
+
     #[test]
     fn test_parse_match_operator() {
         let input = "m/pattern/gi";
         let mut parser = RegexParser::new(input, 1); // Start after 'm'
-        
+
         let result = parser.parse_match_operator().unwrap();
         assert_eq!(result.pattern, "pattern");
         assert_eq!(result.modifiers, "gi");
     }
-    
+
     #[test]
     fn test_parse_substitute_operator() {
         let input = "s/old/new/g";
         let mut parser = RegexParser::new(input, 1); // Start after 's'
-        
+
         let result = parser.parse_substitute_operator().unwrap();
         assert_eq!(result.pattern, "old");
         assert_eq!(result.replacement, Some("new".to_string()));
         assert_eq!(result.modifiers, "g");
     }
-    
+
     #[test]
     fn test_parse_with_alternate_delimiters() {
         let input = "m{test}i";
         let mut parser = RegexParser::new(input, 1); // Start after 'm'
-        
+
         let result = parser.parse_match_operator().unwrap();
         assert_eq!(result.pattern, "test");
         assert_eq!(result.delimiter, '}');

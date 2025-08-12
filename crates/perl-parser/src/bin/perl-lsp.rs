@@ -20,12 +20,12 @@ use std::process;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    
+
     // Parse command line arguments
     let mut use_stdio = true;
     let mut port = 9257;
     let mut enable_logging = false;
-    
+
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -55,7 +55,7 @@ fn main() {
         }
         i += 1;
     }
-    
+
     // Initialize logging if requested
     if enable_logging {
         eprintln!("Perl Language Server starting...");
@@ -64,10 +64,10 @@ fn main() {
             eprintln!("Port: {}", port);
         }
     }
-    
+
     // Create and run the LSP server
     let mut server = LspServer::new();
-    
+
     if use_stdio {
         // Run in stdio mode (default)
         if let Err(e) = server.run() {

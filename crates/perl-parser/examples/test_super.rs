@@ -7,7 +7,6 @@ fn main() {
         ("$self->method()", "simple method call"),
         ("$self->SUPER::method()", "SUPER method call"),
         ("$obj->Some::Package::method()", "qualified method call"),
-        
         // Direct calls
         ("SUPER::method()", "direct SUPER call"),
         ("Package::method()", "direct package call"),

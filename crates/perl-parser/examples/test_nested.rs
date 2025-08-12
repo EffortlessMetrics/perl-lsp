@@ -7,11 +7,11 @@ fn main() {
     println!("=== Simple for loop ===");
     let simple_for = "for (my $i = 0; $i < 10; $i++) { print $i; }";
     test_parse(simple_for);
-    
+
     println!("\n=== For loop in block ===");
     let for_in_block = "{ for (my $i = 0; $i < 10; $i++) { print $i; } }";
     test_parse(for_in_block);
-    
+
     println!("\n=== Full nested structure ===");
     let code = r#"
 if ($x) {
@@ -22,9 +22,9 @@ if ($x) {
     }
 }
 "#;
-    
+
     println!("Code: {}", code);
-    
+
     test_parse(code);
 }
 

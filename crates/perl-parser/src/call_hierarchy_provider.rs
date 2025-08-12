@@ -1,5 +1,5 @@
 use crate::ast::{Node, NodeKind};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Call Hierarchy Item
 #[derive(Debug, Clone)]
@@ -43,14 +43,22 @@ impl CallHierarchyProvider {
     }
 
     /// Get incoming calls (callers of a function)
-    pub fn incoming_calls(&self, ast: &Node, item: &CallHierarchyItem) -> Vec<CallHierarchyIncomingCall> {
+    pub fn incoming_calls(
+        &self,
+        ast: &Node,
+        item: &CallHierarchyItem,
+    ) -> Vec<CallHierarchyIncomingCall> {
         let mut calls = Vec::new();
         self.find_incoming_calls(ast, &item.name, &mut calls, None);
         calls
     }
 
     /// Get outgoing calls (functions called by this function)
-    pub fn outgoing_calls(&self, ast: &Node, item: &CallHierarchyItem) -> Vec<CallHierarchyOutgoingCall> {
+    pub fn outgoing_calls(
+        &self,
+        ast: &Node,
+        item: &CallHierarchyItem,
+    ) -> Vec<CallHierarchyOutgoingCall> {
         // Find the function node
         if let Some(func_node) = self.find_function_by_name(ast, &item.name) {
             let mut calls = Vec::new();
@@ -71,7 +79,7 @@ impl CallHierarchyProvider {
                     if let Some(name_str) = name {
                         let range = self.node_to_range(node);
                         let selection_range = range.clone(); // TODO: Calculate name range
-                        
+
                         let detail = if params.is_empty() {
                             None
                         } else {
@@ -103,16 +111,20 @@ impl CallHierarchyProvider {
             }
 
             // Check children
-            self.visit_children(node, |child| {
-                self.find_callable_at_position(child, offset)
-            })
+            self.visit_children(node, |child| self.find_callable_at_position(child, offset))
         } else {
             None
         }
     }
 
     /// Find all calls to a function
-    fn find_incoming_calls(&self, node: &Node, target_name: &str, calls: &mut Vec<CallHierarchyIncomingCall>, current_function: Option<&CallHierarchyItem>) {
+    fn find_incoming_calls(
+        &self,
+        node: &Node,
+        target_name: &str,
+        calls: &mut Vec<CallHierarchyIncomingCall>,
+        current_function: Option<&CallHierarchyItem>,
+    ) {
         match &node.kind {
             NodeKind::Subroutine { name, .. } => {
                 if let Some(name_str) = name {
@@ -124,7 +136,7 @@ impl CallHierarchyProvider {
                         selection_range: self.node_to_range(node),
                         detail: None,
                     };
-                    
+
                     // Search within this function
                     self.visit_children(node, |child| {
                         self.find_incoming_calls(child, target_name, calls, Some(&item));
@@ -136,9 +148,10 @@ impl CallHierarchyProvider {
                 if name == target_name {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
-                        
+
                         // Check if we already have a call from this function
-                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name) {
+                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name)
+                        {
                             existing.from_ranges.extend(ranges);
                         } else {
                             calls.push(CallHierarchyIncomingCall {
@@ -153,8 +166,9 @@ impl CallHierarchyProvider {
                 if method == target_name {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
-                        
-                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name) {
+
+                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name)
+                        {
                             existing.from_ranges.extend(ranges);
                         } else {
                             calls.push(CallHierarchyIncomingCall {
@@ -189,7 +203,7 @@ impl CallHierarchyProvider {
                 };
 
                 let ranges = vec![self.node_to_range(node)];
-                
+
                 // Check if we already have a call to this function
                 if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == name) {
                     existing.from_ranges.extend(ranges);
@@ -217,7 +231,7 @@ impl CallHierarchyProvider {
                 };
 
                 let ranges = vec![self.node_to_range(node)];
-                
+
                 if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == method) {
                     existing.from_ranges.extend(ranges);
                 } else {
@@ -245,9 +259,7 @@ impl CallHierarchyProvider {
             }
         }
 
-        self.visit_children(node, |child| {
-            self.find_function_by_name(child, target_name)
-        })
+        self.visit_children(node, |child| self.find_function_by_name(child, target_name))
     }
 
     /// Visit children of a node
@@ -270,7 +282,12 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -291,7 +308,9 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -299,7 +318,13 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(init_node) = init {
                     if let Some(result) = f(init_node) {
                         return Some(result);
@@ -319,7 +344,11 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+            } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -402,7 +431,11 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -428,7 +461,7 @@ impl CallHierarchyProvider {
     fn offset_to_position(&self, offset: usize) -> Position {
         let mut line = 0;
         let mut col = 0;
-        
+
         for (i, ch) in self.source.chars().enumerate() {
             if i >= offset {
                 break;
@@ -440,8 +473,11 @@ impl CallHierarchyProvider {
                 col += 1;
             }
         }
-        
-        Position { line, character: col }
+
+        Position {
+            line,
+            character: col,
+        }
     }
 
     /// Convert line/character position to byte offset
@@ -582,8 +618,9 @@ sub process_data {
 
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
-            let provider = CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
-            
+            let provider =
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+
             // Find function at position (line 1, char 5) - "main"
             let items = provider.prepare(&ast, 1, 5);
             assert!(items.is_some());
@@ -612,31 +649,44 @@ sub target_func {
 
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
-            let provider = CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
-            
+            let provider =
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+
             let target_item = CallHierarchyItem {
                 name: "target_func".to_string(),
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position { line: 10, character: 0 },
-                    end: Position { line: 12, character: 1 },
+                    start: Position {
+                        line: 10,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 12,
+                        character: 1,
+                    },
                 },
                 selection_range: Range {
-                    start: Position { line: 10, character: 4 },
-                    end: Position { line: 10, character: 15 },
+                    start: Position {
+                        line: 10,
+                        character: 4,
+                    },
+                    end: Position {
+                        line: 10,
+                        character: 15,
+                    },
                 },
                 detail: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
             assert_eq!(incoming.len(), 2);
-            
+
             // Check callers
             let caller_names: Vec<_> = incoming.iter().map(|c| &c.from.name).collect();
             assert!(caller_names.contains(&&"caller1".to_string()));
             assert!(caller_names.contains(&&"caller2".to_string()));
-            
+
             // caller2 should have 2 ranges (called twice)
             let caller2 = incoming.iter().find(|c| c.from.name == "caller2").unwrap();
             assert_eq!(caller2.from_ranges.len(), 2);
@@ -659,26 +709,39 @@ sub helper {
 
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
-            let provider = CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
-            
+            let provider =
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+
             let main_item = CallHierarchyItem {
                 name: "main".to_string(),
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position { line: 1, character: 0 },
-                    end: Position { line: 5, character: 1 },
+                    start: Position {
+                        line: 1,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 5,
+                        character: 1,
+                    },
                 },
                 selection_range: Range {
-                    start: Position { line: 1, character: 4 },
-                    end: Position { line: 1, character: 8 },
+                    start: Position {
+                        line: 1,
+                        character: 4,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 8,
+                    },
                 },
                 detail: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);
             assert_eq!(outgoing.len(), 3);
-            
+
             // Check called functions
             let called_names: Vec<_> = outgoing.iter().map(|c| &c.to.name).collect();
             assert!(called_names.contains(&&"helper".to_string()));

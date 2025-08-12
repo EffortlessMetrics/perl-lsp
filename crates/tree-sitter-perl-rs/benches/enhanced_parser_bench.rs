@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use tree_sitter_perl::{EnhancedFullParser, FullPerlParser};
 
@@ -191,21 +191,21 @@ print $text;
 "#;
 
     let mut group = c.benchmark_group("parser_comparison");
-    
+
     group.bench_function("full_parser", |b| {
         b.iter(|| {
             let mut parser = FullPerlParser::new();
             let _ = parser.parse(black_box(simple_code));
         })
     });
-    
+
     group.bench_function("enhanced_parser", |b| {
         b.iter(|| {
             let mut parser = EnhancedFullParser::new();
             let _ = parser.parse(black_box(simple_code));
         })
     });
-    
+
     group.finish();
 }
 

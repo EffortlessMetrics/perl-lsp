@@ -10,17 +10,14 @@ fn main() {
         "die",
         "warn",
         "exit",
-        
         // With semicolon
         "print;",
         "say;",
         "return;",
-        
         // In blocks
         "{ print }",
         "{ say }",
         "{ return }",
-        
         // As last statement in program
         "my $x = 1;\nprint",
         "$x = 42;\nsay",

@@ -3,8 +3,8 @@
 //! This module analyzes import statements and usage to optimize imports.
 //! Currently a stub implementation to demonstrate the architecture.
 
+use serde::{Deserialize, Serialize};
 use std::path::Path;
-use serde::{Serialize, Deserialize};
 
 /// Result of import analysis
 #[derive(Debug, Serialize, Deserialize)]

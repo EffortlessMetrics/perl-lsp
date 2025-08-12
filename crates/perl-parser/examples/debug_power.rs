@@ -1,12 +1,9 @@
 //! Debug power operator tokenization
-use perl_parser::{TokenStream, TokenKind};
+use perl_parser::{TokenKind, TokenStream};
 
 fn main() {
-    let tests = vec![
-        "$x **= 2",
-        "$x ** 2",
-    ];
-    
+    let tests = vec!["$x **= 2", "$x ** 2"];
+
     for code in tests {
         println!("\nCode: {}", code);
         println!("Parser tokens:");

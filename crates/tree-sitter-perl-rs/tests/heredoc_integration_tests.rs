@@ -17,10 +17,13 @@ print $text;"#;
             eprintln!("Parse error: {:?}", e);
         }
         assert!(result.is_ok(), "Failed to parse basic heredoc");
-        
+
         let ast = result.unwrap();
-        eprintln!("Parse succeeded, AST type: {:?}", std::mem::discriminant(&ast));
-        
+        eprintln!(
+            "Parse succeeded, AST type: {:?}",
+            std::mem::discriminant(&ast)
+        );
+
         eprintln!("Calling parse_to_sexp...");
         let sexp_result = parser.parse_to_sexp(input);
         if let Err(ref e) = sexp_result {
@@ -59,13 +62,18 @@ C"#;
         let result = parser.parse(input);
         if let Err(ref e) = result {
             eprintln!("Parse error: {:?}", e);
-            
+
             // Debug the preprocessing stages
             let (processed, declarations) = parse_with_heredocs(input);
             eprintln!("\nHeredoc processed:\n{}", processed);
             eprintln!("\nDeclarations: {} found", declarations.len());
             for (i, decl) in declarations.iter().enumerate() {
-                eprintln!("  [{}] {}: {:?}", i, decl.terminator, decl.content.as_deref());
+                eprintln!(
+                    "  [{}] {}: {:?}",
+                    i,
+                    decl.terminator,
+                    decl.content.as_deref()
+                );
             }
         }
         if let Err(ref e) = result {
@@ -73,7 +81,7 @@ C"#;
         }
         assert!(result.is_ok(), "Failed to parse multiple heredocs");
         eprintln!("Parse succeeded!");
-        
+
         // Don't try to generate S-expression yet, just verify parsing worked
     }
 
@@ -117,7 +125,10 @@ print $regex;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with special characters");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with special characters"
+        );
     }
 
     #[test]
@@ -144,7 +155,10 @@ print $tricky;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with terminator in content");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with terminator in content"
+        );
     }
 
     #[test]
@@ -154,23 +168,23 @@ Hello / World
 EOF"#;
 
         let (processed, declarations) = parse_with_heredocs(input);
-        
+
         println!("Original:\n{}", input);
         println!("\nProcessed:\n{}", processed);
         println!("\nDeclarations: {:?}", declarations);
-        
+
         // Check that heredoc was detected
         assert_eq!(declarations.len(), 1);
         assert_eq!(declarations[0].terminator, "EOF");
         assert!(!declarations[0].interpolated);
         assert_eq!(declarations[0].content.as_deref(), Some("Hello / World"));
-        
+
         // Check that heredoc was replaced with placeholder
         assert!(processed.contains("__HEREDOC_1__"));
-        
+
         // The processed output should NOT contain the heredoc content
         assert!(!processed.contains("Hello / World"));
-        
+
         // Check the overall structure
         assert!(processed.starts_with("my $x = __HEREDOC_1__"));
     }
@@ -186,7 +200,10 @@ print $result / 2;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(result.is_ok(), "Failed to parse heredoc with slash disambiguation");
+        assert!(
+            result.is_ok(),
+            "Failed to parse heredoc with slash disambiguation"
+        );
     }
 
     #[test]

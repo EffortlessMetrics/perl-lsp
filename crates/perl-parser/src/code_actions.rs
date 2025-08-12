@@ -45,7 +45,7 @@ impl CodeActionsProvider {
     pub fn new(source: String) -> Self {
         Self { source }
     }
-    
+
     /// Get code actions for a range
     pub fn get_code_actions(
         &self,
@@ -54,7 +54,7 @@ impl CodeActionsProvider {
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Get quick fixes for diagnostics
         for diagnostic in diagnostics {
             if let Some(code) = &diagnostic.code {
@@ -84,22 +84,22 @@ impl CodeActionsProvider {
                 }
             }
         }
-        
+
         // Get refactoring actions for the selection
         actions.extend(self.get_refactoring_actions(ast, range));
-        
+
         actions
     }
-    
+
     /// Fix undefined variable by declaring it
     fn fix_undefined_variable(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Extract variable name from diagnostic message
         if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
             // Find the best place to insert declaration
             let insert_pos = self.find_declaration_position(diagnostic.range.0);
-            
+
             // Add 'my' declaration
             actions.push(CodeAction {
                 title: format!("Declare '{}' with 'my'", var_name),
@@ -107,13 +107,16 @@ impl CodeActionsProvider {
                 diagnostics: vec!["undefined-variable".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: insert_pos, end: insert_pos },
+                        location: SourceLocation {
+                            start: insert_pos,
+                            end: insert_pos,
+                        },
                         new_text: format!("my {};\n", var_name),
                     }],
                 },
                 is_preferred: true,
             });
-            
+
             // Add 'our' declaration
             actions.push(CodeAction {
                 title: format!("Declare '{}' with 'our'", var_name),
@@ -121,21 +124,24 @@ impl CodeActionsProvider {
                 diagnostics: vec!["undefined-variable".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: insert_pos, end: insert_pos },
+                        location: SourceLocation {
+                            start: insert_pos,
+                            end: insert_pos,
+                        },
                         new_text: format!("our {};\n", var_name),
                     }],
                 },
                 is_preferred: false,
             });
         }
-        
+
         actions
     }
-    
+
     /// Fix unused variable by removing it
     fn fix_unused_variable(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Find the declaration line
         let line_start = self.source[..diagnostic.range.0]
             .rfind('\n')
@@ -145,20 +151,23 @@ impl CodeActionsProvider {
             .find('\n')
             .map(|p| diagnostic.range.1 + p)
             .unwrap_or(self.source.len());
-        
+
         actions.push(CodeAction {
             title: "Remove unused variable".to_string(),
             kind: CodeActionKind::QuickFix,
             diagnostics: vec!["unused-variable".to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: line_start, end: line_end + 1 },
+                    location: SourceLocation {
+                        start: line_start,
+                        end: line_end + 1,
+                    },
                     new_text: String::new(),
                 }],
             },
             is_preferred: true,
         });
-        
+
         // Add underscore prefix to mark as intentionally unused
         if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
             actions.push(CodeAction {
@@ -167,26 +176,29 @@ impl CodeActionsProvider {
                 diagnostics: vec!["unused-variable".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                        location: SourceLocation {
+                            start: diagnostic.range.0,
+                            end: diagnostic.range.1,
+                        },
                         new_text: format!("_{}", var_name),
                     }],
                 },
                 is_preferred: false,
             });
         }
-        
+
         actions
     }
-    
+
     /// Fix assignment in condition
     fn fix_assignment_in_condition(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Change = to ==
         let assignment_pos = self.source[diagnostic.range.0..diagnostic.range.1]
             .find('=')
             .map(|p| diagnostic.range.0 + p);
-        
+
         if let Some(pos) = assignment_pos {
             actions.push(CodeAction {
                 title: "Change to comparison (==)".to_string(),
@@ -194,13 +206,16 @@ impl CodeActionsProvider {
                 diagnostics: vec!["assignment-in-condition".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: pos, end: pos + 1 },
+                        location: SourceLocation {
+                            start: pos,
+                            end: pos + 1,
+                        },
                         new_text: "==".to_string(),
                     }],
                 },
                 is_preferred: true,
             });
-            
+
             // Wrap in parentheses to make intention clear
             actions.push(CodeAction {
                 title: "Keep assignment (add parentheses)".to_string(),
@@ -209,11 +224,17 @@ impl CodeActionsProvider {
                 edit: CodeActionEdit {
                     changes: vec![
                         TextEdit {
-                            location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.0 },
+                            location: SourceLocation {
+                                start: diagnostic.range.0,
+                                end: diagnostic.range.0,
+                            },
                             new_text: "(".to_string(),
                         },
                         TextEdit {
-                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            location: SourceLocation {
+                                start: diagnostic.range.1,
+                                end: diagnostic.range.1,
+                            },
                             new_text: ")".to_string(),
                         },
                     ],
@@ -221,10 +242,10 @@ impl CodeActionsProvider {
                 is_preferred: false,
             });
         }
-        
+
         actions
     }
-    
+
     /// Add 'use strict' pragma
     fn add_use_strict(&self) -> Vec<CodeAction> {
         vec![CodeAction {
@@ -240,7 +261,7 @@ impl CodeActionsProvider {
             is_preferred: true,
         }]
     }
-    
+
     /// Add 'use warnings' pragma
     fn add_use_warnings(&self) -> Vec<CodeAction> {
         vec![CodeAction {
@@ -256,40 +277,43 @@ impl CodeActionsProvider {
             is_preferred: true,
         }]
     }
-    
+
     /// Fix deprecated 'defined @array' or 'defined %hash'
     fn fix_deprecated_defined(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Extract the array/hash from the diagnostic
         if let Some(start) = self.source[diagnostic.range.0..diagnostic.range.1].find("defined") {
             let defined_start = diagnostic.range.0 + start;
             let arg_start = defined_start + 7; // "defined".len()
-            
+
             // Find the argument
             let arg_text = &self.source[arg_start..diagnostic.range.1].trim();
-            
+
             actions.push(CodeAction {
                 title: format!("Replace with 'if ({})'", arg_text),
                 kind: CodeActionKind::QuickFix,
                 diagnostics: vec!["deprecated-defined".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: defined_start, end: diagnostic.range.1 },
+                        location: SourceLocation {
+                            start: defined_start,
+                            end: diagnostic.range.1,
+                        },
                         new_text: arg_text.to_string(),
                     }],
                 },
                 is_preferred: true,
             });
         }
-        
+
         actions
     }
-    
+
     /// Fix numeric comparison with undef
     fn fix_numeric_undef(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Add defined check
         actions.push(CodeAction {
             title: "Add defined check".to_string(),
@@ -298,18 +322,24 @@ impl CodeActionsProvider {
             edit: CodeActionEdit {
                 changes: vec![
                     TextEdit {
-                        location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.0 },
+                        location: SourceLocation {
+                            start: diagnostic.range.0,
+                            end: diagnostic.range.0,
+                        },
                         new_text: "defined(".to_string(),
                     },
                     TextEdit {
-                        location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                        location: SourceLocation {
+                            start: diagnostic.range.1,
+                            end: diagnostic.range.1,
+                        },
                         new_text: ")".to_string(),
                     },
                 ],
             },
             is_preferred: true,
         });
-        
+
         // Use // operator
         if self.source[diagnostic.range.0..diagnostic.range.1].contains("==") {
             actions.push(CodeAction {
@@ -318,25 +348,29 @@ impl CodeActionsProvider {
                 diagnostics: vec!["numeric-undef".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                        location: SourceLocation {
+                            start: diagnostic.range.0,
+                            end: diagnostic.range.1,
+                        },
                         new_text: "// 0".to_string(), // Default to 0
                     }],
                 },
                 is_preferred: false,
             });
         }
-        
+
         actions
     }
-    
+
     /// Get refactoring actions for a selection
     fn get_refactoring_actions(&self, ast: &Node, range: (usize, usize)) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Use the enhanced provider for better refactorings
-        let enhanced_provider = crate::code_actions_enhanced::EnhancedCodeActionsProvider::new(self.source.clone());
+        let enhanced_provider =
+            crate::code_actions_enhanced::EnhancedCodeActionsProvider::new(self.source.clone());
         actions.extend(enhanced_provider.get_enhanced_refactoring_actions(ast, range));
-        
+
         // Keep basic refactorings as fallback
         if let Some(node) = self.find_node_at_range(ast, range) {
             match &node.kind {
@@ -350,7 +384,7 @@ impl CodeActionsProvider {
                         is_preferred: false,
                     });
                 }
-                
+
                 // Extract function (basic version)
                 NodeKind::Block { .. } if actions.is_empty() => {
                     actions.push(CodeAction {
@@ -361,27 +395,30 @@ impl CodeActionsProvider {
                         is_preferred: false,
                     });
                 }
-                
+
                 _ => {}
             }
         }
-        
+
         actions
     }
-    
+
     /// Extract expression to variable
     fn extract_variable(&self, node: &Node, _range: (usize, usize)) -> CodeActionEdit {
         let expr_text = &self.source[node.location.start..node.location.end];
         let var_name = "$extracted_var";
-        
+
         // Find statement start
         let stmt_start = self.find_statement_start(node.location.start);
-        
+
         CodeActionEdit {
             changes: vec![
                 // Insert variable declaration
                 TextEdit {
-                    location: SourceLocation { start: stmt_start, end: stmt_start },
+                    location: SourceLocation {
+                        start: stmt_start,
+                        end: stmt_start,
+                    },
                     new_text: format!("my {} = {};\n", var_name, expr_text),
                 },
                 // Replace expression with variable
@@ -392,20 +429,23 @@ impl CodeActionsProvider {
             ],
         }
     }
-    
+
     /// Extract statements to function
     fn extract_function(&self, node: &Node, _range: (usize, usize)) -> CodeActionEdit {
         let body_text = &self.source[node.location.start..node.location.end];
         let func_name = "extracted_function";
-        
+
         // Find a good place to insert the function
         let insert_pos = self.find_function_insert_position();
-        
+
         CodeActionEdit {
             changes: vec![
                 // Insert function definition
                 TextEdit {
-                    location: SourceLocation { start: insert_pos, end: insert_pos },
+                    location: SourceLocation {
+                        start: insert_pos,
+                        end: insert_pos,
+                    },
                     new_text: format!("\nsub {} {{\n{}\n}}\n", func_name, body_text),
                 },
                 // Replace statements with function call
@@ -416,13 +456,13 @@ impl CodeActionsProvider {
             ],
         }
     }
-    
+
     /// Find the best position to insert a declaration
     fn find_declaration_position(&self, error_pos: usize) -> usize {
         // Find the start of the current statement
         self.find_statement_start(error_pos)
     }
-    
+
     /// Find the start of the current statement
     fn find_statement_start(&self, pos: usize) -> usize {
         // Look backwards for statement boundary
@@ -435,13 +475,13 @@ impl CodeActionsProvider {
         }
         0
     }
-    
+
     /// Find a good position to insert a function
     fn find_function_insert_position(&self) -> usize {
         // For now, insert at the end of the file
         self.source.len()
     }
-    
+
     /// Find node at the given range
     #[allow(clippy::only_used_in_recursion)]
     fn find_node_at_range<'a>(&self, node: &'a Node, range: (usize, usize)) -> Option<&'a Node> {
@@ -463,7 +503,12 @@ impl CodeActionsProvider {
                         }
                     }
                 }
-                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                NodeKind::If {
+                    condition,
+                    then_branch,
+                    elsif_branches,
+                    else_branch,
+                } => {
                     if let Some(result) = self.find_node_at_range(condition, range) {
                         return Some(result);
                     }
@@ -503,42 +548,50 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostics::DiagnosticsProvider;
     use crate::Parser;
-    
+    use crate::diagnostics::DiagnosticsProvider;
+
     #[test]
     fn test_undefined_variable_fix() {
         let source = "use strict;\nprint $undefined;";
         let mut parser = Parser::new(source);
         let ast = parser.parse().unwrap();
-        
+
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
-        
+
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
-        
+
         // Debug output
         eprintln!("Diagnostics: {:?}", diagnostics);
         eprintln!("Actions: {:?}", actions);
-        
-        assert!(!diagnostics.is_empty(), "Expected diagnostics for undefined variable");
-        assert!(actions.iter().any(|a| a.title.contains("Declare") || a.title.contains("my")), 
-                "Expected action to declare variable, got: {:?}", actions);
+
+        assert!(
+            !diagnostics.is_empty(),
+            "Expected diagnostics for undefined variable"
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.title.contains("Declare") || a.title.contains("my")),
+            "Expected action to declare variable, got: {:?}",
+            actions
+        );
     }
-    
+
     #[test]
     fn test_assignment_in_condition_fix() {
         let source = "if ($x = 5) { }";
         let mut parser = Parser::new(source);
         let ast = parser.parse().unwrap();
-        
+
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
-        
+
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
-        
+
         assert!(actions.iter().any(|a| a.title.contains("==")));
     }
 }

@@ -1,17 +1,16 @@
 /// Real-world integration tests for LSP server
 /// Tests against actual Perl codebases and common patterns
-
 use serde_json::json;
 
 mod common;
-use common::{start_lsp_server, send_request, send_notification, initialize_lsp, read_response};
+use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
 /// Test with a real CPAN module structure
 #[test]
 fn test_cpan_module_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     // Typical CPAN module structure
     let module_code = r#"
 package My::Module;
@@ -71,42 +70,46 @@ This is a sample CPAN-style module for testing.
 
 =cut
 "#;
-    
+
     let uri = "file:///Module.pm";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": module_code
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": module_code
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Request document symbols
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/documentSymbol",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
-    
+
     let symbols = response["result"].as_array().unwrap();
-    
+
     // Verify expected symbols are found
-    let symbol_names: Vec<&str> = symbols.iter()
-        .filter_map(|s| s["name"].as_str())
-        .collect();
-    
+    let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
     assert!(symbol_names.contains(&"My::Module"));
     assert!(symbol_names.contains(&"new"));
     assert!(symbol_names.contains(&"function1"));
@@ -119,7 +122,7 @@ This is a sample CPAN-style module for testing.
 fn test_mojolicious_app() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let mojo_app = r#"
 #!/usr/bin/env perl
 use Mojolicious::Lite;
@@ -181,37 +184,47 @@ __DATA__
 </body>
 </html>
 "#;
-    
+
     let uri = "file:///app.pl";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": mojo_app
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": mojo_app
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Test diagnostics - should have no errors
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/diagnostic",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
-    
+
     // Should parse without errors
-    assert_eq!(items.len(), 0, "Mojolicious app should parse without errors");
+    assert_eq!(
+        items.len(),
+        0,
+        "Mojolicious app should parse without errors"
+    );
 }
 
 /// Test with DBI database code
@@ -219,7 +232,7 @@ __DATA__
 fn test_dbi_database_code() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let dbi_code = r#"
 #!/usr/bin/perl
 use strict;
@@ -309,41 +322,48 @@ END {
 
 1;
 "#;
-    
+
     let uri = "file:///database.pl";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": dbi_code
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": dbi_code
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Request symbols
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/documentSymbol",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let symbols = response["result"].as_array().unwrap();
-    
+
     // Verify subroutines are detected
-    let sub_names: Vec<&str> = symbols.iter()
+    let sub_names: Vec<&str> = symbols
+        .iter()
         .filter(|s| s["kind"] == 12) // Function
         .filter_map(|s| s["name"].as_str())
         .collect();
-    
+
     assert!(sub_names.contains(&"add_user_with_profile"));
     assert!(sub_names.contains(&"get_recent_users"));
 }
@@ -353,7 +373,7 @@ END {
 fn test_perl_test_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let test_code = r#"
 #!/usr/bin/perl
 use strict;
@@ -420,32 +440,38 @@ TODO: {
 
 done_testing();
 "#;
-    
+
     let uri = "file:///test.t";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": test_code
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": test_code
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Verify parsing succeeds
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/diagnostic",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 0, "Test file should parse without errors");
@@ -456,7 +482,7 @@ done_testing();
 fn test_catalyst_controller() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let catalyst_code = r#"
 package MyApp::Controller::API;
 use Moose;
@@ -581,39 +607,43 @@ __PACKAGE__->meta->make_immutable;
 
 1;
 "#;
-    
+
     let uri = "file:///Controller.pm";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": catalyst_code
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": catalyst_code
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Request symbols - should find all REST methods
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/documentSymbol",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let symbols = response["result"].as_array().unwrap();
-    
-    let method_names: Vec<&str> = symbols.iter()
-        .filter_map(|s| s["name"].as_str())
-        .collect();
-    
+
+    let method_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
     // Verify REST methods are found
     assert!(method_names.contains(&"users_GET"));
     assert!(method_names.contains(&"users_POST"));
@@ -627,7 +657,7 @@ __PACKAGE__->meta->make_immutable;
 fn test_complex_regex_patterns() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let regex_code = r#"
 #!/usr/bin/perl
 use strict;
@@ -732,35 +762,45 @@ sub normalize_text {
 
 1;
 "#;
-    
+
     let uri = "file:///regex.pl";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": regex_code
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": regex_code
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Should parse complex regex patterns without errors
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/diagnostic",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
-    assert_eq!(items.len(), 0, "Complex regex patterns should parse correctly");
+    assert_eq!(
+        items.len(),
+        0,
+        "Complex regex patterns should parse correctly"
+    );
 }
 
 /// Test with modern Perl features
@@ -768,7 +808,7 @@ sub normalize_text {
 fn test_modern_perl_features() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     let modern_perl = r#"
 #!/usr/bin/perl
 use v5.36;
@@ -859,40 +899,44 @@ sub array_operations {
 
 1;
 "#;
-    
+
     let uri = "file:///modern.pl";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": modern_perl
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": modern_perl
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Request symbols to verify modern constructs are recognized
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/documentSymbol",
-        "params": {
-            "textDocument": { "uri": uri }
-        }
-    }));
-    
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let symbols = response["result"].as_array().unwrap();
-    
+
     // Look for class and methods
-    let symbol_names: Vec<&str> = symbols.iter()
-        .filter_map(|s| s["name"].as_str())
-        .collect();
-    
+    let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
     assert!(symbol_names.contains(&"Point"));
     assert!(symbol_names.contains(&"risky_operation"));
     assert!(symbol_names.contains(&"with_defer"));
@@ -903,7 +947,7 @@ sub array_operations {
 fn test_multi_file_project() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     // Main script
     let main_script = r#"
 #!/usr/bin/perl
@@ -940,7 +984,7 @@ sub process_user {
 
 log_info("Application completed");
 "#;
-    
+
     // Config module
     let config_module = r#"
 package MyApp::Config;
@@ -968,62 +1012,74 @@ sub get {
 
 1;
 "#;
-    
+
     // Open both files
     let main_uri = "file:///main.pl";
     let config_uri = "file:///lib/MyApp/Config.pm";
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": main_uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": main_script
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": main_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": main_script
+                }
             }
-        }
-    }));
-    
-    send_notification(&mut server, json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": config_uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": config_module
+        }),
+    );
+
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": config_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": config_module
+                }
             }
-        }
-    }));
-    
+        }),
+    );
+
     // Test cross-file references (would need actual implementation)
     // For now, just verify both files parse correctly
-    
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "textDocument/diagnostic",
-        "params": {
-            "textDocument": { "uri": main_uri }
-        }
-    }));
-    
+
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": main_uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 0, "Main script should parse without errors");
-    
-    send_request(&mut server, json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "textDocument/diagnostic",
-        "params": {
-            "textDocument": { "uri": config_uri }
-        }
-    }));
-    
+
+    send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": config_uri }
+            }
+        }),
+    );
+
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 0, "Config module should parse without errors");

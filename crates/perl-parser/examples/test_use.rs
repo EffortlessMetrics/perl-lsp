@@ -13,7 +13,7 @@ fn main() {
         // "use List::Util qw(max min);",
         // "use POSIX qw(strftime ceil floor);",
     ];
-    
+
     for code in tests {
         println!("\nTesting: {}", code);
         let mut parser = Parser::new(code);

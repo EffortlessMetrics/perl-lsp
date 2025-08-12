@@ -8,12 +8,12 @@ my $template = "$prefix<<$end_tag
 Template content here
 $end_tag";
 "#;
-    
+
     let mut lexer = PerlLexer::new(input);
-    
+
     println!("=== Tokenizing heredoc in string ===");
     println!("Input: {}", input);
-    
+
     while let Some(token) = lexer.next_token() {
         println!("Token: {:?}", token);
         if token.text.contains("<<") {

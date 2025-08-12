@@ -9,12 +9,12 @@ fn test_lsp_signature_help_request_format() {
     // Test that signature help responses match LSP specification
     let code = "print($x, ";
     let position = 9; // After comma
-    
-    let ast = Parser::new(code).parse().unwrap_or_else(|_| {
-        Parser::new("").parse().unwrap()
-    });
+
+    let ast = Parser::new(code)
+        .parse()
+        .unwrap_or_else(|_| Parser::new("").parse().unwrap());
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     if let Some(help) = provider.get_signature_help(code, position) {
         // Convert to JSON to verify LSP format
         let json_help = json!({
@@ -36,7 +36,7 @@ fn test_lsp_signature_help_request_format() {
             "activeSignature": help.active_signature,
             "activeParameter": help.active_parameter
         });
-        
+
         // Verify structure
         assert!(json_help["signatures"].is_array());
         assert!(json_help["activeSignature"].is_number());
@@ -48,21 +48,26 @@ fn test_lsp_signature_help_request_format() {
 fn test_signature_help_trigger_characters() {
     // Test that signature help is triggered correctly
     let trigger_cases = vec![
-        ("print(", 6, true),   // Opening paren
+        ("print(", 6, true),    // Opening paren
         ("print($x,", 9, true), // Comma
         ("print $x", 8, false), // No trigger
         ("my $x = ", 8, false), // No trigger
     ];
-    
+
     for (code, position, should_trigger) in trigger_cases {
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+        let ast = Parser::new(code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         let help = provider.get_signature_help(code, position);
-        assert_eq!(help.is_some(), should_trigger,
-                  "Trigger mismatch for '{}' at position {}", code, position);
+        assert_eq!(
+            help.is_some(),
+            should_trigger,
+            "Trigger mismatch for '{}' at position {}",
+            code,
+            position
+        );
     }
 }
 
@@ -70,39 +75,53 @@ fn test_signature_help_trigger_characters() {
 fn test_multi_signature_functions() {
     // Test functions with multiple signatures
     let multi_sig_functions = vec![
-        ("substr", vec![
-            "substr EXPR, OFFSET, LENGTH, REPLACEMENT",
-            "substr EXPR, OFFSET, LENGTH",
-            "substr EXPR, OFFSET",
-        ]),
-        ("splice", vec![
-            "splice ARRAY, OFFSET, LENGTH, LIST",
-            "splice ARRAY, OFFSET, LENGTH",
-            "splice ARRAY, OFFSET",
-            "splice ARRAY",
-        ]),
-        ("index", vec![
-            "index STR, SUBSTR, POSITION",
-            "index STR, SUBSTR",
-        ]),
+        (
+            "substr",
+            vec![
+                "substr EXPR, OFFSET, LENGTH, REPLACEMENT",
+                "substr EXPR, OFFSET, LENGTH",
+                "substr EXPR, OFFSET",
+            ],
+        ),
+        (
+            "splice",
+            vec![
+                "splice ARRAY, OFFSET, LENGTH, LIST",
+                "splice ARRAY, OFFSET, LENGTH",
+                "splice ARRAY, OFFSET",
+                "splice ARRAY",
+            ],
+        ),
+        (
+            "index",
+            vec!["index STR, SUBSTR, POSITION", "index STR, SUBSTR"],
+        ),
     ];
-    
+
     for (func, expected_sigs) in multi_sig_functions {
         let code = format!("{}(", func);
         let position = code.len();
-        
-        let ast = Parser::new(&code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+
+        let ast = Parser::new(&code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         if let Some(help) = provider.get_signature_help(&code, position) {
-            assert_eq!(help.signatures.len(), expected_sigs.len(),
-                      "Wrong number of signatures for {}", func);
-            
+            assert_eq!(
+                help.signatures.len(),
+                expected_sigs.len(),
+                "Wrong number of signatures for {}",
+                func
+            );
+
             for expected in &expected_sigs {
-                assert!(help.signatures.iter().any(|s| s.label.contains(expected)),
-                       "Missing signature '{}' for {}", expected, func);
+                assert!(
+                    help.signatures.iter().any(|s| s.label.contains(expected)),
+                    "Missing signature '{}' for {}",
+                    expected,
+                    func
+                );
             }
         }
     }
@@ -117,7 +136,7 @@ fn test_parameter_highlighting() {
         expected_param: usize,
         function: &'static str,
     }
-    
+
     let test_cases = vec![
         TestCase {
             code: "substr($str, ",
@@ -144,17 +163,21 @@ fn test_parameter_highlighting() {
             function: "index",
         },
     ];
-    
+
     for test in test_cases {
-        let ast = Parser::new(test.code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+        let ast = Parser::new(test.code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         if let Some(help) = provider.get_signature_help(test.code, test.position) {
-            assert_eq!(help.active_parameter, Some(test.expected_param),
-                      "Wrong active parameter for {} in '{}'",
-                      test.function, test.code);
+            assert_eq!(
+                help.active_parameter,
+                Some(test.expected_param),
+                "Wrong active parameter for {} in '{}'",
+                test.function,
+                test.code
+            );
         }
     }
 }
@@ -170,40 +193,43 @@ sub my_print {
 my_print("hello");
 print("world");
 "#;
-    
+
     // Test user function (should not have built-in signature)
     let user_func_pos = code.find("my_print(").unwrap() + 9;
-    let ast = Parser::new(code).parse().unwrap_or_else(|_| {
-        Parser::new("").parse().unwrap()
-    });
+    let ast = Parser::new(code)
+        .parse()
+        .unwrap_or_else(|_| Parser::new("").parse().unwrap());
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     // User function might have signature from parsing
     let _user_help = provider.get_signature_help(code, user_func_pos);
-    
+
     // Test built-in function
     let builtin_pos = code.find("print(\"world").unwrap() + 6;
     let builtin_help = provider.get_signature_help(code, builtin_pos);
-    
-    assert!(builtin_help.is_some(), "Should have signature for built-in print");
+
+    assert!(
+        builtin_help.is_some(),
+        "Should have signature for built-in print"
+    );
 }
 
 #[test]
 fn test_method_call_signatures() {
     // Test that method calls don't incorrectly trigger built-in signatures
     let test_cases = vec![
-        "$obj->print(", // Method call, not built-in print
+        "$obj->print(",  // Method call, not built-in print
         "$class->new(",  // Method call, not built-in
         "SUPER::print(", // Qualified call
     ];
-    
+
     for code in test_cases {
         let position = code.len();
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+        let ast = Parser::new(code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         // Method calls might not have signatures unless defined
         let _help = provider.get_signature_help(code, position);
         // We don't assert absence since methods might be recognized
@@ -214,19 +240,19 @@ fn test_method_call_signatures() {
 fn test_signature_help_with_syntax_errors() {
     // Test that signature help works even with syntax errors
     let error_cases = vec![
-        "print(((", // Unmatched parens
+        "print(((",       // Unmatched parens
         "print($x, $y, ", // Incomplete
         "print($x, , $y", // Extra comma
-        "print($", // Incomplete variable
+        "print($",        // Incomplete variable
     ];
-    
+
     for code in error_cases {
         let position = code.len() - 1;
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+        let ast = Parser::new(code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         // Should still try to provide help
         let _help = provider.get_signature_help(code, position);
         // Don't assert - just ensure no panic
@@ -243,19 +269,22 @@ fn test_overloaded_operators_as_functions() {
         ("pop", "pop ARRAY"),
         ("splice", "splice ARRAY, OFFSET, LENGTH, LIST"),
     ];
-    
+
     for (op, sig) in operator_functions {
         let code = format!("{}(@array, ", op);
         let position = code.len();
-        
-        let ast = Parser::new(&code).parse().unwrap_or_else(|_| {
-            Parser::new("").parse().unwrap()
-        });
+
+        let ast = Parser::new(&code)
+            .parse()
+            .unwrap_or_else(|_| Parser::new("").parse().unwrap());
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         if let Some(help) = provider.get_signature_help(&code, position) {
-            assert!(help.signatures.iter().any(|s| s.label.contains(sig)),
-                   "Missing signature for operator function {}", op);
+            assert!(
+                help.signatures.iter().any(|s| s.label.contains(sig)),
+                "Missing signature for operator function {}",
+                op
+            );
         }
     }
 }
@@ -264,18 +293,20 @@ fn test_overloaded_operators_as_functions() {
 fn test_file_test_operators() {
     // Test file test operators
     let file_tests = vec![
-        "-e", "-f", "-d", "-r", "-w", "-x", "-o", "-R", "-W", "-X",
-        "-O", "-z", "-s", "-l", "-p", "-S", "-b", "-c", "-t", "-u",
-        "-g", "-k", "-T", "-B", "-M", "-A", "-C",
+        "-e", "-f", "-d", "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O", "-z", "-s", "-l", "-p",
+        "-S", "-b", "-c", "-t", "-u", "-g", "-k", "-T", "-B", "-M", "-A", "-C",
     ];
-    
+
     for op in file_tests {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
-        
+
         // File test operators should have signatures
-        assert!(provider.has_builtin(op),
-               "Missing file test operator: {}", op);
+        assert!(
+            provider.has_builtin(op),
+            "Missing file test operator: {}",
+            op
+        );
     }
 }
 
@@ -285,17 +316,19 @@ fn test_special_forms() {
     let special_forms = vec![
         ("do", vec!["do BLOCK", "do EXPR"]),
         ("eval", vec!["eval EXPR", "eval BLOCK"]),
-        ("require", vec!["require VERSION", "require EXPR", "require"]),
+        (
+            "require",
+            vec!["require VERSION", "require EXPR", "require"],
+        ),
         ("use", vec!["use Module VERSION LIST", "use Module"]),
         ("no", vec!["no Module VERSION LIST", "no Module"]),
     ];
-    
+
     for (form, _sigs) in special_forms {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
-        
-        assert!(provider.has_builtin(form),
-               "Missing special form: {}", form);
+
+        assert!(provider.has_builtin(form), "Missing special form: {}", form);
     }
 }
 
@@ -303,18 +336,20 @@ fn test_special_forms() {
 fn test_pragma_like_functions() {
     // Test pragma-like built-ins
     let pragmas = vec![
-        "strict", "warnings", "feature", "utf8", "bytes",
-        "integer", "locale", "constant",
+        "strict", "warnings", "feature", "utf8", "bytes", "integer", "locale", "constant",
     ];
-    
+
     // These are not functions but modules, so they shouldn't have signatures
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     for pragma in pragmas {
         // Pragmas are not in builtin_signatures
-        assert!(!provider.has_builtin(pragma),
-               "Pragma {} should not be in built-in functions", pragma);
+        assert!(
+            !provider.has_builtin(pragma),
+            "Pragma {} should not be in built-in functions",
+            pragma
+        );
     }
 }
 
@@ -323,7 +358,7 @@ fn test_comprehensive_function_categories() {
     // Ensure all categories of functions are covered
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     let categories = vec![
         ("String", vec!["chomp", "chr", "index", "lc", "length"]),
         ("Array", vec!["push", "pop", "shift", "splice", "grep"]),
@@ -336,11 +371,15 @@ fn test_comprehensive_function_categories() {
         ("Socket", vec!["socket", "bind", "listen", "accept"]),
         ("Misc", vec!["die", "warn", "exit", "eval", "require"]),
     ];
-    
+
     for (category, funcs) in categories {
         for func in funcs {
-            assert!(provider.has_builtin(func),
-                   "Missing {} function: {}", category, func);
+            assert!(
+                provider.has_builtin(func),
+                "Missing {} function: {}",
+                category,
+                func
+            );
         }
     }
 }
@@ -350,16 +389,19 @@ fn test_documentation_quality() {
     // Test that all signatures have documentation
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
-    
+
     let important_funcs = vec![
-        "print", "open", "close", "push", "pop", "substr",
-        "index", "split", "join", "map", "grep", "sort",
+        "print", "open", "close", "push", "pop", "substr", "index", "split", "join", "map", "grep",
+        "sort",
     ];
-    
+
     for func in important_funcs {
         if let Some(sig) = provider.get_builtin_signature(func) {
-            assert!(!sig.documentation.is_empty(),
-                   "Function {} should have documentation", func);
+            assert!(
+                !sig.documentation.is_empty(),
+                "Function {} should have documentation",
+                func
+            );
         }
     }
 }

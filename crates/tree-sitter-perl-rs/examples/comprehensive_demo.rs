@@ -1,8 +1,6 @@
 //! Comprehensive demonstration of tree-sitter-perl capabilities
 use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-    sexp_formatter::SexpFormatter,
+    EnhancedFullParser, pure_rust_parser::AstNode, sexp_formatter::SexpFormatter,
 };
 
 fn main() {
@@ -10,19 +8,27 @@ fn main() {
 
     // Test various Perl constructs
     let test_cases = vec![
-        ("Simple subroutine", r#"
+        (
+            "Simple subroutine",
+            r#"
 sub greet {
     my $name = shift;
     return "Hello, $name!";
 }
-"#),
-        ("Unicode identifiers", r#"
+"#,
+        ),
+        (
+            "Unicode identifiers",
+            r#"
 my $café = "coffee shop";
 my $π = 3.14159;
 my $Σ = sub { my $sum = 0; $sum += $_ for @_; $sum };
 print "π = $π\n";
-"#),
-        ("Modern Perl features", r#"
+"#,
+        ),
+        (
+            "Modern Perl features",
+            r#"
 use feature 'say';
 say "Hello, World!";
 
@@ -32,8 +38,11 @@ package Point {
         bless { x => $x, y => $y }, $class;
     }
 }
-"#),
-        ("Complex data structures", r#"
+"#,
+        ),
+        (
+            "Complex data structures",
+            r#"
 my %config = (
     database => {
         host => 'localhost',
@@ -46,15 +55,21 @@ my %config = (
     features => [qw(auth logging metrics)],
     version => '1.2.3'
 );
-"#),
-        ("Regular expressions", r#"
+"#,
+        ),
+        (
+            "Regular expressions",
+            r#"
 my $text = "The year is 2024";
 if ($text =~ /year is (\d+)/) {
     print "Year: $1\n";
 }
 $text =~ s/\d+/2025/g;
-"#),
-        ("Reference operations", r#"
+"#,
+        ),
+        (
+            "Reference operations",
+            r#"
 my @array = (1, 2, 3);
 my $array_ref = \@array;
 my $first = $array_ref->[0];
@@ -62,7 +77,8 @@ my $first = $array_ref->[0];
 my %hash = (key => 'value');
 my $hash_ref = \%hash;
 my $value = $hash_ref->{key};
-"#),
+"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -75,17 +91,17 @@ my $value = $hash_ref->{key};
         match parser.parse(code) {
             Ok(ast) => {
                 println!("✓ Parsed successfully!");
-                
+
                 // Show AST structure
                 println!("\nAST Structure:");
                 print_ast(&ast, 0);
-                
+
                 // Show S-expression format
                 println!("\nS-expression:");
                 let formatter = SexpFormatter::new("");
                 let sexp = formatter.format(&ast);
                 println!("{}", truncate(&sexp, 200));
-                
+
                 // Show statistics
                 let stats = collect_stats(&ast);
                 println!("\nStatistics:");
@@ -103,11 +119,12 @@ my $value = $hash_ref->{key};
 
 fn print_ast(node: &AstNode, indent: usize) {
     let prefix = "  ".repeat(indent);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program ({} items)", prefix, items.len());
-            for item in items.iter().take(5) {  // Limit output
+            for item in items.iter().take(5) {
+                // Limit output
                 print_ast(item, indent + 1);
             }
             if items.len() > 5 {
@@ -127,7 +144,9 @@ fn print_ast(node: &AstNode, indent: usize) {
         AstNode::UseStatement { module, .. } => {
             println!("{}Use: {}", prefix, module);
         }
-        AstNode::VariableDeclaration { scope, variables, .. } => {
+        AstNode::VariableDeclaration {
+            scope, variables, ..
+        } => {
             println!("{}VarDecl: {} ({} vars)", prefix, scope, variables.len());
         }
         AstNode::BinaryOp { left, op, right } => {
@@ -178,7 +197,7 @@ fn collect_stats(node: &AstNode) -> Stats {
 fn collect_stats_recursive(node: &AstNode, depth: usize, stats: &mut Stats) {
     stats.total_nodes += 1;
     stats.max_depth = stats.max_depth.max(depth);
-    
+
     let type_name = match node {
         AstNode::Program(_) => "Program",
         AstNode::Statement(_) => "Statement",
@@ -191,9 +210,9 @@ fn collect_stats_recursive(node: &AstNode, depth: usize, stats: &mut Stats) {
         AstNode::Number(_) => "Number",
         _ => "Other",
     };
-    
+
     stats.node_types.insert(type_name.to_string());
-    
+
     // Recurse into children
     match node {
         AstNode::Program(items) => {

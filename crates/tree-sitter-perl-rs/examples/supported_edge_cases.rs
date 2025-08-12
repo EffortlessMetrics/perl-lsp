@@ -1,107 +1,130 @@
 //! Test supported edge cases to verify parser capabilities
-//! 
+//!
 //! This focuses on edge cases that the parser should handle correctly
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Supported Edge Cases ===\n");
 
     let test_cases = vec![
         // Basic heredocs that should work
-        ("Basic heredoc", r#"
+        (
+            "Basic heredoc",
+            r#"
 my $text = <<'EOF';
 Line 1
 Line 2
 EOF
-"#),
-
-        ("Quoted heredoc", r#"
+"#,
+        ),
+        (
+            "Quoted heredoc",
+            r#"
 my $text = <<"END";
 Hello World
 END
-"#),
-
+"#,
+        ),
         // Variable edge cases
-        ("Special variables", r#"
+        (
+            "Special variables",
+            r#"
 $_ = "default var";
 @_ = (1, 2, 3);
 $/ = "\n";
 $\ = "\n";
-"#),
-
-        ("Package variables", r#"
+"#,
+        ),
+        (
+            "Package variables",
+            r#"
 our $VERSION = '1.0';
 our @EXPORT = qw(func1 func2);
 local $| = 1;
-"#),
-
+"#,
+        ),
         // String edge cases
-        ("Various string formats", r#"
+        (
+            "Various string formats",
+            r#"
 my $single = 'single quotes';
 my $double = "double quotes";
 my $qq = qq(parentheses);
 my $q = q{braces};
-"#),
-
-        ("String interpolation", r#"
+"#,
+        ),
+        (
+            "String interpolation",
+            r#"
 my $name = "World";
 my $greeting = "Hello, $name!";
 my $complex = "Array: @{[$x, $y, $z]}";
-"#),
-
+"#,
+        ),
         // Reference operations
-        ("Basic references", r#"
+        (
+            "Basic references",
+            r#"
 my $scalar_ref = \$scalar;
 my $array_ref = \@array;
 my $hash_ref = \%hash;
 my $code_ref = \&function;
-"#),
-
-        ("Dereferencing", r#"
+"#,
+        ),
+        (
+            "Dereferencing",
+            r#"
 my $value = ${$scalar_ref};
 my @arr = @{$array_ref};
 my %h = %{$hash_ref};
 $code_ref->();
-"#),
-
+"#,
+        ),
         // Anonymous structures
-        ("Anonymous refs", r#"
+        (
+            "Anonymous refs",
+            r#"
 my $aref = [1, 2, 3];
 my $href = {a => 1, b => 2};
 my $cref = sub { print "anon" };
-"#),
-
+"#,
+        ),
         // Method calls
-        ("Method calls", r#"
+        (
+            "Method calls",
+            r#"
 $obj->method();
 $obj->method($arg);
 $obj->method(@args);
 Class->new();
-"#),
-
+"#,
+        ),
         // List operations
-        ("List contexts", r#"
+        (
+            "List contexts",
+            r#"
 my @sorted = sort @list;
 my @mapped = map { $_ * 2 } @numbers;
 my @filtered = grep { $_ > 0 } @values;
-"#),
-
+"#,
+        ),
         // Hash operations
-        ("Hash operations", r#"
+        (
+            "Hash operations",
+            r#"
 my %hash = (
     key1 => 'value1',
     key2 => 'value2',
 );
 my @keys = keys %hash;
 my @values = values %hash;
-"#),
-
+"#,
+        ),
         // Control flow
-        ("Basic control flow", r#"
+        (
+            "Basic control flow",
+            r#"
 if ($x) {
     print "true";
 } elsif ($y) {
@@ -109,9 +132,11 @@ if ($x) {
 } else {
     print "false";
 }
-"#),
-
-        ("Loops", r#"
+"#,
+        ),
+        (
+            "Loops",
+            r#"
 for my $i (0..10) {
     print $i;
 }
@@ -120,18 +145,22 @@ while ($condition) {
     last if $done;
     next if $skip;
 }
-"#),
-
+"#,
+        ),
         // Pattern matching
-        ("Basic regex", r#"
+        (
+            "Basic regex",
+            r#"
 if ($text =~ /pattern/) {
     print "match";
 }
 $text =~ s/old/new/g;
-"#),
-
+"#,
+        ),
         // Subroutines
-        ("Basic subroutines", r#"
+        (
+            "Basic subroutines",
+            r#"
 sub simple {
     return 42;
 }
@@ -140,25 +169,31 @@ sub with_params {
     my ($x, $y) = @_;
     return $x + $y;
 }
-"#),
-
+"#,
+        ),
         // Operators
-        ("Various operators", r#"
+        (
+            "Various operators",
+            r#"
 my $sum = $a + $b;
 my $concat = $x . $y;
 my $logical = $p && $q || $r;
 my $ternary = $test ? $true : $false;
-"#),
-
-        ("Comparison operators", r#"
+"#,
+        ),
+        (
+            "Comparison operators",
+            r#"
 if ($a == $b) { }
 if ($x eq $y) { }
 if ($m < $n) { }
 if ($p gt $q) { }
-"#),
-
+"#,
+        ),
         // Special constructs
-        ("BEGIN and END blocks", r#"
+        (
+            "BEGIN and END blocks",
+            r#"
 BEGIN {
     print "compile time";
 }
@@ -166,16 +201,19 @@ BEGIN {
 END {
     print "exit time";
 }
-"#),
-
-        ("eval blocks", r#"
+"#,
+        ),
+        (
+            "eval blocks",
+            r#"
 eval {
     risky_operation();
 };
 if ($@) {
     print "Error: $@";
 }
-"#),
+"#,
+        ),
     ];
 
     let mut passed = 0;
@@ -184,14 +222,14 @@ if ($@) {
 
     for (name, code) in test_cases {
         print!("Testing {}: ", name);
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {
                 if validate_ast(&ast) {
                     println!("✓ PASSED");
                     passed += 1;
-                    
+
                     // Collect AST info for summary
                     let node_count = count_nodes(&ast);
                     details.push((name, true, format!("{} nodes", node_count)));
@@ -218,7 +256,7 @@ if ($@) {
     println!("\n=== Detailed Results ===");
     println!("{:<25} {:<8} {}", "Test Case", "Result", "Details");
     println!("{}", "-".repeat(70));
-    
+
     for (name, passed, detail) in details {
         let result = if passed { "PASS" } else { "FAIL" };
         let symbol = if passed { "✓" } else { "✗" };
@@ -227,9 +265,17 @@ if ($@) {
 
     println!("\n=== Summary ===");
     println!("Total tests: {}", passed + failed);
-    println!("Passed: {} ({}%)", passed, (passed * 100) / (passed + failed));
-    println!("Failed: {} ({}%)", failed, (failed * 100) / (passed + failed));
-    
+    println!(
+        "Passed: {} ({}%)",
+        passed,
+        (passed * 100) / (passed + failed)
+    );
+    println!(
+        "Failed: {} ({}%)",
+        failed,
+        (failed * 100) / (passed + failed)
+    );
+
     if passed == passed + failed {
         println!("\n🎉 All supported edge cases passed!");
     } else if passed > (passed + failed) * 3 / 4 {
@@ -248,7 +294,7 @@ fn validate_ast(ast: &AstNode) -> bool {
 
 fn count_nodes(ast: &AstNode) -> usize {
     let mut count = 1;
-    
+
     match ast {
         AstNode::Program(items) => {
             for item in items {
@@ -263,7 +309,12 @@ fn count_nodes(ast: &AstNode) -> usize {
                 count += count_nodes(stmt);
             }
         }
-        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+        AstNode::IfStatement {
+            condition,
+            then_block,
+            elsif_clauses,
+            else_block,
+        } => {
             count += count_nodes(condition);
             count += count_nodes(then_block);
             for (cond, block) in elsif_clauses {
@@ -291,6 +342,6 @@ fn count_nodes(ast: &AstNode) -> usize {
         }
         _ => {}
     }
-    
+
     count
 }

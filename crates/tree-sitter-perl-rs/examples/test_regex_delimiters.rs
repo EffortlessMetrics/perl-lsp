@@ -1,12 +1,9 @@
 //! Test regex with various delimiters
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Regex with Various Delimiters ===\n");
-    
+
     let test_cases = vec![
         ("Standard slash", r#"$text =~ /pattern/;"#),
         ("Match with m//", r#"$text =~ m/pattern/;"#),
@@ -23,11 +20,11 @@ fn main() {
         ("Regex with modifiers", r#"$text =~ m/pattern/gims;"#),
         ("Regex with interpolation", r#"$text =~ /$pattern/;"#),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {

@@ -1,6 +1,6 @@
 //! Enhanced parser that automatically uses stateful parsing for heredocs
 
-use crate::pure_rust_parser::{PureRustPerlParser, AstNode};
+use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use crate::stateful_parser::StatefulPerlParser;
 
 /// Enhanced Perl parser that automatically handles heredocs and other stateful constructs
@@ -20,12 +20,12 @@ impl EnhancedPerlParser {
             use_stateful: true, // Enable stateful parsing by default
         }
     }
-    
+
     pub fn with_stateful(mut self, enabled: bool) -> Self {
         self.use_stateful = enabled;
         self
     }
-    
+
     pub fn parse(&self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
         if self.use_stateful && source.contains("<<") {
             // Use stateful parser if heredocs are detected
@@ -37,7 +37,7 @@ impl EnhancedPerlParser {
             parser.parse(source)
         }
     }
-    
+
     pub fn to_sexp(&self, ast: &AstNode) -> String {
         PureRustPerlParser::new().to_sexp(ast)
     }
@@ -46,7 +46,7 @@ impl EnhancedPerlParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_enhanced_parser_detects_heredocs() {
         let source = r#"my $x = <<EOF;
@@ -58,7 +58,7 @@ EOF
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("Hello world"));
     }
-    
+
     #[test]
     fn test_enhanced_parser_works_without_heredocs() {
         let source = "my $x = 42;";

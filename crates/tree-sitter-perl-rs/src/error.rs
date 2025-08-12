@@ -18,28 +18,38 @@ pub enum ParseErrorKind {
 }
 
 /// Error types for tree-sitter Perl parser
-#[derive(Error, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(
+    Error,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bincode::Encode,
+    bincode::Decode,
+)]
 pub enum ParseError {
     /// Failed to parse the input
     #[error("Failed to parse input")]
     ParseFailed,
-    
+
     /// Failed to serialize scanner state
     #[error("Failed to serialize scanner state")]
     SerializationFailed,
-    
+
     /// Failed to deserialize scanner state
     #[error("Failed to deserialize scanner state")]
     DeserializationFailed,
-    
+
     /// Invalid token encountered
     #[error("Invalid token: {0}")]
     InvalidToken(String),
-    
+
     /// Unexpected end of input
     #[error("Unexpected end of input")]
     UnexpectedEof,
-    
+
     /// Invalid Unicode sequence
     #[error("Invalid Unicode sequence")]
     InvalidUnicode,
@@ -134,16 +144,37 @@ impl ParseError {
     /// Create a new parse error
     pub fn new(kind: ParseErrorKind, position: usize, message: String) -> Self {
         let error_msg = match kind {
-            ParseErrorKind::UnexpectedToken => format!("Unexpected token at position {}: {}", position, message),
-            ParseErrorKind::UnexpectedEndOfInput => format!("Unexpected end of input at position {}: {}", position, message),
-            ParseErrorKind::InvalidSyntax => format!("Invalid syntax at position {}: {}", position, message),
-            ParseErrorKind::InvalidNumber => format!("Invalid number at position {}: {}", position, message),
-            ParseErrorKind::InvalidString => format!("Invalid string at position {}: {}", position, message),
-            ParseErrorKind::InvalidRegex => format!("Invalid regex at position {}: {}", position, message),
-            ParseErrorKind::InvalidVariable => format!("Invalid variable at position {}: {}", position, message),
-            ParseErrorKind::MissingToken(ref token) => format!("Missing {} at position {}: {}", token, position, message),
-            ParseErrorKind::InvalidOperator => format!("Invalid operator at position {}: {}", position, message),
-            ParseErrorKind::InvalidIdentifier => format!("Invalid identifier at position {}: {}", position, message),
+            ParseErrorKind::UnexpectedToken => {
+                format!("Unexpected token at position {}: {}", position, message)
+            }
+            ParseErrorKind::UnexpectedEndOfInput => format!(
+                "Unexpected end of input at position {}: {}",
+                position, message
+            ),
+            ParseErrorKind::InvalidSyntax => {
+                format!("Invalid syntax at position {}: {}", position, message)
+            }
+            ParseErrorKind::InvalidNumber => {
+                format!("Invalid number at position {}: {}", position, message)
+            }
+            ParseErrorKind::InvalidString => {
+                format!("Invalid string at position {}: {}", position, message)
+            }
+            ParseErrorKind::InvalidRegex => {
+                format!("Invalid regex at position {}: {}", position, message)
+            }
+            ParseErrorKind::InvalidVariable => {
+                format!("Invalid variable at position {}: {}", position, message)
+            }
+            ParseErrorKind::MissingToken(ref token) => {
+                format!("Missing {} at position {}: {}", token, position, message)
+            }
+            ParseErrorKind::InvalidOperator => {
+                format!("Invalid operator at position {}: {}", position, message)
+            }
+            ParseErrorKind::InvalidIdentifier => {
+                format!("Invalid identifier at position {}: {}", position, message)
+            }
         };
         ParseError::InvalidToken(error_msg)
     }

@@ -3,8 +3,8 @@
 //! This module provides the bridge between perl-lexer's token output
 //! and the parser's token consumption model.
 
-use perl_lexer::{PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 use crate::error::{ParseError, ParseResult};
+use perl_lexer::{PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 
 /// A simplified token representation for the parser
 #[derive(Debug, Clone, PartialEq)]
@@ -54,7 +54,7 @@ pub enum TokenKind {
     Method,
     Format,
     Undef,
-    
+
     // Operators
     Assign,
     Plus,
@@ -94,7 +94,7 @@ pub enum TokenKind {
     Greater,
     LessEqual,
     GreaterEqual,
-    Spaceship, // <=>
+    Spaceship,     // <=>
     StringCompare, // cmp
     And,
     Or,
@@ -116,7 +116,7 @@ pub enum TokenKind {
     Question,
     Colon,
     Backslash, // Reference operator
-    
+
     // Delimiters
     LeftParen,
     RightParen,
@@ -126,7 +126,7 @@ pub enum TokenKind {
     RightBracket,
     Semicolon,
     Comma,
-    
+
     // Literals
     Number,
     String,
@@ -136,7 +136,7 @@ pub enum TokenKind {
     HeredocStart,
     HeredocBody,
     FormatBody,
-    
+
     // Identifiers and variables
     Identifier,
     ScalarSigil,
@@ -144,7 +144,7 @@ pub enum TokenKind {
     HashSigil,
     SubSigil,
     GlobSigil,
-    
+
     // Special
     Eof,
     Unknown,
@@ -166,7 +166,7 @@ impl<'a> TokenStream<'a> {
             peeked_second: None,
         }
     }
-    
+
     /// Peek at the next token without consuming it
     pub fn peek(&mut self) -> ParseResult<&Token> {
         if self.peeked.is_none() {
@@ -174,12 +174,11 @@ impl<'a> TokenStream<'a> {
         }
         Ok(self.peeked.as_ref().unwrap())
     }
-    
+
     /// Consume and return the next token
     pub fn next(&mut self) -> ParseResult<Token> {
         // If we have a peeked token, return it and move peeked_second to peeked
-        
-        
+
         if let Some(token) = self.peeked.take() {
             self.peeked = self.peeked_second.take();
             Ok(token)
@@ -187,37 +186,36 @@ impl<'a> TokenStream<'a> {
             self.next_token()
         }
     }
-    
+
     /// Check if we're at the end of input
     pub fn is_eof(&mut self) -> bool {
         matches!(self.peek(), Ok(token) if token.kind == TokenKind::Eof)
     }
-    
+
     /// Peek at the second token (two tokens ahead)
     pub fn peek_second(&mut self) -> ParseResult<&Token> {
         // First ensure we have a peeked token
         self.peek()?;
-        
+
         // If we don't have a second peeked token, get it
         if self.peeked_second.is_none() {
             self.peeked_second = Some(self.next_token()?);
         }
-        
+
         Ok(self.peeked_second.as_ref().unwrap())
     }
-    
+
     /// Enter format body parsing mode in the lexer
     pub fn enter_format_mode(&mut self) {
         self.lexer.enter_format_mode();
     }
-    
+
     /// Get the next token from the lexer
     fn next_token(&mut self) -> ParseResult<Token> {
         // Skip whitespace and comments
         loop {
-            let lexer_token = self.lexer.next_token()
-                .ok_or(ParseError::UnexpectedEof)?;
-            
+            let lexer_token = self.lexer.next_token().ok_or(ParseError::UnexpectedEof)?;
+
             match &lexer_token.token_type {
                 LexerTokenType::Whitespace | LexerTokenType::Newline => continue,
                 LexerTokenType::Comment(_) => continue,
@@ -235,7 +233,7 @@ impl<'a> TokenStream<'a> {
             }
         }
     }
-    
+
     /// Convert a lexer token to a parser token
     fn convert_token(&self, token: LexerToken) -> Token {
         let kind = match &token.token_type {
@@ -284,7 +282,7 @@ impl<'a> TokenStream<'a> {
                 "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
                 _ => TokenKind::Identifier,
             },
-            
+
             // Operators
             LexerTokenType::Operator(op) => match op.as_ref() {
                 "=" => TokenKind::Assign,
@@ -349,11 +347,11 @@ impl<'a> TokenStream<'a> {
                 // * is already handled as Star above
                 _ => TokenKind::Unknown,
             },
-            
+
             // Arrow tokens
             LexerTokenType::Arrow => TokenKind::Arrow,
             LexerTokenType::FatComma => TokenKind::FatArrow,
-            
+
             // Delimiters
             LexerTokenType::LeftParen => TokenKind::LeftParen,
             LexerTokenType::RightParen => TokenKind::RightParen,
@@ -363,22 +361,22 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::RightBracket => TokenKind::RightBracket,
             LexerTokenType::Semicolon => TokenKind::Semicolon,
             LexerTokenType::Comma => TokenKind::Comma,
-            
+
             // Division operator (important to handle before other tokens)
             LexerTokenType::Division => TokenKind::Slash,
-            
+
             // Literals
             LexerTokenType::Number(_) => TokenKind::Number,
-            LexerTokenType::StringLiteral | 
-            LexerTokenType::InterpolatedString(_) => TokenKind::String,
+            LexerTokenType::StringLiteral | LexerTokenType::InterpolatedString(_) => {
+                TokenKind::String
+            }
             LexerTokenType::RegexMatch | LexerTokenType::QuoteRegex => TokenKind::Regex,
             LexerTokenType::Substitution => TokenKind::Substitution,
             LexerTokenType::Transliteration => TokenKind::Transliteration,
             LexerTokenType::HeredocStart => TokenKind::HeredocStart,
             LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
             LexerTokenType::FormatBody(_) => TokenKind::FormatBody,
-            
-            
+
             // Identifiers
             LexerTokenType::Identifier(text) => {
                 // Check if it's actually a keyword that the lexer didn't recognize
@@ -389,10 +387,10 @@ impl<'a> TokenStream<'a> {
                     "@" => TokenKind::ArraySigil,
                     "%" => TokenKind::HashSigil,
                     "&" => TokenKind::SubSigil,
-                    _ => TokenKind::Identifier
+                    _ => TokenKind::Identifier,
                 }
             }
-            
+
             // Handle error tokens that might be valid syntax
             LexerTokenType::Error(_msg) => {
                 // Check if it's a brace that the lexer couldn't recognize
@@ -402,10 +400,10 @@ impl<'a> TokenStream<'a> {
                     _ => TokenKind::Unknown,
                 }
             }
-            
+
             _ => TokenKind::Unknown,
         };
-        
+
         Token {
             kind,
             text: token.text.to_string(),

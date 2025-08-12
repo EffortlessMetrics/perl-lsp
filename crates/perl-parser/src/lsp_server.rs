@@ -4,35 +4,30 @@
 //! that can be used with any LSP-compatible editor.
 
 use crate::{
-    Parser, 
-    DiagnosticsProvider, DiagnosticSeverity as InternalDiagnosticSeverity,
-    CodeActionsProvider, CodeActionKind as InternalCodeActionKind,
-    CodeActionsProviderV2, CodeActionKindV2 as InternalCodeActionKindV2,
-    CompletionProvider, CompletionItemKind,
-    document_highlight::DocumentHighlightProvider,
-    type_hierarchy::TypeHierarchyProvider,
-    formatting::{CodeFormatter, FormattingOptions},
-    code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
-    semantic_tokens_provider::{
-        SemanticTokensProvider, 
-        encode_semantic_tokens
-    },
-    call_hierarchy_provider::CallHierarchyProvider,
-    inlay_hints_provider::{InlayHintsProvider, InlayHintConfig},
-    test_runner::{TestRunner, TestKind},
-    performance::{AstCache, SymbolIndex},
+    CodeActionKind as InternalCodeActionKind, CodeActionKindV2 as InternalCodeActionKindV2,
+    CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
+    DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
+    call_hierarchy_provider::CallHierarchyProvider,
+    code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
+    document_highlight::DocumentHighlightProvider,
+    formatting::{CodeFormatter, FormattingOptions},
+    inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
+    performance::{AstCache, SymbolIndex},
     positions::LineStartsCache,
+    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+    test_runner::{TestKind, TestRunner},
+    type_hierarchy::TypeHierarchyProvider,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{WorkspaceIndex, WorkspaceSymbol, LspWorkspaceSymbol, uri_to_fs_path};
+use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
 
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
@@ -96,7 +91,7 @@ struct ServerConfig {
     inlay_hints_type_hints: bool,
     inlay_hints_chained_hints: bool,
     inlay_hints_max_length: usize,
-    
+
     // Test runner configuration
     test_runner_enabled: bool,
     test_runner_command: String,
@@ -159,7 +154,7 @@ impl LspServer {
         } else {
             None
         };
-        
+
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
@@ -183,7 +178,7 @@ impl LspServer {
         } else {
             None
         };
-        
+
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
@@ -196,7 +191,7 @@ impl LspServer {
             client_capabilities: ClientCapabilities::default(),
         }
     }
-    
+
     /// Send a notification to the client with proper framing
     fn notify(&self, method: &str, params: Value) -> io::Result<()> {
         let notification = json!({
@@ -204,10 +199,15 @@ impl LspServer {
             "method": method,
             "params": params
         });
-        
+
         let notification_str = serde_json::to_string(&notification)?;
         let mut output = self.output.lock().unwrap();
-        write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+        write!(
+            output,
+            "Content-Length: {}\r\n\r\n{}",
+            notification_str.len(),
+            notification_str
+        )?;
         output.flush()
     }
 
@@ -224,7 +224,7 @@ impl LspServer {
             // Read LSP message
             if let Some(request) = self.read_message_from(&mut reader)? {
                 eprintln!("Received request: {}", request.method);
-                
+
                 // Handle the request
                 if let Some(response) = self.handle_request(request) {
                     // Send response
@@ -234,15 +234,22 @@ impl LspServer {
         }
     }
 
-
     /// Send an LSP message to stdout
-    fn send_message(&self, stdout: &mut io::StdoutLock, response: &JsonRpcResponse) -> io::Result<()> {
+    fn send_message(
+        &self,
+        stdout: &mut io::StdoutLock,
+        response: &JsonRpcResponse,
+    ) -> io::Result<()> {
         let content = serde_json::to_string(response)?;
         let content_length = content.len();
-        
-        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
+
+        write!(
+            stdout,
+            "Content-Length: {}\r\n\r\n{}",
+            content_length, content
+        )?;
         stdout.flush()?;
-        
+
         Ok(())
     }
 
@@ -255,7 +262,11 @@ impl LspServer {
                 if let Ok(mut output) = self.output.lock() {
                     let content = serde_json::to_string(&response)?;
                     let content_length = content.len();
-                    write!(output, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
+                    write!(
+                        output,
+                        "Content-Length: {}\r\n\r\n{}",
+                        content_length, content
+                    )?;
                     output.flush()?;
                 }
             }
@@ -266,44 +277,44 @@ impl LspServer {
     /// Read an LSP message from any BufRead source
     fn read_message_from<R: BufRead>(&self, reader: &mut R) -> io::Result<Option<JsonRpcRequest>> {
         let mut headers = HashMap::new();
-        
+
         // Read headers
         loop {
             let mut line = String::new();
             if reader.read_line(&mut line)? == 0 {
                 return Ok(None); // EOF
             }
-            
+
             let line = line.trim_end();
             if line.is_empty() {
                 break; // End of headers
             }
-            
+
             if let Some((key, value)) = line.split_once(": ") {
                 headers.insert(key.to_string(), value.to_string());
             }
         }
-        
+
         // Read content
         if let Some(content_length) = headers.get("Content-Length") {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
                 reader.read_exact(&mut content)?;
-                
+
                 // Parse JSON-RPC request
                 if let Ok(request) = serde_json::from_slice(&content) {
                     return Ok(Some(request));
                 }
             }
         }
-        
+
         Ok(None)
     }
 
     /// Handle a JSON-RPC request
     pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = request.id.clone();
-        
+
         let result = match request.method.as_str() {
             "initialize" => self.handle_initialize(request.params),
             "initialized" => {
@@ -312,12 +323,10 @@ impl LspServer {
                 Ok(None)
             }
             "shutdown" => Ok(Some(json!(null))),
-            "textDocument/didOpen" => {
-                match self.handle_did_open(request.params) {
-                    Ok(_) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            }
+            "textDocument/didOpen" => match self.handle_did_open(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
             "textDocument/didChange" => {
                 // Use incremental version if available
                 #[cfg(feature = "incremental")]
@@ -333,24 +342,18 @@ impl LspServer {
                     Err(e) => Err(e),
                 }
             }
-            "textDocument/didClose" => {
-                match self.handle_did_close(request.params) {
-                    Ok(_) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            }
-            "textDocument/didSave" => {
-                match self.handle_did_save(request.params) {
-                    Ok(_) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            }
-            "textDocument/willSave" => {
-                match self.handle_will_save(request.params) {
-                    Ok(_) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            }
+            "textDocument/didClose" => match self.handle_did_close(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "textDocument/didSave" => match self.handle_did_save(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "textDocument/willSave" => match self.handle_will_save(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
             "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
             "textDocument/completion" => self.handle_completion(request.params),
             "textDocument/codeAction" => self.handle_code_action(request.params),
@@ -360,7 +363,9 @@ impl LspServer {
             "textDocument/declaration" => self.handle_declaration(request.params),
             "textDocument/references" => self.handle_references(request.params),
             "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
-            "textDocument/prepareTypeHierarchy" => self.handle_prepare_type_hierarchy(request.params),
+            "textDocument/prepareTypeHierarchy" => {
+                self.handle_prepare_type_hierarchy(request.params)
+            }
             "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
@@ -373,15 +378,21 @@ impl LspServer {
             "textDocument/codeLens" => self.handle_code_lens(request.params),
             "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens_full(request.params),
-            "textDocument/semanticTokens/range" => self.handle_semantic_tokens_range(request.params),
-            "textDocument/prepareCallHierarchy" => self.handle_prepare_call_hierarchy(request.params),
+            "textDocument/semanticTokens/range" => {
+                self.handle_semantic_tokens_range(request.params)
+            }
+            "textDocument/prepareCallHierarchy" => {
+                self.handle_prepare_call_hierarchy(request.params)
+            }
             "callHierarchy/incomingCalls" => self.handle_incoming_calls(request.params),
             "callHierarchy/outgoingCalls" => self.handle_outgoing_calls(request.params),
             "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
             "workspace/executeCommand" => self.handle_execute_command(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery(request.params),
             "workspace/configuration" => self.handle_configuration(request.params),
-            "workspace/didChangeWatchedFiles" => self.handle_did_change_watched_files(request.params),
+            "workspace/didChangeWatchedFiles" => {
+                self.handle_did_change_watched_files(request.params)
+            }
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
             "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
@@ -417,34 +428,38 @@ impl LspServer {
         // Parse client capabilities
         if let Some(params) = &params {
             self.client_capabilities.declaration_link_support = params
-                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("declaration"))
                 .and_then(|d| d.get("linkSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
-                
+
             self.client_capabilities.definition_link_support = params
-                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("definition"))
                 .and_then(|d| d.get("linkSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
-                
+
             self.client_capabilities.type_definition_link_support = params
-                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("typeDefinition"))
                 .and_then(|d| d.get("linkSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
-                
+
             self.client_capabilities.implementation_link_support = params
-                .get("capabilities").and_then(|c| c.get("textDocument"))
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("implementation"))
                 .and_then(|d| d.get("linkSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
         }
-        
+
         // Check for available tools by trying to execute them
         let has_perltidy = std::process::Command::new("perltidy")
             .arg("--version")
@@ -453,7 +468,7 @@ impl LspServer {
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
-            
+
         let has_perlcritic = std::process::Command::new("perlcritic")
             .arg("--version")
             .stdout(std::process::Stdio::null())
@@ -461,16 +476,20 @@ impl LspServer {
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
-        
-        eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
-        
+
+        eprintln!(
+            "Tool availability: perltidy={}, perlcritic={}",
+            has_perltidy, has_perlcritic
+        );
+
         // Check if incremental parsing is enabled
-        let sync_kind = if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
-            2 // Incremental sync
-        } else {
-            1 // Full document sync
-        };
-        
+        let sync_kind =
+            if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
+                2 // Incremental sync
+            } else {
+                1 // Full document sync
+            };
+
         let mut capabilities = json!({
             "textDocumentSync": {
                 "openClose": true,
@@ -515,8 +534,8 @@ impl LspServer {
             },
             "executeCommandProvider": {
                 "commands": [
-                    "perl.runTest", 
-                    "perl.runTestFile", 
+                    "perl.runTest",
+                    "perl.runTestFile",
                     "perl.runTests",
                     "perl.runFile",
                     "perl.runTestSub"
@@ -527,13 +546,13 @@ impl LspServer {
             },
             "positionEncoding": "utf-16"
         });
-        
+
         // Only advertise formatting if perltidy is available
         if has_perltidy {
             capabilities["documentFormattingProvider"] = json!(true);
             capabilities["documentRangeFormattingProvider"] = json!(true);
         }
-        
+
         Ok(Some(json!({
             "capabilities": capabilities,
             "serverInfo": {
@@ -549,9 +568,9 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let text = params["textDocument"]["text"].as_str().unwrap_or("");
             let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
-            
+
             eprintln!("Document opened: {}", uri);
-            
+
             // Check cache first
             let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
                 eprintln!("Using cached AST for {}", uri);
@@ -562,27 +581,30 @@ impl LspServer {
                 match parser.parse() {
                     Ok(ast) => {
                         let arc_ast = Arc::new(ast);
-                        self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
+                        self.ast_cache
+                            .put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), vec![])
-                    },
-                    Err(e) => {
-                        (None, vec![e])
-                    },
+                    }
+                    Err(e) => (None, vec![e]),
                 }
             };
 
             // Convert AST to Arc for stable pointers
             let ast_arc = ast.map(Arc::new);
-            
+
             // Build parent map from the Arc'd AST so pointers remain stable
             let mut parent_map = ParentMap::default();
             if let Some(ref arc) = ast_arc {
-                crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
+                crate::declaration::DeclarationProvider::build_parent_map(
+                    &**arc,
+                    &mut parent_map,
+                    None,
+                );
             }
-            
+
             // Build line starts cache for O(log n) position conversion
             let line_starts = LineStartsCache::new(text);
-            
+
             // Store document state
             self.documents.lock().unwrap().insert(
                 uri.to_string(),
@@ -602,11 +624,12 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 if let Some(ref workspace_index) = self.workspace_index {
                     let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols.into_iter()
+                    let symbols = index_symbols
+                        .into_iter()
                         .filter(|s| s.uri == uri)
                         .map(|s| s.name.clone())
                         .collect::<Vec<_>>();
-                    
+
                     let mut index = self.symbol_index.lock().unwrap();
                     for symbol in symbols {
                         index.add_symbol(symbol);
@@ -617,7 +640,7 @@ impl LspServer {
                     let _index = self.symbol_index.lock().unwrap();
                     // Just ensure the index exists even without workspace feature
                 }
-                
+
                 // Update the workspace-wide index for cross-file features
                 #[cfg(feature = "workspace")]
                 if let Some(ref workspace_index) = self.workspace_index {
@@ -641,13 +664,13 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
-            
+
             if let Some(changes) = params["contentChanges"].as_array() {
                 if let Some(change) = changes.first() {
                     let text = change["text"].as_str().unwrap_or("");
-                    
+
                     eprintln!("Document changed: {}", uri);
-                    
+
                     // Check cache first
                     let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
                         eprintln!("Using cached AST for {}", uri);
@@ -658,25 +681,30 @@ impl LspServer {
                         match parser.parse() {
                             Ok(ast) => {
                                 let arc_ast = Arc::new(ast);
-                                self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
+                                self.ast_cache
+                                    .put(uri.to_string(), text, Arc::clone(&arc_ast));
                                 (Some((*arc_ast).clone()), vec![])
-                            },
+                            }
                             Err(e) => (None, vec![e]),
                         }
                     };
 
                     // Convert AST to Arc for stable pointers
                     let ast_arc = ast.map(Arc::new);
-                    
+
                     // Build parent map from the Arc'd AST so pointers remain stable
                     let mut parent_map = ParentMap::default();
                     if let Some(ref arc) = ast_arc {
-                        crate::declaration::DeclarationProvider::build_parent_map(&**arc, &mut parent_map, None);
+                        crate::declaration::DeclarationProvider::build_parent_map(
+                            &**arc,
+                            &mut parent_map,
+                            None,
+                        );
                     }
-                    
+
                     // Build line starts cache for O(log n) position conversion
                     let line_starts = LineStartsCache::new(&text);
-                    
+
                     // Update document state
                     self.documents.lock().unwrap().insert(
                         uri.to_string(),
@@ -728,7 +756,7 @@ impl LspServer {
                     .map(|d| {
                         let (start_line, start_char) = self.offset_to_pos16(doc, d.range.0);
                         let (end_line, end_char) = self.offset_to_pos16(doc, d.range.1);
-                        
+
                         json!({
                             "range": {
                                 "start": {"line": start_line, "character": start_char},
@@ -747,13 +775,20 @@ impl LspServer {
                     })
                     .collect();
 
-                eprintln!("Publishing {} diagnostics for {}", lsp_diagnostics.len(), uri);
-                
+                eprintln!(
+                    "Publishing {} diagnostics for {}",
+                    lsp_diagnostics.len(),
+                    uri
+                );
+
                 // Send diagnostics notification to client using centralized notify
-                let _ = self.notify("textDocument/publishDiagnostics", json!({
-                    "uri": uri,
-                    "diagnostics": lsp_diagnostics
-                }));
+                let _ = self.notify(
+                    "textDocument/publishDiagnostics",
+                    json!({
+                        "uri": uri,
+                        "diagnostics": lsp_diagnostics
+                    }),
+                );
             }
         }
     }
@@ -762,25 +797,28 @@ impl LspServer {
     fn handle_did_close(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             eprintln!("Document closed: {}", uri);
-            
+
             // Remove from documents
             self.documents.lock().unwrap().remove(uri);
-            
+
             // Clear from workspace index
             #[cfg(feature = "workspace")]
             if let Some(ref workspace_index) = self.workspace_index {
                 workspace_index.clear_file(uri);
             }
-            
+
             // Clear diagnostics for this file using centralized notify
-            let _ = self.notify("textDocument/publishDiagnostics", json!({
-                "uri": uri,
-                "diagnostics": []
-            }));
+            let _ = self.notify(
+                "textDocument/publishDiagnostics",
+                json!({
+                    "uri": uri,
+                    "diagnostics": []
+                }),
+            );
         }
-        
+
         Ok(())
     }
 
@@ -788,53 +826,61 @@ impl LspServer {
     fn handle_did_save(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let _version = params["textDocument"].get("version")
+            let _version = params["textDocument"]
+                .get("version")
                 .and_then(|v| v.as_i64())
                 .map(|v| v as i32);
-            
+
             eprintln!("Document saved: {}", uri);
-            
+
             // Re-run diagnostics on save to catch any changes
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
-                    
+                    let diagnostics =
+                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+
                     // Convert diagnostics
-                    let lsp_diagnostics: Vec<Value> = diagnostics.iter().map(|diag| {
-                        let (start_line, start_char) = self.offset_to_pos16(doc, diag.range.0);
-                        let (end_line, end_char) = self.offset_to_pos16(doc, diag.range.1);
-                        
-                        json!({
-                            "range": {
-                                "start": { "line": start_line, "character": start_char },
-                                "end": { "line": end_line, "character": end_char }
-                            },
-                            "severity": match diag.severity {
-                                InternalDiagnosticSeverity::Error => 1,
-                                InternalDiagnosticSeverity::Warning => 2,
-                                InternalDiagnosticSeverity::Information => 3,
-                                InternalDiagnosticSeverity::Hint => 4,
-                            },
-                            "message": diag.message,
-                            "source": "perl"
+                    let lsp_diagnostics: Vec<Value> = diagnostics
+                        .iter()
+                        .map(|diag| {
+                            let (start_line, start_char) = self.offset_to_pos16(doc, diag.range.0);
+                            let (end_line, end_char) = self.offset_to_pos16(doc, diag.range.1);
+
+                            json!({
+                                "range": {
+                                    "start": { "line": start_line, "character": start_char },
+                                    "end": { "line": end_line, "character": end_char }
+                                },
+                                "severity": match diag.severity {
+                                    InternalDiagnosticSeverity::Error => 1,
+                                    InternalDiagnosticSeverity::Warning => 2,
+                                    InternalDiagnosticSeverity::Information => 3,
+                                    InternalDiagnosticSeverity::Hint => 4,
+                                },
+                                "message": diag.message,
+                                "source": "perl"
+                            })
                         })
-                    }).collect();
-                    
+                        .collect();
+
                     // Send diagnostics notification
-                    let _ = self.notify("textDocument/publishDiagnostics", json!({
-                        "uri": uri,
-                        "diagnostics": lsp_diagnostics
-                    }));
+                    let _ = self.notify(
+                        "textDocument/publishDiagnostics",
+                        json!({
+                            "uri": uri,
+                            "diagnostics": lsp_diagnostics
+                        }),
+                    );
                 }
             }
-            
+
             // Optionally, trigger any post-save hooks here
             // For example: format on save, run tests, etc.
         }
-        
+
         Ok(())
     }
 
@@ -843,32 +889,36 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let reason = params["reason"].as_u64().unwrap_or(1); // 1 = Manual, 2 = AfterDelay, 3 = FocusOut
-            
+
             eprintln!("Document will save: {} (reason: {})", uri, reason);
-            
+
             // Pre-save validation or cleanup can be done here
             // For example: remove trailing whitespace, fix imports, etc.
         }
-        
+
         Ok(())
     }
 
     /// Handle willSaveWaitUntil request
-    fn handle_will_save_wait_until(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_will_save_wait_until(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let _reason = params["reason"].as_u64().unwrap_or(1);
-            
+
             eprintln!("Document will save wait until: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 // Return text edits to be applied before saving
                 // For example: format document, organize imports, etc.
-                
+
                 // Check if we should format on save
                 let config = self.config.lock().unwrap();
-                if config.test_runner_enabled { // Using existing config field as example
+                if config.test_runner_enabled {
+                    // Using existing config field as example
                     // Could add format_on_save config option
                     let formatter = CodeFormatter::new();
                     let format_options = FormattingOptions {
@@ -878,34 +928,37 @@ impl LspServer {
                         insert_final_newline: Some(true),
                         trim_final_newlines: Some(true),
                     };
-                    
+
                     if let Ok(edits) = formatter.format_document(&doc.content, &format_options) {
                         if !edits.is_empty() {
-                            // Convert FormatTextEdit to LSP TextEdit  
+                            // Convert FormatTextEdit to LSP TextEdit
                             // The edits already have line/character positions
-                            let lsp_edits: Vec<Value> = edits.iter().map(|edit| {
-                                json!({
-                                    "range": {
-                                        "start": { 
-                                            "line": edit.range.start.line, 
-                                            "character": edit.range.start.character 
+                            let lsp_edits: Vec<Value> = edits
+                                .iter()
+                                .map(|edit| {
+                                    json!({
+                                        "range": {
+                                            "start": {
+                                                "line": edit.range.start.line,
+                                                "character": edit.range.start.character
+                                            },
+                                            "end": {
+                                                "line": edit.range.end.line,
+                                                "character": edit.range.end.character
+                                            }
                                         },
-                                        "end": { 
-                                            "line": edit.range.end.line, 
-                                            "character": edit.range.end.character 
-                                        }
-                                    },
-                                    "newText": edit.new_text
+                                        "newText": edit.new_text
+                                    })
                                 })
-                            }).collect();
-                            
+                                .collect();
+
                             return Ok(Some(json!(lsp_edits)));
                         }
                     }
                 }
             }
         }
-        
+
         // Return empty array if no edits
         Ok(Some(json!([])))
     }
@@ -916,7 +969,7 @@ impl LspServer {
         let lines: Vec<&str> = content.lines().collect();
         let last_line = lines.len().saturating_sub(1);
         let last_char = lines.last().map(|l| l.len()).unwrap_or(0);
-        
+
         json!({
             "line": last_line,
             "character": last_char
@@ -929,12 +982,12 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
                     let mut completions = provider.get_completions(&doc.content, offset);
@@ -944,42 +997,62 @@ impl LspServer {
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Get the current context to filter relevant completions
                         let text_before = &doc.content[..offset.min(doc.content.len())];
-                        let prefix = text_before.chars().rev()
+                        let prefix = text_before
+                            .chars()
+                            .rev()
                             .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
                             .collect::<String>()
                             .chars()
                             .rev()
                             .collect::<String>();
-                        
+
                         // Find matching symbols in the workspace
                         let workspace_symbols = workspace_index.find_symbols(&prefix);
-                        
+
                         // Add unique workspace symbols as completions
                         use std::collections::HashSet;
                         let mut seen = HashSet::new();
                         for completion in &completions {
                             seen.insert(completion.label.clone());
                         }
-                        
+
                         for symbol in workspace_symbols {
                             // Skip if already in local completions
                             if seen.contains(&symbol.name) {
                                 continue;
                             }
-                            
+
                             // Add workspace symbol as completion
                             let kind = match symbol.kind {
-                                crate::workspace_index::SymbolKind::Package => CompletionItemKind::Module,
-                                crate::workspace_index::SymbolKind::Subroutine => CompletionItemKind::Function,
-                                crate::workspace_index::SymbolKind::Variable => CompletionItemKind::Variable,
-                                crate::workspace_index::SymbolKind::Class => CompletionItemKind::Module,
-                                crate::workspace_index::SymbolKind::Method => CompletionItemKind::Function,
-                                crate::workspace_index::SymbolKind::Constant => CompletionItemKind::Constant,
-                                crate::workspace_index::SymbolKind::Role => CompletionItemKind::Module,
-                                crate::workspace_index::SymbolKind::Import => CompletionItemKind::Module,
-                                crate::workspace_index::SymbolKind::Export => CompletionItemKind::Function,
+                                crate::workspace_index::SymbolKind::Package => {
+                                    CompletionItemKind::Module
+                                }
+                                crate::workspace_index::SymbolKind::Subroutine => {
+                                    CompletionItemKind::Function
+                                }
+                                crate::workspace_index::SymbolKind::Variable => {
+                                    CompletionItemKind::Variable
+                                }
+                                crate::workspace_index::SymbolKind::Class => {
+                                    CompletionItemKind::Module
+                                }
+                                crate::workspace_index::SymbolKind::Method => {
+                                    CompletionItemKind::Function
+                                }
+                                crate::workspace_index::SymbolKind::Constant => {
+                                    CompletionItemKind::Constant
+                                }
+                                crate::workspace_index::SymbolKind::Role => {
+                                    CompletionItemKind::Module
+                                }
+                                crate::workspace_index::SymbolKind::Import => {
+                                    CompletionItemKind::Module
+                                }
+                                crate::workspace_index::SymbolKind::Export => {
+                                    CompletionItemKind::Function
+                                }
                             };
-                            
+
                             completions.push(crate::completion::CompletionItem {
                                 label: symbol.name.clone(),
                                 kind,
@@ -995,22 +1068,24 @@ impl LspServer {
 
                     let items: Vec<Value> = completions
                         .into_iter()
-                        .map(|c| json!({
-                            "label": c.label,
-                            "kind": match c.kind {
-                                CompletionItemKind::Variable => 6,
-                                CompletionItemKind::Function => 3,
-                                CompletionItemKind::Keyword => 14,
-                                CompletionItemKind::Module => 9,
-                                CompletionItemKind::File => 17,
-                                CompletionItemKind::Snippet => 15,
-                                CompletionItemKind::Constant => 14,
-                                CompletionItemKind::Property => 7,
-                            },
-                            "detail": c.detail,
-                            "insertText": c.insert_text,
-                            "insertTextFormat": 1,
-                        }))
+                        .map(|c| {
+                            json!({
+                                "label": c.label,
+                                "kind": match c.kind {
+                                    CompletionItemKind::Variable => 6,
+                                    CompletionItemKind::Function => 3,
+                                    CompletionItemKind::Keyword => 14,
+                                    CompletionItemKind::Module => 9,
+                                    CompletionItemKind::File => 17,
+                                    CompletionItemKind::Snippet => 15,
+                                    CompletionItemKind::Constant => 14,
+                                    CompletionItemKind::Property => 7,
+                                },
+                                "detail": c.detail,
+                                "insertText": c.insert_text,
+                                "insertTextFormat": 1,
+                            })
+                        })
                         .collect();
 
                     eprintln!("Returning {} completions", items.len());
@@ -1030,29 +1105,32 @@ impl LspServer {
             let start_char = params["range"]["start"]["character"].as_u64().unwrap_or(0) as u32;
             let end_line = params["range"]["end"]["line"].as_u64().unwrap_or(0) as u32;
             let end_char = params["range"]["end"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ast) = &doc.ast {
                     let start_offset = self.pos16_to_offset(doc, start_line, start_char);
                     let end_offset = self.pos16_to_offset(doc, end_line, end_char);
-                    
+
                     // Get diagnostics from the document
                     let diag_provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                    let diagnostics = diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
-                    
+                    let diagnostics =
+                        diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+
                     // Get code actions from both providers
                     let mut code_actions: Vec<Value> = Vec::new();
-                    
+
                     // Get quick-fixes from the V2 provider (diagnostic-based)
                     let provider_v2 = CodeActionsProviderV2::new(doc.content.clone());
-                    let quick_fixes = provider_v2.get_code_actions((start_offset, end_offset), &diagnostics);
-                    
+                    let quick_fixes =
+                        provider_v2.get_code_actions((start_offset, end_offset), &diagnostics);
+
                     for action in quick_fixes {
                         let mut changes = HashMap::new();
-                        let (start_line, start_char) = self.offset_to_pos16(doc, action.edit.range.0);
+                        let (start_line, start_char) =
+                            self.offset_to_pos16(doc, action.edit.range.0);
                         let (end_line, end_char) = self.offset_to_pos16(doc, action.edit.range.1);
-                        
+
                         let edits = vec![json!({
                             "range": {
                                 "start": {"line": start_line, "character": start_char},
@@ -1061,7 +1139,7 @@ impl LspServer {
                             "newText": action.edit.new_text,
                         })];
                         changes.insert(uri.to_string(), edits);
-                        
+
                         code_actions.push(json!({
                             "title": action.title,
                             "kind": match action.kind {
@@ -1076,18 +1154,23 @@ impl LspServer {
                             },
                         }));
                     }
-                    
+
                     // Get refactorings from the original provider (AST-based)
                     let provider = CodeActionsProvider::new(doc.content.clone());
-                    let actions = provider.get_code_actions(ast, (start_offset, end_offset), &diagnostics);
+                    let actions =
+                        provider.get_code_actions(ast, (start_offset, end_offset), &diagnostics);
 
                     for action in actions {
                         let mut changes = HashMap::new();
-                        let edits: Vec<Value> = action.edit.changes
+                        let edits: Vec<Value> = action
+                            .edit
+                            .changes
                             .into_iter()
                             .map(|edit| {
-                                let (start_line, start_char) = self.offset_to_pos16(doc, edit.location.start);
-                                let (end_line, end_char) = self.offset_to_pos16(doc, edit.location.end);
+                                let (start_line, start_char) =
+                                    self.offset_to_pos16(doc, edit.location.start);
+                                let (end_line, end_char) =
+                                    self.offset_to_pos16(doc, edit.location.end);
                                 json!({
                                     "range": {
                                         "start": {"line": start_line, "character": start_char},
@@ -1128,15 +1211,15 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // For now, just show the token at position
                     let hover_text = self.get_token_at_position(&doc.content, offset);
-                    
+
                     if !hover_text.is_empty() {
                         return Ok(Some(json!({
                             "contents": {
@@ -1151,23 +1234,27 @@ impl LspServer {
 
         Ok(Some(json!(null)))
     }
-    
+
     /// Handle textDocument/signatureHelp request
     fn handle_signature_help(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
-                
+
                 // Find the function call context at this position
-                if let Some((function_name, active_param)) = self.find_function_context(&doc.content, offset) {
+                if let Some((function_name, active_param)) =
+                    self.find_function_context(&doc.content, offset)
+                {
                     // Try to get signature from user-defined functions first (if AST exists)
                     if let Some(ref ast) = doc.ast {
-                        if let Some(signature) = self.get_user_function_signature(ast, &function_name) {
+                        if let Some(signature) =
+                            self.get_user_function_signature(ast, &function_name)
+                        {
                             return Ok(Some(json!({
                                 "signatures": [signature],
                                 "activeSignature": 0,
@@ -1175,7 +1262,7 @@ impl LspServer {
                             })));
                         }
                     }
-                    
+
                     // Fall back to built-in functions
                     if let Some(signature) = self.get_function_signature(&function_name) {
                         return Ok(Some(json!({
@@ -1184,7 +1271,7 @@ impl LspServer {
                             "activeParameter": active_param
                         })));
                     }
-                    
+
                     // If no signature found, return a generic one
                     return Ok(Some(json!({
                         "signatures": [json!({
@@ -1198,26 +1285,26 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Find function context at position (returns function name and active parameter index)
     fn find_function_context(&self, content: &str, offset: usize) -> Option<(String, usize)> {
         let chars: Vec<char> = content.chars().collect();
         if offset > chars.len() {
             return None;
         }
-        
+
         // Find the opening parenthesis, tracking all bracket types
         let mut paren_pos = None;
         let mut depth = 0;
         let mut i = if offset > 0 { offset - 1 } else { return None };
-        
+
         loop {
             match chars[i] {
                 ')' => depth += 1,
-                ']' => depth += 1, 
+                ']' => depth += 1,
                 '}' => depth += 1,
                 '(' => {
                     if depth == 0 {
@@ -1233,44 +1320,48 @@ impl LspServer {
                 }
                 _ => {}
             }
-            
+
             if i == 0 {
                 break;
             }
             i -= 1;
         }
-        
+
         let paren_pos = paren_pos?;
-        
+
         // Now extract the function name before the parenthesis
         // Handle: func(), $obj->func(), Package::func()
-        let mut j = if paren_pos > 0 { paren_pos - 1 } else { return None };
-        
+        let mut j = if paren_pos > 0 {
+            paren_pos - 1
+        } else {
+            return None;
+        };
+
         // Skip whitespace before '('
         while j > 0 && chars[j].is_whitespace() {
             j -= 1;
         }
-        
+
         if j == 0 && !chars[0].is_alphanumeric() && chars[0] != '_' {
             return None;
         }
-        
+
         let mut end = j + 1;
         let mut start = j;
-        
+
         // Check for method call pattern (->)
-        if j >= 1 && chars[j] == '>' && chars[j-1] == '-' {
+        if j >= 1 && chars[j] == '>' && chars[j - 1] == '-' {
             // This is a method call, extract method name after ->
             // First find where -> starts
             let arrow_end = j - 1; // Position of '-'
-            
+
             // Now find method name after ->
             j = paren_pos - 1;
             while j > arrow_end + 1 && chars[j].is_whitespace() {
                 j -= 1;
             }
             end = j + 1;
-            
+
             j = arrow_end + 2; // Start after ->
             while j < end && chars[j].is_whitespace() {
                 j += 1;
@@ -1293,7 +1384,7 @@ impl LspServer {
                     break;
                 }
             }
-            
+
             // Handle case where we're at the beginning
             if start == 0 && (chars[0].is_alphanumeric() || chars[0] == '_') {
                 // Include first character
@@ -1301,20 +1392,20 @@ impl LspServer {
                 start = 1;
             }
         }
-        
+
         if start >= end {
             return None;
         }
-        
+
         let full_name: String = chars[start..end].iter().collect();
-        
+
         // Extract just the function name (strip package prefix if present)
         let func_name = if let Some(pos) = full_name.rfind("::") {
             &full_name[pos + 2..]
         } else {
             &full_name
         };
-        
+
         // Count commas at depth 0 to determine active parameter
         let mut comma_count = 0;
         let mut depth = 0;
@@ -1326,19 +1417,24 @@ impl LspServer {
                 _ => {}
             }
         }
-        
+
         Some((func_name.trim().to_string(), comma_count))
     }
-    
+
     /// Get function signature information
     /// Get signature for user-defined functions from AST
     fn get_user_function_signature(&self, ast: &Node, function_name: &str) -> Option<Value> {
         // Walk the AST to find the subroutine definition
         let sub_node = self.find_subroutine_definition(ast, function_name)?;
-        
+
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
+        if let NodeKind::Subroutine {
+            params: sub_params,
+            body,
+            ..
+        } = &sub_node.kind
+        {
             if !sub_params.is_empty() {
                 // Extract parameter names from the params node
                 for param in sub_params {
@@ -1349,28 +1445,31 @@ impl LspServer {
                 self.extract_params_from_body(body, &mut params);
             }
         }
-        
+
         // Build signature
         let label = if params.is_empty() {
             format!("sub {}", function_name)
         } else {
             format!("sub {}({})", function_name, params.join(", "))
         };
-        
-        let parameters: Vec<Value> = params.iter().map(|p| {
-            json!({
-                "label": p,
-                "documentation": null
+
+        let parameters: Vec<Value> = params
+            .iter()
+            .map(|p| {
+                json!({
+                    "label": p,
+                    "documentation": null
+                })
             })
-        }).collect();
-        
+            .collect();
+
         Some(json!({
             "label": label,
             "documentation": format!("User-defined function '{}'", function_name),
             "parameters": parameters
         }))
     }
-    
+
     /// Find a subroutine definition by name in the AST
     fn find_subroutine_definition<'a>(&self, node: &'a Node, name: &str) -> Option<&'a Node> {
         match &node.kind {
@@ -1392,27 +1491,36 @@ impl LspServer {
         }
         None
     }
-    
+
     /// Extract parameter names from a params node
     fn extract_params(&self, params_node: &Node, params: &mut Vec<String>) {
         if let NodeKind::Variable { sigil, name } = &params_node.kind {
             params.push(format!("{}{}", sigil, name));
         }
     }
-    
+
     /// Extract parameters from my (...) = @_; pattern in the body
     fn extract_params_from_body(&self, body: &Node, params: &mut Vec<String>) {
         if let NodeKind::Block { statements } = &body.kind {
             if let Some(first_stmt) = statements.first() {
                 // Look for my (...) = @_ pattern
-                if let NodeKind::VariableListDeclaration { variables, initializer, .. } = &first_stmt.kind {
+                if let NodeKind::VariableListDeclaration {
+                    variables,
+                    initializer,
+                    ..
+                } = &first_stmt.kind
+                {
                     // Check if initializer is @_
                     if let Some(init) = initializer {
                         if let NodeKind::Variable { sigil, name } = &init.kind {
                             if sigil == "@" && name == "_" {
                                 // Extract params from variables
                                 for var in variables {
-                                    if let NodeKind::Variable { sigil: var_sigil, name: var_name } = &var.kind {
+                                    if let NodeKind::Variable {
+                                        sigil: var_sigil,
+                                        name: var_name,
+                                    } = &var.kind
+                                    {
                                         params.push(format!("{}{}", var_sigil, var_name));
                                     }
                                 }
@@ -1431,7 +1539,7 @@ impl LspServer {
             }
         }
     }
-    
+
     /// Helper to extract params from left-hand side of assignment
     fn extract_params_from_lhs(&self, lhs: &Node, params: &mut Vec<String>) {
         match &lhs.kind {
@@ -1448,30 +1556,51 @@ impl LspServer {
             _ => {}
         }
     }
-    
+
     fn get_function_signature(&self, function_name: &str) -> Option<Value> {
         // Define signatures for common Perl built-in functions
         let signature = match function_name {
             "print" => Some(("print LIST", vec!["LIST"])),
             "printf" => Some(("printf FORMAT, LIST", vec!["FORMAT", "LIST"])),
-            "open" => Some(("open FILEHANDLE, MODE, EXPR", vec!["FILEHANDLE", "MODE", "EXPR"])),
+            "open" => Some((
+                "open FILEHANDLE, MODE, EXPR",
+                vec!["FILEHANDLE", "MODE", "EXPR"],
+            )),
             "close" => Some(("close FILEHANDLE", vec!["FILEHANDLE"])),
-            "read" => Some(("read FILEHANDLE, SCALAR, LENGTH, OFFSET", vec!["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"])),
+            "read" => Some((
+                "read FILEHANDLE, SCALAR, LENGTH, OFFSET",
+                vec!["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
+            )),
             "write" => Some(("write FILEHANDLE", vec!["FILEHANDLE"])),
             "die" => Some(("die LIST", vec!["LIST"])),
             "warn" => Some(("warn LIST", vec!["LIST"])),
-            "substr" => Some(("substr EXPR, OFFSET, LENGTH, REPLACEMENT", vec!["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"])),
+            "substr" => Some((
+                "substr EXPR, OFFSET, LENGTH, REPLACEMENT",
+                vec!["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"],
+            )),
             "length" => Some(("length EXPR", vec!["EXPR"])),
-            "index" => Some(("index STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
-            "rindex" => Some(("rindex STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
+            "index" => Some((
+                "index STR, SUBSTR, POSITION",
+                vec!["STR", "SUBSTR", "POSITION"],
+            )),
+            "rindex" => Some((
+                "rindex STR, SUBSTR, POSITION",
+                vec!["STR", "SUBSTR", "POSITION"],
+            )),
             "sprintf" => Some(("sprintf FORMAT, LIST", vec!["FORMAT", "LIST"])),
             "join" => Some(("join EXPR, LIST", vec!["EXPR", "LIST"])),
-            "split" => Some(("split /PATTERN/, EXPR, LIMIT", vec!["/PATTERN/", "EXPR", "LIMIT"])),
+            "split" => Some((
+                "split /PATTERN/, EXPR, LIMIT",
+                vec!["/PATTERN/", "EXPR", "LIMIT"],
+            )),
             "push" => Some(("push ARRAY, LIST", vec!["ARRAY", "LIST"])),
             "pop" => Some(("pop ARRAY", vec!["ARRAY"])),
             "shift" => Some(("shift ARRAY", vec!["ARRAY"])),
             "unshift" => Some(("unshift ARRAY, LIST", vec!["ARRAY", "LIST"])),
-            "splice" => Some(("splice ARRAY, OFFSET, LENGTH, LIST", vec!["ARRAY", "OFFSET", "LENGTH", "LIST"])),
+            "splice" => Some((
+                "splice ARRAY, OFFSET, LENGTH, LIST",
+                vec!["ARRAY", "OFFSET", "LENGTH", "LIST"],
+            )),
             "grep" => Some(("grep BLOCK LIST", vec!["BLOCK", "LIST"])),
             "map" => Some(("map BLOCK LIST", vec!["BLOCK", "LIST"])),
             "sort" => Some(("sort BLOCK LIST", vec!["BLOCK", "LIST"])),
@@ -1493,9 +1622,12 @@ impl LspServer {
             "uc" => Some(("uc EXPR", vec!["EXPR"])),
             "lcfirst" => Some(("lcfirst EXPR", vec!["EXPR"])),
             "ucfirst" => Some(("ucfirst EXPR", vec!["EXPR"])),
-            
+
             // File operations
-            "seek" => Some(("seek FILEHANDLE, POSITION, WHENCE", vec!["FILEHANDLE", "POSITION", "WHENCE"])),
+            "seek" => Some((
+                "seek FILEHANDLE, POSITION, WHENCE",
+                vec!["FILEHANDLE", "POSITION", "WHENCE"],
+            )),
             "tell" => Some(("tell FILEHANDLE", vec!["FILEHANDLE"])),
             "stat" => Some(("stat EXPR", vec!["EXPR"])),
             "lstat" => Some(("lstat EXPR", vec!["EXPR"])),
@@ -1512,7 +1644,7 @@ impl LspServer {
             "symlink" => Some(("symlink OLDFILE, NEWFILE", vec!["OLDFILE", "NEWFILE"])),
             "readlink" => Some(("readlink EXPR", vec!["EXPR"])),
             "truncate" => Some(("truncate FILEHANDLE, LENGTH", vec!["FILEHANDLE", "LENGTH"])),
-            
+
             // String/Data functions
             "pack" => Some(("pack TEMPLATE, LIST", vec!["TEMPLATE", "LIST"])),
             "unpack" => Some(("unpack TEMPLATE, EXPR", vec!["TEMPLATE", "EXPR"])),
@@ -1521,11 +1653,11 @@ impl LspServer {
             "oct" => Some(("oct EXPR", vec!["EXPR"])),
             "vec" => Some(("vec EXPR, OFFSET, BITS", vec!["EXPR", "OFFSET", "BITS"])),
             "crypt" => Some(("crypt PLAINTEXT, SALT", vec!["PLAINTEXT", "SALT"])),
-            
+
             // Array/List functions
             "scalar" => Some(("scalar EXPR", vec!["EXPR"])),
             "wantarray" => Some(("wantarray", vec![])),
-            
+
             // Math functions
             "abs" => Some(("abs VALUE", vec!["VALUE"])),
             "int" => Some(("int EXPR", vec!["EXPR"])),
@@ -1538,7 +1670,7 @@ impl LspServer {
             "atan2" => Some(("atan2 Y, X", vec!["Y", "X"])),
             "rand" => Some(("rand EXPR", vec!["EXPR"])),
             "srand" => Some(("srand EXPR", vec!["EXPR"])),
-            
+
             // System/Process functions
             "system" => Some(("system LIST", vec!["LIST"])),
             "exec" => Some(("exec LIST", vec!["LIST"])),
@@ -1553,33 +1685,48 @@ impl LspServer {
             "setpgrp" => Some(("setpgrp PID, PGRP", vec!["PID", "PGRP"])),
             "getppid" => Some(("getppid", vec![])),
             "getpriority" => Some(("getpriority WHICH, WHO", vec!["WHICH", "WHO"])),
-            "setpriority" => Some(("setpriority WHICH, WHO, PRIORITY", vec!["WHICH", "WHO", "PRIORITY"])),
-            
+            "setpriority" => Some((
+                "setpriority WHICH, WHO, PRIORITY",
+                vec!["WHICH", "WHO", "PRIORITY"],
+            )),
+
             // Time functions
             "time" => Some(("time", vec![])),
             "localtime" => Some(("localtime EXPR", vec!["EXPR"])),
             "gmtime" => Some(("gmtime EXPR", vec!["EXPR"])),
             "times" => Some(("times", vec![])),
-            
+
             // User/Group functions
             "getpwuid" => Some(("getpwuid UID", vec!["UID"])),
             "getpwnam" => Some(("getpwnam NAME", vec!["NAME"])),
             "getgrgid" => Some(("getgrgid GID", vec!["GID"])),
             "getgrnam" => Some(("getgrnam NAME", vec!["NAME"])),
             "getlogin" => Some(("getlogin", vec![])),
-            
+
             // Network functions
-            "socket" => Some(("socket SOCKET, DOMAIN, TYPE, PROTOCOL", vec!["SOCKET", "DOMAIN", "TYPE", "PROTOCOL"])),
+            "socket" => Some((
+                "socket SOCKET, DOMAIN, TYPE, PROTOCOL",
+                vec!["SOCKET", "DOMAIN", "TYPE", "PROTOCOL"],
+            )),
             "bind" => Some(("bind SOCKET, NAME", vec!["SOCKET", "NAME"])),
             "listen" => Some(("listen SOCKET, QUEUESIZE", vec!["SOCKET", "QUEUESIZE"])),
-            "accept" => Some(("accept NEWSOCKET, GENERICSOCKET", vec!["NEWSOCKET", "GENERICSOCKET"])),
+            "accept" => Some((
+                "accept NEWSOCKET, GENERICSOCKET",
+                vec!["NEWSOCKET", "GENERICSOCKET"],
+            )),
             "connect" => Some(("connect SOCKET, NAME", vec!["SOCKET", "NAME"])),
-            "send" => Some(("send SOCKET, MSG, FLAGS, TO", vec!["SOCKET", "MSG", "FLAGS", "TO"])),
-            "recv" => Some(("recv SOCKET, SCALAR, LENGTH, FLAGS", vec!["SOCKET", "SCALAR", "LENGTH", "FLAGS"])),
+            "send" => Some((
+                "send SOCKET, MSG, FLAGS, TO",
+                vec!["SOCKET", "MSG", "FLAGS", "TO"],
+            )),
+            "recv" => Some((
+                "recv SOCKET, SCALAR, LENGTH, FLAGS",
+                vec!["SOCKET", "SCALAR", "LENGTH", "FLAGS"],
+            )),
             "shutdown" => Some(("shutdown SOCKET, HOW", vec!["SOCKET", "HOW"])),
             "getsockname" => Some(("getsockname SOCKET", vec!["SOCKET"])),
             "getpeername" => Some(("getpeername SOCKET", vec!["SOCKET"])),
-            
+
             // Control flow
             "eval" => Some(("eval EXPR", vec!["EXPR"])),
             "require" => Some(("require EXPR", vec!["EXPR"])),
@@ -1590,9 +1737,12 @@ impl LspServer {
             "last" => Some(("last LABEL", vec!["LABEL"])),
             "next" => Some(("next LABEL", vec!["LABEL"])),
             "redo" => Some(("redo LABEL", vec!["LABEL"])),
-            
+
             // Misc functions
-            "tie" => Some(("tie VARIABLE, CLASSNAME, LIST", vec!["VARIABLE", "CLASSNAME", "LIST"])),
+            "tie" => Some((
+                "tie VARIABLE, CLASSNAME, LIST",
+                vec!["VARIABLE", "CLASSNAME", "LIST"],
+            )),
             "untie" => Some(("untie VARIABLE", vec!["VARIABLE"])),
             "tied" => Some(("tied VARIABLE", vec!["VARIABLE"])),
             "dbmopen" => Some(("dbmopen HASH, DBNAME, MODE", vec!["HASH", "DBNAME", "MODE"])),
@@ -1602,17 +1752,20 @@ impl LspServer {
             "dump" => Some(("dump LABEL", vec!["LABEL"])),
             "prototype" => Some(("prototype FUNCTION", vec!["FUNCTION"])),
             "lock" => Some(("lock THING", vec!["THING"])),
-            
-            _ => None
+
+            _ => None,
         };
-        
+
         if let Some((label, params)) = signature {
-            let parameters: Vec<Value> = params.iter().map(|p| {
-                json!({
-                    "label": p.to_string()
+            let parameters: Vec<Value> = params
+                .iter()
+                .map(|p| {
+                    json!({
+                        "label": p.to_string()
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             Some(json!({
                 "label": label,
                 "parameters": parameters
@@ -1621,115 +1774,121 @@ impl LspServer {
             None
         }
     }
-    
+
     /// Handle textDocument/definition request
     fn handle_declaration(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         let t0 = std::time::Instant::now();
-        
+
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Use the Declaration provider - ast is already an Arc
                     let provider = crate::declaration::DeclarationProvider::new(
                         ast.clone(),
                         doc.content.clone(),
-                        uri.to_string()
+                        uri.to_string(),
                     )
                     .with_parent_map(&doc.parent_map)
                     .with_doc_version(doc._version);
-                    
+
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset, doc._version) {
                         // Check client capability and return appropriate format
                         if self.client_capabilities.declaration_link_support {
                             // Return LocationLink format
-                            let result: Vec<Value> = location_links.iter().map(|link| {
-                                let (orig_start_line, orig_start_char) = 
-                                    self.offset_to_pos16(doc, link.origin_selection_range.0);
-                                let (orig_end_line, orig_end_char) = 
-                                    self.offset_to_pos16(doc, link.origin_selection_range.1);
-                                
-                                let (target_start_line, target_start_char) = 
-                                    self.offset_to_pos16(doc, link.target_range.0);
-                                let (target_end_line, target_end_char) = 
-                                    self.offset_to_pos16(doc, link.target_range.1);
-                                
-                                let (sel_start_line, sel_start_char) = 
-                                    self.offset_to_pos16(doc, link.target_selection_range.0);
-                                let (sel_end_line, sel_end_char) = 
-                                    self.offset_to_pos16(doc, link.target_selection_range.1);
-                                
-                                json!({
-                                    "originSelectionRange": {
-                                        "start": {
-                                            "line": orig_start_line,
-                                            "character": orig_start_char,
+                            let result: Vec<Value> = location_links
+                                .iter()
+                                .map(|link| {
+                                    let (orig_start_line, orig_start_char) =
+                                        self.offset_to_pos16(doc, link.origin_selection_range.0);
+                                    let (orig_end_line, orig_end_char) =
+                                        self.offset_to_pos16(doc, link.origin_selection_range.1);
+
+                                    let (target_start_line, target_start_char) =
+                                        self.offset_to_pos16(doc, link.target_range.0);
+                                    let (target_end_line, target_end_char) =
+                                        self.offset_to_pos16(doc, link.target_range.1);
+
+                                    let (sel_start_line, sel_start_char) =
+                                        self.offset_to_pos16(doc, link.target_selection_range.0);
+                                    let (sel_end_line, sel_end_char) =
+                                        self.offset_to_pos16(doc, link.target_selection_range.1);
+
+                                    json!({
+                                            "originSelectionRange": {
+                                                "start": {
+                                                    "line": orig_start_line,
+                                                    "character": orig_start_char,
+                                                },
+                                                "end": {
+                                                    "line": orig_end_line,
+                                                    "character": orig_end_char,
+                                                },
+                                            },
+                                            "targetUri": link.target_uri,
+                                            "targetRange": {
+                                            "start": {
+                                                "line": target_start_line,
+                                                "character": target_start_char,
+                                            },
+                                            "end": {
+                                                "line": target_end_line,
+                                                "character": target_end_char,
+                                            },
                                         },
-                                        "end": {
-                                            "line": orig_end_line,
-                                            "character": orig_end_char,
+                                        "targetSelectionRange": {
+                                            "start": {
+                                                "line": sel_start_line,
+                                                "character": sel_start_char,
+                                            },
+                                            "end": {
+                                                "line": sel_end_line,
+                                                "character": sel_end_char,
+                                            },
                                         },
-                                    },
-                                    "targetUri": link.target_uri,
-                                    "targetRange": {
-                                    "start": {
-                                        "line": target_start_line,
-                                        "character": target_start_char,
-                                    },
-                                    "end": {
-                                        "line": target_end_line,
-                                        "character": target_end_char,
-                                    },
-                                },
-                                "targetSelectionRange": {
-                                    "start": {
-                                        "line": sel_start_line,
-                                        "character": sel_start_char,
-                                    },
-                                    "end": {
-                                        "line": sel_end_line,
-                                        "character": sel_end_char,
-                                    },
-                                },
-                            })
-                        }).collect();
-                            
+                                    })
+                                })
+                                .collect();
+
                             return Ok(Some(json!(result)));
                         } else {
                             // Down-convert to Location format for clients that don't support LocationLink
-                            let result: Vec<Value> = location_links.iter().map(|link| {
-                                let (sel_start_line, sel_start_char) = 
-                                    self.offset_to_pos16(doc, link.target_selection_range.0);
-                                let (sel_end_line, sel_end_char) = 
-                                    self.offset_to_pos16(doc, link.target_selection_range.1);
-                                
-                                json!({
-                                    "uri": link.target_uri,
-                                    "range": {
-                                        "start": {
-                                            "line": sel_start_line,
-                                            "character": sel_start_char,
+                            let result: Vec<Value> = location_links
+                                .iter()
+                                .map(|link| {
+                                    let (sel_start_line, sel_start_char) =
+                                        self.offset_to_pos16(doc, link.target_selection_range.0);
+                                    let (sel_end_line, sel_end_char) =
+                                        self.offset_to_pos16(doc, link.target_selection_range.1);
+
+                                    json!({
+                                        "uri": link.target_uri,
+                                        "range": {
+                                            "start": {
+                                                "line": sel_start_line,
+                                                "character": sel_start_char,
+                                            },
+                                            "end": {
+                                                "line": sel_end_line,
+                                                "character": sel_end_char,
+                                            },
                                         },
-                                        "end": {
-                                            "line": sel_end_line,
-                                            "character": sel_end_char,
-                                        },
-                                    },
+                                    })
                                 })
-                            }).collect();
-                            
+                                .collect();
+
                             return Ok(Some(json!(result)));
                         }
                     }
                 }
-                
+
                 // Performance monitoring
                 let dt = t0.elapsed();
                 if doc.content.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
@@ -1745,12 +1904,12 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Try workspace index first for cross-file definitions
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
@@ -1769,24 +1928,31 @@ impl LspServer {
                                 // TODO: Extract package context from analyzer
                                 symbol_info.name.clone()
                             };
-                            
+
                             // Find definition in workspace
-                            if let Some(def_location) = workspace_index.find_definition(&symbol_name) {
+                            if let Some(def_location) =
+                                workspace_index.find_definition(&symbol_name)
+                            {
                                 // Convert internal Location to LSP Location
-                                if let Some(lsp_location) = crate::workspace_index::lsp_adapter::to_lsp_location(&def_location) {
+                                if let Some(lsp_location) =
+                                    crate::workspace_index::lsp_adapter::to_lsp_location(
+                                        &def_location,
+                                    )
+                                {
                                     return Ok(Some(json!([lsp_location])));
                                 }
                             }
                         }
                     }
-                    
+
                     // Fall back to same-file definition
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                    
+
                     // Find definition at the position
                     if let Some(definition) = analyzer.find_definition(offset) {
-                        let (def_line, def_char) = self.offset_to_pos16(doc, definition.location.start);
-                        
+                        let (def_line, def_char) =
+                            self.offset_to_pos16(doc, definition.location.start);
+
                         return Ok(Some(json!([{
                             "uri": uri,
                             "range": {
@@ -1804,10 +1970,10 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/references request
     fn handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -1819,12 +1985,12 @@ impl LspServer {
             } else {
                 true
             };
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Try workspace index first for cross-file references
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
@@ -1843,330 +2009,393 @@ impl LspServer {
                                 // TODO: Extract package context from analyzer
                                 symbol_info.name.clone()
                             };
-                            
+
                             // Find all references in workspace
                             let refs = workspace_index.find_references(&symbol_name);
                             if !refs.is_empty() {
                                 // Convert internal Locations to LSP Locations
-                                let lsp_locations = crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
+                                let lsp_locations =
+                                    crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
                                 if !lsp_locations.is_empty() {
                                     return Ok(Some(json!(lsp_locations)));
                                 }
                             }
                         }
                     }
-                    
+
                     // Fall back to same-file references
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                    
+
                     // Find all references at the position
                     let references = analyzer.find_all_references(offset, include_declaration);
-                    
+
                     if !references.is_empty() {
-                        let locations: Vec<Value> = references.iter().map(|loc| {
-                            let (start_line, start_char) = self.offset_to_pos16(doc, loc.start);
-                            let (end_line, end_char) = self.offset_to_pos16(doc, loc.end);
-                            
-                            json!({
-                                "uri": uri,
-                                "range": {
-                                    "start": {
-                                        "line": start_line,
-                                        "character": start_char,
+                        let locations: Vec<Value> = references
+                            .iter()
+                            .map(|loc| {
+                                let (start_line, start_char) = self.offset_to_pos16(doc, loc.start);
+                                let (end_line, end_char) = self.offset_to_pos16(doc, loc.end);
+
+                                json!({
+                                    "uri": uri,
+                                    "range": {
+                                        "start": {
+                                            "line": start_line,
+                                            "character": start_char,
+                                        },
+                                        "end": {
+                                            "line": end_line,
+                                            "character": end_char,
+                                        },
                                     },
-                                    "end": {
-                                        "line": end_line,
-                                        "character": end_char,
-                                    },
-                                },
+                                })
                             })
-                        }).collect();
-                        
+                            .collect();
+
                         return Ok(Some(json!(locations)));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/documentHighlight request
-    fn handle_document_highlight(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_document_highlight(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Create document highlight provider
                     let provider = DocumentHighlightProvider::new();
-                    
+
                     // Find all highlights at the position
                     let highlights = provider.find_highlights(ast, &doc.content, offset);
-                    
+
                     if !highlights.is_empty() {
-                        let lsp_highlights: Vec<Value> = highlights.iter().map(|highlight| {
-                            let (start_line, start_char) = self.offset_to_pos16(doc, highlight.location.start);
-                            let (end_line, end_char) = self.offset_to_pos16(doc, highlight.location.end);
-                            
-                            json!({
-                                "range": {
-                                    "start": {
-                                        "line": start_line,
-                                        "character": start_char,
+                        let lsp_highlights: Vec<Value> = highlights
+                            .iter()
+                            .map(|highlight| {
+                                let (start_line, start_char) =
+                                    self.offset_to_pos16(doc, highlight.location.start);
+                                let (end_line, end_char) =
+                                    self.offset_to_pos16(doc, highlight.location.end);
+
+                                json!({
+                                    "range": {
+                                        "start": {
+                                            "line": start_line,
+                                            "character": start_char,
+                                        },
+                                        "end": {
+                                            "line": end_line,
+                                            "character": end_char,
+                                        },
                                     },
-                                    "end": {
-                                        "line": end_line,
-                                        "character": end_char,
-                                    },
-                                },
-                                "kind": highlight.kind as u32,
+                                    "kind": highlight.kind as u32,
+                                })
                             })
-                        }).collect();
-                        
+                            .collect();
+
                         return Ok(Some(json!(lsp_highlights)));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Handle textDocument/prepareTypeHierarchy request
-    fn handle_prepare_type_hierarchy(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_prepare_type_hierarchy(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Create type hierarchy provider
                     let provider = TypeHierarchyProvider::new();
-                    
+
                     // Prepare type hierarchy at the position
                     if let Some(items) = provider.prepare(ast, &doc.content, offset) {
-                        let lsp_items: Vec<Value> = items.iter().map(|item| {
-                            json!({
-                                "name": item.name,
-                                "kind": item.kind as u32,
-                                "uri": uri,
-                                "range": {
-                                    "start": {
-                                        "line": item.range.start.line,
-                                        "character": item.range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.range.end.line,
-                                        "character": item.range.end.character,
-                                    },
-                                },
-                                "selectionRange": {
-                                    "start": {
-                                        "line": item.selection_range.start.line,
-                                        "character": item.selection_range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.selection_range.end.line,
-                                        "character": item.selection_range.end.character,
-                                    },
-                                },
-                                "detail": item.detail,
-                                "data": {
-                                    "uri": uri,
+                        let lsp_items: Vec<Value> = items
+                            .iter()
+                            .map(|item| {
+                                json!({
                                     "name": item.name,
-                                },
+                                    "kind": item.kind as u32,
+                                    "uri": uri,
+                                    "range": {
+                                        "start": {
+                                            "line": item.range.start.line,
+                                            "character": item.range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.range.end.line,
+                                            "character": item.range.end.character,
+                                        },
+                                    },
+                                    "selectionRange": {
+                                        "start": {
+                                            "line": item.selection_range.start.line,
+                                            "character": item.selection_range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.selection_range.end.line,
+                                            "character": item.selection_range.end.character,
+                                        },
+                                    },
+                                    "detail": item.detail,
+                                    "data": {
+                                        "uri": uri,
+                                        "name": item.name,
+                                    },
+                                })
                             })
-                        }).collect();
-                        
+                            .collect();
+
                         return Ok(Some(json!(lsp_items)));
                     }
                 }
             }
         }
-        
+
         Ok(None)
     }
 
     /// Handle typeHierarchy/supertypes request
-    fn handle_type_hierarchy_supertypes(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_type_hierarchy_supertypes(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(item) = params.get("item") {
                 let uri = item["data"]["uri"].as_str().unwrap_or("");
                 let name = item["data"]["name"].as_str().unwrap_or("");
-                
+
                 let documents = self.documents.lock().unwrap();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         // Create type hierarchy provider
                         let provider = TypeHierarchyProvider::new();
-                        
+
                         // Create item from request
                         let type_item = crate::type_hierarchy::TypeHierarchyItem {
                             name: name.to_string(),
                             kind: crate::type_hierarchy::SymbolKind::Class,
                             uri: uri.to_string(),
                             range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
-                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                start: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                             },
                             selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
-                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                start: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                             },
                             detail: None,
                             data: None,
                         };
-                        
+
                         // Find supertypes
                         let supertypes = provider.find_supertypes(ast, &type_item);
-                        
-                        let lsp_items: Vec<Value> = supertypes.iter().map(|item| {
-                            json!({
-                                "name": item.name,
-                                "kind": item.kind as u32,
-                                "uri": uri,
-                                "range": {
-                                    "start": {
-                                        "line": item.range.start.line,
-                                        "character": item.range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.range.end.line,
-                                        "character": item.range.end.character,
-                                    },
-                                },
-                                "selectionRange": {
-                                    "start": {
-                                        "line": item.selection_range.start.line,
-                                        "character": item.selection_range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.selection_range.end.line,
-                                        "character": item.selection_range.end.character,
-                                    },
-                                },
-                                "detail": item.detail,
-                                "data": {
-                                    "uri": uri,
+
+                        let lsp_items: Vec<Value> = supertypes
+                            .iter()
+                            .map(|item| {
+                                json!({
                                     "name": item.name,
-                                },
+                                    "kind": item.kind as u32,
+                                    "uri": uri,
+                                    "range": {
+                                        "start": {
+                                            "line": item.range.start.line,
+                                            "character": item.range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.range.end.line,
+                                            "character": item.range.end.character,
+                                        },
+                                    },
+                                    "selectionRange": {
+                                        "start": {
+                                            "line": item.selection_range.start.line,
+                                            "character": item.selection_range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.selection_range.end.line,
+                                            "character": item.selection_range.end.character,
+                                        },
+                                    },
+                                    "detail": item.detail,
+                                    "data": {
+                                        "uri": uri,
+                                        "name": item.name,
+                                    },
+                                })
                             })
-                        }).collect();
-                        
+                            .collect();
+
                         return Ok(Some(json!(lsp_items)));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Handle typeHierarchy/subtypes request
-    fn handle_type_hierarchy_subtypes(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_type_hierarchy_subtypes(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(item) = params.get("item") {
                 let uri = item["data"]["uri"].as_str().unwrap_or("");
                 let name = item["data"]["name"].as_str().unwrap_or("");
-                
+
                 let documents = self.documents.lock().unwrap();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         // Create type hierarchy provider
                         let provider = TypeHierarchyProvider::new();
-                        
+
                         // Create item from request
                         let type_item = crate::type_hierarchy::TypeHierarchyItem {
                             name: name.to_string(),
                             kind: crate::type_hierarchy::SymbolKind::Class,
                             uri: uri.to_string(),
                             range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
-                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                start: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                             },
                             selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
-                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                start: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: crate::type_hierarchy::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                             },
                             detail: None,
                             data: None,
                         };
-                        
+
                         // Find subtypes
                         let subtypes = provider.find_subtypes(ast, &type_item);
-                        
-                        let lsp_items: Vec<Value> = subtypes.iter().map(|item| {
-                            json!({
-                                "name": item.name,
-                                "kind": item.kind as u32,
-                                "uri": uri,
-                                "range": {
-                                    "start": {
-                                        "line": item.range.start.line,
-                                        "character": item.range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.range.end.line,
-                                        "character": item.range.end.character,
-                                    },
-                                },
-                                "selectionRange": {
-                                    "start": {
-                                        "line": item.selection_range.start.line,
-                                        "character": item.selection_range.start.character,
-                                    },
-                                    "end": {
-                                        "line": item.selection_range.end.line,
-                                        "character": item.selection_range.end.character,
-                                    },
-                                },
-                                "detail": item.detail,
-                                "data": {
-                                    "uri": uri,
+
+                        let lsp_items: Vec<Value> = subtypes
+                            .iter()
+                            .map(|item| {
+                                json!({
                                     "name": item.name,
-                                },
+                                    "kind": item.kind as u32,
+                                    "uri": uri,
+                                    "range": {
+                                        "start": {
+                                            "line": item.range.start.line,
+                                            "character": item.range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.range.end.line,
+                                            "character": item.range.end.character,
+                                        },
+                                    },
+                                    "selectionRange": {
+                                        "start": {
+                                            "line": item.selection_range.start.line,
+                                            "character": item.selection_range.start.character,
+                                        },
+                                        "end": {
+                                            "line": item.selection_range.end.line,
+                                            "character": item.selection_range.end.character,
+                                        },
+                                    },
+                                    "detail": item.detail,
+                                    "data": {
+                                        "uri": uri,
+                                        "name": item.name,
+                                    },
+                                })
                             })
-                        }).collect();
-                        
+                            .collect();
+
                         return Ok(Some(json!(lsp_items)));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/rename request
     fn handle_prepare_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Get the token at the current position
                     let token = self.get_token_at_position(&doc.content, offset);
-                    if !token.is_empty() && (token.starts_with('$') || token.starts_with('@') || token.starts_with('%') || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')) {
+                    if !token.is_empty()
+                        && (token.starts_with('$')
+                            || token.starts_with('@')
+                            || token.starts_with('%')
+                            || token
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_alphabetic() || c == '_'))
+                    {
                         // Find the token bounds
-                        let (start_offset, end_offset) = self.get_token_bounds(&doc.content, offset);
+                        let (start_offset, end_offset) =
+                            self.get_token_bounds(&doc.content, offset);
                         let (start_line, start_char) = self.offset_to_pos16(doc, start_offset);
                         let (end_line, end_char) = self.offset_to_pos16(doc, end_offset);
-                        
+
                         // Return the range and placeholder text
                         return Ok(Some(json!({
                             "range": {
@@ -2185,7 +2414,7 @@ impl LspServer {
                 }
             }
         }
-        
+
         // Return null if rename is not possible at this position
         Ok(Some(json!(null)))
     }
@@ -2196,7 +2425,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
             let new_name = params["newName"].as_str().unwrap_or("");
-            
+
             // Validate the new name
             if !self.is_valid_identifier(new_name) {
                 return Err(JsonRpcError {
@@ -2205,25 +2434,26 @@ impl LspServer {
                     data: None,
                 });
             }
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Create semantic analyzer
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                    
+
                     // Find all references (including definition)
                     let references = analyzer.find_all_references(offset, true);
-                    
+
                     if !references.is_empty() {
                         // Create text edits for all references
                         let mut edits = Vec::new();
                         for location in references {
-                            let (start_line, start_char) = self.offset_to_pos16(doc, location.start);
+                            let (start_line, start_char) =
+                                self.offset_to_pos16(doc, location.start);
                             let (end_line, end_char) = self.offset_to_pos16(doc, location.end);
-                            
+
                             edits.push(json!({
                                 "range": {
                                     "start": { "line": start_line, "character": start_char },
@@ -2232,7 +2462,7 @@ impl LspServer {
                                 "newText": new_name
                             }));
                         }
-                        
+
                         // Return WorkspaceEdit
                         return Ok(Some(json!({
                             "changes": {
@@ -2243,75 +2473,86 @@ impl LspServer {
                 }
             }
         }
-        
+
         // Return empty workspace edit if nothing to rename
         Ok(Some(json!({
             "changes": {}
         })))
     }
-    
+
     /// Handle textDocument/documentSymbol request
     fn handle_document_symbol(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
                     let extractor = crate::symbol::SymbolExtractor::new();
                     let symbol_table = extractor.extract(ast);
-                    
+
                     // Convert to DocumentSymbol format
                     let mut document_symbols = Vec::new();
-                    
+
                     // Group symbols by scope and kind
-                    let mut symbols_by_scope: std::collections::HashMap<crate::symbol::ScopeId, Vec<crate::symbol::Symbol>> = std::collections::HashMap::new();
+                    let mut symbols_by_scope: std::collections::HashMap<
+                        crate::symbol::ScopeId,
+                        Vec<crate::symbol::Symbol>,
+                    > = std::collections::HashMap::new();
                     for symbols in symbol_table.symbols.values() {
                         for symbol in symbols {
-                            symbols_by_scope.entry(symbol.scope_id).or_default().push(symbol.clone());
+                            symbols_by_scope
+                                .entry(symbol.scope_id)
+                                .or_default()
+                                .push(symbol.clone());
                         }
                     }
-                    
+
                     // Build hierarchical structure starting from global scope
                     let empty_vec = Vec::new();
                     let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
-                    
+
                     for symbol in global_symbols {
-                        let (start_line, start_char) = self.offset_to_pos16(doc, symbol.location.start);
+                        let (start_line, start_char) =
+                            self.offset_to_pos16(doc, symbol.location.start);
                         let (end_line, end_char) = self.offset_to_pos16(doc, symbol.location.end);
-                        
+
                         // Map symbol kind to LSP SymbolKind
                         let symbol_kind = match symbol.kind {
-                            crate::symbol::SymbolKind::Package => 4,  // Module
-                            crate::symbol::SymbolKind::Subroutine => 12, // Function
+                            crate::symbol::SymbolKind::Package => 4,         // Module
+                            crate::symbol::SymbolKind::Subroutine => 12,     // Function
                             crate::symbol::SymbolKind::ScalarVariable => 13, // Variable
-                            crate::symbol::SymbolKind::ArrayVariable => 18, // Array
+                            crate::symbol::SymbolKind::ArrayVariable => 18,  // Array
                             crate::symbol::SymbolKind::HashVariable => 19, // Object (closest match)
-                            crate::symbol::SymbolKind::Constant => 14, // Constant
-                            crate::symbol::SymbolKind::Label => 16, // String (closest match)
-                            crate::symbol::SymbolKind::Format => 12, // Function
+                            crate::symbol::SymbolKind::Constant => 14,     // Constant
+                            crate::symbol::SymbolKind::Label => 16,        // String (closest match)
+                            crate::symbol::SymbolKind::Format => 12,       // Function
                         };
-                        
+
                         // Create display name with sigil if applicable
                         let display_name = if let Some(sigil) = symbol.kind.sigil() {
                             format!("{}{}", sigil, symbol.name)
                         } else {
                             symbol.name.clone()
                         };
-                        
+
                         // Find child symbols for this scope (if it's a package or subroutine)
                         let mut children = Vec::new();
-                        if symbol.kind == crate::symbol::SymbolKind::Package || symbol.kind == crate::symbol::SymbolKind::Subroutine {
+                        if symbol.kind == crate::symbol::SymbolKind::Package
+                            || symbol.kind == crate::symbol::SymbolKind::Subroutine
+                        {
                             // Find scope ID for this symbol
                             for (scope_id, scope) in &symbol_table.scopes {
                                 if scope.location.start == symbol.location.start {
                                     // Get symbols in this scope
                                     if let Some(child_symbols) = symbols_by_scope.get(scope_id) {
                                         for child in child_symbols {
-                                            let (child_start_line, child_start_char) = self.offset_to_pos16(doc, child.location.start);
-                                            let (child_end_line, child_end_char) = self.offset_to_pos16(doc, child.location.end);
-                                            
+                                            let (child_start_line, child_start_char) =
+                                                self.offset_to_pos16(doc, child.location.start);
+                                            let (child_end_line, child_end_char) =
+                                                self.offset_to_pos16(doc, child.location.end);
+
                                             let child_kind = match child.kind {
                                                 crate::symbol::SymbolKind::Package => 4,
                                                 crate::symbol::SymbolKind::Subroutine => 12,
@@ -2322,13 +2563,14 @@ impl LspServer {
                                                 crate::symbol::SymbolKind::Label => 16,
                                                 crate::symbol::SymbolKind::Format => 12,
                                             };
-                                            
-                                            let child_display_name = if let Some(sigil) = child.kind.sigil() {
-                                                format!("{}{}", sigil, child.name)
-                                            } else {
-                                                child.name.clone()
-                                            };
-                                            
+
+                                            let child_display_name =
+                                                if let Some(sigil) = child.kind.sigil() {
+                                                    format!("{}{}", sigil, child.name)
+                                                } else {
+                                                    child.name.clone()
+                                                };
+
                                             children.push(json!({
                                                 "name": child_display_name,
                                                 "detail": child.declaration.as_deref().unwrap_or(""),
@@ -2349,7 +2591,7 @@ impl LspServer {
                                 }
                             }
                         }
-                        
+
                         let symbol_info = json!({
                             "name": display_name,
                             "detail": symbol.declaration.as_deref().unwrap_or(""),
@@ -2364,10 +2606,10 @@ impl LspServer {
                             },
                             "children": children
                         });
-                        
+
                         document_symbols.push(symbol_info);
                     }
-                    
+
                     return Ok(Some(json!(document_symbols)));
                 } else {
                     // Fallback: Extract symbols via regex when parse fails
@@ -2376,35 +2618,35 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/foldingRange request
     fn handle_folding_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
-                    
+
                     // Convert to LSP JSON format with proper line offsets
                     let mut lsp_ranges = Vec::new();
                     for range in ranges {
                         // Calculate actual line numbers from document content
                         let start_line = self.offset_to_line(&doc.content, range.start_offset);
                         let end_line = self.offset_to_line(&doc.content, range.end_offset);
-                        
+
                         if end_line > start_line {
                             let mut lsp_range = json!({
                                 "startLine": start_line,
                                 "endLine": end_line - 1,  // LSP folding ranges are inclusive
                             });
-                            
+
                             if let Some(ref kind) = range.kind {
                                 lsp_range["kind"] = match kind {
                                     crate::folding::FoldingRangeKind::Comment => json!("comment"),
@@ -2412,16 +2654,16 @@ impl LspServer {
                                     crate::folding::FoldingRangeKind::Region => json!("region"),
                                 };
                             }
-                            
+
                             lsp_ranges.push(lsp_range);
                         }
                     }
-                    
+
                     // If no ranges from AST, try fallback
                     if lsp_ranges.is_empty() {
                         return Ok(Some(json!(self.extract_folding_fallback(&doc.content))));
                     }
-                    
+
                     return Ok(Some(json!(lsp_ranges)));
                 } else {
                     // No AST, use fallback
@@ -2429,10 +2671,10 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Helper function to convert offset to line number
     fn offset_to_line(&self, content: &str, offset: usize) -> usize {
         content[..offset.min(content.len())]
@@ -2440,7 +2682,7 @@ impl LspServer {
             .filter(|&c| c == '\n')
             .count()
     }
-    
+
     /// Fallback folding extraction using text-based analysis
     fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
         let mut ranges = Vec::new();
@@ -2448,10 +2690,10 @@ impl LspServer {
         let mut brace_stack: Vec<usize> = Vec::new();
         let mut sub_start: Option<usize> = None;
         let mut pod_start: Option<usize> = None;
-        
+
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Handle POD sections
             if trimmed.starts_with("=") {
                 if trimmed == "=cut" {
@@ -2470,12 +2712,12 @@ impl LspServer {
                 }
                 continue;
             }
-            
+
             // Skip if we're in POD
             if pod_start.is_some() {
                 continue;
             }
-            
+
             // Handle subroutines
             if trimmed.starts_with("sub ") {
                 // If we had a previous sub, close it
@@ -2489,30 +2731,30 @@ impl LspServer {
                 }
                 sub_start = Some(line_num);
             }
-            
+
             // Count braces (simple approach, doesn't handle strings/comments perfectly)
             let mut in_string = false;
             let mut escape_next = false;
             let mut prev_char = ' ';
-            
+
             for ch in line.chars() {
                 if escape_next {
                     escape_next = false;
                     prev_char = ch;
                     continue;
                 }
-                
+
                 if ch == '\\' {
                     escape_next = true;
                     prev_char = ch;
                     continue;
                 }
-                
+
                 // Simple string detection (not perfect but good enough)
                 if (ch == '"' || ch == '\'') && (!in_string || prev_char != '\\') {
                     in_string = !in_string;
                 }
-                
+
                 if !in_string {
                     if ch == '{' {
                         brace_stack.push(line_num);
@@ -2528,11 +2770,11 @@ impl LspServer {
                         }
                     }
                 }
-                
+
                 prev_char = ch;
             }
         }
-        
+
         // Close any remaining sub
         if let Some(start) = sub_start {
             if lines.len() > start + 1 {
@@ -2542,19 +2784,19 @@ impl LspServer {
                 }));
             }
         }
-        
+
         ranges
     }
-    
+
     /// Fallback symbol extraction using regex when parser fails
     fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
         let mut symbols = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
-        
+
         // Regex for subroutine declarations
         let sub_regex = regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b").unwrap();
         let package_regex = regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b").unwrap();
-        
+
         for (line_num, line) in lines.iter().enumerate() {
             // Check for subroutines
             if let Some(captures) = sub_regex.captures(line) {
@@ -2562,7 +2804,7 @@ impl LspServer {
                     let name = name_match.as_str().to_string();
                     let start_char = name_match.start();
                     let end_char = name_match.end();
-                    
+
                     symbols.push(json!({
                         "name": name,
                         "kind": 12, // Function
@@ -2577,14 +2819,14 @@ impl LspServer {
                     }));
                 }
             }
-            
+
             // Check for packages
             if let Some(captures) = package_regex.captures(line) {
                 if let Some(name_match) = captures.get(1) {
                     let name = name_match.as_str().to_string();
                     let start_char = name_match.start();
                     let end_char = name_match.end();
-                    
+
                     symbols.push(json!({
                         "name": name,
                         "kind": 4, // Module
@@ -2600,30 +2842,30 @@ impl LspServer {
                 }
             }
         }
-        
+
         symbols
     }
-    
+
     /// Validate if a string is a valid Perl identifier
     fn is_valid_identifier(&self, name: &str) -> bool {
         if name.is_empty() {
             return false;
         }
-        
+
         let chars: Vec<char> = name.chars().collect();
-        
+
         // First character must be letter or underscore
         if !chars[0].is_alphabetic() && chars[0] != '_' {
             return false;
         }
-        
+
         // Rest must be alphanumeric or underscore
         for ch in &chars[1..] {
             if !ch.is_alphanumeric() && *ch != '_' {
                 return false;
             }
         }
-        
+
         true
     }
 
@@ -2633,39 +2875,51 @@ impl LspServer {
         if offset >= chars.len() {
             return String::new();
         }
-        
+
         // Find word boundaries
         let mut start = offset;
-        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_' || chars[start - 1] == '$' || chars[start - 1] == '@' || chars[start - 1] == '%') {
+        while start > 0
+            && (chars[start - 1].is_alphanumeric()
+                || chars[start - 1] == '_'
+                || chars[start - 1] == '$'
+                || chars[start - 1] == '@'
+                || chars[start - 1] == '%')
+        {
             start -= 1;
         }
-        
+
         let mut end = offset;
         while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
             end += 1;
         }
-        
+
         chars[start..end].iter().collect()
     }
-    
+
     /// Get the bounds of the token at the given position
     fn get_token_bounds(&self, content: &str, offset: usize) -> (usize, usize) {
         let chars: Vec<char> = content.chars().collect();
         if offset >= chars.len() {
             return (offset, offset);
         }
-        
+
         // Find word boundaries
         let mut start = offset;
-        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_' || chars[start - 1] == '$' || chars[start - 1] == '@' || chars[start - 1] == '%') {
+        while start > 0
+            && (chars[start - 1].is_alphanumeric()
+                || chars[start - 1] == '_'
+                || chars[start - 1] == '$'
+                || chars[start - 1] == '@'
+                || chars[start - 1] == '%')
+        {
             start -= 1;
         }
-        
+
         let mut end = offset;
         while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
             end += 1;
         }
-        
+
         (start, end)
     }
 
@@ -2676,12 +2930,12 @@ impl LspServer {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
-        
+
         for ch in content.chars() {
             if byte_pos >= offset {
                 break;
             }
-            
+
             match ch {
                 '\r' => { /* ignore; CRLF will be handled on '\n' */ }
                 '\n' => {
@@ -2693,10 +2947,10 @@ impl LspServer {
                     col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
                 }
             }
-            
+
             byte_pos += ch.len_utf8();
         }
-        
+
         (line, col_utf16)
     }
 
@@ -2706,7 +2960,7 @@ impl LspServer {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
-        
+
         for ch in content.chars() {
             if cur_line == line {
                 match ch {
@@ -2731,7 +2985,7 @@ impl LspServer {
                     }
                 }
             }
-            
+
             match ch {
                 '\n' => {
                     cur_line += 1;
@@ -2742,12 +2996,12 @@ impl LspServer {
                     col_utf16 = 0;
                 }
                 '\r' => { /* ignore */ }
-                _ => { }
+                _ => {}
             }
-            
+
             byte_pos += ch.len_utf8();
         }
-        
+
         // Clamp to end of buffer
         content.len()
     }
@@ -2765,7 +3019,7 @@ impl LspServer {
     fn offset_to_pos16(&self, doc: &DocumentState, offset: usize) -> (u32, u32) {
         doc.line_starts.offset_to_position(&doc.content, offset)
     }
-    
+
     /// Handle textDocument/formatting request
     fn handle_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -2778,30 +3032,33 @@ impl LspServer {
                     insert_final_newline: None,
                     trim_final_newlines: None,
                 });
-            
+
             eprintln!("Formatting document: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.content, &options) {
                     Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits.into_iter()
-                            .map(|edit| json!({
-                                "range": {
-                                    "start": {
-                                        "line": edit.range.start.line,
-                                        "character": edit.range.start.character,
+                        let lsp_edits: Vec<Value> = edits
+                            .into_iter()
+                            .map(|edit| {
+                                json!({
+                                    "range": {
+                                        "start": {
+                                            "line": edit.range.start.line,
+                                            "character": edit.range.start.character,
+                                        },
+                                        "end": {
+                                            "line": edit.range.end.line,
+                                            "character": edit.range.end.character,
+                                        },
                                     },
-                                    "end": {
-                                        "line": edit.range.end.line,
-                                        "character": edit.range.end.character,
-                                    },
-                                },
-                                "newText": edit.new_text,
-                            }))
+                                    "newText": edit.new_text,
+                                })
+                            })
                             .collect();
-                        
+
                         return Ok(Some(json!(lsp_edits)));
                     }
                     Err(e) => {
@@ -2815,12 +3072,15 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/rangeFormatting request
-    fn handle_range_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_range_formatting(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
@@ -2831,7 +3091,7 @@ impl LspServer {
                     insert_final_newline: None,
                     trim_final_newlines: None,
                 });
-            
+
             let range = if let Some(range_value) = params.get("range") {
                 crate::formatting::Range {
                     start: crate::formatting::Position {
@@ -2846,30 +3106,33 @@ impl LspServer {
             } else {
                 return Ok(Some(json!([])));
             };
-            
+
             eprintln!("Formatting range in document: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_range(&doc.content, &range, &options) {
                     Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits.into_iter()
-                            .map(|edit| json!({
-                                "range": {
-                                    "start": {
-                                        "line": edit.range.start.line,
-                                        "character": edit.range.start.character,
+                        let lsp_edits: Vec<Value> = edits
+                            .into_iter()
+                            .map(|edit| {
+                                json!({
+                                    "range": {
+                                        "start": {
+                                            "line": edit.range.start.line,
+                                            "character": edit.range.start.character,
+                                        },
+                                        "end": {
+                                            "line": edit.range.end.line,
+                                            "character": edit.range.end.character,
+                                        },
                                     },
-                                    "end": {
-                                        "line": edit.range.end.line,
-                                        "character": edit.range.end.character,
-                                    },
-                                },
-                                "newText": edit.new_text,
-                            }))
+                                    "newText": edit.new_text,
+                                })
+                            })
                             .collect();
-                        
+
                         return Ok(Some(json!(lsp_edits)));
                     }
                     Err(e) => {
@@ -2883,20 +3146,23 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle workspace/symbol request
-    fn handle_workspace_symbols(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_workspace_symbols(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let query = params
             .as_ref()
             .and_then(|p| p.get("query"))
             .and_then(|q| q.as_str())
             .unwrap_or("");
-        
+
         eprintln!("Workspace symbol search: '{}'", query);
-        
+
         // Use workspace index for all symbol searches
         #[cfg(feature = "workspace")]
         {
@@ -2905,13 +3171,14 @@ impl LspServer {
             } else {
                 Vec::new()
             };
-            
+
             // Convert workspace index symbols to typed LSP WorkspaceSymbol structs
             use std::collections::HashSet;
             let mut seen = HashSet::new();
-            
+
             // First deduplicate the internal symbols
-            let deduped_symbols: Vec<WorkspaceSymbol> = index_symbols.into_iter()
+            let deduped_symbols: Vec<WorkspaceSymbol> = index_symbols
+                .into_iter()
                 .filter(|sym| {
                     // Deduplicate by (uri, start position, name, kind)
                     seen.insert((
@@ -2923,90 +3190,96 @@ impl LspServer {
                     ))
                 })
                 .collect();
-            
+
             // Convert to LSP DTOs (no internal fields)
-            let lsp_symbols: Vec<LspWorkspaceSymbol> = deduped_symbols
-                .iter()
-                .map(|sym| sym.into())
-                .collect();
-            
+            let lsp_symbols: Vec<LspWorkspaceSymbol> =
+                deduped_symbols.iter().map(|sym| sym.into()).collect();
+
             eprintln!("Found {} symbols (after deduplication)", lsp_symbols.len());
-            
+
             // Convert to JSON for LSP response
             // Now we're only serializing LSP-compliant fields
-            let result = serde_json::to_value(&lsp_symbols)
-                .unwrap_or_else(|_| json!([]));
-            
+            let result = serde_json::to_value(&lsp_symbols).unwrap_or_else(|_| json!([]));
+
             return Ok(Some(result));
         }
-        
+
         #[cfg(not(feature = "workspace"))]
         {
             // Without workspace feature, return empty results
             return Ok(Some(json!([])));
         }
     }
-    
+
     /// Handle textDocument/codeLens request
     fn handle_code_lens(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             eprintln!("Getting code lenses for: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = CodeLensProvider::new(doc.content.clone());
                     let mut lenses = provider.extract(ast);
-                    
+
                     // Add shebang lens if applicable
                     if let Some(shebang_lens) = get_shebang_lens(&doc.content) {
                         lenses.insert(0, shebang_lens);
                     }
-                    
+
                     eprintln!("Found {} code lenses", lenses.len());
-                    
+
                     return Ok(Some(json!(lenses)));
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle codeLens/resolve request
-    fn handle_code_lens_resolve(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_code_lens_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Parse the code lens
-            if let Ok(lens) = serde_json::from_value::<crate::code_lens_provider::CodeLens>(params.clone()) {
+            if let Ok(lens) =
+                serde_json::from_value::<crate::code_lens_provider::CodeLens>(params.clone())
+            {
                 // Extract the symbol name and kind from the lens data
-                let symbol_name = lens.data.as_ref()
+                let symbol_name = lens
+                    .data
+                    .as_ref()
                     .and_then(|d| d.get("name"))
                     .and_then(|n| n.as_str())
                     .unwrap_or("");
-                
-                let symbol_kind = lens.data.as_ref()
+
+                let symbol_kind = lens
+                    .data
+                    .as_ref()
                     .and_then(|d| d.get("kind"))
                     .and_then(|k| k.as_str())
                     .unwrap_or("unknown");
-                
+
                 // Get the document URI from the range (we need to track this better in the future)
                 // For now, count references across all documents
                 let mut total_references = 0;
-                
+
                 let documents = self.documents.lock().unwrap();
                 for (_uri, doc) in documents.iter() {
                     if let Some(ref ast) = doc.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
                     }
                 }
-                
+
                 let resolved = resolve_code_lens(lens, total_references);
                 return Ok(Some(json!(resolved)));
             }
         }
-        
+
         Err(JsonRpcError {
             code: -32602,
             message: "Invalid parameters".to_string(),
@@ -3016,18 +3289,23 @@ impl LspServer {
 
     /// Count references to a symbol in an AST
     #[allow(clippy::only_used_in_recursion)]
-    fn count_references(&self, node: &crate::ast::Node, symbol_name: &str, symbol_kind: &str) -> usize {
+    fn count_references(
+        &self,
+        node: &crate::ast::Node,
+        symbol_name: &str,
+        symbol_kind: &str,
+    ) -> usize {
         use crate::ast::NodeKind;
-        
+
         let mut count = 0;
-        
+
         match &node.kind {
             NodeKind::Program { statements } => {
                 for stmt in statements {
                     count += self.count_references(stmt, symbol_name, symbol_kind);
                 }
             }
-            
+
             NodeKind::FunctionCall { name, args } => {
                 if symbol_kind == "subroutine" && name == symbol_name {
                     count += 1;
@@ -3036,8 +3314,12 @@ impl LspServer {
                     count += self.count_references(arg, symbol_name, symbol_kind);
                 }
             }
-            
-            NodeKind::MethodCall { object, method, args } => {
+
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 if symbol_kind == "subroutine" && method == symbol_name {
                     count += 1;
                 }
@@ -3046,26 +3328,31 @@ impl LspServer {
                     count += self.count_references(arg, symbol_name, symbol_kind);
                 }
             }
-            
+
             NodeKind::Use { module, args: _ } => {
                 if symbol_kind == "package" && module == symbol_name {
                     count += 1;
                 }
             }
-            
+
             NodeKind::Identifier { name } => {
                 if symbol_kind == "package" && name == symbol_name {
                     count += 1;
                 }
             }
-            
+
             NodeKind::Block { statements } => {
                 for stmt in statements {
                     count += self.count_references(stmt, symbol_name, symbol_kind);
                 }
             }
-            
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_branch, symbol_name, symbol_kind);
                 for (cond, branch) in elsif_branches {
@@ -3076,26 +3363,39 @@ impl LspServer {
                     count += self.count_references(else_b, symbol_name, symbol_kind);
                 }
             }
-            
-            NodeKind::While { condition, body, continue_block } |
-            NodeKind::For { condition: Some(condition), body, continue_block, .. } => {
+
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+            }
+            | NodeKind::For {
+                condition: Some(condition),
+                body,
+                continue_block,
+                ..
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
                 if let Some(cont) = continue_block {
                     count += self.count_references(cont, symbol_name, symbol_kind);
                 }
             }
-            
-            NodeKind::Foreach { variable: _, list, body } => {
+
+            NodeKind::Foreach {
+                variable: _,
+                list,
+                body,
+            } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
-            
+
             NodeKind::Binary { left, right, .. } => {
                 count += self.count_references(left, symbol_name, symbol_kind);
                 count += self.count_references(right, symbol_name, symbol_kind);
             }
-            
+
             NodeKind::Unary { op, operand } => {
                 // Check if this is a reference to a subroutine (\&function)
                 if op == "\\" && symbol_kind == "subroutine" {
@@ -3107,48 +3407,56 @@ impl LspServer {
                 }
                 count += self.count_references(operand, symbol_name, symbol_kind);
             }
-            
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_expr, symbol_name, symbol_kind);
                 count += self.count_references(else_expr, symbol_name, symbol_kind);
             }
-            
+
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 count += self.count_references(lhs, symbol_name, symbol_kind);
                 count += self.count_references(rhs, symbol_name, symbol_kind);
             }
-            
+
             NodeKind::Return { value } => {
                 if let Some(val) = value {
                     count += self.count_references(val, symbol_name, symbol_kind);
                 }
             }
-            
+
             NodeKind::ArrayLiteral { elements } => {
                 for elem in elements {
                     count += self.count_references(elem, symbol_name, symbol_kind);
                 }
             }
-            
+
             NodeKind::HashLiteral { pairs } => {
                 for (key, val) in pairs {
                     count += self.count_references(key, symbol_name, symbol_kind);
                     count += self.count_references(val, symbol_name, symbol_kind);
                 }
             }
-            
+
             NodeKind::Subroutine { body, .. } => {
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
-            
+
             NodeKind::Package { block, .. } => {
                 if let Some(block) = block {
                     count += self.count_references(block, symbol_name, symbol_kind);
                 }
             }
-            
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 count += self.count_references(body, symbol_name, symbol_kind);
                 for (_var, block) in catch_blocks {
                     count += self.count_references(block, symbol_name, symbol_kind);
@@ -3157,91 +3465,107 @@ impl LspServer {
                     count += self.count_references(finally, symbol_name, symbol_kind);
                 }
             }
-            
+
             // Recursively handle other node types that might contain references
             _ => {
                 // Default: no references in other node types
             }
         }
-        
+
         count
     }
-    
+
     /// Handle semantic tokens full request
-    fn handle_semantic_tokens_full(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_semantic_tokens_full(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             eprintln!("Getting semantic tokens for: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let mut provider = SemanticTokensProvider::new(doc.content.clone());
                     let tokens = provider.extract(ast);
                     let encoded = encode_semantic_tokens(&tokens);
-                    
+
                     eprintln!("Found {} semantic tokens", tokens.len());
-                    
+
                     return Ok(Some(json!({
                         "data": encoded
                     })));
                 }
             }
         }
-        
+
         Ok(Some(json!({
             "data": []
         })))
     }
 
     /// Handle semantic tokens range request
-    fn handle_semantic_tokens_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_semantic_tokens_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let range = &params["range"];
             let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
             let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
-            
-            eprintln!("Getting semantic tokens for range: {} (lines {}-{})", uri, start_line, end_line);
-            
+
+            eprintln!(
+                "Getting semantic tokens for range: {} (lines {}-{})",
+                uri, start_line, end_line
+            );
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let mut provider = SemanticTokensProvider::new(doc.content.clone());
                     let all_tokens = provider.extract(ast);
-                    
+
                     // Filter tokens to the requested range
-                    let range_tokens: Vec<_> = all_tokens.into_iter()
+                    let range_tokens: Vec<_> = all_tokens
+                        .into_iter()
                         .filter(|token| token.line >= start_line && token.line <= end_line)
                         .collect();
-                    
+
                     let encoded = encode_semantic_tokens(&range_tokens);
-                    
+
                     eprintln!("Found {} semantic tokens in range", range_tokens.len());
-                    
+
                     return Ok(Some(json!({
                         "data": encoded
                     })));
                 }
             }
         }
-        
+
         Ok(Some(json!({
             "data": []
         })))
     }
 
     /// Handle prepare call hierarchy request
-    fn handle_prepare_call_hierarchy(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_prepare_call_hierarchy(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let position = &params["position"];
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
-            
-            eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
-            
+
+            eprintln!(
+                "Preparing call hierarchy at: {} ({}:{})",
+                uri, line, character
+            );
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
@@ -3253,7 +3577,7 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!(null)))
     }
 
@@ -3262,24 +3586,27 @@ impl LspServer {
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
-            
-            eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
-            
+
+            eprintln!(
+                "Getting incoming calls for: {}",
+                item["name"].as_str().unwrap_or("")
+            );
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
-                    
+
                     let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
                     let calls = provider.incoming_calls(ast, &ch_item);
-                    
+
                     let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
                     return Ok(Some(json!(json_calls)));
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
@@ -3288,38 +3615,45 @@ impl LspServer {
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
-            
-            eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
-            
+
+            eprintln!(
+                "Getting outgoing calls for: {}",
+                item["name"].as_str().unwrap_or("")
+            );
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
-                    
+
                     let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
                     let calls = provider.outgoing_calls(ast, &ch_item);
-                    
+
                     let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
                     return Ok(Some(json!(json_calls)));
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Convert JSON to CallHierarchyItem
-    fn json_to_call_hierarchy_item(&self, json: &Value) -> Result<crate::call_hierarchy_provider::CallHierarchyItem, JsonRpcError> {
-        use crate::call_hierarchy_provider::{CallHierarchyItem, Range, Position};
-        
+    fn json_to_call_hierarchy_item(
+        &self,
+        json: &Value,
+    ) -> Result<crate::call_hierarchy_provider::CallHierarchyItem, JsonRpcError> {
+        use crate::call_hierarchy_provider::{CallHierarchyItem, Position, Range};
+
         let name = json["name"].as_str().unwrap_or("").to_string();
         let kind = match json["kind"].as_u64().unwrap_or(12) {
             6 => "method",
             _ => "function",
-        }.to_string();
+        }
+        .to_string();
         let uri = json["uri"].as_str().unwrap_or("").to_string();
-        
+
         let range = Range {
             start: Position {
                 line: json["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
@@ -3330,20 +3664,26 @@ impl LspServer {
                 character: json["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
             },
         };
-        
+
         let selection_range = Range {
             start: Position {
-                line: json["selectionRange"]["start"]["line"].as_u64().unwrap_or(0) as u32,
-                character: json["selectionRange"]["start"]["character"].as_u64().unwrap_or(0) as u32,
+                line: json["selectionRange"]["start"]["line"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
+                character: json["selectionRange"]["start"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
             },
             end: Position {
                 line: json["selectionRange"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                character: json["selectionRange"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                character: json["selectionRange"]["end"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
             },
         };
-        
+
         let detail = json["detail"].as_str().map(|s| s.to_string());
-        
+
         Ok(CallHierarchyItem {
             name,
             kind,
@@ -3359,9 +3699,9 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let range = &params["range"];
-            
+
             eprintln!("Getting inlay hints for: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
@@ -3373,26 +3713,29 @@ impl LspServer {
                         chained_hints: server_config.inlay_hints_chained_hints,
                         max_length: server_config.inlay_hints_max_length,
                     };
-                    
+
                     let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
                     let hints = provider.extract(ast);
-                    
+
                     // Filter hints to the requested range if needed
                     let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
                     let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
-                    
-                    let filtered_hints: Vec<_> = hints.into_iter()
-                        .filter(|hint| hint.position.line >= start_line && hint.position.line <= end_line)
+
+                    let filtered_hints: Vec<_> = hints
+                        .into_iter()
+                        .filter(|hint| {
+                            hint.position.line >= start_line && hint.position.line <= end_line
+                        })
                         .map(|hint| hint.to_json())
                         .collect();
-                    
+
                     eprintln!("Found {} inlay hints", filtered_hints.len());
-                    
+
                     return Ok(Some(json!(filtered_hints)));
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
@@ -3400,85 +3743,88 @@ impl LspServer {
     fn handle_test_discovery(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             eprintln!("Discovering tests for: {}", uri);
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 if let Some(ref ast) = doc.ast {
                     let runner = TestRunner::new(doc.content.clone(), uri.to_string());
                     let tests = runner.discover_tests(ast);
-                    
+
                     // Convert test items to JSON
-                    let test_items: Vec<Value> = tests.into_iter()
-                        .map(|test| json!({
-                            "id": test.id,
-                            "label": test.label,
-                            "uri": test.uri,
-                            "range": {
-                                "start": {
-                                    "line": test.range.start_line,
-                                    "character": test.range.start_character
+                    let test_items: Vec<Value> = tests
+                        .into_iter()
+                        .map(|test| {
+                            json!({
+                                "id": test.id,
+                                "label": test.label,
+                                "uri": test.uri,
+                                "range": {
+                                    "start": {
+                                        "line": test.range.start_line,
+                                        "character": test.range.start_character
+                                    },
+                                    "end": {
+                                        "line": test.range.end_line,
+                                        "character": test.range.end_character
+                                    }
                                 },
-                                "end": {
-                                    "line": test.range.end_line,
-                                    "character": test.range.end_character
-                                }
-                            },
-                            "kind": match test.kind {
-                                TestKind::File => "file",
-                                TestKind::Suite => "suite",
-                                TestKind::Test => "test"
-                            },
-                            "children": test.children.into_iter()
-                                .map(|child| json!({
-                                    "id": child.id,
-                                    "label": child.label,
-                                    "uri": child.uri,
-                                    "range": {
-                                        "start": {
-                                            "line": child.range.start_line,
-                                            "character": child.range.start_character
+                                "kind": match test.kind {
+                                    TestKind::File => "file",
+                                    TestKind::Suite => "suite",
+                                    TestKind::Test => "test"
+                                },
+                                "children": test.children.into_iter()
+                                    .map(|child| json!({
+                                        "id": child.id,
+                                        "label": child.label,
+                                        "uri": child.uri,
+                                        "range": {
+                                            "start": {
+                                                "line": child.range.start_line,
+                                                "character": child.range.start_character
+                                            },
+                                            "end": {
+                                                "line": child.range.end_line,
+                                                "character": child.range.end_character
+                                            }
                                         },
-                                        "end": {
-                                            "line": child.range.end_line,
-                                            "character": child.range.end_character
-                                        }
-                                    },
-                                    "kind": match child.kind {
-                                        TestKind::File => "file",
-                                        TestKind::Suite => "suite",
-                                        TestKind::Test => "test"
-                                    },
-                                    "children": []
-                                }))
-                                .collect::<Vec<_>>()
-                        }))
+                                        "kind": match child.kind {
+                                            TestKind::File => "file",
+                                            TestKind::Suite => "suite",
+                                            TestKind::Test => "test"
+                                        },
+                                        "children": []
+                                    }))
+                                    .collect::<Vec<_>>()
+                            })
+                        })
                         .collect();
-                    
+
                     eprintln!("Found {} test items", test_items.len());
-                    
+
                     return Ok(Some(json!(test_items)));
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Handle execute command request
     fn handle_execute_command(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         use crate::execute_command::ExecuteCommandProvider;
-        
+
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
             let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
-            
+
             eprintln!("Executing command: {}", command);
-            
+
             // Use the new execute command provider for new commands
             let provider = ExecuteCommandProvider::new();
-            
+
             match command {
                 // Keep existing test commands for backward compatibility
                 "perl.runTest" => {
@@ -3513,91 +3859,109 @@ impl LspServer {
                 }
             }
         }
-        
-        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
+
+        Ok(Some(
+            json!({"status": "error", "message": "Invalid parameters"}),
+        ))
     }
 
     /// Run a specific test
     fn run_test(&self, test_id: &str) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Running test: {}", test_id);
-        
+
         // Parse test ID to get URI and test name
         let parts: Vec<&str> = test_id.split("::").collect();
         if parts.len() < 2 {
-            return Ok(Some(json!({"status": "error", "message": "Invalid test ID"})));
+            return Ok(Some(
+                json!({"status": "error", "message": "Invalid test ID"}),
+            ));
         }
-        
+
         let uri = parts[0];
         let test_name = parts[1..].join("::");
-        
+
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
             let runner = TestRunner::new(doc.content.clone(), uri.to_string());
             let results = runner.run_test(&test_name);
-            
+
             // Convert results to JSON
-            let json_results: Vec<Value> = results.into_iter()
-                .map(|result| json!({
-                    "testId": result.test_id,
-                    "status": result.status.as_str(),
-                    "message": result.message,
-                    "duration": result.duration
-                }))
+            let json_results: Vec<Value> = results
+                .into_iter()
+                .map(|result| {
+                    json!({
+                        "testId": result.test_id,
+                        "status": result.status.as_str(),
+                        "message": result.message,
+                        "duration": result.duration
+                    })
+                })
                 .collect();
-            
+
             return Ok(Some(json!({
                 "status": "success",
                 "results": json_results
             })));
         }
-        
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+
+        Ok(Some(
+            json!({"status": "error", "message": "Document not found"}),
+        ))
     }
 
     /// Run all tests in a file
     fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Running test file: {}", uri);
-        
+
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
             let runner = TestRunner::new(doc.content.clone(), uri.to_string());
             let results = runner.run_test(uri);
-            
+
             // Convert results to JSON
-            let json_results: Vec<Value> = results.into_iter()
-                .map(|result| json!({
-                    "testId": result.test_id,
-                    "status": result.status.as_str(),
-                    "message": result.message,
-                    "duration": result.duration
-                }))
+            let json_results: Vec<Value> = results
+                .into_iter()
+                .map(|result| {
+                    json!({
+                        "testId": result.test_id,
+                        "status": result.status.as_str(),
+                        "message": result.message,
+                        "duration": result.duration
+                    })
+                })
                 .collect();
-            
+
             return Ok(Some(json!({
                 "status": "success",
                 "results": json_results
             })));
         }
-        
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+
+        Ok(Some(
+            json!({"status": "error", "message": "Document not found"}),
+        ))
     }
-    
+
     /// Handle workspace/configuration request
     fn handle_configuration(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(items) = params.as_array() {
                 let mut results = Vec::new();
-                
+
                 for item in items {
                     if let Some(section) = item.get("section").and_then(|s| s.as_str()) {
                         eprintln!("Configuration requested for section: {}", section);
-                        
+
                         let config = self.config.lock().unwrap();
                         let value = match section {
                             "perl.inlayHints.enabled" => json!(config.inlay_hints_enabled),
-                            "perl.inlayHints.parameterHints" => json!(config.inlay_hints_parameter_hints),
+                            "perl.inlayHints.parameterHints" => {
+                                json!(config.inlay_hints_parameter_hints)
+                            }
                             "perl.inlayHints.typeHints" => json!(config.inlay_hints_type_hints),
-                            "perl.inlayHints.chainedHints" => json!(config.inlay_hints_chained_hints),
+                            "perl.inlayHints.chainedHints" => {
+                                json!(config.inlay_hints_chained_hints)
+                            }
                             "perl.inlayHints.maxLength" => json!(config.inlay_hints_max_length),
                             "perl.testRunner.enabled" => json!(config.test_runner_enabled),
                             "perl.testRunner.testCommand" => json!(config.test_runner_command),
@@ -3605,20 +3969,23 @@ impl LspServer {
                             "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
                             _ => json!(null),
                         };
-                        
+
                         results.push(value);
                     }
                 }
-                
+
                 return Ok(Some(json!(results)));
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Handle workspace/didChangeWatchedFiles notification
-    fn handle_did_change_watched_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_did_change_watched_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(changes) = params["changes"].as_array() {
                 for change in changes {
@@ -3627,15 +3994,19 @@ impl LspServer {
                         continue;
                     };
                     let change_type = change["type"].as_u64().unwrap_or(0);
-                    
+
                     eprintln!("File change detected: {} (type: {})", uri, change_type);
-                    
+
                     match change_type {
-                        1 => { // Created
+                        1 => {
+                            // Created
                             // Re-index the file if it's a Perl file
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
-                                if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                                if uri.ends_with(".pl")
+                                    || uri.ends_with(".pm")
+                                    || uri.ends_with(".t")
+                                {
                                     if let Some(path) = uri_to_fs_path(uri) {
                                         if let Ok(content) = std::fs::read_to_string(&path) {
                                             if let Ok(url) = url::Url::parse(uri) {
@@ -3647,7 +4018,8 @@ impl LspServer {
                                 }
                             }
                         }
-                        2 => { // Changed
+                        2 => {
+                            // Changed
                             // Re-index the file
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
@@ -3657,12 +4029,13 @@ impl LspServer {
                                             // Clear old index data
                                             workspace_index.clear_file(uri);
                                             // Re-index with new content
-                                            let _ = workspace_index.index_file(url, content.clone());
+                                            let _ =
+                                                workspace_index.index_file(url, content.clone());
                                         }
                                     }
                                 }
                             }
-                            
+
                             // Also update our internal document store if it exists
                             #[cfg(feature = "workspace")]
                             if let Ok(mut documents) = self.documents.lock() {
@@ -3679,21 +4052,22 @@ impl LspServer {
                                     }
                                 }
                             }
-                            
+
                             eprintln!("Re-indexed changed file: {}", uri);
                         }
-                        3 => { // Deleted
+                        3 => {
+                            // Deleted
                             // Remove from index
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
                                 workspace_index.remove_file(uri);
                             }
-                            
+
                             // Remove from document store
                             if let Ok(mut documents) = self.documents.lock() {
                                 documents.remove(uri);
                             }
-                            
+
                             eprintln!("Removed deleted file from index: {}", uri);
                         }
                         _ => {}
@@ -3701,19 +4075,22 @@ impl LspServer {
                 }
             }
         }
-        
+
         // This is a notification, no response needed
         Ok(None)
     }
 
     /// Handle workspace/willRenameFiles request
-    fn handle_will_rename_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_will_rename_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
                 let mut workspace_edit = json!({
                     "changes": {}
                 });
-                
+
                 for file in files {
                     let Some(old_uri) = file["oldUri"].as_str() else {
                         continue;
@@ -3721,13 +4098,13 @@ impl LspServer {
                     let Some(new_uri) = file["newUri"].as_str() else {
                         continue;
                     };
-                    
+
                     eprintln!("File rename: {} -> {}", old_uri, new_uri);
-                    
+
                     // Extract module names from file paths
                     let old_module = path_to_module_name(old_uri);
                     let new_module = path_to_module_name(new_uri);
-                    
+
                     if !old_module.is_empty() && !new_module.is_empty() {
                         // Find all files that reference the old module
                         #[cfg(feature = "workspace")]
@@ -3736,10 +4113,10 @@ impl LspServer {
                         } else {
                             Vec::new()
                         };
-                        
+
                         #[cfg(not(feature = "workspace"))]
                         let dependents = Vec::<String>::new();
-                        
+
                         for dependent_uri in dependents {
                             // Get the document content
                             let Ok(documents) = self.documents.lock() else {
@@ -3747,14 +4124,14 @@ impl LspServer {
                             };
                             if let Some(doc) = documents.get(&dependent_uri) {
                                 let mut edits = Vec::new();
-                                
+
                                 // Find and replace use statements
                                 for (line_num, line) in doc.content.lines().enumerate() {
-                                    if line.contains(&format!("use {}", old_module)) || 
-                                       line.contains(&format!("require {}", old_module)) ||
-                                       line.contains(&format!("use parent '{}'", old_module)) ||
-                                       line.contains(&format!("use base '{}'", old_module)) {
-                                        
+                                    if line.contains(&format!("use {}", old_module))
+                                        || line.contains(&format!("require {}", old_module))
+                                        || line.contains(&format!("use parent '{}'", old_module))
+                                        || line.contains(&format!("use base '{}'", old_module))
+                                    {
                                         let new_line = line.replace(&old_module, &new_module);
                                         edits.push(json!({
                                             "range": {
@@ -3765,14 +4142,14 @@ impl LspServer {
                                         }));
                                     }
                                 }
-                                
+
                                 if !edits.is_empty() {
                                     workspace_edit["changes"][dependent_uri] = json!(edits);
                                 }
                             }
                         }
                     }
-                    
+
                     // Update the index for the renamed file
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
@@ -3786,32 +4163,35 @@ impl LspServer {
                         }
                     }
                 }
-                
+
                 return Ok(Some(workspace_edit));
             }
         }
-        
+
         // Return empty edit if no changes needed
         Ok(Some(json!({"changes": {}})))
     }
 
     /// Handle workspace/didDeleteFiles notification
-    fn handle_did_delete_files(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_did_delete_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
                 for file in files {
                     let Some(uri) = file["uri"].as_str() else {
                         continue;
                     };
-                    
+
                     eprintln!("File deleted: {}", uri);
-                    
+
                     // Remove from workspace index
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
                         workspace_index.remove_file(uri);
                     }
-                    
+
                     // Remove from document store
                     if let Ok(mut documents) = self.documents.lock() {
                         documents.remove(uri);
@@ -3819,7 +4199,7 @@ impl LspServer {
                 }
             }
         }
-        
+
         // This is a notification, no response needed
         Ok(None)
     }
@@ -3828,11 +4208,13 @@ impl LspServer {
     fn handle_apply_edit(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let Some(edit) = params.get("edit") else {
-                return Ok(Some(json!({"applied": false, "failureReason": "Missing 'edit' field"})));
+                return Ok(Some(
+                    json!({"applied": false, "failureReason": "Missing 'edit' field"}),
+                ));
             };
-            
+
             eprintln!("Applying workspace edit");
-            
+
             // Apply changes to each document
             if let Some(changes) = edit["changes"].as_object() {
                 for (uri, edits) in changes {
@@ -3848,23 +4230,31 @@ impl LspServer {
                                 let b_line = b["range"]["start"]["line"].as_u64().unwrap_or(0);
                                 b_line.cmp(&a_line)
                             });
-                            
+
                             for edit in sorted_edits {
                                 if let Some(new_text) = edit["newText"].as_str() {
-                                    let start_line = edit["range"]["start"]["line"].as_u64().unwrap_or(0) as usize;
-                                    let start_char = edit["range"]["start"]["character"].as_u64().unwrap_or(0) as usize;
-                                    let end_line = edit["range"]["end"]["line"].as_u64().unwrap_or(0) as usize;
-                                    let end_char = edit["range"]["end"]["character"].as_u64().unwrap_or(0) as usize;
-                                    
+                                    let start_line =
+                                        edit["range"]["start"]["line"].as_u64().unwrap_or(0)
+                                            as usize;
+                                    let start_char =
+                                        edit["range"]["start"]["character"].as_u64().unwrap_or(0)
+                                            as usize;
+                                    let end_line =
+                                        edit["range"]["end"]["line"].as_u64().unwrap_or(0) as usize;
+                                    let end_char =
+                                        edit["range"]["end"]["character"].as_u64().unwrap_or(0)
+                                            as usize;
+
                                     // Apply the edit to the document content
-                                    let lines: Vec<String> = doc.content.lines().map(String::from).collect();
+                                    let lines: Vec<String> =
+                                        doc.content.lines().map(String::from).collect();
                                     let mut new_lines = Vec::new();
-                                    
+
                                     // Copy lines before the edit
                                     for i in 0..start_line {
                                         new_lines.push(lines[i].clone());
                                     }
-                                    
+
                                     // Apply the edit
                                     if start_line == end_line {
                                         let line = &lines[start_line];
@@ -3887,17 +4277,17 @@ impl LspServer {
                                         );
                                         new_lines.push(new_line);
                                     }
-                                    
+
                                     // Copy lines after the edit
                                     for i in (end_line + 1)..lines.len() {
                                         new_lines.push(lines[i].clone());
                                     }
-                                    
+
                                     doc.content = new_lines.join("\n");
                                     doc._version += 1;
                                 }
                             }
-                            
+
                             // Re-index the file after changes
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
@@ -3905,19 +4295,21 @@ impl LspServer {
                                     let _ = workspace_index.index_file(url, doc.content.clone());
                                 }
                             }
-                            
+
                             // Clear cached AST
                             doc.ast = None;
                         }
                     }
                 }
             }
-            
+
             // Return success
             return Ok(Some(json!({"applied": true})));
         }
-        
-        Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
+
+        Ok(Some(
+            json!({"applied": false, "failureReason": "Invalid parameters"}),
+        ))
     }
 
     // Test-only public methods (enabled for unit tests or integration tests with expose_lsp_test_api)
@@ -3927,17 +4319,26 @@ impl LspServer {
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    pub fn test_handle_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    pub fn test_handle_definition(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_definition(params)
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    pub fn test_handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    pub fn test_handle_references(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_references(params)
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    pub fn test_handle_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    pub fn test_handle_completion(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_completion(params)
     }
 }
@@ -3955,18 +4356,18 @@ fn path_to_module_name(uri: &str) -> String {
     let path = uri.trim_start_matches("file://").to_string();
     let path = path.as_str();
     let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
-    
+
     // Find the lib directory and extract module path
     if let Some(lib_index) = path.rfind("/lib/") {
         let module_path = &path[lib_index + 5..];
         return module_path.replace('/', "::");
     }
-    
+
     // Fallback: use filename as module name
     if let Some(last_slash) = path.rfind('/') {
         return path[last_slash + 1..].to_string();
     }
-    
+
     path.to_string()
 }
 

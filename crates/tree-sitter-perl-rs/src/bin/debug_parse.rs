@@ -8,7 +8,7 @@ fn main() {
     {
         let input = "5 + 3;";
         println!("Parsing: {}", input);
-        
+
         match PerlParser::parse(Rule::program, input) {
             Ok(pairs) => {
                 for pair in pairs {
@@ -20,7 +20,7 @@ fn main() {
             }
         }
     }
-    
+
     #[cfg(not(feature = "pure-rust"))]
     {
         println!("Debug parser requires pure-rust feature");
@@ -31,7 +31,7 @@ fn main() {
 fn print_pair(pair: &pest::iterators::Pair<Rule>, indent: usize) {
     let indent_str = "  ".repeat(indent);
     println!("{}{:?}: '{}'", indent_str, pair.as_rule(), pair.as_str());
-    
+
     for inner_pair in pair.clone().into_inner() {
         print_pair(&inner_pair, indent + 1);
     }

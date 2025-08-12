@@ -3,19 +3,19 @@ use perl_parser::Parser;
 use std::env;
 
 mod edge_cases {
-    pub mod format_and_blocks;
-    pub mod operator_overloading;
-    pub mod indirect_and_methods;
-    pub mod versions_and_vstrings;
-    pub mod unicode_and_encoding;
     pub mod file_io_operations;
+    pub mod format_and_blocks;
+    pub mod indirect_and_methods;
+    pub mod operator_overloading;
     pub mod regex_and_patterns;
+    pub mod unicode_and_encoding;
+    pub mod versions_and_vstrings;
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let category = args.get(1).map(|s| s.as_str()).unwrap_or("format");
-    
+
     let tests = match category {
         "format" => edge_cases::format_and_blocks::get_tests(),
         "operator" => edge_cases::operator_overloading::get_tests(),
@@ -29,14 +29,14 @@ fn main() {
             return;
         }
     };
-    
+
     println!("Testing category: {}", category);
     println!("Total tests: {}", tests.len());
     println!();
-    
+
     let mut passed = 0;
     let mut failed = 0;
-    
+
     for (i, (code, desc)) in tests.iter().enumerate() {
         let mut parser = Parser::new(code);
         match parser.parse() {
@@ -55,9 +55,11 @@ fn main() {
             }
         }
     }
-    
-    println!("\nSummary: {} passed, {} failed ({:.1}%)", 
-             passed, 
-             failed,
-             (passed as f64 / (passed + failed) as f64) * 100.0);
+
+    println!(
+        "\nSummary: {} passed, {} failed ({:.1}%)",
+        passed,
+        failed,
+        (passed as f64 / (passed + failed) as f64) * 100.0
+    );
 }

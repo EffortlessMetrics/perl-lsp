@@ -9,26 +9,22 @@ fn main() {
             when (2) { print 'two' }
             default { print 'other' }
         }",
-        
         // When with multiple values
         "given ($value) {
             when ([1, 2, 3]) { print 'small' }
             when ([10, 20, 30]) { print 'medium' }
             default { print 'other' }
         }",
-        
         // When with regex
         "given ($str) {
             when (/^foo/) { print 'starts with foo' }
             when (/bar$/) { print 'ends with bar' }
             default { print 'no match' }
         }",
-        
         // Smart match operator
         "$x ~~ @array",
         "$str ~~ /pattern/",
         "$value ~~ [1, 2, 3]",
-        
         // Nested given
         "given ($x) {
             when (1) { 
@@ -39,7 +35,7 @@ fn main() {
             }
         }",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test.lines().next().unwrap_or(""));
         let mut parser = Parser::new(test);

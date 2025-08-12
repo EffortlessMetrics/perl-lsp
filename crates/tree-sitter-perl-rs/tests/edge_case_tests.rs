@@ -3,9 +3,9 @@
 #[cfg(all(test, feature = "pure-rust"))]
 mod tests {
     use tree_sitter_perl::{
-        edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
-        dynamic_delimiter_recovery::RecoveryMode,
         anti_pattern_detector::Severity,
+        dynamic_delimiter_recovery::RecoveryMode,
+        edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
         tree_sitter_adapter::TreeSitterAdapter,
     };
 
@@ -29,14 +29,14 @@ END_DATA
 
         // Should detect 2 dynamic delimiters
         let dynamic_count = analysis.diagnostics.iter()
-            .filter(|d| matches!(&d.pattern, 
+            .filter(|d| matches!(&d.pattern,
                 tree_sitter_perl::anti_pattern_detector::AntiPattern::DynamicHeredocDelimiter { .. }))
             .count();
         assert_eq!(dynamic_count, 2);
 
         // Should have delimiter resolutions
         assert!(!analysis.delimiter_resolutions.is_empty());
-        
+
         // First one should resolve with high confidence
         assert!(analysis.delimiter_resolutions[0].confidence > 0.7);
     }
@@ -67,9 +67,11 @@ EOF
 
         // Should have phase warnings
         assert!(!analysis.phase_warnings.is_empty());
-        
+
         // Should distinguish between phase contexts
-        let begin_warnings = analysis.phase_warnings.iter()
+        let begin_warnings = analysis
+            .phase_warnings
+            .iter()
             .filter(|w| w.contains("BEGIN"))
             .count();
         assert!(begin_warnings > 0);
@@ -98,7 +100,9 @@ BACK
         let analysis = handler.analyze(code);
 
         // Should have encoding-related diagnostics
-        let encoding_diags = analysis.diagnostics.iter()
+        let encoding_diags = analysis
+            .diagnostics
+            .iter()
             .filter(|d| d.message.contains("encoding") || d.message.contains("utf8"))
             .count();
         assert!(encoding_diags > 0);
@@ -134,11 +138,19 @@ TIED
         let analysis = handler.analyze(code);
 
         // Should detect multiple anti-pattern types
-        let pattern_types = analysis.diagnostics.iter()
+        let pattern_types = analysis
+            .diagnostics
+            .iter()
             .map(|d| match &d.pattern {
-                tree_sitter_perl::anti_pattern_detector::AntiPattern::DynamicHeredocDelimiter { .. } => "dynamic",
-                tree_sitter_perl::anti_pattern_detector::AntiPattern::BeginTimeHeredoc { .. } => "begin",
-                tree_sitter_perl::anti_pattern_detector::AntiPattern::FormatHeredoc { .. } => "format",
+                tree_sitter_perl::anti_pattern_detector::AntiPattern::DynamicHeredocDelimiter {
+                    ..
+                } => "dynamic",
+                tree_sitter_perl::anti_pattern_detector::AntiPattern::BeginTimeHeredoc {
+                    ..
+                } => "begin",
+                tree_sitter_perl::anti_pattern_detector::AntiPattern::FormatHeredoc { .. } => {
+                    "format"
+                }
                 _ => "other",
             })
             .collect::<std::collections::HashSet<_>>();
@@ -167,7 +179,7 @@ EOF
                 recovery_mode: mode.clone(),
                 ..Default::default()
             };
-            
+
             let mut handler = EdgeCaseHandler::new(config);
             let analysis = handler.analyze(code);
 
@@ -175,8 +187,10 @@ EOF
             match mode {
                 RecoveryMode::Conservative => {
                     // Should not resolve delimiter
-                    assert!(analysis.delimiter_resolutions.is_empty() || 
-                           analysis.delimiter_resolutions[0].resolved_to.is_none());
+                    assert!(
+                        analysis.delimiter_resolutions.is_empty()
+                            || analysis.delimiter_resolutions[0].resolved_to.is_none()
+                    );
                 }
                 RecoveryMode::BestGuess => {
                     // Should attempt resolution
@@ -211,25 +225,22 @@ BEGIN_END
         let analysis = handler.analyze(code);
 
         // Convert to tree-sitter format
-        let ts_output = TreeSitterAdapter::convert_to_tree_sitter(
-            analysis.ast,
-            analysis.diagnostics,
-            code,
-        );
+        let ts_output =
+            TreeSitterAdapter::convert_to_tree_sitter(analysis.ast, analysis.diagnostics, code);
 
         // Verify tree structure
         assert_eq!(ts_output.tree.root.node_type, "source_file");
-        
+
         // Should have both normal and error nodes
         let has_normal = check_tree_for_type(&ts_output.tree.root, "heredoc");
-        let has_error = check_tree_for_type(&ts_output.tree.root, "ERROR") ||
-                       check_tree_for_type(&ts_output.tree.root, "dynamic_heredoc_delimiter");
-        
+        let has_error = check_tree_for_type(&ts_output.tree.root, "ERROR")
+            || check_tree_for_type(&ts_output.tree.root, "dynamic_heredoc_delimiter");
+
         assert!(has_normal || has_error); // Should have at least one
 
         // Diagnostics should be separate
         assert!(!ts_output.diagnostics.is_empty());
-        
+
         // Metadata should be populated
         assert!(ts_output.metadata.edge_case_count > 0);
     }
@@ -247,20 +258,19 @@ BEGIN_END
                 "BEGIN",
                 Severity::Warning,
             ),
-            (
-                "format F =\n<<'E'\ntext\nE\n.",
-                "format",
-                Severity::Warning,
-            ),
+            ("format F =\n<<'E'\ntext\nE\n.", "format", Severity::Warning),
         ];
 
         for (code, expected_type, expected_severity) in test_cases {
             let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
             let analysis = handler.analyze(code);
 
-            assert!(!analysis.diagnostics.is_empty(), 
-                    "Expected diagnostics for {}", expected_type);
-            
+            assert!(
+                !analysis.diagnostics.is_empty(),
+                "Expected diagnostics for {}",
+                expected_type
+            );
+
             let diag = &analysis.diagnostics[0];
             assert!(diag.message.to_lowercase().contains(expected_type));
             assert_eq!(diag.severity, expected_severity);
@@ -320,10 +330,14 @@ UNKNOWN
         let analysis = handler.analyze(code);
 
         // Verify diagnostics are properly categorized
-        let errors = analysis.diagnostics.iter()
+        let errors = analysis
+            .diagnostics
+            .iter()
             .filter(|d| d.severity == Severity::Error)
             .count();
-        let warnings = analysis.diagnostics.iter()
+        let warnings = analysis
+            .diagnostics
+            .iter()
             .filter(|d| d.severity == Severity::Warning)
             .count();
 
@@ -332,11 +346,15 @@ UNKNOWN
     }
 
     // Helper function
-    fn check_tree_for_type(node: &tree_sitter_perl::tree_sitter_adapter::TreeSitterNode, 
-                           node_type: &str) -> bool {
+    fn check_tree_for_type(
+        node: &tree_sitter_perl::tree_sitter_adapter::TreeSitterNode,
+        node_type: &str,
+    ) -> bool {
         if node.node_type == node_type {
             return true;
         }
-        node.children.iter().any(|child| check_tree_for_type(child, node_type))
+        node.children
+            .iter()
+            .any(|child| check_tree_for_type(child, node_type))
     }
 }

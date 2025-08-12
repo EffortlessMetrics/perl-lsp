@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use crate::perl_lexer::{PerlLexer, TokenType};
+use std::sync::Arc;
 
 /// Adapter to use PerlLexer with Pest parser
 /// This allows us to pre-tokenize the slash ambiguities
@@ -16,13 +16,13 @@ impl LexerAdapter {
         let mut lexer = PerlLexer::new(input);
         let mut result = String::with_capacity(input.len() * 2);
         let mut last_end = 0;
-        
+
         while let Some(token) = lexer.next_token() {
             // Add any text between tokens
             if token.start > last_end {
                 result.push_str(&input[last_end..token.start]);
             }
-            
+
             match token.token_type {
                 TokenType::EOF => break,
                 TokenType::Division => {
@@ -53,22 +53,22 @@ impl LexerAdapter {
                     result.push_str(&token.text);
                 }
             }
-            
+
             last_end = token.end;
         }
-        
+
         // Add any remaining text
         if last_end < input.len() {
             result.push_str(&input[last_end..]);
         }
-        
+
         result
     }
-    
+
     /// Post-process the parsed AST to restore original tokens
     pub fn postprocess(node: &mut crate::pure_rust_parser::AstNode) {
         use crate::pure_rust_parser::AstNode;
-        
+
         match node {
             AstNode::BinaryOp { op, left, right } => {
                 if op.as_ref() == "_DIV_" {
@@ -86,14 +86,19 @@ impl LexerAdapter {
             AstNode::Regex { .. } => {
                 // Already handled correctly
             }
-            AstNode::Block(nodes) | 
-            AstNode::List(nodes) |
-            AstNode::ClassDeclaration { body: nodes, .. } => {
+            AstNode::Block(nodes)
+            | AstNode::List(nodes)
+            | AstNode::ClassDeclaration { body: nodes, .. } => {
                 for node in nodes {
                     Self::postprocess(node);
                 }
             }
-            AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+            AstNode::IfStatement {
+                condition,
+                then_block,
+                elsif_clauses,
+                else_block,
+            } => {
                 Self::postprocess(condition);
                 Self::postprocess(then_block);
                 for (cond, block) in elsif_clauses {
@@ -104,22 +109,36 @@ impl LexerAdapter {
                     Self::postprocess(block);
                 }
             }
-            AstNode::UnlessStatement { condition, block, else_block } => {
+            AstNode::UnlessStatement {
+                condition,
+                block,
+                else_block,
+            } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
                 if let Some(else_b) = else_block {
                     Self::postprocess(else_b);
                 }
             }
-            AstNode::WhileStatement { condition, block, .. } => {
+            AstNode::WhileStatement {
+                condition, block, ..
+            } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
             }
-            AstNode::UntilStatement { condition, block, .. } => {
+            AstNode::UntilStatement {
+                condition, block, ..
+            } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
             }
-            AstNode::ForStatement { init, condition, update, block, .. } => {
+            AstNode::ForStatement {
+                init,
+                condition,
+                update,
+                block,
+                ..
+            } => {
                 if let Some(i) = init {
                     Self::postprocess(i);
                 }
@@ -131,15 +150,23 @@ impl LexerAdapter {
                 }
                 Self::postprocess(block);
             }
-            AstNode::ForeachStatement { variable, list, block, .. } => {
+            AstNode::ForeachStatement {
+                variable,
+                list,
+                block,
+                ..
+            } => {
                 if let Some(v) = variable {
                     Self::postprocess(v);
                 }
                 Self::postprocess(list);
                 Self::postprocess(block);
             }
-            AstNode::ArrayAccess { array, index } |
-            AstNode::HashAccess { hash: array, key: index } => {
+            AstNode::ArrayAccess { array, index }
+            | AstNode::HashAccess {
+                hash: array,
+                key: index,
+            } => {
                 Self::postprocess(array);
                 Self::postprocess(index);
             }
@@ -156,13 +183,16 @@ impl LexerAdapter {
             AstNode::UnaryOp { operand, .. } => {
                 Self::postprocess(operand);
             }
-            AstNode::TernaryOp { condition, true_expr, false_expr } => {
+            AstNode::TernaryOp {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
                 Self::postprocess(condition);
                 Self::postprocess(true_expr);
                 Self::postprocess(false_expr);
             }
-            AstNode::SubDeclaration { body, .. } |
-            AstNode::AnonymousSub { body, .. } => {
+            AstNode::SubDeclaration { body, .. } | AstNode::AnonymousSub { body, .. } => {
                 Self::postprocess(body);
             }
             AstNode::MethodCall { object, args, .. } => {
@@ -176,7 +206,11 @@ impl LexerAdapter {
                     Self::postprocess(v);
                 }
             }
-            AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
+            AstNode::TryCatch {
+                try_block,
+                catch_clauses,
+                finally_block,
+            } => {
                 Self::postprocess(try_block);
                 for (_, block) in catch_clauses {
                     Self::postprocess(block);
@@ -229,12 +263,12 @@ mod tests {
         let processed = LexerAdapter::preprocess(input);
         assert!(processed.contains("÷"));
         assert!(processed.contains("/foo/"));
-        
+
         // Test substitution
         let input = "s/foo/bar/g";
         let processed = LexerAdapter::preprocess(input);
         assert!(processed.starts_with("ṡ"));
-        
+
         // Test complex case
         let input = "1/ /abc/ + s{x}{y}";
         let processed = LexerAdapter::preprocess(input);

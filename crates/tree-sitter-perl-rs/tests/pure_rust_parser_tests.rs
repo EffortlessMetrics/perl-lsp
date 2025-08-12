@@ -2,8 +2,8 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
-    use tree_sitter_perl::pure_rust_parser::PerlParser;
     use pest::Parser;
+    use tree_sitter_perl::pure_rust_parser::PerlParser;
 
     fn parse_and_verify(input: &str) -> Result<(), Box<dyn std::error::Error>> {
         let pairs = PerlParser::parse(tree_sitter_perl::pure_rust_parser::Rule::program, input)?;

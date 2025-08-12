@@ -1,8 +1,10 @@
 //! Demonstration of advanced tree-sitter-perl features
 
 use tree_sitter_perl::{
-    incremental_parser::{IncrementalParser, Edit, Position},
-    lsp_server::{PerlLanguageServer, TextDocumentContentChangeEvent, Range, Position as LspPosition},
+    incremental_parser::{Edit, IncrementalParser, Position},
+    lsp_server::{
+        PerlLanguageServer, Position as LspPosition, Range, TextDocumentContentChangeEvent,
+    },
 };
 
 fn main() {
@@ -10,7 +12,7 @@ fn main() {
 
     // 1. Incremental Parsing
     demo_incremental_parsing();
-    
+
     // 2. Language Server Protocol
     demo_lsp_features();
 }
@@ -18,9 +20,9 @@ fn main() {
 fn demo_incremental_parsing() {
     println!("1. Incremental Parsing Demo");
     println!("---------------------------");
-    
+
     let mut parser = IncrementalParser::new();
-    
+
     // Initial parse
     let initial_source = r#"
 sub calculate {
@@ -46,13 +48,22 @@ print "Result: $result\n";
         start_byte: initial_source.find("10").unwrap(),
         old_end_byte: initial_source.find("10").unwrap() + 2,
         new_end_byte: initial_source.find("10").unwrap() + 2,
-        start_position: Position { line: 6, column: 25 },
-        old_end_position: Position { line: 6, column: 27 },
-        new_end_position: Position { line: 6, column: 27 },
+        start_position: Position {
+            line: 6,
+            column: 25,
+        },
+        old_end_position: Position {
+            line: 6,
+            column: 27,
+        },
+        new_end_position: Position {
+            line: 6,
+            column: 27,
+        },
     };
 
     let edited_source = initial_source.replace("10", "15");
-    
+
     match parser.apply_edit(edit, &edited_source) {
         Ok(tree) => {
             println!("\n✓ Incremental update successful");
@@ -70,7 +81,10 @@ print "Result: $result\n";
         new_end_byte: insert_pos + 27,
         start_position: Position { line: 7, column: 0 },
         old_end_position: Position { line: 7, column: 0 },
-        new_end_position: Position { line: 7, column: 27 },
+        new_end_position: Position {
+            line: 7,
+            column: 27,
+        },
     };
 
     let new_line = "my $doubled = $result * 2;\n";
@@ -85,7 +99,10 @@ print "Result: $result\n";
         Ok(_) => {
             println!("✓ Second incremental update successful");
             println!("  - Added new line efficiently");
-            println!("  - Edit history: {} edits tracked", parser.edit_history().len());
+            println!(
+                "  - Edit history: {} edits tracked",
+                parser.edit_history().len()
+            );
         }
         Err(e) => println!("✗ Second update failed: {:?}", e),
     }
@@ -96,9 +113,9 @@ print "Result: $result\n";
 fn demo_lsp_features() {
     println!("2. Language Server Protocol Demo");
     println!("--------------------------------");
-    
+
     let lsp = PerlLanguageServer::new();
-    
+
     // Open a document
     let uri = "file:///example.pl".to_string();
     let source = r#"#!/usr/bin/perl
@@ -153,19 +170,31 @@ print "Product: $product\n";
     }
 
     // Get completions
-    let completions = lsp.get_completions(&uri, LspPosition { line: 25, character: 10 });
-    println!("\n✓ Completions at line 25: {} suggestions", completions.len());
-    let sample_completions: Vec<_> = completions.iter()
-        .take(10)
-        .map(|c| &c.label)
-        .collect();
+    let completions = lsp.get_completions(
+        &uri,
+        LspPosition {
+            line: 25,
+            character: 10,
+        },
+    );
+    println!(
+        "\n✓ Completions at line 25: {} suggestions",
+        completions.len()
+    );
+    let sample_completions: Vec<_> = completions.iter().take(10).map(|c| &c.label).collect();
     println!("  - Sample: {:?}", sample_completions);
 
     // Simulate an edit
     let change = TextDocumentContentChangeEvent {
         range: Some(Range {
-            start: LspPosition { line: 25, character: 18 },
-            end: LspPosition { line: 25, character: 19 },
+            start: LspPosition {
+                line: 25,
+                character: 18,
+            },
+            end: LspPosition {
+                line: 25,
+                character: 19,
+            },
         }),
         text: "10".to_string(),
     };
@@ -188,7 +217,10 @@ if ($x {   # Missing closing paren
 
     lsp.did_open(error_uri.clone(), error_source.to_string(), 1);
     let error_diagnostics = lsp.get_diagnostics(&error_uri);
-    println!("\n✓ Error detection: {} errors found", error_diagnostics.len());
+    println!(
+        "\n✓ Error detection: {} errors found",
+        error_diagnostics.len()
+    );
     for diag in &error_diagnostics {
         println!("  - Line {}: {}", diag.range.start.line, diag.message);
     }
@@ -197,8 +229,15 @@ if ($x {   # Missing closing paren
 // Helper function to display edit information
 fn display_edit_info(edit: &Edit) {
     println!("Edit info:");
-    println!("  - Byte range: {} -> {}", edit.start_byte, edit.old_end_byte);
-    println!("  - Position: {}:{} -> {}:{}", 
-        edit.start_position.line, edit.start_position.column,
-        edit.old_end_position.line, edit.old_end_position.column);
+    println!(
+        "  - Byte range: {} -> {}",
+        edit.start_byte, edit.old_end_byte
+    );
+    println!(
+        "  - Position: {}:{} -> {}:{}",
+        edit.start_position.line,
+        edit.start_position.column,
+        edit.old_end_position.line,
+        edit.old_end_position.column
+    );
 }

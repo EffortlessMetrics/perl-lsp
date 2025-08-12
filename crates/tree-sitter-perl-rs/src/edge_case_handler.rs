@@ -4,10 +4,10 @@
 //! and other edge case detection systems into a unified interface.
 
 use crate::anti_pattern_detector::{AntiPatternDetector, Diagnostic};
-use crate::phase_aware_parser::{PhaseAwareParser, PerlPhase};
-use crate::dynamic_delimiter_recovery::{DynamicDelimiterRecovery, RecoveryMode, ParseContext};
-use crate::understanding_parser::UnderstandingParser;
+use crate::dynamic_delimiter_recovery::{DynamicDelimiterRecovery, ParseContext, RecoveryMode};
 use crate::partial_parse_ast::ExtendedAstNode;
+use crate::phase_aware_parser::{PerlPhase, PhaseAwareParser};
+use crate::understanding_parser::UnderstandingParser;
 
 pub struct EdgeCaseHandler {
     anti_pattern_detector: AntiPatternDetector,
@@ -54,10 +54,20 @@ pub struct DelimiterResolution {
 
 #[derive(Debug)]
 pub enum RecommendedAction {
-    RefactorCode { reason: String, suggestion: String },
-    EnableFeature { feature: String, risk_level: RiskLevel },
-    ManualReview { reason: String },
-    RunInSandbox { command: String },
+    RefactorCode {
+        reason: String,
+        suggestion: String,
+    },
+    EnableFeature {
+        feature: String,
+        risk_level: RiskLevel,
+    },
+    ManualReview {
+        reason: String,
+    },
+    RunInSandbox {
+        command: String,
+    },
 }
 
 #[derive(Debug)]
@@ -76,18 +86,18 @@ impl EdgeCaseHandler {
             config,
         }
     }
-    
+
     /// Analyze code for all edge cases
     pub fn analyze(&mut self, code: &str) -> EdgeCaseAnalysis {
         let mut diagnostics = Vec::new();
         let mut phase_warnings = Vec::new();
         let delimiter_resolutions = Vec::new();
         let mut recommended_actions = Vec::new();
-        
+
         // Phase 1: Anti-pattern detection
         let anti_patterns = self.anti_pattern_detector.detect_all(code);
         diagnostics.extend(anti_patterns);
-        
+
         // Phase 2: Phase analysis
         let phase_transitions = self.phase_parser.analyze_phases(code);
         for transition in phase_transitions {
@@ -103,21 +113,22 @@ impl EdgeCaseHandler {
                 ));
             }
         }
-        
+
         // Phase 3: Dynamic delimiter analysis
         self.delimiter_recovery.scan_for_assignments(code);
-        
+
         // Phase 4: Integrated parsing with understanding
         let mut understanding_parser = UnderstandingParser::new();
-        let parse_result = understanding_parser.parse_with_understanding(code)
+        let parse_result = understanding_parser
+            .parse_with_understanding(code)
             .unwrap_or_else(|e| panic!("Parse failed: {}", e));
-        
+
         // Phase 5: Generate recommendations
         self.generate_recommendations(&mut recommended_actions, &diagnostics);
-        
+
         // Add phase diagnostics
         diagnostics.extend(self.phase_parser.generate_phase_diagnostics());
-        
+
         EdgeCaseAnalysis {
             ast: parse_result.ast,
             diagnostics,
@@ -126,15 +137,17 @@ impl EdgeCaseHandler {
             recommended_actions,
         }
     }
-    
+
     /// Handle a specific dynamic delimiter case
     pub fn handle_dynamic_delimiter(
         &self,
         expression: &str,
         context: &ParseContext,
     ) -> DelimiterResolution {
-        let analysis = self.delimiter_recovery.analyze_dynamic_delimiter(expression, context);
-        
+        let analysis = self
+            .delimiter_recovery
+            .analyze_dynamic_delimiter(expression, context);
+
         DelimiterResolution {
             expression: expression.to_string(),
             resolved_to: analysis.delimiter,
@@ -142,7 +155,7 @@ impl EdgeCaseHandler {
             method: analysis.recovery_strategy,
         }
     }
-    
+
     /// Generate recommendations based on detected issues
     fn generate_recommendations(
         &self,
@@ -152,7 +165,7 @@ impl EdgeCaseHandler {
         let mut has_dynamic_delimiters = false;
         let mut has_begin_heredocs = false;
         let mut has_source_filters = false;
-        
+
         for diag in diagnostics {
             match &diag.pattern {
                 crate::anti_pattern_detector::AntiPattern::DynamicHeredocDelimiter { .. } => {
@@ -167,51 +180,58 @@ impl EdgeCaseHandler {
                 _ => {}
             }
         }
-        
+
         if has_dynamic_delimiters {
             actions.push(RecommendedAction::RefactorCode {
                 reason: "Dynamic heredoc delimiters prevent static analysis".to_string(),
-                suggestion: "Use static delimiters with variable interpolation inside the heredoc body".to_string(),
+                suggestion:
+                    "Use static delimiters with variable interpolation inside the heredoc body"
+                        .to_string(),
             });
-            
+
             if self.config.enable_sandbox {
                 actions.push(RecommendedAction::RunInSandbox {
                     command: "perl-sandbox --resolve-delimiters".to_string(),
                 });
             }
         }
-        
+
         if has_begin_heredocs {
             actions.push(RecommendedAction::RefactorCode {
                 reason: "BEGIN-time heredocs can modify compile-time state".to_string(),
                 suggestion: "Move heredoc initialization to INIT block or runtime".to_string(),
             });
         }
-        
+
         if has_source_filters {
             actions.push(RecommendedAction::ManualReview {
                 reason: "Source filters can arbitrarily transform code".to_string(),
             });
-            
+
             actions.push(RecommendedAction::EnableFeature {
                 feature: "source-filter-simulation".to_string(),
                 risk_level: RiskLevel::High,
             });
         }
     }
-    
+
     /// Generate a comprehensive report
     pub fn generate_report(&self, analysis: &EdgeCaseAnalysis) -> String {
         let mut report = String::new();
-        
+
         report.push_str("=== Perl Heredoc Edge Case Analysis ===\n\n");
-        
+
         // Summary
         report.push_str(&format!("Total Issues: {}\n", analysis.diagnostics.len()));
-        report.push_str(&format!("Phase Warnings: {}\n", analysis.phase_warnings.len()));
-        report.push_str(&format!("Dynamic Delimiters: {}\n", 
-            analysis.delimiter_resolutions.len()));
-        
+        report.push_str(&format!(
+            "Phase Warnings: {}\n",
+            analysis.phase_warnings.len()
+        ));
+        report.push_str(&format!(
+            "Dynamic Delimiters: {}\n",
+            analysis.delimiter_resolutions.len()
+        ));
+
         // Phase warnings
         if !analysis.phase_warnings.is_empty() {
             report.push_str("\n## Phase-Related Warnings\n");
@@ -219,7 +239,7 @@ impl EdgeCaseHandler {
                 report.push_str(&format!("- {}\n", warning));
             }
         }
-        
+
         // Delimiter resolutions
         if !analysis.delimiter_resolutions.is_empty() {
             report.push_str("\n## Dynamic Delimiter Analysis\n");
@@ -236,7 +256,7 @@ impl EdgeCaseHandler {
                 ));
             }
         }
-        
+
         // Recommendations
         if !analysis.recommended_actions.is_empty() {
             report.push_str("\n## Recommended Actions\n");
@@ -244,22 +264,29 @@ impl EdgeCaseHandler {
                 report.push_str(&format!("{}. {}\n", i + 1, self.format_action(action)));
             }
         }
-        
+
         // Anti-pattern details
         if !analysis.diagnostics.is_empty() {
             report.push_str("\n## Detailed Diagnostics\n");
-            report.push_str(&self.anti_pattern_detector.format_report(&analysis.diagnostics));
+            report.push_str(
+                &self
+                    .anti_pattern_detector
+                    .format_report(&analysis.diagnostics),
+            );
         }
-        
+
         report
     }
-    
+
     fn format_action(&self, action: &RecommendedAction) -> String {
         match action {
             RecommendedAction::RefactorCode { reason, suggestion } => {
                 format!("Refactor: {} - {}", reason, suggestion)
             }
-            RecommendedAction::EnableFeature { feature, risk_level } => {
+            RecommendedAction::EnableFeature {
+                feature,
+                risk_level,
+            } => {
                 format!("Enable Feature: {} (Risk: {:?})", feature, risk_level)
             }
             RecommendedAction::ManualReview { reason } => {
@@ -275,7 +302,7 @@ impl EdgeCaseHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_integrated_analysis() {
         let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
@@ -293,7 +320,7 @@ Format heredoc
 END
 .
 "#;
-        
+
         let analysis = handler.analyze(code);
         assert!(!analysis.diagnostics.is_empty());
         assert!(!analysis.phase_warnings.is_empty());

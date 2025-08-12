@@ -35,7 +35,11 @@ impl CodeActionsProvider {
     }
 
     /// Get all available code actions for a given range
-    pub fn get_code_actions(&self, range: (usize, usize), diagnostics: &[Diagnostic]) -> Vec<CodeAction> {
+    pub fn get_code_actions(
+        &self,
+        range: (usize, usize),
+        diagnostics: &[Diagnostic],
+    ) -> Vec<CodeAction> {
         let mut actions = Vec::new();
 
         for diagnostic in diagnostics {
@@ -92,15 +96,15 @@ impl CodeActionsProvider {
     /// Generate fix for undefined variable (add 'my' declaration)
     fn fix_undefined_variable(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Extract variable name from diagnostic message
         if let Some(var_name) = Self::extract_variable_name(&diagnostic.message) {
             // Find the best location to insert the declaration
             let insert_pos = self.find_declaration_position(diagnostic.range.0);
-            
+
             // Generate the declaration
             let declaration = format!("my {};\n", var_name);
-            
+
             actions.push(CodeAction {
                 title: format!("Declare '{}' with 'my'", var_name),
                 kind: CodeActionKind::QuickFix,
@@ -154,7 +158,10 @@ impl CodeActionsProvider {
             };
 
             actions.push(CodeAction {
-                title: format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
+                title: format!(
+                    "Rename to '{}' (mark as intentionally unused)",
+                    underscore_name
+                ),
                 kind: CodeActionKind::QuickFix,
                 edit: TextEdit {
                     range: diagnostic.range,
@@ -175,7 +182,7 @@ impl CodeActionsProvider {
             // Suggest renaming the inner variable
             let base_name = var_name.trim_start_matches(['$', '@', '%']);
             let sigil = &var_name[..var_name.len() - base_name.len()];
-            
+
             // Generate alternative names
             let alternatives = vec![
                 format!("{}inner_{}", sigil, base_name),
@@ -206,7 +213,7 @@ impl CodeActionsProvider {
         // Remove the 'my' keyword from the redeclaration
         let range = diagnostic.range;
         let text = &self.source[range.0..range.1];
-        
+
         if text.starts_with("my ") {
             actions.push(CodeAction {
                 title: "Remove redundant 'my'".to_string(),
@@ -288,7 +295,7 @@ impl CodeActionsProvider {
     /// Generate fix for duplicate parameter
     fn fix_duplicate_parameter(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
             // Remove the duplicate parameter
             actions.push(CodeAction {
@@ -300,12 +307,12 @@ impl CodeActionsProvider {
                 },
                 diagnostic_id: diagnostic.code.clone(),
             });
-            
+
             // Rename the duplicate to a different name
             let base_name = param_name.trim_start_matches(['$', '@', '%']);
             let sigil = &param_name[..param_name.len() - base_name.len()];
             let new_name = format!("{}{}_2", sigil, base_name);
-            
+
             actions.push(CodeAction {
                 title: format!("Rename duplicate to '{}'", new_name),
                 kind: CodeActionKind::QuickFix,
@@ -316,25 +323,25 @@ impl CodeActionsProvider {
                 diagnostic_id: diagnostic.code.clone(),
             });
         }
-        
+
         actions
     }
-    
+
     /// Generate fix for parameter shadowing
     fn fix_parameter_shadowing(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
             let base_name = param_name.trim_start_matches(['$', '@', '%']);
             let sigil = &param_name[..param_name.len() - base_name.len()];
-            
+
             // Suggest renaming the parameter
             let alternatives = vec![
-                format!("{}p_{}", sigil, base_name),  // p_ prefix for parameter
+                format!("{}p_{}", sigil, base_name), // p_ prefix for parameter
                 format!("{}{}_param", sigil, base_name),
                 format!("{}{}_arg", sigil, base_name),
             ];
-            
+
             for alt_name in alternatives {
                 actions.push(CodeAction {
                     title: format!("Rename parameter to '{}'", alt_name),
@@ -347,14 +354,14 @@ impl CodeActionsProvider {
                 });
             }
         }
-        
+
         actions
     }
-    
+
     /// Generate fix for unused parameter
     fn fix_unused_parameter(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
             // Prefix with underscore to indicate intentionally unused
             let underscore_name = if param_name.starts_with('$') {
@@ -366,9 +373,12 @@ impl CodeActionsProvider {
             } else {
                 format!("_{}", param_name)
             };
-            
+
             actions.push(CodeAction {
-                title: format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
+                title: format!(
+                    "Rename to '{}' (mark as intentionally unused)",
+                    underscore_name
+                ),
                 kind: CodeActionKind::QuickFix,
                 edit: TextEdit {
                     range: diagnostic.range,
@@ -376,7 +386,7 @@ impl CodeActionsProvider {
                 },
                 diagnostic_id: diagnostic.code.clone(),
             });
-            
+
             // Add a comment to document why it's unused
             actions.push(CodeAction {
                 title: "Add comment explaining unused parameter".to_string(),
@@ -388,19 +398,19 @@ impl CodeActionsProvider {
                 diagnostic_id: diagnostic.code.clone(),
             });
         }
-        
+
         actions
     }
-    
+
     /// Generate fix for unquoted bareword
     fn fix_unquoted_bareword(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         let mut actions = Vec::new();
-        
+
         // Extract bareword from diagnostic message
         if let Some(start) = diagnostic.message.find('\'') {
-            if let Some(end) = diagnostic.message[start+1..].find('\'') {
-                let bareword = &diagnostic.message[start+1..start+1+end];
-                
+            if let Some(end) = diagnostic.message[start + 1..].find('\'') {
+                let bareword = &diagnostic.message[start + 1..start + 1 + end];
+
                 // Quote with single quotes
                 actions.push(CodeAction {
                     title: format!("Quote bareword as '{}'", bareword),
@@ -411,7 +421,7 @@ impl CodeActionsProvider {
                     },
                     diagnostic_id: diagnostic.code.clone(),
                 });
-                
+
                 // Quote with double quotes
                 actions.push(CodeAction {
                     title: format!("Quote bareword as \"{}\"", bareword),
@@ -422,7 +432,7 @@ impl CodeActionsProvider {
                     },
                     diagnostic_id: diagnostic.code.clone(),
                 });
-                
+
                 // If it looks like a filehandle, suggest declaring it
                 if bareword.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
                     let insert_pos = self.find_declaration_position(diagnostic.range.0);
@@ -431,14 +441,17 @@ impl CodeActionsProvider {
                         kind: CodeActionKind::QuickFix,
                         edit: TextEdit {
                             range: (insert_pos, insert_pos),
-                            new_text: format!("open my ${}, '<', 'filename.txt' or die $!;\n", bareword.to_lowercase()),
+                            new_text: format!(
+                                "open my ${}, '<', 'filename.txt' or die $!;\n",
+                                bareword.to_lowercase()
+                            ),
                         },
                         diagnostic_id: diagnostic.code.clone(),
                     });
                 }
             }
         }
-        
+
         actions
     }
 
@@ -467,11 +480,8 @@ impl CodeActionsProvider {
     /// Find the best position to insert a variable declaration
     fn find_declaration_position(&self, near: usize) -> usize {
         // Find the start of the current line
-        let line_start = self.source[..near]
-            .rfind('\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        
+        let line_start = self.source[..near].rfind('\n').map(|i| i + 1).unwrap_or(0);
+
         // Check if we're after 'use strict' or 'use warnings'
         let before_line = if line_start > 0 {
             let prev_line_start = self.source[..line_start - 1]
@@ -496,7 +506,7 @@ impl CodeActionsProvider {
     fn find_declaration_range(&self, var_name: &str, near: usize) -> (usize, usize) {
         // Simple search for "my $var" pattern
         let search_pattern = format!("my {}", var_name);
-        
+
         // Search backwards from the diagnostic position
         if let Some(pos) = self.source[..near].rfind(&search_pattern) {
             // Find the end of the declaration (usually semicolon + newline)
@@ -512,7 +522,7 @@ impl CodeActionsProvider {
                     }
                 })
                 .unwrap_or(pos + search_pattern.len());
-            
+
             return (pos, end);
         }
 
@@ -551,7 +561,7 @@ mod tests {
     fn test_undefined_variable_fix() {
         let source = "use strict;\nprint $x;".to_string();
         let provider = CodeActionsProvider::new(source);
-        
+
         let diagnostic = Diagnostic {
             range: (18, 20), // Position of $x
             severity: DiagnosticSeverity::Error,
@@ -571,7 +581,7 @@ mod tests {
     fn test_unused_variable_fix() {
         let source = "my $unused = 42;".to_string();
         let provider = CodeActionsProvider::new(source);
-        
+
         let diagnostic = Diagnostic {
             range: (3, 10), // Position of $unused
             severity: DiagnosticSeverity::Warning,
@@ -591,7 +601,7 @@ mod tests {
     fn test_parse_error_semicolon_fix() {
         let source = "print 'hello'\nprint 'world';".to_string();
         let provider = CodeActionsProvider::new(source);
-        
+
         let diagnostic = Diagnostic {
             range: (13, 14), // End of first line
             severity: DiagnosticSeverity::Error,

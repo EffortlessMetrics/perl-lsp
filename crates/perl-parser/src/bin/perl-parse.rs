@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use perl_parser::{Parser, Node, ParseError};
+use perl_parser::{Node, ParseError, Parser};
 
 #[derive(Default)]
 struct TotalStats {
@@ -57,24 +57,33 @@ impl TotalStats {
         eprintln!("\n=== Total Statistics ===");
         eprintln!("Files parsed: {}", self.files_parsed);
         eprintln!("Files failed: {}", self.files_failed);
-        eprintln!("Total size: {} bytes ({:.2} KB)", self.total_bytes, self.total_bytes as f64 / 1024.0);
+        eprintln!(
+            "Total size: {} bytes ({:.2} KB)",
+            self.total_bytes,
+            self.total_bytes as f64 / 1024.0
+        );
         eprintln!("Total time: {:?}", self.total_time);
         eprintln!("Total nodes: {}", self.total_nodes);
-        
+
         if self.files_parsed > 0 {
             let avg_speed = self.total_bytes as f64 / self.total_time.as_secs_f64() / 1_000_000.0;
             eprintln!("Average speed: {:.2} MB/s", avg_speed);
-            eprintln!("Average nodes per file: {}", self.total_nodes / self.files_parsed);
+            eprintln!(
+                "Average nodes per file: {}",
+                self.total_nodes / self.files_parsed
+            );
         }
-        
+
         if self.file_details.len() > 1 && self.file_details.len() <= 20 {
             eprintln!("\n=== File Details ===");
             for stat in &self.file_details {
                 if stat.error {
                     eprintln!("{}: FAILED", stat.name);
                 } else {
-                    eprintln!("{}: {} bytes, {:?}, {} nodes", 
-                             stat.name, stat.bytes, stat.time, stat.nodes);
+                    eprintln!(
+                        "{}: {} bytes, {:?}, {} nodes",
+                        stat.name, stat.bytes, stat.time, stat.nodes
+                    );
                 }
             }
         }
@@ -298,10 +307,10 @@ fn read_input(input: &Input) -> io::Result<String> {
 
 fn count_nodes(ast: &Node) -> usize {
     use perl_parser::NodeKind;
-    
+
     // Count all nodes recursively
     let mut count = 1; // Count this node
-    
+
     // Count children based on node kind
     match &ast.kind {
         NodeKind::Program { statements } => {
@@ -321,12 +330,21 @@ fn count_nodes(ast: &Node) -> usize {
         NodeKind::Unary { operand, .. } => {
             count += count_nodes(operand);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             count += count_nodes(condition);
             count += count_nodes(then_expr);
             count += count_nodes(else_expr);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             count += count_nodes(condition);
             count += count_nodes(then_branch);
             for (cond, branch) in elsif_branches {
@@ -363,13 +381,21 @@ fn count_nodes(ast: &Node) -> usize {
             count += count_nodes(lhs);
             count += count_nodes(rhs);
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             count += count_nodes(variable);
             if let Some(init) = initializer {
                 count += count_nodes(init);
             }
         }
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for var in variables {
                 count += count_nodes(var);
             }
@@ -379,7 +405,7 @@ fn count_nodes(ast: &Node) -> usize {
         }
         _ => {} // Leaf nodes
     }
-    
+
     count
 }
 
@@ -398,11 +424,20 @@ fn ast_to_json(ast: &Node) -> serde_json::Value {
 
 fn print_error(error: &ParseError, source: &str) {
     let mut stderr = io::stderr();
-    
+
     match error {
-        ParseError::UnexpectedToken { expected, found, location } => {
+        ParseError::UnexpectedToken {
+            expected,
+            found,
+            location,
+        } => {
             let (line, col) = position_to_line_col(source, *location);
-            writeln!(stderr, "Parse error: Unexpected token at line {}, column {}", line, col).ok();
+            writeln!(
+                stderr,
+                "Parse error: Unexpected token at line {}, column {}",
+                line, col
+            )
+            .ok();
             writeln!(stderr, "  Expected: {}", expected).ok();
             writeln!(stderr, "  Found: {}", found).ok();
             print_error_context(source, *location, &mut stderr);
@@ -415,7 +450,12 @@ fn print_error(error: &ParseError, source: &str) {
         }
         ParseError::SyntaxError { message, location } => {
             let (line, col) = position_to_line_col(source, *location);
-            writeln!(stderr, "Parse error: {} at line {}, column {}", message, line, col).ok();
+            writeln!(
+                stderr,
+                "Parse error: {} at line {}, column {}",
+                message, line, col
+            )
+            .ok();
             print_error_context(source, *location, &mut stderr);
         }
         ParseError::InvalidNumber { literal } => {
@@ -442,7 +482,7 @@ fn print_error(error: &ParseError, source: &str) {
 fn position_to_line_col(source: &str, position: usize) -> (usize, usize) {
     let mut line = 1;
     let mut col = 1;
-    
+
     for (i, ch) in source.chars().enumerate() {
         if i >= position {
             break;
@@ -454,29 +494,29 @@ fn position_to_line_col(source: &str, position: usize) -> (usize, usize) {
             col += 1;
         }
     }
-    
+
     (line, col)
 }
 
 fn print_error_context(source: &str, position: usize, stderr: &mut io::Stderr) {
     let lines: Vec<&str> = source.lines().collect();
     let (line_num, col_num) = position_to_line_col(source, position);
-    
+
     if line_num > 0 && line_num <= lines.len() {
         writeln!(stderr).ok();
-        
+
         // Show previous line if available
         if line_num > 1 {
             writeln!(stderr, "  {} | {}", line_num - 1, lines[line_num - 2]).ok();
         }
-        
+
         // Show error line
         writeln!(stderr, "  {} | {}", line_num, lines[line_num - 1]).ok();
-        
+
         // Show error pointer
         write!(stderr, "  {} | ", " ".repeat(line_num.to_string().len())).ok();
         writeln!(stderr, "{}^", " ".repeat(col_num - 1)).ok();
-        
+
         // Show next line if available
         if line_num < lines.len() {
             writeln!(stderr, "  {} | {}", line_num + 1, lines[line_num]).ok();

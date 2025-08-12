@@ -7,9 +7,9 @@ fn main() {
 my $x = 42;
 print "Hello, world!";
     "#;
-    
+
     let ast = MinimalParser::parse(source);
-    
+
     println!("Parse succeeded!");
     println!("AST: {:#?}", ast);
     println!("\nS-expression:\n{}", ast.to_sexp());

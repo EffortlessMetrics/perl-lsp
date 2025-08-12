@@ -3,8 +3,8 @@
 //! This module extends the standard AST with nodes that can represent
 //! unparseable or problematic constructs while still maintaining a valid tree.
 
-use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use crate::anti_pattern_detector::{AntiPattern, Diagnostic};
+use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use std::sync::Arc;
 
 /// Extended AST node that can represent partial or problematic parses
@@ -12,13 +12,13 @@ use std::sync::Arc;
 pub enum ExtendedAstNode {
     /// Successfully parsed standard node
     Normal(AstNode),
-    
+
     /// Node with associated warnings but successful parse
     WithWarning {
         node: Box<AstNode>,
         diagnostics: Vec<Diagnostic>,
     },
-    
+
     /// Partially parsed construct with anti-pattern
     PartialParse {
         pattern: AntiPattern,
@@ -26,7 +26,7 @@ pub enum ExtendedAstNode {
         parsed_fragments: Vec<ExtendedAstNode>,
         diagnostics: Vec<Diagnostic>,
     },
-    
+
     /// Completely unparseable construct
     Unparseable {
         pattern: AntiPattern,
@@ -35,7 +35,7 @@ pub enum ExtendedAstNode {
         diagnostics: Vec<Diagnostic>,
         recovery_point: usize,
     },
-    
+
     /// Placeholder for content that needs runtime evaluation
     RuntimeDependentParse {
         construct_type: String,
@@ -75,7 +75,7 @@ impl ExtendedAstNode {
     pub fn to_sexp(&self) -> String {
         match self {
             ExtendedAstNode::Normal(node) => PureRustPerlParser::node_to_sexp(node),
-            
+
             ExtendedAstNode::WithWarning { node, diagnostics } => {
                 format!(
                     "(with_warning {} ; {} warnings)",
@@ -83,22 +83,31 @@ impl ExtendedAstNode {
                     diagnostics.len()
                 )
             }
-            
-            ExtendedAstNode::PartialParse { pattern, parsed_fragments, .. } => {
+
+            ExtendedAstNode::PartialParse {
+                pattern,
+                parsed_fragments,
+                ..
+            } => {
                 let fragments = parsed_fragments
                     .iter()
                     .map(|f| f.to_sexp())
                     .collect::<Vec<_>>()
                     .join(" ");
-                
+
                 format!(
                     "(partial_parse ({:?}) {})",
                     pattern_type(pattern),
                     fragments
                 )
             }
-            
-            ExtendedAstNode::Unparseable { pattern, raw_text, reason, .. } => {
+
+            ExtendedAstNode::Unparseable {
+                pattern,
+                raw_text,
+                reason,
+                ..
+            } => {
                 format!(
                     "(unparseable ({:?}) {:?} ; reason: {})",
                     pattern_type(pattern),
@@ -106,46 +115,60 @@ impl ExtendedAstNode {
                     reason
                 )
             }
-            
-            ExtendedAstNode::RuntimeDependentParse { construct_type, static_parts, .. } => {
+
+            ExtendedAstNode::RuntimeDependentParse {
+                construct_type,
+                static_parts,
+                ..
+            } => {
                 let parts = static_parts
                     .iter()
                     .map(|p| p.to_sexp())
                     .collect::<Vec<_>>()
                     .join(" ");
-                
-                format!(
-                    "(runtime_dependent {} {})",
-                    construct_type,
-                    parts
-                )
+
+                format!("(runtime_dependent {} {})", construct_type, parts)
             }
         }
     }
-    
+
     /// Extract diagnostics from this node and its children
     pub fn collect_diagnostics(&self) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
-        
+
         match self {
-            ExtendedAstNode::Normal(_) => {},
-            
-            ExtendedAstNode::WithWarning { diagnostics: diags, .. } |
-            ExtendedAstNode::PartialParse { diagnostics: diags, .. } |
-            ExtendedAstNode::Unparseable { diagnostics: diags, .. } |
-            ExtendedAstNode::RuntimeDependentParse { diagnostics: diags, .. } => {
+            ExtendedAstNode::Normal(_) => {}
+
+            ExtendedAstNode::WithWarning {
+                diagnostics: diags, ..
+            }
+            | ExtendedAstNode::PartialParse {
+                diagnostics: diags, ..
+            }
+            | ExtendedAstNode::Unparseable {
+                diagnostics: diags, ..
+            }
+            | ExtendedAstNode::RuntimeDependentParse {
+                diagnostics: diags, ..
+            } => {
                 diagnostics.extend(diags.clone());
             }
         }
-        
+
         // Recursively collect from children
         match self {
-            ExtendedAstNode::PartialParse { parsed_fragments, .. } => {
+            ExtendedAstNode::PartialParse {
+                parsed_fragments, ..
+            } => {
                 for fragment in parsed_fragments {
                     diagnostics.extend(fragment.collect_diagnostics());
                 }
             }
-            ExtendedAstNode::RuntimeDependentParse { static_parts, dynamic_parts, .. } => {
+            ExtendedAstNode::RuntimeDependentParse {
+                static_parts,
+                dynamic_parts,
+                ..
+            } => {
                 for part in static_parts {
                     diagnostics.extend(part.collect_diagnostics());
                 }
@@ -157,10 +180,10 @@ impl ExtendedAstNode {
             }
             _ => {}
         }
-        
+
         diagnostics
     }
-    
+
     /// Check if this node or any child contains anti-patterns
     pub fn has_anti_patterns(&self) -> bool {
         match self {
@@ -171,7 +194,7 @@ impl ExtendedAstNode {
             ExtendedAstNode::RuntimeDependentParse { .. } => true,
         }
     }
-    
+
     /// Try to extract a normal AST node, ignoring warnings
     pub fn as_normal(&self) -> Option<&AstNode> {
         match self {
@@ -213,11 +236,11 @@ impl ExtendedAstBuilder {
             diagnostics: Vec::new(),
         }
     }
-    
+
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
-    
+
     pub fn build_normal(self, node: AstNode) -> ExtendedAstNode {
         if self.diagnostics.is_empty() {
             ExtendedAstNode::Normal(node)
@@ -228,7 +251,7 @@ impl ExtendedAstBuilder {
             }
         }
     }
-    
+
     pub fn build_partial(
         self,
         pattern: AntiPattern,
@@ -242,7 +265,7 @@ impl ExtendedAstBuilder {
             diagnostics: self.diagnostics,
         }
     }
-    
+
     pub fn build_unparseable(
         self,
         pattern: AntiPattern,
@@ -264,20 +287,24 @@ impl ExtendedAstBuilder {
 mod tests {
     use super::*;
     use crate::anti_pattern_detector::{Location, Severity};
-    
+
     #[test]
     fn test_extended_ast_normal() {
         let node = ExtendedAstNode::Normal(AstNode::Identifier(Arc::from("test")));
         assert!(!node.has_anti_patterns());
         assert_eq!(node.to_sexp(), "test");
     }
-    
+
     #[test]
     fn test_extended_ast_with_warning() {
         let diagnostic = Diagnostic {
             severity: Severity::Warning,
             pattern: AntiPattern::FormatHeredoc {
-                location: Location { line: 1, column: 1, offset: 0 },
+                location: Location {
+                    line: 1,
+                    column: 1,
+                    offset: 0,
+                },
                 format_name: "REPORT".to_string(),
                 heredoc_delimiter: "END".to_string(),
             },
@@ -286,24 +313,28 @@ mod tests {
             suggested_fix: None,
             references: vec![],
         };
-        
+
         let node = ExtendedAstNode::WithWarning {
             node: Box::new(AstNode::Identifier(Arc::from("test"))),
             diagnostics: vec![diagnostic],
         };
-        
+
         assert!(node.has_anti_patterns());
         assert!(node.to_sexp().contains("with_warning"));
         assert_eq!(node.collect_diagnostics().len(), 1);
     }
-    
+
     #[test]
     fn test_builder() {
         let mut builder = ExtendedAstBuilder::new();
         builder.add_diagnostic(Diagnostic {
             severity: Severity::Info,
             pattern: AntiPattern::DynamicHeredocDelimiter {
-                location: Location { line: 1, column: 1, offset: 0 },
+                location: Location {
+                    line: 1,
+                    column: 1,
+                    offset: 0,
+                },
                 expression: "<<$var".to_string(),
             },
             message: "Info".to_string(),
@@ -311,7 +342,7 @@ mod tests {
             suggested_fix: None,
             references: vec![],
         });
-        
+
         let node = builder.build_normal(AstNode::Number(Arc::from("42")));
         assert!(matches!(node, ExtendedAstNode::WithWarning { .. }));
     }

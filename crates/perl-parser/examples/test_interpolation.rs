@@ -6,7 +6,6 @@ fn main() {
         // Simple strings (no interpolation)
         r#"'hello'"#,
         r#"'hello world'"#,
-        
         // Double-quoted strings (interpolation)
         r#""hello""#,
         r#""hello world""#,
@@ -14,23 +13,20 @@ fn main() {
         r#""hello ${name}""#,
         r#""array: @array""#,
         r#""hash: %hash""#,
-        
         // Escape sequences
         r#""hello\n""#,
         r#""hello\tworld""#,
         r#""quote: \"""#,
-        
         // Complex interpolation
         r#""$hash{key}""#,
         r#""$array[0]""#,
         r#""$obj->method()""#,
         r#""${$ref}""#,
-        
         // Mixed
         r#""Hello $name, you have $count items""#,
         r#""Path: $ENV{PATH}""#,
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

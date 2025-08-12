@@ -1,15 +1,25 @@
 //! Context-sensitive parsing for Perl operators
-//! 
+//!
 //! This module handles operators like s///, tr///, and m// that require
 //! context-sensitive parsing to distinguish from regular identifiers.
-
 
 /// Context-sensitive token types
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextToken {
-    Substitution { pattern: String, replacement: String, flags: String },
-    Transliteration { search: String, replace: String, flags: String },
-    Match { pattern: String, flags: String },
+    Substitution {
+        pattern: String,
+        replacement: String,
+        flags: String,
+    },
+    Transliteration {
+        search: String,
+        replace: String,
+        flags: String,
+    },
+    Match {
+        pattern: String,
+        flags: String,
+    },
     Identifier(String),
 }
 
@@ -56,7 +66,7 @@ impl ContextSensitiveLexer {
     /// Try to parse s/// substitution operator
     fn try_parse_substitution(&mut self) -> Option<ContextToken> {
         let start_pos = self.position;
-        
+
         // Check for 's' followed by delimiter
         if self.peek_str(1) != "s" {
             return None;
@@ -75,20 +85,24 @@ impl ContextSensitiveLexer {
 
         // Parse pattern
         let pattern = self.parse_until_delimiter(delimiter, true)?;
-        
+
         // Parse replacement
         let replacement = self.parse_until_delimiter(delimiter, false)?;
-        
+
         // Parse flags
         let flags = self.parse_regex_flags();
 
-        Some(ContextToken::Substitution { pattern, replacement, flags })
+        Some(ContextToken::Substitution {
+            pattern,
+            replacement,
+            flags,
+        })
     }
 
     /// Try to parse tr/// or y/// transliteration operator
     fn try_parse_transliteration(&mut self) -> Option<ContextToken> {
         let start_pos = self.position;
-        
+
         // Check for 'tr' or just 't' (for tr///)
         if self.peek_str(2) == "tr" {
             self.position += 2;
@@ -110,20 +124,24 @@ impl ContextSensitiveLexer {
 
         // Parse search list
         let search = self.parse_until_delimiter(delimiter, false)?;
-        
+
         // Parse replace list
         let replace = self.parse_until_delimiter(delimiter, false)?;
-        
+
         // Parse flags
         let flags = self.parse_trans_flags();
 
-        Some(ContextToken::Transliteration { search, replace, flags })
+        Some(ContextToken::Transliteration {
+            search,
+            replace,
+            flags,
+        })
     }
 
     /// Try to parse m// match operator
     fn try_parse_match(&mut self) -> Option<ContextToken> {
         let start_pos = self.position;
-        
+
         // Check for 'm' followed by delimiter
         if self.peek_str(1) != "m" {
             return None;
@@ -142,7 +160,7 @@ impl ContextSensitiveLexer {
 
         // Parse pattern
         let pattern = self.parse_until_delimiter(delimiter, true)?;
-        
+
         // Parse flags
         let flags = self.parse_regex_flags();
 
@@ -183,7 +201,10 @@ impl ContextSensitiveLexer {
     fn parse_regex_flags(&mut self) -> String {
         let mut flags = String::new();
         while let Some(ch) = self.peek() {
-            if matches!(ch, 'i' | 'm' | 's' | 'x' | 'g' | 'o' | 'a' | 'u' | 'l' | 'n' | 'p' | 'c' | 'e' | 'r') {
+            if matches!(
+                ch,
+                'i' | 'm' | 's' | 'x' | 'g' | 'o' | 'a' | 'u' | 'l' | 'n' | 'p' | 'c' | 'e' | 'r'
+            ) {
                 flags.push(ch);
                 self.next_char();
             } else {
@@ -229,7 +250,11 @@ mod tests {
     fn test_substitution_parsing() {
         let mut lexer = ContextSensitiveLexer::new("s/foo/bar/gi".to_string());
         match lexer.try_parse_operator() {
-            Some(ContextToken::Substitution { pattern, replacement, flags }) => {
+            Some(ContextToken::Substitution {
+                pattern,
+                replacement,
+                flags,
+            }) => {
                 assert_eq!(pattern, "foo");
                 assert_eq!(replacement, "bar");
                 assert_eq!(flags, "gi");
@@ -254,7 +279,11 @@ mod tests {
     fn test_transliteration_parsing() {
         let mut lexer = ContextSensitiveLexer::new("tr/abc/xyz/".to_string());
         match lexer.try_parse_operator() {
-            Some(ContextToken::Transliteration { search, replace, flags }) => {
+            Some(ContextToken::Transliteration {
+                search,
+                replace,
+                flags,
+            }) => {
                 assert_eq!(search, "abc");
                 assert_eq!(replace, "xyz");
                 assert_eq!(flags, "");

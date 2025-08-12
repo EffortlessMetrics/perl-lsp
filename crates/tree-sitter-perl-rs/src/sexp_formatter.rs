@@ -56,10 +56,14 @@ impl SexpFormatter {
 
     fn format_node(&self, node: &AstNode, output: &mut String, depth: usize) {
         use AstNode::*;
-        
+
         let node_type = self.get_node_type(node);
-        let indent = if self.compact { std::string::String::new() } else { "  ".repeat(depth) };
-        
+        let indent = if self.compact {
+            std::string::String::new()
+        } else {
+            "  ".repeat(depth)
+        };
+
         write!(output, "{}", indent).unwrap();
         write!(output, "({}", node_type).unwrap();
 
@@ -81,7 +85,7 @@ impl SexpFormatter {
                     self.format_node(stmt, output, depth + 1);
                 }
             }
-            
+
             Block(statements) => {
                 for stmt in statements {
                     if !self.compact {
@@ -102,16 +106,20 @@ impl SexpFormatter {
                 self.format_node(inner, output, depth + 1);
             }
 
-            VariableDeclaration { scope, variables, initializer } => {
+            VariableDeclaration {
+                scope,
+                variables,
+                initializer,
+            } => {
                 write!(output, " scope: {}", scope).unwrap();
-                
+
                 write!(output, " (variables").unwrap();
                 for var in variables {
                     write!(output, " ").unwrap();
                     self.format_node(var, output, depth + 1);
                 }
                 write!(output, ")").unwrap();
-                
+
                 if let Some(init) = initializer {
                     write!(output, " (initializer ").unwrap();
                     self.format_node(init, output, depth + 1);
@@ -119,13 +127,18 @@ impl SexpFormatter {
                 }
             }
 
-            SubDeclaration { name, prototype, attributes, body } => {
+            SubDeclaration {
+                name,
+                prototype,
+                attributes,
+                body,
+            } => {
                 write!(output, " name: {}", name).unwrap();
-                
+
                 if let Some(proto) = prototype {
                     write!(output, " prototype: {}", proto).unwrap();
                 }
-                
+
                 if !attributes.is_empty() {
                     write!(output, " (attributes").unwrap();
                     for attr in attributes {
@@ -133,7 +146,7 @@ impl SexpFormatter {
                     }
                     write!(output, ")").unwrap();
                 }
-                
+
                 write!(output, " (body ").unwrap();
                 self.format_node(body, output, depth + 1);
                 write!(output, ")").unwrap();
@@ -166,7 +179,11 @@ impl SexpFormatter {
                 write!(output, ")").unwrap();
             }
 
-            MethodCall { object, method, args } => {
+            MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 write!(output, " (object ").unwrap();
                 self.format_node(object, output, depth + 1);
                 write!(output, ") method: {} (arguments", method).unwrap();
@@ -177,13 +194,18 @@ impl SexpFormatter {
                 write!(output, ")").unwrap();
             }
 
-            IfStatement { condition, then_block, elsif_clauses, else_block } => {
+            IfStatement {
+                condition,
+                then_block,
+                elsif_clauses,
+                else_block,
+            } => {
                 write!(output, " (condition ").unwrap();
                 self.format_node(condition, output, depth + 1);
                 write!(output, ") (then ").unwrap();
                 self.format_node(then_block, output, depth + 1);
                 write!(output, ")").unwrap();
-                
+
                 for (elsif_cond, elsif_block) in elsif_clauses {
                     write!(output, " (elsif (condition ").unwrap();
                     self.format_node(elsif_cond, output, depth + 1);
@@ -191,7 +213,7 @@ impl SexpFormatter {
                     self.format_node(elsif_block, output, depth + 1);
                     write!(output, "))").unwrap();
                 }
-                
+
                 if let Some(else_blk) = else_block {
                     write!(output, " (else ").unwrap();
                     self.format_node(else_blk, output, depth + 1);
@@ -199,7 +221,11 @@ impl SexpFormatter {
                 }
             }
 
-            WhileStatement { label, condition, block } => {
+            WhileStatement {
+                label,
+                condition,
+                block,
+            } => {
                 if let Some(lbl) = label {
                     write!(output, " label: {}", lbl).unwrap();
                 }
@@ -210,7 +236,12 @@ impl SexpFormatter {
                 write!(output, ")").unwrap();
             }
 
-            ForeachStatement { label, variable, list, block } => {
+            ForeachStatement {
+                label,
+                variable,
+                list,
+                block,
+            } => {
                 if let Some(lbl) = label {
                     write!(output, " label: {}", lbl).unwrap();
                 }
@@ -233,10 +264,19 @@ impl SexpFormatter {
             ScalarVariable(name) => write!(output, " name: {}", name).unwrap(),
             ArrayVariable(name) => write!(output, " name: {}", name).unwrap(),
             HashVariable(name) => write!(output, " name: {}", name).unwrap(),
-            
-            Heredoc { marker, indented, quoted, content } => {
-                write!(output, " marker: {} indented: {} quoted: {} content: {:?}", 
-                    marker, indented, quoted, content).unwrap();
+
+            Heredoc {
+                marker,
+                indented,
+                quoted,
+                content,
+            } => {
+                write!(
+                    output,
+                    " marker: {} indented: {} quoted: {} content: {:?}",
+                    marker, indented, quoted, content
+                )
+                .unwrap();
             }
 
             DataSection(content) => {
@@ -246,7 +286,7 @@ impl SexpFormatter {
             Pod(content) => {
                 write!(output, " content: {:?}", content).unwrap();
             }
-            
+
             ErrorNode { message, content } => {
                 write!(output, " message: {:?} content: {:?}", message, content).unwrap();
             }
@@ -373,16 +413,12 @@ mod tests {
     #[test]
     fn test_simple_sexp_formatting() {
         let formatter = SexpFormatter::new("my $x = 42;");
-        let ast = AstNode::Program(vec![
-            AstNode::Statement(Box::new(
-                AstNode::Assignment {
-                    target: Box::new(AstNode::ScalarVariable("$x".into())),
-                    op: "=".into(),
-                    value: Box::new(AstNode::Number("42".into())),
-                }
-            ))
-        ]);
-        
+        let ast = AstNode::Program(vec![AstNode::Statement(Box::new(AstNode::Assignment {
+            target: Box::new(AstNode::ScalarVariable("$x".into())),
+            op: "=".into(),
+            value: Box::new(AstNode::Number("42".into())),
+        }))]);
+
         let sexp = formatter.format(&ast);
         assert!(sexp.contains("source_file"));
         assert!(sexp.contains("assignment"));
@@ -396,7 +432,7 @@ mod tests {
             AstNode::Number("42".into()),
             AstNode::Number("43".into()),
         ]);
-        
+
         let sexp = formatter.format(&ast);
         assert!(!sexp.contains('\n'));
     }

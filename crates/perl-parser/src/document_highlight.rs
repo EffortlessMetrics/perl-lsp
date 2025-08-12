@@ -35,7 +35,12 @@ impl DocumentHighlightProvider {
     }
 
     /// Find all highlights for the symbol at the given position in source code
-    pub fn find_highlights(&self, ast: &Node, source: &str, byte_offset: usize) -> Vec<DocumentHighlight> {
+    pub fn find_highlights(
+        &self,
+        ast: &Node,
+        source: &str,
+        byte_offset: usize,
+    ) -> Vec<DocumentHighlight> {
         // Find the node at the cursor position
         let target_node = match self.find_node_at_offset(ast, byte_offset) {
             Some(node) => node,
@@ -83,14 +88,22 @@ impl DocumentHighlightProvider {
     fn get_children<'a>(&self, node: &'a Node) -> Option<Vec<&'a Node>> {
         match &node.kind {
             NodeKind::Program { statements } => Some(statements.iter().collect()),
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
                 }
                 Some(children)
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 let mut children: Vec<&Node> = variables.iter().collect();
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
@@ -105,11 +118,14 @@ impl DocumentHighlightProvider {
                 children.extend(args.iter().map(|a| a as &Node));
                 Some(children)
             }
-            NodeKind::FunctionCall { args, .. } => {
-                Some(args.iter().collect())
-            }
+            NodeKind::FunctionCall { args, .. } => Some(args.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for (cond, branch) in elsif_branches {
                     children.push(cond.as_ref());
@@ -120,27 +136,37 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let mut children = Vec::new();
-                if let Some(i) = init { children.push(i.as_ref()); }
-                if let Some(c) = condition { children.push(c.as_ref()); }
-                if let Some(u) = update { children.push(u.as_ref()); }
+                if let Some(i) = init {
+                    children.push(i.as_ref());
+                }
+                if let Some(c) = condition {
+                    children.push(c.as_ref());
+                }
+                if let Some(u) = update {
+                    children.push(u.as_ref());
+                }
                 children.push(body.as_ref());
                 Some(children)
             }
-            NodeKind::Foreach { variable, list, body } => {
-                Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
-            }
-            NodeKind::While { condition, body, .. } => {
-                Some(vec![condition.as_ref(), body.as_ref()])
-            }
-            NodeKind::Subroutine { body, .. } => {
-                Some(vec![body.as_ref()])
-            }
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+            } => Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()]),
+            NodeKind::While {
+                condition, body, ..
+            } => Some(vec![condition.as_ref(), body.as_ref()]),
+            NodeKind::Subroutine { body, .. } => Some(vec![body.as_ref()]),
             NodeKind::Return { value } => value.as_ref().map(|v| vec![v.as_ref()]),
-            NodeKind::ArrayLiteral { elements } => {
-                Some(elements.iter().collect())
-            }
+            NodeKind::ArrayLiteral { elements } => Some(elements.iter().collect()),
             NodeKind::HashLiteral { pairs } => {
                 let mut children = Vec::new();
                 for (k, v) in pairs {
@@ -149,9 +175,15 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
-                Some(vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()])
-            }
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => Some(vec![
+                condition.as_ref(),
+                then_expr.as_ref(),
+                else_expr.as_ref(),
+            ]),
             NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
             _ => None,
         }
@@ -168,42 +200,33 @@ impl DocumentHighlightProvider {
         )
     }
 
-
     /// Extract symbol information from a node
     fn extract_symbol_info(&self, node: &Node, source: &str) -> Option<SymbolInfo> {
         match &node.kind {
-            NodeKind::Variable { sigil, name } => {
-                Some(SymbolInfo {
-                    name: name.clone(),
-                    sigil: Some(sigil.clone()),
-                    is_method: false,
-                    is_function: false,
-                })
-            }
-            NodeKind::Identifier { name } => {
-                Some(SymbolInfo {
-                    name: name.clone(),
-                    sigil: None,
-                    is_method: false,
-                    is_function: false,
-                })
-            }
-            NodeKind::FunctionCall { name, .. } => {
-                Some(SymbolInfo {
-                    name: name.clone(),
-                    sigil: None,
-                    is_method: false,
-                    is_function: true,
-                })
-            }
-            NodeKind::MethodCall { method, .. } => {
-                Some(SymbolInfo {
-                    name: method.clone(),
-                    sigil: None,
-                    is_method: true,
-                    is_function: false,
-                })
-            }
+            NodeKind::Variable { sigil, name } => Some(SymbolInfo {
+                name: name.clone(),
+                sigil: Some(sigil.clone()),
+                is_method: false,
+                is_function: false,
+            }),
+            NodeKind::Identifier { name } => Some(SymbolInfo {
+                name: name.clone(),
+                sigil: None,
+                is_method: false,
+                is_function: false,
+            }),
+            NodeKind::FunctionCall { name, .. } => Some(SymbolInfo {
+                name: name.clone(),
+                sigil: None,
+                is_method: false,
+                is_function: true,
+            }),
+            NodeKind::MethodCall { method, .. } => Some(SymbolInfo {
+                name: method.clone(),
+                sigil: None,
+                is_method: true,
+                is_function: false,
+            }),
             _ => {
                 // Try to extract from source text
                 let text = &source[node.location.start..node.location.end];
@@ -261,12 +284,8 @@ impl DocumentHighlightProvider {
             NodeKind::Identifier { name } => {
                 !target.is_method && target.sigil.is_none() && name == &target.name
             }
-            NodeKind::FunctionCall { name, .. } => {
-                target.is_function && name == &target.name
-            }
-            NodeKind::MethodCall { method, .. } => {
-                target.is_method && method == &target.name
-            }
+            NodeKind::FunctionCall { name, .. } => target.is_function && name == &target.name,
+            NodeKind::MethodCall { method, .. } => target.is_method && method == &target.name,
             _ => {
                 // Check source text as fallback
                 if let Some(target_sigil) = &target.sigil {
@@ -309,10 +328,10 @@ $foo = 100;"#;
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let provider = DocumentHighlightProvider::new();
-        
+
         // Position on first $foo (byte offset around 3)
         let highlights = provider.find_highlights(&ast, code, 3);
-        
+
         assert!(!highlights.is_empty());
     }
 
@@ -324,10 +343,10 @@ hello();"#;
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let provider = DocumentHighlightProvider::new();
-        
+
         // Position on first hello() call
         let highlights = provider.find_highlights(&ast, code, 29);
-        
+
         assert!(!highlights.is_empty());
     }
 
@@ -337,10 +356,10 @@ hello();"#;
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let provider = DocumentHighlightProvider::new();
-        
+
         // Position on string literal (byte offset 12 is in "Hello")
         let highlights = provider.find_highlights(&ast, code, 12);
-        
+
         assert_eq!(highlights.len(), 0);
     }
 }

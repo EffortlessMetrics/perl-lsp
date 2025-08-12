@@ -1,12 +1,12 @@
 //! Debug edge cases in perl-parser
 
-use perl_parser::Parser;
 use perl_lexer::PerlLexer;
+use perl_parser::Parser;
 
 fn test_case(name: &str, code: &str) {
     println!("\n=== {} ===", name);
     println!("Code: {}", code);
-    
+
     // Show lexer output
     println!("\nLexer tokens:");
     let mut lexer = PerlLexer::new(code);
@@ -16,7 +16,7 @@ fn test_case(name: &str, code: &str) {
             break;
         }
     }
-    
+
     // Try parsing
     println!("\nParser result:");
     let mut parser = Parser::new(code);
@@ -39,12 +39,15 @@ fn main() {
     test_case("Complex expression", "$result = ($a + $b) * $c;");
     test_case("For loop", "for (my $i = 0; $i < 10; $i++) { print $i; }");
     test_case("String interpolation", "print \"Hello, $name!\";");
-    
+
     // Test nested structures
-    test_case("Nested if/while", r#"
+    test_case(
+        "Nested if/while",
+        r#"
 if ($x) {
     while ($y) {
         print $z;
     }
-}"#);
+}"#,
+    );
 }

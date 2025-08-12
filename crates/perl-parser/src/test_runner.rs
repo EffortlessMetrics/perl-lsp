@@ -1,5 +1,5 @@
 use crate::ast::{Node, NodeKind};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -72,11 +72,11 @@ impl TestRunner {
     /// Discover tests in the AST
     pub fn discover_tests(&self, ast: &Node) -> Vec<TestItem> {
         let mut tests = Vec::new();
-        
+
         // Find test functions
         let mut test_functions = Vec::new();
         self.find_test_functions_only(ast, &mut test_functions);
-        
+
         // Check if this is a test file
         if self.is_test_file(&self.uri) {
             // Create a file-level test item
@@ -92,29 +92,29 @@ impl TestRunner {
                 kind: TestKind::File,
                 children: test_functions,
             };
-            
+
             tests.push(file_item);
         } else {
             // Return individual test functions
             tests.extend(test_functions);
         }
-        
+
         tests
     }
 
     /// Check if a file is a test file
     fn is_test_file(&self, uri: &str) -> bool {
         let path = Path::new(uri);
-        let file_name = path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
-            
+        let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+
         // Common Perl test file patterns
-        file_name.ends_with(".t") ||
-        file_name.ends_with("_test.pl") ||
-        file_name.ends_with("Test.pl") ||
-        file_name.starts_with("test_") ||
-        path.components().any(|c| c.as_os_str() == "t" || c.as_os_str() == "tests")
+        file_name.ends_with(".t")
+            || file_name.ends_with("_test.pl")
+            || file_name.ends_with("Test.pl")
+            || file_name.starts_with("test_")
+            || path
+                .components()
+                .any(|c| c.as_os_str() == "t" || c.as_os_str() == "tests")
     }
 
     /// Find test functions in the AST
@@ -124,7 +124,7 @@ impl TestRunner {
         self.visit_node_for_tests(node, &mut tests);
         tests
     }
-    
+
     /// Find only test functions (not assertions)
     fn find_test_functions_only(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
@@ -133,13 +133,13 @@ impl TestRunner {
                     self.find_test_functions_only(stmt, tests);
                 }
             }
-            
+
             NodeKind::Block { statements } => {
                 for stmt in statements {
                     self.find_test_functions_only(stmt, tests);
                 }
             }
-            
+
             NodeKind::Subroutine { name, .. } => {
                 if let Some(func_name) = name {
                     if self.is_test_function(func_name) {
@@ -155,18 +155,23 @@ impl TestRunner {
                     }
                 }
             }
-            
+
             _ => {
                 // Visit children
                 self.visit_children_for_test_functions(node, tests);
             }
         }
     }
-    
+
     /// Visit children nodes for test functions only
     fn visit_children_for_test_functions(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
-            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+            NodeKind::If {
+                then_branch,
+                elsif_branches,
+                else_branch,
+                ..
+            } => {
                 self.find_test_functions_only(then_branch, tests);
                 for (_, body) in elsif_branches {
                     self.find_test_functions_only(body, tests);
@@ -197,13 +202,13 @@ impl TestRunner {
                     self.visit_node_for_tests(stmt, tests);
                 }
             }
-            
+
             NodeKind::Block { statements } => {
                 for stmt in statements {
                     self.visit_node_for_tests(stmt, tests);
                 }
             }
-            
+
             NodeKind::Subroutine { name, body, .. } => {
                 if let Some(func_name) = name {
                     if self.is_test_function(func_name) {
@@ -218,18 +223,18 @@ impl TestRunner {
                         tests.push(test_item);
                     }
                 }
-                
+
                 // Still visit the body for nested tests
                 self.visit_node_for_tests(body, tests);
             }
-            
+
             // Look for Test::More style tests
             NodeKind::FunctionCall { name, args } => {
                 if self.is_test_assertion(name) {
                     // Extract test description if available
                     let description = self.extract_test_description(args);
                     let label = description.unwrap_or_else(|| name.clone());
-                    
+
                     let test_item = TestItem {
                         id: format!("{}::{}::{}", self.uri, name, node.location.start),
                         label,
@@ -240,13 +245,13 @@ impl TestRunner {
                     };
                     tests.push(test_item);
                 }
-                
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node_for_tests(arg, tests);
                 }
             }
-            
+
             _ => {
                 // Visit children
                 self.visit_children_for_tests(node, tests);
@@ -256,22 +261,33 @@ impl TestRunner {
 
     /// Check if a function name indicates a test
     fn is_test_function(&self, name: &str) -> bool {
-        name.starts_with("test_") ||
-        name.ends_with("_test") ||
-        name.starts_with("Test") ||
-        name.ends_with("Test") ||
-        name == "test"
+        name.starts_with("test_")
+            || name.ends_with("_test")
+            || name.starts_with("Test")
+            || name.ends_with("Test")
+            || name == "test"
     }
 
     /// Check if a function call is a test assertion
     #[allow(dead_code)]
     fn is_test_assertion(&self, name: &str) -> bool {
         // Test::More assertions
-        matches!(name, 
-            "ok" | "is" | "isnt" | "like" | "unlike" | 
-            "is_deeply" | "cmp_ok" | "can_ok" | "isa_ok" |
-            "pass" | "fail" | "dies_ok" | "lives_ok" |
-            "throws_ok" | "lives_and"
+        matches!(
+            name,
+            "ok" | "is"
+                | "isnt"
+                | "like"
+                | "unlike"
+                | "is_deeply"
+                | "cmp_ok"
+                | "can_ok"
+                | "isa_ok"
+                | "pass"
+                | "fail"
+                | "dies_ok"
+                | "lives_ok"
+                | "throws_ok"
+                | "lives_and"
         )
     }
 
@@ -279,11 +295,9 @@ impl TestRunner {
     #[allow(dead_code)]
     fn extract_test_description(&self, args: &[Node]) -> Option<String> {
         // Usually the last argument is the description
-        args.last().and_then(|arg| {
-            match &arg.kind {
-                NodeKind::String { value, .. } => Some(value.clone()),
-                _ => None,
-            }
+        args.last().and_then(|arg| match &arg.kind {
+            NodeKind::String { value, .. } => Some(value.clone()),
+            _ => None,
         })
     }
 
@@ -291,7 +305,12 @@ impl TestRunner {
     #[allow(dead_code)]
     fn visit_children_for_tests(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node_for_tests(condition, tests);
                 self.visit_node_for_tests(then_branch, tests);
                 for (cond, body) in elsif_branches {
@@ -302,11 +321,19 @@ impl TestRunner {
                     self.visit_node_for_tests(else_b, tests);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 self.visit_node_for_tests(condition, tests);
                 self.visit_node_for_tests(body, tests);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     self.visit_node_for_tests(i, tests);
                 }
@@ -318,7 +345,11 @@ impl TestRunner {
                 }
                 self.visit_node_for_tests(body, tests);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+            } => {
                 self.visit_node_for_tests(variable, tests);
                 self.visit_node_for_tests(list, tests);
                 self.visit_node_for_tests(body, tests);
@@ -331,7 +362,7 @@ impl TestRunner {
     fn node_to_range(&self, node: &Node) -> TestRange {
         let (start_line, start_char) = self.offset_to_position(node.location.start);
         let (end_line, end_char) = self.offset_to_position(node.location.end);
-        
+
         TestRange {
             start_line,
             start_character: start_char,
@@ -345,7 +376,7 @@ impl TestRunner {
         let lines: Vec<&str> = self.source.lines().collect();
         let last_line = lines.len().saturating_sub(1) as u32;
         let last_char = lines.last().map(|l| l.len() as u32).unwrap_or(0);
-        
+
         TestRange {
             start_line: 0,
             start_character: 0,
@@ -358,7 +389,7 @@ impl TestRunner {
     fn offset_to_position(&self, offset: usize) -> (u32, u32) {
         let mut line = 0;
         let mut col = 0;
-        
+
         for (i, ch) in self.source.chars().enumerate() {
             if i >= offset {
                 break;
@@ -370,18 +401,18 @@ impl TestRunner {
                 col += 1;
             }
         }
-        
+
         (line, col)
     }
 
     /// Run a test and return results
     pub fn run_test(&self, test_id: &str) -> Vec<TestResult> {
         let mut results = Vec::new();
-        
+
         // Extract file path from URI
         let file_path = test_id.split("::").next().unwrap_or(test_id);
         let file_path = file_path.strip_prefix("file://").unwrap_or(file_path);
-        
+
         // Determine how to run the test
         if file_path.ends_with(".t") {
             // Run as a test file
@@ -390,14 +421,14 @@ impl TestRunner {
             // Run as a Perl script with prove or perl
             results.extend(self.run_perl_test(file_path));
         }
-        
+
         results
     }
 
     /// Run a .t test file
     fn run_test_file(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
-        
+
         // Try to run with prove first, fall back to perl
         let output = Command::new("prove")
             .arg("-v")
@@ -405,7 +436,7 @@ impl TestRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
-            
+
         let output = match output {
             Ok(out) => out,
             Err(_) => {
@@ -414,7 +445,8 @@ impl TestRunner {
                     .arg(file_path)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
-                    .output() {
+                    .output()
+                {
                     Ok(out) => out,
                     Err(e) => {
                         return vec![TestResult {
@@ -427,29 +459,30 @@ impl TestRunner {
                 }
             }
         };
-        
+
         let duration = start_time.elapsed().as_millis() as u64;
-        
+
         // Parse TAP output
         self.parse_tap_output(
             &String::from_utf8_lossy(&output.stdout),
             &String::from_utf8_lossy(&output.stderr),
             output.status.success(),
             duration,
-            file_path
+            file_path,
         )
     }
 
     /// Run a Perl script as a test
     fn run_perl_test(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
-        
+
         let output = match Command::new("perl")
             .arg("-Ilib")
             .arg(file_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output() {
+            .output()
+        {
             Ok(out) => out,
             Err(e) => {
                 return vec![TestResult {
@@ -460,11 +493,11 @@ impl TestRunner {
                 }];
             }
         };
-        
+
         let duration = start_time.elapsed().as_millis() as u64;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         vec![TestResult {
             test_id: file_path.to_string(),
             status: if output.status.success() {
@@ -484,10 +517,17 @@ impl TestRunner {
     }
 
     /// Parse TAP (Test Anything Protocol) output
-    fn parse_tap_output(&self, stdout: &str, stderr: &str, success: bool, duration: u64, test_id: &str) -> Vec<TestResult> {
+    fn parse_tap_output(
+        &self,
+        stdout: &str,
+        stderr: &str,
+        success: bool,
+        duration: u64,
+        test_id: &str,
+    ) -> Vec<TestResult> {
         let mut results = Vec::new();
         let mut _test_count = 0;
-        
+
         // Parse TAP output line by line
         for line in stdout.lines() {
             if line.starts_with("ok ") {
@@ -510,7 +550,7 @@ impl TestRunner {
                 });
             }
         }
-        
+
         // If no individual test results, create one for the whole file
         if results.is_empty() {
             results.push(TestResult {
@@ -528,7 +568,7 @@ impl TestRunner {
                 duration: Some(duration),
             });
         }
-        
+
         results
     }
 }
@@ -568,17 +608,17 @@ impl TestResult {
                 TestStatus::Errored => "errored",
             }
         });
-        
+
         if let Some(message) = &self.message {
             result["message"] = json!({
                 "message": message
             });
         }
-        
+
         if let Some(duration) = self.duration {
             result["duration"] = json!(duration);
         }
-        
+
         result
     }
 }
@@ -608,7 +648,7 @@ sub test_another_thing {
         if let Ok(ast) = parser.parse() {
             let runner = TestRunner::new(code.to_string(), "file:///test.pl".to_string());
             let tests = runner.discover_tests(&ast);
-            
+
             // Debug: print tests found
             eprintln!("Found {} tests", tests.len());
             for test in &tests {
@@ -617,16 +657,17 @@ sub test_another_thing {
                     eprintln!("  Child: {}", child.label);
                 }
             }
-            
+
             // Should find at least 1 test (file or functions)
             assert!(!tests.is_empty());
-            
+
             // Should have found test functions
-            let test_functions: Vec<&str> = tests.iter()
+            let test_functions: Vec<&str> = tests
+                .iter()
                 .filter(|t| t.kind == TestKind::Test && t.label.starts_with("test_"))
                 .map(|t| t.label.as_str())
                 .collect();
-            
+
             eprintln!("Test functions: {:?}", test_functions);
             assert!(test_functions.contains(&"test_basic"));
             assert!(test_functions.contains(&"test_another_thing"));
@@ -649,25 +690,26 @@ done_testing();
         if let Ok(ast) = parser.parse() {
             let runner = TestRunner::new(code.to_string(), "file:///test.t".to_string());
             let tests = runner.discover_tests(&ast);
-            
+
             // Should find test file with assertions
             assert!(!tests.is_empty());
-            
+
             // Should have discovered individual assertions
-            let all_tests: Vec<&TestItem> = tests.iter()
+            let all_tests: Vec<&TestItem> = tests
+                .iter()
                 .flat_map(|t| {
                     let mut items = vec![t];
                     items.extend(&t.children);
                     items
                 })
                 .collect();
-            
+
             // Debug: print all tests
             eprintln!("All tests found:");
             for test in &all_tests {
                 eprintln!("  Test: {} (kind: {:?})", test.label, test.kind);
             }
-            
+
             // Should have found the test file
             assert!(!tests.is_empty());
             assert_eq!(tests[0].kind, TestKind::File);
@@ -677,12 +719,12 @@ done_testing();
     #[test]
     fn test_is_test_file() {
         let runner = TestRunner::new("".to_string(), "".to_string());
-        
+
         assert!(runner.is_test_file("file:///t/basic.t"));
         assert!(runner.is_test_file("file:///tests/foo_test.pl"));
         assert!(runner.is_test_file("file:///MyTest.pl"));
         assert!(runner.is_test_file("file:///test_something.pl"));
-        
+
         assert!(!runner.is_test_file("file:///lib/Module.pm"));
         assert!(!runner.is_test_file("file:///script.pl"));
     }

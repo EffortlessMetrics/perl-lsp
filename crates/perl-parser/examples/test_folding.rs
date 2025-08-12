@@ -1,4 +1,4 @@
-use perl_parser::{Parser, FoldingRangeExtractor};
+use perl_parser::{FoldingRangeExtractor, Parser};
 
 fn main() {
     let content = r#"#!/usr/bin/perl
@@ -28,7 +28,7 @@ sub method1 {
 1;"#;
 
     let mut parser = Parser::new(content);
-    
+
     match parser.parse() {
         Ok(ast) => {
             println!("AST parsed successfully");
@@ -36,11 +36,19 @@ sub method1 {
             let ranges = extractor.extract(&ast);
             println!("Found {} folding ranges", ranges.len());
             for range in &ranges {
-                println!("  Range: offset {} to {}, kind: {:?}", 
-                    range.start_offset, range.end_offset, range.kind);
+                println!(
+                    "  Range: offset {} to {}, kind: {:?}",
+                    range.start_offset, range.end_offset, range.kind
+                );
                 // Show the actual lines
-                let start_line = content[..range.start_offset].chars().filter(|&c| c == '\n').count();
-                let end_line = content[..range.end_offset].chars().filter(|&c| c == '\n').count();
+                let start_line = content[..range.start_offset]
+                    .chars()
+                    .filter(|&c| c == '\n')
+                    .count();
+                let end_line = content[..range.end_offset]
+                    .chars()
+                    .filter(|&c| c == '\n')
+                    .count();
                 println!("    Lines: {} to {}", start_line, end_line);
             }
         }

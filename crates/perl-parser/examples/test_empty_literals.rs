@@ -10,7 +10,7 @@ fn main() {
         "my @empty = []",
         "my %empty = {}",
     ];
-    
+
     for test in tests {
         println!("\nTesting: {}", test);
         let mut parser = Parser::new(test);

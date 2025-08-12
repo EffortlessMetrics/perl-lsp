@@ -9,7 +9,6 @@ fn main() {
         "use 5.036",
         "use 5.036;",
         "use 5.036_001",
-        
         // Pragma with arguments
         "no warnings 'void'",
         "no warnings 'void';",
@@ -18,7 +17,6 @@ fn main() {
         "use strict 'refs'",
         "use feature 'say'",
         "use feature qw(say state)",
-        
         // More complex
         "use v5.36; use warnings;",
         "no warnings qw(void uninitialized)",

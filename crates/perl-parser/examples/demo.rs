@@ -10,7 +10,7 @@ fn main() {
     println!("This demonstrates the clean separation between:");
     println!("1. perl-lexer: Converts Perl source → Token stream");
     println!("2. perl-parser: Converts Token stream → AST\n");
-    
+
     let test_cases = vec![
         ("Simple variable", "my $x = 42;"),
         ("String assignment", "my $name = \"Perl\";"),
@@ -21,13 +21,13 @@ fn main() {
         ("Function definition", "sub greet { print \"Hello\"; }"),
         ("Complex expression", "$result = ($a + $b) * $c;"),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Test: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = Parser::new(code);
-        
+
         match parser.parse() {
             Ok(ast) => {
                 println!("✅ Success!");
@@ -37,10 +37,10 @@ fn main() {
                 println!("❌ Error: {}", e);
             }
         }
-        
+
         println!();
     }
-    
+
     // Show a more complex example
     println!("=== Complex Example: Fibonacci ===");
     let fibonacci = r#"
@@ -65,12 +65,12 @@ sub fibonacci {
 my $result = fibonacci(10);
 print "Fibonacci(10) = $result\n";
 "#;
-    
+
     println!("Code:");
     println!("{}", fibonacci);
-    
+
     let mut parser = Parser::new(fibonacci);
-    
+
     match parser.parse() {
         Ok(ast) => {
             println!("\n✅ Successfully parsed!");
@@ -86,7 +86,7 @@ print "Fibonacci(10) = $result\n";
             println!("\n❌ Parse error: {}", e);
         }
     }
-    
+
     println!("\n=== Architecture Benefits ===");
     println!("• Clean separation of concerns");
     println!("• Independent testing of lexer and parser");

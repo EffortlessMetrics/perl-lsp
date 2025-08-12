@@ -1,5 +1,5 @@
 use crate::ast::{Node, NodeKind};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Inlay Hint types according to LSP spec
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,62 +82,70 @@ impl InlayHintsProvider {
                     self.visit_node(stmt, hints);
                 }
             }
-            
+
             NodeKind::Block { statements } => {
                 for stmt in statements {
                     self.visit_node(stmt, hints);
                 }
             }
-            
+
             // Function calls - show parameter hints
             NodeKind::FunctionCall { name, args } => {
                 if self.enabled_hints.parameter_hints {
                     self.add_parameter_hints(name, args, node, hints);
                 }
-                
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node(arg, hints);
                 }
             }
-            
+
             // Method calls - show parameter hints
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 if self.enabled_hints.parameter_hints {
                     self.add_parameter_hints(method, args, node, hints);
                 }
-                
+
                 // Visit object and arguments
                 self.visit_node(object, hints);
                 for arg in args {
                     self.visit_node(arg, hints);
                 }
             }
-            
+
             // Variable declarations - show type hints
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if self.enabled_hints.type_hints {
                     if let Some(init) = initializer {
                         self.add_type_hint(variable, init, hints);
                     }
                 }
-                
+
                 // Visit initializer
                 if let Some(init) = initializer {
                     self.visit_node(init, hints);
                 }
             }
-            
+
             // Chained method calls - show intermediate types
             NodeKind::Binary { op, left, right } if op == "->" => {
                 if self.enabled_hints.chained_hints {
                     self.add_chain_hint(left, hints);
                 }
-                
+
                 self.visit_node(left, hints);
                 self.visit_node(right, hints);
             }
-            
+
             // Visit other nodes recursively
             _ => {
                 self.visit_children(node, hints);
@@ -146,21 +154,27 @@ impl InlayHintsProvider {
     }
 
     /// Add parameter hints for function/method calls
-    fn add_parameter_hints(&self, function_name: &str, args: &[Node], _call_node: &Node, hints: &mut Vec<InlayHint>) {
+    fn add_parameter_hints(
+        &self,
+        function_name: &str,
+        args: &[Node],
+        _call_node: &Node,
+        hints: &mut Vec<InlayHint>,
+    ) {
         // Get parameter names for known functions
         let param_names = self.get_parameter_names(function_name);
-        
+
         if param_names.is_empty() {
             return;
         }
-        
+
         // Add hints for each argument
         for (i, (arg, param_name)) in args.iter().zip(param_names.iter()).enumerate() {
             // Skip if argument is already clear (e.g., named parameter)
             if self.is_clear_argument(arg) {
                 continue;
             }
-            
+
             let position = self.get_node_start_position(arg);
             hints.push(InlayHint {
                 position,
@@ -180,7 +194,7 @@ impl InlayHintsProvider {
             if type_info.len() > self.enabled_hints.max_length {
                 return;
             }
-            
+
             let position = self.get_node_end_position(variable);
             hints.push(InlayHint {
                 position,
@@ -199,7 +213,7 @@ impl InlayHintsProvider {
             if type_info.len() > self.enabled_hints.max_length {
                 return;
             }
-            
+
             let position = self.get_node_end_position(expr);
             hints.push(InlayHint {
                 position,
@@ -216,16 +230,42 @@ impl InlayHintsProvider {
     fn get_parameter_names(&self, function_name: &str) -> Vec<String> {
         match function_name {
             // Built-in functions
-            "open" => vec!["filehandle".to_string(), "mode".to_string(), "filename".to_string()],
+            "open" => vec![
+                "filehandle".to_string(),
+                "mode".to_string(),
+                "filename".to_string(),
+            ],
             "print" => vec!["filehandle".to_string(), "list".to_string()],
-            "printf" => vec!["filehandle".to_string(), "format".to_string(), "list".to_string()],
+            "printf" => vec![
+                "filehandle".to_string(),
+                "format".to_string(),
+                "list".to_string(),
+            ],
             "push" => vec!["array".to_string(), "list".to_string()],
             "unshift" => vec!["array".to_string(), "list".to_string()],
-            "splice" => vec!["array".to_string(), "offset".to_string(), "length".to_string(), "list".to_string()],
-            "substr" => vec!["string".to_string(), "offset".to_string(), "length".to_string(), "replacement".to_string()],
-            "index" => vec!["string".to_string(), "substring".to_string(), "position".to_string()],
+            "splice" => vec![
+                "array".to_string(),
+                "offset".to_string(),
+                "length".to_string(),
+                "list".to_string(),
+            ],
+            "substr" => vec![
+                "string".to_string(),
+                "offset".to_string(),
+                "length".to_string(),
+                "replacement".to_string(),
+            ],
+            "index" => vec![
+                "string".to_string(),
+                "substring".to_string(),
+                "position".to_string(),
+            ],
             "join" => vec!["separator".to_string(), "list".to_string()],
-            "split" => vec!["pattern".to_string(), "string".to_string(), "limit".to_string()],
+            "split" => vec![
+                "pattern".to_string(),
+                "string".to_string(),
+                "limit".to_string(),
+            ],
             "grep" => vec!["block".to_string(), "list".to_string()],
             "map" => vec!["block".to_string(), "list".to_string()],
             "sort" => vec!["block".to_string(), "list".to_string()],
@@ -238,7 +278,10 @@ impl InlayHintsProvider {
         match &arg.kind {
             // String literals with clear content
             NodeKind::String { value, .. } => {
-                value.len() < 20 && value.chars().all(|c| c.is_alphanumeric() || c.is_whitespace())
+                value.len() < 20
+                    && value
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c.is_whitespace())
             }
             // Simple variable names
             NodeKind::Variable { name, .. } => {
@@ -256,12 +299,8 @@ impl InlayHintsProvider {
             NodeKind::String { .. } => Some("string".to_string()),
             NodeKind::Number { .. } => Some("number".to_string()),
             NodeKind::Regex { .. } => Some("Regexp".to_string()),
-            NodeKind::FunctionCall { name, .. } => {
-                self.get_return_type(name)
-            }
-            NodeKind::MethodCall { method, .. } => {
-                self.get_return_type(method)
-            }
+            NodeKind::FunctionCall { name, .. } => self.get_return_type(name),
+            NodeKind::MethodCall { method, .. } => self.get_return_type(method),
             _ => None,
         }
     }
@@ -284,7 +323,12 @@ impl InlayHintsProvider {
     /// Visit children nodes
     fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>) {
         match &node.kind {
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node(condition, hints);
                 self.visit_node(then_branch, hints);
                 for (cond, body) in elsif_branches {
@@ -295,11 +339,19 @@ impl InlayHintsProvider {
                     self.visit_node(else_b, hints);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 self.visit_node(condition, hints);
                 self.visit_node(body, hints);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     self.visit_node(i, hints);
                 }
@@ -311,7 +363,11 @@ impl InlayHintsProvider {
                 }
                 self.visit_node(body, hints);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+            } => {
                 self.visit_node(variable, hints);
                 self.visit_node(list, hints);
                 self.visit_node(body, hints);
@@ -354,7 +410,7 @@ impl InlayHintsProvider {
     fn offset_to_position(&self, offset: usize) -> (u32, u32) {
         let mut line = 0;
         let mut col = 0;
-        
+
         for (i, ch) in self.source.chars().enumerate() {
             if i >= offset {
                 break;
@@ -366,7 +422,7 @@ impl InlayHintsProvider {
                 col += 1;
             }
         }
-        
+
         (line, col)
     }
 }
@@ -410,10 +466,10 @@ open(FH, "<", "file.txt");
         if let Ok(ast) = parser.parse() {
             let provider = InlayHintsProvider::new(code.to_string());
             let hints = provider.extract(&ast);
-            
+
             // Should have parameter hints for push, substr, and open
             assert!(hints.len() >= 3); // At least 1 for each function call
-            
+
             // Check first hint is for array parameter
             assert_eq!(hints[0].label, "array: ");
             assert_eq!(hints[0].kind, InlayHintKind::Parameter);
@@ -432,14 +488,15 @@ my $result = split(/,/, $input);
         if let Ok(ast) = parser.parse() {
             let provider = InlayHintsProvider::new(code.to_string());
             let hints = provider.extract(&ast);
-            
+
             // Should have type hints for variables
-            let type_hints: Vec<_> = hints.iter()
+            let type_hints: Vec<_> = hints
+                .iter()
                 .filter(|h| h.kind == InlayHintKind::Type)
                 .collect();
-            
+
             assert!(type_hints.len() >= 3);
-            
+
             // Check types
             assert!(type_hints.iter().any(|h| h.label.contains("ARRAY")));
             assert!(type_hints.iter().any(|h| h.label.contains("HASH")));
@@ -457,12 +514,13 @@ print("Hello, World!");
         if let Ok(ast) = parser.parse() {
             let provider = InlayHintsProvider::new(code.to_string());
             let hints = provider.extract(&ast);
-            
+
             // Should skip hints for clear arguments
-            let param_hints: Vec<_> = hints.iter()
+            let param_hints: Vec<_> = hints
+                .iter()
                 .filter(|h| h.kind == InlayHintKind::Parameter)
                 .collect();
-            
+
             // Should have some parameter hints, but skip clear ones
             assert!(!param_hints.is_empty());
         }

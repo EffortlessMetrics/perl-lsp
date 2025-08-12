@@ -4,49 +4,57 @@ use perl_parser::Parser;
 fn main() {
     println!("Testing Perl Operator Precedence");
     println!("=================================\n");
-    
+
     let tests = vec![
         // Basic precedence tests
         ("$a || $b and $c", "Should parse as: ($a || $b) and $c"),
         ("$a or $b && $c", "Should parse as: $a or ($b && $c)"),
         ("$a && $b or $c", "Should parse as: ($a && $b) or $c"),
-        
         // not vs !
         ("not $a || $b", "Should parse as: not ($a || $b)"),
         ("!$a or $b", "Should parse as: (!$a) or $b"),
-        
         // Assignment precedence
         ("$x = $a or die", "Should parse as: ($x = $a) or die"),
         ("$y = $a and $b", "Should parse as: ($y = $a) and $b"),
         ("$z = $a || $b", "Should parse as: $z = ($a || $b)"),
-        
         // Comparison with and/or
-        ("$a > 0 and $b < 10", "Should parse as: ($a > 0) and ($b < 10)"),
-        ("$a == 1 or $b == 0", "Should parse as: ($a == 1) or ($b == 0)"),
-        
+        (
+            "$a > 0 and $b < 10",
+            "Should parse as: ($a > 0) and ($b < 10)",
+        ),
+        (
+            "$a == 1 or $b == 0",
+            "Should parse as: ($a == 1) or ($b == 0)",
+        ),
         // Complex nesting
-        ("$a and $b or $c and $d", "Left associative: (($a and $b) or $c) and $d"),
-        ("$a or $b and $c or $d", "Should parse with correct precedence"),
+        (
+            "$a and $b or $c and $d",
+            "Left associative: (($a and $b) or $c) and $d",
+        ),
+        (
+            "$a or $b and $c or $d",
+            "Should parse with correct precedence",
+        ),
     ];
-    
+
     for (test, expected) in tests {
         println!("Testing: {}", test);
         println!("Expected: {}", expected);
-        
+
         let mut parser = Parser::new(test);
         match parser.parse() {
             Ok(ast) => {
                 let sexp = ast.to_sexp();
                 println!("✅ Parsed successfully");
                 println!("   S-expr: {}", sexp);
-                
+
                 // Check specific precedence patterns
                 if test.contains("or") && test.contains("and") {
                     if sexp.contains("(logical_and") && sexp.contains("(logical_or") {
                         println!("   ✓ Correct precedence: and binds tighter than or");
                     }
                 }
-                
+
                 if test.contains("=") && test.contains("or") {
                     if sexp.contains("(assign") && sexp.contains("(logical_or") {
                         // Check if assignment is inside or outside the or
@@ -64,7 +72,7 @@ fn main() {
         }
         println!();
     }
-    
+
     println!("\nOperator Precedence Table (Perl):");
     println!("==================================");
     println!("Highest to Lowest:");

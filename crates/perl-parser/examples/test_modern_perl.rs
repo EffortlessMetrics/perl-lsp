@@ -7,20 +7,19 @@ fn main() {
         ("use v5.36;", "version declaration"),
         ("use v5.32.1;", "version with patch level"),
         ("use 5.036;", "numeric version"),
-        
         // Try/catch
         ("try { die 'oops' } catch ($e) { warn $e }", "try/catch"),
-        ("try { risky() } catch ($e) { handle($e) }", "try/catch with calls"),
-        
+        (
+            "try { risky() } catch ($e) { handle($e) }",
+            "try/catch with calls",
+        ),
         // Defer
         ("defer { cleanup() }", "defer block"),
-        
         // Class/method (Corinna)
         ("class Point { }", "empty class"),
         ("class Point { field $x; }", "class with field"),
         ("class Point { method new() { } }", "class with method"),
         ("method new($x, $y) { }", "method with signature"),
-        
         // Field declarations
         ("field $x;", "field declaration"),
         ("field $x = 42;", "field with default"),

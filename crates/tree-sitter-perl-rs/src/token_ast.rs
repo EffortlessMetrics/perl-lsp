@@ -22,10 +22,8 @@ impl AstNode {
                 format!("({})", self.node_type)
             }
         } else {
-            let children_sexp: Vec<String> = self.children
-                .iter()
-                .map(|child| child.to_sexp())
-                .collect();
+            let children_sexp: Vec<String> =
+                self.children.iter().map(|child| child.to_sexp()).collect();
             format!("({} {})", self.node_type, children_sexp.join(" "))
         }
     }

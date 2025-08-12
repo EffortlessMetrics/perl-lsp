@@ -4,23 +4,23 @@ use perl_lexer::{PerlLexer, TokenType};
 fn debug_simple_tokens() {
     let input = "my $x = 42; print $x;";
     let mut lexer = PerlLexer::new(input);
-    
+
     let mut count = 0;
     while let Some(token) = lexer.next_token() {
         println!("Token {}: {:?}", count, token);
         count += 1;
-        
+
         // Check for EOF
         if token.token_type == TokenType::EOF {
             break;
         }
-        
+
         // Safety check
         if count > 100 {
             panic!("Too many tokens - possible infinite loop");
         }
     }
-    
+
     println!("Total tokens: {}", count);
 }
 
@@ -30,7 +30,7 @@ fn test_format_termination() {
     let input = "Some format content\n.\n";
     let mut lexer = PerlLexer::new(input);
     lexer.enter_format_mode();
-    
+
     let token = lexer.next_token();
     assert!(token.is_some());
     match token.unwrap().token_type {
@@ -40,7 +40,7 @@ fn test_format_termination() {
         TokenType::Error(msg) => {
             println!("Error: {:?}", msg);
         }
-        _ => panic!("Unexpected token type")
+        _ => panic!("Unexpected token type"),
     }
 }
 
@@ -50,13 +50,13 @@ fn test_format_no_termination() {
     let input = "Some format content\nno dot here";
     let mut lexer = PerlLexer::new(input);
     lexer.enter_format_mode();
-    
+
     let token = lexer.next_token();
     assert!(token.is_some());
     match token.unwrap().token_type {
         TokenType::Error(msg) => {
             assert_eq!(msg.as_ref(), "Unterminated format body");
         }
-        _ => panic!("Expected error token")
+        _ => panic!("Expected error token"),
     }
 }

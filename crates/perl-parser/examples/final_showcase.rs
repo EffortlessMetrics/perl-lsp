@@ -160,27 +160,30 @@ print "Showcase complete!";
 
     println!("Parsing comprehensive Perl showcase...\n");
     let mut parser = Parser::new(showcase);
-    
+
     match parser.parse() {
         Ok(ast) => {
             println!("✅ Successfully parsed entire showcase!");
-            
+
             let sexp = ast.to_sexp();
-            
+
             // Count various features
-            let compound_assigns = sexp.matches("assignment_").count() - sexp.matches("assignment_assign").count();
-            let word_ops = sexp.matches("binary_and").count() + sexp.matches("binary_or").count() + 
-                          sexp.matches("unary_not").count() + sexp.matches("binary_xor").count();
+            let compound_assigns =
+                sexp.matches("assignment_").count() - sexp.matches("assignment_assign").count();
+            let word_ops = sexp.matches("binary_and").count()
+                + sexp.matches("binary_or").count()
+                + sexp.matches("unary_not").count()
+                + sexp.matches("binary_xor").count();
             let file_tests = sexp.matches("unary_-").count();
             let ternary = sexp.matches("ternary").count();
-            
+
             println!("\nFeature Statistics:");
             println!("  Compound assignments: {}", compound_assigns);
             println!("  Word operators: {}", word_ops);
             println!("  File test operators: {}", file_tests);
             println!("  Ternary operators: {}", ternary);
             println!("  Total S-expression length: {} chars", sexp.len());
-            
+
             println!("\n✨ All features working correctly!");
         }
         Err(e) => {

@@ -1,11 +1,11 @@
 //! Missing LSP User Stories - High Priority Tests
-//! 
+//!
 //! This file contains tests for critical user stories that are not yet covered
 //! in the comprehensive E2E test suite. These represent real-world scenarios
 //! that Perl developers encounter daily.
 
+use serde_json::{Value, json};
 use std::collections::HashMap;
-use serde_json::{json, Value};
 
 /// Test context helper for missing user stories
 #[allow(dead_code)]
@@ -31,7 +31,8 @@ impl MissingStoryTestContext {
     }
 
     fn open_document(&mut self, uri: &str, content: &str) {
-        self.open_documents.insert(uri.to_string(), content.to_string());
+        self.open_documents
+            .insert(uri.to_string(), content.to_string());
         println!("Document opened: {}", uri);
     }
 
@@ -49,7 +50,7 @@ impl MissingStoryTestContext {
 }
 
 // ==================== USER STORY: MULTI-FILE PROJECT NAVIGATION ====================
-// As a Perl developer working on a large project, I want to navigate between 
+// As a Perl developer working on a large project, I want to navigate between
 // modules and their dependencies seamlessly.
 
 #[test]
@@ -118,7 +119,7 @@ sub fetch_user_by_email {
 
     ctx.open_document("file:///workspace/lib/MyApp/Database.pm", database_module);
 
-    // Module 2: Logger  
+    // Module 2: Logger
     let logger_module = r#"
 package MyApp::Logger;
 use strict;
@@ -181,45 +182,69 @@ sub validate_email {
 
     // TEST 1: Go to definition for module usage
     println!("\n=== Testing Multi-File Navigation ===");
-    
+
     // Developer Ctrl+clicks on "MyApp::Database" in main.pl
-    let definition_result = ctx.send_request("textDocument/definition", Some(json!({
-        "textDocument": {"uri": "file:///workspace/main.pl"},
-        "position": {"line": 6, "character": 8} // On "MyApp::Database"
-    })));
+    let definition_result = ctx.send_request(
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/main.pl"},
+            "position": {"line": 6, "character": 8} // On "MyApp::Database"
+        })),
+    );
 
     // Should navigate to Database.pm
-    assert!(definition_result.is_some(), "Should find Database module definition");
+    assert!(
+        definition_result.is_some(),
+        "Should find Database module definition"
+    );
     println!("✓ Module definition lookup works");
 
     // TEST 2: Find references across files
     // Developer right-clicks on "new" method in Database.pm
-    let references_result = ctx.send_request("textDocument/references", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/MyApp/Database.pm"},
-        "position": {"line": 6, "character": 5}, // On "new" method
-        "context": {"includeDeclaration": true}
-    })));
+    let references_result = ctx.send_request(
+        "textDocument/references",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/MyApp/Database.pm"},
+            "position": {"line": 6, "character": 5}, // On "new" method
+            "context": {"includeDeclaration": true}
+        })),
+    );
 
-    assert!(references_result.is_some(), "Should find method references across files");
+    assert!(
+        references_result.is_some(),
+        "Should find method references across files"
+    );
     println!("✓ Cross-file reference finding works");
 
     // TEST 3: Workspace symbol search
     // Developer searches for "format_date" across project
-    let symbol_search = ctx.send_request("workspace/symbol", Some(json!({
-        "query": "format_date"
-    })));
+    let symbol_search = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "format_date"
+        })),
+    );
 
-    assert!(symbol_search.is_some(), "Should find symbols across workspace");
+    assert!(
+        symbol_search.is_some(),
+        "Should find symbols across workspace"
+    );
     println!("✓ Workspace symbol search works");
 
     // TEST 4: Import completion
     // Developer types "use MyApp::" and wants completion
-    let import_completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {"uri": "file:///workspace/main.pl"},
-        "position": {"line": 7, "character": 12} // After "MyApp::"
-    })));
+    let import_completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/main.pl"},
+            "position": {"line": 7, "character": 12} // After "MyApp::"
+        })),
+    );
 
-    assert!(import_completion.is_some(), "Should provide module completion");
+    assert!(
+        import_completion.is_some(),
+        "Should provide module completion"
+    );
     println!("✓ Import completion works");
 
     println!("✅ Multi-file navigation user story test complete");
@@ -228,13 +253,13 @@ sub validate_email {
 // ==================== USER STORY: TEST INTEGRATION WORKFLOW ====================
 // As a Perl developer, I want to discover, run, and debug tests directly from my editor.
 
-#[test] 
+#[test]
 fn test_user_story_test_integration() {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
     // Scenario: Developer working on a module with comprehensive tests
-    
+
     // Main module under test
     let calculator_module = r#"
 package Calculator;
@@ -359,23 +384,32 @@ done_testing();
 
     // TEST 1: Test Discovery
     // LSP should identify test files and individual tests
-    let test_discovery = ctx.send_request("workspace/symbol", Some(json!({
-        "query": "test"
-    })));
+    let test_discovery = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "test"
+        })),
+    );
 
-    assert!(test_discovery.is_some(), "Should discover test files and test cases");
+    assert!(
+        test_discovery.is_some(),
+        "Should discover test files and test cases"
+    );
     println!("✓ Test discovery works");
 
     // TEST 2: Run Single Test
     // Developer right-clicks on specific test and runs it
     // This would typically use LSP executeCommand
-    let run_single_test = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.runTest",
-        "arguments": [
-            "file:///workspace/t/calculator.t",
-            "Adding positive numbers"  // Specific test name
-        ]
-    })));
+    let run_single_test = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.runTest",
+            "arguments": [
+                "file:///workspace/t/calculator.t",
+                "Adding positive numbers"  // Specific test name
+            ]
+        })),
+    );
 
     // Test execution might not be available yet, just verify response format
     if let Some(response) = run_single_test {
@@ -385,10 +419,13 @@ done_testing();
 
     // TEST 3: Run Test File
     // Developer runs entire test file
-    let run_test_file = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.runTestFile", 
-        "arguments": ["file:///workspace/t/calculator.t"]
-    })));
+    let run_test_file = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.runTestFile",
+            "arguments": ["file:///workspace/t/calculator.t"]
+        })),
+    );
 
     // Test file execution might not be available yet
     if let Some(response) = run_test_file {
@@ -398,10 +435,13 @@ done_testing();
 
     // TEST 4: Test Coverage
     // Developer wants to see test coverage for module
-    let test_coverage = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.showTestCoverage",
-        "arguments": ["file:///workspace/lib/Calculator.pm"]
-    })));
+    let test_coverage = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.showTestCoverage",
+            "arguments": ["file:///workspace/lib/Calculator.pm"]
+        })),
+    );
 
     // Coverage might not be available yet
     if let Some(response) = test_coverage {
@@ -411,28 +451,37 @@ done_testing();
 
     // TEST 5: Failed Test Navigation
     // LSP should provide diagnostics for failed tests
-    let _test_diagnostics = ctx.send_request("textDocument/publishDiagnostics", Some(json!({
-        "uri": "file:///workspace/t/calculator.t",
-        "diagnostics": [{
-            "range": {
-                "start": {"line": 8, "character": 0},
-                "end": {"line": 8, "character": 40}
-            },
-            "severity": 1,
-            "message": "Test failed: expected 5, got 6"
-        }]
-    })));
+    let _test_diagnostics = ctx.send_request(
+        "textDocument/publishDiagnostics",
+        Some(json!({
+            "uri": "file:///workspace/t/calculator.t",
+            "diagnostics": [{
+                "range": {
+                    "start": {"line": 8, "character": 0},
+                    "end": {"line": 8, "character": 40}
+                },
+                "severity": 1,
+                "message": "Test failed: expected 5, got 6"
+            }]
+        })),
+    );
 
     println!("✓ Test failure diagnostics work");
 
     // TEST 6: Hover on Test Functions
     // Developer hovers over test functions for documentation
-    let test_hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {"uri": "file:///workspace/t/calculator.t"},
-        "position": {"line": 7, "character": 3} // On "is" function
-    })));
+    let test_hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/t/calculator.t"},
+            "position": {"line": 7, "character": 3} // On "is" function
+        })),
+    );
 
-    assert!(test_hover.is_some(), "Should provide hover info for test functions");
+    assert!(
+        test_hover.is_some(),
+        "Should provide hover info for test functions"
+    );
     println!("✓ Test function hover works");
 
     println!("✅ Test integration user story test complete");
@@ -497,16 +546,19 @@ sub process_user_data {
 
     // TEST 1: Extract Variable
     // Developer selects complex expression and extracts to variable
-    let extract_variable = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
-        "range": {
-            "start": {"line": 16, "character": 21}, // Start of calculation
-            "end": {"line": 19, "character": 49}    // End of calculation
-        },
-        "context": {
-            "only": ["refactor.extract"]
-        }
-    })));
+    let extract_variable = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
+            "range": {
+                "start": {"line": 16, "character": 21}, // Start of calculation
+                "end": {"line": 19, "character": 49}    // End of calculation
+            },
+            "context": {
+                "only": ["refactor.extract"]
+            }
+        })),
+    );
 
     // Extract variable might be available depending on context
     if let Some(actions) = extract_variable {
@@ -519,16 +571,19 @@ sub process_user_data {
 
     // TEST 2: Extract Method
     // Developer selects validation logic and extracts to method
-    let extract_method = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
-        "range": {
-            "start": {"line": 9, "character": 8},  // Start of validation
-            "end": {"line": 18, "character": 9}    // End of validation
-        },
-        "context": {
-            "only": ["refactor.extract"]
-        }
-    })));
+    let extract_method = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
+            "range": {
+                "start": {"line": 9, "character": 8},  // Start of validation
+                "end": {"line": 18, "character": 9}    // End of validation
+            },
+            "context": {
+                "only": ["refactor.extract"]
+            }
+        })),
+    );
 
     // Extract method might be available depending on context
     if let Some(actions) = extract_method {
@@ -541,16 +596,19 @@ sub process_user_data {
 
     // TEST 3: Inline Variable
     // Developer wants to inline a simple variable
-    let inline_variable = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
-        "range": {
-            "start": {"line": 16, "character": 12}, // On variable declaration
-            "end": {"line": 16, "character": 18}
-        },
-        "context": {
-            "only": ["refactor.inline"]
-        }
-    })));
+    let inline_variable = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
+            "range": {
+                "start": {"line": 16, "character": 12}, // On variable declaration
+                "end": {"line": 16, "character": 18}
+            },
+            "context": {
+                "only": ["refactor.inline"]
+            }
+        })),
+    );
 
     // Inline variable might be available depending on context
     if let Some(actions) = inline_variable {
@@ -563,16 +621,19 @@ sub process_user_data {
 
     // TEST 4: Change Function Signature
     // Developer wants to add parameter to function
-    let change_signature = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
-        "range": {
-            "start": {"line": 4, "character": 0}, // Function definition
-            "end": {"line": 4, "character": 25}
-        },
-        "context": {
-            "only": ["refactor.rewrite"]
-        }
-    })));
+    let change_signature = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/UserProcessor.pm"},
+            "range": {
+                "start": {"line": 4, "character": 0}, // Function definition
+                "end": {"line": 4, "character": 25}
+            },
+            "context": {
+                "only": ["refactor.rewrite"]
+            }
+        })),
+    );
 
     // Change signature might be available depending on context
     if let Some(actions) = change_signature {
@@ -585,14 +646,17 @@ sub process_user_data {
 
     // TEST 5: Move Method to Another Module
     // This would be a complex refactoring operation
-    let move_method = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.moveMethodToModule",
-        "arguments": [
-            "file:///workspace/lib/UserProcessor.pm",
-            "process_user_data",
-            "file:///workspace/lib/DataProcessor.pm"
-        ]
-    })));
+    let move_method = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.moveMethodToModule",
+            "arguments": [
+                "file:///workspace/lib/UserProcessor.pm",
+                "process_user_data",
+                "file:///workspace/lib/DataProcessor.pm"
+            ]
+        })),
+    );
 
     // Move method might be available depending on context
     if let Some(actions) = move_method {
@@ -663,32 +727,41 @@ sub validate_and_parse_data {
 
     // TEST 1: Regex Explanation on Hover
     // Developer hovers over complex regex to understand it
-    let regex_hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
-        "position": {"line": 8, "character": 35} // Over email regex
-    })));
+    let regex_hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
+            "position": {"line": 8, "character": 35} // Over email regex
+        })),
+    );
 
     assert!(regex_hover.is_some(), "Should explain regex on hover");
     println!("✓ Regex explanation on hover works");
 
     // TEST 2: Regex Validation
     // LSP should validate regex syntax as user types
-    let _regex_diagnostics = ctx.send_request("textDocument/publishDiagnostics", Some(json!({
-        "uri": "file:///workspace/lib/RegexProcessor.pm",
-        "diagnostics": [] // No errors - regex is valid
-    })));
+    let _regex_diagnostics = ctx.send_request(
+        "textDocument/publishDiagnostics",
+        Some(json!({
+            "uri": "file:///workspace/lib/RegexProcessor.pm",
+            "diagnostics": [] // No errors - regex is valid
+        })),
+    );
 
     println!("✓ Regex validation works");
 
     // TEST 3: Regex Testing
     // Developer wants to test regex against sample data
-    let test_regex = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.testRegex",
-        "arguments": [
-            "^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$",
-            ["test@example.com", "invalid.email", "user@domain.org"]
-        ]
-    })));
+    let test_regex = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.testRegex",
+            "arguments": [
+                "^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$",
+                ["test@example.com", "invalid.email", "user@domain.org"]
+            ]
+        })),
+    );
 
     // Regex testing might not be implemented yet
     if let Some(actions) = test_regex {
@@ -701,16 +774,19 @@ sub validate_and_parse_data {
 
     // TEST 4: Regex Refactoring
     // Developer wants to optimize or improve regex
-    let regex_refactor = ctx.send_request("textDocument/codeAction", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
-        "range": {
-            "start": {"line": 8, "character": 20},
-            "end": {"line": 8, "character": 85}
-        },
-        "context": {
-            "only": ["refactor"]
-        }
-    })));
+    let regex_refactor = ctx.send_request(
+        "textDocument/codeAction",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
+            "range": {
+                "start": {"line": 8, "character": 20},
+                "end": {"line": 8, "character": 85}
+            },
+            "context": {
+                "only": ["refactor"]
+            }
+        })),
+    );
 
     // Regex refactoring might not be implemented yet
     if let Some(actions) = regex_refactor {
@@ -723,12 +799,18 @@ sub validate_and_parse_data {
 
     // TEST 5: Named Capture Groups
     // Developer gets help with named capture group completion
-    let named_groups_completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
-        "position": {"line": 29, "character": 25} // After $+{
-    })));
+    let named_groups_completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/RegexProcessor.pm"},
+            "position": {"line": 29, "character": 25} // After $+{
+        })),
+    );
 
-    assert!(named_groups_completion.is_some(), "Should complete named capture groups");
+    assert!(
+        named_groups_completion.is_some(),
+        "Should complete named capture groups"
+    );
     println!("✓ Named capture group completion works");
 
     println!("✅ Regex support user story test complete");
@@ -746,21 +828,25 @@ fn test_user_story_performance_monitoring() {
 
     // TEST 1: Large File Handling
     // Create a large Perl file with many functions
-    let mut large_file_content = String::from("package LargeModule;\nuse strict;\nuse warnings;\n\n");
-    
+    let mut large_file_content =
+        String::from("package LargeModule;\nuse strict;\nuse warnings;\n\n");
+
     for i in 0..1000 {
         large_file_content.push_str(&format!(
             "sub function_{} {{\n    my ($param) = @_;\n    return $param * {};\n}}\n\n",
             i, i
         ));
     }
-    
+
     ctx.open_document("file:///workspace/lib/LargeModule.pm", &large_file_content);
-    
+
     // LSP should handle this without performance degradation
-    let large_file_symbols = ctx.send_request("textDocument/documentSymbol", Some(json!({
-        "textDocument": {"uri": "file:///workspace/lib/LargeModule.pm"}
-    })));
+    let large_file_symbols = ctx.send_request(
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {"uri": "file:///workspace/lib/LargeModule.pm"}
+        })),
+    );
 
     // Large file handling should not crash, even if it returns None for performance
     // Large file should return symbols array (might be empty if parsing fails)
@@ -775,13 +861,19 @@ fn test_user_story_performance_monitoring() {
             "package Module{};\nuse strict;\nuse warnings;\n\nsub process {{ return 'module_{}'; }}\n1;\n",
             i, i
         );
-        ctx.open_document(&format!("file:///workspace/lib/Module{}.pm", i), &small_module);
+        ctx.open_document(
+            &format!("file:///workspace/lib/Module{}.pm", i),
+            &small_module,
+        );
     }
 
     // Workspace symbol search should still be fast
-    let workspace_search = ctx.send_request("workspace/symbol", Some(json!({
-        "query": "process"
-    })));
+    let workspace_search = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "process"
+        })),
+    );
 
     assert!(workspace_search.is_some(), "Should handle many open files");
     println!("✓ Many open files handled (50 modules)");
@@ -808,7 +900,10 @@ sub inefficient_function {
 }
 "#;
 
-    ctx.open_document("file:///workspace/lib/Performance.pm", performance_warning_code);
+    ctx.open_document(
+        "file:///workspace/lib/Performance.pm",
+        performance_warning_code,
+    );
 
     // Should provide performance diagnostics
     let _perf_diagnostics = ctx.send_request("textDocument/publishDiagnostics", Some(json!({
@@ -826,14 +921,20 @@ sub inefficient_function {
 
     println!("✓ Performance diagnostics work");
 
-    // TEST 4: Memory Usage Monitoring  
-    let memory_usage = ctx.send_request("workspace/executeCommand", Some(json!({
-        "command": "perl.getMemoryUsage"
-    })));
+    // TEST 4: Memory Usage Monitoring
+    let memory_usage = ctx.send_request(
+        "workspace/executeCommand",
+        Some(json!({
+            "command": "perl.getMemoryUsage"
+        })),
+    );
 
     // Memory monitoring might not be implemented yet
     if let Some(response) = memory_usage {
-        assert!(response.is_array(), "Code lens should be array for memory hints");
+        assert!(
+            response.is_array(),
+            "Code lens should be array for memory hints"
+        );
     }
     println!("✓ Memory usage monitoring available");
 
@@ -846,46 +947,46 @@ sub inefficient_function {
 fn test_missing_user_stories_summary() {
     println!("\n🎯 MISSING USER STORIES TEST SUMMARY");
     println!("=====================================");
-    
+
     println!("✅ Multi-File Project Navigation");
     println!("   - Cross-file go to definition");
     println!("   - References across modules");
     println!("   - Workspace symbol search");
     println!("   - Import completion");
-    
-    println!("✅ Test Integration Workflow");  
+
+    println!("✅ Test Integration Workflow");
     println!("   - Test discovery (Test::More, Test2)");
     println!("   - Single test execution");
     println!("   - Test file execution");
     println!("   - Test coverage integration");
     println!("   - Failed test diagnostics");
-    
+
     println!("✅ Advanced Refactoring Operations");
     println!("   - Extract variable/method");
     println!("   - Inline variable");
     println!("   - Change function signature");
     println!("   - Move method to module");
-    
+
     println!("✅ Regular Expression Support");
     println!("   - Regex explanation on hover");
     println!("   - Syntax validation");
     println!("   - Regex testing");
     println!("   - Refactoring suggestions");
     println!("   - Named capture completion");
-    
+
     println!("✅ Performance Monitoring");
     println!("   - Large file handling");
     println!("   - Many open files");
     println!("   - Performance diagnostics");
     println!("   - Memory usage monitoring");
-    
+
     println!("\n🚀 IMPLEMENTATION PRIORITY:");
     println!("1. Multi-file navigation (CRITICAL)");
     println!("2. Test integration (HIGH VALUE)");
     println!("3. Refactoring operations (HIGH VALUE)");
     println!("4. Regex support (PERL-SPECIFIC)");
     println!("5. Performance monitoring (SCALABILITY)");
-    
+
     println!("\n📊 Coverage Impact:");
     println!("Current: ~40% of LSP user stories");
     println!("With these tests: ~75% coverage");

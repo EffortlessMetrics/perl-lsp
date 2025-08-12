@@ -13,8 +13,8 @@
 // Include the generated bindings
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use tree_sitter::{Language, Parser};
 use std::path::Path;
+use tree_sitter::{Language, Parser};
 
 /// Get the tree-sitter Perl language
 pub fn language() -> Language {
@@ -38,7 +38,9 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 }
 
 /// Parse a Perl file using the C scanner
-pub fn parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+pub fn parse_perl_file<P: AsRef<Path>>(
+    path: P,
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let code = std::fs::read_to_string(path)?;
     parse_perl_code(&code)
 }
@@ -78,4 +80,4 @@ mod tests {
 // External C function declarations
 unsafe extern "C" {
     fn tree_sitter_perl() -> Language;
-} 
+}

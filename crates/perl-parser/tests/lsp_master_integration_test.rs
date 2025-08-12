@@ -1,8 +1,8 @@
 //! Master integration test suite for the Perl LSP
-//! 
+//!
 //! This test ensures all LSP components work together seamlessly
 
-use perl_parser::{LspServer, JsonRpcRequest};
+use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Master test that validates the entire LSP lifecycle
@@ -10,7 +10,7 @@ use serde_json::json;
 fn test_complete_lsp_integration() {
     // Initialize server
     let mut server = LspServer::new();
-    
+
     // Step 1: Initialize
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -34,18 +34,27 @@ fn test_complete_lsp_integration() {
             }
         })),
     };
-    
+
     let response = server.handle_request(init_request);
     let response_str = format!("{:?}", response);
     assert!(response_str.contains("result") || response.is_some());
-    
+
     // Step 2: Open multiple files to simulate real project
     let files = vec![
-        ("file:///workspace/main.pl", include_str!("../../../test_fixtures/main.pl")),
-        ("file:///workspace/lib/Module.pm", include_str!("../../../test_fixtures/Module.pm")),
-        ("file:///workspace/t/test.t", include_str!("../../../test_fixtures/test.t")),
+        (
+            "file:///workspace/main.pl",
+            include_str!("../../../test_fixtures/main.pl"),
+        ),
+        (
+            "file:///workspace/lib/Module.pm",
+            include_str!("../../../test_fixtures/Module.pm"),
+        ),
+        (
+            "file:///workspace/t/test.t",
+            include_str!("../../../test_fixtures/test.t"),
+        ),
     ];
-    
+
     for (uri, content) in files {
         let open_request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
@@ -62,12 +71,12 @@ fn test_complete_lsp_integration() {
         };
         server.handle_request(open_request);
     }
-    
+
     // Step 3: Test all major features
-    
+
     // 3a. Diagnostics (should be published automatically)
     // Check internal state or mock notification handler
-    
+
     // 3b. Completion
     let completion_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -80,7 +89,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(completion_request);
     assert!(response.is_some());
-    
+
     // 3c. Go to Definition
     let definition_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -93,7 +102,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(definition_request);
     assert!(response.is_some());
-    
+
     // 3d. Find References
     let references_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -107,7 +116,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(references_request);
     assert!(response.is_some());
-    
+
     // 3e. Document Symbols
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -119,7 +128,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(symbols_request);
     assert!(response.is_some());
-    
+
     // 3f. Workspace Symbol Search
     let workspace_symbol_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -131,7 +140,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(workspace_symbol_request);
     assert!(response.is_some());
-    
+
     // Step 4: Test incremental updates
     let change_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -152,7 +161,7 @@ fn test_complete_lsp_integration() {
         })),
     };
     server.handle_request(change_request);
-    
+
     // Step 5: Shutdown sequence
     let shutdown_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -162,7 +171,7 @@ fn test_complete_lsp_integration() {
     };
     let response = server.handle_request(shutdown_request);
     assert!(response.is_some());
-    
+
     let exit_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -177,7 +186,7 @@ fn test_complete_lsp_integration() {
 fn test_all_test_suites_pass() {
     let test_suites = vec![
         "lsp_user_story_test",
-        "lsp_builtin_functions_test", 
+        "lsp_builtin_functions_test",
         "lsp_edge_cases_test",
         "lsp_multi_file_test",
         "lsp_testing_integration_test",
@@ -185,13 +194,16 @@ fn test_all_test_suites_pass() {
         "lsp_performance_test",
         "lsp_formatting_test",
     ];
-    
-    println!("Validating all {} test suites are integrated...", test_suites.len());
-    
+
+    println!(
+        "Validating all {} test suites are integrated...",
+        test_suites.len()
+    );
+
     for suite in test_suites {
         println!("  ✓ {}", suite);
     }
-    
+
     println!("\nAll test suites properly integrated!");
 }
 
@@ -199,9 +211,9 @@ fn test_all_test_suites_pass() {
 #[test]
 fn test_complete_workflow_performance() {
     use std::time::Instant;
-    
+
     let mut server = LspServer::new();
-    
+
     // Initialize
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -214,9 +226,9 @@ fn test_complete_workflow_performance() {
         })),
     };
     server.handle_request(init_request);
-    
+
     let start = Instant::now();
-    
+
     // Open 10 files
     for i in 0..10 {
         let content = format!("package Module{};\nsub test {{ return {} }}\n1;", i, i);
@@ -235,7 +247,7 @@ fn test_complete_workflow_performance() {
         };
         server.handle_request(open_request);
     }
-    
+
     // Perform 10 operations
     for i in 0..10 {
         let request = JsonRpcRequest {
@@ -243,17 +255,20 @@ fn test_complete_workflow_performance() {
             id: Some(json!(i + 10)),
             method: "textDocument/documentSymbol".to_string(),
             params: Some(json!({
-                "textDocument": { 
-                    "uri": format!("file:///workspace/Module{}.pm", i) 
+                "textDocument": {
+                    "uri": format!("file:///workspace/Module{}.pm", i)
                 }
             })),
         };
         server.handle_request(request);
     }
-    
+
     let elapsed = start.elapsed();
-    
+
     // Complete workflow should be under 100ms
-    assert!(elapsed.as_millis() < 100, 
-            "Complete workflow took {:?}, expected < 100ms", elapsed);
+    assert!(
+        elapsed.as_millis() < 100,
+        "Complete workflow took {:?}, expected < 100ms",
+        elapsed
+    );
 }

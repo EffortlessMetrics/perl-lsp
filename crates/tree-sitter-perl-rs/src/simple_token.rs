@@ -13,40 +13,40 @@ pub enum Token {
     #[regex(r"-?0[0-7_]+")]
     #[regex(r"-?[0-9]+")]
     IntegerLiteral,
-    
+
     #[regex(r"-?[0-9]*\.[0-9]+([eE][+-]?[0-9]+)?")]
     #[regex(r"-?[0-9]+[eE][+-]?[0-9]+")]
     FloatLiteral,
-    
+
     // Legacy combined number token
     Number,
-    
+
     // Strings
     #[regex(r#""([^"\\]|\\.)*""#)]
     #[regex(r"'([^'\\]|\\.)*'")]
     StringLiteral,
-    
+
     #[regex(r"`([^`\\]|\\.)*`")]
     Backtick,
-    
+
     // Legacy string token
     String,
-    
+
     // Variables
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*", priority = 2)]
     #[regex(r"\$\{[^}]+\}", priority = 2)]
     #[regex(r"\$[0-9]+", priority = 1)]
     #[regex(r"\$[#_!@\$&*+\-.]", priority = 1)]
     ScalarVar,
-    
+
     #[regex(r"@[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*")]
     #[regex(r"@\{[^}]+\}")]
     ArrayVar,
-    
+
     #[regex(r"%[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z_][a-zA-Z0-9_]*)*")]
     #[regex(r"%\{[^}]+\}")]
     HashVar,
-    
+
     // Keywords
     #[token("if")]
     If,
@@ -86,7 +86,7 @@ pub enum Token {
     Method,
     #[token("has")]
     Has,
-    
+
     // Operators
     #[token("=")]
     Assign,
@@ -112,7 +112,7 @@ pub enum Token {
     LshiftAssign,
     #[token(">>=")]
     RshiftAssign,
-    
+
     #[token("+")]
     Plus,
     #[token("-")]
@@ -125,7 +125,7 @@ pub enum Token {
     Modulo,
     #[token("**")]
     Power,
-    
+
     #[token("==")]
     NumEq,
     #[token("!=")]
@@ -140,7 +140,7 @@ pub enum Token {
     NumGe,
     #[token("<=>")]
     Spaceship,
-    
+
     #[token("eq")]
     StrEq,
     #[token("ne")]
@@ -155,10 +155,10 @@ pub enum Token {
     StrGe,
     #[token("cmp")]
     Cmp,
-    
+
     #[token("isa")]
     Isa,
-    
+
     #[token("&&")]
     LogAnd,
     #[token("||")]
@@ -173,17 +173,17 @@ pub enum Token {
     BitXor,
     #[token("~")]
     BitNot,
-    
+
     #[token("=~")]
     BinMatch,
     #[token("!~")]
     BinNotMatch,
-    
+
     #[token("->")]
     Arrow,
     #[token("=>")]
     FatArrow,
-    
+
     // Delimiters
     #[token("(")]
     LParen,
@@ -197,7 +197,7 @@ pub enum Token {
     LBracket,
     #[token("]")]
     RBracket,
-    
+
     // Other
     #[token(";")]
     Semicolon,
@@ -213,31 +213,31 @@ pub enum Token {
     Colon,
     #[token("?")]
     Question,
-    
+
     #[regex(r"\n")]
     Newline,
-    
+
     #[regex(r"#[^\n]*")]
     Comment,
-    
+
     // Identifiers (must be after keywords)
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
     Identifier,
-    
+
     // Barewords (same pattern but treated differently)
     Bareword,
-    
+
     // Special tokens
     // Note: Regex is not defined here - it's handled by context-aware lexing
     Regex,
-    
+
     // More keywords
     #[token("state")]
     State,
-    
+
     // EOF
     Eof,
-    
+
     // Error (logos 0.13+ doesn't need #[error] attribute)
     Error,
 }
@@ -255,29 +255,29 @@ impl<'source> PerlLexer<'source> {
             peeked: None,
         }
     }
-    
+
     pub fn next_token(&mut self) -> Token {
         if let Some(token) = self.peeked.take() {
             return token;
         }
-        
+
         match self.lexer.next() {
             Some(Ok(token)) => token,
             _ => Token::Eof,
         }
     }
-    
+
     pub fn peek(&mut self) -> &Token {
         if self.peeked.is_none() {
             self.peeked = Some(self.next_token());
         }
         self.peeked.as_ref().unwrap()
     }
-    
+
     pub fn span(&self) -> logos::Span {
         self.lexer.span()
     }
-    
+
     pub fn slice(&self) -> &'source str {
         self.lexer.slice()
     }
@@ -286,12 +286,12 @@ impl<'source> PerlLexer<'source> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_basic_lexing() {
         let input = "my $x = 42;";
         let mut lexer = PerlLexer::new(input);
-        
+
         assert_eq!(lexer.next_token(), Token::My);
         assert_eq!(lexer.next_token(), Token::ScalarVar);
         assert_eq!(lexer.next_token(), Token::Assign);
@@ -299,12 +299,12 @@ mod tests {
         assert_eq!(lexer.next_token(), Token::Semicolon);
         assert_eq!(lexer.next_token(), Token::Eof);
     }
-    
+
     #[test]
     fn test_operators() {
         let input = "$a + $b * $c";
         let mut lexer = PerlLexer::new(input);
-        
+
         assert_eq!(lexer.next_token(), Token::ScalarVar);
         assert_eq!(lexer.next_token(), Token::Plus);
         assert_eq!(lexer.next_token(), Token::ScalarVar);

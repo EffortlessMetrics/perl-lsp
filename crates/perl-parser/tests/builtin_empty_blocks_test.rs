@@ -6,9 +6,13 @@ mod builtin_empty_blocks_tests {
         let mut parser = Parser::new(input);
         let result = parser.parse().expect("Failed to parse");
         let sexp = result.to_sexp();
-        assert!(sexp.contains(expected_contains), 
-                "Expected '{}' to contain '{}', but got: {}", 
-                sexp, expected_contains, sexp);
+        assert!(
+            sexp.contains(expected_contains),
+            "Expected '{}' to contain '{}', but got: {}",
+            sexp,
+            expected_contains,
+            sexp
+        );
     }
 
     #[test]

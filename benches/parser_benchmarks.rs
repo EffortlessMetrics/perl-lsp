@@ -21,8 +21,12 @@ use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 #[cfg(not(feature = "pure-rust"))]
 fn parse(code: &str) -> Result<tree_sitter::Tree, String> {
     let mut parser = Parser::new();
-    parser.set_language(&language()).map_err(|e| e.to_string())?;
-    parser.parse(code, None).ok_or_else(|| "Failed to parse".to_string())
+    parser
+        .set_language(&language())
+        .map_err(|e| e.to_string())?;
+    parser
+        .parse(code, None)
+        .ok_or_else(|| "Failed to parse".to_string())
 }
 
 #[cfg(feature = "pure-rust")]

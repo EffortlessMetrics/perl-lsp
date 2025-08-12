@@ -3,9 +3,9 @@
 //! This module provides intelligent code completion suggestions based on
 //! context, including variables, functions, keywords, and more.
 
-use crate::ast::Node;
 use crate::SourceLocation;
-use crate::symbol::{SymbolTable, SymbolKind, SymbolExtractor};
+use crate::ast::Node;
+use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use std::collections::HashSet;
 
 /// Type of completion item
@@ -80,82 +80,211 @@ impl CompletionProvider {
     /// Create a new completion provider from parsed AST
     pub fn new(ast: &Node) -> Self {
         let symbol_table = SymbolExtractor::new().extract(ast);
-        
+
         let keywords = [
-            "my", "our", "local", "state",
-            "sub", "package", "use", "require",
-            "if", "elsif", "else", "unless",
-            "while", "until", "for", "foreach",
-            "do", "eval", "goto", "last", "next", "redo",
-            "return", "die", "warn", "exit",
-            "and", "or", "not", "xor",
-            "eq", "ne", "lt", "le", "gt", "ge", "cmp",
-            "defined", "undef", "ref", "blessed",
-            "scalar", "wantarray",
-            "__PACKAGE__", "__FILE__", "__LINE__",
-            "BEGIN", "END", "CHECK", "INIT", "UNITCHECK",
-            "DESTROY", "AUTOLOAD",
-        ].into_iter().collect();
-        
+            "my",
+            "our",
+            "local",
+            "state",
+            "sub",
+            "package",
+            "use",
+            "require",
+            "if",
+            "elsif",
+            "else",
+            "unless",
+            "while",
+            "until",
+            "for",
+            "foreach",
+            "do",
+            "eval",
+            "goto",
+            "last",
+            "next",
+            "redo",
+            "return",
+            "die",
+            "warn",
+            "exit",
+            "and",
+            "or",
+            "not",
+            "xor",
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "cmp",
+            "defined",
+            "undef",
+            "ref",
+            "blessed",
+            "scalar",
+            "wantarray",
+            "__PACKAGE__",
+            "__FILE__",
+            "__LINE__",
+            "BEGIN",
+            "END",
+            "CHECK",
+            "INIT",
+            "UNITCHECK",
+            "DESTROY",
+            "AUTOLOAD",
+        ]
+        .into_iter()
+        .collect();
+
         let builtins = [
             // I/O
-            "print", "printf", "say", "sprintf",
-            "open", "close", "read", "write", "seek", "tell",
-            "binmode", "eof", "fileno", "flock",
-            
+            "print",
+            "printf",
+            "say",
+            "sprintf",
+            "open",
+            "close",
+            "read",
+            "write",
+            "seek",
+            "tell",
+            "binmode",
+            "eof",
+            "fileno",
+            "flock",
             // String
-            "chomp", "chop", "chr", "ord", "lc", "uc", "lcfirst", "ucfirst",
-            "length", "substr", "index", "rindex", "split", "join",
-            "reverse", "sprintf", "quotemeta",
-            
+            "chomp",
+            "chop",
+            "chr",
+            "ord",
+            "lc",
+            "uc",
+            "lcfirst",
+            "ucfirst",
+            "length",
+            "substr",
+            "index",
+            "rindex",
+            "split",
+            "join",
+            "reverse",
+            "sprintf",
+            "quotemeta",
             // Array
-            "push", "pop", "shift", "unshift", "splice",
-            "grep", "map", "sort", "reverse",
-            
+            "push",
+            "pop",
+            "shift",
+            "unshift",
+            "splice",
+            "grep",
+            "map",
+            "sort",
+            "reverse",
             // Hash
-            "keys", "values", "each", "exists", "delete",
-            
+            "keys",
+            "values",
+            "each",
+            "exists",
+            "delete",
             // Math
-            "abs", "atan2", "cos", "sin", "exp", "log", "sqrt",
-            "int", "rand", "srand",
-            
+            "abs",
+            "atan2",
+            "cos",
+            "sin",
+            "exp",
+            "log",
+            "sqrt",
+            "int",
+            "rand",
+            "srand",
             // File tests
-            "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O",
-            "-e", "-z", "-s", "-f", "-d", "-l", "-p", "-S", "-b", "-c",
-            "-t", "-u", "-g", "-k", "-T", "-B", "-M", "-A", "-C",
-            
+            "-r",
+            "-w",
+            "-x",
+            "-o",
+            "-R",
+            "-W",
+            "-X",
+            "-O",
+            "-e",
+            "-z",
+            "-s",
+            "-f",
+            "-d",
+            "-l",
+            "-p",
+            "-S",
+            "-b",
+            "-c",
+            "-t",
+            "-u",
+            "-g",
+            "-k",
+            "-T",
+            "-B",
+            "-M",
+            "-A",
+            "-C",
             // System
-            "system", "exec", "fork", "wait", "waitpid",
-            "kill", "sleep", "alarm", "getpid", "getppid",
-            
+            "system",
+            "exec",
+            "fork",
+            "wait",
+            "waitpid",
+            "kill",
+            "sleep",
+            "alarm",
+            "getpid",
+            "getppid",
             // Time
-            "time", "localtime", "gmtime",
-            
+            "time",
+            "localtime",
+            "gmtime",
             // Misc
-            "caller", "die", "warn", "eval", "exit",
-            "require", "use", "no", "import", "unimport",
-            "bless", "ref", "tied", "untie",
-            "pack", "unpack", "vec",
-            "study", "pos", "qr",
-        ].into_iter().collect();
-        
+            "caller",
+            "die",
+            "warn",
+            "eval",
+            "exit",
+            "require",
+            "use",
+            "no",
+            "import",
+            "unimport",
+            "bless",
+            "ref",
+            "tied",
+            "untie",
+            "pack",
+            "unpack",
+            "vec",
+            "study",
+            "pos",
+            "qr",
+        ]
+        .into_iter()
+        .collect();
+
         CompletionProvider {
             symbol_table,
             keywords,
             builtins,
         }
     }
-    
+
     /// Get completions at a given position
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         let context = self.analyze_context(source, position);
-        
+
         if context.in_comment {
             return vec![];
         }
-        
+
         let mut completions = Vec::new();
-        
+
         // Determine what kind of completions to provide based on context
         if context.prefix.starts_with('$') {
             // Scalar variable completion
@@ -188,50 +317,60 @@ impl CompletionProvider {
             if context.prefix.is_empty() || self.could_be_keyword(&context.prefix) {
                 self.add_keyword_completions(&mut completions, &context);
             }
-            
+
             if context.prefix.is_empty() || self.could_be_function(&context.prefix) {
                 self.add_builtin_completions(&mut completions, &context);
                 self.add_function_completions(&mut completions, &context);
             }
-            
+
             // Also suggest variables without sigils in some contexts
             self.add_all_variables(&mut completions, &context);
         }
-        
+
         // Sort completions by relevance
         completions.sort_by(|a, b| {
-            a.sort_text.as_ref().unwrap_or(&a.label)
+            a.sort_text
+                .as_ref()
+                .unwrap_or(&a.label)
                 .cmp(b.sort_text.as_ref().unwrap_or(&b.label))
         });
-        
+
         completions
     }
-    
+
     /// Analyze the context at the cursor position
     fn analyze_context(&self, source: &str, position: usize) -> CompletionContext {
         // Find the prefix (text before cursor on the same line)
         let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
         let _prefix = source[line_start..position].to_string();
-        
+
         // Find the word being typed
         let word_start = source[..position]
-            .rfind(|c: char| !c.is_alphanumeric() && c != '_' && c != ':' && c != '$' && c != '@' && c != '%' && c != '&')
+            .rfind(|c: char| {
+                !c.is_alphanumeric()
+                    && c != '_'
+                    && c != ':'
+                    && c != '$'
+                    && c != '@'
+                    && c != '%'
+                    && c != '&'
+            })
             .map(|p| p + 1)
             .unwrap_or(0);
         let word_prefix = source[word_start..position].to_string();
-        
+
         // Detect trigger character
         let trigger_character = if position > 0 {
             source.chars().nth(position - 1)
         } else {
             None
         };
-        
+
         // Simple heuristics for context detection
         let in_string = self.is_in_string(source, position);
         let in_regex = self.is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
-        
+
         CompletionContext {
             position,
             trigger_character,
@@ -242,25 +381,35 @@ impl CompletionProvider {
             prefix: word_prefix,
         }
     }
-    
+
     /// Add variable completions
-    fn add_variable_completions(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext, kind: SymbolKind) {
+    fn add_variable_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        kind: SymbolKind,
+    ) {
         let sigil = kind.sigil().unwrap_or("");
         let prefix_without_sigil = context.prefix.trim_start_matches(sigil);
-        
+
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
                 if symbol.kind == kind && name.starts_with(prefix_without_sigil) {
                     let insert_text = format!("{}{}", sigil, name);
-                    
+
                     completions.push(CompletionItem {
                         label: insert_text.clone(),
                         kind: CompletionItemKind::Variable,
-                        detail: Some(format!("{} {}{}", 
-                            symbol.declaration.as_deref().unwrap_or(""),
-                            sigil,
-                            name
-                        ).trim().to_string()),
+                        detail: Some(
+                            format!(
+                                "{} {}{}",
+                                symbol.declaration.as_deref().unwrap_or(""),
+                                sigil,
+                                name
+                            )
+                            .trim()
+                            .to_string(),
+                        ),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(insert_text),
                         sort_text: Some(format!("1_{}", name)), // Variables have high priority
@@ -271,9 +420,14 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Add special Perl variables
-    fn add_special_variables(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext, sigil: &str) {
+    fn add_special_variables(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        sigil: &str,
+    ) {
         let special_vars = match sigil {
             "$" => vec![
                 ("$_", "Default input and pattern-search space"),
@@ -307,7 +461,7 @@ impl CompletionProvider {
             ],
             _ => vec![],
         };
-        
+
         for (var, description) in special_vars {
             if var.starts_with(&context.prefix) {
                 completions.push(CompletionItem {
@@ -323,11 +477,15 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Add function completions
-    fn add_function_completions(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext) {
+    fn add_function_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
         let prefix_without_amp = context.prefix.trim_start_matches('&');
-        
+
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
                 if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix_without_amp) {
@@ -345,9 +503,13 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Add built-in function completions
-    fn add_builtin_completions(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext) {
+    fn add_builtin_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
         for builtin in &self.builtins {
             if builtin.starts_with(&context.prefix) {
                 let (insert_text, detail) = match *builtin {
@@ -359,7 +521,7 @@ impl CompletionProvider {
                     "sort" => ("sort { } ", "sort BLOCK LIST"),
                     _ => (*builtin, "built-in function"),
                 };
-                
+
                 completions.push(CompletionItem {
                     label: builtin.to_string(),
                     kind: CompletionItemKind::Function,
@@ -373,9 +535,13 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Add keyword completions
-    fn add_keyword_completions(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext) {
+    fn add_keyword_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
         for keyword in &self.keywords {
             if keyword.starts_with(&context.prefix) {
                 let (insert_text, snippet) = match *keyword {
@@ -391,10 +557,14 @@ impl CompletionProvider {
                     "use" => ("use ${1:Module};\n$0", true),
                     _ => (*keyword, false),
                 };
-                
+
                 completions.push(CompletionItem {
                     label: keyword.to_string(),
-                    kind: if snippet { CompletionItemKind::Snippet } else { CompletionItemKind::Keyword },
+                    kind: if snippet {
+                        CompletionItemKind::Snippet
+                    } else {
+                        CompletionItemKind::Keyword
+                    },
                     detail: Some("keyword".to_string()),
                     documentation: None,
                     insert_text: Some(insert_text.to_string()),
@@ -405,15 +575,23 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Add package member completions
-    fn add_package_completions(&self, _completions: &mut Vec<CompletionItem>, _context: &CompletionContext) {
+    fn add_package_completions(
+        &self,
+        _completions: &mut Vec<CompletionItem>,
+        _context: &CompletionContext,
+    ) {
         // TODO: Implement package member completion
         // This would require analyzing package contents
     }
-    
+
     /// Add method completions
-    fn add_method_completions(&self, completions: &mut Vec<CompletionItem>, _context: &CompletionContext) {
+    fn add_method_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        _context: &CompletionContext,
+    ) {
         // Common object methods
         let methods = [
             ("new", "Constructor"),
@@ -422,7 +600,7 @@ impl CompletionProvider {
             ("DOES", "Check if object does role"),
             ("VERSION", "Get version"),
         ];
-        
+
         for (method, desc) in methods {
             completions.push(CompletionItem {
                 label: method.to_string(),
@@ -436,25 +614,42 @@ impl CompletionProvider {
             });
         }
     }
-    
+
     /// Add file path completions
-    fn add_file_completions(&self, _completions: &mut Vec<CompletionItem>, _context: &CompletionContext) {
+    fn add_file_completions(
+        &self,
+        _completions: &mut Vec<CompletionItem>,
+        _context: &CompletionContext,
+    ) {
         // TODO: Implement file path completion
         // This would require filesystem access
     }
-    
+
     /// Add all variables without sigils (for interpolation contexts)
-    fn add_all_variables(&self, completions: &mut Vec<CompletionItem>, context: &CompletionContext) {
+    fn add_all_variables(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
         // Only add if the prefix doesn't already have a sigil
         if !context.prefix.starts_with(['$', '@', '%', '&']) {
             for (name, symbols) in &self.symbol_table.symbols {
                 for symbol in symbols {
-                    if matches!(symbol.kind, SymbolKind::ScalarVariable | SymbolKind::ArrayVariable | SymbolKind::HashVariable) && name.starts_with(&context.prefix) {
+                    if matches!(
+                        symbol.kind,
+                        SymbolKind::ScalarVariable
+                            | SymbolKind::ArrayVariable
+                            | SymbolKind::HashVariable
+                    ) && name.starts_with(&context.prefix)
+                    {
                         let sigil = symbol.kind.sigil().unwrap_or("");
                         completions.push(CompletionItem {
                             label: format!("{}{}", sigil, name),
                             kind: CompletionItemKind::Variable,
-                            detail: Some(format!("{} variable", symbol.declaration.as_deref().unwrap_or(""))),
+                            detail: Some(format!(
+                                "{} variable",
+                                symbol.declaration.as_deref().unwrap_or("")
+                            )),
                             documentation: symbol.documentation.clone(),
                             insert_text: Some(format!("{}{}", sigil, name)),
                             sort_text: Some(format!("5_{}", name)),
@@ -466,19 +661,19 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Check if prefix could be a keyword
     fn could_be_keyword(&self, prefix: &str) -> bool {
         self.keywords.iter().any(|k| k.starts_with(prefix))
     }
-    
+
     /// Check if prefix could be a function
     fn could_be_function(&self, prefix: &str) -> bool {
         // Check builtins
         if self.builtins.iter().any(|b| b.starts_with(prefix)) {
             return true;
         }
-        
+
         // Check user-defined functions
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
@@ -487,20 +682,20 @@ impl CompletionProvider {
                 }
             }
         }
-        
+
         false
     }
-    
+
     /// Simple heuristic to check if position is in a string
     fn is_in_string(&self, source: &str, position: usize) -> bool {
         let before = &source[..position];
         let single_quotes = before.matches('\'').count();
         let double_quotes = before.matches('"').count();
-        
+
         // Very simple: odd number of quotes means we're inside
         single_quotes % 2 == 1 || double_quotes % 2 == 1
     }
-    
+
     /// Simple heuristic to check if position is in a regex
     fn is_in_regex(&self, source: &str, position: usize) -> bool {
         // Look for regex patterns before position
@@ -516,7 +711,7 @@ impl CompletionProvider {
             false
         }
     }
-    
+
     /// Simple heuristic to check if position is in a comment
     fn is_in_comment(&self, source: &str, position: usize) -> bool {
         let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
@@ -529,7 +724,7 @@ impl CompletionProvider {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    
+
     #[test]
     fn test_variable_completion() {
         let code = r#"
@@ -539,17 +734,17 @@ my @items = ();
 
 $c
 "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
-        
+
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len() - 1);
-        
+
         assert!(completions.iter().any(|c| c.label == "$count"));
         assert!(completions.iter().any(|c| c.label == "$counter"));
     }
-    
+
     #[test]
     fn test_function_completion() {
         let code = r#"
@@ -563,27 +758,27 @@ sub process_items {
 
 proc
 "#;
-        
+
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
-        
+
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len() - 1);
-        
+
         assert!(completions.iter().any(|c| c.label == "process_data"));
         assert!(completions.iter().any(|c| c.label == "process_items"));
     }
-    
+
     #[test]
     fn test_builtin_completion() {
         let code = "pr";
-        
+
         let mut parser = Parser::new(""); // Empty AST
         let ast = parser.parse().unwrap();
-        
+
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
-        
+
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "printf"));
     }

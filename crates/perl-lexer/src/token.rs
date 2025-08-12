@@ -31,7 +31,7 @@ pub enum TokenType {
     Transliteration,
     /// Quote regex: qr//
     QuoteRegex,
-    
+
     // String and quote tokens
     /// String literal: "string" or 'string'
     StringLiteral,
@@ -43,29 +43,29 @@ pub enum TokenType {
     QuoteWords,
     /// Quote command: qx// or `backticks`
     QuoteCommand,
-    
+
     // String interpolation tokens
     /// String with interpolated parts
     InterpolatedString(Vec<StringPart>),
-    
+
     // Heredoc tokens
     /// Heredoc start: <<EOF or <<'EOF'
     HeredocStart,
     /// Heredoc body content
     HeredocBody(Arc<str>),
-    
+
     // Format declarations
     /// Format body content
     FormatBody(Arc<str>),
-    
+
     // Version strings
     /// Version string: v5.32.0
     Version(Arc<str>),
-    
+
     // POD documentation
     /// POD documentation block
     Pod,
-    
+
     // Identifiers and literals
     /// Identifier or variable name
     Identifier(Arc<str>),
@@ -75,7 +75,7 @@ pub enum TokenType {
     Operator(Arc<str>),
     /// Keyword
     Keyword(Arc<str>),
-    
+
     // Delimiters
     /// Left parenthesis: (
     LeftParen,
@@ -89,7 +89,7 @@ pub enum TokenType {
     LeftBrace,
     /// Right brace: }
     RightBrace,
-    
+
     // Punctuation
     /// Semicolon: ;
     Semicolon,
@@ -101,7 +101,7 @@ pub enum TokenType {
     Arrow,
     /// Fat comma: =>
     FatComma,
-    
+
     // Whitespace and comments
     /// Whitespace (usually not returned)
     Whitespace,
@@ -109,7 +109,7 @@ pub enum TokenType {
     Newline,
     /// Comment text
     Comment(Arc<str>),
-    
+
     // Special tokens
     /// End of file
     EOF,
@@ -140,12 +140,12 @@ impl Token {
             end,
         }
     }
-    
+
     /// Get the length of the token
     pub fn len(&self) -> usize {
         self.end - self.start
     }
-    
+
     /// Check if the token is empty
     pub fn is_empty(&self) -> bool {
         self.start == self.end

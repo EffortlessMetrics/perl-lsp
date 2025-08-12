@@ -2,12 +2,7 @@
 use perl_parser::{Parser, ast::NodeKind};
 
 fn main() {
-    let tests = vec![
-        "sub",
-        "sub {",
-        "sub { }",
-        "sub { 42 }",
-    ];
+    let tests = vec!["sub", "sub {", "sub { }", "sub { 42 }"];
 
     for test in tests {
         println!("\n=== Input: {} ===", test);

@@ -111,7 +111,11 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(result.is_ok(), "Failed to parse control structure: {}", case);
+            assert!(
+                result.is_ok(),
+                "Failed to parse control structure: {}",
+                case
+            );
         }
     }
 
@@ -186,7 +190,11 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(result.is_ok(), "Failed to parse complex expression: {}", case);
+            assert!(
+                result.is_ok(),
+                "Failed to parse complex expression: {}",
+                case
+            );
         }
     }
 
@@ -236,11 +244,9 @@ mod tests {
             "my $content = do { local $/; <$fh> };",
             "use strict; use warnings;",
             "package My::Module; use base 'Parent';",
-            
             // Error handling
             "eval { dangerous_operation() }; warn $@ if $@;",
             "local $SIG{__DIE__} = sub { print STDERR @_ };",
-            
             // One-liners
             "@ARGV = grep { -f } @ARGV;",
             "print join('\\n', sort keys %hash);",
@@ -250,7 +256,11 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(result.is_ok(), "Failed to parse real-world snippet: {}", case);
+            assert!(
+                result.is_ok(),
+                "Failed to parse real-world snippet: {}",
+                case
+            );
         }
     }
 }

@@ -12,17 +12,17 @@ fn test_basic_formatting() {
         insert_final_newline: None,
         trim_final_newlines: None,
     };
-    
+
     // Test simple unformatted code
     let code = "sub test{my$x=1;return$x;}";
-    
+
     match formatter.format_document(code, &options) {
         Ok(edits) => {
             // Should have at least one edit
             assert!(!edits.is_empty(), "Expected formatting edits");
-            
+
             let formatted = &edits[0].new_text;
-            
+
             // Check that formatting improved spacing
             assert!(formatted.contains("sub test"));
             assert!(formatted.contains("my $x"));
@@ -49,16 +49,22 @@ fn test_range_formatting() {
         insert_final_newline: None,
         trim_final_newlines: None,
     };
-    
+
     // Multi-line code
     let code = "my $x = 1;\nsub test{return$x;}\nmy $y = 2;";
-    
+
     // Format only the middle line
     let range = perl_parser::formatting::Range {
-        start: perl_parser::formatting::Position { line: 1, character: 0 },
-        end: perl_parser::formatting::Position { line: 1, character: 20 },
+        start: perl_parser::formatting::Position {
+            line: 1,
+            character: 0,
+        },
+        end: perl_parser::formatting::Position {
+            line: 1,
+            character: 20,
+        },
     };
-    
+
     match formatter.format_range(code, &range, &options) {
         Ok(edits) => {
             if !edits.is_empty() {
@@ -89,7 +95,7 @@ fn test_empty_document() {
         insert_final_newline: None,
         trim_final_newlines: None,
     };
-    
+
     // Empty document should return no edits
     match formatter.format_document("", &options) {
         Ok(edits) => {

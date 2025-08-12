@@ -15,14 +15,14 @@ fn test_deep_nested_expression() {
     for _ in 0..depth {
         expr = format!("({})", expr);
     }
-    
+
     println!("Testing expression with depth: {}", depth);
     println!("Expression length: {} bytes", expr.len());
-    
+
     // This should overflow in debug builds
     let mut parser = PureRustPerlParser::new();
     let result = parser.parse(&expr);
-    
+
     match result {
         Ok(ast) => {
             println!("Successfully parsed!");
@@ -44,12 +44,12 @@ fn test_deep_nested_blocks() {
     for _ in 0..depth {
         code = format!("{{ {} }}", code);
     }
-    
+
     println!("Testing nested blocks with depth: {}", depth);
-    
+
     let mut parser = PureRustPerlParser::new();
     let result = parser.parse(&code);
-    
+
     match result {
         Ok(ast) => {
             println!("Successfully parsed!");
@@ -70,12 +70,12 @@ fn test_deep_nested_arrays() {
     for _ in 0..depth {
         expr = format!("[{}]", expr);
     }
-    
+
     println!("Testing nested arrays with depth: {}", depth);
-    
+
     let mut parser = PureRustPerlParser::new();
     let result = parser.parse(&expr);
-    
+
     match result {
         Ok(ast) => {
             println!("Successfully parsed!");
@@ -96,12 +96,12 @@ fn test_deep_method_chain() {
     for i in 0..depth {
         expr = format!("{}->method{}()", expr, i);
     }
-    
+
     println!("Testing method chain with depth: {}", depth);
-    
+
     let mut parser = PureRustPerlParser::new();
     let result = parser.parse(&expr);
-    
+
     match result {
         Ok(ast) => {
             println!("Successfully parsed!");
@@ -116,7 +116,7 @@ fn test_deep_method_chain() {
 #[cfg(test)]
 mod helpers {
     use std::env;
-    
+
     pub fn run_with_backtrace<F: FnOnce()>(test_fn: F) {
         unsafe {
             env::set_var("RUST_BACKTRACE", "1");

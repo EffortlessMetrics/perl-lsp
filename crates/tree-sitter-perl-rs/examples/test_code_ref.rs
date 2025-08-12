@@ -1,16 +1,16 @@
 //! Test code reference parsing specifically
 
-use tree_sitter_perl::{
-    EnhancedFullParser,
-    pure_rust_parser::AstNode,
-};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Code References ===\n");
 
     let test_cases = vec![
         ("Simple function reference", r#"my $ref = \&function;"#),
-        ("Qualified function reference", r#"my $ref = \&Module::function;"#),
+        (
+            "Qualified function reference",
+            r#"my $ref = \&Module::function;"#,
+        ),
         ("Reference without &", r#"my $ref = \function;"#),
         ("Reference in expression", r#"my $ref = \&{"function"};"#),
     ];
@@ -18,7 +18,7 @@ fn main() {
     for (name, code) in test_cases {
         println!("Testing: {}", name);
         println!("Code: {}", code);
-        
+
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
             Ok(ast) => {
@@ -38,7 +38,7 @@ fn main() {
 
 fn print_ast(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
-    
+
     match node {
         AstNode::Program(items) => {
             println!("{}Program", indent);
@@ -50,7 +50,9 @@ fn print_ast(node: &AstNode, depth: usize) {
             println!("{}Statement", indent);
             print_ast(content, depth + 1);
         }
-        AstNode::VariableDeclaration { scope, initializer, .. } => {
+        AstNode::VariableDeclaration {
+            scope, initializer, ..
+        } => {
             println!("{}VarDecl: {}", indent, scope);
             if let Some(init) = initializer {
                 print_ast(init, depth + 1);

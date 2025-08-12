@@ -14,12 +14,12 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
-use serde_json::json;
 
 pub fn run(
     c_only: bool,
@@ -160,7 +160,12 @@ fn test_implementation(
     let mut parse_error_count = 0;
 
     for (i, test_case) in test_cases.iter().enumerate() {
-        spinner.set_message(format!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case));
+        spinner.set_message(format!(
+            "  [{}/{}] Testing: {}",
+            i + 1,
+            test_cases.len(),
+            test_case
+        ));
 
         let test_result = run_single_test(impl_type, test_case, iterations)?;
 
@@ -285,7 +290,10 @@ fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("C implementation failed: {}", stdout));
+        return Err(color_eyre::eyre::eyre!(
+            "C implementation failed: {}",
+            stdout
+        ));
     }
     // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
@@ -314,7 +322,10 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("Rust implementation failed: {}", stdout));
+        return Err(color_eyre::eyre::eyre!(
+            "Rust implementation failed: {}",
+            stdout
+        ));
     }
     // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
@@ -372,37 +383,59 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
 
     // Summary
     markdown.push_str("## Summary\n\n");
-    
-    let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
+
+    let time_diff = comparison["time_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    
-    markdown.push_str(&format!("- **Performance:** Rust implementation is {:.1}% {} than C implementation\n", 
-        time_diff.abs(), if rust_faster { "faster" } else { "slower" }));
-    
+
+    markdown.push_str(&format!(
+        "- **Performance:** Rust implementation is {:.1}% {} than C implementation\n",
+        time_diff.abs(),
+        if rust_faster { "faster" } else { "slower" }
+    ));
+
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
     let rust_success = comparison["success_rate"]["rust"].as_u64().unwrap_or(0);
     let total = comparison["success_rate"]["total"].as_u64().unwrap_or(0);
-    
-    markdown.push_str(&format!("- **Success Rate:** C: {}/{} ({}%), Rust: {}/{} ({}%)\n",
-        c_success, total, (c_success as f64 / total as f64 * 100.0) as i32,
-        rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32));
+
+    markdown.push_str(&format!(
+        "- **Success Rate:** C: {}/{} ({}%), Rust: {}/{} ({}%)\n",
+        c_success,
+        total,
+        (c_success as f64 / total as f64 * 100.0) as i32,
+        rust_success,
+        total,
+        (rust_success as f64 / total as f64 * 100.0) as i32
+    ));
 
     // Detailed Results
     markdown.push_str("\n## Detailed Results\n\n");
-    
+
     let c_avg_time = c_results["summary"]["avg_time"].as_f64().unwrap_or(0.0);
     let rust_avg_time = rust_results["summary"]["avg_time"].as_f64().unwrap_or(0.0);
-    
+
     markdown.push_str("| Metric | C Implementation | Rust Implementation | Difference |\n");
     markdown.push_str("|--------|------------------|---------------------|------------|\n");
-    markdown.push_str(&format!("| Avg Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
-        c_avg_time, rust_avg_time, time_diff));
-    
+    markdown.push_str(&format!(
+        "| Avg Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
+        c_avg_time, rust_avg_time, time_diff
+    ));
+
     let c_total_time = c_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
-    let rust_total_time = rust_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
-    markdown.push_str(&format!("| Total Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
-        c_total_time, rust_total_time, 
-        if c_total_time > 0.0 { ((rust_total_time - c_total_time) / c_total_time) * 100.0 } else { 0.0 }));
+    let rust_total_time = rust_results["summary"]["total_time"]
+        .as_f64()
+        .unwrap_or(0.0);
+    markdown.push_str(&format!(
+        "| Total Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
+        c_total_time,
+        rust_total_time,
+        if c_total_time > 0.0 {
+            ((rust_total_time - c_total_time) / c_total_time) * 100.0
+        } else {
+            0.0
+        }
+    ));
 
     markdown.push_str("\n## Test Case Results\n\n");
     markdown.push_str("| Test Case | C Time (μs) | Rust Time (μs) | Difference |\n");
@@ -412,14 +445,20 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
         let test_case_str = test_case.as_str().unwrap_or("Unknown");
         let c_result = &c_results["test_cases"][test_case_str];
         let rust_result = &rust_results["test_cases"][test_case_str];
-        
+
         if let (Some(c_time), Some(rust_time)) = (
             c_result["avg_time"].as_f64(),
-            rust_result["avg_time"].as_f64()
+            rust_result["avg_time"].as_f64(),
         ) {
-            let diff = if c_time > 0.0 { ((rust_time - c_time) / c_time) * 100.0 } else { 0.0 };
-            markdown.push_str(&format!("| {} | {:.2} | {:.2} | {:.1}% |\n",
-                test_case_str, c_time, rust_time, diff));
+            let diff = if c_time > 0.0 {
+                ((rust_time - c_time) / c_time) * 100.0
+            } else {
+                0.0
+            };
+            markdown.push_str(&format!(
+                "| {} | {:.2} | {:.2} | {:.1}% |\n",
+                test_case_str, c_time, rust_time, diff
+            ));
         }
     }
 
@@ -428,21 +467,32 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
 
 fn print_summary(report: &serde_json::Value) {
     let comparison = &report["comparison"];
-    let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
+    let time_diff = comparison["time_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    
+
     println!("\n📈 Comparison Summary");
     println!("===================");
-    println!("🦀 Rust is {:.1}% {} than C", 
-        time_diff.abs(), if rust_faster { "faster" } else { "slower" });
-    
+    println!(
+        "🦀 Rust is {:.1}% {} than C",
+        time_diff.abs(),
+        if rust_faster { "faster" } else { "slower" }
+    );
+
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
     let rust_success = comparison["success_rate"]["rust"].as_u64().unwrap_or(0);
     let total = comparison["success_rate"]["total"].as_u64().unwrap_or(0);
-    
-    println!("✅ Success Rate - C: {}/{} ({}%), Rust: {}/{} ({}%)",
-        c_success, total, (c_success as f64 / total as f64 * 100.0) as i32,
-        rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32);
+
+    println!(
+        "✅ Success Rate - C: {}/{} ({}%), Rust: {}/{} ({}%)",
+        c_success,
+        total,
+        (c_success as f64 / total as f64 * 100.0) as i32,
+        rust_success,
+        total,
+        (rust_success as f64 / total as f64 * 100.0) as i32
+    );
 }
 
 fn validate_existing_results(
@@ -451,7 +501,7 @@ fn validate_existing_results(
     spinner: &ProgressBar,
 ) -> Result<()> {
     let comparison_results = output_dir.join("comparison_results.json");
-    
+
     if !comparison_results.exists() {
         return Err(color_eyre::eyre::eyre!("Comparison results not found"));
     }
@@ -459,7 +509,8 @@ fn validate_existing_results(
     spinner.set_message("Validating existing results...");
 
     // Load and validate results
-    let comparison_data: serde_json::Value = serde_json::from_str(&fs::read_to_string(&comparison_results)?)?;
+    let comparison_data: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&comparison_results)?)?;
 
     // Basic validation
     if !comparison_data.get("implementations").is_some() {
@@ -474,8 +525,6 @@ fn validate_existing_results(
 
     Ok(())
 }
-
-
 
 fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     let output = Command::new("cargo")
@@ -727,7 +776,8 @@ fn validate_results(
     spinner.finish_with_message("✅ All results validated");
 
     if check_gates {
-        let content = fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
+        let content =
+            fs::read_to_string(comparison_results).context("Failed to read comparison results")?;
         let comparison_data: serde_json::Value = serde_json::from_str(&content)?;
         check_performance_gates(&comparison_data, spinner)?;
     }
@@ -735,7 +785,10 @@ fn validate_results(
     Ok(())
 }
 
-fn check_performance_gates(comparison_results: &serde_json::Value, spinner: &ProgressBar) -> Result<()> {
+fn check_performance_gates(
+    comparison_results: &serde_json::Value,
+    spinner: &ProgressBar,
+) -> Result<()> {
     // comparison_results is already a serde_json::Value
     let comparison = comparison_results;
 
@@ -780,10 +833,6 @@ fn check_performance_gates(comparison_results: &serde_json::Value, spinner: &Pro
 
     Ok(())
 }
-
-
-
-
 
 fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Result<()> {
     println!("\n📊 Benchmark Summary");
