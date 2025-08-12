@@ -6,7 +6,7 @@
 #[cfg(feature = "incremental")]
 use perl_parser::{
     edit::Edit,
-    incremental::IncrementalParser,
+    incremental::IncrementalState,
     position::Position,
 };
 
@@ -38,7 +38,7 @@ fn demo_simple_edit() {
     println!("1. Simple Value Edit (Maximum Reuse)");
     println!("-----------------------------------");
     
-    let mut parser = IncrementalParser::new();
+    let mut parser = IncrementalState::new();
     
     // Initial parse with multiple statements
     let source1 = r#"
@@ -99,7 +99,7 @@ fn demo_statement_edit() {
     println!("2. Statement-Level Edit");
     println!("----------------------");
     
-    let mut parser = IncrementalParser::new();
+    let mut parser = IncrementalState::new();
     
     let source1 = r#"
 sub calculate {
@@ -162,7 +162,7 @@ fn demo_multiple_edits() {
     println!("3. Multiple Edits in Different Locations");
     println!("---------------------------------------");
     
-    let mut parser = IncrementalParser::new();
+    let mut parser = IncrementalState::new();
     
     let source1 = r#"
 my $count = 0;

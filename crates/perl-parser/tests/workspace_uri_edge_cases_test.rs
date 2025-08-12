@@ -3,8 +3,6 @@ mod support;
 #[cfg(feature = "workspace")]
 #[cfg(test)]
 mod tests {
-    use tempfile::tempdir;
-    use std::fs;
     use lsp_types::Position;
     use serde_json::json;
     use perl_parser::lsp_server::LspServer;
@@ -52,7 +50,7 @@ print "Result: $result\n";
         
         // Set up LSP server with workspace indexing
         let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
         // Convert paths to URIs (with proper percent-encoding for spaces)
@@ -139,7 +137,7 @@ sub use_emoji {
         
         // Set up LSP server
         let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
         let emoji_uri = url::Url::from_file_path(&emoji_file).unwrap().to_string();
@@ -215,7 +213,7 @@ Unicode::
         
         // Set up LSP server
         let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
         let unicode_uri = url::Url::from_file_path(&unicode_file).unwrap().to_string();
