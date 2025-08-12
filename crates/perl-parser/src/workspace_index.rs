@@ -12,6 +12,50 @@ use crate::ast::{Node, NodeKind};
 use crate::Parser;
 use crate::document_store::{Document, DocumentStore};
 
+/// Helper functions for safe URI <-> filesystem path conversion
+/// 
+/// These functions handle proper percent-encoding/decoding and work correctly
+/// with spaces, Windows paths, and non-ASCII characters.
+
+/// Convert a file:// URI to a filesystem path
+/// 
+/// Properly handles percent-encoding and works with spaces, Windows paths, 
+/// and non-ASCII characters. Returns None if the URI is not a valid file:// URI.
+pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
+    // Parse the URI
+    let url = Url::parse(uri).ok()?;
+    
+    // Only handle file:// URIs
+    if url.scheme() != "file" {
+        return None;
+    }
+    
+    // Convert to filesystem path using the url crate's built-in method
+    url.to_file_path().ok()
+}
+
+/// Convert a filesystem path to a file:// URI
+/// 
+/// Properly handles percent-encoding and works with spaces, Windows paths,
+/// and non-ASCII characters.
+pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
+    let path = path.as_ref();
+    
+    // Convert to absolute path if relative
+    let abs_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?
+            .join(path)
+    };
+    
+    // Use the url crate's built-in method to create a proper file:// URI
+    Url::from_file_path(&abs_path)
+        .map(|url| url.to_string())
+        .map_err(|_| format!("Failed to convert path to URI: {}", abs_path.display()))
+}
+
 // Using lsp_types for Position and Range
 
 /// Internal location type using String URIs
@@ -173,44 +217,34 @@ impl WorkspaceIndex {
         }
     }
     
-    /// Normalize a URI to a consistent form using lsp_types
+    /// Normalize a URI to a consistent form using proper URI handling
     fn normalize_uri(uri: &str) -> String {
         // Try to parse as URL first
-        use url::Url;
-        
         if let Ok(url) = Url::parse(uri) {
+            // Already a valid URI, return as-is
             return url.to_string();
         }
         
-        // If not a valid URL, try as file path
-        if let Ok(url) = Url::from_file_path(uri) {
-            return url.to_string();
+        // If not a valid URI, try to treat as a file path
+        let path = std::path::Path::new(uri);
+        
+        // Try to convert path to URI using our helper function
+        if let Ok(uri_string) = fs_path_to_uri(path) {
+            return uri_string;
         }
         
-        // Fallback: try to construct file URL manually
-        let path = if uri.starts_with("file://") {
-            &uri[7..]
-        } else {
-            uri
-        };
-        
-        // Try to create file URL from path
-        std::path::Path::new(path)
-            .canonicalize()
-            .ok()
-            .and_then(|p| Url::from_file_path(p).ok())
-            .map(|u| u.to_string())
-            .unwrap_or_else(|| {
-                // Last resort: just ensure file:// prefix
-                if uri.starts_with("file://") || uri.starts_with("untitled:") {
-                    uri.to_string()
-                } else if uri.starts_with('/') {
-                    format!("file://{}", uri)
-                } else {
-                    // Relative path - keep as is
-                    uri.to_string()
+        // Last resort: if it looks like a file:// URI but is malformed,
+        // try to extract the path and reconstruct properly
+        if uri.starts_with("file://") {
+            if let Some(fs_path) = uri_to_fs_path(uri) {
+                if let Ok(normalized) = fs_path_to_uri(&fs_path) {
+                    return normalized;
                 }
-            })
+            }
+        }
+        
+        // Final fallback: return as-is for special URIs like untitled:
+        uri.to_string()
     }
     
     /// Index a file from its URI and text content
@@ -986,9 +1020,9 @@ pub mod lsp_adapter {
             std::path::Path::new(s).canonicalize()
                 .ok()
                 .and_then(|p| {
-                    // Convert path to file:// URI string
-                    let uri_string = format!("file://{}", p.display());
-                    LspUrl::from_str(&uri_string).ok()
+                    // Use proper URI construction with percent-encoding
+                    crate::workspace_index::fs_path_to_uri(&p).ok()
+                        .and_then(|uri_string| LspUrl::from_str(&uri_string).ok())
                 })
         })
     }
@@ -1058,5 +1092,138 @@ use Data::Dumper;
         assert!(deps.contains("strict"));
         assert!(deps.contains("warnings"));
         assert!(deps.contains("Data::Dumper"));
+    }
+    
+    #[test]
+    fn test_uri_to_fs_path_basic() {
+        // Test basic file:// URI conversion
+        if let Some(path) = uri_to_fs_path("file:///tmp/test.pl") {
+            assert_eq!(path, std::path::PathBuf::from("/tmp/test.pl"));
+        }
+        
+        // Test with invalid URI
+        assert!(uri_to_fs_path("not-a-uri").is_none());
+        
+        // Test with non-file scheme
+        assert!(uri_to_fs_path("http://example.com").is_none());
+    }
+    
+    #[test]
+    fn test_uri_to_fs_path_with_spaces() {
+        // Test with percent-encoded spaces
+        if let Some(path) = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl") {
+            assert_eq!(path, std::path::PathBuf::from("/tmp/path with spaces/test.pl"));
+        }
+        
+        // Test with multiple spaces and special characters
+        if let Some(path) = uri_to_fs_path("file:///tmp/My%20Documents/test%20file.pl") {
+            assert_eq!(path, std::path::PathBuf::from("/tmp/My Documents/test file.pl"));
+        }
+    }
+    
+    #[test]
+    fn test_uri_to_fs_path_with_unicode() {
+        // Test with Unicode characters (percent-encoded)
+        if let Some(path) = uri_to_fs_path("file:///tmp/caf%C3%A9/test.pl") {
+            assert_eq!(path, std::path::PathBuf::from("/tmp/café/test.pl"));
+        }
+        
+        // Test with Unicode emoji (percent-encoded)
+        if let Some(path) = uri_to_fs_path("file:///tmp/emoji%F0%9F%98%80/test.pl") {
+            assert_eq!(path, std::path::PathBuf::from("/tmp/emoji😀/test.pl"));
+        }
+    }
+    
+    #[test]
+    fn test_fs_path_to_uri_basic() {
+        // Test basic path to URI conversion
+        let result = fs_path_to_uri("/tmp/test.pl");
+        assert!(result.is_ok());
+        let uri = result.unwrap();
+        assert!(uri.starts_with("file://"));
+        assert!(uri.contains("/tmp/test.pl"));
+    }
+    
+    #[test]
+    fn test_fs_path_to_uri_with_spaces() {
+        // Test path with spaces
+        let result = fs_path_to_uri("/tmp/path with spaces/test.pl");
+        assert!(result.is_ok());
+        let uri = result.unwrap();
+        assert!(uri.starts_with("file://"));
+        // Should contain percent-encoded spaces
+        assert!(uri.contains("path%20with%20spaces"));
+    }
+    
+    #[test]
+    fn test_fs_path_to_uri_with_unicode() {
+        // Test path with Unicode characters
+        let result = fs_path_to_uri("/tmp/café/test.pl");
+        assert!(result.is_ok());
+        let uri = result.unwrap();
+        assert!(uri.starts_with("file://"));
+        // Should contain percent-encoded Unicode
+        assert!(uri.contains("caf%C3%A9"));
+    }
+    
+    #[test]
+    fn test_normalize_uri_file_schemes() {
+        // Test normalization of valid file URIs
+        let uri = WorkspaceIndex::normalize_uri("file:///tmp/test.pl");
+        assert_eq!(uri, "file:///tmp/test.pl");
+        
+        // Test normalization of URIs with spaces
+        let uri = WorkspaceIndex::normalize_uri("file:///tmp/path%20with%20spaces/test.pl");
+        assert_eq!(uri, "file:///tmp/path%20with%20spaces/test.pl");
+    }
+    
+    #[test]
+    fn test_normalize_uri_absolute_paths() {
+        // Test normalization of absolute paths (convert to file:// URI)
+        let uri = WorkspaceIndex::normalize_uri("/tmp/test.pl");
+        assert!(uri.starts_with("file://"));
+        assert!(uri.contains("/tmp/test.pl"));
+    }
+    
+    #[test]
+    fn test_normalize_uri_special_schemes() {
+        // Test that special schemes like untitled: are preserved
+        let uri = WorkspaceIndex::normalize_uri("untitled:Untitled-1");
+        assert_eq!(uri, "untitled:Untitled-1");
+    }
+    
+    #[test]
+    fn test_roundtrip_conversion() {
+        // Test that URI -> path -> URI conversion preserves the URI
+        let original_uri = "file:///tmp/path%20with%20spaces/caf%C3%A9.pl";
+        
+        if let Some(path) = uri_to_fs_path(original_uri) {
+            if let Ok(converted_uri) = fs_path_to_uri(&path) {
+                // Should be able to round-trip back to an equivalent URI
+                assert!(converted_uri.starts_with("file://"));
+                
+                // The path component should decode correctly
+                if let Some(roundtrip_path) = uri_to_fs_path(&converted_uri) {
+                    assert_eq!(path, roundtrip_path);
+                }
+            }
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_windows_paths() {
+        // Test Windows-style paths
+        let result = fs_path_to_uri(r"C:\Users\test\Documents\script.pl");
+        assert!(result.is_ok());
+        let uri = result.unwrap();
+        assert!(uri.starts_with("file://"));
+        
+        // Test Windows path with spaces
+        let result = fs_path_to_uri(r"C:\Program Files\My App\script.pl");
+        assert!(result.is_ok());
+        let uri = result.unwrap();
+        assert!(uri.starts_with("file://"));
+        assert!(uri.contains("Program%20Files"));
     }
 }

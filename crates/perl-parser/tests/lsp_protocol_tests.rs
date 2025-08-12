@@ -119,6 +119,7 @@ fn test_diagnostics_clear_protocol_framing() {
 fn test_workspace_symbol_deduplication() {
     use perl_parser::workspace_index::WorkspaceIndex;
     use std::collections::HashSet;
+    use url::Url;
     
     let index = WorkspaceIndex::new();
     
@@ -142,7 +143,10 @@ sub another {
 "#;
     
     let uri = "file:///test/test.pl";
-    index.index_file(uri, perl_code, 1).unwrap();
+    index.index_file(
+        Url::parse(uri).unwrap(),
+        perl_code.to_string()
+    ).unwrap();
     
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -177,6 +181,7 @@ sub another {
 #[test]
 fn test_workspace_symbol_response_format() {
     use perl_parser::workspace_index::WorkspaceIndex;
+    use url::Url;
     
     let index = WorkspaceIndex::new();
     
@@ -190,7 +195,10 @@ sub test_function {
 "#;
     
     let uri = "file:///test/test.pl";
-    index.index_file(uri, perl_code, 1).unwrap();
+    index.index_file(
+        Url::parse(uri).unwrap(),
+        perl_code.to_string()
+    ).unwrap();
     
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -275,6 +283,7 @@ fn test_tool_detection() {
 #[test]
 fn test_uri_normalization() {
     use perl_parser::workspace_index::WorkspaceIndex;
+    use url::Url;
     
     let index = WorkspaceIndex::new();
     
@@ -290,7 +299,17 @@ fn test_uri_normalization() {
     
     for (input, _expected) in test_cases {
         // Just ensure indexing doesn't panic with various URI formats
-        let result = index.index_file(input, test_code, 1);
+        let url = if input.starts_with("file://") || input.starts_with("untitled:") {
+            Url::parse(input).ok()
+        } else {
+            Url::from_file_path(input).ok()
+        };
+        
+        let result = if let Some(url) = url {
+            index.index_file(url, test_code.to_string())
+        } else {
+            Err("Invalid URI".to_string())
+        };
         assert!(result.is_ok(), "Failed to index with URI: {}", input);
     }
 }
