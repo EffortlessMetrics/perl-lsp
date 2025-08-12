@@ -40,8 +40,8 @@ print $result;
 "#;
     
     // Index both files
-    index.index_file(file1_uri, file1_content, 1).expect("Failed to index file1");
-    index.index_file(file2_uri, file2_content, 1).expect("Failed to index file2");
+    index.index_file(url::Url::parse(file1_uri).unwrap(), file1_content.to_string()).expect("Failed to index file1");
+    index.index_file(url::Url::parse(file2_uri).unwrap(), file2_content.to_string()).expect("Failed to index file2");
     
     // Test 1: Find the 'bar' subroutine
     let bar_symbols = index.find_symbols("bar");
@@ -104,7 +104,7 @@ sub old_function {
 }
 "#;
     
-    index.index_file(file_uri, content_v1, 1).expect("Failed to index v1");
+    index.index_file(url::Url::parse(file_uri).unwrap(), content_v1.to_string()).expect("Failed to index v1");
     
     let old_func = index.find_symbols("old_function");
     assert_eq!(old_func.len(), 1, "Should find old_function");
@@ -116,7 +116,7 @@ sub new_function {
 }
 "#;
     
-    index.index_file(file_uri, content_v2, 2).expect("Failed to index v2");
+    index.index_file(url::Url::parse(file_uri).unwrap(), content_v2.to_string()).expect("Failed to index v2");
     
     let old_func = index.find_symbols("old_function");
     assert_eq!(old_func.len(), 0, "Should not find old_function after update");
@@ -135,7 +135,7 @@ package TempPackage;
 sub temp_sub { }
 "#;
     
-    index.index_file(file_uri, content, 1).expect("Failed to index");
+    index.index_file(url::Url::parse(file_uri).unwrap(), content.to_string()).expect("Failed to index");
     
     let symbols = index.find_symbols("TempPackage");
     let packages: Vec<_> = symbols.iter()
@@ -144,7 +144,7 @@ sub temp_sub { }
     assert_eq!(packages.len(), 1, "Should find TempPackage");
     
     // Clear the file
-    index.clear_file(file_uri);
+    index.clear_file(&url::Url::parse(file_uri).unwrap());
     
     let symbols = index.find_symbols("TempPackage");
     assert_eq!(symbols.len(), 0, "Should not find TempPackage after clearing");
@@ -162,7 +162,7 @@ my %hash = (key => 'value');
 my ($x, $y, $z) = (1, 2, 3);
 "#;
     
-    index.index_file(file_uri, content, 1).expect("Failed to index");
+    index.index_file(url::Url::parse(file_uri).unwrap(), content.to_string()).expect("Failed to index");
     
     let scalar = index.find_symbols("$scalar");
     assert_eq!(scalar.len(), 1, "Should find $scalar");

@@ -52,6 +52,7 @@ criterion = "0.7.0"
 pretty_assertions = "1.4.1"
 regex = "1.11.1"
 serial_test = "3.0"
+tempfile = "3.8"
 
 [[bench]]
 name = "parser_benchmark"

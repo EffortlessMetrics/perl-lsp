@@ -32,7 +32,7 @@ my $♥ = 'love';  # Heart variable
 my $π = 3.14159;  # Greek letter pi
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let symbols = index.file_symbols(uri);
         
@@ -84,7 +84,7 @@ my $😀 = 2;  # Emoji at column 3, takes 2 UTF-16 units
 my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let symbols = index.file_symbols(uri);
         
@@ -129,7 +129,7 @@ sub third_sub {
 }
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let symbols = index.file_symbols(uri);
         
@@ -167,7 +167,7 @@ my $y = $x + 1;  # Read $x
 print $x;        # Read
 "#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         let refs = index.find_references("$x");
         
@@ -192,7 +192,7 @@ print $x;        # Read
     return 42;
 }"#;
         
-        index.index_file(uri, code_v1, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code_v1.to_string()).unwrap();
         
         let symbols_v1 = index.file_symbols(uri);
         assert!(symbols_v1.iter().any(|s| s.name == "old_name"));
@@ -203,7 +203,7 @@ print $x;        # Read
     return 42;
 }"#;
         
-        index.index_file(uri, code_v2, 2).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code_v2.to_string()).unwrap();
         
         let symbols_v2 = index.file_symbols(uri);
         assert!(!symbols_v2.iter().any(|s| s.name == "old_name"), "old_name should be gone");
@@ -218,14 +218,14 @@ print $x;        # Read
         let code = r#"package Test;
 sub test_sub { }"#;
         
-        index.index_file(uri, code, 1).unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
         
         // Verify symbols exist
         let symbols = index.file_symbols(uri);
         assert!(!symbols.is_empty());
         
         // Clear the file
-        index.clear_file(uri);
+        index.clear_file(&url::Url::parse(uri).unwrap());
         
         // Verify symbols are gone
         let symbols_after = index.file_symbols(uri);
