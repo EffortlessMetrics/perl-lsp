@@ -4,6 +4,17 @@
 //! nature of the language, particularly the ambiguity of the `/` character
 //! which can be either division or the start of a regex.
 
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::too_many_lines,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::must_use_candidate
+)]
+
 use std::sync::Arc;
 
 pub mod checkpoint;
@@ -828,37 +839,37 @@ impl<'a> PerlLexer<'a> {
             if matches!(text, "s" | "tr" | "y") {
                 if let Some(next) = self.current_char() {
                     // Check if followed by a delimiter
-                    if matches!(
-                        next,
-                        '/' | '|'
-                            | '{'
-                            | '['
-                            | '('
-                            | '<'
-                            | '!'
-                            | '#'
-                            | '@'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '+'
-                            | '='
-                            | '~'
-                            | '`'
-                    ) {
-                        match text {
-                            "s" => {
-                                return self.parse_substitution(start);
-                            }
-                            "tr" | "y" => {
-                                return self.parse_transliteration(start);
-                            }
-                            _ => unreachable!(),
+                if matches!(
+                    next,
+                    '/' | '|'
+                        | '{'
+                        | '['
+                        | '('
+                        | '<'
+                        | '!'
+                        | '#'
+                        | '@'
+                        | '$'
+                        | '%'
+                        | '^'
+                        | '&'
+                        | '*'
+                        | '+'
+                        | '='
+                        | '~'
+                        | '`'
+                ) {
+                    match text {
+                        "s" => {
+                            return self.parse_substitution(start);
                         }
+                        "tr" | "y" => {
+                            return self.parse_transliteration(start);
+                        }
+                        _ => unreachable!(),
                     }
                 }
+            }
             }
 
             let token_type = if is_keyword(text) {
@@ -1027,29 +1038,29 @@ impl<'a> PerlLexer<'a> {
                 // Check for compound operators
                 if let Some(next) = self.current_char() {
                     if is_compound_operator(ch, next) {
-                        self.advance();
+                    self.advance();
 
-                        // Check for three-character operators like **=, <<=, >>=
-                        if self.position < self.input.len() {
-                            let third = self.current_char();
-                            // Check for three-character operators
-                            if matches!(
-                                (ch, next, third),
-                                ('*', '*', Some('='))
-                                    | ('<', '<', Some('='))
-                                    | ('>', '>', Some('='))
-                                    | ('&', '&', Some('='))
-                                    | ('|', '|', Some('='))
-                                    | ('/', '/', Some('='))
-                            ) {
-                                self.advance(); // consume the =
-                            } else if ch == '<' && next == '=' && third == Some('>') {
-                                self.advance(); // consume the >
-                            // Special case: <=> spaceship operator
-                            } else if ch == '.' && next == '.' && third == Some('.') {
-                                self.advance(); // consume the third .
-                            }
+                    // Check for three-character operators like **=, <<=, >>=
+                    if self.position < self.input.len() {
+                        let third = self.current_char();
+                        // Check for three-character operators
+                        if matches!(
+                            (ch, next, third),
+                            ('*', '*', Some('='))
+                                | ('<', '<', Some('='))
+                                | ('>', '>', Some('='))
+                                | ('&', '&', Some('='))
+                                | ('|', '|', Some('='))
+                                | ('/', '/', Some('='))
+                        ) {
+                            self.advance(); // consume the =
+                        } else if ch == '<' && next == '=' && third == Some('>') {
+                            self.advance(); // consume the >
+                        // Special case: <=> spaceship operator
+                        } else if ch == '.' && next == '.' && third == Some('.') {
+                            self.advance(); // consume the third .
                         }
+                    }
                     }
                 }
             }
@@ -1059,27 +1070,27 @@ impl<'a> PerlLexer<'a> {
                 // Check for compound operators
                 if let Some(next) = self.current_char() {
                     if is_compound_operator(ch, next) {
-                        self.advance();
+                    self.advance();
 
-                        // Check for three-character operators like **=, <<=, >>=
-                        if self.position < self.input.len() {
-                            let third = self.current_char();
-                            // Check for three-character operators
-                            if matches!(
-                                (ch, next, third),
-                                ('*', '*', Some('='))
-                                    | ('<', '<', Some('='))
-                                    | ('>', '>', Some('='))
-                                    | ('&', '&', Some('='))
-                                    | ('|', '|', Some('='))
-                                    | ('/', '/', Some('='))
-                            ) {
-                                self.advance(); // consume the =
-                            } else if ch == '<' && next == '=' && third == Some('>') {
-                                self.advance(); // consume the >
-                                // Special case: <=> spaceship operator
-                            }
+                    // Check for three-character operators like **=, <<=, >>=
+                    if self.position < self.input.len() {
+                        let third = self.current_char();
+                        // Check for three-character operators
+                        if matches!(
+                            (ch, next, third),
+                            ('*', '*', Some('='))
+                                | ('<', '<', Some('='))
+                                | ('>', '>', Some('='))
+                                | ('&', '&', Some('='))
+                                | ('|', '|', Some('='))
+                                | ('/', '/', Some('='))
+                        ) {
+                            self.advance(); // consume the =
+                        } else if ch == '<' && next == '=' && third == Some('>') {
+                            self.advance(); // consume the >
+                            // Special case: <=> spaceship operator
                         }
+                    }
                     }
                 }
             }

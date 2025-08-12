@@ -3,6 +3,18 @@
 //! This crate provides a clean, efficient parser that consumes tokens from
 //! the perl-lexer crate and produces a well-structured Abstract Syntax Tree (AST).
 //!
+
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::too_many_lines,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::must_use_candidate
+)]
 //! ## Architecture
 //!
 //! The parser follows a recursive descent design with operator precedence handling,

@@ -990,7 +990,7 @@ impl LspServer {
 
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    let completions = provider.get_completions(&doc.content, offset);
+                    let mut completions = provider.get_completions(&doc.content, offset);
 
                     // Add workspace-wide completions (functions and modules from other files)
                     #[cfg(feature = "workspace")]

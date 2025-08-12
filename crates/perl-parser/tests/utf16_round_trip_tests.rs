@@ -183,7 +183,7 @@ mod utf16_round_trip_tests {
         assert!(test_round_trip(&server, text, 0, 0), "Start");
 
         // Position after the complex emoji (it's many UTF-16 units)
-        let offset_start = server.position_to_offset(text, 0, 0);
+        let _offset_start = server.position_to_offset(text, 0, 0);
         let offset_after_emoji = text.find(" family").unwrap();
         let (line, char) = server.offset_to_position(text, offset_after_emoji);
         assert_eq!(line, 0, "Still on first line");

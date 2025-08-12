@@ -1,0 +1,11 @@
+# clippy.toml
+# Keep pedantic on, but chill some noisy lints for a parser project.
+warn-on-all = false
+msrv = "1.85"
+
+# Common pedantic relaxations for parser projects
+allow-private-module-inception = true
+too-many-arguments-threshold = 8
+type-complexity-threshold = 350
+cognitive-complexity-threshold = 50
+too-many-lines-threshold = 500
