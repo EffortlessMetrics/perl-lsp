@@ -725,6 +725,7 @@ impl EnhancedCodeActionsProvider {
     }
     
     /// Find node at range
+    #[allow(dead_code)]
     #[allow(clippy::only_used_in_recursion)]
     fn find_node_at_range<'a>(&self, node: &'a Node, range: (usize, usize)) -> Option<&'a Node> {
         if node.location.start <= range.0 && node.location.end >= range.1 {

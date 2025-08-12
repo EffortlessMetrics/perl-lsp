@@ -144,7 +144,7 @@ sub temp_sub { }
     assert_eq!(packages.len(), 1, "Should find TempPackage");
     
     // Clear the file
-    index.clear_file(&url::Url::parse(file_uri).unwrap());
+    index.clear_file(file_uri);
     
     let symbols = index.find_symbols("TempPackage");
     assert_eq!(symbols.len(), 0, "Should not find TempPackage after clearing");

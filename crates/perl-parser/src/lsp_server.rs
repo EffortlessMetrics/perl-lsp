@@ -771,9 +771,7 @@ impl LspServer {
             // Clear from workspace index
             #[cfg(feature = "workspace")]
             if let Some(ref workspace_index) = self.workspace_index {
-                if let Ok(url) = url::Url::parse(uri) {
-                    workspace_index.clear_file(&url);
-                }
+                workspace_index.clear_file(uri);
             }
             
             // Clear diagnostics for this file using centralized notify
@@ -3656,7 +3654,7 @@ impl LspServer {
                                     if let Ok(content) = std::fs::read_to_string(&path) {
                                         if let Ok(url) = url::Url::parse(uri) {
                                             // Clear old index data
-                                            workspace_index.clear_file(&url);
+                                            workspace_index.clear_file(uri);
                                             // Re-index with new content
                                             let _ = workspace_index.index_file(url, content.clone());
                                         }
@@ -3686,9 +3684,7 @@ impl LspServer {
                             // Remove from index
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
-                                if let Ok(url) = url::Url::parse(uri) {
-                                    workspace_index.remove_file(&url);
-                                }
+                                workspace_index.remove_file(uri);
                             }
                             
                             // Remove from document store
@@ -3778,9 +3774,7 @@ impl LspServer {
                     // Update the index for the renamed file
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
-                        if let Ok(url) = url::Url::parse(old_uri) {
-                            workspace_index.remove_file(&url);
-                        }
+                        workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
@@ -3813,9 +3807,7 @@ impl LspServer {
                     // Remove from workspace index
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
-                        if let Ok(url) = url::Url::parse(uri) {
-                            workspace_index.remove_file(&url);
-                        }
+                        workspace_index.remove_file(uri);
                     }
                     
                     // Remove from document store
@@ -3926,23 +3918,23 @@ impl LspServer {
         Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
     }
 
-    // Test-only public methods (enabled for workspace feature tests)
-    #[cfg(all(feature = "workspace", test))]
+    // Test-only public methods (enabled for unit tests or integration tests with expose_lsp_test_api)
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         self.handle_did_open(params)
     }
 
-    #[cfg(all(feature = "workspace", test))]
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         self.handle_definition(params)
     }
 
-    #[cfg(all(feature = "workspace", test))]
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         self.handle_references(params)
     }
 
-    #[cfg(all(feature = "workspace", test))]
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         self.handle_completion(params)
     }
