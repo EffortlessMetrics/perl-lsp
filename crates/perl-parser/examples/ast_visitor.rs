@@ -233,14 +233,14 @@ my $unused = 42;
             println!("\n⚠️  Potential Issues:");
 
             // Find unused variables
-            for (var, _) in &collector.declarations {
+            for var in collector.declarations.keys() {
                 if !collector.usages.contains_key(var) {
                     println!("  Unused variable: {}", var);
                 }
             }
 
             // Find undefined variables
-            for (var, _) in &collector.usages {
+            for var in collector.usages.keys() {
                 if !collector.declarations.contains_key(var) {
                     // Skip built-ins like @_
                     if var != "@_" {

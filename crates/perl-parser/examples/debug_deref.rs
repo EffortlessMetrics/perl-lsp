@@ -1,4 +1,4 @@
-use perl_parser::{Parser, TokenKind};
+use perl_parser::Parser;
 
 fn main() {
     let input = "$hash->{key}->[0]->{sub}";

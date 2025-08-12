@@ -16,7 +16,6 @@ use url::Url;
 ///
 /// These functions handle proper percent-encoding/decoding and work correctly
 /// with spaces, Windows paths, and non-ASCII characters.
-
 /// Convert a file:// URI to a filesystem path
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,

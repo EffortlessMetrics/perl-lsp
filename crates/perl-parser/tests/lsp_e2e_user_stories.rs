@@ -596,7 +596,7 @@ sub process {
     let acts = actions.as_array().unwrap();
     // Code actions may be empty if the diagnostic provider doesn't detect this specific issue
     // Just verify we got a valid response
-    assert!(acts.is_empty() || acts.len() > 0);
+    assert!(acts.is_empty() || !acts.is_empty());
 }
 
 // ==================== USER STORY 10: INCREMENTAL PARSING ====================

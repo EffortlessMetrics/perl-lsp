@@ -147,12 +147,12 @@ impl CodeActionsProvider {
             });
 
             // Option 2: Prefix with underscore to indicate intentionally unused
-            let underscore_name = if var_name.starts_with('$') {
-                format!("$_{}", &var_name[1..])
-            } else if var_name.starts_with('@') {
-                format!("@_{}", &var_name[1..])
-            } else if var_name.starts_with('%') {
-                format!("%_{}", &var_name[1..])
+            let underscore_name = if let Some(stripped) = var_name.strip_prefix('$') {
+                format!("$_{}", stripped)
+            } else if let Some(stripped) = var_name.strip_prefix('@') {
+                format!("@_{}", stripped)
+            } else if let Some(stripped) = var_name.strip_prefix('%') {
+                format!("%_{}", stripped)
             } else {
                 format!("_{}", var_name)
             };
@@ -364,12 +364,12 @@ impl CodeActionsProvider {
 
         if let Some(param_name) = Self::extract_variable_name(&diagnostic.message) {
             // Prefix with underscore to indicate intentionally unused
-            let underscore_name = if param_name.starts_with('$') {
-                format!("$_{}", &param_name[1..])
-            } else if param_name.starts_with('@') {
-                format!("@_{}", &param_name[1..])
-            } else if param_name.starts_with('%') {
-                format!("%_{}", &param_name[1..])
+            let underscore_name = if let Some(stripped) = param_name.strip_prefix('$') {
+                format!("$_{}", stripped)
+            } else if let Some(stripped) = param_name.strip_prefix('@') {
+                format!("@_{}", stripped)
+            } else if let Some(stripped) = param_name.strip_prefix('%') {
+                format!("%_{}", stripped)
             } else {
                 format!("_{}", param_name)
             };
@@ -544,8 +544,6 @@ impl CodeActionsProvider {
         let before = &self.source[pos.saturating_sub(10)..pos];
         if before.contains('\'') {
             '\''
-        } else if before.contains('"') {
-            '"'
         } else {
             '"' // Default to double quote
         }

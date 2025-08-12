@@ -6,7 +6,7 @@
 #[cfg(feature = "incremental")]
 use perl_parser::{
     edit::{Edit, EditSet},
-    incremental::IncrementalParser,
+    incremental::IncrementalState,
     position::Position,
     token_wrapper::PositionTracker,
 };
@@ -129,7 +129,7 @@ fn demo_incremental_parsing() {
     println!("3. Incremental Parsing Demo");
     println!("--------------------------");
 
-    let mut parser = IncrementalParser::new();
+    let mut parser = IncrementalState::new();
 
     // Initial parse
     let source1 = "my $x = 42;\nprint $x;";

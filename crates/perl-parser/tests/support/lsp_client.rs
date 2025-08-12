@@ -228,7 +228,7 @@ impl Drop for LspClient {
     fn drop(&mut self) {
         // Try to gracefully shutdown
         let _ = self.request("shutdown", json!(null));
-        let _ = self.send(&json!({
+        self.send(&json!({
             "jsonrpc": "2.0",
             "method": "exit"
         }));

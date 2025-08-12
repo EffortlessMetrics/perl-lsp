@@ -58,7 +58,7 @@ sub process($data) {
         .filter(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global"))
         .collect();
 
-    assert!(shadow_actions.len() >= 1);
+    assert!(!shadow_actions.is_empty());
     assert!(
         shadow_actions
             .iter()
@@ -92,7 +92,7 @@ fn test_unused_parameter_code_actions() {
         .filter(|a| a.diagnostic_id.as_deref() == Some("unused-parameter"))
         .collect();
 
-    assert!(unused_actions.len() >= 1);
+    assert!(!unused_actions.is_empty());
     assert!(unused_actions.iter().any(|a| a.title.contains("$_unused")));
     assert!(unused_actions.iter().any(|a| a.title.contains("comment")));
 }
@@ -184,7 +184,7 @@ print LOGFILE "Starting process";"#;
         .filter(|a| a.title.contains("filehandle"))
         .collect();
 
-    assert!(filehandle_actions.len() >= 1);
+    assert!(!filehandle_actions.is_empty());
     assert!(filehandle_actions[0].edit.new_text.contains("open"));
 }
 

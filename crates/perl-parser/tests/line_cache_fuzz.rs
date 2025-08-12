@@ -81,7 +81,7 @@ mod fuzz {
 
             // Test various offsets (only valid char boundaries)
             let mut offsets = vec![0];
-            if content.len() > 0 {
+            if !content.is_empty() {
                 offsets.push(content.len());
 
                 // Add char boundary offsets

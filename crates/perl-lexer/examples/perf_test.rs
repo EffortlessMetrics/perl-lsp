@@ -61,7 +61,7 @@ fn main() {
     for _ in 0..iterations {
         let lexer = PerlLexer::new(&large_input);
         let tokens = collect_all_tokens(lexer);
-        assert!(tokens.len() > 0);
+        assert!(!tokens.is_empty());
     }
 
     let elapsed = start.elapsed();

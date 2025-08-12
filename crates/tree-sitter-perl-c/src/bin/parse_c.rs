@@ -1,7 +1,6 @@
 use std::env;
 use std::fs;
 use std::process;
-use tree_sitter_perl_c;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

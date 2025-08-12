@@ -28,6 +28,12 @@ pub struct DocumentHighlight {
 /// Document Highlight Provider
 pub struct DocumentHighlightProvider;
 
+impl Default for DocumentHighlightProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DocumentHighlightProvider {
     /// Create a new document highlight provider
     pub fn new() -> Self {

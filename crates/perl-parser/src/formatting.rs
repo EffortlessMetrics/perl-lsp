@@ -127,7 +127,7 @@ impl CodeFormatter {
         }
 
         // Calculate the range to replace
-        let start_char = if start_line == 0 { 0 } else { 0 }; // Always start at beginning of line
+        let start_char = 0; // Always start at beginning of line
         let end_char = lines[end_line].len() as u32;
 
         Ok(vec![FormatTextEdit {

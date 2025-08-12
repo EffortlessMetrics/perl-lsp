@@ -19,7 +19,7 @@ mod declaration_micro_tests {
 
         // Build parent map
         let mut parent_map = ParentMap::default();
-        DeclarationProvider::build_parent_map(&*ast_arc, &mut parent_map, None);
+        DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
 
         // Create provider - we need to leak to satisfy lifetime
         let leaked_map = Box::leak(Box::new(parent_map));
