@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Test Infrastructure** - Rust 2024 Edition compatibility
-  - Added required `unsafe` blocks for `env::set_var`/`remove_var` (Rust 2024 edition marks these as unsafe due to data race risks in multithreaded programs)
+  - Rust 2024 marks `std::env::{set_var, remove_var}` as `unsafe`; audited test code and wrapped calls accordingly
+  - Run env-mutating tests single-threaded with `#[serial_test::serial]` for safety
   - Serialized environment variable usage in tests with `EnvGuard` helper
   - Added proper `#[allow(dead_code)]` annotations for test helpers
   - Fixed workspace URI edge cases test API calls

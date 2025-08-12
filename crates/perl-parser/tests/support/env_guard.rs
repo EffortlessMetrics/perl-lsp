@@ -10,10 +10,15 @@ pub struct EnvGuard {
 }
 
 impl EnvGuard {
-    /// Set an environment variable and return a guard that will restore it
-    pub fn set<K: Into<String>, V: AsRef<str>>(key: K, value: V) -> Self {
+    /// Set an environment variable and return a guard that will restore it.
+    ///
+    /// # Safety
+    /// Must only be called when **no other threads are running**. Environment
+    /// mutation is process-global and not thread-safe on some platforms.
+    pub unsafe fn set<K: Into<String>, V: AsRef<str>>(key: K, value: V) -> Self {
         let key = key.into();
         let prev = env::var_os(&key);
+        // SAFETY: upheld by the caller (see safety contract above).
         unsafe { env::set_var(&key, value.as_ref()) };
         EnvGuard { key, prev }
     }

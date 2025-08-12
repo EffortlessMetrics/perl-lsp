@@ -49,7 +49,8 @@ print "Result: $result\n";
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server with workspace indexing
-        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+        // SAFETY: Test runs single-threaded with #[serial_test::serial]
+        let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
@@ -136,7 +137,8 @@ sub use_emoji {
         fs::write(&emoji_file, emoji_content).unwrap();
         
         // Set up LSP server
-        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+        // SAFETY: Test runs single-threaded with #[serial_test::serial]
+        let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
@@ -212,7 +214,8 @@ Unicode::
         fs::write(&main_file, main_content).unwrap();
         
         // Set up LSP server
-        let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
+        // SAFETY: Test runs single-threaded with #[serial_test::serial]
+        let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
         
