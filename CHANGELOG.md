@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Safe environment variable management with `EnvGuard` helper
 
 ### Fixed
-- **Test Infrastructure** - Improved test utilities
-  - Serialized environment variable usage in tests with `EnvGuard` helper (using unsafe blocks as required in Rust 2024)
+- **Test Infrastructure** - Rust 2024 Edition compatibility
+  - Fixed environment variable operations to use required `unsafe` blocks (Rust 2024 edition requirement)
+  - Serialized environment variable usage in tests with `EnvGuard` helper
   - Added proper `#[allow(dead_code)]` annotations for test helpers
   - Fixed workspace URI edge cases test API calls
   - Properly feature-gated incremental parsing handler
