@@ -44,6 +44,7 @@ path = "src/bin/perl-dap.rs"
 default = []
 cli = []
 incremental = ["anyhow"]
+workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 
 [dev-dependencies]
