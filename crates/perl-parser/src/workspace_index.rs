@@ -6,26 +6,16 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use serde::{Serialize, Deserialize};
+use lsp_types::{Position, Range};
+use url::Url;
 use crate::ast::{Node, NodeKind};
 use crate::Parser;
 use crate::document_store::{Document, DocumentStore};
 
-/// A position in a document
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Position {
-    pub line: u32,
-    pub character: u32,
-}
+// Using lsp_types for Position and Range
 
-/// A range in a document
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Range {
-    pub start: Position,
-    pub end: Position,
-}
-
-/// A location in a workspace
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Internal location type using String URIs
+#[derive(Debug, Clone)]
 pub struct Location {
     pub uri: String,
     pub range: Range,
@@ -224,33 +214,33 @@ impl WorkspaceIndex {
     }
     
     /// Index a file from its URI and text content
-    pub fn index_file(&self, uri: &str, text: &str, version: i32) -> Result<(), String> {
-        let normalized_uri = Self::normalize_uri(uri);
+    pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
+        let uri_str = uri.to_string();
         
         // Update document store
-        if self.document_store.is_open(&normalized_uri) {
-            self.document_store.update(&normalized_uri, version, text.to_string());
+        if self.document_store.is_open(&uri_str) {
+            self.document_store.update(&uri_str, 1, text.clone());
         } else {
-            self.document_store.open(normalized_uri.clone(), version, text.to_string());
+            self.document_store.open(uri_str.clone(), 1, text.clone());
         }
         
         // Parse the file
-        let mut parser = Parser::new(text);
+        let mut parser = Parser::new(&text);
         let ast = match parser.parse() {
             Ok(ast) => ast,
             Err(e) => return Err(format!("Parse error: {}", e)),
         };
         
         // Get the document for line index
-        let mut doc = self.document_store.get(&normalized_uri).ok_or("Document not found")?;
+        let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
         
         // Extract symbols and references
         let mut file_index = FileIndex::default();
-        let mut visitor = IndexVisitor::new(&mut doc, normalized_uri.clone());
+        let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
         visitor.visit(&ast, &mut file_index);
         
         // Update the index
-        let key = DocumentStore::uri_key(&normalized_uri);
+        let key = DocumentStore::uri_key(&uri_str);
         {
             let mut files = self.files.write().unwrap();
             files.insert(key.clone(), file_index);
@@ -263,9 +253,9 @@ impl WorkspaceIndex {
                 let mut symbols = self.symbols.write().unwrap();
                 for symbol in &file_index.symbols {
                     if let Some(ref qname) = symbol.qualified_name {
-                        symbols.insert(qname.clone(), uri.to_string());
+                        symbols.insert(qname.clone(), uri_str.clone());
                     } else {
-                        symbols.insert(symbol.name.clone(), uri.to_string());
+                        symbols.insert(symbol.name.clone(), uri_str.clone());
                     }
                 }
             }
@@ -275,12 +265,12 @@ impl WorkspaceIndex {
     }
     
     /// Remove a file from the index
-    pub fn remove_file(&self, uri: &str) {
-        let normalized_uri = Self::normalize_uri(uri);
-        let key = DocumentStore::uri_key(&normalized_uri);
+    pub fn remove_file(&self, uri: &Url) {
+        let uri_str = uri.to_string();
+        let key = DocumentStore::uri_key(&uri_str);
         
         // Remove from document store
-        self.document_store.close(&normalized_uri);
+        self.document_store.close(&uri_str);
         
         // Remove file index
         let mut files = self.files.write().unwrap();
@@ -298,9 +288,8 @@ impl WorkspaceIndex {
     }
     
     /// Clear a file from the index (alias for remove_file)
-    pub fn clear_file(&self, uri: &str) {
-        let normalized_uri = Self::normalize_uri(uri);
-        self.remove_file(&normalized_uri);
+    pub fn clear_file(&self, uri: &Url) {
+        self.remove_file(uri);
     }
     
     /// Find all references to a symbol
