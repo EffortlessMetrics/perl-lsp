@@ -4,6 +4,7 @@
 
 pub mod lsp_client;
 pub mod lsp_harness;
+pub mod env_guard;
 
 use serde_json::Value;
 use std::time::{Duration, Instant};

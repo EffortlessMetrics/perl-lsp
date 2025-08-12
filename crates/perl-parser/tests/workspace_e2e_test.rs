@@ -1,3 +1,5 @@
+mod support;
+
 #[cfg(feature = "workspace")]
 #[test]
 #[serial_test::serial]
@@ -7,11 +9,10 @@ fn test_goto_definition_across_files() {
     use lsp_types::Position;
     use serde_json::json;
     use perl_parser::lsp_server::LspServer;
+    use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    // Save original value
-    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
-    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -76,10 +77,6 @@ fn test_goto_definition_across_files() {
     } else {
         panic!("No definitions found");
     }
-
-    // Clean up
-    // Restore environment
-    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
@@ -91,11 +88,10 @@ fn test_find_references_across_files() {
     use lsp_types::Position;
     use serde_json::json;
     use perl_parser::lsp_server::LspServer;
+    use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    // Save original value
-    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
-    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -181,10 +177,6 @@ fn test_find_references_across_files() {
     } else {
         panic!("No references found");
     }
-
-    // Clean up
-    // Restore environment
-    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
 
 #[cfg(feature = "workspace")]
@@ -196,11 +188,10 @@ fn test_workspace_symbol_completion() {
     use lsp_types::Position;
     use serde_json::json;
     use perl_parser::lsp_server::LspServer;
+    use support::env_guard::EnvGuard;
 
     // Enable workspace indexing
-    // Save original value
-    let _original = std::env::var("PERL_LSP_WORKSPACE").ok();
-    unsafe { std::env::set_var("PERL_LSP_WORKSPACE", "1"); }
+    let _guard = EnvGuard::set("PERL_LSP_WORKSPACE", "1");
 
     // Create temporary directory structure
     let dir = tempdir().unwrap();
@@ -270,8 +261,4 @@ fn test_workspace_symbol_completion() {
     } else {
         panic!("No completions found");
     }
-
-    // Clean up
-    // Restore environment
-    unsafe { std::env::remove_var("PERL_LSP_WORKSPACE"); }
 }
