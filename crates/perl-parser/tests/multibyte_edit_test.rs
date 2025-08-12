@@ -114,4 +114,29 @@ mod multibyte_tests {
         assert_eq!(rope.to_string(), "é\nhello Rust!\n");
     }
 
+    #[test]
+    fn multi_change_crlf_with_multibyte() {
+        let text = "café\r\nhello world\r\n";
+        let mut mapper = PositionMapper::new(text);
+        let mut rope   = Rope::from_str(text);
+
+        // 1) Replace "world" -> "Rust"
+        let s1 = Position { line: 1, character: 6 };
+        let e1 = Position { line: 1, character: 11 };
+        let (sb1, eb1) = (mapper.lsp_pos_to_byte(s1).unwrap(), mapper.lsp_pos_to_byte(e1).unwrap());
+        let (sc1, ec1) = (rope.byte_to_char(sb1), rope.byte_to_char(eb1));
+        rope.remove(sc1..ec1);
+        rope.insert(sc1, "Rust");
+        mapper.apply_edit(sb1, eb1, "Rust");
+
+        // 2) Insert "!" at end of line 1 (after CRLF accounting)
+        let end = Position { line: 1, character: 10 }; // "hello Rust"
+        let be   = mapper.lsp_pos_to_byte(end).unwrap();
+        let ce = rope.byte_to_char(be);
+        rope.insert(ce, "!");
+        mapper.apply_edit(be, be, "!");
+
+        assert_eq!(rope.to_string(), "café\r\nhello Rust!\r\n");
+    }
+
 }

@@ -56,19 +56,25 @@ impl LspServer {
                             character: range["end"]["character"].as_u64().unwrap_or(0) as u32,
                         };
 
-                        if let (Some(start_byte), Some(end_byte)) =
+                        let (Some(start_byte), Some(end_byte)) =
                             (mapper.lsp_pos_to_byte(start_pos), mapper.lsp_pos_to_byte(end_pos))
-                        {
-                            // Rope uses char indices, convert bytes → chars once
-                            let start_char = rope.byte_to_char(start_byte);
-                            let end_char   = rope.byte_to_char(end_byte);
+                        else {
+                            return Err(JsonRpcError {
+                                code: -32602,
+                                message: "Invalid range in textDocument/didChange".to_string(),
+                                data: None,
+                            });
+                        };
+                        
+                        // Rope uses char indices, convert bytes → chars once
+                        let start_char = rope.byte_to_char(start_byte);
+                        let end_char   = rope.byte_to_char(end_byte);
 
-                            rope.remove(start_char..end_char);
-                            rope.insert(start_char, text);
+                        rope.remove(start_char..end_char);
+                        rope.insert(start_char, text);
 
-                            // Keep mapper consistent for subsequent changes
-                            mapper.apply_edit(start_byte, end_byte, text);
-                        }
+                        // Keep mapper consistent for subsequent changes
+                        mapper.apply_edit(start_byte, end_byte, text);
                     }
                 }
 
