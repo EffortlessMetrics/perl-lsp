@@ -18,7 +18,7 @@ mod bless_parsing_tests {
     fn test_bless_empty_hash_with_class() {
         parse_and_check(
             "bless {}, $class",
-            "(program (call bless ((array (hash ) (variable $ class)))))"
+            "(program (call bless ((hash ) (variable $ class))))"
         );
     }
 
@@ -26,7 +26,7 @@ mod bless_parsing_tests {
     fn test_bless_with_string_literal() {
         parse_and_check(
             "bless {}, 'Foo'",
-            "(program (call bless ((array (hash ) (string \"'Foo'\")))))"
+            "(program (call bless ((hash ) (string \"'Foo'\"))))"
         );
     }
 
@@ -58,7 +58,7 @@ mod bless_parsing_tests {
     fn test_bless_with_hashref_data() {
         parse_and_check(
             "bless { foo => 1, bar => 2 }, $class",
-            "(program (call bless ((array (hash ((identifier foo) (number 1)) ((identifier bar) (number 2))) (variable $ class)))))"
+            "(program (call bless ((hash ((identifier foo) (number 1)) ((identifier bar) (number 2))) (variable $ class))))"
         );
     }
 
@@ -66,7 +66,7 @@ mod bless_parsing_tests {
     fn test_nested_bless_calls() {
         parse_and_check(
             "bless { inner => bless {}, 'Inner' }, 'Outer'",
-            "(program (call bless ((array (hash ((identifier inner) (call bless ((hash ) (string \"'Inner'\"))))) (string \"'Outer'\")))))"
+            "(program (call bless ((hash ((identifier inner) (call bless ((hash ) (string \"'Inner'\"))))) (string \"'Outer'\"))))"
         );
     }
 
@@ -74,7 +74,7 @@ mod bless_parsing_tests {
     fn test_bless_with_variable_hashref() {
         parse_and_check(
             "bless $data, $class",
-            "(program (call bless ((array (variable $ data) (variable $ class)))))"
+            "(program (call bless ((variable $ data) (variable $ class))))"
         );
     }
 
