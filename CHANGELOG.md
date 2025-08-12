@@ -35,12 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Position mapper with flexible UTF-8/UTF-16 handling
 
 ### Fixed
-- **Test Infrastructure** 
-  - Rust 2024 Edition compatibility - properly handle `unsafe` requirements for `env::set_var`/`remove_var`
+- **Test Infrastructure** – Rust 2024: `std::env::{set_var, remove_var}` are now `unsafe`; wrapped calls and ran env-mutating tests single-threaded
   - Fixed bless parsing tests expectations (removed incorrect `array` wrapper nodes)
   - Fixed incremental parsing test expectations (`Variable` vs `ScalarVariable` node names)
   - Serialized environment variable usage in tests with `EnvGuard` helper
-  - Added comprehensive safety documentation for all unsafe blocks
   - Fixed workspace URI edge cases test API calls
   - Properly feature-gated incremental parsing handler
 
