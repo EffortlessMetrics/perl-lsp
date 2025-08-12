@@ -67,14 +67,14 @@ impl MockTransport {
 #[test]
 fn test_diagnostics_clear_protocol_framing() {
     // Create a mock stdout to capture output
-    let original_stdout = std::io::stdout();
-    let mock_transport = MockTransport::new();
+    let _original_stdout = std::io::stdout();
+    let _mock_transport = MockTransport::new();
 
     // Create LSP server
-    let server = LspServer::new();
+    let _server = LspServer::new();
 
     // Initialize the server
-    let init_request = json!({
+    let _init_request = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
@@ -85,7 +85,7 @@ fn test_diagnostics_clear_protocol_framing() {
     });
 
     // Open a document
-    let open_notification = json!({
+    let _open_notification = json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didOpen",
         "params": {
@@ -99,7 +99,7 @@ fn test_diagnostics_clear_protocol_framing() {
     });
 
     // Close the document - this should send a clear diagnostics notification
-    let close_notification = json!({
+    let _close_notification = json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didClose",
         "params": {
@@ -237,9 +237,9 @@ sub test_function {
 #[test]
 fn test_position_encoding_advertised() {
     // This test verifies that the server advertises UTF-16 position encoding
-    let server = LspServer::new();
+    let _server = LspServer::new();
 
-    let init_request = json!({
+    let _init_request = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
