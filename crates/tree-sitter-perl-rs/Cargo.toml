@@ -78,11 +78,6 @@ path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust"]
 
 [[example]]
-name = "test_format"
-path = "examples/test_format.rs"
-required-features = ["pure-rust"]
-
-[[example]]
 name = "showcase_features"
 path = "examples/showcase_features.rs"
 required-features = ["pure-rust"]
@@ -128,18 +123,8 @@ path = "examples/test_code_ref.rs"
 required-features = ["pure-rust"]
 
 [[example]]
-name = "test_deref"
-path = "examples/test_deref.rs"
-required-features = ["pure-rust"]
-
-[[example]]
 name = "test_for_loop"
 path = "examples/test_for_loop.rs"
-required-features = ["pure-rust"]
-
-[[example]]
-name = "test_statement_modifiers"
-path = "examples/test_statement_modifiers.rs"
 required-features = ["pure-rust"]
 
 [[example]]

@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
+        rust: [stable, "1.85"]  # Test MSRV
     steps:
       - uses: actions/checkout@v4
       
@@ -67,8 +67,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
         
-      - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: Doc tests (deny warnings)
+        run: RUSTDOCFLAGS="-D warnings" cargo test --workspace --doc
+        
+      - name: Clippy (deny warnings with pedantic)
+        run: RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --all-features -- -W clippy::all -W clippy::pedantic
         
       - name: Install ripgrep (Linux)
         if: runner.os == 'Linux'
