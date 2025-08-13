@@ -313,34 +313,33 @@ impl HeredocRecovery {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
                     if name.as_ref() == format!("@{}", var_name) {
                         // Found array variable, look for list assignment
-                        if i + 2 < tokens.len() {
-                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
-                            {
-                                // Look for the list values
-                                let mut list_values = Vec::new();
-                                let mut j = i + 2;
-                                let mut in_list = false;
+                        if i + 2 < tokens.len() 
+                            && matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
+                        {
+                            // Look for the list values
+                            let mut list_values = Vec::new();
+                            let mut j = i + 2;
+                            let mut in_list = false;
 
-                                while j < tokens.len() {
-                                    match &tokens[j].token_type {
-                                        TokenType::LeftParen => in_list = true,
-                                        TokenType::RightParen => break,
-                                        TokenType::StringLiteral if in_list => {
-                                            if let Some(value) =
-                                                self.extract_string_literal(&tokens[j].text)
-                                            {
-                                                list_values.push(value);
-                                            }
+                            while j < tokens.len() {
+                                match &tokens[j].token_type {
+                                    TokenType::LeftParen => in_list = true,
+                                    TokenType::RightParen => break,
+                                    TokenType::StringLiteral if in_list => {
+                                        if let Some(value) =
+                                            self.extract_string_literal(&tokens[j].text)
+                                        {
+                                            list_values.push(value);
                                         }
-                                        _ => {}
                                     }
-                                    j += 1;
+                                    _ => {}
                                 }
+                                j += 1;
+                            }
 
-                                // Return the value at the requested index
-                                if index < list_values.len() {
-                                    return Some((Arc::from(list_values[index].clone()), 0.9));
-                                }
+                            // Return the value at the requested index
+                            if index < list_values.len() {
+                                return Some((Arc::from(list_values[index].clone()), 0.9));
                             }
                         }
                     }

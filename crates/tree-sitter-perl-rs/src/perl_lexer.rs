@@ -1831,14 +1831,15 @@ impl<'a> PerlLexer<'a> {
                                 }
                             }
                         }
-                    } else if ch == 'q' && self.position + 2 < self.input.len() {
-                        if self.input.as_bytes()[self.position + 1] == b'r' {
-                            let next = self.input.as_bytes()[self.position + 2] as char;
-                            if Self::is_regex_delimiter(next) {
-                                if let Some(token) = self.scan_regex_like() {
-                                    self.update_mode(&token.token_type);
-                                    return Some(token);
-                                }
+                    } else if ch == 'q' 
+                        && self.position + 2 < self.input.len()
+                        && self.input.as_bytes()[self.position + 1] == b'r' 
+                    {
+                        let next = self.input.as_bytes()[self.position + 2] as char;
+                        if Self::is_regex_delimiter(next) {
+                            if let Some(token) = self.scan_regex_like() {
+                                self.update_mode(&token.token_type);
+                                return Some(token);
                             }
                         }
                     }

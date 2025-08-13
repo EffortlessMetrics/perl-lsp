@@ -2,9 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::context_lexer_simple::ContextLexer;
     use crate::simple_parser_v2::SimpleParser;
-    use crate::simple_token::Token;
 
     #[test]
     fn demo_basic_parsing() {

@@ -3,7 +3,6 @@
 //! Handles m//, s///, qr//, tr///, and other quote-like operators
 
 use crate::simple_token::Token;
-use std::sync::Arc;
 
 /// Quote-like operators in Perl
 #[derive(Debug, Clone, PartialEq)]
