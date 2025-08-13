@@ -49,20 +49,24 @@ fn main() {
                 println!("   S-expr: {}", sexp);
 
                 // Check specific precedence patterns
-                if test.contains("or") && test.contains("and") {
-                    if sexp.contains("(logical_and") && sexp.contains("(logical_or") {
-                        println!("   ✓ Correct precedence: and binds tighter than or");
-                    }
+                if test.contains("or")
+                    && test.contains("and")
+                    && sexp.contains("(logical_and")
+                    && sexp.contains("(logical_or")
+                {
+                    println!("   ✓ Correct precedence: and binds tighter than or");
                 }
 
-                if test.contains("=") && test.contains("or") {
-                    if sexp.contains("(assign") && sexp.contains("(logical_or") {
-                        // Check if assignment is inside or outside the or
-                        let assign_pos = sexp.find("(assign").unwrap_or(0);
-                        let or_pos = sexp.find("(logical_or").unwrap_or(0);
-                        if assign_pos < or_pos {
-                            println!("   ✓ Correct: assignment happens before 'or'");
-                        }
+                if test.contains("=")
+                    && test.contains("or")
+                    && sexp.contains("(assign")
+                    && sexp.contains("(logical_or")
+                {
+                    // Check if assignment is inside or outside the or
+                    let assign_pos = sexp.find("(assign").unwrap_or(0);
+                    let or_pos = sexp.find("(logical_or").unwrap_or(0);
+                    if assign_pos < or_pos {
+                        println!("   ✓ Correct: assignment happens before 'or'");
                     }
                 }
             }

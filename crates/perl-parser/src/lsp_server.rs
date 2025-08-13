@@ -320,6 +320,10 @@ impl LspServer {
             "initialized" => {
                 self.initialized = true;
                 eprintln!("Server initialized");
+
+                // Register file watchers for Perl files
+                self.register_file_watchers();
+
                 Ok(None)
             }
             "shutdown" => Ok(Some(json!(null))),
@@ -387,6 +391,9 @@ impl LspServer {
             "callHierarchy/incomingCalls" => self.handle_incoming_calls(request.params),
             "callHierarchy/outgoingCalls" => self.handle_outgoing_calls(request.params),
             "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
+            "textDocument/documentLink" => self.handle_document_link(request.params),
+            "textDocument/selectionRange" => self.handle_selection_range(request.params),
+            "textDocument/onTypeFormatting" => self.handle_on_type_formatting(request.params),
             "workspace/executeCommand" => self.handle_execute_command(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery(request.params),
             "workspace/configuration" => self.handle_configuration(request.params),
@@ -532,6 +539,14 @@ impl LspServer {
             "inlayHintProvider": {
                 "resolveProvider": false
             },
+            "documentLinkProvider": {
+                "resolveProvider": false
+            },
+            "selectionRangeProvider": true,
+            "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "}",
+                "moreTriggerCharacter": ["{", ";", ")", "\n"]
+            },
             "executeCommandProvider": {
                 "commands": [
                     "perl.runTest",
@@ -557,7 +572,7 @@ impl LspServer {
             "capabilities": capabilities,
             "serverInfo": {
                 "name": "perl-language-server",
-                "version": "0.7.4"
+                "version": "0.8.2"
             }
         })))
     }
@@ -4342,6 +4357,139 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_completion(params)
+    }
+
+    /// Handle documentLink request
+    fn handle_document_link(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                match crate::lsp_document_link::collect_document_links(&doc.content, uri) {
+                    Ok(links) => Ok(Some(serde_json::to_value(links).unwrap_or(Value::Null))),
+                    Err(_) => Ok(Some(Value::Null)),
+                }
+            } else {
+                Ok(Some(Value::Null))
+            }
+        } else {
+            Ok(Some(Value::Null))
+        }
+    }
+
+    /// Handle selectionRange request
+    fn handle_selection_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let positions = params["positions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|pos| {
+                            let line = pos["line"].as_u64()? as u32;
+                            let character = pos["character"].as_u64()? as u32;
+                            Some(lsp_types::Position::new(line, character))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                let ranges = crate::lsp_selection_range::selection_ranges(&doc.content, &positions);
+                Ok(Some(serde_json::to_value(ranges).unwrap_or(Value::Null)))
+            } else {
+                Ok(Some(Value::Null))
+            }
+        } else {
+            Ok(Some(Value::Null))
+        }
+    }
+
+    /// Handle onTypeFormatting request
+    fn handle_on_type_formatting(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let ch = params["ch"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let tab_size = params["options"]["tabSize"].as_u64().unwrap_or(4) as usize;
+            let insert_spaces = params["options"]["insertSpaces"].as_bool().unwrap_or(true);
+
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                let uri_obj = uri
+                    .parse::<lsp_types::Uri>()
+                    .unwrap_or_else(|_| "file:///tmp".parse::<lsp_types::Uri>().unwrap());
+                let edits = crate::lsp_on_type_formatting::format_on_type(
+                    &doc.content,
+                    uri_obj,
+                    ch.to_string(),
+                    lsp_types::Position::new(line, character),
+                    tab_size,
+                    insert_spaces,
+                );
+                Ok(Some(serde_json::to_value(edits).unwrap_or(Value::Null)))
+            } else {
+                Ok(Some(Value::Null))
+            }
+        } else {
+            Ok(Some(Value::Null))
+        }
+    }
+
+    /// Register file watchers for Perl files
+    fn register_file_watchers(&self) {
+        use lsp_types::{
+            DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
+            RegistrationParams, WatchKind,
+            notification::{DidChangeWatchedFiles, Notification},
+        };
+
+        let watchers = vec![
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.pl".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.pm".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.t".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
+        ];
+
+        let opts = DidChangeWatchedFilesRegistrationOptions { watchers };
+        let reg = Registration {
+            id: "perl-didChangeWatchedFiles".into(),
+            method: <DidChangeWatchedFiles as Notification>::METHOD.to_string(),
+            register_options: Some(serde_json::to_value(opts).unwrap_or(Value::Null)),
+        };
+
+        let params = RegistrationParams {
+            registrations: vec![reg],
+        };
+
+        // Send the registration request
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": serde_json::Value::Number(serde_json::Number::from(9999)),
+            "method": "client/registerCapability",
+            "params": params
+        });
+
+        // Print to stdout to send to client
+        let msg = serde_json::to_string(&request).unwrap();
+        print!("Content-Length: {}\r\n\r\n{}", msg.len(), msg);
+        std::io::stdout().flush().unwrap();
+
+        eprintln!("Registered file watchers for Perl files");
     }
 }
 

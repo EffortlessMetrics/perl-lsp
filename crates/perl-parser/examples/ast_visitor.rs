@@ -101,11 +101,10 @@ impl AstVisitor for VariableUsageCollector {
                 let var_name = format!("{}{}", sigil, name);
                 *self.usages.entry(var_name).or_insert(0) += 1;
             }
-            NodeKind::Subroutine { name, .. } => {
-                if let Some(n) = name {
-                    self.current_scope.push(n.clone());
-                }
+            NodeKind::Subroutine { name: Some(n), .. } => {
+                self.current_scope.push(n.clone());
             }
+            NodeKind::Subroutine { name: None, .. } => {}
             NodeKind::Block { .. } => {
                 self.current_scope.push("block".to_string());
             }

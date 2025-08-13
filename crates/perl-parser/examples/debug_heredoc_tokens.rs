@@ -14,13 +14,9 @@ fn main() {
         let mut lexer = PerlLexer::new(test);
         println!("Tokens:");
 
-        loop {
-            if let Some(token) = lexer.next_token() {
-                println!("  {:?}", token);
-                if token.token_type == TokenType::EOF {
-                    break;
-                }
-            } else {
+        while let Some(token) = lexer.next_token() {
+            println!("  {:?}", token);
+            if token.token_type == TokenType::EOF {
                 break;
             }
         }

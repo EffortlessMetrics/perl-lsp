@@ -71,7 +71,7 @@ fn main() {
         print!("Testing {:<25} {:40} ", desc, test);
         let mut parser = Parser::new(test);
         match parser.parse() {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("✅");
                 // println!("   S-expr: {}", ast.to_sexp());
                 passed += 1;

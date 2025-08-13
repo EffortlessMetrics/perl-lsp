@@ -2,7 +2,7 @@
 use perl_parser::Parser;
 
 fn main() {
-    let tests = vec![
+    let tests = [
         // Basic heredoc
         r#"print <<EOF;
 Hello World

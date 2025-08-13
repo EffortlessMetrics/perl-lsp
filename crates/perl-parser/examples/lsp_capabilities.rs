@@ -94,11 +94,12 @@ fn extract_symbols(node: &perl_parser::ast::Node, indent: &str) {
         NodeKind::Package { name, .. } => {
             println!("{}  - Package: {}", indent, name);
         }
-        NodeKind::Subroutine { name, .. } => {
-            if let Some(name) = name {
-                println!("{}  - Subroutine: {}", indent, name);
-            }
+        NodeKind::Subroutine {
+            name: Some(name), ..
+        } => {
+            println!("{}  - Subroutine: {}", indent, name);
         }
+        NodeKind::Subroutine { name: None, .. } => {}
         NodeKind::VariableDeclaration { variable, .. } => {
             if let NodeKind::Variable { sigil, name } = &variable.kind {
                 println!("{}  - Variable: {}{}", indent, sigil, name);

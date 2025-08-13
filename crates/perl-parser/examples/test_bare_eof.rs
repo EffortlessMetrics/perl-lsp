@@ -27,7 +27,7 @@ fn main() {
         print!("Testing: {:30} ", test.replace('\n', "\\n"));
         let mut parser = Parser::new(test);
         match parser.parse() {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("✅");
             }
             Err(e) => {

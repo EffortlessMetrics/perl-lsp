@@ -16,17 +16,13 @@ fn main() {
         let mut lexer = PerlLexer::new(code);
         let mut tokens = Vec::new();
 
-        loop {
-            if let Some(token) = lexer.next_token() {
-                println!("  Token: {:?}", token);
+        while let Some(token) = lexer.next_token() {
+            println!("  Token: {:?}", token);
 
-                if matches!(token.token_type, TokenType::EOF) {
-                    break;
-                }
-                tokens.push(token);
-            } else {
+            if matches!(token.token_type, TokenType::EOF) {
                 break;
             }
+            tokens.push(token);
         }
 
         // Check if we got a division token

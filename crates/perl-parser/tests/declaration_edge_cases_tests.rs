@@ -137,10 +137,8 @@ my $x = BAR;
             .find_declaration(code.find("my $x = BAR").unwrap() + 8, 0)
             .unwrap_or_default();
         // Verify we scan all {...} blocks
-        assert!(
-            !decls.is_empty() || true,
-            "Should scan all hash blocks (or gracefully handle)"
-        );
+        // Should scan all hash blocks (or gracefully handle)
+        let _ = decls;
     }
 
     #[test]
