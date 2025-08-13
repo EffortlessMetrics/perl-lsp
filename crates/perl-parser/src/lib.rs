@@ -41,7 +41,17 @@
     clippy::redundant_closure_for_method_calls,
     clippy::inefficient_to_string,
     clippy::semicolon_if_nothing_returned,
-    clippy::items_after_test_module
+    clippy::items_after_test_module,
+    clippy::single_char_pattern,
+    clippy::format_push_string,
+    clippy::map_unwrap_or,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::manual_flatten,
+    clippy::ignored_unit_patterns,
+    clippy::manual_let_else,
+    clippy::question_mark,
+    clippy::from_over_into,
+    clippy::explicit_iter_loop
 )]
 //! ## Architecture
 //!
