@@ -5,6 +5,7 @@
 //! - File paths in require/do -> local files
 
 use lsp_types::{DocumentLink, Position, Range, Uri};
+use url::Url;
 
 fn to_range(content: &str, start: usize, end: usize) -> Range {
     // Simple byte->(line,col) translator
@@ -33,7 +34,7 @@ fn to_range(content: &str, start: usize, end: usize) -> Range {
     Range::new(start_pos, end_pos)
 }
 
-pub fn collect_document_links(text: &str, uri_str: &str) -> Result<Vec<DocumentLink>, String> {
+pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>, String> {
     let mut links = Vec::new();
 
     for (line_idx, line) in text.lines().enumerate() {
@@ -55,9 +56,9 @@ pub fn collect_document_links(text: &str, uri_str: &str) -> Result<Vec<DocumentL
                 let e = s + name.len();
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
-                    target: format!("https://metacpan.org/pod/{}", name)
-                        .parse::<Uri>()
-                        .ok(),
+                    target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
+                        .ok()
+                        .and_then(|url| url.to_string().parse::<Uri>().ok()),
                     tooltip: Some(format!("Open {} on MetaCPAN", name)),
                     data: None,
                 });
@@ -84,9 +85,9 @@ pub fn collect_document_links(text: &str, uri_str: &str) -> Result<Vec<DocumentL
                     let e = s + name.len();
                     links.push(DocumentLink {
                         range: to_range(text, s, e),
-                        target: format!("https://metacpan.org/pod/{}", name)
-                            .parse::<Uri>()
-                            .ok(),
+                        target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
+                            .ok()
+                            .and_then(|url| url.to_string().parse::<Uri>().ok()),
                         tooltip: Some(format!("Open {} on MetaCPAN", name)),
                         data: None,
                     });
@@ -114,21 +115,20 @@ pub fn collect_document_links(text: &str, uri_str: &str) -> Result<Vec<DocumentL
                         // Try to resolve relative to current file
                         let target = if path.starts_with('/') {
                             // Absolute path
-                            format!("file://{}", path).parse::<Uri>().ok()
+                            Url::from_file_path(path).ok()
                         } else {
                             // Relative to current file's directory
-                            // Extract the directory from the URI string
-                            if let Some(last_slash) = uri_str.rfind('/') {
-                                let base_dir = &uri_str[..last_slash];
-                                format!("{}/{}", base_dir, path).parse::<Uri>().ok()
-                            } else {
-                                None
-                            }
+                            uri.to_file_path().ok().and_then(|base_path| {
+                                base_path.parent().and_then(|parent| {
+                                    let resolved = parent.join(path);
+                                    Url::from_file_path(resolved).ok()
+                                })
+                            })
                         };
                         if let Some(target_url) = target {
                             links.push(DocumentLink {
                                 range: to_range(text, s, e),
-                                target: Some(target_url),
+                                target: target_url.to_string().parse::<Uri>().ok(),
                                 tooltip: Some(format!("Open {}", path)),
                                 data: None,
                             });
