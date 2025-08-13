@@ -3,6 +3,7 @@
 //! This module provides a simple statement boundary detector that helps
 //! the heredoc scanner know when a statement containing heredocs actually ends.
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum BracketType {
     Paren,  // ()
@@ -11,12 +12,14 @@ enum BracketType {
 }
 
 /// Tracks statement boundaries by monitoring brackets and semicolons
+#[allow(dead_code)]
 pub struct StatementTracker {
     bracket_stack: Vec<BracketType>,
     in_string: Option<char>, // None, Some('"'), Some('\''), Some('`')
     escape_next: bool,
 }
 
+#[allow(dead_code)]
 impl StatementTracker {
     pub fn new() -> Self {
         Self {

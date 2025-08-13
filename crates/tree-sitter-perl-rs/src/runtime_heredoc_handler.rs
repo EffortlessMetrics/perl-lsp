@@ -111,14 +111,22 @@ impl RuntimeHeredocHandler {
 
     /// Process heredocs in eval content
     fn process_eval_heredocs(&mut self, content: &str) -> Result<String, RuntimeError> {
-        let heredoc_regex = Regex::new(r#"<<\s*(['"]?)(\w+)\1"#).unwrap();
+        // Note: Rust regex doesn't support backreferences, so we'll handle quotes manually
+        let heredoc_regex = Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#).unwrap();
         let mut processed = content.to_string();
         let mut offset = 0;
 
         for cap in heredoc_regex.captures_iter(content) {
             if let (Some(full_match), Some(delimiter)) = (cap.get(0), cap.get(2)) {
+                // Check that opening and closing quotes match
+                let open_quote = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                let close_quote = cap.get(3).map(|m| m.as_str()).unwrap_or("");
+                if open_quote != close_quote {
+                    continue; // Skip mismatched quotes
+                }
+
                 let delim = delimiter.as_str();
-                let quoted = !cap.get(1).unwrap().as_str().is_empty();
+                let _quoted = !open_quote.is_empty();
 
                 // Find the heredoc content
                 if let Some(heredoc_content) =

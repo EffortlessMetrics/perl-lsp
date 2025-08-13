@@ -61,42 +61,49 @@ impl<'source> RegexParser<'source> {
     }
 
     /// Parse a quote-like operator (m//, s///, etc.)
-    pub fn parse_quote_operator(&mut self, op: Token) -> Result<QuoteConstruct, String> {
-        let operator = match op {
+    pub fn parse_quote_operator(&mut self, _op: Token) -> Result<QuoteConstruct, String> {
+        // This function currently always returns an error
+        // The match below handles all cases with returns
+        match _op {
             Token::BinMatch => {
                 // This is =~, not a quote operator
                 return Err("BinMatch is not a quote operator".to_string());
             }
-            _ => return Err(format!("Unexpected token for quote operator: {:?}", op)),
-        };
+            _ => return Err(format!("Unexpected token for quote operator: {:?}", _op)),
+        }
 
-        // Skip optional whitespace
-        self.skip_whitespace();
+        // Skip optional whitespace (unreachable but kept for future extension)
+        #[allow(unreachable_code)]
+        {
+            self.skip_whitespace();
 
-        // Get delimiter
-        let delimiter = self.parse_delimiter()?;
+            // Get delimiter
+            let delimiter = self.parse_delimiter()?;
 
-        // Parse pattern
-        let pattern = self.parse_until_delimiter(delimiter)?;
+            // Parse pattern
+            let pattern = self.parse_until_delimiter(delimiter)?;
 
-        // For substitution and transliteration, parse replacement
-        let replacement = match operator {
-            QuoteOperator::Substitute | QuoteOperator::Transliterate => {
-                Some(self.parse_until_delimiter(delimiter)?)
-            }
-            _ => None,
-        };
+            // This code is unreachable but kept for future implementation
+            // For substitution and transliteration, parse replacement
+            let operator = QuoteOperator::Match; // Placeholder since this is unreachable
+            let replacement = match operator {
+                QuoteOperator::Substitute | QuoteOperator::Transliterate => {
+                    Some(self.parse_until_delimiter(delimiter)?)
+                }
+                _ => None,
+            };
 
-        // Parse modifiers
-        let modifiers = self.parse_modifiers();
+            // Parse modifiers
+            let modifiers = self.parse_modifiers();
 
-        Ok(QuoteConstruct {
-            operator,
-            delimiter,
-            pattern,
-            replacement,
-            modifiers,
-        })
+            Ok(QuoteConstruct {
+                operator,
+                delimiter,
+                pattern,
+                replacement,
+                modifiers,
+            })
+        }
     }
 
     /// Parse m// operator

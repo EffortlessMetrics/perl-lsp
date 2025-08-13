@@ -118,6 +118,9 @@ pub use pure_rust_parser::{AstNode, PerlParser};
 #[cfg(feature = "pure-rust")]
 pub mod iterative_parser;
 
+#[cfg(feature = "pure-rust")]
+pub mod string_utils;
+
 #[cfg(all(feature = "pure-rust", test))]
 pub mod parser_benchmark;
 

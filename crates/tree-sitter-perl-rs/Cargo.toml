@@ -33,6 +33,20 @@ lazy_static = "1.5.0"
 criterion = "0.7.0"
 test-case = "3.3.1"
 
+[lints.rust]
+unused_imports = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+collapsible_if = "warn"
+manual_strip = "warn"
+unnecessary_map_or = "warn"
+redundant_closure = "warn"
+while_let_on_iterator = "warn"
+len_zero = "warn"
+only_used_in_recursion = "warn"
+ptr_arg = "warn"
+
 [features]
 default = ["pure-rust"]
 pure-rust = []
