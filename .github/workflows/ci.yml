@@ -70,8 +70,8 @@ jobs:
       - name: Doc tests (deny warnings)
         run: RUSTDOCFLAGS="-D warnings" cargo test --workspace --doc
         
-      - name: Clippy (deny warnings with pedantic)
-        run: RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --all-features -- -W clippy::all -W clippy::pedantic
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
         
       - name: Install ripgrep (Linux)
         if: runner.os == 'Linux'

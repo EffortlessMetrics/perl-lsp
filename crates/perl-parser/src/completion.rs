@@ -703,7 +703,7 @@ impl CompletionProvider {
         if let Some(last_slash) = before.rfind('/') {
             if last_slash > 0 {
                 let prev_char = before.chars().nth(last_slash - 1);
-                matches!(prev_char, Some('~') | Some('!'))
+                matches!(prev_char, Some('~' | '!'))
             } else {
                 false
             }

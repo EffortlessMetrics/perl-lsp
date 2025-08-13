@@ -315,7 +315,7 @@ impl RefactoringProvider {
         }
         
         let end_char = self.source.chars().nth(end - 1);
-        matches!(end_char, Some(';') | Some('\n'))
+        matches!(end_char, Some(';' | '\n'))
     }
     
     fn find_containing_statement(&self, pos: usize) -> Result<(usize, String), RefactoringError> {

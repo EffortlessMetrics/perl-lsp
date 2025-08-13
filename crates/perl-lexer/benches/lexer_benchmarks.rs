@@ -1,5 +1,6 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_lexer::{PerlLexer, Token};
+use std::hint::black_box;
 
 fn collect_all_tokens(mut lexer: PerlLexer) -> Vec<Token> {
     lexer.collect_tokens()

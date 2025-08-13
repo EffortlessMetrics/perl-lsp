@@ -11,7 +11,7 @@ use std::fmt;
 pub struct LexerCheckpoint {
     /// Current position in the input
     pub position: usize,
-    /// Current lexer mode (ExpectTerm, ExpectOperator, etc.)
+    /// Current lexer mode (`ExpectTerm`, `ExpectOperator`, etc.)
     pub mode: LexerMode,
     /// Stack for nested delimiters in s{}{} constructs
     pub delimiter_stack: Vec<char>,

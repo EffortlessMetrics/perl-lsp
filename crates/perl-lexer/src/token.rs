@@ -11,7 +11,7 @@ pub enum StringPart {
     Variable(Arc<str>),
     /// Expression interpolation: ${expr}, @{expr}
     Expression(Arc<str>),
-    /// Method call: ->method()
+    /// Method call: `->method()`
     MethodCall(Arc<str>),
     /// Array slice: [1..3]
     ArraySlice(Arc<str>),
