@@ -147,6 +147,7 @@ impl EnhancedFullParser {
         self.restore_node_content(node, &placeholder_map);
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn restore_node_content(
         &self,
         node: &mut AstNode,

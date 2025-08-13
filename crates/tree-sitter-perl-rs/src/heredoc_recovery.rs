@@ -313,7 +313,7 @@ impl HeredocRecovery {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
                     if name.as_ref() == format!("@{}", var_name) {
                         // Found array variable, look for list assignment
-                        if i + 2 < tokens.len() 
+                        if i + 2 < tokens.len()
                             && matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
                         {
                             // Look for the list values
@@ -358,16 +358,14 @@ impl HeredocRecovery {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
                     if name.as_ref() == format!("${}", var_name) {
                         // Check if next tokens form an assignment
-                        if i + 2 < tokens.len() {
-                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
-                            {
-                                if let TokenType::StringLiteral = tokens[i + 2].token_type {
-                                    // Extract the string value
-                                    let text = tokens[i + 2].text.as_ref();
-                                    if let Some(delimiter) = self.extract_string_literal(text) {
-                                        return Some((Arc::from(delimiter), 0.9));
-                                    }
-                                }
+                        if i + 2 < tokens.len()
+                            && matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
+                            && matches!(tokens[i + 2].token_type, TokenType::StringLiteral)
+                        {
+                            // Extract the string value
+                            let text = tokens[i + 2].text.as_ref();
+                            if let Some(delimiter) = self.extract_string_literal(text) {
+                                return Some((Arc::from(delimiter), 0.9));
                             }
                         }
                     }
@@ -405,16 +403,14 @@ impl HeredocRecovery {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
                     if name.as_ref() == format!("${}", var_name) {
                         // Check if next tokens form an assignment
-                        if i + 2 < tokens.len() {
-                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
-                            {
-                                if let TokenType::StringLiteral = tokens[i + 2].token_type {
-                                    // Extract the string value
-                                    let text = tokens[i + 2].text.as_ref();
-                                    if let Some(delimiter) = self.extract_string_literal(text) {
-                                        return Some((Arc::from(delimiter), 0.9));
-                                    }
-                                }
+                        if i + 2 < tokens.len()
+                            && matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
+                            && matches!(tokens[i + 2].token_type, TokenType::StringLiteral)
+                        {
+                            // Extract the string value
+                            let text = tokens[i + 2].text.as_ref();
+                            if let Some(delimiter) = self.extract_string_literal(text) {
+                                return Some((Arc::from(delimiter), 0.9));
                             }
                         }
                     }

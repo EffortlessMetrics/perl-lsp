@@ -54,6 +54,7 @@ impl SexpFormatter {
         output
     }
 
+    #[allow(clippy::ptr_arg)] // needs String for write!
     fn format_node(&self, node: &AstNode, output: &mut String, depth: usize) {
         use AstNode::*;
 
@@ -347,6 +348,7 @@ impl SexpFormatter {
         }
     }
 
+    #[allow(clippy::ptr_arg)] // needs String for consistency with format_node
     fn format_children(&self, _node: &AstNode, _output: &mut String, _depth: usize) {
         // This is a placeholder for nodes that need custom formatting
         // In a real implementation, we'd handle all node types

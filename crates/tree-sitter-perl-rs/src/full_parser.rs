@@ -90,6 +90,7 @@ impl FullPerlParser {
         self.restore_node_content_with_depth(node, placeholder_map, 0);
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn restore_node_content_with_depth(
         &self,
         node: &mut AstNode,
