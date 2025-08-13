@@ -424,14 +424,11 @@ impl HeredocRecovery {
     /// Extract string literal value from quoted string
     fn extract_string_literal(&self, text: &str) -> Option<String> {
         let text = text.trim();
-        if text.len() >= 2 {
-            if (text.starts_with('"') && text.ends_with('"'))
-                || (text.starts_with('\'') && text.ends_with('\''))
-            {
-                return Some(text[1..text.len() - 1].to_string());
-            }
-        }
-        None
+        // Use idiomatic strip_prefix/strip_suffix instead of manual indexing
+        text.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .or_else(|| text.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+            .map(|s| s.to_string())
     }
 
     /// Resolve a variable value by following assignment chains
@@ -451,24 +448,23 @@ impl HeredocRecovery {
                 if let TokenType::Identifier(name) = &tokens[i].token_type {
                     if name.as_ref() == format!("${}", current_var) {
                         // Check if next tokens form an assignment
-                        if i + 2 < tokens.len() {
-                            if matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
-                            {
-                                match &tokens[i + 2].token_type {
-                                    TokenType::StringLiteral => {
-                                        // Found a string literal value
-                                        let text = tokens[i + 2].text.as_ref();
-                                        return self.extract_string_literal(text);
-                                    }
-                                    TokenType::Identifier(next_var) => {
-                                        // Variable assigned to another variable
-                                        if let Some(stripped) = next_var.strip_prefix('$') {
-                                            current_var = stripped;
-                                            break; // Continue with the new variable
-                                        }
-                                    }
-                                    _ => {}
+                        if i + 2 < tokens.len()
+                            && matches!(tokens[i + 1].token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
+                        {
+                            match &tokens[i + 2].token_type {
+                                TokenType::StringLiteral => {
+                                    // Found a string literal value
+                                    let text = tokens[i + 2].text.as_ref();
+                                    return self.extract_string_literal(text);
                                 }
+                                TokenType::Identifier(next_var) => {
+                                    // Variable assigned to another variable
+                                    if let Some(stripped) = next_var.strip_prefix('$') {
+                                        current_var = stripped;
+                                        break; // Continue with the new variable
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -506,8 +502,8 @@ impl HeredocRecovery {
     }
 
     /// Build parse context from tokens
-    fn build_context(&self, tokens: &[Token], position: usize) -> ParseContext {
-        let mut context = ParseContext {
+    fn build_context(&self, _tokens: &[Token], _position: usize) -> ParseContext {
+        let context = ParseContext {
             current_package: None,
             imported_modules: Vec::new(),
             in_subroutine: None,
@@ -554,11 +550,9 @@ impl HeredocRecovery {
             // Also add END as it's commonly confused with EOF
             delimiters.push(Arc::from("END"));
         }
-        if lower.contains("end") {
-            if !lower.contains("eof") {
-                delimiters.push(Arc::from("END"));
-                delimiters.push(Arc::from("EOF"));
-            }
+        if lower.contains("end") && !lower.contains("eof") {
+            delimiters.push(Arc::from("END"));
+            delimiters.push(Arc::from("EOF"));
         }
         if lower.contains("sql") {
             delimiters.push(Arc::from("SQL"));
