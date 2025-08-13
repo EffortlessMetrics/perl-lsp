@@ -1,6 +1,10 @@
 //! Demo of the Perl parser with lexer integration
 
-use tree_sitter_perl::minimal_parser::MinimalParser;
+#[cfg(feature = "pure-rust")]
+use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
+
+#[cfg(not(feature = "pure-rust"))]
+compile_error!("This example requires the 'pure-rust' feature");
 
 fn main() {
     println!("=== Perl Parser Demo ===\n");
@@ -31,8 +35,11 @@ print "Sum: $sum\n";
         println!("Source: {}", source.trim());
         println!("---");
 
-        let ast = MinimalParser::parse(source);
-        println!("S-expression:\n{}\n", ast.to_sexp());
+        #[cfg(feature = "pure-rust")]
+        {
+            let ast = PureRustPerlParser::parse(source).unwrap();
+            println!("S-expression:\n{}\n", ast.to_sexp());
+        }
     }
 
     // Larger example
@@ -50,10 +57,13 @@ print "5! = $result\n";
 "#;
 
     println!("Source:\n{}", complex);
-    let ast = MinimalParser::parse(complex);
-    println!("\nS-expression:\n{}", ast.to_sexp());
+    #[cfg(feature = "pure-rust")]
+    {
+        let ast = PureRustPerlParser::parse(complex).unwrap();
+        println!("\nS-expression:\n{}", ast.to_sexp());
 
-    // Show AST structure
-    println!("\n=== AST Debug Output ===");
-    println!("{:#?}", ast);
+        // Show AST structure
+        println!("\n=== AST Debug Output ===");
+        println!("{:#?}", ast);
+    }
 }

@@ -4,54 +4,46 @@
 //! the perl-lexer crate and produces a well-structured Abstract Syntax Tree (AST).
 //!
 
-#![warn(clippy::all, clippy::pedantic)]
+#![warn(clippy::all)]
 #![allow(
-    clippy::module_name_repetitions,
+    // Core allows for parser/lexer code
     clippy::too_many_lines,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
+    clippy::module_name_repetitions,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
     clippy::cast_possible_wrap,
     clippy::must_use_candidate,
-    clippy::struct_excessive_bools,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+
+    // Parser-specific patterns that are fine
+    clippy::wildcard_imports,
+    clippy::enum_glob_use,
     clippy::match_same_arms,
     clippy::if_not_else,
-    clippy::similar_names,
-    clippy::many_single_char_names,
-    clippy::unnested_or_patterns,
-    clippy::needless_continue,
-    clippy::redundant_else,
-    clippy::uninlined_format_args,
+    clippy::struct_excessive_bools,
     clippy::items_after_statements,
     clippy::return_self_not_must_use,
-    clippy::enum_glob_use,
-    clippy::wildcard_imports,
     clippy::unused_self,
-    clippy::module_name_repetitions,
-    clippy::needless_pass_by_value,
     clippy::collapsible_match,
     clippy::collapsible_if,
-    clippy::struct_field_names,
-    clippy::doc_markdown,
-    clippy::manual_string_new,
+    clippy::ptr_arg,
     clippy::only_used_in_recursion,
-    clippy::needless_raw_string_hashes,
-    clippy::single_match_else,
-    clippy::redundant_closure_for_method_calls,
-    clippy::inefficient_to_string,
-    clippy::semicolon_if_nothing_returned,
     clippy::items_after_test_module,
-    clippy::single_char_pattern,
-    clippy::format_push_string,
-    clippy::map_unwrap_or,
-    clippy::trivially_copy_pass_by_ref,
+    clippy::while_let_loop,
+    clippy::single_range_in_vec_init,
+    clippy::arc_with_non_send_sync,
+    clippy::needless_range_loop,
+    clippy::result_large_err,
+    clippy::if_same_then_else,
+    clippy::should_implement_trait,
     clippy::manual_flatten,
-    clippy::ignored_unit_patterns,
-    clippy::manual_let_else,
-    clippy::question_mark,
-    clippy::from_over_into,
-    clippy::explicit_iter_loop
+
+    // String handling in parsers
+    clippy::needless_raw_string_hashes,
+    clippy::single_char_pattern,
+    clippy::uninlined_format_args
 )]
 //! ## Architecture
 //!
