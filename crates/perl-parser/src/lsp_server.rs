@@ -990,7 +990,8 @@ impl LspServer {
 
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    #[allow(unused_mut)] // mut needed when workspace feature is enabled
+                    // mut is only "unused" when workspace feature is disabled
+                    #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                     let mut completions = provider.get_completions(&doc.content, offset);
 
                     // Add workspace-wide completions (functions and modules from other files)

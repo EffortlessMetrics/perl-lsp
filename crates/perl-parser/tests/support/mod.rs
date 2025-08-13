@@ -106,8 +106,8 @@ pub fn apply_text_edits(text: &str, edits: &[Value]) -> String {
 fn line_col_to_offset(lines: &[&str], line: usize, col_utf16: usize) -> usize {
     let mut offset = 0;
 
-    for i in 0..line.min(lines.len()) {
-        offset += lines[i].len() + 1; // +1 for newline
+    for line_str in lines.iter().take(line) {
+        offset += line_str.len() + 1; // +1 for newline
     }
 
     if line < lines.len() {

@@ -28,7 +28,6 @@
     clippy::unused_self,
     clippy::collapsible_match,
     clippy::collapsible_if,
-    clippy::ptr_arg,
     clippy::only_used_in_recursion,
     clippy::items_after_test_module,
     clippy::while_let_loop,
@@ -113,6 +112,7 @@ pub mod incremental_v2;
 pub mod inlay_hints_provider;
 pub mod line_index;
 pub mod lsp_server;
+pub mod lsp_utils;
 pub mod parser;
 pub mod parser_context;
 pub mod perl_critic;

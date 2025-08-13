@@ -1026,9 +1026,7 @@ impl<'a> Parser<'a> {
             loop {
                 // Attributes can be identifiers or certain keywords
                 let attr_token = match self.peek_kind() {
-                    Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
-                        self.tokens.next()?
-                    }
+                    Some(TokenKind::Identifier | TokenKind::Method) => self.tokens.next()?,
                     _ => {
                         // If it's not an attribute name, we're done with this attribute list
                         break;
@@ -1065,7 +1063,7 @@ impl<'a> Parser<'a> {
 
                 // Check if there's another attribute (not preceded by colon)
                 match self.peek_kind() {
-                    Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
+                    Some(TokenKind::Identifier | TokenKind::Method) => {
                         // Continue parsing more attributes
                         continue;
                     }
@@ -1502,7 +1500,7 @@ impl<'a> Parser<'a> {
                             self.tokens.next()?; // consume =>
                             // Parse the value as a simple expression
                             match self.peek_kind() {
-                                Some(k) if matches!(k, TokenKind::Number | TokenKind::String) => {
+                                Some(TokenKind::Number | TokenKind::String) => {
                                     args.push(self.tokens.next()?.text.clone());
                                 }
                                 Some(TokenKind::Identifier) => {
@@ -3086,7 +3084,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(k) if matches!(k, TokenKind::SubSigil | TokenKind::BitwiseAnd) => {
+                        Some(TokenKind::SubSigil | TokenKind::BitwiseAnd) => {
                             // ->&* (code dereference)
                             self.tokens.next()?; // consume &
 
@@ -3124,7 +3122,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
+                        Some(TokenKind::Identifier | TokenKind::Method) => {
                             // Method call
                             let method = self.tokens.next()?.text.clone();
 

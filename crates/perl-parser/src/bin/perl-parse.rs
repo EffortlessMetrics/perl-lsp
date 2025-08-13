@@ -372,11 +372,10 @@ fn count_nodes(ast: &Node) -> usize {
                 count += count_nodes(arg);
             }
         }
-        NodeKind::Return { value } => {
-            if let Some(val) = value {
-                count += count_nodes(val);
-            }
+        NodeKind::Return { value: Some(val) } => {
+            count += count_nodes(val);
         }
+        NodeKind::Return { value: None } => {}
         NodeKind::Assignment { lhs, rhs, .. } => {
             count += count_nodes(lhs);
             count += count_nodes(rhs);
