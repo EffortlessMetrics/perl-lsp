@@ -1,6 +1,6 @@
 # clippy.toml
 # Keep pedantic on, but chill some noisy lints for a parser project.
-warn-on-all = false
+# warn-on-all-wildcard-imports = false
 msrv = "1.85"
 
 # Common pedantic relaxations for parser projects
