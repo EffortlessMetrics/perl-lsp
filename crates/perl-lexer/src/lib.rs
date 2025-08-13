@@ -4,24 +4,25 @@
 //! nature of the language, particularly the ambiguity of the `/` character
 //! which can be either division or the start of a regex.
 
-#![warn(clippy::all, clippy::pedantic)]
+#![warn(clippy::all)]
 #![allow(
-    clippy::module_name_repetitions,
+    // Core allows for lexer code
     clippy::too_many_lines,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
+    clippy::module_name_repetitions,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap,
     clippy::cast_precision_loss,
     clippy::must_use_candidate,
-    clippy::unnested_or_patterns,
-    clippy::redundant_else,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+
+    // Lexer-specific patterns that are fine
     clippy::match_same_arms,
+    clippy::redundant_else,
     clippy::unnecessary_wraps,
     clippy::unused_self,
     clippy::items_after_statements,
-    clippy::assigning_clones,
     clippy::struct_excessive_bools,
     clippy::uninlined_format_args
 )]

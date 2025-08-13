@@ -35,6 +35,51 @@ impl<'a> Parser<'a> {
         self.parse_program()
     }
 
+    // Helper functions for cleaner pattern matching
+
+    #[inline]
+    fn is_statement_terminator(kind: Option<TokenKind>) -> bool {
+        matches!(
+            kind,
+            Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
+        )
+    }
+
+    #[inline]
+    fn is_stmt_modifier_kind(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::If
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::When
+                | TokenKind::Foreach
+        )
+    }
+
+    #[inline]
+    fn is_logical_or(kind: Option<TokenKind>) -> bool {
+        matches!(kind, Some(TokenKind::Or) | Some(TokenKind::DefinedOr))
+    }
+
+    #[inline]
+    fn is_postfix_op(kind: Option<TokenKind>) -> bool {
+        matches!(
+            kind,
+            Some(TokenKind::Increment) | Some(TokenKind::Decrement)
+        )
+    }
+
+    #[inline]
+    fn is_variable_sigil(kind: Option<TokenKind>) -> bool {
+        matches!(
+            kind,
+            Some(TokenKind::ScalarSigil) | Some(TokenKind::ArraySigil) | Some(TokenKind::HashSigil)
+        )
+    }
+
     /// Check recursion depth
     fn check_recursion(&mut self) -> ParseResult<()> {
         self.recursion_depth += 1;
@@ -140,15 +185,7 @@ impl<'a> Parser<'a> {
         }?;
 
         // Check for statement modifiers on ANY statement
-        if matches!(
-            self.peek_kind(),
-            Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-        ) {
+        if matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k)) {
             stmt = self.parse_statement_modifier(stmt)?;
         }
 
@@ -216,20 +253,16 @@ impl<'a> Parser<'a> {
         let mut args = vec![];
 
         // Continue parsing arguments until we hit a statement terminator
-        while !matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-        ) && !self.is_statement_modifier_keyword()
+        while !Self::is_statement_terminator(self.peek_kind())
+            && !self.is_statement_modifier_keyword()
         {
             args.push(self.parse_expression()?);
 
             // Check if we should continue (comma is optional in indirect syntax)
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?; // consume comma
-            } else if matches!(
-                self.peek_kind(),
-                Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-            ) || self.is_statement_modifier_keyword()
+            } else if Self::is_statement_terminator(self.peek_kind())
+                || self.is_statement_modifier_keyword()
             {
                 break;
             }
@@ -250,15 +283,7 @@ impl<'a> Parser<'a> {
 
     /// Check if current token is a statement modifier keyword
     fn is_statement_modifier_keyword(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::When)
-        )
+        matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
     }
 
     /// Parse variable declaration (my, our, local, state)
@@ -469,14 +494,27 @@ impl<'a> Parser<'a> {
 
         // Check if next token is an identifier or a keyword that should be treated as identifier
         let next_kind = self.peek_kind();
+        let can_be_sub_name = |k: TokenKind| {
+            matches!(
+                k,
+                TokenKind::Sub
+                    | TokenKind::My
+                    | TokenKind::Our
+                    | TokenKind::If
+                    | TokenKind::Unless
+                    | TokenKind::While
+                    | TokenKind::For
+                    | TokenKind::Return
+                    | TokenKind::Do
+                    | TokenKind::Eval
+                    | TokenKind::Use
+                    | TokenKind::Package
+            )
+        };
+
         let (name, end) = if next_kind == Some(TokenKind::Identifier) ||
                              // Keywords that can be used as subroutine names with & sigil
-                             (sigil == "&" && matches!(next_kind, 
-                                 Some(TokenKind::Sub) | Some(TokenKind::My) | Some(TokenKind::Our) |
-                                 Some(TokenKind::If) | Some(TokenKind::Unless) | Some(TokenKind::While) |
-                                 Some(TokenKind::For) | Some(TokenKind::Return) | Some(TokenKind::Do) |
-                                 Some(TokenKind::Eval) | Some(TokenKind::Use) | Some(TokenKind::Package)
-                             ))
+                             (sigil == "&" && matches!(next_kind, Some(k) if can_be_sub_name(k)))
         {
             let name_token = self.tokens.next()?;
             let mut name = name_token.text.clone();
@@ -812,7 +850,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'for'
 
         // Check if it's a foreach-style for loop
-        if self.peek_kind() == Some(TokenKind::My) || self.is_variable_start() {
+        if matches!(self.peek_kind(), Some(TokenKind::My)) || self.is_variable_start() {
             return self.parse_foreach_style_for();
         }
 
@@ -988,7 +1026,9 @@ impl<'a> Parser<'a> {
             loop {
                 // Attributes can be identifiers or certain keywords
                 let attr_token = match self.peek_kind() {
-                    Some(TokenKind::Identifier) | Some(TokenKind::Method) => self.tokens.next()?,
+                    Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
+                        self.tokens.next()?
+                    }
                     _ => {
                         // If it's not an attribute name, we're done with this attribute list
                         break;
@@ -1025,7 +1065,7 @@ impl<'a> Parser<'a> {
 
                 // Check if there's another attribute (not preceded by colon)
                 match self.peek_kind() {
-                    Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
+                    Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
                         // Continue parsing more attributes
                         continue;
                     }
@@ -1428,13 +1468,9 @@ impl<'a> Parser<'a> {
             }
         }
         // Handle bare arguments (no parentheses)
-        else if matches!(
-            self.peek_kind(),
-            Some(TokenKind::String) | Some(TokenKind::Identifier)
-        ) && !matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-        ) {
+        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier))
+            && !Self::is_statement_terminator(self.peek_kind())
+        {
             // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
             loop {
                 match self.peek_kind() {
@@ -1466,7 +1502,7 @@ impl<'a> Parser<'a> {
                             self.tokens.next()?; // consume =>
                             // Parse the value as a simple expression
                             match self.peek_kind() {
-                                Some(TokenKind::Number) | Some(TokenKind::String) => {
+                                Some(k) if matches!(k, TokenKind::Number | TokenKind::String) => {
                                     args.push(self.tokens.next()?.text.clone());
                                 }
                                 Some(TokenKind::Identifier) => {
@@ -1474,10 +1510,7 @@ impl<'a> Parser<'a> {
                                 }
                                 _ => {
                                     // For more complex expressions, just consume tokens until semicolon
-                                    while !matches!(
-                                        self.peek_kind(),
-                                        Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-                                    ) {
+                                    while !Self::is_statement_terminator(self.peek_kind()) {
                                         args.push(self.tokens.next()?.text.clone());
                                     }
                                 }
@@ -1488,10 +1521,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Check if we should continue parsing arguments
-                if matches!(
-                    self.peek_kind(),
-                    Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-                ) {
+                if Self::is_statement_terminator(self.peek_kind()) {
                     break;
                 }
             }
@@ -1644,10 +1674,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Check if we should continue parsing arguments
-                if matches!(
-                    self.peek_kind(),
-                    Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
-                ) {
+                if Self::is_statement_terminator(self.peek_kind()) {
                     break;
                 }
             }
@@ -1699,15 +1726,10 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'return'
 
         // Check if we have a value to return - only stop at clear ends or statement modifiers
-        let value = if matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace) |
-            Some(TokenKind::Eof) | None |
-            // Statement modifiers - these will be handled at statement level
-            Some(TokenKind::If) | Some(TokenKind::Unless) |
-            Some(TokenKind::While) | Some(TokenKind::Until) |
-            Some(TokenKind::For) | Some(TokenKind::Foreach)
-        ) {
+        let value = if Self::is_statement_terminator(self.peek_kind())
+            || matches!(self.peek_kind(), Some(TokenKind::RightBrace))
+            || matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+        {
             None
         } else {
             // Parse the return value
@@ -2365,10 +2387,7 @@ impl<'a> Parser<'a> {
     fn parse_or(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_and()?;
 
-        while matches!(
-            self.peek_kind(),
-            Some(TokenKind::Or) | Some(TokenKind::DefinedOr)
-        ) {
+        while Self::is_logical_or(self.peek_kind()) {
             let op_token = self.tokens.next()?;
             let right = self.parse_and()?;
             let start = expr.location.start;
@@ -2953,7 +2972,7 @@ impl<'a> Parser<'a> {
 
         loop {
             match self.peek_kind() {
-                Some(TokenKind::Increment) | Some(TokenKind::Decrement) => {
+                Some(k) if Self::is_postfix_op(Some(k)) => {
                     let op_token = self.consume_token()?;
                     let start = expr.location.start;
                     let end = op_token.end;
@@ -3067,7 +3086,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(TokenKind::SubSigil) | Some(TokenKind::BitwiseAnd) => {
+                        Some(k) if matches!(k, TokenKind::SubSigil | TokenKind::BitwiseAnd) => {
                             // ->&* (code dereference)
                             self.tokens.next()?; // consume &
 
@@ -3105,7 +3124,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(TokenKind::Identifier) | Some(TokenKind::Method) => {
+                        Some(k) if matches!(k, TokenKind::Identifier | TokenKind::Method) => {
                             // Method call
                             let method = self.tokens.next()?.text.clone();
 
@@ -4125,10 +4144,8 @@ impl<'a> Parser<'a> {
             TokenKind::Sub => {
                 // Check if this is an anonymous subroutine
                 let next = self.peek_kind();
-                if matches!(
-                    next,
-                    Some(TokenKind::LeftBrace) | Some(TokenKind::LeftParen)
-                ) {
+                if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
+                {
                     // It's an anonymous subroutine
                     self.parse_subroutine()
                 } else {
@@ -4270,10 +4287,7 @@ impl<'a> Parser<'a> {
 
     /// Check if the next token starts a variable
     fn is_variable_start(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::ScalarSigil) | Some(TokenKind::ArraySigil) | Some(TokenKind::HashSigil)
-        )
+        Self::is_variable_sigil(self.peek_kind())
     }
 
     /// Expect a specific token kind
@@ -4417,7 +4431,7 @@ impl<'a> Parser<'a> {
         let next_kind = self.peek_kind();
 
         // Parse as hash if we see => or comma-separated pairs
-        if next_kind == Some(TokenKind::FatArrow) || next_kind == Some(TokenKind::Comma) {
+        if matches!(next_kind, Some(k) if matches!(k, TokenKind::FatArrow | TokenKind::Comma)) {
             // Parse as hash
             _is_hash = true;
 
