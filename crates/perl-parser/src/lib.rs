@@ -19,6 +19,7 @@
     clippy::if_not_else,
     clippy::similar_names,
     clippy::many_single_char_names,
+    clippy::unnested_or_patterns,
     clippy::needless_continue,
     clippy::redundant_else,
     clippy::uninlined_format_args,
@@ -26,7 +27,21 @@
     clippy::return_self_not_must_use,
     clippy::enum_glob_use,
     clippy::wildcard_imports,
-    clippy::unused_self
+    clippy::unused_self,
+    clippy::module_name_repetitions,
+    clippy::needless_pass_by_value,
+    clippy::collapsible_match,
+    clippy::collapsible_if,
+    clippy::struct_field_names,
+    clippy::doc_markdown,
+    clippy::manual_string_new,
+    clippy::only_used_in_recursion,
+    clippy::needless_raw_string_hashes,
+    clippy::single_match_else,
+    clippy::redundant_closure_for_method_calls,
+    clippy::inefficient_to_string,
+    clippy::semicolon_if_nothing_returned,
+    clippy::items_after_test_module
 )]
 //! ## Architecture
 //!
