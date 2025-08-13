@@ -295,7 +295,7 @@ impl ErrorRecoveryParser {
                     consumed += ch.len_utf8();
                     if !ch.is_whitespace() {
                         // Skip non-whitespace
-                        while let Some(ch) = chars.next() {
+                        for ch in chars.by_ref() {
                             consumed += ch.len_utf8();
                             if ch.is_whitespace() {
                                 break;

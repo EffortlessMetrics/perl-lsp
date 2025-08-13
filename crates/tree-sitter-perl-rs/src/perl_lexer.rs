@@ -1831,9 +1831,9 @@ impl<'a> PerlLexer<'a> {
                                 }
                             }
                         }
-                    } else if ch == 'q' 
+                    } else if ch == 'q'
                         && self.position + 2 < self.input.len()
-                        && self.input.as_bytes()[self.position + 1] == b'r' 
+                        && self.input.as_bytes()[self.position + 1] == b'r'
                     {
                         let next = self.input.as_bytes()[self.position + 2] as char;
                         if Self::is_regex_delimiter(next) {

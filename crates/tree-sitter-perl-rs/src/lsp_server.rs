@@ -378,6 +378,7 @@ impl PerlLanguageServer {
     }
 
     /// Extract symbols from AST
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_symbols_from_ast(
         &self,
         node: &AstNode,

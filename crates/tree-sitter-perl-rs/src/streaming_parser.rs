@@ -159,7 +159,7 @@ impl<R: Read> StreamingParser<R> {
         if !self.in_pod
             && trimmed.starts_with('=')
             && trimmed.len() > 1
-            && trimmed.chars().nth(1).map_or(false, |c| c.is_alphabetic())
+            && trimmed.chars().nth(1).is_some_and(|c| c.is_alphabetic())
         {
             self.in_pod = true;
             return Some(ParseEvent::SpecialSection {

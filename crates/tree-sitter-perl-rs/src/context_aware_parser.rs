@@ -337,7 +337,7 @@ EOF
         let (processed, declarations) = parser.parse();
 
         // Should find both heredocs
-        assert!(declarations.len() >= 1, "Should find eval heredoc");
+        assert!(!declarations.is_empty(), "Should find eval heredoc");
 
         // The eval content should be marked for re-parsing
         assert!(declarations.iter().any(|d| d.terminator == "EOF"));
@@ -379,6 +379,6 @@ OUTER
         let (processed, declarations) = parser.parse();
 
         // Should handle nested evals
-        assert!(declarations.len() >= 1, "Should find outer eval heredoc");
+        assert!(!declarations.is_empty(), "Should find outer eval heredoc");
     }
 }
