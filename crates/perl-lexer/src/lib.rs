@@ -23,7 +23,6 @@
     clippy::items_after_statements,
     clippy::assigning_clones,
     clippy::struct_excessive_bools,
-    clippy::doc_markdown,
     clippy::uninlined_format_args
 )]
 
@@ -636,16 +635,7 @@ impl<'a> PerlLexer<'a> {
                     if sigil != '*'
                         && matches!(
                             next_char,
-                            Some('$')
-                                | Some('@')
-                                | Some('%')
-                                | Some('*')
-                                | Some('&')
-                                | Some('[')
-                                | Some(' ')
-                                | Some('\t')
-                                | Some('\n')
-                                | Some('\r')
+                            Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r')
                         )
                     {
                         // This is a dereference, don't consume the brace
@@ -708,16 +698,7 @@ impl<'a> PerlLexer<'a> {
                         if sigil != '*'
                             && matches!(
                                 self.current_char(),
-                                Some('$')
-                                    | Some('@')
-                                    | Some('%')
-                                    | Some('*')
-                                    | Some('&')
-                                    | Some('[')
-                                    | Some(' ')
-                                    | Some('\t')
-                                    | Some('\n')
-                                    | Some('\r')
+                                Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r')
                             )
                         {
                             // This is a dereference, backtrack

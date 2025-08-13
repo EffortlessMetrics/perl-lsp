@@ -17,7 +17,16 @@
     clippy::struct_excessive_bools,
     clippy::match_same_arms,
     clippy::if_not_else,
-    clippy::similar_names
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    clippy::needless_continue,
+    clippy::redundant_else,
+    clippy::uninlined_format_args,
+    clippy::items_after_statements,
+    clippy::return_self_not_must_use,
+    clippy::enum_glob_use,
+    clippy::wildcard_imports,
+    clippy::unused_self
 )]
 //! ## Architecture
 //!

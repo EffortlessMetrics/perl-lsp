@@ -3,8 +3,9 @@
 //! This benchmark suite measures the performance of the modern two-crate
 //! architecture and enables comparison with other implementations.
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::Parser;
+use std::hint::black_box;
 
 const SIMPLE_SCRIPT: &str = r#"
 my $x = 42;
