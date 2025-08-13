@@ -17,15 +17,10 @@ fn main() {
         println!("Lexer tokens:");
 
         let mut lexer = PerlLexer::new(code);
-        loop {
-            match lexer.next_token() {
-                Some(token) => {
-                    println!("  {:?}", token);
-                    if matches!(token.token_type, TokenType::EOF) {
-                        break;
-                    }
-                }
-                None => break,
+        while let Some(token) = lexer.next_token() {
+            println!("  {:?}", token);
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
             }
         }
 

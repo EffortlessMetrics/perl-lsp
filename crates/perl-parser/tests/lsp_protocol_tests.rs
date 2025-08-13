@@ -4,22 +4,26 @@ use std::io::{BufRead, BufReader, Cursor, Read};
 use std::sync::{Arc, Mutex};
 
 /// Mock transport for testing JSON-RPC messages
+#[allow(dead_code)]
 struct MockTransport {
     output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl MockTransport {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             output: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
+    #[allow(dead_code)]
     fn get_output(&self) -> String {
         let output = self.output.lock().unwrap();
         String::from_utf8_lossy(&output).to_string()
     }
 
+    #[allow(dead_code)]
     fn parse_messages(&self) -> Vec<Value> {
         let output = self.get_output();
         let mut messages = Vec::new();

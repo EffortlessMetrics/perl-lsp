@@ -121,14 +121,13 @@ fn main() {
         ("do { $x } until $y", "do-until"),
     ];
 
-    let mut parser = Parser::new("");
     let mut passed = 0;
     let mut failed = 0;
 
     println!("Running {} more edge case tests...\n", tests.len());
 
     for (code, description) in tests {
-        parser = Parser::new(code);
+        let mut parser = Parser::new(code);
         match parser.parse() {
             Ok(_) => {
                 println!("✅ {:<50} {}", description, code);

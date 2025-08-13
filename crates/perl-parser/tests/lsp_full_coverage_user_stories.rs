@@ -942,7 +942,7 @@ sub run {
     // Should return formatting edits or empty if already formatted
 
     // Verify all operations complete without panic
-    assert!(true, "All integration operations completed successfully");
+    // All integration operations completed successfully
 }
 
 // ===================== Performance Tests =====================
@@ -1014,5 +1014,5 @@ fn test_concurrent_operations() {
         }
     }
 
-    assert!(true, "Multiple operations completed successfully");
+    // Multiple operations completed successfully
 }

@@ -335,7 +335,7 @@ sub test { print "hello" }
     );
 
     // Simulate rapid edits around quotes and braces
-    let edits = vec![
+    let edits = [
         // Insert quote in string
         (1, 10, "\""),
         // Delete closing brace
@@ -380,5 +380,5 @@ sub test { print "hello" }
     }
 
     // If we got here without hanging, the test passes
-    assert!(true, "Server survived rapid edit fuzzing");
+    // Server survived rapid edit fuzzing
 }
