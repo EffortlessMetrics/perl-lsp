@@ -194,8 +194,8 @@ impl StatefulPerlParser {
 
         if let Some(pos) = line.find("<<") {
             let after_marker = &line[pos + 2..];
-            let (indented, rest) = if after_marker.starts_with('~') {
-                (true, &after_marker[1..])
+            let (indented, rest) = if let Some(r) = after_marker.strip_prefix('~') {
+                (true, r)
             } else {
                 (false, after_marker)
             };

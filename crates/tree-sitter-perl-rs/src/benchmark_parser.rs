@@ -4,7 +4,6 @@
 //! without dependencies on perl-lexer.
 
 use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
-use pest::Parser;
 
 /// Benchmark-friendly wrapper for the Pure Rust Pest parser
 /// This wrapper provides an immutable parse method for benchmarking

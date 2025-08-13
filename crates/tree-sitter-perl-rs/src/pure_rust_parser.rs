@@ -559,21 +559,22 @@ impl PureRustPerlParser {
 
                 // Extract modifier type and condition from the statement_modifier
                 let modifier_str = modifier.as_str();
-                let (modifier_type, condition_expr) = if modifier_str.starts_with("if ") {
-                    ("if", &modifier_str[3..])
-                } else if modifier_str.starts_with("unless ") {
-                    ("unless", &modifier_str[7..])
-                } else if modifier_str.starts_with("while ") {
-                    ("while", &modifier_str[6..])
-                } else if modifier_str.starts_with("until ") {
-                    ("until", &modifier_str[6..])
-                } else if modifier_str.starts_with("for ") {
-                    ("for", &modifier_str[4..])
-                } else if modifier_str.starts_with("foreach ") {
-                    ("foreach", &modifier_str[8..])
-                } else {
-                    return Ok(expr);
-                };
+                let (modifier_type, condition_expr) =
+                    if let Some(rest) = modifier_str.strip_prefix("if ") {
+                        ("if", rest)
+                    } else if let Some(rest) = modifier_str.strip_prefix("unless ") {
+                        ("unless", rest)
+                    } else if let Some(rest) = modifier_str.strip_prefix("while ") {
+                        ("while", rest)
+                    } else if let Some(rest) = modifier_str.strip_prefix("until ") {
+                        ("until", rest)
+                    } else if let Some(rest) = modifier_str.strip_prefix("for ") {
+                        ("for", rest)
+                    } else if let Some(rest) = modifier_str.strip_prefix("foreach ") {
+                        ("foreach", rest)
+                    } else {
+                        return Ok(expr);
+                    };
 
                 // For now, create a simple identifier for the condition
                 // In a real implementation, we'd parse the condition expression
@@ -974,11 +975,8 @@ impl PureRustPerlParser {
                                 Rule::postfix_dereference => {
                                     let deref_str = op_inner.as_str();
                                     // Extract the dereference type after "->"
-                                    let deref_type = if deref_str.starts_with("->") {
-                                        &deref_str[2..]
-                                    } else {
-                                        deref_str
-                                    };
+                                    let deref_type =
+                                        deref_str.strip_prefix("->").unwrap_or(deref_str);
                                     expr = AstNode::PostfixDereference {
                                         expr: Box::new(expr),
                                         deref_type: Arc::from(deref_type),
@@ -1349,27 +1347,27 @@ impl PureRustPerlParser {
             Rule::begin_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
-                Ok(block.map(|b| AstNode::BeginBlock(b)))
+                Ok(block.map(AstNode::BeginBlock))
             }
             Rule::end_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
-                Ok(block.map(|b| AstNode::EndBlock(b)))
+                Ok(block.map(AstNode::EndBlock))
             }
             Rule::check_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
-                Ok(block.map(|b| AstNode::CheckBlock(b)))
+                Ok(block.map(AstNode::CheckBlock))
             }
             Rule::init_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
-                Ok(block.map(|b| AstNode::InitBlock(b)))
+                Ok(block.map(AstNode::InitBlock))
             }
             Rule::unitcheck_block => {
                 let inner = pair.into_inner().next().unwrap(); // get the block
                 let block = self.build_node(inner)?.map(Box::new);
-                Ok(block.map(|b| AstNode::UnitcheckBlock(b)))
+                Ok(block.map(AstNode::UnitcheckBlock))
             }
             Rule::qw_list => {
                 let mut words = Vec::new();
@@ -1382,7 +1380,7 @@ impl PureRustPerlParser {
                         | Rule::qw_delimited_items => {
                             // Split the content by whitespace
                             let content = inner.as_str();
-                            words.extend(content.split_whitespace().map(|s| Arc::from(s)));
+                            words.extend(content.split_whitespace().map(Arc::from));
                         }
                         _ => {}
                     }
@@ -1392,7 +1390,7 @@ impl PureRustPerlParser {
             Rule::do_block => {
                 let inner = pair.into_inner().next().unwrap();
                 let expr = self.build_node(inner)?.map(Box::new);
-                Ok(expr.map(|e| AstNode::DoBlock(e)))
+                Ok(expr.map(AstNode::DoBlock))
             }
             Rule::eval_statement => {
                 let inner = pair.into_inner().next().unwrap();
@@ -2312,7 +2310,7 @@ impl PureRustPerlParser {
             } => {
                 let args_str = args
                     .iter()
-                    .map(|a| Self::node_to_sexp(a))
+                    .map(Self::node_to_sexp)
                     .collect::<Vec<_>>()
                     .join(" ");
                 format!(
@@ -2367,7 +2365,7 @@ impl PureRustPerlParser {
                     format!(
                         "( {} )",
                         args.iter()
-                            .map(|a| Self::node_to_sexp(a))
+                            .map(Self::node_to_sexp)
                             .collect::<Vec<_>>()
                             .join(" ")
                     )
@@ -2394,7 +2392,7 @@ impl PureRustPerlParser {
                     format!(
                         " {}",
                         args.iter()
-                            .map(|a| Self::node_to_sexp(a))
+                            .map(Self::node_to_sexp)
                             .collect::<Vec<_>>()
                             .join(" ")
                     )
@@ -2412,7 +2410,7 @@ impl PureRustPerlParser {
                     format!(
                         " {}",
                         args.iter()
-                            .map(|a| Self::node_to_sexp(a))
+                            .map(Self::node_to_sexp)
                             .collect::<Vec<_>>()
                             .join(" ")
                     )
@@ -2473,7 +2471,7 @@ impl PureRustPerlParser {
             AstNode::InterpolatedString(parts) => {
                 let parts_str = parts
                     .iter()
-                    .map(|p| Self::node_to_sexp(p))
+                    .map(Self::node_to_sexp)
                     .collect::<Vec<_>>()
                     .join(" ");
                 format!("(interpolated_string {})", parts_str)
