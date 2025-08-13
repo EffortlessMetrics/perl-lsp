@@ -86,7 +86,7 @@ impl EnhancedFullParser {
             if !in_pod
                 && line.starts_with('=')
                 && line.len() > 1
-                && line.chars().nth(1).map_or(false, |c| c.is_alphabetic())
+                && line.chars().nth(1).is_some_and(|c| c.is_alphabetic())
             {
                 in_pod = true;
                 pod_start = i;

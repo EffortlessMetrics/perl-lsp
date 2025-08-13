@@ -17,7 +17,7 @@ mod integration_highlight {
         for entry in fs::read_dir(highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                 test_count += 1;
                 
                 // Read the highlight test file
@@ -110,7 +110,7 @@ mod integration_highlight {
         for entry in fs::read_dir(highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                 let content = fs::read_to_string(&path).unwrap();
                 
                 // Ensure it's not empty
@@ -155,7 +155,7 @@ mod integration_highlight {
             for entry in fs::read_dir(highlight_dir).unwrap() {
                 let entry = entry.unwrap();
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                     let content = fs::read_to_string(&path).unwrap();
                     let tree = parser.parse(&content, None).unwrap();
                     
@@ -188,7 +188,7 @@ mod integration_highlight {
         for entry in fs::read_dir(highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                 let content = fs::read_to_string(&path).unwrap();
                 let start = Instant::now();
                 
@@ -245,7 +245,7 @@ mod integration_highlight {
             for entry in fs::read_dir(highlight_dir).unwrap() {
                 let entry = entry.unwrap();
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                     let content = fs::read_to_string(&path).unwrap();
                     let tree = parser.parse(&content, None).unwrap();
                     
@@ -316,7 +316,7 @@ mod integration_highlight {
         for entry in fs::read_dir(highlight_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "pm") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                 let content = fs::read_to_string(&path).unwrap();
                 let tree = parser.parse(&content, None).unwrap();
                 

@@ -500,10 +500,8 @@ impl PerlLanguageServer {
         let mut byte = 0;
 
         for ch in content.chars() {
-            if line == pos.line as usize {
-                if byte == pos.character as usize {
-                    return byte;
-                }
+            if line == pos.line as usize && byte == pos.character as usize {
+                return byte;
             }
             if ch == '\n' {
                 line += 1;
