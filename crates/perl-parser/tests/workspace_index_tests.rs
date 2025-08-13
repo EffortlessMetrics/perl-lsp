@@ -66,7 +66,7 @@ print $result;
     // it extracts "Foo::bar" as the function name
     // We'll check that we found at least the definition reference
     assert!(
-        bar_refs.len() >= 1,
+        !bar_refs.is_empty(),
         "Should find at least one reference to 'bar'"
     );
 
@@ -89,7 +89,7 @@ print $result;
     let foo_refs = index.find_references("Foo");
     // Should find at least one reference (the use statement)
     assert!(
-        foo_refs.len() >= 1,
+        !foo_refs.is_empty(),
         "Should find at least one reference to 'Foo'"
     );
 

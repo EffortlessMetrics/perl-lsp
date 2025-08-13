@@ -383,6 +383,7 @@ impl CompletionProvider {
     }
 
     /// Add variable completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_variable_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -422,6 +423,7 @@ impl CompletionProvider {
     }
 
     /// Add special Perl variables
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_special_variables(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -479,6 +481,7 @@ impl CompletionProvider {
     }
 
     /// Add function completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_function_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -505,6 +508,7 @@ impl CompletionProvider {
     }
 
     /// Add built-in function completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_builtin_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -537,6 +541,7 @@ impl CompletionProvider {
     }
 
     /// Add keyword completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_keyword_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -577,6 +582,7 @@ impl CompletionProvider {
     }
 
     /// Add package member completions
+    #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_package_completions(
         &self,
         _completions: &mut Vec<CompletionItem>,
@@ -587,6 +593,7 @@ impl CompletionProvider {
     }
 
     /// Add method completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_method_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -616,6 +623,7 @@ impl CompletionProvider {
     }
 
     /// Add file path completions
+    #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_file_completions(
         &self,
         _completions: &mut Vec<CompletionItem>,
@@ -626,6 +634,7 @@ impl CompletionProvider {
     }
 
     /// Add all variables without sigils (for interpolation contexts)
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_all_variables(
         &self,
         completions: &mut Vec<CompletionItem>,
