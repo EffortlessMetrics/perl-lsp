@@ -4366,7 +4366,12 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                match crate::lsp_document_link::collect_document_links(&doc.content, uri) {
+                let uri_parsed = url::Url::parse(uri).map_err(|_| JsonRpcError {
+                    code: -32602,
+                    message: "Invalid URI".to_string(),
+                    data: None,
+                })?;
+                match crate::lsp_document_link::collect_document_links(&doc.content, &uri_parsed) {
                     Ok(links) => Ok(Some(serde_json::to_value(links).unwrap_or(Value::Null))),
                     Err(_) => Ok(Some(Value::Null)),
                 }
