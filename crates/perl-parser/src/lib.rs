@@ -13,7 +13,11 @@
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::struct_excessive_bools,
+    clippy::match_same_arms,
+    clippy::if_not_else,
+    clippy::similar_names
 )]
 //! ## Architecture
 //!

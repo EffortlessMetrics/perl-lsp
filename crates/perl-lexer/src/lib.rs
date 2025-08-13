@@ -12,7 +12,19 @@
     clippy::missing_panics_doc,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::must_use_candidate
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::must_use_candidate,
+    clippy::unnested_or_patterns,
+    clippy::redundant_else,
+    clippy::match_same_arms,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    clippy::items_after_statements,
+    clippy::assigning_clones,
+    clippy::struct_excessive_bools,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args
 )]
 
 use std::sync::Arc;
@@ -573,7 +585,7 @@ impl<'a> PerlLexer<'a> {
                 if self.position >= 3
                     && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)]
                         == "->"
-                    && matches!(self.current_char(), Some('{') | Some('[') | Some('*'))
+                    && matches!(self.current_char(), Some('{' | '[' | '*'))
                 {
                     // Just return the sigil
                     let text = &self.input[start..self.position];
@@ -1793,7 +1805,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
 }
 
 // Checkpoint support for incremental parsing
-impl<'a> Checkpointable for PerlLexer<'a> {
+impl Checkpointable for PerlLexer<'_> {
     fn checkpoint(&self) -> LexerCheckpoint {
         use checkpoint::CheckpointContext;
 
