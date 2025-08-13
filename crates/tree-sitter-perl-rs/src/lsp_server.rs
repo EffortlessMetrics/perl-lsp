@@ -180,7 +180,7 @@ impl PerlLanguageServer {
             Ok(_) => {
                 // Success - check with error recovery parser for warnings
                 let mut error_parser = ErrorRecoveryParser::new();
-                if let Ok(_) = error_parser.parse(&text) {
+                if error_parser.parse(&text).is_ok() {
                     for error in error_parser.errors() {
                         diagnostics.push(Diagnostic {
                             range: Range {

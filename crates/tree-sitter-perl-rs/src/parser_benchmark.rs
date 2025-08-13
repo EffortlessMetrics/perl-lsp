@@ -127,11 +127,17 @@ pub struct ParserBenchmark {
     parser: PureRustPerlParser,
 }
 
-impl ParserBenchmark {
-    pub fn new() -> Self {
+impl Default for ParserBenchmark {
+    fn default() -> Self {
         Self {
             parser: PureRustPerlParser::new(),
         }
+    }
+}
+
+impl ParserBenchmark {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Run benchmark with specified parser implementation

@@ -3,8 +3,7 @@
 //! This module provides a clean interface to the Pest-based parser
 //! without dependencies on perl-lexer.
 
-use crate::error::ParseError;
-use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser};
+use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use pest::Parser;
 
 /// Benchmark-friendly wrapper for the Pure Rust Pest parser

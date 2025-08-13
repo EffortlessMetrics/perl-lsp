@@ -366,13 +366,19 @@ pub struct SexpBuilder {
     compact: bool,
 }
 
-impl SexpBuilder {
-    pub fn new() -> Self {
+impl Default for SexpBuilder {
+    fn default() -> Self {
         Self {
             buffer: String::new(),
             depth: 0,
             compact: false,
         }
+    }
+}
+
+impl SexpBuilder {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn begin_node(&mut self, node_type: &str) {

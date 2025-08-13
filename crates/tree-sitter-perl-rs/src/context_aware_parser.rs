@@ -255,11 +255,17 @@ pub struct ContextAwareFullParser {
     base_parser: PureRustPerlParser,
 }
 
-impl ContextAwareFullParser {
-    pub fn new() -> Self {
+impl Default for ContextAwareFullParser {
+    fn default() -> Self {
         Self {
             base_parser: PureRustPerlParser::new(),
         }
+    }
+}
+
+impl ContextAwareFullParser {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Parse with full context awareness
