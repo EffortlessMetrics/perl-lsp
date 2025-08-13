@@ -87,6 +87,11 @@ path = "examples/checkpoint_demo.rs"
 required-features = ["incremental"]
 
 [[example]]
+name = "test_incremental_ast"
+path = "examples/test_incremental_ast.rs"
+required-features = ["incremental"]
+
+[[example]]
 name = "test_all_edge_cases"
 path = "examples/test_all_edge_cases.rs"
 

@@ -504,6 +504,7 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     /// Iterate over all qw windows in the string
+    #[allow(clippy::many_single_char_names)]
     fn for_each_qw_window<F>(&self, s: &str, mut f: F) -> bool
     where
         F: FnMut(usize, usize) -> bool,
