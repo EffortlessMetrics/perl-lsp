@@ -26,12 +26,20 @@
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
+
+// Auto-generate unique IDs for requests
+static NEXT_ID: AtomicI64 = AtomicI64::new(1000);
+
+fn next_id() -> i64 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
@@ -201,9 +209,19 @@ pub fn start_lsp_server() -> LspServer {
     }
 }
 
-pub fn send_request(server: &mut LspServer, request: Value) -> Value {
+pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     use std::io::Write as _;
-    let id = request.get("id").cloned();
+    
+    // Ensure every request has an id so we can match the response deterministically
+    let id = match request.get("id") {
+        Some(v) => Some(v.clone()),
+        None => {
+            let nid = next_id();
+            request["id"] = json!(nid);
+            Some(json!(nid))
+        }
+    };
+    
     let body = request.to_string();
     let header = format!("Content-Length: {}\r\n\r\n", body.len());
 
@@ -219,7 +237,7 @@ pub fn send_request(server: &mut LspServer, request: Value) -> Value {
                 .unwrap_or(json!(null))
         }
         Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or(json!(null)),
-        None => read_response(server),
+        None => unreachable!("we always assign an id"),
     }
 }
 
