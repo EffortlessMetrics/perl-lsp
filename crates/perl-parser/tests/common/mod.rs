@@ -234,7 +234,9 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     match id {
         Some(Value::Number(n)) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}}))
+                .unwrap_or_else(
+                    || json!({"error":{"code":-32000,"message":"test harness timeout"}}),
+                )
         }
         Some(v) => read_response_matching(server, &v, default_timeout())
             .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}})),
