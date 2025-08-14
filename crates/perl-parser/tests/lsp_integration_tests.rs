@@ -40,7 +40,10 @@ fn test_lsp_initialization() {
 
     let capabilities = result.unwrap();
     // TextDocumentSync can be either a number or an object
-    assert!(capabilities["capabilities"]["textDocumentSync"].is_object() || capabilities["capabilities"]["textDocumentSync"] == 1);
+    assert!(
+        capabilities["capabilities"]["textDocumentSync"].is_object()
+            || capabilities["capabilities"]["textDocumentSync"] == 1
+    );
     assert_eq!(
         capabilities["capabilities"]["completionProvider"]["triggerCharacters"],
         json!(["$", "@", "%", "->"])

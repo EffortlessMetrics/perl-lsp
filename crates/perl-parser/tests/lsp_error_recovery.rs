@@ -60,7 +60,6 @@ fn test_recover_from_parse_errors() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -124,7 +123,6 @@ sub another_valid {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -220,7 +218,6 @@ fn test_incremental_edit_recovery() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/hover",
             "params": {
                 "textDocument": {
@@ -298,7 +295,6 @@ fn test_workspace_recovery_after_error() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "workspace/symbol",
             "params": {
                 "query": "foo"
@@ -359,7 +355,6 @@ print $var;  # Another valid reference
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/references",
             "params": {
                 "textDocument": {
@@ -422,7 +417,6 @@ sub broken {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {
@@ -482,7 +476,6 @@ $old_name++;
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/prepareRename",
             "params": {
                 "textDocument": {
@@ -501,7 +494,6 @@ $old_name++;
             &mut server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 3,
                 "method": "textDocument/rename",
                 "params": {
                     "textDocument": {
@@ -551,7 +543,6 @@ my   $z   =   3;"#;
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/formatting",
             "params": {
                 "textDocument": {
@@ -681,7 +672,6 @@ fn test_diagnostic_recovery() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -729,7 +719,6 @@ my $result = my_func();  # Should still find definition
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/definition",
             "params": {
                 "textDocument": {
@@ -783,7 +772,6 @@ sub broken {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/hover",
             "params": {
                 "textDocument": {

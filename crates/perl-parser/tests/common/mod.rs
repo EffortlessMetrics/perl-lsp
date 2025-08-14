@@ -1,9 +1,26 @@
 //! Common test utilities for LSP integration tests
 //!
-//! Env toggles:
-//!   LSP_TEST_TIMEOUT_MS   – default per-request timeout (ms), default 5000
-//!   LSP_TEST_SHORT_MS     – "short" timeout for optional responses (ms), default 500
-//!   LSP_TEST_ECHO_STDERR  – if set, echo perl-lsp stderr lines in tests
+//! ## Test Harness Contracts
+//!
+//! - **Deterministic IO**: Background reader thread with bounded queue prevents blocking
+//! - **Request IDs**: Auto-generated when omitted from test requests (avoids collisions)
+//! - **Response Matching**: Match by ID for request/response pairing
+//! - **Timeouts**: Configurable via env vars, with sensible defaults
+//! - **Quiet Drain**: Wait for server to settle after changes before assertions
+//! - **Portable Spawn**: Attempts CARGO_BIN_EXE_perl-lsp → PATH → cargo run fallback
+//!
+//! ## Environment Variables
+//!
+//! - `LSP_TEST_TIMEOUT_MS`: Default per-request timeout (ms), default 5000
+//! - `LSP_TEST_SHORT_MS`: "Short" timeout for optional responses (ms), default 500  
+//! - `LSP_TEST_ECHO_STDERR`: If set, echo perl-lsp stderr lines in tests
+//!
+//! ## Key Functions
+//!
+//! - `send_request()`: Sends request and returns matched response (auto-generates ID if missing)
+//! - `drain_until_quiet()`: Waits for server to stop sending messages
+//! - `read_notification_method()`: Reads specific notification by method name
+//! - `read_response_matching()`: Reads response matching specific ID
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
