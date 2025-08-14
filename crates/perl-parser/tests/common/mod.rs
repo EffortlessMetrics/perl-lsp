@@ -211,7 +211,7 @@ pub fn start_lsp_server() -> LspServer {
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     use std::io::Write as _;
-    
+
     // Ensure every request has an id so we can match the response deterministically
     let id = match request.get("id") {
         Some(v) => Some(v.clone()),
@@ -221,7 +221,7 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
             Some(json!(nid))
         }
     };
-    
+
     let body = request.to_string();
     let header = format!("Content-Length: {}\r\n\r\n", body.len());
 
