@@ -5,8 +5,8 @@ use std::time::Duration;
 
 mod common;
 use common::{
-    initialize_lsp, read_response, read_response_timeout, send_raw,
-    send_notification, send_request, shutdown_and_exit, start_lsp_server,
+    initialize_lsp, read_response, read_response_timeout, send_notification, send_raw,
+    send_request, shutdown_and_exit, start_lsp_server,
 };
 
 /// Test suite for unhappy paths and error scenarios
@@ -625,12 +625,15 @@ fn test_binary_frame() {
     initialize_lsp(&mut server);
 
     // Send actual binary junk as a frame body; behavior is implementation-defined
-    send_raw(&mut server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
-    
+    send_raw(
+        &mut server,
+        b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07",
+    );
+
     // Server might ignore or error, we just verify it doesn't hang or crash
     let _maybe = read_response_timeout(&mut server, Duration::from_millis(500));
     // Any behavior is acceptable - ignore, error, or notification
-    
+
     // Server must remain alive
     assert!(
         server.process.try_wait().unwrap().is_none(),
