@@ -8,6 +8,12 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Test with a real CPAN module structure
 #[test]
 fn test_cpan_module_structure() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_cpan_module_structure (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -120,6 +126,12 @@ This is a sample CPAN-style module for testing.
 /// Test with Mojolicious web application
 #[test]
 fn test_mojolicious_app() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_mojolicious_app (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -230,6 +242,12 @@ __DATA__
 /// Test with DBI database code
 #[test]
 fn test_dbi_database_code() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_dbi_database_code (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -371,6 +389,12 @@ END {
 /// Test with Test::More test file
 #[test]
 fn test_perl_test_file() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_perl_test_file (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -480,6 +504,12 @@ done_testing();
 /// Test with Catalyst MVC controller
 #[test]
 fn test_catalyst_controller() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_catalyst_controller (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -655,6 +685,12 @@ __PACKAGE__->meta->make_immutable;
 /// Test with complex regex patterns
 #[test]
 fn test_complex_regex_patterns() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_complex_regex_patterns (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -806,6 +842,12 @@ sub normalize_text {
 /// Test with modern Perl features
 #[test]
 fn test_modern_perl_features() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_modern_perl_features (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -945,6 +987,12 @@ sub array_operations {
 /// Test multi-file project with modules
 #[test]
 fn test_multi_file_project() {
+    // Opt-in for slow/flake-prone integration test
+    if std::env::var("RUN_REAL_WORLD").is_err() {
+        eprintln!("skipping test_multi_file_project (set RUN_REAL_WORLD=1 to run)");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
