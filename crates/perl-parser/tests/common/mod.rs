@@ -234,9 +234,10 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     match id {
         Some(Value::Number(n)) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or(json!(null))
+                .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}}))
         }
-        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or(json!(null)),
+        Some(v) => read_response_matching(server, &v, default_timeout())
+            .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}})),
         None => unreachable!("we always assign an id"),
     }
 }
@@ -274,7 +275,8 @@ pub fn short_timeout() -> Duration {
 
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
-    read_response_timeout(server, default_timeout()).unwrap_or(json!(null))
+    read_response_timeout(server, default_timeout())
+        .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}}))
 }
 
 /// Try to receive a response within `dur`. Returns None on timeout.
