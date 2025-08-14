@@ -1,9 +1,10 @@
+#![allow(dead_code)] // Common test utilities - some may not be used by all test files
+
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
 /// Get completion items from a response, handling both array and object formats
-#[allow(dead_code)]
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
     resp["result"]["items"]
         .as_array()
@@ -15,12 +16,17 @@ pub struct LspServer {
     pub process: Child,
     pub stdin: Option<std::process::ChildStdin>,
     pub stdout: Option<BufReader<std::process::ChildStdout>>,
+    // Keep a handle so the drain thread isn't dropped immediately.
+    #[allow(dead_code)]
+    stderr_drain: Option<std::thread::JoinHandle<()>>,
 }
 
 pub fn start_lsp_server() -> LspServer {
+    // Use cargo run but discard stderr entirely to avoid blocking
     let mut process = Command::new("cargo")
         .args([
             "run",
+            "-q", // Quiet mode to reduce output
             "-p",
             "perl-parser",
             "--bin",
@@ -30,17 +36,21 @@ pub fn start_lsp_server() -> LspServer {
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null()) // Discard stderr completely
         .spawn()
         .expect("Failed to start LSP server");
 
     let stdin = process.stdin.take();
     let stdout = process.stdout.take().map(BufReader::new);
 
+    // Give the server a moment to start up
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
     LspServer {
         process,
         stdin,
         stdout,
+        stderr_drain: None,
     }
 }
 
@@ -95,18 +105,43 @@ pub fn send_notification(server: &mut LspServer, notification: Value) {
 }
 
 pub fn read_response(server: &mut LspServer) -> Value {
+    use std::io::ErrorKind;
+    use std::time::{Duration, Instant};
+
     let stdout = server.stdout.as_mut().unwrap();
     let mut headers = String::new();
+    let timeout = Duration::from_secs(5);
+    let start = Instant::now();
 
-    // Read headers
+    // Read headers with timeout check
     loop {
-        let mut line = String::new();
-        stdout.read_line(&mut line).unwrap();
-
-        if line == "\r\n" || line == "\n" {
-            break;
+        if start.elapsed() > timeout {
+            eprintln!("Timeout reading headers");
+            return json!(null);
         }
-        headers.push_str(&line);
+
+        let mut line = String::new();
+        match stdout.read_line(&mut line) {
+            Ok(0) => {
+                // EOF reached
+                return json!(null);
+            }
+            Ok(_) => {
+                if line == "\r\n" || line == "\n" {
+                    break;
+                }
+                headers.push_str(&line);
+            }
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                // Non-blocking read, retry
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            Err(e) => {
+                eprintln!("Error reading headers: {}", e);
+                return json!(null);
+            }
+        }
     }
 
     // Parse content length
@@ -124,9 +159,13 @@ pub fn read_response(server: &mut LspServer) -> Value {
     // Read content
     let mut content = vec![0u8; content_length];
     use std::io::Read;
-    stdout.read_exact(&mut content).unwrap();
-
-    serde_json::from_slice(&content).unwrap_or(json!(null))
+    match stdout.read_exact(&mut content) {
+        Ok(_) => serde_json::from_slice(&content).unwrap_or(json!(null)),
+        Err(e) => {
+            eprintln!("Error reading content: {}", e);
+            json!(null)
+        }
+    }
 }
 
 pub fn initialize_lsp(server: &mut LspServer) -> Value {
