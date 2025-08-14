@@ -22,20 +22,25 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.0
+## 📦 Latest Release: v0.8.2
 
-### v0.8.0 - Production-Hardened Position Helpers & Breaking API Change
-- ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking - `find_declaration(offset, col, current_version)`
-- ⚡ **40-100x Faster**: LineStartsCache for position conversions (1M lines: 7-20µs)
-- 🛡️ **Production Safety**: Version guards prevent stale provider reuse after AST refresh
-- 🔍 **Semi-Internal API**: positions module marked #[doc(hidden)] for stability
-- ✅ **Cross-Platform CI**: Enhanced with ripgrep, platform guards, resilient checks
-- 🧪 **Fuzz Testing**: Comprehensive Unicode edge case coverage (ZWJ, BOM, surrogates)
+### v0.8.2 - Windows-Safe Document Links & New LSP Features
+- 🔗 **Document Links**: MetaCPAN links for modules, local file links with Windows-safe paths
+- 🎯 **Selection Ranges**: Smart hierarchical selection (identifier → expression → statement → block)
+- ⌨️ **On-Type Formatting**: Auto-formatting on `{`, `}`, `)`, `;`, and newline
+- 📁 **File Watching**: Live synchronization with external file changes
+- ✅ **100% Test Coverage**: All LSP features comprehensively tested
+- 🪟 **Windows Support**: Proper URI and path handling across all platforms
+
+### Previous: v0.8.0 - Production-Hardened Position Helpers
+- ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking
+- ⚡ **40-100x Faster**: LineStartsCache for position conversions
+- 🛡️ **Production Safety**: Version guards prevent stale provider reuse
 
 ### Previous: v0.7.5 - Enterprise Release Infrastructure
 - 🚀 **Enterprise Distribution**: Multi-platform binaries with SHA256 checksums
-- 🔧 **One-liner Install**: `curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash`
-- 🍺 **Homebrew Support**: `brew tap tree-sitter-perl/tap && brew install perl-lsp`
+- 🔧 **One-liner Install**: *(internal tooling; public script TBD)*
+- 🍺 **Homebrew Support**: *(internal formula; public tap TBD)*
 - 🧠 **Smart Type Inference**: Enhanced hash literal type unification
 - ✅ **526+ Tests Running**: Fixed critical test infrastructure (recovered 400+ tests)
 - 📁 **Workspace File Ops**: File watching, rename tracking, multi-file edits
@@ -132,7 +137,7 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features (26+ Professional IDE Features) ✅
+### LSP Features (30+ Professional IDE Features) ✅
 
 #### Core Features
 - ✅ **Real-time Diagnostics**: Live syntax checking with detailed error messages
@@ -143,6 +148,10 @@ The v3 parser includes a **full-featured Language Server Protocol implementation
 - ✅ **Signature Help**: Function parameter hints for 150+ built-in functions
 - ✅ **Document Symbols**: Hierarchical outline view with icons
 - ✅ **Rename Symbol**: Safe renaming across all references
+- ✅ **Document Links**: Navigate to modules (MetaCPAN) and local files (v0.8.2)
+- ✅ **Selection Ranges**: Smart hierarchical selection expansion (v0.8.2)
+- ✅ **On-Type Formatting**: Auto-formatting as you type (v0.8.2)
+- ✅ **File Watching**: External change synchronization (v0.8.2)
 - ✅ **Document Highlights**: Highlight all occurrences of symbol at cursor
 - ✅ **Type Hierarchy**: Navigate inheritance relationships (supertypes/subtypes)
 

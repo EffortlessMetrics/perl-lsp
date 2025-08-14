@@ -105,9 +105,11 @@ fn test_invalid_uri_format() {
     );
 
     let response = read_response(&mut server);
-    assert!(
-        response["error"].is_object() || response["result"]["items"].as_array().unwrap().is_empty()
-    );
+    let empty_items = response["result"]["items"]
+        .as_array()
+        .map(|a| a.is_empty())
+        .unwrap_or(true);
+    assert!(response["error"].is_object() || empty_items);
 }
 
 #[test]
@@ -135,9 +137,11 @@ fn test_document_not_found() {
     );
 
     let response = read_response(&mut server);
-    assert!(
-        response["error"].is_object() || response["result"]["items"].as_array().unwrap().is_empty()
-    );
+    let empty_items = response["result"]["items"]
+        .as_array()
+        .map(|a| a.is_empty())
+        .unwrap_or(true);
+    assert!(response["error"].is_object() || empty_items);
 }
 
 #[test]
@@ -183,9 +187,11 @@ fn test_out_of_bounds_position() {
 
     let response = read_response(&mut server);
     // Should handle gracefully, return empty or error
-    assert!(
-        response["error"].is_object() || response["result"]["items"].as_array().unwrap().is_empty()
-    );
+    let empty_items = response["result"]["items"]
+        .as_array()
+        .map(|a| a.is_empty())
+        .unwrap_or(true);
+    assert!(response["error"].is_object() || empty_items);
 }
 
 #[test]

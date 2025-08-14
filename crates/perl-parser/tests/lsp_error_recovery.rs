@@ -2,7 +2,7 @@ use serde_json::json;
 use std::time::Duration;
 
 mod common;
-use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
+use common::{completion_items, initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
 /// Test suite for error recovery scenarios
 /// Ensures the LSP server can recover from various error states
@@ -423,8 +423,8 @@ sub broken {
     );
 
     let response = read_response(&mut server);
-    assert!(response["result"]["items"].is_array());
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
+    assert!(!items.is_empty());
 
     // Should suggest "print" despite earlier error
     assert!(items.iter().any(|item| item["label"] == "print"));
