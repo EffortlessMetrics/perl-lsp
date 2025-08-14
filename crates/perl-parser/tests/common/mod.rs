@@ -24,6 +24,9 @@
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
+// Error codes
+const ERR_TEST_TIMEOUT: i64 = -32000;
+
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -235,11 +238,11 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
         Some(Value::Number(n)) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
                 .unwrap_or_else(
-                    || json!({"error":{"code":-32000,"message":"test harness timeout"}}),
+                    || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
                 )
         }
         Some(v) => read_response_matching(server, &v, default_timeout())
-            .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}})),
+            .unwrap_or_else(|| json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}})),
         None => unreachable!("we always assign an id"),
     }
 }
@@ -278,12 +281,21 @@ pub fn short_timeout() -> Duration {
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
     read_response_timeout(server, default_timeout())
-        .unwrap_or_else(|| json!({"error":{"code":-32000,"message":"test harness timeout"}}))
+        .unwrap_or_else(|| json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}))
 }
 
 /// Try to receive a response within `dur`. Returns None on timeout.
 pub fn read_response_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
     server.rx.recv_timeout(dur).ok()
+}
+
+/// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
+pub fn read_notification_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
+    match server.rx.recv_timeout(dur) {
+        Ok(val) if val.get("id").is_none() => Some(val),
+        Ok(_) => None, // Got a response, not a notification
+        Err(_) => None, // Timeout or disconnected
+    }
 }
 
 /// Receive the response matching `id` (number or string), buffering other traffic.

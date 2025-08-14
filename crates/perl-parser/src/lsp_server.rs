@@ -33,6 +33,11 @@ use std::sync::{
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
 
+// JSON-RPC Error Codes
+const ERR_METHOD_NOT_FOUND: i32 = -32601;
+const ERR_REQUEST_CANCELLED: i32 = -32800;
+const ERR_CONTENT_MODIFIED: i32 = -32801;
+
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
 struct ClientCapabilities {
@@ -333,7 +338,7 @@ impl LspServer {
     /// Create a request cancelled error
     fn request_cancelled() -> JsonRpcError {
         JsonRpcError {
-            code: -32800,
+            code: ERR_REQUEST_CANCELLED,
             message: "Request cancelled".to_string(),
             data: None,
         }
@@ -382,7 +387,11 @@ impl LspServer {
 
                 Ok(None)
             }
-            "shutdown" => Ok(Some(json!(null))),
+            "shutdown" => {
+                // Clear any pending cancelled requests on shutdown
+                self.cancelled.lock().unwrap().clear();
+                Ok(Some(json!(null)))
+            }
             "textDocument/didOpen" => match self.handle_did_open(request.params) {
                 Ok(_) => Ok(None),
                 Err(e) => Err(e),
@@ -467,7 +476,7 @@ impl LspServer {
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
-                    code: -32601,
+                    code: ERR_METHOD_NOT_FOUND,
                     message: "Method not found".to_string(),
                     data: None,
                 })
@@ -582,7 +591,8 @@ impl LspServer {
                 }
             },
             "completionProvider": {
-                "triggerCharacters": ["$", "@", "%", "->"]
+                "triggerCharacters": ["$", "@", "%", ">", "-"], // covers '->'
+                "allCommitCharacters": [";", " ", ")", "]", "}"]
             },
             "hoverProvider": true,
             "definitionProvider": true,
@@ -1272,7 +1282,7 @@ impl LspServer {
                 let items: Vec<Value> = completions
                     .into_iter()
                     .map(|c| {
-                        json!({
+                        let mut item = json!({
                             "label": c.label,
                             "kind": match c.kind {
                                 CompletionItemKind::Variable => 6,
@@ -1287,8 +1297,20 @@ impl LspServer {
                             "detail": c.detail,
                             "insertText": c.insert_text,
                             "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
-                            "commitCharacters": [";", " ", ")", "]", "}"],
-                        })
+                        });
+                        
+                        // Only add commit characters for functions and variables, not keywords
+                        let needs_commit_chars = matches!(c.kind, 
+                            CompletionItemKind::Function | 
+                            CompletionItemKind::Variable |
+                            CompletionItemKind::Module |
+                            CompletionItemKind::Constant
+                        );
+                        if needs_commit_chars {
+                            item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
+                        }
+                        
+                        item
                     })
                     .collect();
 
@@ -3340,7 +3362,7 @@ impl LspServer {
     /// Helper to create a ContentModified error response
     fn content_modified() -> JsonRpcError {
         JsonRpcError {
-            code: -32801,
+            code: ERR_CONTENT_MODIFIED,
             message: "ContentModified".to_string(),
             data: None,
         }
@@ -4202,7 +4224,7 @@ impl LspServer {
                 }
                 _ => {
                     return Err(JsonRpcError {
-                        code: -32601,
+                        code: ERR_METHOD_NOT_FOUND,
                         message: format!("Unknown command: {}", command),
                         data: None,
                     });
