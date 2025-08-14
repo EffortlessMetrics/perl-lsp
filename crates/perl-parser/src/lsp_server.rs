@@ -684,33 +684,37 @@ impl LspServer {
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock().unwrap();
-                let mut doc_state = documents.get(uri).cloned().unwrap_or_else(|| DocumentState {
-                    content: String::new(),
-                    _version: version,
-                    ast: None,
-                    parse_errors: vec![],
-                    parent_map: ParentMap::default(),
-                    line_starts: LineStartsCache::new(""),
-                });
+                let mut doc_state = documents
+                    .get(uri)
+                    .cloned()
+                    .unwrap_or_else(|| DocumentState {
+                        content: String::new(),
+                        _version: version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts: LineStartsCache::new(""),
+                    });
 
                 // Apply incremental changes with UTF-16 aware mapping
                 use crate::textdoc::{Doc, PosEnc, apply_changes};
-                use ropey::Rope;
                 use lsp_types::TextDocumentContentChangeEvent;
-                
+                use ropey::Rope;
+
                 let mut doc = Doc {
                     rope: Rope::from_str(&doc_state.content),
                     version,
                 };
-                
+
                 // Convert JSON changes to proper LSP types
-                let lsp_changes: Vec<TextDocumentContentChangeEvent> = changes.iter()
+                let lsp_changes: Vec<TextDocumentContentChangeEvent> = changes
+                    .iter()
                     .filter_map(|c| serde_json::from_value(c.clone()).ok())
                     .collect();
-                
+
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
-                
+
                 let text = doc.rope.to_string();
                 eprintln!("Document changed: {} (version {})", uri, version);
 
@@ -732,54 +736,57 @@ impl LspServer {
                     }
                 };
 
-                    // Convert AST to Arc for stable pointers
-                    let ast_arc = ast.map(Arc::new);
+                // Convert AST to Arc for stable pointers
+                let ast_arc = ast.map(Arc::new);
 
-                    // Build parent map from the Arc'd AST so pointers remain stable
-                    let mut parent_map = ParentMap::default();
-                    if let Some(ref arc) = ast_arc {
-                        crate::declaration::DeclarationProvider::build_parent_map(
-                            arc,
-                            &mut parent_map,
-                            None,
-                        );
-                    }
+                // Build parent map from the Arc'd AST so pointers remain stable
+                let mut parent_map = ParentMap::default();
+                if let Some(ref arc) = ast_arc {
+                    crate::declaration::DeclarationProvider::build_parent_map(
+                        arc,
+                        &mut parent_map,
+                        None,
+                    );
+                }
 
-                    // Build line starts cache for O(log n) position conversion
-                    let line_starts = LineStartsCache::new(&text);
+                // Build line starts cache for O(log n) position conversion
+                let line_starts = LineStartsCache::new(&text);
 
-                    // Update document state with properly updated content
-                    doc_state = DocumentState {
-                        content: text.to_string(),
-                        _version: version,
-                        ast: ast_arc.clone(),
-                        parse_errors: errors,
-                        parent_map,
-                        line_starts,
-                    };
-                    
-                    documents.insert(uri.to_string(), doc_state);
-                    
-                    // Must drop the lock before calling publish_diagnostics
-                    drop(documents);
+                // Update document state with properly updated content
+                doc_state = DocumentState {
+                    content: text.to_string(),
+                    _version: version,
+                    ast: ast_arc.clone(),
+                    parse_errors: errors,
+                    parent_map,
+                    line_starts,
+                };
 
-                    // Index symbols for workspace search
-                    if let Some(ref _ast) = ast_arc {
-                        // Update the workspace-wide index for cross-file features
-                        // Note: version is maintained by the document state
-                        #[cfg(feature = "workspace")]
-                        if let Some(ref workspace_index) = self.workspace_index {
-                            if let Ok(url) = url::Url::parse(uri) {
-                                let doc_content = self.documents.lock().unwrap()
-                                    .get(uri)
-                                    .map(|d| d.content.clone())
-                                    .unwrap_or_default();
-                                if let Err(e) = workspace_index.index_file(url, doc_content) {
-                                    eprintln!("Failed to index file {}: {}", uri, e);
-                                }
+                documents.insert(uri.to_string(), doc_state);
+
+                // Must drop the lock before calling publish_diagnostics
+                drop(documents);
+
+                // Index symbols for workspace search
+                if let Some(ref _ast) = ast_arc {
+                    // Update the workspace-wide index for cross-file features
+                    // Note: version is maintained by the document state
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        if let Ok(url) = url::Url::parse(uri) {
+                            let doc_content = self
+                                .documents
+                                .lock()
+                                .unwrap()
+                                .get(uri)
+                                .map(|d| d.content.clone())
+                                .unwrap_or_default();
+                            if let Err(e) = workspace_index.index_file(url, doc_content) {
+                                eprintln!("Failed to index file {}: {}", uri, e);
                             }
                         }
                     }
+                }
 
                 // Send diagnostics
                 self.publish_diagnostics(uri);
@@ -829,9 +836,11 @@ impl LspServer {
                     .map(|e| {
                         // Extract location and message from error enum
                         let (location, message) = match e {
-                            crate::error::ParseError::UnexpectedToken { location, expected, found } => {
-                                (*location, format!("Expected {}, found {}", expected, found))
-                            }
+                            crate::error::ParseError::UnexpectedToken {
+                                location,
+                                expected,
+                                found,
+                            } => (*location, format!("Expected {}, found {}", expected, found)),
                             crate::error::ParseError::SyntaxError { location, message } => {
                                 (*location, message.clone())
                             }
@@ -843,10 +852,10 @@ impl LspServer {
                             }
                             _ => (0, e.to_string()),
                         };
-                        
+
                         // Convert byte offset to line/column
                         let (line, character) = self.offset_to_pos16(doc, location);
-                        
+
                         json!({
                             "range": {
                                 "start": {"line": line, "character": character},
@@ -1074,7 +1083,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
-                
+
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
@@ -1089,98 +1098,94 @@ impl LspServer {
                 // Add workspace-wide completions (functions and modules from other files)
                 #[cfg(feature = "workspace")]
                 if let Some(ref workspace_index) = self.workspace_index {
-                        // Get the current context to filter relevant completions
-                        let text_before = &doc.content[..offset.min(doc.content.len())];
-                        let prefix = text_before
-                            .chars()
-                            .rev()
-                            .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
-                            .collect::<String>()
-                            .chars()
-                            .rev()
-                            .collect::<String>();
+                    // Get the current context to filter relevant completions
+                    let text_before = &doc.content[..offset.min(doc.content.len())];
+                    let prefix = text_before
+                        .chars()
+                        .rev()
+                        .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect::<String>();
 
-                        // Find matching symbols in the workspace
-                        let workspace_symbols = workspace_index.find_symbols(&prefix);
+                    // Find matching symbols in the workspace
+                    let workspace_symbols = workspace_index.find_symbols(&prefix);
 
-                        // Add unique workspace symbols as completions
-                        use std::collections::HashSet;
-                        let mut seen = HashSet::new();
-                        for completion in &completions {
-                            seen.insert(completion.label.clone());
+                    // Add unique workspace symbols as completions
+                    use std::collections::HashSet;
+                    let mut seen = HashSet::new();
+                    for completion in &completions {
+                        seen.insert(completion.label.clone());
+                    }
+
+                    for symbol in workspace_symbols {
+                        // Skip if already in local completions
+                        if seen.contains(&symbol.name) {
+                            continue;
                         }
 
-                        for symbol in workspace_symbols {
-                            // Skip if already in local completions
-                            if seen.contains(&symbol.name) {
-                                continue;
+                        // Add workspace symbol as completion
+                        let kind = match symbol.kind {
+                            crate::workspace_index::SymbolKind::Package => {
+                                CompletionItemKind::Module
                             }
+                            crate::workspace_index::SymbolKind::Subroutine => {
+                                CompletionItemKind::Function
+                            }
+                            crate::workspace_index::SymbolKind::Variable => {
+                                CompletionItemKind::Variable
+                            }
+                            crate::workspace_index::SymbolKind::Class => CompletionItemKind::Module,
+                            crate::workspace_index::SymbolKind::Method => {
+                                CompletionItemKind::Function
+                            }
+                            crate::workspace_index::SymbolKind::Constant => {
+                                CompletionItemKind::Constant
+                            }
+                            crate::workspace_index::SymbolKind::Role => CompletionItemKind::Module,
+                            crate::workspace_index::SymbolKind::Import => {
+                                CompletionItemKind::Module
+                            }
+                            crate::workspace_index::SymbolKind::Export => {
+                                CompletionItemKind::Function
+                            }
+                        };
 
-                            // Add workspace symbol as completion
-                            let kind = match symbol.kind {
-                                crate::workspace_index::SymbolKind::Package => {
-                                    CompletionItemKind::Module
-                                }
-                                crate::workspace_index::SymbolKind::Subroutine => {
-                                    CompletionItemKind::Function
-                                }
-                                crate::workspace_index::SymbolKind::Variable => {
-                                    CompletionItemKind::Variable
-                                }
-                                crate::workspace_index::SymbolKind::Class => {
-                                    CompletionItemKind::Module
-                                }
-                                crate::workspace_index::SymbolKind::Method => {
-                                    CompletionItemKind::Function
-                                }
-                                crate::workspace_index::SymbolKind::Constant => {
-                                    CompletionItemKind::Constant
-                                }
-                                crate::workspace_index::SymbolKind::Role => {
-                                    CompletionItemKind::Module
-                                }
-                                crate::workspace_index::SymbolKind::Import => {
-                                    CompletionItemKind::Module
-                                }
-                                crate::workspace_index::SymbolKind::Export => {
-                                    CompletionItemKind::Function
-                                }
-                            };
-
-                            completions.push(crate::completion::CompletionItem {
-                                label: symbol.name.clone(),
-                                kind,
-                                detail: symbol.qualified_name,
-                                insert_text: Some(symbol.name),
-                                sort_text: None,
-                                filter_text: None,
-                                documentation: None,
-                                additional_edits: Vec::new(),
-                            });
-                        }
+                        completions.push(crate::completion::CompletionItem {
+                            label: symbol.name.clone(),
+                            kind,
+                            detail: symbol.qualified_name,
+                            insert_text: Some(symbol.name),
+                            sort_text: None,
+                            filter_text: None,
+                            documentation: None,
+                            additional_edits: Vec::new(),
+                        });
+                    }
                 }
 
                 let items: Vec<Value> = completions
-                        .into_iter()
-                        .map(|c| {
-                            json!({
-                                "label": c.label,
-                                "kind": match c.kind {
-                                    CompletionItemKind::Variable => 6,
-                                    CompletionItemKind::Function => 3,
-                                    CompletionItemKind::Keyword => 14,
-                                    CompletionItemKind::Module => 9,
-                                    CompletionItemKind::File => 17,
-                                    CompletionItemKind::Snippet => 15,
-                                    CompletionItemKind::Constant => 14,
-                                    CompletionItemKind::Property => 7,
-                                },
-                                "detail": c.detail,
-                                "insertText": c.insert_text,
-                                "insertTextFormat": 1,
-                            })
+                    .into_iter()
+                    .map(|c| {
+                        json!({
+                            "label": c.label,
+                            "kind": match c.kind {
+                                CompletionItemKind::Variable => 6,
+                                CompletionItemKind::Function => 3,
+                                CompletionItemKind::Keyword => 14,
+                                CompletionItemKind::Module => 9,
+                                CompletionItemKind::File => 17,
+                                CompletionItemKind::Snippet => 15,
+                                CompletionItemKind::Constant => 14,
+                                CompletionItemKind::Property => 7,
+                            },
+                            "detail": c.detail,
+                            "insertText": c.insert_text,
+                            "insertTextFormat": 1,
                         })
-                        .collect();
+                    })
+                    .collect();
 
                 eprintln!("Returning {} completions", items.len());
                 return Ok(Some(json!({"items": items})));
