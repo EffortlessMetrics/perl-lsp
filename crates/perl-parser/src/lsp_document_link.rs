@@ -5,6 +5,7 @@
 //! - File paths in require/do -> local files
 
 use lsp_types::{DocumentLink, Position, Range, Uri};
+use std::path::PathBuf;
 use url::Url;
 
 fn to_range(content: &str, start: usize, end: usize) -> Range {
@@ -113,23 +114,30 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                             + 1;
                         let e = s + path.len();
                         // Try to resolve relative to current file
-                        let target = if path.starts_with('/') {
-                            // Absolute path
+                        let target = if PathBuf::from(path).is_absolute() {
+                            // Absolute path - works on both Unix and Windows
                             Url::from_file_path(path).ok()
                         } else {
                             // Relative to current file's directory
                             uri.to_file_path().ok().and_then(|base_path| {
                                 base_path.parent().and_then(|parent| {
                                     let resolved = parent.join(path);
-                                    Url::from_file_path(resolved).ok()
+                                    // Normalize the path for the current OS
+                                    Url::from_file_path(&resolved).ok()
                                 })
                             })
                         };
                         if let Some(target_url) = target {
+                            // Get display path for tooltip
+                            let display_path = if let Ok(file_path) = target_url.to_file_path() {
+                                file_path.display().to_string()
+                            } else {
+                                path.to_string()
+                            };
                             links.push(DocumentLink {
                                 range: to_range(text, s, e),
                                 target: target_url.to_string().parse::<Uri>().ok(),
-                                tooltip: Some(format!("Open {}", path)),
+                                tooltip: Some(format!("Open {}", display_path)),
                                 data: None,
                             });
                         }

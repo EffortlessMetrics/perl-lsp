@@ -4003,93 +4003,93 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            if let Some(changes) = params["changes"].as_array() {
-                for change in changes {
-                    let Some(uri) = change["uri"].as_str() else {
-                        eprintln!("Invalid URI in file change event");
-                        continue;
-                    };
-                    let change_type = change["type"].as_u64().unwrap_or(0);
+        use lsp_types::{DidChangeWatchedFilesParams, FileChangeType};
 
-                    eprintln!("File change detected: {} (type: {})", uri, change_type);
+        let Some(params) = params else {
+            return Ok(None);
+        };
 
-                    match change_type {
-                        1 => {
-                            // Created
-                            // Re-index the file if it's a Perl file
-                            #[cfg(feature = "workspace")]
-                            if let Some(ref workspace_index) = self.workspace_index {
-                                if uri.ends_with(".pl")
-                                    || uri.ends_with(".pm")
-                                    || uri.ends_with(".t")
-                                {
-                                    if let Some(path) = uri_to_fs_path(uri) {
-                                        if let Ok(content) = std::fs::read_to_string(&path) {
-                                            if let Ok(url) = url::Url::parse(uri) {
-                                                let _ = workspace_index.index_file(url, content);
-                                                eprintln!("Indexed new file: {}", uri);
-                                            }
-                                        }
+        let Ok(params) = serde_json::from_value::<DidChangeWatchedFilesParams>(params) else {
+            eprintln!("Failed to parse didChangeWatchedFiles params");
+            return Ok(None);
+        };
+
+        for change in params.changes {
+            let uri = change.uri.to_string();
+            let change_type = change.typ;
+
+            eprintln!("File change detected: {} (type: {:?})", uri, change_type);
+
+            match change_type {
+                FileChangeType::CREATED => {
+                    // Created
+                    // Re-index the file if it's a Perl file
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                            if let Some(path) = uri_to_fs_path(&uri) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    if let Ok(url) = url::Url::parse(&uri) {
+                                        let _ = workspace_index.index_file(url, content);
+                                        eprintln!("Indexed new file: {}", uri);
                                     }
                                 }
                             }
                         }
-                        2 => {
-                            // Changed
-                            // Re-index the file
-                            #[cfg(feature = "workspace")]
-                            if let Some(ref workspace_index) = self.workspace_index {
-                                if let Some(path) = uri_to_fs_path(uri) {
-                                    if let Ok(content) = std::fs::read_to_string(&path) {
-                                        if let Ok(url) = url::Url::parse(uri) {
-                                            // Clear old index data
-                                            workspace_index.clear_file(uri);
-                                            // Re-index with new content
-                                            let _ =
-                                                workspace_index.index_file(url, content.clone());
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Also update our internal document store if it exists
-                            #[cfg(feature = "workspace")]
-                            if let Ok(mut documents) = self.documents.lock() {
-                                if let Some(doc) = documents.get_mut(uri) {
-                                    // Note: content variable is only available inside the cfg block above
-                                    // We'll need to re-read the file or restructure this
-                                    if let Some(path) = uri_to_fs_path(uri) {
-                                        if let Ok(content) = std::fs::read_to_string(&path) {
-                                            doc.content = content;
-                                            doc._version += 1;
-                                            // Clear cached AST
-                                            doc.ast = None;
-                                        }
-                                    }
-                                }
-                            }
-
-                            eprintln!("Re-indexed changed file: {}", uri);
-                        }
-                        3 => {
-                            // Deleted
-                            // Remove from index
-                            #[cfg(feature = "workspace")]
-                            if let Some(ref workspace_index) = self.workspace_index {
-                                workspace_index.remove_file(uri);
-                            }
-
-                            // Remove from document store
-                            if let Ok(mut documents) = self.documents.lock() {
-                                documents.remove(uri);
-                            }
-
-                            eprintln!("Removed deleted file from index: {}", uri);
-                        }
-                        _ => {}
                     }
                 }
+                FileChangeType::CHANGED => {
+                    // Changed
+                    // Re-index the file
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        if let Some(path) = uri_to_fs_path(&uri) {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                if let Ok(url) = url::Url::parse(&uri) {
+                                    // Clear old index data
+                                    workspace_index.clear_file(&uri);
+                                    // Re-index with new content
+                                    let _ = workspace_index.index_file(url, content.clone());
+                                }
+                            }
+                        }
+                    }
+
+                    // Also update our internal document store if it exists
+                    #[cfg(feature = "workspace")]
+                    if let Ok(mut documents) = self.documents.lock() {
+                        if let Some(doc) = documents.get_mut(&uri) {
+                            // Note: content variable is only available inside the cfg block above
+                            // We'll need to re-read the file or restructure this
+                            if let Some(path) = uri_to_fs_path(&uri) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    doc.content = content;
+                                    doc._version += 1;
+                                    // Clear cached AST
+                                    doc.ast = None;
+                                }
+                            }
+                        }
+                    }
+
+                    eprintln!("Re-indexed changed file: {}", uri);
+                }
+                FileChangeType::DELETED => {
+                    // Deleted
+                    // Remove from index
+                    #[cfg(feature = "workspace")]
+                    if let Some(ref workspace_index) = self.workspace_index {
+                        workspace_index.remove_file(&uri);
+                    }
+
+                    // Remove from document store
+                    if let Ok(mut documents) = self.documents.lock() {
+                        documents.remove(&uri);
+                    }
+
+                    eprintln!("Removed deleted file from index: {}", uri);
+                }
+                _ => {}
             }
         }
 
