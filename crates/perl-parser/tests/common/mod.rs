@@ -316,10 +316,12 @@ pub fn read_notification_method(
 
     // then poll
     while Instant::now() < deadline {
-        match server.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        match server
+            .rx
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        {
             Ok(msg) => {
-                let is_match = msg.get("id").is_none()
-                    && msg.get("method") == Some(&json!(method));
+                let is_match = msg.get("id").is_none() && msg.get("method") == Some(&json!(method));
                 if is_match {
                     return Some(msg);
                 }
