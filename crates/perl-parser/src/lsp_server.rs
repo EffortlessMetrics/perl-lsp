@@ -3295,7 +3295,6 @@ impl LspServer {
     }
 
     /// Helper to create a ContentModified error response
-    #[allow(dead_code)]
     fn content_modified() -> JsonRpcError {
         JsonRpcError {
             code: -32801,
@@ -3305,7 +3304,6 @@ impl LspServer {
     }
 
     /// Ensure the request version matches the current document version
-    #[allow(dead_code)]
     fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), JsonRpcError> {
         if let Some(v) = req_version {
             let documents = self.documents.lock().unwrap();

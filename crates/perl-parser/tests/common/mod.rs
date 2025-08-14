@@ -424,6 +424,29 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
     let _ = server.process.kill();
 }
 
+/// Send raw message to server (for testing malformed input)
+pub fn send_raw_message(server: &mut LspServer, content: &str) {
+    use std::io::Write as _;
+    let header = format!("Content-Length: {}\r\n\r\n", content.len());
+    if let Some(stdin) = server.stdin.as_mut() {
+        stdin.write_all(header.as_bytes()).unwrap();
+        stdin.write_all(content.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+    }
+}
+
+/// Send request without waiting for response
+pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
+    use std::io::Write as _;
+    let body = req.to_string();
+    let header = format!("Content-Length: {}\r\n\r\n", body.len());
+    if let Some(stdin) = server.stdin.as_mut() {
+        stdin.write_all(header.as_bytes()).unwrap();
+        stdin.write_all(body.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+    }
+}
+
 impl Drop for LspServer {
     fn drop(&mut self) {
         // Best-effort cleanup if shutdown wasn't called.
