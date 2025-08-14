@@ -131,6 +131,7 @@ pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
 pub mod test_runner;
+pub mod textdoc;
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
