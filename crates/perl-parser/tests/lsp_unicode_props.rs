@@ -10,13 +10,13 @@ use common::*;
 fn test_utf16_position_roundtrip() {
     // Test with a string containing various Unicode characters
     let test_strings = vec![
-        "hello world",                             // ASCII
-        "café",                                    // Latin-1 supplement
-        "🦀 Rust 🚀",                             // Emoji (astral plane)
-        "日本語",                                  // CJK
-        "👨‍💻 coding",                          // ZWJ sequence
-        "𐐷𐐀𐐨",                                  // Deseret alphabet (astral)
-        "mixed\n\r\nlines",                      // Mixed line endings
+        "hello world",      // ASCII
+        "café",             // Latin-1 supplement
+        "🦀 Rust 🚀",       // Emoji (astral plane)
+        "日本語",           // CJK
+        "👨‍💻 coding",        // ZWJ sequence
+        "𐐷𐐀𐐨",              // Deseret alphabet (astral)
+        "mixed\n\r\nlines", // Mixed line endings
     ];
 
     let mut server = start_lsp_server();
@@ -24,7 +24,7 @@ fn test_utf16_position_roundtrip() {
 
     for text in test_strings {
         let uri = "file:///test.pl";
-        
+
         // Open document with the test string
         send_notification(
             &mut server,
@@ -65,28 +65,28 @@ fn test_utf16_position_roundtrip() {
 fn test_utf16_handles_various_strings() {
     // Test various edge cases that would be covered by property testing
     let test_cases = vec![
-        "",                                     // Empty string
-        "a",                                    // Single ASCII
-        "\n",                                   // Newline
-        "\r\n",                                 // CRLF
-        "a\nb\rc\r\nd",                         // Mixed line endings
-        "🦀",                                    // Single emoji
-        "a🦀b",                                  // Emoji between ASCII
-        "日本語テキスト",                        // CJK text
-        "مرحبا بالعالم",                         // RTL text
-        "a\u{0301}",                            // Combining character
-        "\u{1F468}\u{200D}\u{1F4BB}",           // ZWJ sequence
-        "𐐷𐐀𐐨",                                  // Astral plane
+        "",                           // Empty string
+        "a",                          // Single ASCII
+        "\n",                         // Newline
+        "\r\n",                       // CRLF
+        "a\nb\rc\r\nd",               // Mixed line endings
+        "🦀",                         // Single emoji
+        "a🦀b",                       // Emoji between ASCII
+        "日本語テキスト",             // CJK text
+        "مرحبا بالعالم",              // RTL text
+        "a\u{0301}",                  // Combining character
+        "\u{1F468}\u{200D}\u{1F4BB}", // ZWJ sequence
+        "𐐷𐐀𐐨",                        // Astral plane
     ];
 
     for text in test_cases {
         let formatted = format!("{}\n🦀{}\n", text, text);
-        
+
         let mut server = start_lsp_server();
         initialize_lsp(&mut server);
-        
+
         let uri = "file:///test.pl";
-        
+
         // Open document
         send_notification(
             &mut server,
@@ -103,7 +103,7 @@ fn test_utf16_handles_various_strings() {
                 }
             }),
         );
-        
+
         // Try hover at various positions
         for line in 0..3 {
             for character in [0, 1, 5, 10] {

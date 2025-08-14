@@ -23,12 +23,12 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
 };
-use std::collections::HashSet;
 
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};

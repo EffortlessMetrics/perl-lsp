@@ -1,8 +1,8 @@
 //! Tests for $/cancelRequest notification
 
 use serde_json::json;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 mod common;
 use common::*;
@@ -34,7 +34,7 @@ fn test_cancel_request() {
 
     // Send a request and immediately cancel it
     let request_id = 9999;
-    
+
     // Send the request (but don't wait for response yet)
     send_request_no_wait(
         &mut server,
@@ -48,7 +48,7 @@ fn test_cancel_request() {
             }
         }),
     );
-    
+
     // Immediately send cancellation
     send_notification(
         &mut server,
@@ -60,10 +60,10 @@ fn test_cancel_request() {
             }
         }),
     );
-    
+
     // Try to read the response - it may or may not be cancelled depending on timing
     let response = read_response_matching_i64(&mut server, request_id, Duration::from_secs(2));
-    
+
     if let Some(resp) = response {
         // We got a response - check if it's cancelled or completed
         if let Some(error) = resp.get("error") {
@@ -72,7 +72,10 @@ fn test_cancel_request() {
             assert!(code != 0, "Should have an error code");
         } else {
             // Request completed before cancellation took effect - that's okay too
-            assert!(resp.get("result").is_some(), "Should have result if not cancelled");
+            assert!(
+                resp.get("result").is_some(),
+                "Should have result if not cancelled"
+            );
         }
     }
     // If no response, that's also fine - the request was cancelled before processing
@@ -83,10 +86,14 @@ fn test_cancel_request() {
 fn test_cancel_request_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
-    
+
     // Clear any pending messages (like diagnostics)
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(500));
-    
+    drain_until_quiet(
+        &mut server,
+        Duration::from_millis(100),
+        Duration::from_millis(500),
+    );
+
     // Send a cancel request for a non-existent ID
     send_notification(
         &mut server,
@@ -98,11 +105,11 @@ fn test_cancel_request_no_response() {
             }
         }),
     );
-    
+
     // Wait a bit and ensure no response comes back for our specific request
     thread::sleep(Duration::from_millis(100));
     let response = read_response_timeout(&mut server, Duration::from_millis(100));
-    
+
     // If we get a response, it should be a notification (no ID) not a response to our cancel
     if let Some(resp) = response {
         assert!(
@@ -137,7 +144,7 @@ fn test_cancel_multiple_requests() {
 
     // Send multiple requests
     let ids = [8001, 8002, 8003];
-    
+
     for &id in &ids {
         send_request_no_wait(
             &mut server,
@@ -152,7 +159,7 @@ fn test_cancel_multiple_requests() {
             }),
         );
     }
-    
+
     // Cancel the middle request
     send_notification(
         &mut server,
@@ -164,7 +171,7 @@ fn test_cancel_multiple_requests() {
             }
         }),
     );
-    
+
     // Check responses
     for &id in &ids {
         let response = read_response_matching_i64(&mut server, id, Duration::from_secs(2));
