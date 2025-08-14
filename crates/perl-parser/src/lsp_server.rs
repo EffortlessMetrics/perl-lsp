@@ -1140,9 +1140,7 @@ impl LspServer {
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
-            if let Err(e) = self.ensure_latest(uri, req_version) {
-                return Ok(Some(e));
-            }
+            self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -1376,9 +1374,7 @@ impl LspServer {
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
-            if let Err(e) = self.ensure_latest(uri, req_version) {
-                return Ok(Some(e));
-            }
+            self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -3300,13 +3296,17 @@ impl LspServer {
 
     /// Helper to create a ContentModified error response
     #[allow(dead_code)]
-    fn content_modified() -> Value {
-        json!({ "code": -32801, "message": "ContentModified" })
+    fn content_modified() -> JsonRpcError {
+        JsonRpcError {
+            code: -32801,
+            message: "ContentModified".to_string(),
+            data: None,
+        }
     }
 
     /// Ensure the request version matches the current document version
     #[allow(dead_code)]
-    fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), Value> {
+    fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), JsonRpcError> {
         if let Some(v) = req_version {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -3331,9 +3331,7 @@ impl LspServer {
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
-            if let Err(e) = self.ensure_latest(uri, req_version) {
-                return Ok(Some(e));
-            }
+            self.ensure_latest(uri, req_version)?;
 
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
                 .unwrap_or(FormattingOptions {
