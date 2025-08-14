@@ -2,7 +2,7 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{completion_items, initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test basic variable completion
 #[test]
@@ -48,7 +48,7 @@ $cou
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     // Check that both $count and $counter are suggested
@@ -104,7 +104,7 @@ my @data = qw(a b c);
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     let labels: Vec<String> = items
@@ -158,7 +158,7 @@ my %settings = ();
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     let labels: Vec<String> = items
@@ -218,7 +218,7 @@ proc
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     let labels: Vec<String> = items
@@ -266,7 +266,7 @@ fn test_builtin_completion() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have print and printf");
 
     let labels: Vec<String> = items
@@ -314,7 +314,7 @@ fn test_keyword_completion() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Allow empty completions for partial keywords
     if items.is_empty() {
@@ -369,7 +369,7 @@ fn test_special_variable_completion() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Allow empty completions for special variables
     if items.is_empty() {
@@ -427,7 +427,7 @@ fn test_method_completion() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Allow empty completions for method calls
     if items.is_empty() {
@@ -495,7 +495,7 @@ va
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(items.len() >= 3, "Should have variables and function");
 
     let labels: Vec<String> = items
@@ -545,7 +545,7 @@ fn test_completion_details() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Find @ARGV in completions
     let argv_item = items
@@ -576,21 +576,21 @@ fn test_empty_prefix_completion() {
     send_notification(
         &mut server,
         json!({
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "jsonrpc": "2.0",
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "method": "textDocument/didOpen",
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "params": {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "textDocument": {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    "uri": uri,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    "languageId": "perl",
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    "version": 1,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    "text": r#"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "jsonrpc": "2.0",
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "method": "textDocument/didOpen",
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "params": {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "textDocument": {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            "uri": uri,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            "languageId": "perl",
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            "version": 1,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            "text": r#"
 my $var = 42;
 sub test { }
 
 "#  // Empty line where we'll request completion
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }),
     );
 
     let response = send_request(
@@ -606,7 +606,7 @@ sub test { }
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert!(
         items.len() > 10,
         "Should have many completions for empty prefix"
@@ -660,7 +660,7 @@ fn test_no_completion_in_comments() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     assert_eq!(items.len(), 0, "Should have no completions in comments");
 }
 
@@ -708,7 +708,7 @@ MyModule::"#
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
     // Since package completion is TODO, this might be empty for now
     assert!(
         items.is_empty() || !items.is_empty(),
@@ -757,7 +757,7 @@ fn test_snippet_completion() {
         response["result"].get("items").is_some(),
         "Response should have items field"
     );
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Allow empty completions in this case (partial keyword)
     if items.is_empty() {
@@ -838,7 +838,7 @@ $arr"#
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Should suggest $array[...] for array element access
     let labels: Vec<String> = items
@@ -886,7 +886,7 @@ fn test_completion_ranking() {
         }),
     );
 
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = completion_items(&response);
 
     // Special variables should appear first (they have sort_text starting with "0_")
     let first_items: Vec<String> = items

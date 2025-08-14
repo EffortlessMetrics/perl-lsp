@@ -32,21 +32,24 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
 
 ### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
-- **26+ Professional IDE Features** implemented (v0.7.5)
+- **30+ Professional IDE Features** implemented (v0.8.2)
 - **Core Features**: Diagnostics, completion, go-to-definition, find-references, hover, signature help, symbols, rename, document highlights, type hierarchy
+- **Navigation** (v0.8.2): Document links (MetaCPAN + local files), selection ranges, file watching
+- **Formatting** (v0.8.2): On-type formatting with smart indentation
 - **Advanced Refactoring**: Extract variable/subroutine, convert loops, add error checking, organize imports
 - **Enhanced Features**: Semantic tokens, CodeLens, call hierarchy, inlay hints, workspace symbols, folding
-- **Workspace File Operations** (v0.7.5): File watching, rename tracking, deletion handling, multi-file edits
-- **Type System** (v0.7.5): Smart hash literal inference, type unification, union types
+- **Workspace File Operations**: File watching, rename tracking, deletion handling, multi-file edits
+- **Type System**: Smart hash literal inference, type unification, union types
 - **Code Completion**: Variables, functions, keywords, modules with smart filtering and documentation
 - **Document Highlights**: Smart symbol highlighting with exact matching
 - **Type Hierarchy**: Full inheritance navigation with @ISA and use parent/base support
 - **150+ Built-in Functions**: Complete signature help with parameter hints
-- **526+ Tests Running** (v0.7.5): Fixed test infrastructure, all tests now properly discovered and executed
+- **530+ Tests Running**: Comprehensive test coverage for all features
 - **Robust Error Recovery**: Fallback mechanisms for incomplete/invalid code
 - **Real-time Diagnostics**: Undefined variables, unused variables, strict/warnings suggestions
+- **Cross-Platform** (v0.8.2): Windows-safe path handling, proper URI resolution
 - **Performance**: <50ms response times for all operations
-- **Distribution**: Pre-built binaries for all platforms, Homebrew formula, one-liner installer
+- **Distribution**: Internal pre-built binaries (public packages & installers TBD)
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
 
 ## Default Build Configuration
@@ -511,11 +514,18 @@ To extend the Pest grammar:
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.7.5)
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.8.2)
 - **Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Status**: Production ready, feature complete
-- **Latest improvements (v0.7.5)**:
+- **Latest improvements (v0.8.2)**:
+  - ✅ Added document links for MetaCPAN and local files with Windows-safe paths
+  - ✅ Implemented selection ranges for smart hierarchical selection
+  - ✅ Added on-type formatting with smart indentation
+  - ✅ Enhanced file watching for external change synchronization
+  - ✅ Improved test infrastructure with 530+ tests running
+  - ✅ Full cross-platform support with proper URI handling
+- **Previous improvements (v0.7.5)**:
   - ✅ Added enterprise-grade release automation with cargo-dist
   - ✅ Created comprehensive CI/CD pipeline with test matrix and coverage
   - ✅ Enhanced type inference for hash literals with smart unification

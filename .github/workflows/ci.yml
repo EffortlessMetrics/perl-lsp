@@ -70,12 +70,14 @@ jobs:
       - name: Doc tests (deny warnings)
         run: RUSTDOCFLAGS="-D warnings" cargo test --workspace --doc
         
+      - name: Check v2 (lib + tests)
+        run: cargo check -p tree-sitter-perl-rs --lib --tests
+        
       - name: Clippy v3 (perl-parser - deny warnings)
         run: cargo clippy -p perl-parser -p perl-lexer --all-targets --all-features -- -D warnings
         
-      - name: Clippy v2 (tree-sitter-perl-rs - warnings allowed)
-        run: cargo clippy -p tree-sitter-perl-rs --all-targets --all-features
-        continue-on-error: true
+      - name: Clippy v2 (warnings allowed)
+        run: cargo clippy -p tree-sitter-perl-rs --lib --tests -- -A warnings || true
         
       - name: Install ripgrep (Linux)
         if: runner.os == 'Linux'

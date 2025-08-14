@@ -432,3 +432,56 @@ fn test_on_type_formatting_tabs() {
         }
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn test_document_links_windows_path_with_space() {
+    use serde_json::json;
+    mod common;
+    use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+
+    let mut server = start_lsp_server();
+    initialize_lsp(&mut server);
+
+    // Simulate a file living in a folder with a space; we don't need the file to exist.
+    let uri = "file:///C:/Temp/Perl%20LSP%20Demo/main.pl";
+    let text = r#"require "lib\\Thing.pm";"#;
+
+    // Open doc
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            }
+        }),
+    );
+
+    // Request document links
+    let resp = send_request(
+        &mut server,
+        json!({
+            "jsonrpc":"2.0",
+            "id": 99001,
+            "method":"textDocument/documentLink",
+            "params":{ "textDocument": { "uri": uri } }
+        }),
+    );
+
+    let links = resp["result"].as_array().expect("links array");
+    assert!(!links.is_empty(), "should return at least one link");
+    let target = links[0]["target"].as_str().expect("target uri");
+
+    // Percent-encoded space must be preserved; path join must be forward-slash normalized
+    assert!(
+        target.ends_with("C:/Temp/Perl%20LSP%20Demo/lib/Thing.pm"),
+        "unexpected target: {target}"
+    );
+}
