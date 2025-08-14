@@ -28,7 +28,7 @@ pub struct LspServer {
 fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
     let mut v: Vec<Command> = Vec::new();
-    
+
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -39,14 +39,14 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         c.arg("--stdio");
         v.push(c);
     }
-    
+
     // Try perl-lsp from PATH
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
         v.push(c);
     }
-    
+
     // Fallback: use cargo run
     {
         let mut c = Command::new("cargo");
@@ -62,7 +62,7 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         ]);
         v.push(c);
     }
-    
+
     v.into_iter()
 }
 
@@ -125,44 +125,44 @@ pub fn start_lsp_server() -> LspServer {
     let _stdout_thread = std::thread::Builder::new()
         .name("lsp-stdout-reader".into())
         .spawn(move || {
-        let mut r = BufReader::new(stdout);
-        loop {
-            // Parse headers
-            let mut content_len: Option<usize> = None;
-            let mut line = String::new();
+            let mut r = BufReader::new(stdout);
             loop {
-                line.clear();
-                match r.read_line(&mut line) {
-                    Ok(0) => return, // EOF
-                    Ok(_) => {
-                        let l = line.trim_end();
-                        if l.is_empty() {
-                            break;
+                // Parse headers
+                let mut content_len: Option<usize> = None;
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match r.read_line(&mut line) {
+                        Ok(0) => return, // EOF
+                        Ok(_) => {
+                            let l = line.trim_end();
+                            if l.is_empty() {
+                                break;
+                            }
+                            // Case-insensitive header matching
+                            let lower = l.to_ascii_lowercase();
+                            if let Some(rest) = lower.strip_prefix("content-length:") {
+                                content_len = rest.trim().parse::<usize>().ok();
+                            }
                         }
-                        // Case-insensitive header matching
-                        let lower = l.to_ascii_lowercase();
-                        if let Some(rest) = lower.strip_prefix("content-length:") {
-                            content_len = rest.trim().parse::<usize>().ok();
-                        }
+                        Err(_) => return,
                     }
-                    Err(_) => return,
+                }
+                let len = match content_len {
+                    Some(n) => n,
+                    None => continue,
+                };
+                // Read body
+                let mut buf = vec![0u8; len];
+                if r.read_exact(&mut buf).is_err() {
+                    return;
+                }
+                if let Ok(val) = serde_json::from_slice::<Value>(&buf) {
+                    let _ = tx.send(val);
                 }
             }
-            let len = match content_len {
-                Some(n) => n,
-                None => continue,
-            };
-            // Read body
-            let mut buf = vec![0u8; len];
-            if r.read_exact(&mut buf).is_err() {
-                return;
-            }
-            if let Ok(val) = serde_json::from_slice::<Value>(&buf) {
-                let _ = tx.send(val);
-            }
-        }
-    })
-    .unwrap();
+        })
+        .unwrap();
 
     LspServer {
         process,
@@ -179,7 +179,7 @@ pub fn send_request(server: &mut LspServer, request: Value) -> Value {
     let id = request.get("id").cloned();
     let body = request.to_string();
     let header = format!("Content-Length: {}\r\n\r\n", body.len());
-    
+
     let w = server.stdin.as_mut().expect("child stdin");
     w.write_all(header.as_bytes()).unwrap();
     w.write_all(body.as_bytes()).unwrap();
