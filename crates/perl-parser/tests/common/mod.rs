@@ -2,6 +2,15 @@ use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
+/// Get completion items from a response, handling both array and object formats
+#[allow(dead_code)]
+pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
+    resp["result"]["items"]
+        .as_array()
+        .or_else(|| resp["result"].as_array())
+        .expect("completion result should be array or { items: [] }")
+}
+
 pub struct LspServer {
     pub process: Child,
     pub stdin: Option<std::process::ChildStdin>,
@@ -39,6 +48,9 @@ pub fn send_request(server: &mut LspServer, request: Value) -> Value {
     let request_str = serde_json::to_string(&request).unwrap();
     let stdin = server.stdin.as_mut().unwrap();
 
+    // Extract the request ID for matching the response
+    let request_id = request["id"].clone();
+
     writeln!(
         stdin,
         "Content-Length: {}\r\n\r\n{}",
@@ -48,7 +60,24 @@ pub fn send_request(server: &mut LspServer, request: Value) -> Value {
     .unwrap();
     stdin.flush().unwrap();
 
-    read_response(server)
+    // Read responses until we find the one matching our request ID
+    loop {
+        let response = read_response(server);
+
+        // Check if this is a response to our request (has matching ID)
+        if let Some(id) = response.get("id") {
+            if id == &request_id {
+                return response;
+            }
+        }
+
+        // If it's a notification or different response, continue reading
+        // But only continue if we got valid JSON (not null)
+        if response.is_null() {
+            // No more messages available, return null
+            return response;
+        }
+    }
 }
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {

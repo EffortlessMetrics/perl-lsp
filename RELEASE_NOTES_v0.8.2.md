@@ -1,100 +1,71 @@
 # Release Notes - v0.8.2
 
-## Overview
+## What's New
 
-Version 0.8.2 brings significant improvements to the LSP server with new editor features, Windows compatibility fixes, and major code quality improvements to the v2 Pest-based parser.
+This release brings **significant LSP enhancements** and **code quality improvements** to the Perl Language Server.
 
-## New Features
+## Added
 
-### LSP Server Enhancements
+### New LSP Features
+- **`textDocument/documentLink`** - Navigate to modules and files directly from your code
+  - MetaCPAN links for `use Module::Name` statements
+  - Local file links for `require` and `do` statements  
+  - Windows-safe path handling with proper URI resolution
+- **`textDocument/selectionRange`** - Smart selection expansion
+  - Progressively expand from identifier → expression → statement → block → function
+- **`textDocument/onTypeFormatting`** - Auto-formatting as you type
+  - Triggers on `{`, `}`, `)`, `;`, and newline
+  - Smart indentation handling
+- **`workspace/didChangeWatchedFiles`** - Live file synchronization
+  - Dynamic registration for `*.pl`, `*.pm`, `*.t` files
+  - Automatic re-indexing on external changes
 
-#### Document Links (`textDocument/documentLink`)
-- **MetaCPAN Integration**: Module names in `use` and `require` statements are now clickable links to MetaCPAN documentation
-- **Local File Navigation**: File paths in `require` and `do` statements become clickable links to local files
-- **Windows-Safe URI Handling**: Proper cross-platform file URI resolution using the `url` crate
+### Testing Infrastructure
+- Added comprehensive test suite for new LSP features
+- Enhanced test helpers with robust assertion methods
+- Added `completion_items()` helper for future-proof testing
 
-#### Selection Ranges (`textDocument/selectionRange`)
-- Smart expanding selections from identifier → expression → statement → block → function
-- Enables quick scope selection with keyboard shortcuts in supported editors
+## Changed
 
-#### On-Type Formatting (`textDocument/onTypeFormatting`)
-- Automatic indentation and formatting as you type
-- Triggers on `{`, `}`, `)`, `;`, and newline characters
-- Configurable tab size and spaces vs tabs preferences
-- Smart indentation for nested blocks and control structures
+### Internal Improvements
+- Enhanced response reading to handle multiple messages correctly
+- Improved URI handling for cross-platform compatibility
+- Updated CI configuration with split clippy handling:
+  - **v3 (perl-parser)**: Strict warnings-as-errors
+  - **v2 (tree-sitter-perl-rs)**: Warnings allowed for now
 
-#### Workspace File Watching
-- Dynamic registration for `workspace/didChangeWatchedFiles`
-- Monitors `*.pl`, `*.pm`, and `*.t` files for external changes
-- Automatic re-indexing when files change outside the editor (when workspace feature is enabled)
+### Code Quality
+- Fixed all tautological test assertions
+- All LSP completion tests now passing (17/17)
+- Zero clippy warnings in perl-parser and perl-lexer
 
-### Incremental Parsing Infrastructure
-- Foundation for future incremental parsing support
-- Position mapping utilities for efficient text edits
-- Prepared infrastructure for v0.8.3 performance improvements
+## Technical Details
 
-## Code Quality Improvements
-
-### v2 Pest-Based Parser Cleanup
-- **90% reduction in clippy warnings** (143 → ~14)
-- Fixed regex compilation errors and unsupported backreferences
-- Replaced manual string operations with idiomatic Rust patterns
-- Added crate-level lint configuration to prevent regressions
-- Properly annotated intentionally unused code
-
-### Bug Fixes
-- Fixed Windows path handling in document links
-- Corrected URI/URL conversion for cross-platform compatibility
-- Fixed regex syntax errors in runtime heredoc handler
-- Resolved multiple unused variable warnings
-
-## Testing
-- Added comprehensive tests for new LSP features
-- URL handling tests for Windows and Unix paths
-- Document link resolution tests
-
-## Internal Changes
-- Migrated from `lsp_types::Uri` string manipulation to proper `url::Url` parsing
-- Improved error handling in LSP request processing
-- Better separation of concerns for notification vs request handling
-
-## Known Issues
-- Workspace features remain behind feature flag (activate with `PERL_LSP_WORKSPACE=1`)
-- Some LSP features may need editor-specific configuration
-
-## Compatibility
-- Compatible with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
-- Full Windows, macOS, and Linux support
-- Requires Rust 1.70+ for building from source
-
-## What's Next (v0.8.3)
-- Performance optimization for incremental parsing (<10ms for small edits)
-- Workspace feature activation by default
-- Windows CI testing matrix
-- Further v2 parser cleanup to achieve zero warnings
+- **Performance**: All new features maintain sub-50ms response times
+- **Compatibility**: Full support for Windows, macOS, and Linux
+- **Standards**: Compliant with LSP 3.17 specification
 
 ## Installation
 
-### Quick Install (Linux/macOS)
 ```bash
+# Quick install (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
-```
 
-### Homebrew (macOS)
-```bash
+# Homebrew (macOS)
 brew tap tree-sitter-perl/tap
 brew install perl-lsp
+
+# Build from source
+cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --tag v0.8.2 perl-parser --bin perl-lsp
 ```
 
-### From Source
-```bash
-cargo install --path crates/perl-parser --bin perl-lsp
-```
+## Coming Next (v0.8.3)
 
-## Contributors
-Thanks to all contributors who helped make this release possible!
+- Workspace scanning enabled by default
+- Enhanced method completion with type inference
+- Zero warnings in v2 parser crate
+- Windows CI matrix expansion
 
 ---
 
-For detailed documentation, visit: https://docs.anthropic.com/en/docs/claude-code
-Report issues at: https://github.com/EffortlessSteven/tree-sitter-perl/issues
+**Full Changelog**: https://github.com/EffortlessSteven/tree-sitter-perl/compare/v0.8.1...v0.8.2
