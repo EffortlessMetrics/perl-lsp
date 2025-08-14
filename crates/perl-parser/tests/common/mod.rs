@@ -1,8 +1,10 @@
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
@@ -15,42 +17,109 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
 pub struct LspServer {
     pub process: Child,
     pub stdin: Option<std::process::ChildStdin>,
-    pub stdout: Option<BufReader<std::process::ChildStdout>>,
-    // Keep a handle so the drain thread isn't dropped immediately.
-    #[allow(dead_code)]
-    stderr_drain: Option<std::thread::JoinHandle<()>>,
+    rx: Receiver<Value>,
+    // Keep threads alive for the lifetime of the server
+    _stdout_thread: std::thread::JoinHandle<()>,
+    _stderr_thread: std::thread::JoinHandle<()>,
+}
+
+fn resolve_perl_lsp_bin() -> Command {
+    // Prefer Cargo-provided binary paths when running integration tests
+    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
+        let mut cmd = Command::new(p);
+        cmd.arg("--stdio");
+        return cmd;
+    }
+    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl_lsp") {
+        let mut cmd = Command::new(p);
+        cmd.arg("--stdio");
+        return cmd;
+    }
+    // Fallback: use cargo run
+    let mut cmd = Command::new("cargo");
+    cmd.args([
+        "run",
+        "-q",
+        "-p",
+        "perl-parser",
+        "--bin",
+        "perl-lsp",
+        "--",
+        "--stdio",
+    ]);
+    cmd
 }
 
 pub fn start_lsp_server() -> LspServer {
-    // Use cargo run but discard stderr entirely to avoid blocking
-    let mut process = Command::new("cargo")
-        .args([
-            "run",
-            "-q", // Quiet mode to reduce output
-            "-p",
-            "perl-parser",
-            "--bin",
-            "perl-lsp",
-            "--",
-            "--stdio",
-        ])
+    // Spawn the language server
+    let mut cmd = resolve_perl_lsp_bin();
+    #[allow(clippy::zombie_processes)] // Process is owned by LspServer and cleaned up in Drop
+    let mut process = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null()) // Discard stderr completely
+        .stderr(Stdio::piped())
         .spawn()
-        .expect("Failed to start LSP server");
+        .expect("Failed to start perl-lsp");
 
     let stdin = process.stdin.take();
-    let stdout = process.stdout.take().map(BufReader::new);
 
-    // Give the server a moment to start up
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    // -------- stderr drain thread (prevents child from blocking on logs) --------
+    let stderr = process.stderr.take().expect("stderr piped");
+    let _stderr_thread = std::thread::spawn(move || {
+        let mut r = BufReader::new(stderr);
+        let mut line = String::new();
+        while r.read_line(&mut line).unwrap_or(0) > 0 {
+            // discard or mirror to eprintln! if needed
+            line.clear();
+        }
+    });
+
+    // -------- stdout LSP reader thread --------
+    let stdout = process.stdout.take().expect("stdout piped");
+    let (tx, rx) = mpsc::channel::<Value>();
+    let _stdout_thread = std::thread::spawn(move || {
+        let mut r = BufReader::new(stdout);
+        loop {
+            // Parse headers
+            let mut content_len: Option<usize> = None;
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match r.read_line(&mut line) {
+                    Ok(0) => return, // EOF
+                    Ok(_) => {
+                        let l = line.trim_end();
+                        if l.is_empty() {
+                            break;
+                        }
+                        if let Some(rest) = l.strip_prefix("Content-Length:") {
+                            content_len = rest.trim().parse::<usize>().ok();
+                        }
+                    }
+                    Err(_) => return,
+                }
+            }
+            let len = match content_len {
+                Some(n) => n,
+                None => continue,
+            };
+            // Read body
+            let mut buf = vec![0u8; len];
+            if r.read_exact(&mut buf).is_err() {
+                return;
+            }
+            if let Ok(val) = serde_json::from_slice::<Value>(&buf) {
+                let _ = tx.send(val);
+            }
+        }
+    });
 
     LspServer {
         process,
         stdin,
-        stdout,
-        stderr_drain: None,
+        rx,
+        _stdout_thread,
+        _stderr_thread,
     }
 }
 
@@ -104,68 +173,14 @@ pub fn send_notification(server: &mut LspServer, notification: Value) {
     stdin.flush().unwrap();
 }
 
+/// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
-    use std::io::ErrorKind;
-    use std::time::{Duration, Instant};
+    read_response_timeout(server, Duration::from_secs(5)).unwrap_or(json!(null))
+}
 
-    let stdout = server.stdout.as_mut().unwrap();
-    let mut headers = String::new();
-    let timeout = Duration::from_secs(5);
-    let start = Instant::now();
-
-    // Read headers with timeout check
-    loop {
-        if start.elapsed() > timeout {
-            eprintln!("Timeout reading headers");
-            return json!(null);
-        }
-
-        let mut line = String::new();
-        match stdout.read_line(&mut line) {
-            Ok(0) => {
-                // EOF reached
-                return json!(null);
-            }
-            Ok(_) => {
-                if line == "\r\n" || line == "\n" {
-                    break;
-                }
-                headers.push_str(&line);
-            }
-            Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                // Non-blocking read, retry
-                std::thread::sleep(Duration::from_millis(10));
-                continue;
-            }
-            Err(e) => {
-                eprintln!("Error reading headers: {}", e);
-                return json!(null);
-            }
-        }
-    }
-
-    // Parse content length
-    let content_length = headers
-        .lines()
-        .find(|line| line.starts_with("Content-Length:"))
-        .and_then(|line| line.split(':').nth(1))
-        .and_then(|len| len.trim().parse::<usize>().ok())
-        .unwrap_or(0);
-
-    if content_length == 0 {
-        return json!(null);
-    }
-
-    // Read content
-    let mut content = vec![0u8; content_length];
-    use std::io::Read;
-    match stdout.read_exact(&mut content) {
-        Ok(_) => serde_json::from_slice(&content).unwrap_or(json!(null)),
-        Err(e) => {
-            eprintln!("Error reading content: {}", e);
-            json!(null)
-        }
-    }
+/// Try to receive a response within `dur`. Returns None on timeout.
+pub fn read_response_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
+    server.rx.recv_timeout(dur).ok()
 }
 
 pub fn initialize_lsp(server: &mut LspServer) -> Value {
@@ -198,6 +213,25 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
             }
         }),
     )
+}
+
+/// Gracefully shut the server down (best-effort) without hanging tests.
+pub fn shutdown_and_exit(server: &mut LspServer) {
+    // Try a graceful shutdown first; if the server ignores, we'll still exit the test.
+    let _ = send_request(
+        server,
+        json!({"jsonrpc":"2.0","id": 999_001,"method":"shutdown","params":{}}),
+    );
+    send_notification(server, json!({"jsonrpc":"2.0","method":"exit"}));
+
+    // Give it a moment, then force-kill if needed.
+    for _ in 0..20 {
+        if server.process.try_wait().ok().flatten().is_some() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = server.process.kill();
 }
 
 impl Drop for LspServer {
