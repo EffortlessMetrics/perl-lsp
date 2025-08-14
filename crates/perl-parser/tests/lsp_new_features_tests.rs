@@ -436,10 +436,6 @@ fn test_on_type_formatting_tabs() {
 #[cfg(windows)]
 #[test]
 fn test_document_links_windows_path_with_space() {
-    use serde_json::json;
-    mod common;
-    use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
-
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 

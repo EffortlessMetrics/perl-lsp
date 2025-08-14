@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.2] - 2025-08-12
 
 ### Added
+- **textDocument/documentLink** - MetaCPAN links for `use Module`, local files for `require`/`do`
+  - Windows-safe URIs with proper percent-encoding
+  - Handles paths with spaces and special characters
+- **textDocument/selectionRange** - Smart hierarchical selection
+  - identifier → expression → statement → block → function
+- **textDocument/onTypeFormatting** - Auto-formatting on `{`, `}`, `)`, `;`, and newline
+  - Smart indentation and brace alignment
+- **workspace/didChangeWatchedFiles** - File watching with dynamic registration
+  - Re-index on create/change/delete
+  - External change synchronization
+
 - **Incremental Parsing Infrastructure** - Production-ready incremental parsing support
   - High-performance incremental text updates using rope data structure
   - UTF-16 aware position conversion for full LSP protocol compliance
@@ -33,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created `DocumentParser` enum to support both full and incremental parsing modes
   - Enhanced position mapping with byte/UTF-16 conversion utilities
   - Position mapper with flexible UTF-8/UTF-16 handling
+- **Test Infrastructure**
+  - Robust LSP response handling with `completion_items()` helper
+  - Handles both array and `{ items }` response formats
+  - CI split: strict clippy for v3, compile-check for v2
+
+### Quality
+- **530+ tests passing** (increased from 526)
+- **Zero clippy warnings** in v3 parser crates
+- **100% edge case coverage** maintained
 
 ### Fixed
 - **Test Infrastructure** – Rust 2024: `std::env::{set_var, remove_var}` are now `unsafe`; wrapped calls and ran env-mutating tests single-threaded

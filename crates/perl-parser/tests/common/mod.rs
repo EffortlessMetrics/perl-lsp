@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
 /// Get completion items from a response, handling both array and object formats
+#[allow(dead_code)]
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
     resp["result"]["items"]
         .as_array()

@@ -2,7 +2,10 @@ use serde_json::json;
 use std::time::Duration;
 
 mod common;
-use common::{completion_items, initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
+use common::{
+    completion_items, initialize_lsp, read_response, send_notification, send_request,
+    start_lsp_server,
+};
 
 /// Test suite for error recovery scenarios
 /// Ensures the LSP server can recover from various error states

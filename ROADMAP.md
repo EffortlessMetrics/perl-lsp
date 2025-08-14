@@ -59,7 +59,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - ✅ Parallel file processing
 - ✅ **Zero C dependencies** (v2 and v3)
 - ✅ **Comprehensive documentation**
-- ✅ **Distribution ready** (crates.io, Homebrew, Debian/RPM)
+- ✅ **Distribution scaffolding ready** (internal binaries; public packages TBD)
 
 ---
 
@@ -88,7 +88,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 ### 🎯 Q2 2025: Official Release & Adoption
 **Goal**: Launch to the Perl community
 
-#### Immediate Priority (February-March) - **MAJOR ACHIEVEMENTS** ✅
+#### Immediate Priority (February–March)
 - [x] **Release Infrastructure** ✅ **COMPLETED**
   - [x] cargo-dist configuration for automated releases
   - [x] Multi-platform binary builds (Linux/macOS/Windows, x86_64/aarch64)
@@ -99,11 +99,12 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - [x] Static analysis and code coverage
   - [x] Benchmark regression detection
   - [x] Test discovery guard (>100 tests required)
-- [x] **Easy Installation** ✅ **COMPLETED**
-  - [x] One-liner installer script with checksums
-  - [x] Homebrew formula for macOS
-  - [x] Pre-built binaries for all platforms
-  - [x] Smart PATH detection and shell config
+- [ ] **Easy Installation** (public) — *in progress*
+  - [ ] One-liner installer script with checksums
+  - [ ] Homebrew formula for macOS
+  - [ ] Public pre-built binaries for all platforms
+  - [ ] Smart PATH detection and shell config
+  - [x] Internal pre-built binaries for testing
 - [x] **Enhanced Type System** ✅ **COMPLETED**
   - [x] Smart hash literal type inference
   - [x] Type unification for collections
@@ -165,7 +166,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 **Impact**: Widespread adoption in Perl community
 
-### Q3 2025: v0.8.0 - Advanced Analysis & AI
+### Q3 2025: v0.9.0 - Advanced Analysis & AI
 **Goal**: Next-generation development experience
 
 #### Code Intelligence
@@ -322,11 +323,17 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 ### For Users
 ```bash
-# Install LSP server
-cargo install --git https://github.com/tree-sitter-perl --bin perl-lsp
+# Build from source (recommended right now)
+cargo build -p perl-parser --bin perl-lsp --release
+
+# Or install locally from this workspace
+cargo install --path crates/perl-parser --bin perl-lsp
+
+# (If/when v0.8.2 is published from the repo)
+# cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --tag v0.8.2 perl-parser --bin perl-lsp
 
 # Use in your editor
-perl-lsp --stdio
+./target/release/perl-lsp --stdio
 ```
 
 ### For Contributors
