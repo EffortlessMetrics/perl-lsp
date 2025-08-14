@@ -20,13 +20,13 @@ pub enum PosEnc {
 pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     let line = pos.line as usize;
     let col = pos.character as usize;
-    
+
     if line >= rope.len_lines() {
         return rope.len_bytes();
     }
-    
+
     let line_char0 = rope.line_to_char(line);
-    
+
     match enc {
         PosEnc::Utf8 => {
             let line_chars = rope.line(line).len_chars();
@@ -55,7 +55,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
     let line = rope.char_to_line(char_idx);
     let line_char0 = rope.line_to_char(line);
     let col_chars = char_idx - line_char0;
-    
+
     let character = match enc {
         PosEnc::Utf8 => col_chars as u32,
         PosEnc::Utf16 => {
@@ -70,7 +70,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
             cu
         }
     };
-    
+
     Position {
         line: line as u32,
         character,
