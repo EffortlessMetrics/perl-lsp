@@ -6,7 +6,7 @@ use std::time::Duration;
 mod common;
 use common::{
     initialize_lsp, read_response, read_response_timeout, send_notification, send_raw,
-    send_request, shutdown_and_exit, start_lsp_server,
+    send_request, short_timeout, shutdown_and_exit, start_lsp_server,
 };
 
 /// Test suite for unhappy paths and error scenarios
@@ -22,7 +22,7 @@ fn test_malformed_json_request() {
 
     // Do NOT block: accept None as compliant behavior
     // Server may ignore malformed JSON, send notifications, or send an error
-    let _maybe = read_response_timeout(&mut server, Duration::from_millis(500));
+    let _maybe = read_response_timeout(&mut server, short_timeout());
     // Any behavior is acceptable - we just verify the server doesn't crash
 
     // Server must remain alive
@@ -631,7 +631,7 @@ fn test_binary_frame() {
     );
 
     // Server might ignore or error, we just verify it doesn't hang or crash
-    let _maybe = read_response_timeout(&mut server, Duration::from_millis(500));
+    let _maybe = read_response_timeout(&mut server, short_timeout());
     // Any behavior is acceptable - ignore, error, or notification
 
     // Server must remain alive

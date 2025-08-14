@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
@@ -25,72 +25,106 @@ pub struct LspServer {
     pending: VecDeque<Value>,
 }
 
-fn resolve_perl_lsp_bin() -> Command {
-    // Prefer Cargo-provided binary paths when running integration tests
+fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
+    // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
+    let mut v: Vec<Command> = Vec::new();
+    
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
-        let mut cmd = Command::new(p);
-        cmd.arg("--stdio");
-        return cmd;
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
     }
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl_lsp") {
-        let mut cmd = Command::new(p);
-        cmd.arg("--stdio");
-        return cmd;
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
     }
+    
     // Try perl-lsp from PATH
-    if std::process::Command::new("which")
-        .arg("perl-lsp")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
     {
-        let mut cmd = Command::new("perl-lsp");
-        cmd.arg("--stdio");
-        return cmd;
+        let mut c = Command::new("perl-lsp");
+        c.arg("--stdio");
+        v.push(c);
     }
+    
     // Fallback: use cargo run
-    let mut cmd = Command::new("cargo");
-    cmd.args([
-        "run",
-        "-q",
-        "-p",
-        "perl-parser",
-        "--bin",
-        "perl-lsp",
-        "--",
-        "--stdio",
-    ]);
-    cmd
+    {
+        let mut c = Command::new("cargo");
+        c.args([
+            "run",
+            "-q",
+            "-p",
+            "perl-parser",
+            "--bin",
+            "perl-lsp",
+            "--",
+            "--stdio",
+        ]);
+        v.push(c);
+    }
+    
+    v.into_iter()
 }
 
 pub fn start_lsp_server() -> LspServer {
-    // Spawn the language server
-    let mut cmd = resolve_perl_lsp_bin();
-    #[allow(clippy::zombie_processes)] // Process is owned by LspServer and cleaned up in Drop
-    let mut process = cmd
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to start perl-lsp");
+    // Try candidates in order; fall back cleanly on NotFound
+    let mut last_err: Option<io::Error> = None;
+    let mut process: Child = {
+        let mut spawned: Option<Child> = None;
+        for mut cmd in resolve_perl_lsp_cmds() {
+            match cmd
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
+                Ok(child) => {
+                    spawned = Some(child);
+                    break;
+                }
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    last_err = Some(e);
+                    continue;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+            }
+        }
+        spawned.unwrap_or_else(|| {
+            panic!(
+                "Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}",
+                last_err
+            )
+        })
+    };
 
     let stdin = process.stdin.take();
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
     let stderr = process.stderr.take().expect("stderr piped");
-    let _stderr_thread = std::thread::spawn(move || {
-        let mut r = BufReader::new(stderr);
-        let mut line = String::new();
-        while r.read_line(&mut line).unwrap_or(0) > 0 {
-            // discard or mirror to eprintln! if needed
-            line.clear();
-        }
-    });
+    let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
+    let _stderr_thread = std::thread::Builder::new()
+        .name("lsp-stderr-drain".into())
+        .spawn(move || {
+            let mut r = BufReader::new(stderr);
+            let mut line = String::new();
+            while r.read_line(&mut line).unwrap_or(0) > 0 {
+                if echo {
+                    eprintln!("[perl-lsp] {}", line.trim_end());
+                }
+                line.clear();
+            }
+        })
+        .unwrap();
 
     // -------- stdout LSP reader thread --------
     let stdout = process.stdout.take().expect("stdout piped");
     let (tx, rx) = mpsc::channel::<Value>();
-    let _stdout_thread = std::thread::spawn(move || {
+    let _stdout_thread = std::thread::Builder::new()
+        .name("lsp-stdout-reader".into())
+        .spawn(move || {
         let mut r = BufReader::new(stdout);
         loop {
             // Parse headers
@@ -127,7 +161,8 @@ pub fn start_lsp_server() -> LspServer {
                 let _ = tx.send(val);
             }
         }
-    });
+    })
+    .unwrap();
 
     LspServer {
         process,
@@ -140,38 +175,24 @@ pub fn start_lsp_server() -> LspServer {
 }
 
 pub fn send_request(server: &mut LspServer, request: Value) -> Value {
-    let request_str = serde_json::to_string(&request).unwrap();
-    let stdin = server.stdin.as_mut().unwrap();
+    use std::io::Write as _;
+    let id = request.get("id").cloned();
+    let body = request.to_string();
+    let header = format!("Content-Length: {}\r\n\r\n", body.len());
+    
+    let w = server.stdin.as_mut().expect("child stdin");
+    w.write_all(header.as_bytes()).unwrap();
+    w.write_all(body.as_bytes()).unwrap();
+    w.flush().unwrap();
 
-    // Extract the request ID for matching the response
-    let request_id = request["id"].clone();
-
-    writeln!(
-        stdin,
-        "Content-Length: {}\r\n\r\n{}",
-        request_str.len(),
-        request_str
-    )
-    .unwrap();
-    stdin.flush().unwrap();
-
-    // Read responses until we find the one matching our request ID
-    loop {
-        let response = read_response(server);
-
-        // Check if this is a response to our request (has matching ID)
-        if let Some(id) = response.get("id") {
-            if id == &request_id {
-                return response;
-            }
+    // Match by ID to avoid confusion with interleaved notifications
+    match id {
+        Some(Value::Number(n)) if n.as_i64().is_some() => {
+            read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
+                .unwrap_or(json!(null))
         }
-
-        // If it's a notification or different response, continue reading
-        // But only continue if we got valid JSON (not null)
-        if response.is_null() {
-            // No more messages available, return null
-            return response;
-        }
+        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or(json!(null)),
+        None => read_response(server),
     }
 }
 
@@ -195,6 +216,15 @@ fn default_timeout() -> Duration {
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
         .unwrap_or(Duration::from_secs(5))
+}
+
+/// Short timeout for expected non-responses (malformed requests, etc)
+pub fn short_timeout() -> Duration {
+    std::env::var("LSP_TEST_SHORT_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_millis(500))
 }
 
 /// Blocking receive with a sane default timeout to avoid hangs.
