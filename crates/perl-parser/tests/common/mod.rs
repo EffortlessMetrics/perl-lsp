@@ -1,10 +1,11 @@
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::{Duration, Instant};
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
@@ -21,6 +22,7 @@ pub struct LspServer {
     // Keep threads alive for the lifetime of the server
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
+    pending: VecDeque<Value>,
 }
 
 fn resolve_perl_lsp_bin() -> Command {
@@ -32,6 +34,17 @@ fn resolve_perl_lsp_bin() -> Command {
     }
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl_lsp") {
         let mut cmd = Command::new(p);
+        cmd.arg("--stdio");
+        return cmd;
+    }
+    // Try perl-lsp from PATH
+    if std::process::Command::new("which")
+        .arg("perl-lsp")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        let mut cmd = Command::new("perl-lsp");
         cmd.arg("--stdio");
         return cmd;
     }
@@ -92,7 +105,9 @@ pub fn start_lsp_server() -> LspServer {
                         if l.is_empty() {
                             break;
                         }
-                        if let Some(rest) = l.strip_prefix("Content-Length:") {
+                        // Case-insensitive header matching
+                        let lower = l.to_ascii_lowercase();
+                        if let Some(rest) = lower.strip_prefix("content-length:") {
                             content_len = rest.trim().parse::<usize>().ok();
                         }
                     }
@@ -120,6 +135,7 @@ pub fn start_lsp_server() -> LspServer {
         rx,
         _stdout_thread,
         _stderr_thread,
+        pending: VecDeque::new(),
     }
 }
 
@@ -173,9 +189,17 @@ pub fn send_notification(server: &mut LspServer, notification: Value) {
     stdin.flush().unwrap();
 }
 
+fn default_timeout() -> Duration {
+    std::env::var("LSP_TEST_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_secs(5))
+}
+
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
-    read_response_timeout(server, Duration::from_secs(5)).unwrap_or(json!(null))
+    read_response_timeout(server, default_timeout()).unwrap_or(json!(null))
 }
 
 /// Try to receive a response within `dur`. Returns None on timeout.
@@ -183,36 +207,81 @@ pub fn read_response_timeout(server: &mut LspServer, dur: Duration) -> Option<Va
     server.rx.recv_timeout(dur).ok()
 }
 
-pub fn initialize_lsp(server: &mut LspServer) -> Value {
-    send_request(
-        server,
-        json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "processId": null,
-                "rootUri": "file:///test",
-                "capabilities": {
-                    "textDocument": {
-                        "completion": {
-                            "completionItem": {
-                                "snippetSupport": true
-                            }
-                        },
-                        "hover": {
-                            "contentFormat": ["markdown", "plaintext"]
-                        },
-                        "signatureHelp": {
-                            "signatureInformation": {
-                                "documentationFormat": ["markdown", "plaintext"]
-                            }
-                        }
-                    }
-                }
+/// Receive the response matching `id` (number or string), buffering other traffic.
+pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration) -> Option<Value> {
+    // scan buffered
+    for _ in 0..server.pending.len() {
+        if let Some(msg) = server.pending.pop_front() {
+            if msg.get("id") == Some(id) {
+                return Some(msg);
             }
-        }),
-    )
+            server.pending.push_back(msg);
+        }
+    }
+    // then poll
+    let deadline = Instant::now() + dur;
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+        match server.rx.recv_timeout(deadline - now) {
+            Ok(msg) => {
+                if msg.get("id") == Some(id) {
+                    return Some(msg);
+                }
+                server.pending.push_back(msg);
+            }
+            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+}
+
+/// Convenience for numeric ids.
+pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration) -> Option<Value> {
+    read_response_matching(server, &json!(id), dur)
+}
+
+/// Write raw bytes (for malformed/binary frame tests).
+pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
+    use std::io::Write as _;
+    let w = server.stdin.as_mut().expect("child stdin");
+    w.write_all(bytes).unwrap();
+    w.flush().unwrap();
+}
+
+pub fn initialize_lsp(server: &mut LspServer) -> Value {
+    let init = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "capabilities": {},
+            "clientInfo": {"name":"perl-parser-tests","version":"0"},
+            "rootUri": null,
+            "workspaceFolders": null
+        }
+    });
+    
+    // write without reading
+    {
+        use std::io::Write as _;
+        let w = server.stdin.as_mut().expect("child stdin");
+        let body = init.to_string();
+        let header = format!("Content-Length: {}\r\n\r\n", body.len());
+        w.write_all(header.as_bytes()).unwrap();
+        w.write_all(body.as_bytes()).unwrap();
+        w.flush().unwrap();
+    }
+    
+    // wait specifically for id=1
+    let resp = read_response_matching_i64(server, 1, default_timeout())
+        .expect("initialize response");
+    
+    // send initialized notification
+    send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
+    
+    resp
 }
 
 /// Gracefully shut the server down (best-effort) without hanging tests.
@@ -236,24 +305,10 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
 impl Drop for LspServer {
     fn drop(&mut self) {
-        // Send exit notification
-        if let Some(stdin) = &mut self.stdin {
-            let exit = json!({
-                "jsonrpc": "2.0",
-                "method": "exit",
-                "params": null
-            });
-            let exit_str = serde_json::to_string(&exit).unwrap();
-            let _ = writeln!(
-                stdin,
-                "Content-Length: {}\r\n\r\n{}",
-                exit_str.len(),
-                exit_str
-            );
+        // Best-effort cleanup if shutdown wasn't called.
+        if self.process.try_wait().ok().flatten().is_none() {
+            let _ = self.process.kill();
+            let _ = self.process.wait();
         }
-
-        // Kill process if still running
-        let _ = self.process.kill();
-        let _ = self.process.wait();
     }
 }
