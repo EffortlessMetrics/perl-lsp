@@ -1,6 +1,6 @@
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -262,7 +262,7 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
             "workspaceFolders": null
         }
     });
-    
+
     // write without reading
     {
         use std::io::Write as _;
@@ -273,14 +273,14 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
         w.write_all(body.as_bytes()).unwrap();
         w.flush().unwrap();
     }
-    
+
     // wait specifically for id=1
-    let resp = read_response_matching_i64(server, 1, default_timeout())
-        .expect("initialize response");
-    
+    let resp =
+        read_response_matching_i64(server, 1, default_timeout()).expect("initialize response");
+
     // send initialized notification
     send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
-    
+
     resp
 }
 
