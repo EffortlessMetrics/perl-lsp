@@ -48,15 +48,11 @@ This release brings **significant LSP enhancements** and **code quality improvem
 ## Installation
 
 ```bash
-# Quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
-
-# Homebrew (macOS)
-brew tap tree-sitter-perl/tap
-brew install perl-lsp
-
 # Build from source
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --tag v0.8.2 perl-parser --bin perl-lsp
+cargo build -p perl-parser --bin perl-lsp --release
+
+# Or install locally
+cargo install --path crates/perl-parser --bin perl-lsp
 ```
 
 ## Coming Next (v0.8.3)
