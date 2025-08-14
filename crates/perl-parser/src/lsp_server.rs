@@ -28,6 +28,7 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
 };
+use std::collections::HashSet;
 
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
@@ -64,6 +65,8 @@ pub struct LspServer {
     output: Arc<Mutex<Box<dyn Write + Send>>>,
     /// Client capabilities
     client_capabilities: ClientCapabilities,
+    /// Cancelled request IDs
+    cancelled: Arc<Mutex<HashSet<Value>>>,
 }
 
 /// State of a document
@@ -171,6 +174,7 @@ impl LspServer {
             config: Arc::new(Mutex::new(ServerConfig::default())),
             output: Arc::new(Mutex::new(Box::new(io::stdout()))),
             client_capabilities: ClientCapabilities::default(),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -194,6 +198,7 @@ impl LspServer {
             config: Arc::new(Mutex::new(ServerConfig::default())),
             output,
             client_capabilities: ClientCapabilities::default(),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -325,9 +330,46 @@ impl LspServer {
         Ok(None)
     }
 
+    /// Create a request cancelled error
+    fn request_cancelled() -> JsonRpcError {
+        JsonRpcError {
+            code: -32800,
+            message: "Request cancelled".to_string(),
+            data: None,
+        }
+    }
+
+    /// Check if a request has been cancelled
+    fn is_cancelled(&self, id: &Value) -> bool {
+        let mut set = self.cancelled.lock().unwrap();
+        set.take(id).is_some()
+    }
+
     /// Handle a JSON-RPC request
     pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = request.id.clone();
+
+        // Handle $/cancelRequest notification
+        if request.method == "$/cancelRequest" {
+            if let Some(params) = request.params {
+                if let Some(cancel_id) = params.get("id").cloned() {
+                    self.cancelled.lock().unwrap().insert(cancel_id);
+                }
+            }
+            return None; // Notifications don't get responses
+        }
+
+        // Check if this request has been cancelled
+        if let Some(ref id) = id {
+            if self.is_cancelled(id) {
+                return Some(JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: Some(id.clone()),
+                    result: None,
+                    error: Some(Self::request_cancelled()),
+                });
+            }
+        }
 
         let result = match request.method.as_str() {
             "initialize" => self.handle_initialize(request.params),
@@ -1244,7 +1286,8 @@ impl LspServer {
                             },
                             "detail": c.detail,
                             "insertText": c.insert_text,
-                            "insertTextFormat": 1,
+                            "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
+                            "commitCharacters": [";", " ", ")", "]", "}"],
                         })
                     })
                     .collect();

@@ -372,10 +372,7 @@ fn test_special_variable_completion() {
 
     // The completion provider might return keywords instead of special variables
     // in this context, so we'll be more lenient
-    assert!(
-        items.len() >= 2,
-        "Should have at least some completions"
-    );
+    assert!(items.len() >= 2, "Should have at least some completions");
 
     let labels: Vec<String> = items
         .iter()
@@ -383,9 +380,10 @@ fn test_special_variable_completion() {
         .collect();
 
     // Check if we got special variables or keywords (both are acceptable)
-    let has_special_vars = labels.contains(&"$^O".to_string()) && labels.contains(&"$^V".to_string());
+    let has_special_vars =
+        labels.contains(&"$^O".to_string()) && labels.contains(&"$^V".to_string());
     let has_keywords = labels.contains(&"print".to_string()) || labels.contains(&"my".to_string());
-    
+
     assert!(
         has_special_vars || has_keywords,
         "Should have either special variables or keywords"
@@ -574,21 +572,21 @@ fn test_empty_prefix_completion() {
     send_notification(
         &mut server,
         json!({
-                                                                                                                                                                                                                                                    "jsonrpc": "2.0",
-                                                                                                                                                                                                                                                    "method": "textDocument/didOpen",
-                                                                                                                                                                                                                                                    "params": {
-                                                                                                                                                                                                                                                        "textDocument": {
-                                                                                                                                                                                                                                                            "uri": uri,
-                                                                                                                                                                                                                                                            "languageId": "perl",
-                                                                                                                                                                                                                                                            "version": 1,
-                                                                                                                                                                                                                                                            "text": r#"
+                                                                                                                                                                                                                                                            "jsonrpc": "2.0",
+                                                                                                                                                                                                                                                            "method": "textDocument/didOpen",
+                                                                                                                                                                                                                                                            "params": {
+                                                                                                                                                                                                                                                                "textDocument": {
+                                                                                                                                                                                                                                                                    "uri": uri,
+                                                                                                                                                                                                                                                                    "languageId": "perl",
+                                                                                                                                                                                                                                                                    "version": 1,
+                                                                                                                                                                                                                                                                    "text": r#"
 my $var = 42;
 sub test { }
 
 "#  // Empty line where we'll request completion
-                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                }),
+                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                            }
+                                                                                                                                                                                                                                                        }),
     );
 
     let response = send_request(
