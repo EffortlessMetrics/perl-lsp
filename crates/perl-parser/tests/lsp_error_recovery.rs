@@ -2,9 +2,7 @@ use serde_json::json;
 use std::time::Duration;
 
 mod common;
-use common::{
-    completion_items, initialize_lsp, send_notification, send_request, start_lsp_server,
-};
+use common::{completion_items, initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test suite for error recovery scenarios
 /// Ensures the LSP server can recover from various error states
@@ -312,7 +310,11 @@ fn test_workspace_recovery_after_error() {
     // Note: workspace symbols requires the 'workspace' feature to be enabled
     // Without it, an empty array is returned which is valid behavior
     if !symbols.is_empty() {
-        assert!(symbols.iter().any(|s| s["name"] == "foo"), "Workspace symbols: {:?}", symbols);
+        assert!(
+            symbols.iter().any(|s| s["name"] == "foo"),
+            "Workspace symbols: {:?}",
+            symbols
+        );
     }
 }
 
@@ -377,7 +379,11 @@ print $var;  # Another valid reference
     let refs = response["result"].as_array().unwrap();
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
-    eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
+    eprintln!(
+        "Found {} references (may be 0 due to parse errors): {:?}",
+        refs.len(),
+        refs
+    );
 }
 
 #[test]
