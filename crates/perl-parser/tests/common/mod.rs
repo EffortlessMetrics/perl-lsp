@@ -1,7 +1,16 @@
+//! Common test utilities for LSP integration tests
+//!
+//! Env toggles:
+//!   LSP_TEST_TIMEOUT_MS   – default per-request timeout (ms), default 5000
+//!   LSP_TEST_SHORT_MS     – "short" timeout for optional responses (ms), default 500
+//!   LSP_TEST_ECHO_STDERR  – if set, echo perl-lsp stderr lines in tests
+
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+
+const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
@@ -139,10 +148,11 @@ pub fn start_lsp_server() -> LspServer {
                             if l.is_empty() {
                                 break;
                             }
-                            // Case-insensitive header matching
+                            // Case-insensitive header matching with flexible colon handling
                             let lower = l.to_ascii_lowercase();
-                            if let Some(rest) = lower.strip_prefix("content-length:") {
-                                content_len = rest.trim().parse::<usize>().ok();
+                            if let Some(rest) = lower.strip_prefix("content-length") {
+                                let rest = rest.trim_start_matches(':').trim();
+                                content_len = rest.parse::<usize>().ok();
                             }
                         }
                         Err(_) => return,
@@ -245,6 +255,9 @@ pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration)
             if msg.get("id") == Some(id) {
                 return Some(msg);
             }
+            if server.pending.len() >= PENDING_CAP {
+                server.pending.pop_front();
+            }
             server.pending.push_back(msg);
         }
     }
@@ -259,6 +272,9 @@ pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration)
             Ok(msg) => {
                 if msg.get("id") == Some(id) {
                     return Some(msg);
+                }
+                if server.pending.len() >= PENDING_CAP {
+                    server.pending.pop_front();
                 }
                 server.pending.push_back(msg);
             }
@@ -278,6 +294,62 @@ pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
     let w = server.stdin.as_mut().expect("child stdin");
     w.write_all(bytes).unwrap();
     w.flush().unwrap();
+}
+
+/// Read a notification matching the given method name
+pub fn read_notification_method(
+    server: &mut LspServer,
+    method: &str,
+    dur: Duration,
+) -> Option<Value> {
+    let deadline = Instant::now() + dur;
+
+    // scan buffered first
+    for _ in 0..server.pending.len() {
+        if let Some(msg) = server.pending.pop_front() {
+            if msg.get("id").is_none() && msg.get("method") == Some(&json!(method)) {
+                return Some(msg);
+            }
+            server.pending.push_back(msg);
+        }
+    }
+
+    // then poll
+    while Instant::now() < deadline {
+        match server.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(msg) => {
+                let is_match = msg.get("id").is_none()
+                    && msg.get("method") == Some(&json!(method));
+                if is_match {
+                    return Some(msg);
+                }
+                if server.pending.len() >= PENDING_CAP {
+                    server.pending.pop_front();
+                }
+                server.pending.push_back(msg);
+            }
+            Err(_) => break,
+        }
+    }
+    None
+}
+
+/// Drain messages until no traffic for a quiet period (stabilizes CI)
+pub fn drain_until_quiet(server: &mut LspServer, quiet: Duration, ceiling: Duration) {
+    let start = Instant::now();
+    let mut last = Instant::now();
+    while start.elapsed() < ceiling {
+        match server.rx.recv_timeout(quiet.saturating_sub(last.elapsed())) {
+            Ok(msg) => {
+                if server.pending.len() >= PENDING_CAP {
+                    server.pending.pop_front();
+                }
+                server.pending.push_back(msg);
+                last = Instant::now();
+            }
+            Err(_) => break, // quiet period achieved
+        }
+    }
 }
 
 pub fn initialize_lsp(server: &mut LspServer) -> Value {
