@@ -498,6 +498,7 @@ impl LspServer {
             };
 
         let mut capabilities = json!({
+            "positionEncoding": "utf-16",
             "textDocumentSync": {
                 "openClose": true,
                 "change": sync_kind, // Dynamic based on incremental feature
@@ -681,28 +682,55 @@ impl LspServer {
             let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
 
             if let Some(changes) = params["contentChanges"].as_array() {
-                if let Some(change) = changes.first() {
-                    let text = change["text"].as_str().unwrap_or("");
+                // Get current document state or create new one
+                let mut documents = self.documents.lock().unwrap();
+                let mut doc_state = documents.get(uri).cloned().unwrap_or_else(|| DocumentState {
+                    content: String::new(),
+                    _version: version,
+                    ast: None,
+                    parse_errors: vec![],
+                    parent_map: ParentMap::default(),
+                    line_starts: LineStartsCache::new(""),
+                });
 
-                    eprintln!("Document changed: {}", uri);
+                // Apply incremental changes with UTF-16 aware mapping
+                use crate::textdoc::{Doc, PosEnc, apply_changes};
+                use ropey::Rope;
+                use lsp_types::TextDocumentContentChangeEvent;
+                
+                let mut doc = Doc {
+                    rope: Rope::from_str(&doc_state.content),
+                    version,
+                };
+                
+                // Convert JSON changes to proper LSP types
+                let lsp_changes: Vec<TextDocumentContentChangeEvent> = changes.iter()
+                    .filter_map(|c| serde_json::from_value(c.clone()).ok())
+                    .collect();
+                
+                // Apply changes with UTF-16 encoding (as advertised in initialize)
+                apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
+                
+                let text = doc.rope.to_string();
+                eprintln!("Document changed: {} (version {})", uri, version);
 
-                    // Check cache first
-                    let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
-                        eprintln!("Using cached AST for {}", uri);
-                        (Some((*cached_ast).clone()), vec![])
-                    } else {
-                        // Parse the document
-                        let mut parser = Parser::new(text);
-                        match parser.parse() {
-                            Ok(ast) => {
-                                let arc_ast = Arc::new(ast);
-                                self.ast_cache
-                                    .put(uri.to_string(), text, Arc::clone(&arc_ast));
-                                (Some((*arc_ast).clone()), vec![])
-                            }
-                            Err(e) => (None, vec![e]),
+                // Check cache first
+                let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, &text) {
+                    eprintln!("Using cached AST for {}", uri);
+                    (Some((*cached_ast).clone()), vec![])
+                } else {
+                    // Parse the document
+                    let mut parser = Parser::new(&text);
+                    match parser.parse() {
+                        Ok(ast) => {
+                            let arc_ast = Arc::new(ast);
+                            self.ast_cache
+                                .put(uri.to_string(), &text, Arc::clone(&arc_ast));
+                            (Some((*arc_ast).clone()), vec![])
                         }
-                    };
+                        Err(e) => (None, vec![e]),
+                    }
+                };
 
                     // Convert AST to Arc for stable pointers
                     let ast_arc = ast.map(Arc::new);
@@ -718,20 +746,22 @@ impl LspServer {
                     }
 
                     // Build line starts cache for O(log n) position conversion
-                    let line_starts = LineStartsCache::new(text);
+                    let line_starts = LineStartsCache::new(&text);
 
-                    // Update document state
-                    self.documents.lock().unwrap().insert(
-                        uri.to_string(),
-                        DocumentState {
-                            content: text.to_string(),
-                            _version: version,
-                            ast: ast_arc.clone(),
-                            parse_errors: errors,
-                            parent_map,
-                            line_starts,
-                        },
-                    );
+                    // Update document state with properly updated content
+                    doc_state = DocumentState {
+                        content: text.to_string(),
+                        _version: version,
+                        ast: ast_arc.clone(),
+                        parse_errors: errors,
+                        parent_map,
+                        line_starts,
+                    };
+                    
+                    documents.insert(uri.to_string(), doc_state);
+                    
+                    // Must drop the lock before calling publish_diagnostics
+                    drop(documents);
 
                     // Index symbols for workspace search
                     if let Some(ref _ast) = ast_arc {
@@ -740,16 +770,19 @@ impl LspServer {
                         #[cfg(feature = "workspace")]
                         if let Some(ref workspace_index) = self.workspace_index {
                             if let Ok(url) = url::Url::parse(uri) {
-                                if let Err(e) = workspace_index.index_file(url, text.to_string()) {
+                                let doc_content = self.documents.lock().unwrap()
+                                    .get(uri)
+                                    .map(|d| d.content.clone())
+                                    .unwrap_or_default();
+                                if let Err(e) = workspace_index.index_file(url, doc_content) {
                                     eprintln!("Failed to index file {}: {}", uri, e);
                                 }
                             }
                         }
                     }
 
-                    // Send diagnostics
-                    self.publish_diagnostics(uri);
-                }
+                // Send diagnostics
+                self.publish_diagnostics(uri);
             }
         }
 
@@ -760,13 +793,13 @@ impl LspServer {
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
-            if let Some(ast) = &doc.ast {
+            let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics
                 let provider = DiagnosticsProvider::new(ast, doc.content.clone());
                 let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
 
                 // Convert to LSP diagnostics
-                let lsp_diagnostics: Vec<Value> = diagnostics
+                diagnostics
                     .into_iter()
                     .map(|d| {
                         let (start_line, start_char) = self.offset_to_pos16(doc, d.range.0);
@@ -788,23 +821,63 @@ impl LspServer {
                             "message": d.message,
                         })
                     })
-                    .collect();
+                    .collect()
+            } else {
+                // No AST available (parse failed completely), just report parse errors
+                doc.parse_errors
+                    .iter()
+                    .map(|e| {
+                        // Extract location and message from error enum
+                        let (location, message) = match e {
+                            crate::error::ParseError::UnexpectedToken { location, expected, found } => {
+                                (*location, format!("Expected {}, found {}", expected, found))
+                            }
+                            crate::error::ParseError::SyntaxError { location, message } => {
+                                (*location, message.clone())
+                            }
+                            crate::error::ParseError::UnexpectedEof => {
+                                (doc.content.len(), "Unexpected end of input".to_string())
+                            }
+                            crate::error::ParseError::LexerError { message } => {
+                                (0, message.clone())
+                            }
+                            _ => (0, e.to_string()),
+                        };
+                        
+                        // Convert byte offset to line/column
+                        let (line, character) = self.offset_to_pos16(doc, location);
+                        
+                        json!({
+                            "range": {
+                                "start": {"line": line, "character": character},
+                                "end": {"line": line, "character": character + 1},
+                            },
+                            "severity": 1, // Error
+                            "code": "parse-error",
+                            "source": "perl-parser",
+                            "message": message,
+                        })
+                    })
+                    .collect()
+            };
 
-                eprintln!(
-                    "Publishing {} diagnostics for {}",
-                    lsp_diagnostics.len(),
-                    uri
-                );
+            eprintln!(
+                "Publishing {} diagnostics for {} (version {})",
+                lsp_diagnostics.len(),
+                uri,
+                doc._version
+            );
 
-                // Send diagnostics notification to client using centralized notify
-                let _ = self.notify(
-                    "textDocument/publishDiagnostics",
-                    json!({
-                        "uri": uri,
-                        "diagnostics": lsp_diagnostics
-                    }),
-                );
-            }
+            // Always send diagnostics notification with version
+            // This ensures diagnostics are cleared when all errors are fixed
+            let _ = self.notify(
+                "textDocument/publishDiagnostics",
+                json!({
+                    "uri": uri,
+                    "version": doc._version,
+                    "diagnostics": lsp_diagnostics
+                }),
+            );
         }
     }
 
@@ -1000,18 +1073,22 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                if let Some(ast) = &doc.ast {
-                    let offset = self.pos16_to_offset(doc, line, character);
-
+                let offset = self.pos16_to_offset(doc, line, character);
+                
+                // Get completions, with fallback for missing AST
+                #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
+                let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    // mut is only "unused" when workspace feature is disabled
-                    #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
-                    let mut completions = provider.get_completions(&doc.content, offset);
+                    provider.get_completions(&doc.content, offset)
+                } else {
+                    // Fallback: provide basic keyword completions when AST is unavailable
+                    vec![]
+                };
 
-                    // Add workspace-wide completions (functions and modules from other files)
-                    #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                // Add workspace-wide completions (functions and modules from other files)
+                #[cfg(feature = "workspace")]
+                if let Some(ref workspace_index) = self.workspace_index {
                         // Get the current context to filter relevant completions
                         let text_before = &doc.content[..offset.min(doc.content.len())];
                         let prefix = text_before
@@ -1081,9 +1158,9 @@ impl LspServer {
                                 additional_edits: Vec::new(),
                             });
                         }
-                    }
+                }
 
-                    let items: Vec<Value> = completions
+                let items: Vec<Value> = completions
                         .into_iter()
                         .map(|c| {
                             json!({
@@ -1105,9 +1182,8 @@ impl LspServer {
                         })
                         .collect();
 
-                    eprintln!("Returning {} completions", items.len());
-                    return Ok(Some(json!({"items": items})));
-                }
+                eprintln!("Returning {} completions", items.len());
+                return Ok(Some(json!({"items": items})));
             }
         }
 
