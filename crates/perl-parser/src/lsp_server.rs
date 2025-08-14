@@ -24,7 +24,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU32, Ordering},
+};
 
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
@@ -80,6 +83,8 @@ pub(crate) struct DocumentState {
     pub(crate) parent_map: ParentMap,
     /// Line starts cache for O(log n) position conversion
     pub(crate) line_starts: LineStartsCache,
+    /// Generation counter for latest-wins race condition prevention
+    pub(crate) generation: Arc<AtomicU32>,
 }
 
 /// Server configuration
@@ -374,7 +379,12 @@ impl LspServer {
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             "textDocument/rename" => self.handle_rename(request.params),
-            "textDocument/documentSymbol" => self.handle_document_symbol(request.params),
+            "textDocument/documentSymbol" => {
+                eprintln!("Processing documentSymbol request");
+                let result = self.handle_document_symbol(request.params);
+                eprintln!("DocumentSymbol result: {:?}", result.is_ok());
+                result
+            }
             "textDocument/foldingRange" => self.handle_folding_range(request.params),
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
@@ -414,19 +424,31 @@ impl LspServer {
         };
 
         match result {
-            Ok(Some(result)) => Some(JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id,
-                result: Some(result),
-                error: None,
-            }),
-            Ok(None) => None, // Notification, no response
-            Err(error) => Some(JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id,
-                result: None,
-                error: Some(error),
-            }),
+            Ok(Some(result)) => {
+                eprintln!("Sending successful response for request {}", request.method);
+                Some(JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id,
+                    result: Some(result),
+                    error: None,
+                })
+            }
+            Ok(None) => {
+                eprintln!("Request {} is a notification, no response", request.method);
+                None // Notification, no response
+            }
+            Err(error) => {
+                eprintln!(
+                    "Sending error response for request {}: {:?}",
+                    request.method, error
+                );
+                Some(JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id,
+                    result: None,
+                    error: Some(error),
+                })
+            }
         }
     }
 
@@ -631,6 +653,7 @@ impl LspServer {
                     parse_errors: errors,
                     parent_map,
                     line_starts,
+                    generation: Arc::new(AtomicU32::new(0)),
                 },
             );
 
@@ -694,7 +717,15 @@ impl LspServer {
                         parse_errors: vec![],
                         parent_map: ParentMap::default(),
                         line_starts: LineStartsCache::new(""),
+                        generation: Arc::new(AtomicU32::new(0)),
                     });
+
+                // Increment generation counter for this change
+                let next_gen = doc_state
+                    .generation
+                    .fetch_add(1, Ordering::SeqCst)
+                    .wrapping_add(1);
+                let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
                 use crate::textdoc::{Doc, PosEnc, apply_changes};
@@ -760,7 +791,25 @@ impl LspServer {
                     parse_errors: errors,
                     parent_map,
                     line_starts,
+                    generation: doc_state.generation.clone(), // Preserve the generation counter
                 };
+
+                // Check if a newer change arrived while we were parsing
+                if let Some(existing_doc) = documents.get(uri) {
+                    if existing_doc.generation.load(Ordering::SeqCst) != next_gen
+                        || existing_doc._version > target_version
+                    {
+                        eprintln!(
+                            "Discarding stale parse result for {} (gen {} != {} or version {} > {})",
+                            uri,
+                            next_gen,
+                            existing_doc.generation.load(Ordering::SeqCst),
+                            existing_doc._version,
+                            target_version
+                        );
+                        return Ok(());
+                    }
+                }
 
                 documents.insert(uri.to_string(), doc_state);
 
@@ -1092,7 +1141,7 @@ impl LspServer {
                     provider.get_completions(&doc.content, offset)
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
-                    vec![]
+                    self.lexical_complete(&doc.content, offset)
                 };
 
                 // Add workspace-wide completions (functions and modules from other files)
@@ -1889,7 +1938,7 @@ impl LspServer {
 
                     // Use the Declaration provider - ast is already an Arc
                     let provider = crate::declaration::DeclarationProvider::new(
-                        ast.clone(),
+                        Arc::clone(ast),
                         doc.content.clone(),
                         uri.to_string(),
                     )
@@ -2711,7 +2760,9 @@ impl LspServer {
                     return Ok(Some(json!(document_symbols)));
                 } else {
                     // Fallback: Extract symbols via regex when parse fails
+                    eprintln!("Using fallback symbol extraction for {}", uri);
                     let symbols = self.extract_symbols_fallback(&doc.content);
+                    eprintln!("Returning {} fallback symbols", symbols.len());
                     return Ok(Some(json!(symbols)));
                 }
             }
@@ -3110,6 +3161,140 @@ impl LspServer {
     fn pos16_to_offset(&self, doc: &DocumentState, line: u32, ch: u32) -> usize {
         // Uses the cached, CRLF/UTF-16 aware converter
         doc.line_starts.position_to_offset(&doc.content, line, ch)
+    }
+
+    /// Lexical completion fallback for when AST is unavailable
+    fn lexical_complete(
+        &self,
+        content: &str,
+        offset: usize,
+    ) -> Vec<crate::completion::CompletionItem> {
+        let mut completions = Vec::new();
+
+        // Get the prefix we're completing
+        let text_before = &content[..offset.min(content.len())];
+        let prefix = text_before
+            .chars()
+            .rev()
+            .take_while(|&c| c.is_alphanumeric() || c == '_')
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>();
+
+        // Check what sigil we're after (if any)
+        let sigil = text_before
+            .chars()
+            .rev()
+            .find(|&c| !(c.is_alphanumeric() || c == '_'));
+
+        // Basic keywords that match the prefix
+        let keywords = [
+            "my", "our", "local", "state", "sub", "package", "use", "require", "if", "elsif",
+            "else", "unless", "while", "until", "for", "foreach", "given", "when", "default",
+            "return", "last", "next", "redo", "goto", "die", "warn", "print", "say", "open",
+            "close", "read", "write", "push", "pop", "shift", "unshift", "splice", "grep", "map",
+            "sort",
+        ];
+
+        match sigil {
+            Some('$') => {
+                // Scalar variables - suggest common ones
+                if "_".starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: "_".to_string(),
+                        kind: CompletionItemKind::Variable,
+                        detail: Some("Default variable".to_string()),
+                        documentation: None,
+                        insert_text: Some("_".to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                    });
+                }
+            }
+            Some('@') => {
+                // Array variables - suggest common ones
+                if "ARGV".starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: "ARGV".to_string(),
+                        kind: CompletionItemKind::Variable,
+                        detail: Some("Command line arguments".to_string()),
+                        documentation: None,
+                        insert_text: Some("ARGV".to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                    });
+                }
+                if "_".starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: "_".to_string(),
+                        kind: CompletionItemKind::Variable,
+                        detail: Some("Function arguments".to_string()),
+                        documentation: None,
+                        insert_text: Some("_".to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                    });
+                }
+            }
+            Some('%') => {
+                // Hash variables - suggest common ones
+                if "ENV".starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: "ENV".to_string(),
+                        kind: CompletionItemKind::Variable,
+                        detail: Some("Environment variables".to_string()),
+                        documentation: None,
+                        insert_text: Some("ENV".to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                    });
+                }
+            }
+            _ => {
+                // No sigil - suggest keywords
+                for kw in &keywords {
+                    if kw.starts_with(&prefix) {
+                        completions.push(crate::completion::CompletionItem {
+                            label: kw.to_string(),
+                            kind: CompletionItemKind::Keyword,
+                            detail: None,
+                            documentation: None,
+                            insert_text: Some(kw.to_string()),
+                            additional_edits: vec![],
+                            sort_text: None,
+                            filter_text: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        completions
+    }
+
+    /// Helper to create a ContentModified error response
+    #[allow(dead_code)]
+    fn content_modified() -> Value {
+        json!({ "code": -32801, "message": "ContentModified" })
+    }
+
+    /// Ensure the request version matches the current document version
+    #[allow(dead_code)]
+    fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), Value> {
+        if let Some(v) = req_version {
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if v < doc._version {
+                    return Err(Self::content_modified());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Offset to position conversion using cached line starts for O(log n) performance
