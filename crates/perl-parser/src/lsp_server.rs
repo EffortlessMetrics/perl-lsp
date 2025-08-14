@@ -248,6 +248,15 @@ impl LspServer {
         let content = serde_json::to_string(response)?;
         let content_length = content.len();
 
+        // Log outgoing response for debugging
+        eprintln!(
+            "[perl-lsp:tx] id={:?} has_result={} has_error={} len={}",
+            response.id,
+            response.result.is_some(),
+            response.error.is_some(),
+            content_length
+        );
+
         write!(
             stdout,
             "Content-Length: {}\r\n\r\n{}",
@@ -1129,6 +1138,12 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
+            // Reject stale requests
+            let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
+            if let Err(e) = self.ensure_latest(uri, req_version) {
+                return Ok(Some(e));
+            }
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
@@ -1237,11 +1252,11 @@ impl LspServer {
                     .collect();
 
                 eprintln!("Returning {} completions", items.len());
-                return Ok(Some(json!({"items": items})));
+                return Ok(Some(json!({"isIncomplete": false, "items": items})));
             }
         }
 
-        Ok(Some(json!({"items": []})))
+        Ok(Some(json!({"isIncomplete": false, "items": []})))
     }
 
     /// Handle code action request
@@ -1358,6 +1373,12 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+
+            // Reject stale requests
+            let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
+            if let Err(e) = self.ensure_latest(uri, req_version) {
+                return Ok(Some(e));
+            }
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -3307,6 +3328,13 @@ impl LspServer {
     fn handle_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+
+            // Reject stale requests
+            let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
+            if let Err(e) = self.ensure_latest(uri, req_version) {
+                return Ok(Some(e));
+            }
+
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
                 .unwrap_or(FormattingOptions {
                     tab_size: 4,

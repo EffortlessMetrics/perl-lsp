@@ -3,8 +3,8 @@ use std::time::Duration;
 
 mod common;
 use common::{
-    completion_items, initialize_lsp, read_response, send_notification, send_request,
-    start_lsp_server,
+    completion_items, initialize_lsp, read_response, read_response_matching, send_notification,
+    send_request, start_lsp_server,
 };
 
 /// Test suite for error recovery scenarios
@@ -55,12 +55,15 @@ fn test_recover_from_parse_errors() {
         }),
     );
 
+    // Wait for diagnostics to clear after fix
+    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+
     // Should now work correctly
     send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -70,8 +73,14 @@ fn test_recover_from_parse_errors() {
         }),
     );
 
-    let response = read_response(&mut server);
-    assert!(response["result"].is_array());
+    let response = read_response_matching(&mut server, &json!(2), Duration::from_secs(5))
+        .expect("Failed to receive response for documentSymbol");
+    eprintln!("Received response: {}", response);
+    assert!(
+        response["result"].is_array(),
+        "Response was not an array: {}",
+        response
+    );
     let symbols = response["result"].as_array().unwrap();
     assert!(!symbols.is_empty());
 }
@@ -122,7 +131,7 @@ sub another_valid {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -220,7 +229,7 @@ fn test_incremental_edit_recovery() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/hover",
             "params": {
                 "textDocument": {
@@ -297,7 +306,7 @@ fn test_workspace_recovery_after_error() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "workspace/symbol",
             "params": {
                 "query": "foo"
@@ -352,7 +361,7 @@ print $var;  # Another valid reference
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/references",
             "params": {
                 "textDocument": {
@@ -411,7 +420,7 @@ sub broken {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {
@@ -473,7 +482,7 @@ $old_name++;
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/prepareRename",
             "params": {
                 "textDocument": {
@@ -546,7 +555,7 @@ my   $z   =   3;"#;
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/formatting",
             "params": {
                 "textDocument": {
@@ -613,6 +622,9 @@ fn test_diagnostic_recovery() {
         }),
     );
 
+    // Wait for change to be processed
+    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+
     std::thread::sleep(Duration::from_millis(100));
 
     // Fix second error
@@ -636,6 +648,9 @@ fn test_diagnostic_recovery() {
             }
         }),
     );
+
+    // Wait for change to be processed
+    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
 
     std::thread::sleep(Duration::from_millis(100));
 
@@ -661,6 +676,9 @@ fn test_diagnostic_recovery() {
         }),
     );
 
+    // Wait for all changes to be processed
+    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+
     // All diagnostics should be cleared
     std::thread::sleep(Duration::from_millis(100));
 
@@ -669,7 +687,7 @@ fn test_diagnostic_recovery() {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/documentSymbol",
             "params": {
                 "textDocument": {
@@ -719,7 +737,7 @@ my $result = my_func();  # Should still find definition
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/definition",
             "params": {
                 "textDocument": {
@@ -775,7 +793,7 @@ sub broken {
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": 2,
             "method": "textDocument/hover",
             "params": {
                 "textDocument": {
