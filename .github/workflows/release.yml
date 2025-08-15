@@ -3,13 +3,17 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., 0.6.0)'
+      tag:
+        description: 'Release tag (e.g., v0.8.3)'
         required: true
         type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   build:
@@ -19,18 +23,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux GNU
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
+            os: ubuntu-22.04
+            use_cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+          # Linux musl (static)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+          # macOS
           - target: x86_64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
+            os: macos-13
+            use_cross: false
           - target: aarch64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
+            os: macos-14
+            use_cross: false
+          # Windows
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
+            os: windows-2022
+            use_cross: false
 
     steps:
       - name: Checkout
@@ -41,78 +58,84 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
 
-      - name: Build binaries
+      - name: Build binary
+        shell: bash
         run: |
-          cargo build --release -p perl-parser --bin perl-lsp --target ${{ matrix.target }}
-          cargo build --release -p perl-parser --bin perl-dap --target ${{ matrix.target }}
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            cross build --release --target ${{ matrix.target }} -p perl-parser --bin perl-lsp
+          else
+            cargo build --release --target ${{ matrix.target }} -p perl-parser --bin perl-lsp
+          fi
 
-      - name: Strip binaries (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Package binary
+        shell: bash
         run: |
-          strip target/${{ matrix.target }}/release/perl-lsp
-          strip target/${{ matrix.target }}/release/perl-dap
+          NAME="perl-lsp"
+          TARGET="${{ matrix.target }}"
+          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          
+          # Binary name with .exe for Windows
+          if [[ "$TARGET" == *"windows"* ]]; then
+            BIN="${NAME}.exe"
+            EXT=".zip"
+          else
+            BIN="${NAME}"
+            EXT=".tar.gz"
+          fi
+          
+          # Create package directory
+          PKG_NAME="${NAME}-${VERSION}-${TARGET}"
+          mkdir -p "${PKG_NAME}"
+          
+          # Copy binary
+          cp "target/${TARGET}/release/${BIN}" "${PKG_NAME}/"
+          
+          # Strip binary on Unix
+          if [[ "$TARGET" != *"windows"* ]] && [[ "${{ matrix.use_cross }}" != "true" ]]; then
+            strip "${PKG_NAME}/${BIN}" 2>/dev/null || true
+          fi
+          
+          # Copy additional files
+          cp README.md LICENSE "${PKG_NAME}/" 2>/dev/null || true
+          
+          # Generate checksums
+          cd "${PKG_NAME}"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${BIN}" > SHA256SUMS.txt
+          else
+            shasum -a 256 "${BIN}" > SHA256SUMS.txt
+          fi
+          cd ..
+          
+          # Create archive
+          if [[ "$EXT" == ".zip" ]]; then
+            7z a "${PKG_NAME}${EXT}" "${PKG_NAME}"/*
+          else
+            tar czf "${PKG_NAME}${EXT}" "${PKG_NAME}"
+          fi
+          
+          echo "ASSET=${PKG_NAME}${EXT}" >> $GITHUB_ENV
+          echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_ENV
 
-      - name: Package (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: |
-          mkdir -p dist
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../dist/perl-lsp-${{ github.event.inputs.version || github.ref_name }}-${{ matrix.target }}.tar.gz perl-lsp perl-dap
-          cd ../../../
-          sha256sum dist/*.tar.gz > dist/checksums-${{ matrix.target }}.txt
-
-      - name: Package (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Compress-Archive -Path target\${{ matrix.target }}\release\perl-lsp.exe, target\${{ matrix.target }}\release\perl-dap.exe -DestinationPath dist\perl-lsp-${{ github.event.inputs.version || github.ref_name }}-${{ matrix.target }}.zip
-          Get-FileHash dist\*.zip | Format-Table -AutoSize | Out-File -FilePath dist\checksums-${{ matrix.target }}.txt
-
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.target }}
-          path: dist/*
-
-  build-vscode:
-    name: Build VSCode Extension
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Install dependencies
-        working-directory: vscode-extension
-        run: npm ci
-
-      - name: Build extension
-        working-directory: vscode-extension
-        run: |
-          npm run compile
-          npx vsce package
-
-      - name: Upload VSIX
-        uses: actions/upload-artifact@v4
-        with:
-          name: vscode-extension
-          path: vscode-extension/*.vsix
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.ASSET }}
+          retention-days: 1
 
   release:
     name: Create Release
-    needs: [build, build-vscode]
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,112 +151,69 @@ jobs:
 
       - name: Prepare release files
         run: |
-          mkdir -p release
-          mv artifacts/binaries-*/* release/
-          mv artifacts/vscode-extension/*.vsix release/
-          cd release
-          cat checksums-*.txt > checksums.txt
-          rm checksums-*.txt
-          ls -la
+          # Move all artifacts to current directory
+          find artifacts -name '*.tar.gz' -o -name '*.zip' | xargs -I {} mv {} .
+          
+          # Generate aggregate checksums
+          sha256sum *.tar.gz *.zip > SHA256SUMS 2>/dev/null || true
+          
+          # List files for verification
+          ls -la *.tar.gz *.zip SHA256SUMS 2>/dev/null || true
 
-      - name: Create release notes
+      - name: Generate release body
         run: |
-          VERSION=${{ github.event.inputs.version || github.ref_name }}
-          cat > release-notes.md << EOF
-          # Perl Language Server ${VERSION}
+          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          cat > release-body.md << 'EOF'
+          ## Perl LSP ${VERSION}
           
-          ## 🎉 Highlights
+          ### Installation
           
-          - **Call Hierarchy**: Navigate incoming and outgoing function calls
-          - **Inlay Hints**: See parameter names and type hints inline
-          - **Test Explorer**: Discover and run Perl tests from your IDE
-          - **Debug Support**: Full DAP implementation with breakpoints and stepping
-          - **Performance**: AST caching and symbol indexing for large projects
-          
-          ## 📦 Installation
-          
-          ### Quick Install (Linux/macOS)
-          \`\`\`bash
+          #### Quick install (Linux/macOS)
+          ```bash
           curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
-          \`\`\`
+          ```
           
-          ### Homebrew (macOS)
-          \`\`\`bash
-          brew tap tree-sitter-perl/tap
+          #### Quick install (Windows PowerShell)
+          ```powershell
+          irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+          ```
+          
+          #### Homebrew (macOS/Linux)
+          ```bash
+          brew tap effortlesssteven/tap
           brew install perl-lsp
-          \`\`\`
+          ```
           
-          ### VSCode Extension
-          Install from the marketplace or download the VSIX file below.
+          ### Platform Support
           
-          ### Manual Installation
-          Download the appropriate archive for your platform and extract to your PATH.
+          | Platform | Architecture | Binary |
+          |----------|-------------|--------|
+          | Linux | x86_64 | ✅ GNU + musl |
+          | Linux | aarch64 | ✅ GNU + musl |
+          | macOS | x86_64 | ✅ Intel |
+          | macOS | aarch64 | ✅ Apple Silicon |
+          | Windows | x86_64 | ✅ MSVC |
           
-          ## 📋 Checksums
-          See \`checksums.txt\` for SHA256 hashes of all release files.
+          ### Changes
+          See [CHANGELOG.md](https://github.com/EffortlessSteven/tree-sitter-perl/blob/main/CHANGELOG.md) for details.
           
-          ## 📚 Documentation
-          - [Getting Started](https://github.com/EffortlessSteven/tree-sitter-perl#quick-start)
-          - [Configuration](https://github.com/EffortlessSteven/tree-sitter-perl#configuration)
-          - [Contributing](https://github.com/EffortlessSteven/tree-sitter-perl#contributing)
+          ### Checksums
+          Verify downloads with the SHA256SUMS file.
           EOF
+          sed -i "s/\${VERSION}/${VERSION}/g" release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          name: v${{ github.event.inputs.version || github.ref_name }}
-          body_path: release-notes.md
-          files: release/*
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: release-body.md
           draft: false
-          prerelease: false
-
-  publish-crates:
-    name: Publish to crates.io
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Publish perl-lexer
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
+          files: |
+            *.tar.gz
+            *.zip
+            SHA256SUMS
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cd crates/perl-lexer
-          cargo publish --no-verify
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for crates.io
-        run: sleep 30
-
-      - name: Publish perl-parser
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cd crates/perl-parser
-          cargo publish --no-verify
-
-  publish-vscode:
-    name: Publish VSCode Extension
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: vscode-extension
-        run: npm ci
-
-      - name: Publish to marketplace
-        working-directory: vscode-extension
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish
