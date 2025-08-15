@@ -132,6 +132,8 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 # Should output: Content-Length: ... (followed by valid JSON-RPC response)
 ```
 
+> **Note**: The exact Content-Length number may differ if you modify the JSON. The presence of a valid `Content-Length:` header indicates successful LSP initialization.
+
 ### Use the Parser Library
 
 ```toml
