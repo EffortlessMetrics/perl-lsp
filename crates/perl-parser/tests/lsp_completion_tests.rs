@@ -572,21 +572,17 @@ fn test_empty_prefix_completion() {
     send_notification(
         &mut server,
         json!({
-                                                                                                                                                                                                                                                                                    "jsonrpc": "2.0",
-                                                                                                                                                                                                                                                                                    "method": "textDocument/didOpen",
-                                                                                                                                                                                                                                                                                    "params": {
-                                                                                                                                                                                                                                                                                        "textDocument": {
-                                                                                                                                                                                                                                                                                            "uri": uri,
-                                                                                                                                                                                                                                                                                            "languageId": "perl",
-                                                                                                                                                                                                                                                                                            "version": 1,
-                                                                                                                                                                                                                                                                                            "text": r#"
-my $var = 42;
-sub test { }
-
-"#  // Empty line where we'll request completion
-                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                }),
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $var = 42;\nsub test { }\n\n"
+                }
+            }
+        }),
     );
 
     let response = send_request(
