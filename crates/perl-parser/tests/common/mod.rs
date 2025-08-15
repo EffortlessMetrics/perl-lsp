@@ -241,8 +241,9 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
                     || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
                 )
         }
-        Some(v) => read_response_matching(server, &v, default_timeout())
-            .unwrap_or_else(|| json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}})),
+        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or_else(
+            || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
+        ),
         None => unreachable!("we always assign an id"),
     }
 }
@@ -280,8 +281,9 @@ pub fn short_timeout() -> Duration {
 
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
-    read_response_timeout(server, default_timeout())
-        .unwrap_or_else(|| json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}))
+    read_response_timeout(server, default_timeout()).unwrap_or_else(
+        || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
+    )
 }
 
 /// Try to receive a response within `dur`. Returns None on timeout.
@@ -293,7 +295,7 @@ pub fn read_response_timeout(server: &mut LspServer, dur: Duration) -> Option<Va
 pub fn read_notification_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
     match server.rx.recv_timeout(dur) {
         Ok(val) if val.get("id").is_none() => Some(val),
-        Ok(_) => None, // Got a response, not a notification
+        Ok(_) => None,  // Got a response, not a notification
         Err(_) => None, // Timeout or disconnected
     }
 }
