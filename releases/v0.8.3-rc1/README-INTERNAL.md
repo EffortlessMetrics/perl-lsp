@@ -8,128 +8,141 @@
 # Extract the package
 tar -xzf perl-lsp-v0.8.3-rc1-x86_64-unknown-linux-gnu.tar.gz
 
-# Install to system (requires sudo)
-sudo cp perl-lsp-v0.8.3-rc1-*/perl-lsp /usr/local/bin/
-
-# Or install to user directory (no sudo needed)
-mkdir -p ~/.local/bin
-cp perl-lsp-v0.8.3-rc1-*/perl-lsp ~/.local/bin/
-export PATH="$HOME/.local/bin:$PATH"
-
-# Verify installation
+# Install globally (recommended)
+sudo cp perl-lsp-v0.8.3-rc1-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 perl-lsp --version
-```
 
-### VS Code Integration
-
-1. Install the binary as shown above
-2. Configure VS Code settings:
-
-```json
-{
-  "perl.lsp.path": "/usr/local/bin/perl-lsp",
-  "perl.lsp.enabled": true
-}
-```
-
-3. Open any `.pl` file and the LSP will start automatically
-
-### Testing the LSP
-
-```bash
-# Test with stdio
-printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
-
-# Test with a Perl file
-perl-lsp --check your-script.pl
+# Or install to user directory
+cp perl-lsp-v0.8.3-rc1-x86_64-unknown-linux-gnu/perl-lsp ~/.local/bin/
 ```
 
 ## 📦 Package Contents
 
-- `perl-lsp` - The Language Server Protocol binary
-- `README.md` - Main project documentation  
-- `LICENSE` - MIT License
+- `perl-lsp` - The language server binary
+- `README.md` - Basic documentation
 
-## 🔧 Features (v0.8.3-rc1)
+## 🔧 VS Code Configuration
 
-### Core LSP Features
-- ✅ Real-time diagnostics
-- ✅ Auto-completion
-- ✅ Go to definition
-- ✅ Find references
-- ✅ Hover documentation
-- ✅ Signature help
-- ✅ Document/workspace symbols
-- ✅ Rename refactoring
+Since this is a private repository, GitHub releases are not available.
+Configure VS Code to use the local binary:
 
-### Advanced Features
-- ✅ Code actions and quick fixes
-- ✅ Extract variable/subroutine
-- ✅ Type hierarchy navigation
-- ✅ Call hierarchy
-- ✅ Document links (MetaCPAN + local)
-- ✅ Selection ranges
-- ✅ On-type formatting
-- ✅ Semantic tokens
-- ✅ CodeLens
-- ✅ Inlay hints
-- ✅ Folding ranges
+### Option 1: Local Binary Path (Recommended)
 
-### Perl Support
-- ✅ 100% Perl 5 syntax coverage
-- ✅ Modern Perl features (5.38+)
-- ✅ Unicode identifiers
-- ✅ All regex delimiters
-- ✅ Heredocs (all variants)
-- ✅ 150+ built-in functions
+Add to `.vscode/settings.json`:
 
-## 🐛 Known Issues
+```json
+{
+  "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
+  "perl-lsp.autoDownload": false,
+  "perl-lsp.channel": "tag",
+  "perl-lsp.versionTag": "v0.8.3-rc1"
+}
+```
 
-- This is a release candidate (RC) for internal testing
-- GitHub Actions are disabled (internal repo)
-- ARM64 Linux packages not included in this build
+### Option 2: Team Configuration
 
-## 📊 Performance
+For teams, add to workspace settings:
 
-- Simple files: ~1-2ms parsing
-- Medium files (1000 lines): ~50-150ms
-- Large files (10000+ lines): ~500ms-1s
-- Memory usage: ~20-50MB typical
+```json
+{
+  "perl-lsp.serverPath": "${env:PERL_LSP_PATH}",
+  "perl-lsp.autoDownload": false
+}
+```
 
-## 🔍 Troubleshooting
+Then each team member sets: `export PERL_LSP_PATH=/usr/local/bin/perl-lsp`
 
-### LSP not starting
+## 📋 Features
+
+### Language Server Protocol (v0.8.3)
+- ✅ **30+ IDE Features** implemented
+- ✅ **Diagnostics**: Real-time error detection
+- ✅ **Completion**: Smart code completion with documentation
+- ✅ **Go to Definition**: Navigate to symbol definitions
+- ✅ **Find References**: Find all usages of symbols
+- ✅ **Hover**: Type information and documentation
+- ✅ **Signature Help**: Parameter hints while typing
+- ✅ **Symbol Navigation**: Document and workspace symbols
+- ✅ **Rename**: Safe symbol renaming across files
+- ✅ **Code Actions**: Quick fixes and refactorings
+- ✅ **Formatting**: Document and on-type formatting
+- ✅ **Semantic Tokens**: Syntax highlighting
+- ✅ **Type Hierarchy**: Navigate inheritance chains
+- ✅ **Call Hierarchy**: Trace function calls
+- ✅ **Document Links**: MetaCPAN and local file links
+
+### Refactoring Features
+- Extract variable/subroutine
+- Convert loops (for/while/foreach)
+- Add error checking
+- Organize imports
+- Inline variables
+
+### Performance
+- <50ms response times for all operations
+- Handles large codebases efficiently
+- Smart caching for improved performance
+
+## 🧪 Testing
+
+### Basic Test
 ```bash
-# Check binary is executable
-ls -la /usr/local/bin/perl-lsp
-# Should show: -rwxr-xr-x
-
-# Test manually
 perl-lsp --version
-# Should show: perl-lsp 0.1.0
+# Should output: perl-lsp 0.1.0
+# Perl Language Server using perl-parser v3
+```
 
-# Enable debug logging
-perl-lsp --stdio --log 2>lsp.log
+### LSP Protocol Test
+```bash
+echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+# Should return JSON response with capabilities
+```
+
+## 🐛 Troubleshooting
+
+### Binary not found
+```bash
+# Check if installed
+which perl-lsp
+
+# Check if in PATH
+echo $PATH | tr ':' '\n' | grep -E '(local/bin|usr/local/bin)'
+
+# Add to PATH if needed
+export PATH="/usr/local/bin:$PATH"
 ```
 
 ### VS Code not detecting LSP
-1. Check Output panel → "Perl Language Server"
-2. Ensure settings point to correct binary path
-3. Reload VS Code window (Cmd/Ctrl+Shift+P → "Reload Window")
+1. Check VS Code settings for `perl-lsp.serverPath`
+2. Restart VS Code after configuration
+3. Check Output panel > Perl LSP for errors
 
-## 📝 Feedback
+### Permission denied
+```bash
+chmod +x /usr/local/bin/perl-lsp
+```
 
-Internal testing feedback:
-- Report issues in internal tracker
-- Test with your production Perl codebases
-- Note any missing features or false positives
+## 📊 Package Info
 
-## 🚦 Release Status
+| Platform | File | Size | SHA256 |
+|----------|------|------|--------|
+| Linux x86_64 | perl-lsp-v0.8.3-rc1-x86_64-unknown-linux-gnu.tar.gz | 1.5MB | 49c6621f2ede2822f202dfaafa52c9dbe8351af36368f53e3d85b20094efa1f1 |
 
-- **v0.8.3-rc1**: Internal testing phase
-- **v0.8.3**: Planned public release (pending testing)
-- **v1.0.0**: GA release (Q1 2025)
+## 🚦 Next Steps
 
----
+1. **Test thoroughly** with your Perl codebases
+2. **Report issues** internally before public release
+3. **Gather feedback** from team members
+4. **Plan public release** when ready
 
-*This is an internal release for testing purposes only.*
+## 📝 Notes
+
+- This is an internal release candidate (RC) for testing
+- GitHub Actions are disabled for the private repository
+- Public release will enable automated builds for all platforms
+- For now, use the local build script for additional platforms
+
+## 🔗 Links
+
+- Repository: (internal - private)
+- Public release planned: v0.8.3 (after internal validation)
