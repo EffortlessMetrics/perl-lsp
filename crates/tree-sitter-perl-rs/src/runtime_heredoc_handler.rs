@@ -19,11 +19,7 @@ pub struct RuntimeHeredocContext {
 
 impl Default for RuntimeHeredocContext {
     fn default() -> Self {
-        Self {
-            variables: HashMap::new(),
-            interpolate: true,
-            eval_depth: 0,
-        }
+        Self { variables: HashMap::new(), interpolate: true, eval_depth: 0 }
     }
 }
 
@@ -37,10 +33,7 @@ pub struct RuntimeHeredocHandler {
 
 impl RuntimeHeredocHandler {
     pub fn new() -> Self {
-        Self {
-            max_eval_depth: 10,
-            context_stack: vec![RuntimeHeredocContext::default()],
-        }
+        Self { max_eval_depth: 10, context_stack: vec![RuntimeHeredocContext::default()] }
     }
 
     /// Evaluate heredoc content at runtime
@@ -175,11 +168,7 @@ impl RuntimeHeredocHandler {
             }
         }
 
-        if in_heredoc {
-            Some(content_lines.join("\n"))
-        } else {
-            None
-        }
+        if in_heredoc { Some(content_lines.join("\n")) } else { None }
     }
 
     /// Static version of evaluate_heredoc for avoiding borrow conflicts
@@ -323,9 +312,7 @@ EOF"#;
     fn test_variable_interpolation() {
         let mut handler = RuntimeHeredocHandler::new();
         let mut context = RuntimeHeredocContext::default();
-        context
-            .variables
-            .insert("name".to_string(), "World".to_string());
+        context.variables.insert("name".to_string(), "World".to_string());
 
         let content = "Hello, $name!";
         let result = handler.evaluate_heredoc(content, &context).unwrap();
@@ -335,10 +322,7 @@ EOF"#;
     #[test]
     fn test_max_eval_depth() {
         let mut handler = RuntimeHeredocHandler::new();
-        let mut context = RuntimeHeredocContext {
-            eval_depth: 10,
-            ..Default::default()
-        };
+        let mut context = RuntimeHeredocContext { eval_depth: 10, ..Default::default() };
 
         let result = handler.evaluate_heredoc("test", &context);
         assert!(matches!(result, Err(RuntimeError::MaxEvalDepthExceeded)));

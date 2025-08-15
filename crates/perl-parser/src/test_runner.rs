@@ -112,9 +112,7 @@ impl TestRunner {
             || file_name.ends_with("_test.pl")
             || file_name.ends_with("Test.pl")
             || file_name.starts_with("test_")
-            || path
-                .components()
-                .any(|c| c.as_os_str() == "t" || c.as_os_str() == "tests")
+            || path.components().any(|c| c.as_os_str() == "t" || c.as_os_str() == "tests")
     }
 
     /// Find test functions in the AST
@@ -166,12 +164,7 @@ impl TestRunner {
     /// Visit children nodes for test functions only
     fn visit_children_for_test_functions(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
-            NodeKind::If {
-                then_branch,
-                elsif_branches,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
                 self.find_test_functions_only(then_branch, tests);
                 for (_, body) in elsif_branches {
                     self.find_test_functions_only(body, tests);
@@ -305,12 +298,7 @@ impl TestRunner {
     #[allow(dead_code)]
     fn visit_children_for_tests(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.visit_node_for_tests(condition, tests);
                 self.visit_node_for_tests(then_branch, tests);
                 for (cond, body) in elsif_branches {
@@ -321,19 +309,11 @@ impl TestRunner {
                     self.visit_node_for_tests(else_b, tests);
                 }
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 self.visit_node_for_tests(condition, tests);
                 self.visit_node_for_tests(body, tests);
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(i) = init {
                     self.visit_node_for_tests(i, tests);
                 }
@@ -345,11 +325,7 @@ impl TestRunner {
                 }
                 self.visit_node_for_tests(body, tests);
             }
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 self.visit_node_for_tests(variable, tests);
                 self.visit_node_for_tests(list, tests);
                 self.visit_node_for_tests(body, tests);
@@ -363,12 +339,7 @@ impl TestRunner {
         let (start_line, start_char) = self.offset_to_position(node.location.start);
         let (end_line, end_char) = self.offset_to_position(node.location.end);
 
-        TestRange {
-            start_line,
-            start_character: start_char,
-            end_line,
-            end_character: end_char,
-        }
+        TestRange { start_line, start_character: start_char, end_line, end_character: end_char }
     }
 
     /// Get range for entire file
@@ -500,11 +471,7 @@ impl TestRunner {
 
         vec![TestResult {
             test_id: file_path.to_string(),
-            status: if output.status.success() {
-                TestStatus::Passed
-            } else {
-                TestStatus::Failed
-            },
+            status: if output.status.success() { TestStatus::Passed } else { TestStatus::Failed },
             message: if !stderr.is_empty() {
                 Some(stderr.to_string())
             } else if !stdout.is_empty() {
@@ -555,16 +522,8 @@ impl TestRunner {
         if results.is_empty() {
             results.push(TestResult {
                 test_id: test_id.to_string(),
-                status: if success {
-                    TestStatus::Passed
-                } else {
-                    TestStatus::Failed
-                },
-                message: if !stderr.is_empty() {
-                    Some(stderr.to_string())
-                } else {
-                    None
-                },
+                status: if success { TestStatus::Passed } else { TestStatus::Failed },
+                message: if !stderr.is_empty() { Some(stderr.to_string()) } else { None },
                 duration: Some(duration),
             });
         }

@@ -50,11 +50,7 @@ fn print_ast(node: &AstNode, indent: usize) {
                 print_ast(stmt, indent + 1);
             }
         }
-        AstNode::VariableDeclaration {
-            scope,
-            variables,
-            initializer,
-        } => {
+        AstNode::VariableDeclaration { scope, variables, initializer } => {
             println!("{}VariableDeclaration: {}", prefix, scope);
             for var in variables {
                 print_ast(var, indent + 1);
@@ -63,13 +59,7 @@ fn print_ast(node: &AstNode, indent: usize) {
                 print_ast(init, indent + 1);
             }
         }
-        AstNode::ForStatement {
-            label,
-            init,
-            condition,
-            update,
-            block,
-        } => {
+        AstNode::ForStatement { label, init, condition, update, block } => {
             println!("{}ForStatement", prefix);
             if let Some(label) = label {
                 println!("{}  Label: {}", prefix, label);

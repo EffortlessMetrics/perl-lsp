@@ -98,10 +98,8 @@ main();
     ];
 
     // Create source map for search
-    let source_map: HashMap<String, String> = files
-        .iter()
-        .map(|(uri, content)| (uri.to_string(), content.to_string()))
-        .collect();
+    let source_map: HashMap<String, String> =
+        files.iter().map(|(uri, content)| (uri.to_string(), content.to_string())).collect();
 
     for (query, description) in searches {
         println!("Search '{}' ({})", query, description);
@@ -129,10 +127,7 @@ main();
 
     let response = handle_workspace_symbols(&workspace_symbols, request.params, &source_map);
     println!("Request: workspace/symbol with query 'connect'");
-    println!(
-        "Response: {}",
-        serde_json::to_string_pretty(&response).unwrap()
-    );
+    println!("Response: {}", serde_json::to_string_pretty(&response).unwrap());
 }
 
 fn handle_workspace_symbols(
@@ -140,11 +135,7 @@ fn handle_workspace_symbols(
     params: Option<serde_json::Value>,
     source_map: &HashMap<String, String>,
 ) -> JsonRpcResponse {
-    let query = params
-        .as_ref()
-        .and_then(|p| p.get("query"))
-        .and_then(|q| q.as_str())
-        .unwrap_or("");
+    let query = params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
 
     let symbols = provider.search(query, source_map);
 

@@ -12,10 +12,7 @@ mod line_cache_property_tests {
             // CRLF
             ("hello\r\nworld\r\n", vec![(0, 0), (5, 5), (7, 0), (12, 5)]),
             // Mixed line endings
-            (
-                "a\nb\r\nc\r\n",
-                vec![(0, 0), (1, 1), (2, 0), (3, 1), (5, 0), (6, 1)],
-            ),
+            ("a\nb\r\nc\r\n", vec![(0, 0), (1, 1), (2, 0), (3, 1), (5, 0), (6, 1)]),
             // UTF-16 with emoji (surrogate pairs)
             (
                 "👋 hello\n🌍 world",
@@ -194,11 +191,7 @@ mod line_cache_property_tests {
 
         // Verify it round-trips correctly
         let (rt_line, rt_col) = cache.offset_to_position(&long_line, clamped);
-        assert_eq!(
-            (rt_line, rt_col),
-            (0, 20_000),
-            "Clamped position should round-trip"
-        );
+        assert_eq!((rt_line, rt_col), (0, 20_000), "Clamped position should round-trip");
     }
 
     /// Test that cache handles all Unicode planes correctly

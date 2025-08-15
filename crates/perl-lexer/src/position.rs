@@ -14,11 +14,7 @@ pub struct Position {
 impl Position {
     /// Create a position at the start of input
     pub fn start() -> Self {
-        Position {
-            byte: 0,
-            line: 1,
-            column: 1,
-        }
+        Position { byte: 0, line: 1, column: 1 }
     }
 
     /// Advance position by a character

@@ -24,11 +24,7 @@ pub enum ParseEvent {
     /// Parse error encountered
     Error { line: usize, message: String },
     /// Special section found
-    SpecialSection {
-        kind: SectionKind,
-        start_line: usize,
-        content: String,
-    },
+    SpecialSection { kind: SectionKind, start_line: usize, content: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -178,11 +174,7 @@ impl<R: Read> StreamingParser<R> {
         // Check for DATA/END section
         if !self.in_data_section && (trimmed == "__DATA__" || trimmed == "__END__") {
             self.in_data_section = true;
-            let kind = if trimmed == "__DATA__" {
-                SectionKind::Data
-            } else {
-                SectionKind::End
-            };
+            let kind = if trimmed == "__DATA__" { SectionKind::Data } else { SectionKind::End };
             return Some(ParseEvent::SpecialSection {
                 kind,
                 start_line: self.line_number,
@@ -368,42 +360,22 @@ print "After POD\n";
         let mut parser = StreamingParser::new(cursor, StreamConfig::default());
         let events: Vec<_> = parser.parse().collect();
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            ParseEvent::SpecialSection {
-                kind: SectionKind::Pod,
-                ..
-            }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ParseEvent::SpecialSection { kind: SectionKind::Pod, .. }))
+        );
     }
 
     #[test]
     fn test_statement_detection() {
         let parser = StreamingParser::new(Cursor::new(""), StreamConfig::default());
 
-        assert_eq!(
-            parser.detect_statement_kind("sub foo { }"),
-            StatementKind::SubDeclaration
-        );
-        assert_eq!(
-            parser.detect_statement_kind("package Foo;"),
-            StatementKind::PackageDeclaration
-        );
-        assert_eq!(
-            parser.detect_statement_kind("use strict;"),
-            StatementKind::UseStatement
-        );
-        assert_eq!(
-            parser.detect_statement_kind("my $x = 42;"),
-            StatementKind::Variable
-        );
-        assert_eq!(
-            parser.detect_statement_kind("if ($x) { }"),
-            StatementKind::ControlFlow
-        );
-        assert_eq!(
-            parser.detect_statement_kind("print $x;"),
-            StatementKind::Expression
-        );
+        assert_eq!(parser.detect_statement_kind("sub foo { }"), StatementKind::SubDeclaration);
+        assert_eq!(parser.detect_statement_kind("package Foo;"), StatementKind::PackageDeclaration);
+        assert_eq!(parser.detect_statement_kind("use strict;"), StatementKind::UseStatement);
+        assert_eq!(parser.detect_statement_kind("my $x = 42;"), StatementKind::Variable);
+        assert_eq!(parser.detect_statement_kind("if ($x) { }"), StatementKind::ControlFlow);
+        assert_eq!(parser.detect_statement_kind("print $x;"), StatementKind::Expression);
     }
 }

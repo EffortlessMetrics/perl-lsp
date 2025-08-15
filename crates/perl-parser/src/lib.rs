@@ -235,9 +235,7 @@ mod tests {
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
-                if let NodeKind::VariableDeclaration {
-                    declarator: decl, ..
-                } = &statements[0].kind
+                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
                 {
                     assert_eq!(decl, declarator);
                 } else {

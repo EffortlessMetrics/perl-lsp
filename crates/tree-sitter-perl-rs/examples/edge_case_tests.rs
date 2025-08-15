@@ -345,16 +345,8 @@ my %hash = (
 
     println!("\n=== Summary ===");
     println!("Total tests: {}", passed + failed);
-    println!(
-        "Passed: {} ({}%)",
-        passed,
-        (passed * 100) / (passed + failed).max(1)
-    );
-    println!(
-        "Failed: {} ({}%)",
-        failed,
-        (failed * 100) / (passed + failed).max(1)
-    );
+    println!("Passed: {} ({}%)", passed, (passed * 100) / (passed + failed).max(1));
+    println!("Failed: {} ({}%)", failed, (failed * 100) / (passed + failed).max(1));
 
     if failed > 0 {
         println!("\nNote: Some edge cases may fail due to parser limitations.");
@@ -391,20 +383,14 @@ fn print_ast_summary(ast: &AstNode, max_depth: usize) {
                 println!("{}Statement", indent);
                 print_node(content, depth + 1, max_depth);
             }
-            AstNode::Heredoc {
-                marker, content, ..
-            } => {
+            AstNode::Heredoc { marker, content, .. } => {
                 println!("{}Heredoc [{}]: {} chars", indent, marker, content.len());
             }
             AstNode::Identifier(name) => {
                 println!("{}Identifier: {}", indent, name);
             }
             AstNode::String(s) => {
-                let preview = if s.len() > 20 {
-                    format!("{}...", &s[..20])
-                } else {
-                    s.to_string()
-                };
+                let preview = if s.len() > 20 { format!("{}...", &s[..20]) } else { s.to_string() };
                 println!("{}String: \"{}\"", indent, preview);
             }
             _ => {

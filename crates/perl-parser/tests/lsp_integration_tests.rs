@@ -20,9 +20,7 @@ fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
         params,
     };
 
-    server
-        .handle_request(request)
-        .and_then(|response| response.result)
+    server.handle_request(request).and_then(|response| response.result)
 }
 
 #[test]
@@ -49,14 +47,8 @@ fn test_lsp_initialization() {
         json!(["$", "@", "%", "->"])
     );
     assert_eq!(capabilities["capabilities"]["hoverProvider"], true);
-    assert_eq!(
-        capabilities["capabilities"]["workspaceSymbolProvider"],
-        true
-    );
-    assert_eq!(
-        capabilities["capabilities"]["codeLensProvider"]["resolveProvider"],
-        true
-    );
+    assert_eq!(capabilities["capabilities"]["workspaceSymbolProvider"], true);
+    assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
 }
 
 #[test]
@@ -121,10 +113,7 @@ my $local_var = 456;
 
     // Verify symbol details - we found the two functions
     // The order may vary, so just check that we have the right functions
-    let names: Vec<&str> = symbols_array
-        .iter()
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
+    let names: Vec<&str> = symbols_array.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"my_function"));
     assert!(names.contains(&"another_function"));
 }
@@ -240,12 +229,7 @@ fn test_code_lens_resolve() {
 
     let resolved = result.unwrap();
     assert!(resolved["command"].is_object());
-    assert!(
-        resolved["command"]["title"]
-            .as_str()
-            .unwrap()
-            .contains("reference")
-    );
+    assert!(resolved["command"]["title"].as_str().unwrap().contains("reference"));
 }
 
 #[test]
@@ -316,10 +300,7 @@ sub function2 { }
     // Should find both Module1 and Module2
     assert_eq!(symbols_array.len(), 2);
 
-    let names: Vec<&str> = symbols_array
-        .iter()
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
+    let names: Vec<&str> = symbols_array.iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"Module1"));
     assert!(names.contains(&"Module2"));
 }
@@ -429,11 +410,9 @@ package MyPkg;
         assert!(lenses.len() >= 3);
 
         // Find the test lens
-        let test_lens = lenses.iter().find(|l| {
-            l.command
-                .as_ref()
-                .is_some_and(|c| c.title.contains("Run Test"))
-        });
+        let test_lens = lenses
+            .iter()
+            .find(|l| l.command.as_ref().is_some_and(|c| c.title.contains("Run Test")));
         assert!(test_lens.is_some());
     }
 }
@@ -746,10 +725,8 @@ sub target_func {
     assert_eq!(calls_array.len(), 2);
 
     // Check caller names
-    let caller_names: Vec<&str> = calls_array
-        .iter()
-        .map(|c| c["from"]["name"].as_str().unwrap())
-        .collect();
+    let caller_names: Vec<&str> =
+        calls_array.iter().map(|c| c["from"]["name"].as_str().unwrap()).collect();
     assert!(caller_names.contains(&"caller1"));
     assert!(caller_names.contains(&"caller2"));
 }
@@ -831,10 +808,8 @@ sub helper {
     assert_eq!(calls_array.len(), 3);
 
     // Check called function names
-    let called_names: Vec<&str> = calls_array
-        .iter()
-        .map(|c| c["to"]["name"].as_str().unwrap())
-        .collect();
+    let called_names: Vec<&str> =
+        calls_array.iter().map(|c| c["to"]["name"].as_str().unwrap()).collect();
     assert!(called_names.contains(&"helper"));
     assert!(called_names.contains(&"process_data"));
     assert!(called_names.contains(&"method_call"));

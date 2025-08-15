@@ -2,12 +2,7 @@
 use perl_lexer::{PerlLexer, TokenType};
 
 fn main() {
-    let tests = vec![
-        "s/foo/bar/",
-        "$str =~ s/old/new/",
-        "tr/a-z/A-Z/",
-        "$str =~ tr/a-z/A-Z/",
-    ];
+    let tests = vec!["s/foo/bar/", "$str =~ s/old/new/", "tr/a-z/A-Z/", "$str =~ tr/a-z/A-Z/"];
 
     for test in tests {
         println!("\nCode: {}", test);

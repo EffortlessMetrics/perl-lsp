@@ -53,10 +53,7 @@ sub get_lexical { return $lexical_var; }
 
         println!("\nFound {} issues:", issues.len());
         for issue in &issues {
-            println!(
-                "  - {:?}: {} (line {})",
-                issue.kind, issue.description, issue.line
-            );
+            println!("  - {:?}: {} (line {})", issue.kind, issue.description, issue.line);
         }
     }
 }

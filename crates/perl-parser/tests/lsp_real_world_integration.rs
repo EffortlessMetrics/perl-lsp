@@ -232,11 +232,7 @@ __DATA__
     let items = response["result"]["items"].as_array().unwrap();
 
     // Should parse without errors
-    assert_eq!(
-        items.len(),
-        0,
-        "Mojolicious app should parse without errors"
-    );
+    assert_eq!(items.len(), 0, "Mojolicious app should parse without errors");
 }
 
 /// Test with DBI database code
@@ -832,11 +828,7 @@ sub normalize_text {
 
     let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().unwrap();
-    assert_eq!(
-        items.len(),
-        0,
-        "Complex regex patterns should parse correctly"
-    );
+    assert_eq!(items.len(), 0, "Complex regex patterns should parse correctly");
 }
 
 /// Test with modern Perl features

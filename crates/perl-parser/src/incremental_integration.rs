@@ -120,15 +120,9 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte_offset: usize) -> (usize, usize) {
 /// Wrapper for document state with incremental parsing support
 pub enum DocumentParser {
     /// Full parsing mode (current implementation)
-    Full {
-        content: String,
-        ast: Option<Arc<Node>>,
-    },
+    Full { content: String, ast: Option<Arc<Node>> },
     /// Incremental parsing mode
-    Incremental {
-        document: IncrementalDocument,
-        rope: Rope,
-    },
+    Incremental { document: IncrementalDocument, rope: Rope },
 }
 
 impl DocumentParser {

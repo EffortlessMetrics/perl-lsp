@@ -33,9 +33,7 @@ impl WorkingParser {
         match self.parse_program() {
             Ok(node) => node,
             Err(msg) => Node::new(
-                NodeKind::Error {
-                    message: Arc::from(msg),
-                },
+                NodeKind::Error { message: Arc::from(msg) },
                 SourceLocation { start: 0, end: 0 },
             ),
         }
@@ -53,10 +51,7 @@ impl WorkingParser {
         }
 
         let end = self.previous_position();
-        Ok(Node::new(
-            NodeKind::Program { statements },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::Program { statements }, SourceLocation { start, end }))
     }
 
     fn parse_statement(&mut self) -> Result<Node, String> {
@@ -116,10 +111,7 @@ impl WorkingParser {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::VariableDeclaration {
-                declarator: Arc::from("my"),
-                variables: vec![var],
-            },
+            NodeKind::VariableDeclaration { declarator: Arc::from("my"), variables: vec![var] },
             SourceLocation { start, end },
         ))
     }
@@ -140,11 +132,8 @@ impl WorkingParser {
         let then_block = self.parse_block()?;
 
         // Check for else
-        let else_block = if self.match_keyword("else") {
-            Some(Box::new(self.parse_block()?))
-        } else {
-            None
-        };
+        let else_block =
+            if self.match_keyword("else") { Some(Box::new(self.parse_block()?)) } else { None };
 
         let end = self.previous_position();
         Ok(Node::new(
@@ -197,10 +186,7 @@ impl WorkingParser {
         self.consume(&TokenType::RightBrace, "Expected '}'")?;
         let end = self.previous_position();
 
-        Ok(Node::new(
-            NodeKind::Block { statements },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
     }
 
     fn parse_expression(&mut self) -> Result<Node, String> {
@@ -237,11 +223,7 @@ impl WorkingParser {
             let end = self.previous_position();
 
             expr = Node::new(
-                NodeKind::Binary {
-                    op,
-                    left: Box::new(expr),
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { op, left: Box::new(expr), right: Box::new(right) },
                 SourceLocation { start, end },
             );
         }
@@ -257,10 +239,7 @@ impl WorkingParser {
             let end = self.previous_position();
 
             return Ok(Node::new(
-                NodeKind::Unary {
-                    op,
-                    operand: Box::new(operand),
-                },
+                NodeKind::Unary { op, operand: Box::new(operand) },
                 SourceLocation { start, end },
             ));
         }
@@ -280,10 +259,7 @@ impl WorkingParser {
             let value = token.text.clone();
             return Ok(Node::new(
                 NodeKind::Number { value },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -296,10 +272,7 @@ impl WorkingParser {
             let value = token.text.clone();
             return Ok(Node::new(
                 NodeKind::String { value },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -314,10 +287,7 @@ impl WorkingParser {
             // Variable node includes the sigil in the name
             return Ok(Node::new(
                 NodeKind::Variable { name: text },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -327,10 +297,7 @@ impl WorkingParser {
             let value = token.text.clone();
             return Ok(Node::new(
                 NodeKind::Bareword { value },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -396,11 +363,7 @@ impl WorkingParser {
     }
 
     fn check_token(&self, token_type: &TokenType) -> bool {
-        if self.is_at_end() {
-            false
-        } else {
-            &self.peek().token_type == token_type
-        }
+        if self.is_at_end() { false } else { &self.peek().token_type == token_type }
     }
 
     fn advance(&mut self) -> &Token {
@@ -435,11 +398,7 @@ impl WorkingParser {
     }
 
     fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, String> {
-        if self.check_token(token_type) {
-            Ok(self.advance())
-        } else {
-            Err(message.to_string())
-        }
+        if self.check_token(token_type) { Ok(self.advance()) } else { Err(message.to_string()) }
     }
 }
 

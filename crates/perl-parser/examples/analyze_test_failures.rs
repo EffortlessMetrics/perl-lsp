@@ -48,34 +48,13 @@ fn main() {
     println!("🔍 Perl Parser Edge Case Failure Analysis\n");
 
     let categories = vec![
-        (
-            "Format & Blocks",
-            edge_cases::format_and_blocks::get_tests(),
-        ),
-        (
-            "Operator Overloading",
-            edge_cases::operator_overloading::get_tests(),
-        ),
-        (
-            "Indirect & Methods",
-            edge_cases::indirect_and_methods::get_tests(),
-        ),
-        (
-            "Versions & V-strings",
-            edge_cases::versions_and_vstrings::get_tests(),
-        ),
-        (
-            "Unicode & Encoding",
-            edge_cases::unicode_and_encoding::get_tests(),
-        ),
-        (
-            "File I/O Operations",
-            edge_cases::file_io_operations::get_tests(),
-        ),
-        (
-            "Regex & Patterns",
-            edge_cases::regex_and_patterns::get_tests(),
-        ),
+        ("Format & Blocks", edge_cases::format_and_blocks::get_tests()),
+        ("Operator Overloading", edge_cases::operator_overloading::get_tests()),
+        ("Indirect & Methods", edge_cases::indirect_and_methods::get_tests()),
+        ("Versions & V-strings", edge_cases::versions_and_vstrings::get_tests()),
+        ("Unicode & Encoding", edge_cases::unicode_and_encoding::get_tests()),
+        ("File I/O Operations", edge_cases::file_io_operations::get_tests()),
+        ("Regex & Patterns", edge_cases::regex_and_patterns::get_tests()),
     ];
 
     let mut all_failures = Vec::new();
@@ -92,11 +71,8 @@ fn main() {
         total_failed += failed;
         all_failures.extend(failures);
 
-        let percentage = if total_tests > 0 {
-            (passed as f64 / total_tests as f64) * 100.0
-        } else {
-            100.0
-        };
+        let percentage =
+            if total_tests > 0 { (passed as f64 / total_tests as f64) * 100.0 } else { 100.0 };
 
         category_stats.insert(category_name, (passed, failed, percentage));
 
@@ -138,10 +114,7 @@ fn main() {
             "Other"
         };
 
-        failure_patterns
-            .entry(pattern.to_string())
-            .or_default()
-            .push(failure);
+        failure_patterns.entry(pattern.to_string()).or_default().push(failure);
     }
 
     // Print pattern analysis
@@ -171,21 +144,13 @@ fn main() {
         if *failed > 0 {
             println!("{} ({} failures):", category, failed);
 
-            let category_failures: Vec<_> = all_failures
-                .iter()
-                .filter(|f| f.category == *category)
-                .collect();
+            let category_failures: Vec<_> =
+                all_failures.iter().filter(|f| f.category == *category).collect();
 
             for (i, failure) in category_failures.iter().take(10).enumerate() {
                 println!("  {}. {}", i + 1, failure.description);
-                println!(
-                    "     Code: {}",
-                    failure.code.lines().next().unwrap_or(&failure.code)
-                );
-                println!(
-                    "     Error: {}",
-                    failure.error.lines().next().unwrap_or(&failure.error)
-                );
+                println!("     Code: {}", failure.code.lines().next().unwrap_or(&failure.code));
+                println!("     Error: {}", failure.error.lines().next().unwrap_or(&failure.error));
                 println!();
             }
 

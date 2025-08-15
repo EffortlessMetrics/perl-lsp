@@ -2,11 +2,7 @@
 use perl_parser::Parser;
 
 fn main() {
-    let tests = vec![
-        "package Test;",
-        "package Test::Module;",
-        "package Foo::Bar::Baz;",
-    ];
+    let tests = vec!["package Test;", "package Test::Module;", "package Foo::Bar::Baz;"];
 
     for code in tests {
         println!("\nTesting: {}", code);

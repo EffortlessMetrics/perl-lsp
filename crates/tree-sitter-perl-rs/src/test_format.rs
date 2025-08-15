@@ -99,18 +99,9 @@ test line
 
         // Test individual components first
         println!("Testing components:");
-        println!(
-            "  format keyword: {:?}",
-            PerlParser::parse(Rule::reserved_word, "format")
-        );
-        println!(
-            "  format_name: {:?}",
-            PerlParser::parse(Rule::format_name, "STDOUT")
-        );
-        println!(
-            "  format_end: {:?}",
-            PerlParser::parse(Rule::format_end, ".\n")
-        );
+        println!("  format keyword: {:?}", PerlParser::parse(Rule::reserved_word, "format"));
+        println!("  format_name: {:?}", PerlParser::parse(Rule::format_name, "STDOUT"));
+        println!("  format_end: {:?}", PerlParser::parse(Rule::format_end, ".\n"));
 
         // Try parsing each line separately
         println!("\nTrying first line:");
@@ -139,21 +130,13 @@ test line
         println!("  Partial result: {:?}", partial_result);
 
         let pairs = PerlParser::parse(Rule::format_declaration, input);
-        assert!(
-            pairs.is_ok(),
-            "Failed to parse format declaration: {:?}",
-            pairs.err()
-        );
+        assert!(pairs.is_ok(), "Failed to parse format declaration: {:?}", pairs.err());
 
         let pairs = pairs.unwrap();
         for pair in pairs {
             println!("Rule: {:?}, Text: {}", pair.as_rule(), pair.as_str());
             for inner in pair.into_inner() {
-                println!(
-                    "  Inner - Rule: {:?}, Text: {}",
-                    inner.as_rule(),
-                    inner.as_str()
-                );
+                println!("  Inner - Rule: {:?}, Text: {}", inner.as_rule(), inner.as_str());
             }
         }
     }

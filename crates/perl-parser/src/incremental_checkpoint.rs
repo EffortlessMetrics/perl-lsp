@@ -31,10 +31,7 @@ struct TokenCache {
 
 impl TokenCache {
     fn new() -> Self {
-        TokenCache {
-            tokens: HashMap::new(),
-            valid_range: None,
-        }
+        TokenCache { tokens: HashMap::new(), valid_range: None }
     }
 
     /// Get cached tokens starting at position
@@ -168,8 +165,7 @@ impl CheckpointedIncrementalParser {
         // Update checkpoint cache
         let old_len = edit.end - edit.start;
         let new_len = new_content.len();
-        self.checkpoint_cache
-            .apply_edit(edit.start, old_len, new_len);
+        self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
 
         // Find nearest checkpoint before edit
         let checkpoint = self.checkpoint_cache.find_before(edit.start);
@@ -332,11 +328,7 @@ mod tests {
         let tree1 = parser.parse(source).unwrap();
 
         // Edit: change 42 to 4242
-        let edit = SimpleEdit {
-            start: 8,
-            end: 10,
-            new_text: "4242".to_string(),
-        };
+        let edit = SimpleEdit { start: 8, end: 10, new_text: "4242".to_string() };
 
         let tree2 = parser.apply_edit(&edit).unwrap();
 
@@ -366,18 +358,10 @@ mod tests {
         parser.parse(source).unwrap();
 
         // Multiple edits
-        let edit1 = SimpleEdit {
-            start: 8,
-            end: 9,
-            new_text: "42".to_string(),
-        };
+        let edit1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
         parser.apply_edit(&edit1).unwrap();
 
-        let edit2 = SimpleEdit {
-            start: 20,
-            end: 21,
-            new_text: "99".to_string(),
-        };
+        let edit2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
         parser.apply_edit(&edit2).unwrap();
 
         let stats = parser.stats();

@@ -92,10 +92,7 @@ pub struct CriticAnalyzer {
 
 impl CriticAnalyzer {
     pub fn new(config: CriticConfig) -> Self {
-        Self {
-            config,
-            cache: HashMap::new(),
-        }
+        Self { config, cache: HashMap::new() }
     }
 
     /// Run Perl::Critic on a file
@@ -140,9 +137,7 @@ impl CriticAnalyzer {
         cmd.arg(file_path);
 
         // Execute command
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to run perlcritic: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("Failed to run perlcritic: {}", e))?;
 
         // Parse output
         let violations = self.parse_output(&output.stdout, &path_str)?;
@@ -181,16 +176,8 @@ impl CriticAnalyzer {
                 explanation: self.get_policy_explanation(&policy),
                 severity: Severity::from_number(severity),
                 range: Range {
-                    start: Position {
-                        byte: 0,
-                        line: line_num - 1,
-                        column: column - 1,
-                    },
-                    end: Position {
-                        byte: 0,
-                        line: line_num - 1,
-                        column,
-                    },
+                    start: Position { byte: 0, line: line_num - 1, column: column - 1 },
+                    end: Position { byte: 0, line: line_num - 1, column },
                 },
                 file: file_path.to_string(),
             });
@@ -231,32 +218,18 @@ impl CriticAnalyzer {
         match violation.policy.as_str() {
             "Variables::ProhibitUnusedVariables" => Some(QuickFix {
                 title: "Remove unused variable".to_string(),
-                edit: TextEdit {
-                    range: violation.range,
-                    new_text: String::new(),
-                },
+                edit: TextEdit { range: violation.range, new_text: String::new() },
             }),
             "Subroutines::ProhibitUnusedPrivateSubroutines" => Some(QuickFix {
                 title: "Remove unused subroutine".to_string(),
-                edit: TextEdit {
-                    range: violation.range,
-                    new_text: String::new(),
-                },
+                edit: TextEdit { range: violation.range, new_text: String::new() },
             }),
             "TestingAndDebugging::RequireUseStrict" => Some(QuickFix {
                 title: "Add 'use strict'".to_string(),
                 edit: TextEdit {
                     range: Range {
-                        start: Position {
-                            byte: 0,
-                            line: 0,
-                            column: 0,
-                        },
-                        end: Position {
-                            byte: 0,
-                            line: 0,
-                            column: 0,
-                        },
+                        start: Position { byte: 0, line: 0, column: 0 },
+                        end: Position { byte: 0, line: 0, column: 0 },
                     },
                     new_text: "use strict;\n".to_string(),
                 },
@@ -265,16 +238,8 @@ impl CriticAnalyzer {
                 title: "Add 'use warnings'".to_string(),
                 edit: TextEdit {
                     range: Range {
-                        start: Position {
-                            byte: 0,
-                            line: 0,
-                            column: 0,
-                        },
-                        end: Position {
-                            byte: 0,
-                            line: 0,
-                            column: 0,
-                        },
+                        start: Position { byte: 0, line: 0, column: 0 },
+                        end: Position { byte: 0, line: 0, column: 0 },
                     },
                     new_text: "use warnings;\n".to_string(),
                 },
@@ -333,16 +298,8 @@ impl Policy for RequireUseStrict {
                 explanation: "Always use strict to catch common mistakes".to_string(),
                 severity: self.severity(),
                 range: Range {
-                    start: Position {
-                        byte: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                    end: Position {
-                        byte: 0,
-                        line: 0,
-                        column: 0,
-                    },
+                    start: Position { byte: 0, line: 0, column: 0 },
+                    end: Position { byte: 0, line: 0, column: 0 },
                 },
                 file: String::new(),
             }]
@@ -372,16 +329,8 @@ impl Policy for RequireUseWarnings {
                 explanation: "Always use warnings to catch potential issues".to_string(),
                 severity: self.severity(),
                 range: Range {
-                    start: Position {
-                        byte: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                    end: Position {
-                        byte: 0,
-                        line: 0,
-                        column: 0,
-                    },
+                    start: Position { byte: 0, line: 0, column: 0 },
+                    end: Position { byte: 0, line: 0, column: 0 },
                 },
                 file: String::new(),
             }]
@@ -393,9 +342,7 @@ impl Policy for RequireUseWarnings {
 
 impl Default for BuiltInAnalyzer {
     fn default() -> Self {
-        Self {
-            policies: vec![Box::new(RequireUseStrict), Box::new(RequireUseWarnings)],
-        }
+        Self { policies: vec![Box::new(RequireUseStrict), Box::new(RequireUseWarnings)] }
     }
 }
 
@@ -430,9 +377,7 @@ mod tests {
     fn test_builtin_policies() {
         let analyzer = BuiltInAnalyzer::new();
         let ast = Node::new(
-            crate::ast::NodeKind::Error {
-                message: "test".to_string(),
-            },
+            crate::ast::NodeKind::Error { message: "test".to_string() },
             crate::ast::SourceLocation { start: 0, end: 10 },
         );
 

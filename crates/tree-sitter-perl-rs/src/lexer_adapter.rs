@@ -93,12 +93,7 @@ impl LexerAdapter {
                     Self::postprocess(node);
                 }
             }
-            AstNode::IfStatement {
-                condition,
-                then_block,
-                elsif_clauses,
-                else_block,
-            } => {
+            AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
                 Self::postprocess(condition);
                 Self::postprocess(then_block);
                 for (cond, block) in elsif_clauses {
@@ -109,36 +104,22 @@ impl LexerAdapter {
                     Self::postprocess(block);
                 }
             }
-            AstNode::UnlessStatement {
-                condition,
-                block,
-                else_block,
-            } => {
+            AstNode::UnlessStatement { condition, block, else_block } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
                 if let Some(else_b) = else_block {
                     Self::postprocess(else_b);
                 }
             }
-            AstNode::WhileStatement {
-                condition, block, ..
-            } => {
+            AstNode::WhileStatement { condition, block, .. } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
             }
-            AstNode::UntilStatement {
-                condition, block, ..
-            } => {
+            AstNode::UntilStatement { condition, block, .. } => {
                 Self::postprocess(condition);
                 Self::postprocess(block);
             }
-            AstNode::ForStatement {
-                init,
-                condition,
-                update,
-                block,
-                ..
-            } => {
+            AstNode::ForStatement { init, condition, update, block, .. } => {
                 if let Some(i) = init {
                     Self::postprocess(i);
                 }
@@ -150,12 +131,7 @@ impl LexerAdapter {
                 }
                 Self::postprocess(block);
             }
-            AstNode::ForeachStatement {
-                variable,
-                list,
-                block,
-                ..
-            } => {
+            AstNode::ForeachStatement { variable, list, block, .. } => {
                 if let Some(v) = variable {
                     Self::postprocess(v);
                 }
@@ -163,10 +139,7 @@ impl LexerAdapter {
                 Self::postprocess(block);
             }
             AstNode::ArrayAccess { array, index }
-            | AstNode::HashAccess {
-                hash: array,
-                key: index,
-            } => {
+            | AstNode::HashAccess { hash: array, key: index } => {
                 Self::postprocess(array);
                 Self::postprocess(index);
             }
@@ -183,11 +156,7 @@ impl LexerAdapter {
             AstNode::UnaryOp { operand, .. } => {
                 Self::postprocess(operand);
             }
-            AstNode::TernaryOp {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
+            AstNode::TernaryOp { condition, true_expr, false_expr } => {
                 Self::postprocess(condition);
                 Self::postprocess(true_expr);
                 Self::postprocess(false_expr);
@@ -206,11 +175,7 @@ impl LexerAdapter {
                     Self::postprocess(v);
                 }
             }
-            AstNode::TryCatch {
-                try_block,
-                catch_clauses,
-                finally_block,
-            } => {
+            AstNode::TryCatch { try_block, catch_clauses, finally_block } => {
                 Self::postprocess(try_block);
                 for (_, block) in catch_clauses {
                     Self::postprocess(block);

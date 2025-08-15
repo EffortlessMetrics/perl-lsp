@@ -19,11 +19,7 @@ fn test_isa_operator() {
         let sexp = ast.to_sexp();
 
         println!("  Result: {}", sexp);
-        assert!(
-            sexp.contains("ISA"),
-            "ISA operator not found in output for '{}'",
-            code
-        );
+        assert!(sexp.contains("ISA"), "ISA operator not found in output for '{}'", code);
     }
 }
 
@@ -79,26 +75,16 @@ my $x :shared;
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(
-        result.is_ok(),
-        "Failed to parse comprehensive test: {:?}",
-        result
-    );
+    assert!(result.is_ok(), "Failed to parse comprehensive test: {:?}", result);
     let ast = result.unwrap();
     let sexp = ast.to_sexp();
 
     // Verify key features are present
     assert!(sexp.contains("regex"), "Regex not found");
     assert!(sexp.contains("substitution"), "Substitution not found");
-    assert!(
-        sexp.contains("transliteration"),
-        "Transliteration not found"
-    );
+    assert!(sexp.contains("transliteration"), "Transliteration not found");
     assert!(sexp.contains("array"), "qw() array not found");
-    assert!(
-        sexp.contains("statement_modifier"),
-        "Statement modifiers not found"
-    );
+    assert!(sexp.contains("statement_modifier"), "Statement modifiers not found");
     assert!(sexp.contains("ISA"), "ISA operator not found");
     assert!(sexp.contains("unary_-f"), "File test operator not found");
     assert!(sexp.contains("~~"), "Smart match not found");

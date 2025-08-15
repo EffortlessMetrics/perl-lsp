@@ -265,10 +265,7 @@ impl WorkspaceIndex {
         };
 
         // Get the document for line index
-        let mut doc = self
-            .document_store
-            .get(&uri_str)
-            .ok_or("Document not found")?;
+        let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
         // Extract symbols and references
         let mut file_index = FileIndex::default();
@@ -357,10 +354,7 @@ impl WorkspaceIndex {
         for (_uri_key, file_index) in files.iter() {
             if let Some(refs) = file_index.references.get(symbol_name) {
                 for reference in refs {
-                    locations.push(Location {
-                        uri: reference.uri.clone(),
-                        range: reference.range,
-                    });
+                    locations.push(Location { uri: reference.uri.clone(), range: reference.range });
                 }
             }
         }
@@ -377,10 +371,7 @@ impl WorkspaceIndex {
                 if symbol.name == symbol_name
                     || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
-                    return Some(Location {
-                        uri: symbol.uri.clone(),
-                        range: symbol.range,
-                    });
+                    return Some(Location { uri: symbol.uri.clone(), range: symbol.range });
                 }
             }
         }
@@ -426,10 +417,7 @@ impl WorkspaceIndex {
         let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read().unwrap();
 
-        files
-            .get(&key)
-            .map(|fi| fi.symbols.clone())
-            .unwrap_or_default()
+        files.get(&key).map(|fi| fi.symbols.clone()).unwrap_or_default()
     }
 
     /// Get dependencies of a file
@@ -438,10 +426,7 @@ impl WorkspaceIndex {
         let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read().unwrap();
 
-        files
-            .get(&key)
-            .map(|fi| fi.dependencies.clone())
-            .unwrap_or_default()
+        files.get(&key).map(|fi| fi.dependencies.clone()).unwrap_or_default()
     }
 
     /// Find all files that depend on a module
@@ -527,11 +512,7 @@ struct IndexVisitor {
 
 impl IndexVisitor {
     fn new(document: &mut Document, uri: String) -> Self {
-        Self {
-            document: document.clone(),
-            uri,
-            current_package: Some("main".to_string()),
-        }
+        Self { document: document.clone(), uri, current_package: Some("main".to_string()) }
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
@@ -589,26 +570,20 @@ impl IndexVisitor {
                     }
 
                     // Mark as definition
-                    file_index
-                        .references
-                        .entry(name_str.clone())
-                        .or_default()
-                        .push(SymbolReference {
+                    file_index.references.entry(name_str.clone()).or_default().push(
+                        SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(node),
                             kind: ReferenceKind::Definition,
-                        });
+                        },
+                    );
                 }
 
                 // Visit body
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
 
@@ -624,15 +599,13 @@ impl IndexVisitor {
                     });
 
                     // Mark as definition
-                    file_index
-                        .references
-                        .entry(var_name.clone())
-                        .or_default()
-                        .push(SymbolReference {
+                    file_index.references.entry(var_name.clone()).or_default().push(
+                        SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(variable),
                             kind: ReferenceKind::Definition,
-                        });
+                        },
+                    );
                 }
 
                 // Visit initializer
@@ -641,11 +614,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::VariableListDeclaration {
-                variables,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
                 // Handle each variable in the list declaration
                 for var in variables {
                     if let NodeKind::Variable { sigil, name } = &var.kind {
@@ -663,15 +632,11 @@ impl IndexVisitor {
                         });
 
                         // Mark as definition
-                        file_index
-                            .references
-                            .entry(var_name)
-                            .or_default()
-                            .push(SymbolReference {
-                                uri: self.uri.clone(),
-                                range: self.node_to_range(var),
-                                kind: ReferenceKind::Definition,
-                            });
+                        file_index.references.entry(var_name).or_default().push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(var),
+                            kind: ReferenceKind::Definition,
+                        });
                     }
                 }
 
@@ -685,30 +650,22 @@ impl IndexVisitor {
                 let var_name = format!("{}{}", sigil, name);
 
                 // Track as usage (could be read or write based on context)
-                file_index
-                    .references
-                    .entry(var_name)
-                    .or_default()
-                    .push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        kind: ReferenceKind::Read, // Default to read, would need context for write
-                    });
+                file_index.references.entry(var_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    kind: ReferenceKind::Read, // Default to read, would need context for write
+                });
             }
 
             NodeKind::FunctionCall { name, args, .. } => {
                 let func_name = name.clone();
 
                 // Track as usage
-                file_index
-                    .references
-                    .entry(func_name)
-                    .or_default()
-                    .push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        kind: ReferenceKind::Usage,
-                    });
+                file_index.references.entry(func_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    kind: ReferenceKind::Usage,
+                });
 
                 // Visit arguments
                 for arg in args {
@@ -721,15 +678,11 @@ impl IndexVisitor {
                 file_index.dependencies.insert(module_name.clone());
 
                 // Track as import
-                file_index
-                    .references
-                    .entry(module_name)
-                    .or_default()
-                    .push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        kind: ReferenceKind::Import,
-                    });
+                file_index.references.entry(module_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    kind: ReferenceKind::Import,
+                });
             }
 
             // Handle assignment to detect writes
@@ -742,27 +695,21 @@ impl IndexVisitor {
 
                     // For compound assignments, it's a read first
                     if is_compound {
-                        file_index
-                            .references
-                            .entry(var_name.clone())
-                            .or_default()
-                            .push(SymbolReference {
+                        file_index.references.entry(var_name.clone()).or_default().push(
+                            SymbolReference {
                                 uri: self.uri.clone(),
                                 range: self.node_to_range(lhs),
                                 kind: ReferenceKind::Read,
-                            });
+                            },
+                        );
                     }
 
                     // Then it's always a write
-                    file_index
-                        .references
-                        .entry(var_name)
-                        .or_default()
-                        .push(SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(lhs),
-                            kind: ReferenceKind::Write,
-                        });
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(lhs),
+                        kind: ReferenceKind::Write,
+                    });
                 }
 
                 // Right side could have reads
@@ -776,12 +723,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_branch, file_index);
                 for (cond, branch) in elsif_branches {
@@ -793,11 +735,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::While {
-                condition,
-                body,
-                continue_block,
-            } => {
+            NodeKind::While { condition, body, continue_block } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(body, file_index);
                 if let Some(cont) = continue_block {
@@ -805,13 +743,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                continue_block,
-            } => {
+            NodeKind::For { init, condition, update, body, continue_block } => {
                 if let Some(i) = init {
                     self.visit_node(i, file_index);
                 }
@@ -827,34 +759,22 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 // Iterator is a write context
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
-                    file_index
-                        .references
-                        .entry(var_name)
-                        .or_default()
-                        .push(SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(variable),
-                            kind: ReferenceKind::Write,
-                        });
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(variable),
+                        kind: ReferenceKind::Write,
+                    });
                 }
                 self.visit_node(variable, file_index);
                 self.visit_node(list, file_index);
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
+            NodeKind::MethodCall { object, method, args } => {
                 // Check if this is a static method call (Package->method)
                 let qualified_method = if let NodeKind::Identifier { name } = &object.kind {
                     // Static method call: Package->method
@@ -869,15 +789,13 @@ impl IndexVisitor {
 
                 // Track method call with qualified name if applicable
                 let method_key = qualified_method.as_ref().unwrap_or(method);
-                file_index
-                    .references
-                    .entry(method_key.clone())
-                    .or_default()
-                    .push(SymbolReference {
+                file_index.references.entry(method_key.clone()).or_default().push(
+                    SymbolReference {
                         uri: self.uri.clone(),
                         range: self.node_to_range(node),
                         kind: ReferenceKind::Usage,
-                    });
+                    },
+                );
 
                 // Visit arguments
                 for arg in args {
@@ -941,25 +859,19 @@ impl IndexVisitor {
                     let var_name = format!("{}{}", sigil, name);
 
                     // It's both a read and a write
-                    file_index
-                        .references
-                        .entry(var_name.clone())
-                        .or_default()
-                        .push(SymbolReference {
+                    file_index.references.entry(var_name.clone()).or_default().push(
+                        SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(operand),
                             kind: ReferenceKind::Read,
-                        });
+                        },
+                    );
 
-                    file_index
-                        .references
-                        .entry(var_name)
-                        .or_default()
-                        .push(SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(operand),
-                            kind: ReferenceKind::Write,
-                        });
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(operand),
+                        kind: ReferenceKind::Write,
+                    });
                 }
             }
 
@@ -986,11 +898,7 @@ impl IndexVisitor {
                 self.visit_node(left, file_index);
                 self.visit_node(right, file_index);
             }
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_expr, file_index);
                 self.visit_node(else_expr, file_index);
@@ -1014,11 +922,7 @@ impl IndexVisitor {
             NodeKind::Eval { block } | NodeKind::Do { block } => {
                 self.visit_node(block, file_index);
             }
-            NodeKind::Try {
-                body,
-                catch_blocks,
-                finally_block,
-            } => {
+            NodeKind::Try { body, catch_blocks, finally_block } => {
                 self.visit_node(body, file_index);
                 for (_, block) in catch_blocks {
                     self.visit_node(block, file_index);
@@ -1038,11 +942,7 @@ impl IndexVisitor {
             NodeKind::Default { body } => {
                 self.visit_node(body, file_index);
             }
-            NodeKind::StatementModifier {
-                statement,
-                condition,
-                ..
-            } => {
+            NodeKind::StatementModifier { statement, condition, .. } => {
                 self.visit_node(statement, file_index);
                 self.visit_node(condition, file_index);
             }
@@ -1060,19 +960,11 @@ impl IndexVisitor {
 
     fn node_to_range(&mut self, node: &Node) -> Range {
         // LineIndex.range returns line numbers and UTF-16 code unit columns
-        let ((start_line, start_col), (end_line, end_col)) = self
-            .document
-            .line_index
-            .range(node.location.start, node.location.end);
+        let ((start_line, start_col), (end_line, end_col)) =
+            self.document.line_index.range(node.location.start, node.location.end);
         Range {
-            start: Position {
-                line: start_line,
-                character: start_col,
-            },
-            end: Position {
-                line: end_line,
-                character: end_col,
-            },
+            start: Position { line: start_line, character: start_col },
+            end: Position { line: end_line, character: end_col },
         }
     }
 }
@@ -1092,16 +984,11 @@ pub mod lsp_adapter {
     type LspUrl = lsp_types::Uri;
 
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
-        parse_url(&ix.uri).map(|uri| LspLocation {
-            uri,
-            range: ix.range,
-        })
+        parse_url(&ix.uri).map(|uri| LspLocation { uri, range: ix.range })
     }
 
     pub fn to_lsp_locations(all: impl IntoIterator<Item = IxLocation>) -> Vec<LspLocation> {
-        all.into_iter()
-            .filter_map(|ix| to_lsp_location(&ix))
-            .collect()
+        all.into_iter().filter_map(|ix| to_lsp_location(&ix)).collect()
     }
 
     fn parse_url(s: &str) -> Option<LspUrl> {
@@ -1140,27 +1027,13 @@ sub hello {
 my $var = 42;
 "#;
 
-        index
-            .index_file(url::Url::parse(uri).unwrap(), code.to_string())
-            .unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
 
         // Should have indexed the package and subroutine
         let symbols = index.file_symbols(uri);
-        assert!(
-            symbols
-                .iter()
-                .any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package)
-        );
-        assert!(
-            symbols
-                .iter()
-                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
-        );
-        assert!(
-            symbols
-                .iter()
-                .any(|s| s.name == "$var" && s.kind == SymbolKind::Variable)
-        );
+        assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind == SymbolKind::Variable));
     }
 
     #[test]
@@ -1176,9 +1049,7 @@ sub test {
 }
 "#;
 
-        index
-            .index_file(url::Url::parse(uri).unwrap(), code.to_string())
-            .unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
 
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
@@ -1195,9 +1066,7 @@ use warnings;
 use Data::Dumper;
 "#;
 
-        index
-            .index_file(url::Url::parse(uri).unwrap(), code.to_string())
-            .unwrap();
+        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
 
         let deps = index.file_dependencies(uri);
         assert!(deps.contains("strict"));
@@ -1223,18 +1092,12 @@ use Data::Dumper;
     fn test_uri_to_fs_path_with_spaces() {
         // Test with percent-encoded spaces
         if let Some(path) = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl") {
-            assert_eq!(
-                path,
-                std::path::PathBuf::from("/tmp/path with spaces/test.pl")
-            );
+            assert_eq!(path, std::path::PathBuf::from("/tmp/path with spaces/test.pl"));
         }
 
         // Test with multiple spaces and special characters
         if let Some(path) = uri_to_fs_path("file:///tmp/My%20Documents/test%20file.pl") {
-            assert_eq!(
-                path,
-                std::path::PathBuf::from("/tmp/My Documents/test file.pl")
-            );
+            assert_eq!(path, std::path::PathBuf::from("/tmp/My Documents/test file.pl"));
         }
     }
 

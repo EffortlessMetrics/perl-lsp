@@ -52,12 +52,8 @@ print $result;
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("Extract")
-                && a["title"].as_str().unwrap().contains("variable"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Extract")
+        && a["title"].as_str().unwrap().contains("variable")));
 }
 
 /// Test adding error checking to file operations
@@ -108,11 +104,7 @@ close($fh);
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("error checking"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("error checking")));
 }
 
 /// Test converting old-style for loops to foreach
@@ -163,11 +155,7 @@ for (my $i = 0; $i < @array; $i++) {
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("foreach"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("foreach")));
 }
 
 /// Test converting to postfix form
@@ -218,11 +206,7 @@ if ($debug) {
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("postfix"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("postfix")));
 }
 
 /// Test adding missing pragmas
@@ -274,11 +258,7 @@ print $x;
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("pragma"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("pragma")));
 }
 
 /// Test quick fix for undefined variable
@@ -343,12 +323,8 @@ print $undefined_var;
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("Declare")
-                && a["title"].as_str().unwrap().contains("my"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Declare")
+        && a["title"].as_str().unwrap().contains("my")));
 }
 
 /// Test extract subroutine refactoring
@@ -404,11 +380,7 @@ my $y = 20;
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("subroutine"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("subroutine")));
 }
 
 /// Test organize imports refactoring
@@ -465,11 +437,7 @@ print "test\n";
     );
 
     let actions = response["result"].as_array().unwrap();
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["title"].as_str().unwrap().contains("Organize imports"))
-    );
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Organize imports")));
 }
 
 /// Test multiple refactorings available
@@ -525,9 +493,5 @@ if ($processed > 100) {
 
     // Should have multiple refactoring options
     assert!(!actions.is_empty());
-    assert!(
-        actions
-            .iter()
-            .any(|a| a["kind"].as_str() == Some("refactor.extract"))
-    );
+    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.extract")));
 }

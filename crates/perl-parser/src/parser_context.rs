@@ -38,11 +38,7 @@ struct PositionTracker {
 #[allow(dead_code)]
 impl PositionTracker {
     fn new() -> Self {
-        PositionTracker {
-            _byte_offset: 0,
-            _line: 1,
-            _column: 1,
-        }
+        PositionTracker { _byte_offset: 0, _line: 1, _column: 1 }
     }
 
     fn current_position(&self) -> Position {
@@ -174,10 +170,7 @@ impl ParserContext {
                 Ok(&self.tokens[self.current - 1])
             }
             Some(token) => Err(ParseError::new(
-                format!(
-                    "Expected {:?}, found {:?}",
-                    expected, token.token.token_type
-                ),
+                format!("Expected {:?}, found {:?}", expected, token.token.token_type),
                 token.range(),
             )
             .with_expected(vec![format!("{:?}", expected)])
@@ -193,9 +186,7 @@ impl ParserContext {
 
     /// Check if current token matches
     pub fn check(&self, token_type: &TokenType) -> bool {
-        self.current_token()
-            .map(|t| &t.token.token_type == token_type)
-            .unwrap_or(false)
+        self.current_token().map(|t| &t.token.token_type == token_type).unwrap_or(false)
     }
 
     /// Consume token if it matches

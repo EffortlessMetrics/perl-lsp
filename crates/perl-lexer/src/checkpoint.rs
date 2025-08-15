@@ -31,23 +31,13 @@ pub enum CheckpointContext {
     /// Normal lexing
     Normal,
     /// Inside a heredoc (tracks the terminator)
-    Heredoc {
-        terminator: String,
-        is_interpolated: bool,
-    },
+    Heredoc { terminator: String, is_interpolated: bool },
     /// Inside a format body
     Format { start_position: usize },
     /// Inside a regex or substitution
-    Regex {
-        delimiter: char,
-        flags_position: Option<usize>,
-    },
+    Regex { delimiter: char, flags_position: Option<usize> },
     /// Inside a quote-like operator
-    QuoteLike {
-        operator: String,
-        delimiter: char,
-        is_paired: bool,
-    },
+    QuoteLike { operator: String, delimiter: char, is_paired: bool },
 }
 
 impl LexerCheckpoint {
@@ -66,10 +56,7 @@ impl LexerCheckpoint {
 
     /// Create a checkpoint at a specific position
     pub fn at_position(position: usize) -> Self {
-        Self {
-            position,
-            ..Self::new()
-        }
+        Self { position, ..Self::new() }
     }
 
     /// Check if this checkpoint is at the start of input
@@ -178,10 +165,7 @@ pub struct CheckpointCache {
 impl CheckpointCache {
     /// Create a new checkpoint cache
     pub fn new(max_checkpoints: usize) -> Self {
-        Self {
-            checkpoints: Vec::new(),
-            max_checkpoints,
-        }
+        Self { checkpoints: Vec::new(), max_checkpoints }
     }
 
     /// Add a checkpoint to the cache
@@ -215,11 +199,7 @@ impl CheckpointCache {
 
     /// Find the nearest checkpoint before a given position
     pub fn find_before(&self, position: usize) -> Option<&LexerCheckpoint> {
-        self.checkpoints
-            .iter()
-            .rev()
-            .find(|(pos, _)| *pos <= position)
-            .map(|(_, cp)| cp)
+        self.checkpoints.iter().rev().find(|(pos, _)| *pos <= position).map(|(_, cp)| cp)
     }
 
     /// Clear all cached checkpoints

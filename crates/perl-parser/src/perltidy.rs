@@ -174,10 +174,7 @@ pub struct PerlTidyFormatter {
 
 impl PerlTidyFormatter {
     pub fn new(config: PerlTidyConfig) -> Self {
-        Self {
-            config,
-            cache: HashMap::new(),
-        }
+        Self { config, cache: HashMap::new() }
     }
 
     /// Format Perl code
@@ -202,9 +199,7 @@ impl PerlTidyFormatter {
             .stderr(Stdio::piped());
 
         // Start the process
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to start perltidy: {}", e))?;
+        let mut child = cmd.spawn().map_err(|e| format!("Failed to start perltidy: {}", e))?;
 
         // Write input
         if let Some(mut stdin) = child.stdin.take() {
@@ -214,9 +209,8 @@ impl PerlTidyFormatter {
         }
 
         // Wait for completion
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to run perltidy: {}", e))?;
+        let output =
+            child.wait_with_output().map_err(|e| format!("Failed to run perltidy: {}", e))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -245,9 +239,7 @@ impl PerlTidyFormatter {
         cmd.arg(file_path);
 
         // Run command
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to run perltidy: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("Failed to run perltidy: {}", e))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

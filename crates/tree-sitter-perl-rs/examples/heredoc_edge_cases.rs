@@ -225,16 +225,8 @@ FOOTER
 
     println!("\n=== Summary ===");
     println!("Total heredoc tests: {}", passed + failed);
-    println!(
-        "Passed: {} ({}%)",
-        passed,
-        (passed * 100) / (passed + failed)
-    );
-    println!(
-        "Failed: {} ({}%)",
-        failed,
-        (failed * 100) / (passed + failed)
-    );
+    println!("Passed: {} ({}%)", passed, (passed * 100) / (passed + failed));
+    println!("Failed: {} ({}%)", failed, (failed * 100) / (passed + failed));
 
     if failed == 0 {
         println!("\n🎉 All heredoc tests passed!");
@@ -299,12 +291,7 @@ fn print_heredoc_nodes(node: &AstNode, depth: usize) {
     let indent = "  ".repeat(depth);
 
     match node {
-        AstNode::Heredoc {
-            marker,
-            indented,
-            quoted,
-            content,
-        } => {
+        AstNode::Heredoc { marker, indented, quoted, content } => {
             println!("{}Heredoc {{", indent);
             println!("{}  marker: \"{}\"", indent, marker);
             println!("{}  indented: {}", indent, indented);

@@ -54,10 +54,7 @@ impl PositionTracker {
     }
 
     fn offset_to_position(&self, offset: usize) -> Position {
-        let line = self
-            .line_starts
-            .binary_search(&offset)
-            .unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
         let line_start = self.line_starts[line];
         let column = offset - line_start + 1;
         Position::new(offset, (line + 1) as u32, column as u32)
@@ -150,10 +147,7 @@ impl TriviaParserContext {
                     let ws = &source[ws_start..*position];
                     trivia.push(TriviaToken::new(
                         Trivia::Whitespace(ws.to_string()),
-                        Range::new(
-                            Position::new(ws_start, 0, 0),
-                            Position::new(*position, 0, 0),
-                        ),
+                        Range::new(Position::new(ws_start, 0, 0), Position::new(*position, 0, 0)),
                     ));
                 }
 
@@ -299,9 +293,7 @@ pub struct TriviaPreservingParser {
 impl TriviaPreservingParser {
     /// Create a new trivia-preserving parser
     pub fn new(source: String) -> Self {
-        TriviaPreservingParser {
-            context: TriviaParserContext::new(source),
-        }
+        TriviaPreservingParser { context: TriviaParserContext::new(source) }
     }
 
     /// Parse the source, preserving trivia
@@ -330,17 +322,11 @@ impl TriviaPreservingParser {
 
         let program = Node::new(
             self.context.id_generator.next_id(),
-            NodeKind::Program {
-                statements: statement_nodes,
-            },
+            NodeKind::Program { statements: statement_nodes },
             Range::new(start_pos, end_pos),
         );
 
-        NodeWithTrivia {
-            node: program,
-            leading_trivia,
-            trailing_trivia: Vec::new(),
-        }
+        NodeWithTrivia { node: program, leading_trivia, trailing_trivia: Vec::new() }
     }
 
     /// Parse a statement with trivia
@@ -357,10 +343,7 @@ impl TriviaPreservingParser {
         // Simple demonstration: parse variable declarations
         match &token.token_type {
             TokenType::Keyword(kw) if matches!(kw.as_ref(), "my" | "our" | "local" | "state") => {
-                let start_pos = self
-                    .context
-                    .position_tracker
-                    .offset_to_position(token.start);
+                let start_pos = self.context.position_tracker.offset_to_position(token.start);
 
                 let declarator = kw.to_string();
                 self.context.advance();
@@ -385,11 +368,7 @@ impl TriviaPreservingParser {
                     self.context.advance();
                 }
 
-                Some(NodeWithTrivia {
-                    node,
-                    leading_trivia,
-                    trailing_trivia: Vec::new(),
-                })
+                Some(NodeWithTrivia { node, leading_trivia, trailing_trivia: Vec::new() })
             }
             _ => {
                 // Skip unknown tokens for now

@@ -20,12 +20,7 @@ fn main() {
 #[cfg(feature = "pure-rust")]
 fn debug_print_pair(pair: &pest::iterators::Pair<Rule>, indent: usize) {
     let indent_str = "  ".repeat(indent);
-    println!(
-        "{}Rule: {:?}, Text: {:?}",
-        indent_str,
-        pair.as_rule(),
-        pair.as_str()
-    );
+    println!("{}Rule: {:?}, Text: {:?}", indent_str, pair.as_rule(), pair.as_str());
     for inner in pair.clone().into_inner() {
         debug_print_pair(&inner, indent + 1);
     }

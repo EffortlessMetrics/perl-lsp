@@ -282,11 +282,7 @@ mod test_slash {
         for (input, expected_type) in delimiters {
             let mut lexer = PerlLexer::new(input);
             let token = lexer.next_token().unwrap();
-            assert_eq!(
-                token.token_type, expected_type,
-                "Failed for input: {}",
-                input
-            );
+            assert_eq!(token.token_type, expected_type, "Failed for input: {}", input);
         }
     }
 
@@ -874,9 +870,7 @@ mod test_slash {
         assert_eq!(slot.text.as_ref(), "SCALAR");
 
         // Multiple slots
-        for slot_name in [
-            "ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE",
-        ] {
+        for slot_name in ["ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE"] {
             let input = format!("*bar{{{}}}", slot_name);
             let mut lexer = PerlLexer::new(&input);
             let _glob = lexer.next_token().unwrap();
@@ -1117,9 +1111,7 @@ mod test_slash {
         }
 
         // Low-level I/O operations
-        for func in [
-            "ioctl", "fcntl", "sysopen", "sysread", "syswrite", "sysseek",
-        ] {
+        for func in ["ioctl", "fcntl", "sysopen", "sysread", "syswrite", "sysseek"] {
             let input = format!("{} $fh", func);
             let mut lexer = PerlLexer::new(&input);
             let op = lexer.next_token().unwrap();

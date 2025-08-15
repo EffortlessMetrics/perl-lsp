@@ -6,20 +6,9 @@
 /// Context-sensitive token types
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextToken {
-    Substitution {
-        pattern: String,
-        replacement: String,
-        flags: String,
-    },
-    Transliteration {
-        search: String,
-        replace: String,
-        flags: String,
-    },
-    Match {
-        pattern: String,
-        flags: String,
-    },
+    Substitution { pattern: String, replacement: String, flags: String },
+    Transliteration { search: String, replace: String, flags: String },
+    Match { pattern: String, flags: String },
     Identifier(String),
 }
 
@@ -92,11 +81,7 @@ impl ContextSensitiveLexer {
         // Parse flags
         let flags = self.parse_regex_flags();
 
-        Some(ContextToken::Substitution {
-            pattern,
-            replacement,
-            flags,
-        })
+        Some(ContextToken::Substitution { pattern, replacement, flags })
     }
 
     /// Try to parse tr/// or y/// transliteration operator
@@ -131,11 +116,7 @@ impl ContextSensitiveLexer {
         // Parse flags
         let flags = self.parse_trans_flags();
 
-        Some(ContextToken::Transliteration {
-            search,
-            replace,
-            flags,
-        })
+        Some(ContextToken::Transliteration { search, replace, flags })
     }
 
     /// Try to parse m// match operator
@@ -250,11 +231,7 @@ mod tests {
     fn test_substitution_parsing() {
         let mut lexer = ContextSensitiveLexer::new("s/foo/bar/gi".to_string());
         match lexer.try_parse_operator() {
-            Some(ContextToken::Substitution {
-                pattern,
-                replacement,
-                flags,
-            }) => {
+            Some(ContextToken::Substitution { pattern, replacement, flags }) => {
                 assert_eq!(pattern, "foo");
                 assert_eq!(replacement, "bar");
                 assert_eq!(flags, "gi");
@@ -279,11 +256,7 @@ mod tests {
     fn test_transliteration_parsing() {
         let mut lexer = ContextSensitiveLexer::new("tr/abc/xyz/".to_string());
         match lexer.try_parse_operator() {
-            Some(ContextToken::Transliteration {
-                search,
-                replace,
-                flags,
-            }) => {
+            Some(ContextToken::Transliteration { search, replace, flags }) => {
                 assert_eq!(search, "abc");
                 assert_eq!(replace, "xyz");
                 assert_eq!(flags, "");

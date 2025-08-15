@@ -147,10 +147,9 @@ impl ParseError {
             ParseErrorKind::UnexpectedToken => {
                 format!("Unexpected token at position {}: {}", position, message)
             }
-            ParseErrorKind::UnexpectedEndOfInput => format!(
-                "Unexpected end of input at position {}: {}",
-                position, message
-            ),
+            ParseErrorKind::UnexpectedEndOfInput => {
+                format!("Unexpected end of input at position {}: {}", position, message)
+            }
             ParseErrorKind::InvalidSyntax => {
                 format!("Invalid syntax at position {}: {}", position, message)
             }

@@ -10,9 +10,7 @@ pub struct PestOnlyParser {
 
 impl PestOnlyParser {
     pub fn new() -> Self {
-        Self {
-            inner: PureRustPerlParser::new(),
-        }
+        Self { inner: PureRustPerlParser::new() }
     }
 
     // Provide immutable parse method for benchmarks

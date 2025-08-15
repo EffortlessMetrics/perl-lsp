@@ -19,10 +19,7 @@ print $text;"#;
         assert!(result.is_ok(), "Failed to parse basic heredoc");
 
         let ast = result.unwrap();
-        eprintln!(
-            "Parse succeeded, AST type: {:?}",
-            std::mem::discriminant(&ast)
-        );
+        eprintln!("Parse succeeded, AST type: {:?}", std::mem::discriminant(&ast));
 
         eprintln!("Calling parse_to_sexp...");
         let sexp_result = parser.parse_to_sexp(input);
@@ -68,12 +65,7 @@ C"#;
             eprintln!("\nHeredoc processed:\n{}", processed);
             eprintln!("\nDeclarations: {} found", declarations.len());
             for (i, decl) in declarations.iter().enumerate() {
-                eprintln!(
-                    "  [{}] {}: {:?}",
-                    i,
-                    decl.terminator,
-                    decl.content.as_deref()
-                );
+                eprintln!("  [{}] {}: {:?}", i, decl.terminator, decl.content.as_deref());
             }
         }
         if let Err(ref e) = result {
@@ -125,10 +117,7 @@ print $regex;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc with special characters"
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc with special characters");
     }
 
     #[test]
@@ -155,10 +144,7 @@ print $tricky;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc with terminator in content"
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc with terminator in content");
     }
 
     #[test]
@@ -200,10 +186,7 @@ print $result / 2;"#;
 
         let mut parser = FullPerlParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc with slash disambiguation"
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc with slash disambiguation");
     }
 
     #[test]

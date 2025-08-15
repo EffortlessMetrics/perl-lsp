@@ -44,11 +44,7 @@ fn test_unicode_identifiers() {
             }
         }
 
-        assert!(
-            found_unicode,
-            "Should have found unicode identifier in: {}",
-            input
-        );
+        assert!(found_unicode, "Should have found unicode identifier in: {}", input);
     }
 }
 

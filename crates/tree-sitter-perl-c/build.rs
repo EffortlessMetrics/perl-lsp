@@ -30,9 +30,7 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
-    bindings
-        .write_to_file(out_dir.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    bindings.write_to_file(out_dir.join("bindings.rs")).expect("Couldn't write bindings!");
 
     // No need to post-process - bindgen 0.72 already handles Rust 2024 unsafe extern blocks
 

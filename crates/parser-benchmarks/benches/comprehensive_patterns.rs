@@ -207,23 +207,13 @@ fn generate_code(lines: usize) -> String {
             0 => code.push_str(&format!("my $var{} = {};\n", i, i)),
             1 => code.push_str(&format!("push @array{}, $var{};\n", i / 10, i)),
             2 => code.push_str(&format!("$hash{{{}}}->{{'key'}} = $var{};\n", i / 10, i)),
-            3 => code.push_str(&format!(
-                "if ($var{} > {}) {{ $result += $var{}; }}\n",
-                i,
-                i / 2,
-                i
-            )),
+            3 => {
+                code.push_str(&format!("if ($var{} > {}) {{ $result += $var{}; }}\n", i, i / 2, i))
+            }
             4 => code.push_str(&format!("$string{} = \"Value is $var{}\";\n", i, i)),
             5 => code.push_str(&format!("$object{}->method{}($var{});\n", i / 10, i % 5, i)),
-            6 => code.push_str(&format!(
-                "for my $x (1..{}) {{ $sum{} += $x; }}\n",
-                i % 20,
-                i
-            )),
-            7 => code.push_str(&format!(
-                "sub func{} {{ my ($x) = @_; return $x * {}; }}\n",
-                i, i
-            )),
+            6 => code.push_str(&format!("for my $x (1..{}) {{ $sum{} += $x; }}\n", i % 20, i)),
+            7 => code.push_str(&format!("sub func{} {{ my ($x) = @_; return $x * {}; }}\n", i, i)),
             8 => code.push_str(&format!(
                 "$result{} = $var{} =~ /pattern{}/ ? 1 : 0;\n",
                 i,

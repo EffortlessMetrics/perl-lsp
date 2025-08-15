@@ -82,10 +82,7 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("$obj->grep { $_ > 10 }", "grep method with block"),
         ("$obj->sort { $a <=> $b }", "sort method with block"),
         // Indirect object with blocks
-        (
-            "print { select_fh() } 'hello'",
-            "print with block filehandle",
-        ),
+        ("print { select_fh() } 'hello'", "print with block filehandle"),
         ("printf { $fh } '%s', $text", "printf with block filehandle"),
         // Special indirect syntax
         ("do File 'test.pl'", "do with indirect file"),
@@ -101,10 +98,7 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("$obj->method($)", "method with prototype hint"),
         ("Class->new(\\@)", "constructor with prototype hint"),
         // Destructuring in method calls
-        (
-            "my ($x, $y) = $obj->get_coords",
-            "destructure method return",
-        ),
+        ("my ($x, $y) = $obj->get_coords", "destructure method return"),
         ("my @results = $obj->method", "array context method"),
         ("my %hash = $obj->to_hash", "hash context method"),
         // Goto method

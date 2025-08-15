@@ -86,14 +86,8 @@ impl CodeFormatter {
         // Return a single edit that replaces the entire document
         Ok(vec![FormatTextEdit {
             range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: last_line,
-                    character: last_char,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: last_line, character: last_char },
             },
             new_text: formatted,
         }])
@@ -132,14 +126,8 @@ impl CodeFormatter {
 
         Ok(vec![FormatTextEdit {
             range: Range {
-                start: Position {
-                    line: start_line as u32,
-                    character: start_char,
-                },
-                end: Position {
-                    line: end_line as u32,
-                    character: end_char,
-                },
+                start: Position { line: start_line as u32, character: start_char },
+                end: Position { line: end_line as u32, character: end_char },
             },
             new_text: formatted,
         }])
@@ -270,15 +258,11 @@ impl CodeFormatter {
 
         // Write input
         if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(content.as_bytes())
-                .map_err(|e| FormatError::IoError(e.to_string()))?;
+            stdin.write_all(content.as_bytes()).map_err(|e| FormatError::IoError(e.to_string()))?;
         }
 
         // Get output
-        let output = child
-            .wait_with_output()
-            .map_err(|e| FormatError::IoError(e.to_string()))?;
+        let output = child.wait_with_output().map_err(|e| FormatError::IoError(e.to_string()))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

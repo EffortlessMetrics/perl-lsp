@@ -7,10 +7,7 @@ fn main() {
     let test_cases = vec![
         ("Simple new", r#"my $obj = new Class;"#),
         ("Qualified new", r#"my $obj = new Class::Name;"#),
-        (
-            "New with args",
-            r#"my $obj = new Class::Name($arg1, $arg2);"#,
-        ),
+        ("New with args", r#"my $obj = new Class::Name($arg1, $arg2);"#),
         ("Method on object", r#"my $result = method $obj;"#),
         ("Method with args", r#"my $result = method $obj @args;"#),
         ("Print to filehandle", r#"print FH "data";"#),

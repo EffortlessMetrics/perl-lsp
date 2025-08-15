@@ -9,10 +9,7 @@ fn main() {
         ("use 5.036;", "numeric version"),
         // Try/catch
         ("try { die 'oops' } catch ($e) { warn $e }", "try/catch"),
-        (
-            "try { risky() } catch ($e) { handle($e) }",
-            "try/catch with calls",
-        ),
+        ("try { risky() } catch ($e) { handle($e) }", "try/catch with calls"),
         // Defer
         ("defer { cleanup() }", "defer block"),
         // Class/method (Corinna)

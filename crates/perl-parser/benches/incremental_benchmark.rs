@@ -114,10 +114,5 @@ print "$x $y $z\n";
     });
 }
 
-criterion_group!(
-    benches,
-    bench_incremental_small_edit,
-    bench_full_reparse,
-    bench_multiple_edits
-);
+criterion_group!(benches, bench_incremental_small_edit, bench_full_reparse, bench_multiple_edits);
 criterion_main!(benches);

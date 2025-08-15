@@ -28,8 +28,6 @@ EOF
     }
 
     // Check if we found a HeredocStart token
-    let has_heredoc = tokens
-        .iter()
-        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = tokens.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
     println!("\nFound HeredocStart: {}", has_heredoc);
 }

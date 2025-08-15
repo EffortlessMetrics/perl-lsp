@@ -15,10 +15,8 @@ fn test_extremely_large_document() {
     // Create a 10MB document
     let mut large_content = String::with_capacity(10 * 1024 * 1024);
     for i in 0..100000 {
-        large_content.push_str(&format!(
-            "my $var_{} = 'value_{}'; # Long comment to pad the line\n",
-            i, i
-        ));
+        large_content
+            .push_str(&format!("my $var_{} = 'value_{}'; # Long comment to pad the line\n", i, i));
     }
 
     let uri = "file:///large_document.pl";
@@ -435,10 +433,8 @@ fn test_cache_exhaustion() {
         let uri = format!("file:///cache_test_{}.pl", i);
 
         // Each document has unique content
-        let content = format!(
-            "package Package{};\nsub unique_func_{} {{ return {}; }}\n1;",
-            i, i, i
-        );
+        let content =
+            format!("package Package{};\nsub unique_func_{} {{ return {}; }}\n1;", i, i, i);
 
         send_notification(
             &mut server,

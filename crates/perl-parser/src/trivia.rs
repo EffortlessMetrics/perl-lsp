@@ -278,29 +278,20 @@ impl TriviaPreservingParser {
 
     /// Parse and return AST with trivia preserved
     pub fn parse(mut self) -> NodeWithTrivia {
-        let leading_trivia = if let Some((_, trivia)) = &self.current {
-            trivia.clone()
-        } else {
-            Vec::new()
-        };
+        let leading_trivia =
+            if let Some((_, trivia)) = &self.current { trivia.clone() } else { Vec::new() };
 
         // For now, create a simple demonstration node
         let node = Node::new(
             self.id_generator.next_id(),
-            NodeKind::Program {
-                statements: Vec::new(),
-            },
+            NodeKind::Program { statements: Vec::new() },
             Range::new(
                 crate::position::Position::new(0, 1, 1),
                 crate::position::Position::new(0, 1, 1),
             ),
         );
 
-        NodeWithTrivia {
-            node,
-            leading_trivia,
-            trailing_trivia: Vec::new(),
-        }
+        NodeWithTrivia { node, leading_trivia, trailing_trivia: Vec::new() }
     }
 }
 
@@ -321,16 +312,8 @@ mod tests {
             eprintln!("Trivia[{}]: {:?}", i, t.trivia);
         }
         assert!(trivia.len() >= 2); // At least whitespace and comment
-        assert!(
-            trivia
-                .iter()
-                .any(|t| matches!(&t.trivia, Trivia::Whitespace(_)))
-        );
-        assert!(
-            trivia
-                .iter()
-                .any(|t| matches!(&t.trivia, Trivia::LineComment(_)))
-        );
+        assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(_))));
+        assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_))));
     }
 
     #[test]
@@ -341,10 +324,6 @@ mod tests {
         let (_, trivia) = lexer.next_token_with_trivia().unwrap();
 
         // Should have POD as trivia
-        assert!(
-            trivia
-                .iter()
-                .any(|t| matches!(&t.trivia, Trivia::PodComment(_)))
-        );
+        assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_))));
     }
 }

@@ -7,9 +7,7 @@ use std::sync::Mutex;
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
-    let output = Arc::new(Mutex::new(
-        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
-    ));
+    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
     LspServer::with_output(output)
 }
 
@@ -487,10 +485,7 @@ fn test_path_to_module_name() {
     // Test various path patterns
     let test_cases = vec![
         ("file:///test/lib/Foo/Bar.pm", "file:///test/lib/Baz/Qux.pm"),
-        (
-            "file:///test/workspace/lib/Module.pm",
-            "file:///test/workspace/lib/NewModule.pm",
-        ),
+        ("file:///test/workspace/lib/Module.pm", "file:///test/workspace/lib/NewModule.pm"),
         ("file:///test/MyModule.pl", "file:///test/YourModule.pl"),
     ];
 

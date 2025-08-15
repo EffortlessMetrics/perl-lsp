@@ -30,10 +30,7 @@ pub mod v0 {
     // ============= Scope Analyzer Compatibility =============
 
     /// Old scope analyzer that took code directly
-    #[deprecated(
-        since = "0.7.5",
-        note = "Use ScopeAnalyzer::new().analyze(&ast, code, pragmas)"
-    )]
+    #[deprecated(since = "0.7.5", note = "Use ScopeAnalyzer::new().analyze(&ast, code, pragmas)")]
     #[inline]
     pub fn analyze_scope(code: &str) -> Result<Vec<scope_analyzer::ScopeIssue>, String> {
         let mut parser = Parser::new(code);
@@ -73,10 +70,7 @@ pub mod v0 {
     }
 
     /// Convert new workspace symbol to old DTO format
-    #[deprecated(
-        since = "0.7.5",
-        note = "Use workspace_index::WorkspaceSymbol directly"
-    )]
+    #[deprecated(since = "0.7.5", note = "Use workspace_index::WorkspaceSymbol directly")]
     #[inline]
     pub fn to_old_workspace_symbol(sym: &workspace_index::WorkspaceSymbol) -> WorkspaceSymbolDto {
         use crate::workspace_index::SymbolKind;
@@ -133,9 +127,7 @@ pub mod v0 {
             })),
         };
 
-        server
-            .handle_request(request)
-            .and_then(|response| response.result)
+        server.handle_request(request).and_then(|response| response.result)
     }
 
     /// Helper for sending notifications

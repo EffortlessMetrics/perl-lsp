@@ -84,14 +84,8 @@ print "Result: $result\n";"#;
 
     // Format just the messy subroutine (line 4)
     let range = perl_parser::formatting::Range {
-        start: perl_parser::formatting::Position {
-            line: 4,
-            character: 0,
-        },
-        end: perl_parser::formatting::Position {
-            line: 4,
-            character: 50,
-        },
+        start: perl_parser::formatting::Position { line: 4, character: 0 },
+        end: perl_parser::formatting::Position { line: 4, character: 50 },
     };
 
     match formatter.format_range(multi_line, &range, &options) {

@@ -13,14 +13,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     if let Some(test_name) = test {
         println!("Running specific edge case test: {}", test_name);
         let status = Command::new("cargo")
-            .args(&[
-                "test",
-                "--features",
-                features,
-                &test_name,
-                "--",
-                "--nocapture",
-            ])
+            .args(&["test", "--features", features, &test_name, "--", "--nocapture"])
             .status()
             .context("Failed to run specific edge case test")?;
 
@@ -34,14 +27,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     // Run edge case unit tests
     println!("\n📝 Running edge case tests...");
     let status = Command::new("cargo")
-        .args(&[
-            "test",
-            "--features",
-            features,
-            "edge_case_tests",
-            "--",
-            "--nocapture",
-        ])
+        .args(&["test", "--features", features, "edge_case_tests", "--", "--nocapture"])
         .status()
         .context("Failed to run edge case tests")?;
 
@@ -83,11 +69,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
 
     // Run examples
     println!("\n📚 Running edge case examples...");
-    let examples = vec![
-        "edge_case_demo",
-        "anti_pattern_analysis",
-        "tree_sitter_compatibility",
-    ];
+    let examples = vec!["edge_case_demo", "anti_pattern_analysis", "tree_sitter_compatibility"];
 
     for example in examples {
         let status = Command::new("cargo")

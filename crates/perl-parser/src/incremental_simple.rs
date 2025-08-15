@@ -159,16 +159,8 @@ impl SimpleIncrementalParser {
                     }
                 }
                 (
-                    NodeKind::Binary {
-                        left: old_l,
-                        right: old_r,
-                        ..
-                    },
-                    NodeKind::Binary {
-                        left: new_l,
-                        right: new_r,
-                        ..
-                    },
+                    NodeKind::Binary { left: old_l, right: old_r, .. },
+                    NodeKind::Binary { left: new_l, right: new_r, .. },
                 ) => {
                     self.count_reusable_nodes(old_l, new_l);
                     self.count_reusable_nodes(old_r, new_r);
@@ -186,14 +178,8 @@ impl SimpleIncrementalParser {
             (NodeKind::Number { value: v1 }, NodeKind::Number { value: v2 }) => v1 == v2,
             (NodeKind::String { value: v1, .. }, NodeKind::String { value: v2, .. }) => v1 == v2,
             (
-                NodeKind::Variable {
-                    sigil: s1,
-                    name: n1,
-                },
-                NodeKind::Variable {
-                    sigil: s2,
-                    name: n2,
-                },
+                NodeKind::Variable { sigil: s1, name: n1 },
+                NodeKind::Variable { sigil: s2, name: n2 },
             ) => s1 == s2 && n1 == n2,
             (NodeKind::Binary { op: op1, .. }, NodeKind::Binary { op: op2, .. }) => op1 == op2,
             (NodeKind::Program { .. }, NodeKind::Program { .. }) => true,
@@ -219,12 +205,7 @@ impl SimpleIncrementalParser {
             NodeKind::Unary { operand, .. } => {
                 count += self.count_nodes(operand);
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -235,11 +216,7 @@ impl SimpleIncrementalParser {
                     count += self.count_nodes(else_b);
                 }
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 count += self.count_nodes(variable);
                 if let Some(init) = initializer {
                     count += self.count_nodes(init);
@@ -294,9 +271,6 @@ mod tests {
 
         // Should have reused some nodes
         assert!(parser.reused_nodes > 0);
-        println!(
-            "Reused: {}, Reparsed: {}",
-            parser.reused_nodes, parser.reparsed_nodes
-        );
+        println!("Reused: {}, Reparsed: {}", parser.reused_nodes, parser.reparsed_nodes);
     }
 }

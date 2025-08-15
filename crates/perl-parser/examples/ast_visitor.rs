@@ -28,12 +28,7 @@ trait AstVisitor {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -113,10 +108,8 @@ impl AstVisitor for VariableUsageCollector {
     }
 
     fn visit_children(&mut self, node: &Node) {
-        let pushed_scope = matches!(
-            &node.kind,
-            NodeKind::Subroutine { .. } | NodeKind::Block { .. }
-        );
+        let pushed_scope =
+            matches!(&node.kind, NodeKind::Subroutine { .. } | NodeKind::Block { .. });
 
         // Call default implementation
         match &node.kind {
@@ -132,12 +125,7 @@ impl AstVisitor for VariableUsageCollector {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -163,11 +151,7 @@ impl AstVisitor for VariableUsageCollector {
                     self.visit_node(arg);
                 }
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 self.visit_node(variable);
                 if let Some(init) = initializer {
                     self.visit_node(init);

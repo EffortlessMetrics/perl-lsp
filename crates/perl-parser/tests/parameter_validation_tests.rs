@@ -15,10 +15,8 @@ sub test($x, $y, $x) {
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
     // Should have one error for duplicate parameter
-    let duplicate_errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("duplicate-parameter"))
-        .collect();
+    let duplicate_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("duplicate-parameter")).collect();
 
     assert_eq!(duplicate_errors.len(), 1);
     assert!(duplicate_errors[0].message.contains("Duplicate parameter"));
@@ -67,10 +65,8 @@ sub helper($x, $y, $z) {
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
     // Should have one warning for unused parameter
-    let unused_warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("unused-parameter"))
-        .collect();
+    let unused_warnings: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unused-parameter")).collect();
 
     assert_eq!(unused_warnings.len(), 1);
     assert!(unused_warnings[0].message.contains("never used"));
@@ -93,10 +89,8 @@ my $hash = { key => value };  # These barewords should also be flagged
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
     // Should have errors for barewords
-    let bareword_errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
-        .collect();
+    let bareword_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
 
     assert!(!bareword_errors.is_empty());
     assert!(bareword_errors[0].message.contains("Bareword"));
@@ -124,10 +118,7 @@ sub legacy_style {
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
     // Should not flag @_ usage
-    let false_positives: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.message.contains("@_"))
-        .collect();
+    let false_positives: Vec<_> = diagnostics.iter().filter(|d| d.message.contains("@_")).collect();
 
     assert_eq!(false_positives.len(), 0, "Should not flag @_ usage");
 }
@@ -154,11 +145,7 @@ sub callback($event, $_unused_data) {
         .filter(|d| d.message.contains("$_unused_data"))
         .collect();
 
-    assert_eq!(
-        unused_warnings.len(),
-        0,
-        "Should not flag underscore-prefixed parameters"
-    );
+    assert_eq!(unused_warnings.len(), 0, "Should not flag underscore-prefixed parameters");
 }
 
 #[test]
@@ -176,14 +163,8 @@ sub complex($a, $b, $a, $c, $b) {
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
     // Should have errors for both duplicate parameters
-    let duplicate_errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("duplicate-parameter"))
-        .collect();
+    let duplicate_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("duplicate-parameter")).collect();
 
-    assert_eq!(
-        duplicate_errors.len(),
-        2,
-        "Should detect both duplicate parameters"
-    );
+    assert_eq!(duplicate_errors.len(), 2, "Should detect both duplicate parameters");
 }

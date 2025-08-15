@@ -16,10 +16,7 @@ pub fn run(version: String, yes: bool) -> Result<()> {
     }
 
     // Files to update
-    let cargo_files = vec![
-        "crates/perl-lexer/Cargo.toml",
-        "crates/perl-parser/Cargo.toml",
-    ];
+    let cargo_files = vec!["crates/perl-lexer/Cargo.toml", "crates/perl-parser/Cargo.toml"];
 
     let package_json = "vscode-extension/package.json";
 
@@ -73,10 +70,7 @@ pub fn run(version: String, yes: bool) -> Result<()> {
     println!();
     println!("💡 Next steps:");
     println!("1. Review the changes: git diff");
-    println!(
-        "2. Commit: git commit -am 'chore: bump version to {}'",
-        version
-    );
+    println!("2. Commit: git commit -am 'chore: bump version to {}'", version);
     println!("3. Run release: cargo xtask release {}", version);
 
     Ok(())
@@ -124,14 +118,8 @@ fn update_package_json_version(path: &str, version: &str) -> Result<()> {
 fn update_source_versions(version: &str) -> Result<()> {
     // Update version strings in Rust source files
     let patterns = vec![
-        (
-            r"Perl Language Server v\d+\.\d+\.\d+",
-            format!("Perl Language Server v{}", version),
-        ),
-        (
-            r"Perl Debug Adapter v\d+\.\d+\.\d+",
-            format!("Perl Debug Adapter v{}", version),
-        ),
+        (r"Perl Language Server v\d+\.\d+\.\d+", format!("Perl Language Server v{}", version)),
+        (r"Perl Debug Adapter v\d+\.\d+\.\d+", format!("Perl Debug Adapter v{}", version)),
     ];
 
     let source_dirs = vec!["crates/perl-parser/src"];
@@ -154,9 +142,7 @@ fn update_directory_versions(dir: &str, patterns: &[(impl AsRef<str>, String)]) 
 
             for (pattern, replacement) in patterns {
                 let regex = Regex::new(pattern.as_ref())?;
-                new_content = regex
-                    .replace_all(&new_content, replacement.as_str())
-                    .to_string();
+                new_content = regex.replace_all(&new_content, replacement.as_str()).to_string();
             }
 
             if new_content != content {
@@ -182,17 +168,13 @@ fn update_readme_version(version: &str) -> Result<()> {
     // Update perl-parser dependency version (X.Y format)
     let major_minor = version.split('.').take(2).collect::<Vec<_>>().join(".");
     let regex = Regex::new(r#"perl-parser = "\d+\.\d+""#)?;
-    let new_content = regex
-        .replace_all(&content, format!(r#"perl-parser = "{}""#, major_minor))
-        .to_string();
+    let new_content =
+        regex.replace_all(&content, format!(r#"perl-parser = "{}""#, major_minor)).to_string();
 
     // Update VSIX filename references
     let regex = Regex::new(r"perl-language-server-\d+\.\d+\.\d+\.vsix")?;
     let new_content = regex
-        .replace_all(
-            &new_content,
-            format!("perl-language-server-{}.vsix", version),
-        )
+        .replace_all(&new_content, format!("perl-language-server-{}.vsix", version))
         .to_string();
 
     fs::write(path, new_content)?;

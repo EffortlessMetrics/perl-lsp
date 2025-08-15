@@ -11,11 +11,7 @@ fn test_suite(_name: &str, tests: Vec<(&str, &str)>) -> Vec<(String, String, Str
             failures.push((
                 desc.to_string(),
                 code.lines().next().unwrap_or(code).to_string(),
-                format!("{:?}", e)
-                    .lines()
-                    .next()
-                    .unwrap_or("Unknown")
-                    .to_string(),
+                format!("{:?}", e).lines().next().unwrap_or("Unknown").to_string(),
             ));
         }
     }
@@ -40,42 +36,14 @@ fn main() {
     println!("|-------------|------|-------|");
 
     let additional_failures = vec![
-        (
-            "multiple heredocs in call",
-            "func(<<EOF, <<'END');",
-            "Heredoc parsing",
-        ),
-        (
-            "named capture group",
-            "m{(?<name>\\w+)}g",
-            "UnexpectedToken at (?<",
-        ),
-        (
-            "prototype with signature",
-            "sub qux :prototype($) ($x) { }",
-            "Expected { found (",
-        ),
-        (
-            "assignment in while",
-            "while (my $line = <>) { }",
-            "Expected ) found my",
-        ),
+        ("multiple heredocs in call", "func(<<EOF, <<'END');", "Heredoc parsing"),
+        ("named capture group", "m{(?<name>\\w+)}g", "UnexpectedToken at (?<"),
+        ("prototype with signature", "sub qux :prototype($) ($x) { }", "Expected { found ("),
+        ("assignment in while", "while (my $line = <>) { }", "Expected ) found my"),
         ("tie array", "tie my @array, 'Class'", "Expected expression"),
-        (
-            "full array slice",
-            "@list[0..$#list]",
-            "Expected ] found $#",
-        ),
-        (
-            "complex keys operation",
-            "keys %{{ map { $_ => 1 } @list }}",
-            "Complex expression",
-        ),
-        (
-            "postfix hash slice",
-            "$ref->%{qw(a b)}",
-            "Postfix deref syntax",
-        ),
+        ("full array slice", "@list[0..$#list]", "Expected ] found $#"),
+        ("complex keys operation", "keys %{{ map { $_ => 1 } @list }}", "Complex expression"),
+        ("postfix hash slice", "$ref->%{qw(a b)}", "Postfix deref syntax"),
     ];
 
     for (desc, code, error) in &additional_failures {
@@ -90,39 +58,15 @@ fn main() {
     println!("|-------------|------|-------|");
 
     let more_failures = vec![
-        (
-            "qq with hash delimiter",
-            "qq#hello $world#",
-            "Expected delimiter",
-        ),
+        ("qq with hash delimiter", "qq#hello $world#", "Expected delimiter"),
         ("match with angle brackets", "m<pattern>", "UnexpectedToken"),
-        (
-            "method attribute",
-            "sub foo : method { }",
-            "Expected { found :",
-        ),
-        (
-            "multiple attributes",
-            "sub bar : lvalue method { }",
-            "Expected { found method",
-        ),
-        (
-            "block and list prototype",
-            "sub mygrep(&@) { }",
-            "Prototype syntax",
-        ),
-        (
-            "reference prototype",
-            "sub mymap(\\@) { }",
-            "Prototype syntax",
-        ),
+        ("method attribute", "sub foo : method { }", "Expected { found :"),
+        ("multiple attributes", "sub bar : lvalue method { }", "Expected { found method"),
+        ("block and list prototype", "sub mygrep(&@) { }", "Prototype syntax"),
+        ("reference prototype", "sub mymap(\\@) { }", "Prototype syntax"),
         ("double negation", "!!", "Expected expression"),
         ("standalone smartmatch", "~~", "Expected expression"),
-        (
-            "full array slice",
-            "@array[0..$#array]",
-            "Expected ] found $#",
-        ),
+        ("full array slice", "@array[0..$#array]", "Expected ] found $#"),
         ("autoload block", "AUTOLOAD { }", "Expected expression"),
         ("destructor block", "DESTROY { }", "Expected expression"),
         ("emoji identifier", "my $♥ = 'love'", "Unicode identifier"),

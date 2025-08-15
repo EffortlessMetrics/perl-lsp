@@ -198,9 +198,7 @@ Data section line 3
             ParseEvent::Node(_) => {
                 *event_counts.entry("nodes").or_insert(0) += 1;
             }
-            ParseEvent::SpecialSection {
-                kind, start_line, ..
-            } => {
+            ParseEvent::SpecialSection { kind, start_line, .. } => {
                 special_sections.push((kind.clone(), *start_line));
                 *event_counts.entry("special").or_insert(0) += 1;
             }
@@ -213,14 +211,8 @@ Data section line 3
         }
     }
 
-    println!(
-        "  - Parsed nodes: {}",
-        event_counts.get("nodes").unwrap_or(&0)
-    );
-    println!(
-        "  - Special sections: {}",
-        event_counts.get("special").unwrap_or(&0)
-    );
+    println!("  - Parsed nodes: {}", event_counts.get("nodes").unwrap_or(&0));
+    println!("  - Special sections: {}", event_counts.get("special").unwrap_or(&0));
     for (kind, line) in special_sections {
         println!("    • {:?} at line {}", kind, line);
     }
@@ -314,9 +306,7 @@ my $result = greet("World");
             println!("✓ Generating S-expressions:");
 
             // Pretty-print mode
-            let formatter = SexpFormatter::new(sample_code)
-                .with_positions(false)
-                .compact(false);
+            let formatter = SexpFormatter::new(sample_code).with_positions(false).compact(false);
             let pretty_sexp = formatter.format(&ast);
 
             println!("\nPretty-printed S-expression:");
@@ -328,9 +318,8 @@ my $result = greet("World");
             }
 
             // Compact mode
-            let compact_formatter = SexpFormatter::new(sample_code)
-                .with_positions(true)
-                .compact(true);
+            let compact_formatter =
+                SexpFormatter::new(sample_code).with_positions(true).compact(true);
             let compact_sexp = compact_formatter.format(&ast);
 
             println!("\nCompact S-expression (first 150 chars):");
@@ -363,12 +352,7 @@ fn count_nodes(ast: &tree_sitter_perl::AstNode) -> usize {
         AstNode::MethodCall { object, args, .. } => {
             1 + count_nodes(object) + args.iter().map(count_nodes).sum::<usize>()
         }
-        AstNode::IfStatement {
-            condition,
-            then_block,
-            elsif_clauses,
-            else_block,
-        } => {
+        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
             let mut count = 1 + count_nodes(condition) + count_nodes(then_block);
             for (cond, block) in elsif_clauses {
                 count += count_nodes(cond) + count_nodes(block);

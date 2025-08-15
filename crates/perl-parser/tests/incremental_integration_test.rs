@@ -44,11 +44,7 @@ print $x + $y;
         let parse_time = start.elapsed();
 
         // Verify parse time is reasonable
-        assert!(
-            parse_time.as_millis() < 100,
-            "Parse time too slow: {:?}",
-            parse_time
-        );
+        assert!(parse_time.as_millis() < 100, "Parse time too slow: {:?}", parse_time);
 
         // Verify updated AST
         let ast2 = doc.ast().unwrap();

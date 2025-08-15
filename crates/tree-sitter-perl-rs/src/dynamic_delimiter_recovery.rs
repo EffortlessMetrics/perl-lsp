@@ -58,18 +58,8 @@ pub struct DelimiterAnalysis {
 static DELIMITER_ASSIGNMENT: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"(?m)^\s*(?:my\s+)?\$(\w+)\s*=\s*["']([^"']+)["']"#).unwrap());
 
-static COMMON_DELIMITER_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "delimiter",
-        "delim",
-        "end",
-        "eof",
-        "marker",
-        "tag",
-        "term",
-        "terminator",
-    ]
-});
+static COMMON_DELIMITER_NAMES: Lazy<Vec<&'static str>> =
+    Lazy::new(|| vec!["delimiter", "delim", "end", "eof", "marker", "tag", "term", "terminator"]);
 
 impl DynamicDelimiterRecovery {
     pub fn new(mode: RecoveryMode) -> Self {
@@ -100,14 +90,13 @@ impl DynamicDelimiterRecovery {
                     0.5
                 };
 
-                self.variable_values
-                    .entry(var_name.to_string())
-                    .or_insert_with(Vec::new)
-                    .push(PossibleValue {
+                self.variable_values.entry(var_name.to_string()).or_insert_with(Vec::new).push(
+                    PossibleValue {
                         value: value.to_string(),
                         confidence,
                         source: ValueSource::Literal,
-                    });
+                    },
+                );
             }
         }
     }
@@ -223,14 +212,13 @@ impl DynamicDelimiterRecovery {
 
     /// Add a user-provided hint
     pub fn add_user_hint(&mut self, var_name: &str, value: &str) {
-        self.variable_values
-            .entry(var_name.to_string())
-            .or_insert_with(Vec::new)
-            .push(PossibleValue {
+        self.variable_values.entry(var_name.to_string()).or_insert_with(Vec::new).push(
+            PossibleValue {
                 value: value.to_string(),
                 confidence: 0.9, // High confidence for user hints
                 source: ValueSource::UserHint,
-            });
+            },
+        );
     }
 }
 

@@ -23,9 +23,7 @@ fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
         params,
     };
 
-    server
-        .handle_request(request)
-        .and_then(|response| response.result)
+    server.handle_request(request).and_then(|response| response.result)
 }
 
 /// Initialize the LSP server
@@ -129,11 +127,7 @@ sub calculate {
 }
 "#;
 
-    open_document(
-        &mut server,
-        "file:///test/undefined_var.pl",
-        code_with_warning,
-    );
+    open_document(&mut server, "file:///test/undefined_var.pl", code_with_warning);
     // In a full implementation, the diagnostics provider would detect undefined $y
 }
 
@@ -322,11 +316,7 @@ print "Using config: $config_file\n";
     // 3. Use in die string: "Cannot open $config_file: $!"
     // 4. Use in backup string: "$config_file.bak"
     // 5. Use in print: "Using config: $config_file\n"
-    assert_eq!(
-        refs.len(),
-        5,
-        "Expected 5 references (1 declaration + 4 uses)"
-    );
+    assert_eq!(refs.len(), 5, "Expected 5 references (1 declaration + 4 uses)");
 }
 
 // ==================== USER STORY 5: HOVER INFORMATION ====================
@@ -726,12 +716,7 @@ sub multiply {
 1;
 "#;
 
-    update_document(
-        &mut server,
-        "file:///test/Calculator.pm",
-        2,
-        updated_calculator,
-    );
+    update_document(&mut server, "file:///test/Calculator.pm", 2, updated_calculator);
 
     // Step 6: Developer gets completion for the new function
     let completion_result = send_request(
@@ -927,11 +912,7 @@ sub fetch_all {
 1;
 "#;
 
-    open_document(
-        &mut server,
-        "file:///test/lib/MyApp/Database.pm",
-        module_code,
-    );
+    open_document(&mut server, "file:///test/lib/MyApp/Database.pm", module_code);
 
     // Developer wants to navigate to Database module definition
     let definition = send_request(
@@ -950,10 +931,7 @@ sub fetch_all {
 
     // Definition might not be found if module isn't in path
     if let Some(def) = definition {
-        assert!(
-            def.is_array() || def.is_object(),
-            "Definition should be array or LocationLink"
-        );
+        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
     }
 
     // Developer wants to find all uses of the Database module
@@ -966,9 +944,7 @@ sub fetch_all {
     );
 
     if let Some(symbols) = workspace_symbols {
-        let arr = symbols
-            .as_array()
-            .expect("workspace symbols should be array");
+        let arr = symbols.as_array().expect("workspace symbols should be array");
         // Module search might return empty if not in workspace
         if !arr.is_empty() {
             let has_database = arr.iter().any(|s| {

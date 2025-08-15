@@ -73,12 +73,7 @@ pub struct IncrementalParser {
 
 impl IncrementalParser {
     pub fn new() -> Self {
-        Self {
-            current_tree: None,
-            edit_history: Vec::new(),
-            max_history: 100,
-            use_enhanced: true,
-        }
+        Self { current_tree: None, edit_history: Vec::new(), max_history: 100, use_enhanced: true }
     }
 
     pub fn with_enhanced(mut self, use_enhanced: bool) -> Self {
@@ -108,20 +103,10 @@ impl IncrementalParser {
         let line_breaks = find_line_breaks(source);
         let mut node_positions = HashMap::new();
         let mut id_counter = 0;
-        collect_node_positions(
-            &ast,
-            &mut node_positions,
-            &mut id_counter,
-            source,
-            &line_breaks,
-        );
+        collect_node_positions(&ast, &mut node_positions, &mut id_counter, source, &line_breaks);
 
-        self.current_tree = Some(ParseTree {
-            root: ast,
-            node_positions,
-            source: Arc::from(source),
-            line_breaks,
-        });
+        self.current_tree =
+            Some(ParseTree { root: ast, node_positions, source: Arc::from(source), line_breaks });
 
         Ok(self.current_tree.as_ref().unwrap())
     }
@@ -296,9 +281,7 @@ fn find_line_breaks(source: &str) -> Vec<usize> {
 
 /// Calculate position from byte offset
 fn byte_to_position(byte_offset: usize, line_breaks: &[usize]) -> Position {
-    let line = line_breaks
-        .binary_search(&byte_offset)
-        .unwrap_or_else(|i| i.saturating_sub(1));
+    let line = line_breaks.binary_search(&byte_offset).unwrap_or_else(|i| i.saturating_sub(1));
     let line_start = line_breaks[line];
     let column = byte_offset - line_start;
     Position { line, column }
@@ -378,14 +361,8 @@ mod tests {
             old_end_byte: 10,
             new_end_byte: 10,
             start_position: Position { line: 0, column: 8 },
-            old_end_position: Position {
-                line: 0,
-                column: 10,
-            },
-            new_end_position: Position {
-                line: 0,
-                column: 10,
-            },
+            old_end_position: Position { line: 0, column: 10 },
+            new_end_position: Position { line: 0, column: 10 },
         };
 
         let new_source = "my $x = 43;";

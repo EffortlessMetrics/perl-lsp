@@ -5,14 +5,8 @@ fn main() {
     let tests = vec![
         // Complex heredoc edge cases
         ("my @x = (<<EOF, 'other');\ntext\nEOF", "heredoc in list"),
-        (
-            "print <<'EOF' . 'suffix';\ntext\nEOF",
-            "heredoc with concatenation",
-        ),
-        (
-            "func(<<EOF, <<'END');\nfirst\nEOF\nsecond\nEND",
-            "multiple heredocs in call",
-        ),
+        ("print <<'EOF' . 'suffix';\ntext\nEOF", "heredoc with concatenation"),
+        ("func(<<EOF, <<'END');\nfirst\nEOF\nsecond\nEND", "multiple heredocs in call"),
         ("$hash{<<EOF};\nkey\nEOF", "heredoc as hash key"),
         // Complex interpolation edge cases
         ("\"${\\$x}\"", "reference in interpolation"),
@@ -51,10 +45,7 @@ fn main() {
         ("sub qux :prototype($) ($x) { }", "prototype with signature"),
         // Complex filehandle operations
         ("open my $fh, '<:utf8', 'file'", "open with encoding"),
-        (
-            "binmode STDOUT, ':encoding(UTF-8)'",
-            "binmode with encoding",
-        ),
+        ("binmode STDOUT, ':encoding(UTF-8)'", "binmode with encoding"),
         ("<STDIN>", "readline from STDIN"),
         ("print {$fh} 'text'", "print with block filehandle"),
         // Loop edge cases
@@ -84,10 +75,7 @@ fn main() {
         ("@list[0..$#list]", "full array slice"),
         ("@array[@indices]", "slice with array"),
         ("(LIST)[0, 2, 4]", "list slice"),
-        (
-            "keys %{{ map { $_ => 1 } @list }}",
-            "complex keys operation",
-        ),
+        ("keys %{{ map { $_ => 1 } @list }}", "complex keys operation"),
         // More postfix dereference cases
         ("$ref->@[0..2]", "postfix slice"),
         ("$ref->%{qw(a b)}", "postfix hash slice"),
@@ -127,10 +115,7 @@ fn main() {
         }
     }
 
-    println!(
-        "\nAdditional Tests Summary: {} passed, {} failed",
-        passed, failed
-    );
+    println!("\nAdditional Tests Summary: {} passed, {} failed", passed, failed);
 
     if failed > 0 {
         std::process::exit(1);

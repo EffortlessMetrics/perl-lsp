@@ -53,11 +53,7 @@ enum DebugState {
 #[serde(tag = "type")]
 pub enum DapMessage {
     #[serde(rename = "request")]
-    Request {
-        seq: i64,
-        command: String,
-        arguments: Option<Value>,
-    },
+    Request { seq: i64, command: String, arguments: Option<Value> },
     #[serde(rename = "response")]
     Response {
         seq: i64,
@@ -210,12 +206,7 @@ impl DebugAdapter {
 
                     // Parse and handle the message
                     if let Ok(msg) = serde_json::from_slice::<DapMessage>(&buffer[..bytes_read]) {
-                        if let DapMessage::Request {
-                            seq,
-                            command,
-                            arguments,
-                        } = msg
-                        {
+                        if let DapMessage::Request { seq, command, arguments } = msg {
                             let response = self.handle_request(seq, &command, arguments);
                             if let Ok(json) = serde_json::to_string(&response) {
                                 let content_length = json.len();
@@ -283,11 +274,7 @@ impl DebugAdapter {
     fn send_event(&self, event: &str, body: Option<Value>) {
         if let Some(ref sender) = self.event_sender {
             let seq = self.next_seq();
-            let msg = DapMessage::Event {
-                seq,
-                event: event.to_string(),
-                body,
-            };
+            let msg = DapMessage::Event { seq, event: event.to_string(), body };
             let _ = sender.send(msg);
         }
     }
@@ -361,17 +348,11 @@ impl DebugAdapter {
                 .get("args")
                 .and_then(|a| a.as_array())
                 .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
+                    arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
 
-            let stop_on_entry = args
-                .get("stopOnEntry")
-                .and_then(|s| s.as_bool())
-                .unwrap_or(false);
+            let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
             // Launch Perl debugger
             match self.launch_debugger(program, perl_args, stop_on_entry) {
@@ -528,10 +509,8 @@ impl DebugAdapter {
                 .unwrap_or("");
 
             let empty_vec = Vec::new();
-            let breakpoint_requests = args
-                .get("breakpoints")
-                .and_then(|b| b.as_array())
-                .unwrap_or(&empty_vec);
+            let breakpoint_requests =
+                args.get("breakpoints").and_then(|b| b.as_array()).unwrap_or(&empty_vec);
 
             let mut verified_breakpoints = Vec::new();
             let mut bp_id = 1;
@@ -539,10 +518,8 @@ impl DebugAdapter {
             for bp_req in breakpoint_requests {
                 let line = bp_req.get("line").and_then(|l| l.as_i64()).unwrap_or(0) as i32;
 
-                let condition = bp_req
-                    .get("condition")
-                    .and_then(|c| c.as_str())
-                    .map(|s| s.to_string());
+                let condition =
+                    bp_req.get("condition").and_then(|c| c.as_str()).map(|s| s.to_string());
 
                 // TODO: Actually set breakpoint in Perl debugger
                 let breakpoint = Breakpoint {
@@ -687,17 +664,11 @@ impl DebugAdapter {
     /// Handle variables request
     fn handle_variables(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
-            let variables_ref = args
-                .get("variablesReference")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0) as i32;
+            let variables_ref =
+                args.get("variablesReference").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
 
             let variables = if let Some(ref session) = *self.session.lock().unwrap() {
-                session
-                    .variables
-                    .get(&variables_ref)
-                    .cloned()
-                    .unwrap_or_default()
+                session.variables.get(&variables_ref).cloned().unwrap_or_default()
             } else {
                 vec![]
             };
@@ -799,10 +770,7 @@ impl DebugAdapter {
     /// Handle evaluate request
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
-            let expression = args
-                .get("expression")
-                .and_then(|e| e.as_str())
-                .unwrap_or("");
+            let expression = args.get("expression").and_then(|e| e.as_str()).unwrap_or("");
 
             // TODO: Evaluate expression in Perl debugger
             let result = format!("({})", expression);
@@ -857,12 +825,7 @@ mod tests {
         let response = adapter.handle_request(1, "initialize", None);
 
         match response {
-            DapMessage::Response {
-                success,
-                command,
-                body,
-                ..
-            } => {
+            DapMessage::Response { success, command, body, .. } => {
                 assert!(success);
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());

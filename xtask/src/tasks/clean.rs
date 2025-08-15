@@ -8,17 +8,13 @@ use std::fs;
 pub fn run(all: bool) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     spinner.set_message("Cleaning build artifacts");
 
     // Clean cargo artifacts
-    let status = cmd("cargo", &["clean"])
-        .run()
-        .context("Failed to clean cargo artifacts")?;
+    let status = cmd("cargo", &["clean"]).run().context("Failed to clean cargo artifacts")?;
 
     if !status.status.success() {
         spinner.finish_with_message("❌ Clean failed");
@@ -30,11 +26,7 @@ pub fn run(all: bool) -> Result<()> {
         spinner.set_message("Cleaning all artifacts");
 
         // Remove generated files
-        let generated_files = [
-            "crates/tree-sitter-perl/src/bindings.rs",
-            "target",
-            "Cargo.lock",
-        ];
+        let generated_files = ["crates/tree-sitter-perl/src/bindings.rs", "target", "Cargo.lock"];
 
         for file in &generated_files {
             if fs::metadata(file).is_ok() {

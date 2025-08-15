@@ -55,24 +55,15 @@ impl AstCache {
 
         // Evict oldest entries if cache is full
         if cache.len() >= self.max_size {
-            let oldest_key = cache
-                .iter()
-                .min_by_key(|(_, v)| v.last_accessed)
-                .map(|(k, _)| k.clone());
+            let oldest_key =
+                cache.iter().min_by_key(|(_, v)| v.last_accessed).map(|(k, _)| k.clone());
 
             if let Some(key) = oldest_key {
                 cache.remove(&key);
             }
         }
 
-        cache.insert(
-            uri,
-            CachedAst {
-                ast,
-                content_hash,
-                last_accessed: Instant::now(),
-            },
-        );
+        cache.insert(uri, CachedAst { ast, content_hash, last_accessed: Instant::now() });
     }
 
     /// Clear expired entries
@@ -107,9 +98,7 @@ impl Default for IncrementalParser {
 
 impl IncrementalParser {
     pub fn new() -> Self {
-        Self {
-            changed_regions: Vec::new(),
-        }
+        Self { changed_regions: Vec::new() }
     }
 
     /// Mark a region as changed
@@ -236,10 +225,7 @@ impl Default for SymbolIndex {
 
 impl SymbolIndex {
     pub fn new() -> Self {
-        Self {
-            trie: SymbolTrie::new(),
-            inverted_index: HashMap::new(),
-        }
+        Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
     }
 
     /// Add a symbol to the index
@@ -250,10 +236,7 @@ impl SymbolIndex {
         // Add to inverted index for fuzzy matching
         let tokens = Self::tokenize(&symbol);
         for token in tokens {
-            self.inverted_index
-                .entry(token)
-                .or_default()
-                .push(symbol.clone());
+            self.inverted_index.entry(token).or_default().push(symbol.clone());
         }
     }
 
@@ -314,20 +297,14 @@ impl SymbolIndex {
 
 impl SymbolTrie {
     fn new() -> Self {
-        Self {
-            children: HashMap::new(),
-            symbols: Vec::new(),
-        }
+        Self { children: HashMap::new(), symbols: Vec::new() }
     }
 
     fn insert(&mut self, symbol: &str) {
         let mut node = self;
 
         for ch in symbol.chars() {
-            node = node
-                .children
-                .entry(ch)
-                .or_insert_with(|| Box::new(SymbolTrie::new()));
+            node = node.children.entry(ch).or_insert_with(|| Box::new(SymbolTrie::new()));
         }
 
         node.symbols.push(symbol.to_string());

@@ -75,10 +75,7 @@ fn main() {
         ("wantarray", "context check"),
         // Loop control
         ("LABEL: while (1) { last LABEL }", "labeled last"),
-        (
-            "OUTER: for (@a) { INNER: for (@b) { next OUTER } }",
-            "nested labels",
-        ),
+        ("OUTER: for (@a) { INNER: for (@b) { next OUTER } }", "nested labels"),
         // Special use cases
         ("use 5.010;", "version requirement"),
         ("use feature 'say';", "feature pragma"),
@@ -141,10 +138,7 @@ fn main() {
         }
     }
 
-    println!(
-        "\nMore Edge Cases Summary: {} passed, {} failed",
-        passed, failed
-    );
+    println!("\nMore Edge Cases Summary: {} passed, {} failed", passed, failed);
 
     if failed > 0 {
         std::process::exit(1);

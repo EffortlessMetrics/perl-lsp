@@ -16,26 +16,17 @@ mod bless_parsing_tests {
 
     #[test]
     fn test_bless_empty_hash_with_class() {
-        parse_and_check(
-            "bless {}, $class",
-            "(program (call bless ((hash ) (variable $ class))))",
-        );
+        parse_and_check("bless {}, $class", "(program (call bless ((hash ) (variable $ class))))");
     }
 
     #[test]
     fn test_bless_with_string_literal() {
-        parse_and_check(
-            "bless {}, 'Foo'",
-            "(program (call bless ((hash ) (string \"'Foo'\"))))",
-        );
+        parse_and_check("bless {}, 'Foo'", "(program (call bless ((hash ) (string \"'Foo'\"))))");
     }
 
     #[test]
     fn test_return_bless_empty_hash() {
-        parse_and_check(
-            "return bless {}",
-            "(program (return (call bless ((hash )))))",
-        );
+        parse_and_check("return bless {}", "(program (return (call bless ((hash )))))");
     }
 
     #[test]

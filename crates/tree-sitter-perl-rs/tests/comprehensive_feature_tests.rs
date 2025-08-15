@@ -7,12 +7,7 @@ mod tests {
 
     fn assert_parses(input: &str) {
         let result = PerlParser::parse(Rule::program, input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse: {}\nError: {:?}",
-            input,
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse: {}\nError: {:?}", input, result.err());
     }
 
     fn assert_parse_fails(input: &str) {

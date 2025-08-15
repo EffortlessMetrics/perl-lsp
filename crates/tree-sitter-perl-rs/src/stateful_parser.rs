@@ -172,11 +172,7 @@ impl StatefulPerlParser {
             let name_part = after_format[..eq_pos].trim();
 
             // If no name specified, use empty string (parser will use default)
-            let name = if name_part.is_empty() {
-                String::new()
-            } else {
-                name_part.to_string()
-            };
+            let name = if name_part.is_empty() { String::new() } else { name_part.to_string() };
 
             Some(FormatInfo {
                 name,
@@ -245,12 +241,7 @@ impl StatefulPerlParser {
                 return None;
             }
 
-            Some(HeredocMarker {
-                marker,
-                indented,
-                quoted: quote_type,
-                position: pos,
-            })
+            Some(HeredocMarker { marker, indented, quoted: quote_type, position: pos })
         } else {
             None
         }
@@ -258,11 +249,7 @@ impl StatefulPerlParser {
 
     /// Check if a line is a heredoc terminator
     pub fn is_heredoc_terminator(&self, line: &str, heredoc: &HeredocMarker) -> bool {
-        let trimmed = if heredoc.indented {
-            line.trim_start()
-        } else {
-            line
-        };
+        let trimmed = if heredoc.indented { line.trim_start() } else { line };
 
         trimmed == heredoc.marker
     }
@@ -285,10 +272,8 @@ impl StatefulPerlParser {
         }
 
         // Create a map for quick lookup
-        let mut content_map: std::collections::HashMap<Arc<str>, String> = contents
-            .into_iter()
-            .map(|(k, v)| (Arc::from(k), v))
-            .collect();
+        let mut content_map: std::collections::HashMap<Arc<str>, String> =
+            contents.into_iter().map(|(k, v)| (Arc::from(k), v)).collect();
 
         // Recursively walk the AST and update heredoc nodes
         self.update_heredoc_nodes(ast, &mut content_map);
@@ -319,9 +304,7 @@ impl StatefulPerlParser {
         content_map: &mut std::collections::HashMap<Arc<str>, String>,
     ) {
         match node {
-            AstNode::Heredoc {
-                marker, content, ..
-            } => {
+            AstNode::Heredoc { marker, content, .. } => {
                 if let Some(collected_content) = content_map.remove(marker) {
                     *content = Arc::from(collected_content);
                 }
@@ -342,12 +325,7 @@ impl StatefulPerlParser {
             | AstNode::EvalString(inner) => {
                 self.update_heredoc_nodes(inner, content_map);
             }
-            AstNode::IfStatement {
-                then_block,
-                elsif_clauses,
-                else_block,
-                ..
-            } => {
+            AstNode::IfStatement { then_block, elsif_clauses, else_block, .. } => {
                 self.update_heredoc_nodes(then_block, content_map);
                 for (_, block) in elsif_clauses {
                     self.update_heredoc_nodes(block, content_map);
@@ -356,9 +334,7 @@ impl StatefulPerlParser {
                     self.update_heredoc_nodes(else_block, content_map);
                 }
             }
-            AstNode::UnlessStatement {
-                block, else_block, ..
-            } => {
+            AstNode::UnlessStatement { block, else_block, .. } => {
                 self.update_heredoc_nodes(block, content_map);
                 if let Some(else_block) = else_block {
                     self.update_heredoc_nodes(else_block, content_map);
@@ -391,21 +367,13 @@ impl StatefulPerlParser {
             AstNode::UnaryOp { operand, .. } => {
                 self.update_heredoc_nodes(operand, content_map);
             }
-            AstNode::TernaryOp {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
+            AstNode::TernaryOp { condition, true_expr, false_expr } => {
                 self.update_heredoc_nodes(condition, content_map);
                 self.update_heredoc_nodes(true_expr, content_map);
                 self.update_heredoc_nodes(false_expr, content_map);
             }
             AstNode::FunctionCall { function, args }
-            | AstNode::MethodCall {
-                object: function,
-                args,
-                ..
-            } => {
+            | AstNode::MethodCall { object: function, args, .. } => {
                 self.update_heredoc_nodes(function, content_map);
                 for arg in args {
                     self.update_heredoc_nodes(arg, content_map);
@@ -461,12 +429,7 @@ impl StatefulPerlParser {
             | AstNode::EvalString(inner) => {
                 self.update_format_nodes(inner, content_map);
             }
-            AstNode::IfStatement {
-                then_block,
-                elsif_clauses,
-                else_block,
-                ..
-            } => {
+            AstNode::IfStatement { then_block, elsif_clauses, else_block, .. } => {
                 self.update_format_nodes(then_block, content_map);
                 for (_, block) in elsif_clauses {
                     self.update_format_nodes(block, content_map);
@@ -475,9 +438,7 @@ impl StatefulPerlParser {
                     self.update_format_nodes(else_block, content_map);
                 }
             }
-            AstNode::UnlessStatement {
-                block, else_block, ..
-            } => {
+            AstNode::UnlessStatement { block, else_block, .. } => {
                 self.update_format_nodes(block, content_map);
                 if let Some(else_block) = else_block {
                     self.update_format_nodes(else_block, content_map);

@@ -37,9 +37,7 @@ impl DisambiguatedParser {
         let mut parser = PureRustPerlParser::new();
         let mut ast = None;
         for pair in pairs {
-            ast = parser
-                .build_node(pair)
-                .map_err(|_| ParseError::ParseFailed)?;
+            ast = parser.build_node(pair).map_err(|_| ParseError::ParseFailed)?;
         }
 
         // Step 4: Postprocess to restore original tokens

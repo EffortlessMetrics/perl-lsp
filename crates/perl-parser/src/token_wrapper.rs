@@ -20,11 +20,7 @@ pub struct TokenWithPosition {
 impl TokenWithPosition {
     /// Create a new token with position
     pub fn new(token: Token, start_pos: Position, end_pos: Position) -> Self {
-        TokenWithPosition {
-            token,
-            start_pos,
-            end_pos,
-        }
+        TokenWithPosition { token, start_pos, end_pos }
     }
 
     /// Get the token type
@@ -65,10 +61,7 @@ impl<'a> PositionTracker<'a> {
             }
         }
 
-        PositionTracker {
-            source,
-            line_starts,
-        }
+        PositionTracker { source, line_starts }
     }
 
     /// Convert a byte offset to a Position

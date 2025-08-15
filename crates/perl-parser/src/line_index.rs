@@ -28,10 +28,7 @@ impl LineIndex {
 
     /// Convert byte offset to position (0-based line and UTF-16 column)
     pub fn offset_to_position(&mut self, offset: usize) -> (u32, u32) {
-        let line = self
-            .line_starts
-            .binary_search(&offset)
-            .unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
 
         let line_start = self.line_starts[line];
         let column = self.utf16_column(line, offset - line_start);
@@ -95,11 +92,7 @@ impl LineIndex {
         }
 
         // Check if we're at the end of the line
-        if current_utf16 == utf16_offset {
-            Some(line_text.len())
-        } else {
-            None
-        }
+        if current_utf16 == utf16_offset { Some(line_text.len()) } else { None }
     }
 
     // Remove unused compute_utf16_line method

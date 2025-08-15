@@ -43,28 +43,17 @@ pub struct InlayHintConfig {
 
 impl Default for InlayHintConfig {
     fn default() -> Self {
-        Self {
-            parameter_hints: true,
-            type_hints: true,
-            chained_hints: true,
-            max_length: 30,
-        }
+        Self { parameter_hints: true, type_hints: true, chained_hints: true, max_length: 30 }
     }
 }
 
 impl InlayHintsProvider {
     pub fn new(source: String) -> Self {
-        Self {
-            source,
-            enabled_hints: InlayHintConfig::default(),
-        }
+        Self { source, enabled_hints: InlayHintConfig::default() }
     }
 
     pub fn with_config(source: String, config: InlayHintConfig) -> Self {
-        Self {
-            source,
-            enabled_hints: config,
-        }
+        Self { source, enabled_hints: config }
     }
 
     /// Extract inlay hints from the AST
@@ -102,11 +91,7 @@ impl InlayHintsProvider {
             }
 
             // Method calls - show parameter hints
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
+            NodeKind::MethodCall { object, method, args } => {
                 if self.enabled_hints.parameter_hints {
                     self.add_parameter_hints(method, args, node, hints);
                 }
@@ -119,11 +104,7 @@ impl InlayHintsProvider {
             }
 
             // Variable declarations - show type hints
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if self.enabled_hints.type_hints {
                     if let Some(init) = initializer {
                         self.add_type_hint(variable, init, hints);
@@ -230,17 +211,9 @@ impl InlayHintsProvider {
     fn get_parameter_names(&self, function_name: &str) -> Vec<String> {
         match function_name {
             // Built-in functions
-            "open" => vec![
-                "filehandle".to_string(),
-                "mode".to_string(),
-                "filename".to_string(),
-            ],
+            "open" => vec!["filehandle".to_string(), "mode".to_string(), "filename".to_string()],
             "print" => vec!["filehandle".to_string(), "list".to_string()],
-            "printf" => vec![
-                "filehandle".to_string(),
-                "format".to_string(),
-                "list".to_string(),
-            ],
+            "printf" => vec!["filehandle".to_string(), "format".to_string(), "list".to_string()],
             "push" => vec!["array".to_string(), "list".to_string()],
             "unshift" => vec!["array".to_string(), "list".to_string()],
             "splice" => vec![
@@ -255,17 +228,9 @@ impl InlayHintsProvider {
                 "length".to_string(),
                 "replacement".to_string(),
             ],
-            "index" => vec![
-                "string".to_string(),
-                "substring".to_string(),
-                "position".to_string(),
-            ],
+            "index" => vec!["string".to_string(), "substring".to_string(), "position".to_string()],
             "join" => vec!["separator".to_string(), "list".to_string()],
-            "split" => vec![
-                "pattern".to_string(),
-                "string".to_string(),
-                "limit".to_string(),
-            ],
+            "split" => vec!["pattern".to_string(), "string".to_string(), "limit".to_string()],
             "grep" => vec!["block".to_string(), "list".to_string()],
             "map" => vec!["block".to_string(), "list".to_string()],
             "sort" => vec!["block".to_string(), "list".to_string()],
@@ -278,10 +243,7 @@ impl InlayHintsProvider {
         match &arg.kind {
             // String literals with clear content
             NodeKind::String { value, .. } => {
-                value.len() < 20
-                    && value
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c.is_whitespace())
+                value.len() < 20 && value.chars().all(|c| c.is_alphanumeric() || c.is_whitespace())
             }
             // Simple variable names
             NodeKind::Variable { name, .. } => {
@@ -323,12 +285,7 @@ impl InlayHintsProvider {
     /// Visit children nodes
     fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>) {
         match &node.kind {
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.visit_node(condition, hints);
                 self.visit_node(then_branch, hints);
                 for (cond, body) in elsif_branches {
@@ -339,19 +296,11 @@ impl InlayHintsProvider {
                     self.visit_node(else_b, hints);
                 }
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 self.visit_node(condition, hints);
                 self.visit_node(body, hints);
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(i) = init {
                     self.visit_node(i, hints);
                 }
@@ -363,11 +312,7 @@ impl InlayHintsProvider {
                 }
                 self.visit_node(body, hints);
             }
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 self.visit_node(variable, hints);
                 self.visit_node(list, hints);
                 self.visit_node(body, hints);
@@ -490,10 +435,8 @@ my $result = split(/,/, $input);
             let hints = provider.extract(&ast);
 
             // Should have type hints for variables
-            let type_hints: Vec<_> = hints
-                .iter()
-                .filter(|h| h.kind == InlayHintKind::Type)
-                .collect();
+            let type_hints: Vec<_> =
+                hints.iter().filter(|h| h.kind == InlayHintKind::Type).collect();
 
             assert!(type_hints.len() >= 3);
 
@@ -516,10 +459,8 @@ print("Hello, World!");
             let hints = provider.extract(&ast);
 
             // Should skip hints for clear arguments
-            let param_hints: Vec<_> = hints
-                .iter()
-                .filter(|h| h.kind == InlayHintKind::Parameter)
-                .collect();
+            let param_hints: Vec<_> =
+                hints.iter().filter(|h| h.kind == InlayHintKind::Parameter).collect();
 
             // Should have some parameter hints, but skip clear ones
             assert!(!param_hints.is_empty());

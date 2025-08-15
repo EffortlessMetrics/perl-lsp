@@ -248,18 +248,14 @@ pub fn language() -> Language {
 /// Create a new tree-sitter parser instance
 pub fn create_ts_parser() -> tree_sitter::Parser {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&language())
-        .expect("Failed to set language");
+    parser.set_language(&language()).expect("Failed to set language");
     parser
 }
 
 /// Parse Perl source code
 pub fn parse(source: &str) -> Result<tree_sitter::Tree, error::ParseError> {
     let mut parser = create_ts_parser();
-    parser
-        .parse(source, None)
-        .ok_or(error::ParseError::ParseFailed)
+    parser.parse(source, None).ok_or(error::ParseError::ParseFailed)
 }
 
 /// Parse Perl source code with existing tree
@@ -268,9 +264,7 @@ pub fn parse_with_tree(
     old_tree: Option<&tree_sitter::Tree>,
 ) -> Result<tree_sitter::Tree, error::ParseError> {
     let mut parser = create_ts_parser();
-    parser
-        .parse(source, old_tree)
-        .ok_or(error::ParseError::ParseFailed)
+    parser.parse(source, old_tree).ok_or(error::ParseError::ParseFailed)
 }
 
 // Rule is available as a type inside pure_rust_parser module when using PerlParser

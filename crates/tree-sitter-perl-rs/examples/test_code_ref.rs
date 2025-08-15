@@ -7,10 +7,7 @@ fn main() {
 
     let test_cases = vec![
         ("Simple function reference", r#"my $ref = \&function;"#),
-        (
-            "Qualified function reference",
-            r#"my $ref = \&Module::function;"#,
-        ),
+        ("Qualified function reference", r#"my $ref = \&Module::function;"#),
         ("Reference without &", r#"my $ref = \function;"#),
         ("Reference in expression", r#"my $ref = \&{"function"};"#),
     ];
@@ -50,9 +47,7 @@ fn print_ast(node: &AstNode, depth: usize) {
             println!("{}Statement", indent);
             print_ast(content, depth + 1);
         }
-        AstNode::VariableDeclaration {
-            scope, initializer, ..
-        } => {
+        AstNode::VariableDeclaration { scope, initializer, .. } => {
             println!("{}VarDecl: {}", indent, scope);
             if let Some(init) = initializer {
                 print_ast(init, depth + 1);

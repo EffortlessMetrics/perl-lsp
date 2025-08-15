@@ -11,10 +11,7 @@ fn main() {
         ("Mixed commas and arrows", "{ 'one', 1, two => 2 }"),
         ("Nested hash refs", "{ outer => { inner => 'value' } }"),
         ("Array with fat arrows", "(a => 1, b => 2)"),
-        (
-            "Function call with arrows",
-            "print(foo => 'bar', baz => 'qux')",
-        ),
+        ("Function call with arrows", "print(foo => 'bar', baz => 'qux')"),
     ];
 
     println!("=== Testing Fat Arrow (=>) Operator ===\n");

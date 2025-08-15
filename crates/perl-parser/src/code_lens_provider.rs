@@ -73,12 +73,7 @@ impl CodeLensProvider {
                 }
             }
 
-            NodeKind::Subroutine {
-                name,
-                params: _,
-                attributes: _,
-                body,
-            } => {
+            NodeKind::Subroutine { name, params: _, attributes: _, body } => {
                 if let Some(name) = name {
                     // Add "Run Test" lens for test subroutines
                     if self.is_test_subroutine(name) {
@@ -137,14 +132,8 @@ impl CodeLensProvider {
 
         lenses.push(CodeLens {
             range: Range {
-                start: Position {
-                    line: start_line as u32,
-                    character: start_col as u32,
-                },
-                end: Position {
-                    line: end_line as u32,
-                    character: end_col as u32,
-                },
+                start: Position { line: start_line as u32, character: start_col as u32 },
+                end: Position { line: end_line as u32, character: end_col as u32 },
             },
             command: Some(Command {
                 title: "▶ Run Test".to_string(),
@@ -162,14 +151,8 @@ impl CodeLensProvider {
         // Put the lens on the same line as the declaration
         lenses.push(CodeLens {
             range: Range {
-                start: Position {
-                    line: start_line as u32,
-                    character: start_col as u32,
-                },
-                end: Position {
-                    line: start_line as u32,
-                    character: start_col as u32,
-                },
+                start: Position { line: start_line as u32, character: start_col as u32 },
+                end: Position { line: start_line as u32, character: start_col as u32 },
             },
             command: None, // Will be resolved later
             data: Some(json!({
@@ -250,14 +233,8 @@ pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
     if source.starts_with("#!") && source.contains("perl") {
         Some(CodeLens {
             range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
             },
             command: Some(Command {
                 title: "▶ Run Script".to_string(),
@@ -311,12 +288,7 @@ sub test_another {
         // Check for run test lenses
         let run_test_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| {
-                l.command
-                    .as_ref()
-                    .map(|c| c.command == "perl.runTest")
-                    .unwrap_or(false)
-            })
+            .filter(|l| l.command.as_ref().map(|c| c.command == "perl.runTest").unwrap_or(false))
             .collect();
         assert_eq!(run_test_lenses.len(), 2); // test_basic and test_another
     }
@@ -340,14 +312,8 @@ sub test_another {
     fn test_resolve_code_lens() {
         let unresolved = CodeLens {
             range: Range {
-                start: Position {
-                    line: 5,
-                    character: 0,
-                },
-                end: Position {
-                    line: 5,
-                    character: 0,
-                },
+                start: Position { line: 5, character: 0 },
+                end: Position { line: 5, character: 0 },
             },
             command: None,
             data: Some(json!({ "name": "foo", "kind": "subroutine" })),

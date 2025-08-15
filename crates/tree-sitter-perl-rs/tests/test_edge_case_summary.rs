@@ -81,16 +81,6 @@ fn test_code(name: &str, code: &str) {
         tokens.push(token);
     }
 
-    let status = if errors == 0 {
-        "✓ SUPPORTED"
-    } else {
-        "✗ PARTIAL/UNSUPPORTED"
-    };
-    println!(
-        "{:<25} {} ({} tokens, {} errors)",
-        name,
-        status,
-        tokens.len(),
-        errors
-    );
+    let status = if errors == 0 { "✓ SUPPORTED" } else { "✗ PARTIAL/UNSUPPORTED" };
+    println!("{:<25} {} ({} tokens, {} errors)", name, status, tokens.len(), errors);
 }

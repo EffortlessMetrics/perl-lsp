@@ -84,12 +84,7 @@ impl EnhancedCodeActionsProvider {
                     self.collect_actions_for_range(stmt, range, actions);
                 }
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.collect_actions_for_range(condition, range, actions);
                 self.collect_actions_for_range(then_branch, range, actions);
                 for (cond, branch) in elsif_branches {
@@ -113,11 +108,7 @@ impl EnhancedCodeActionsProvider {
                 self.collect_actions_for_range(lhs, range, actions);
                 self.collect_actions_for_range(rhs, range, actions);
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 self.collect_actions_for_range(variable, range, actions);
                 if let Some(init) = initializer {
                     self.collect_actions_for_range(init, range, actions);
@@ -154,27 +145,18 @@ impl EnhancedCodeActionsProvider {
         let indent = self.get_indent_at(stmt_start);
 
         CodeAction {
-            title: format!(
-                "Extract '{}' to variable",
-                self.truncate_expr(expr_text, 30)
-            ),
+            title: format!("Extract '{}' to variable", self.truncate_expr(expr_text, 30)),
             kind: CodeActionKind::RefactorExtract,
             diagnostics: Vec::new(),
             edit: CodeActionEdit {
                 changes: vec![
                     // Insert variable declaration
                     TextEdit {
-                        location: SourceLocation {
-                            start: stmt_start,
-                            end: stmt_start,
-                        },
+                        location: SourceLocation { start: stmt_start, end: stmt_start },
                         new_text: format!("{}my ${} = {};\n", indent, var_name, expr_text),
                     },
                     // Replace expression with variable
-                    TextEdit {
-                        location: node.location,
-                        new_text: format!("${}", var_name),
-                    },
+                    TextEdit { location: node.location, new_text: format!("${}", var_name) },
                 ],
             },
             is_preferred: false,
@@ -192,11 +174,7 @@ impl EnhancedCodeActionsProvider {
         let signature = if params.is_empty() {
             format!("sub {} {{\n", sub_name)
         } else {
-            format!(
-                "sub {} {{\n    my ({}) = @_;\n",
-                sub_name,
-                params.join(", ")
-            )
+            format!("sub {} {{\n    my ({}) = @_;\n", sub_name, params.join(", "))
         };
 
         // Find insertion position (before current sub or at end)
@@ -206,12 +184,7 @@ impl EnhancedCodeActionsProvider {
         let call = if returns.is_empty() {
             format!("{}({});", sub_name, params.join(", "))
         } else {
-            format!(
-                "my {} = {}({});",
-                returns.join(", "),
-                sub_name,
-                params.join(", ")
-            )
+            format!("my {} = {}({});", returns.join(", "), sub_name, params.join(", "))
         };
 
         CodeAction {
@@ -222,17 +195,11 @@ impl EnhancedCodeActionsProvider {
                 changes: vec![
                     // Insert function definition
                     TextEdit {
-                        location: SourceLocation {
-                            start: insert_pos,
-                            end: insert_pos,
-                        },
+                        location: SourceLocation { start: insert_pos, end: insert_pos },
                         new_text: format!("{}{}\n}}\n\n", signature, body_text),
                     },
                     // Replace block with function call
-                    TextEdit {
-                        location: node.location,
-                        new_text: call,
-                    },
+                    TextEdit { location: node.location, new_text: call },
                 ],
             },
             is_preferred: false,
@@ -241,14 +208,7 @@ impl EnhancedCodeActionsProvider {
 
     /// Convert old-style for loops to modern foreach
     fn convert_loop_style(&self, node: &Node) -> Option<CodeAction> {
-        if let NodeKind::For {
-            init,
-            condition,
-            update,
-            body,
-            ..
-        } = &node.kind
-        {
+        if let NodeKind::For { init, condition, update, body, .. } = &node.kind {
             // Check if it's a C-style for loop that can be converted
             if let Some(converted) = self.try_convert_c_style_loop(init, condition, update, body) {
                 return Some(CodeAction {
@@ -256,10 +216,7 @@ impl EnhancedCodeActionsProvider {
                     kind: CodeActionKind::RefactorRewrite,
                     diagnostics: Vec::new(),
                     edit: CodeActionEdit {
-                        changes: vec![TextEdit {
-                            location: node.location,
-                            new_text: converted,
-                        }],
+                        changes: vec![TextEdit { location: node.location, new_text: converted }],
                     },
                     is_preferred: false,
                 });
@@ -267,12 +224,7 @@ impl EnhancedCodeActionsProvider {
         }
 
         // Check for foreach that could be improved
-        if let NodeKind::Foreach {
-            variable,
-            list,
-            body,
-        } = &node.kind
-        {
+        if let NodeKind::Foreach { variable, list, body } = &node.kind {
             // Check if using implicit $_
             if let NodeKind::Variable { name, sigil } = &variable.kind {
                 if name == "_" && sigil == "$" {
@@ -336,13 +288,7 @@ impl EnhancedCodeActionsProvider {
 
     /// Convert if statement to postfix form
     fn convert_to_postfix(&self, node: &Node) -> Option<CodeAction> {
-        if let NodeKind::If {
-            condition,
-            then_branch,
-            elsif_branches,
-            else_branch,
-        } = &node.kind
-        {
+        if let NodeKind::If { condition, then_branch, elsif_branches, else_branch } = &node.kind {
             // Only convert simple if statements with no elsif/else
             if elsif_branches.is_empty() && else_branch.is_none() {
                 if let NodeKind::Block { statements } = &then_branch.kind {
@@ -427,10 +373,7 @@ impl EnhancedCodeActionsProvider {
             diagnostics: Vec::new(),
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation {
-                        start: insert_pos,
-                        end: insert_pos,
-                    },
+                    location: SourceLocation { start: insert_pos, end: insert_pos },
                     new_text: format!("{}\n", imports.join("\n")),
                 }],
             },
@@ -492,10 +435,7 @@ impl EnhancedCodeActionsProvider {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: insert_pos,
-                            end: insert_pos,
-                        },
+                        location: SourceLocation { start: insert_pos, end: insert_pos },
                         new_text: format!("{}\n", pragmas.join("\n")),
                     }],
                 },
@@ -513,10 +453,7 @@ impl EnhancedCodeActionsProvider {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: insert_pos,
-                            end: insert_pos,
-                        },
+                        location: SourceLocation { start: insert_pos, end: insert_pos },
                         new_text: "use utf8;\nuse open qw(:std :utf8);\n".to_string(),
                     }],
                 },

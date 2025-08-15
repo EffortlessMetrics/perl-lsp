@@ -146,11 +146,7 @@ fn test_chained_increment() {
         if let NodeKind::Unary { op, operand } = &statements[0].kind {
             assert_eq!(op, "++");
             // The operand should be +$x
-            if let NodeKind::Unary {
-                op: inner_op,
-                operand: inner_operand,
-            } = &operand.kind
-            {
+            if let NodeKind::Unary { op: inner_op, operand: inner_operand } = &operand.kind {
                 assert_eq!(inner_op, "+");
                 if let NodeKind::Variable { sigil, name } = &inner_operand.kind {
                     assert_eq!(sigil, "$");

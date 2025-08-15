@@ -47,13 +47,8 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                 .collect();
             if !name.is_empty() && name.contains("::") {
-                let s = text[..]
-                    .lines()
-                    .take(line_idx)
-                    .map(|l| l.len() + 1)
-                    .sum::<usize>()
-                    + idx
-                    + 4;
+                let s =
+                    text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>() + idx + 4;
                 let e = s + name.len();
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
@@ -76,11 +71,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                     .collect();
                 if !name.is_empty() && name.contains("::") {
-                    let s = text[..]
-                        .lines()
-                        .take(line_idx)
-                        .map(|l| l.len() + 1)
-                        .sum::<usize>()
+                    let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
                         + idx
                         + 8;
                     let e = s + name.len();
@@ -104,11 +95,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 if quote == '\'' || quote == '"' {
                     if let Some(endq) = rest[1..].find(quote) {
                         let path = &rest[1..1 + endq];
-                        let s = text[..]
-                            .lines()
-                            .take(line_idx)
-                            .map(|l| l.len() + 1)
-                            .sum::<usize>()
+                        let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
                             + idx
                             + kw.len()
                             + 1;

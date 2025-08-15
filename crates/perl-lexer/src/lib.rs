@@ -57,11 +57,7 @@ pub struct LexerConfig {
 
 impl Default for LexerConfig {
     fn default() -> Self {
-        Self {
-            parse_interpolation: true,
-            track_positions: true,
-            max_lookahead: 1024,
-        }
+        Self { parse_interpolation: true, track_positions: true, max_lookahead: 1024 }
     }
 }
 
@@ -262,11 +258,7 @@ impl<'a> PerlLexer<'a> {
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
         let pos = self.position + offset;
-        if pos < self.input_bytes.len() {
-            Some(self.input_bytes[pos])
-        } else {
-            None
-        }
+        if pos < self.input_bytes.len() { Some(self.input_bytes[pos]) } else { None }
     }
 
     /// Check if the next bytes match a pattern (ASCII only)
@@ -892,12 +884,7 @@ impl<'a> PerlLexer<'a> {
                 TokenType::Identifier(Arc::from(text))
             };
 
-            Some(Token {
-                token_type,
-                text: Arc::from(text),
-                start,
-                end: self.position,
-            })
+            Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
             None
         }
@@ -1673,10 +1660,7 @@ fn is_keyword(word: &str) -> bool {
     // Fast length check first
     match word.len() {
         1 => matches!(word, "q" | "m"),
-        2 => matches!(
-            word,
-            "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"
-        ),
+        2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
         3 => matches!(
             word,
             "sub"
@@ -1713,10 +1697,7 @@ fn is_keyword(word: &str) -> bool {
                 | "undef"
         ),
         6 => matches!(word, "unless" | "return" | "method" | "format"),
-        7 => matches!(
-            word,
-            "require" | "package" | "default" | "foreach" | "finally"
-        ),
+        7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
         8 => word == "continue",
         9 => word == "UNITCHECK",
         _ => false,

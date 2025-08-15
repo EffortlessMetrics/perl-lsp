@@ -64,9 +64,7 @@ impl PerlModernizer {
             },
         ];
 
-        Self {
-            _patterns: patterns,
-        }
+        Self { _patterns: patterns }
     }
 
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {
@@ -196,10 +194,8 @@ impl PerlModernizer {
 
     fn check_indirect_notation(&self, code: &str) -> Option<ModernizationSuggestion> {
         // Check for common indirect object notation patterns
-        let indirect_patterns = [
-            ("new MyClass", "MyClass->new", 11),
-            ("new Class", "Class->new", 9),
-        ];
+        let indirect_patterns =
+            [("new MyClass", "MyClass->new", 11), ("new Class", "Class->new", 9)];
 
         for (pattern, replacement, len) in &indirect_patterns {
             if let Some(pos) = code.find(pattern) {
@@ -267,10 +263,7 @@ impl PerlModernizer {
         // Handle specific replacements
         let replacements: HashMap<&str, (&str, &str)> = [
             ("open FH", ("open FH", "open my $fh")),
-            (
-                "open(FH, 'file.txt')",
-                ("open(FH, 'file.txt')", "open(my $fh, '<', 'file.txt')"),
-            ),
+            ("open(FH, 'file.txt')", ("open(FH, 'file.txt')", "open(my $fh, '<', 'file.txt')")),
             ("defined @array", ("defined @array", "@array")),
             ("new Class", ("new Class(", "Class->new(")),
             ("new MyClass", ("new MyClass(", "MyClass->new(")),
@@ -281,10 +274,7 @@ impl PerlModernizer {
                     "foreach my $i (0..$#array) { my $val = $array[$i]; }",
                 ),
             ),
-            (
-                "print \"Hello\\n\"",
-                ("print \"Hello\\n\"", "say \"Hello\""),
-            ),
+            ("print \"Hello\\n\"", ("print \"Hello\\n\"", "say \"Hello\"")),
         ]
         .into_iter()
         .collect();
@@ -302,11 +292,7 @@ impl PerlModernizer {
     fn add_pragmas(&self, code: String) -> String {
         if let Some(pos) = code.find('\n') {
             if code.starts_with("#!") {
-                format!(
-                    "{}\nuse strict;\nuse warnings;{}",
-                    &code[..pos],
-                    &code[pos..]
-                )
+                format!("{}\nuse strict;\nuse warnings;{}", &code[..pos], &code[pos..])
             } else {
                 format!("use strict;\nuse warnings;\n{}", code)
             }

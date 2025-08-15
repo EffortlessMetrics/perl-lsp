@@ -138,20 +138,13 @@ UNKNOWN
     ];
 
     for (name, mode) in modes {
-        group.bench_with_input(
-            BenchmarkId::new("mode", name),
-            &mode,
-            |b, mode: &RecoveryMode| {
-                b.iter(|| {
-                    let config = EdgeCaseConfig {
-                        recovery_mode: mode.clone(),
-                        ..Default::default()
-                    };
-                    let mut handler = EdgeCaseHandler::new(config);
-                    black_box(handler.analyze(code))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("mode", name), &mode, |b, mode: &RecoveryMode| {
+            b.iter(|| {
+                let config = EdgeCaseConfig { recovery_mode: mode.clone(), ..Default::default() };
+                let mut handler = EdgeCaseHandler::new(config);
+                black_box(handler.analyze(code))
+            });
+        });
     }
 
     group.finish();
@@ -304,10 +297,7 @@ fn generate_nested_code(depth: usize) -> String {
 
         if i % 3 == 0 {
             code.push_str(&"  ".repeat(i + 1));
-            code.push_str(&format!(
-                "my $h{} = <<'END';\nNested heredoc at level {}\nEND\n",
-                i, i
-            ));
+            code.push_str(&format!("my $h{} = <<'END';\nNested heredoc at level {}\nEND\n", i, i));
         }
     }
 

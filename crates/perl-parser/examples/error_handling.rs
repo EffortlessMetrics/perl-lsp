@@ -57,11 +57,7 @@ print "Result: $result\n";  # This line won't parse due to previous error
 
             // Extract error information
             match e {
-                ParseError::UnexpectedToken {
-                    expected,
-                    found,
-                    location,
-                } => {
+                ParseError::UnexpectedToken { expected, found, location } => {
                     println!("  Type: Unexpected token");
                     println!("  Expected: {}", expected);
                     println!("  Found: {}", found);

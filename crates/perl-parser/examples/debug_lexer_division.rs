@@ -26,12 +26,8 @@ fn main() {
         }
 
         // Check if we got a division token
-        let has_division = tokens
-            .iter()
-            .any(|t| matches!(t.token_type, TokenType::Division));
-        let has_regex = tokens
-            .iter()
-            .any(|t| matches!(t.token_type, TokenType::RegexMatch));
+        let has_division = tokens.iter().any(|t| matches!(t.token_type, TokenType::Division));
+        let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
 
         println!("  Has Division: {}", has_division);
         println!("  Has Regex: {}", has_regex);

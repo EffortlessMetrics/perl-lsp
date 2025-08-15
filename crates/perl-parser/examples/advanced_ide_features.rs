@@ -111,11 +111,7 @@ print "Squared: @squared\n";
 
     println!("   Found {} completions:", builtin_completions.len());
     for completion in builtin_completions.iter() {
-        println!(
-            "   - {} : {}",
-            completion.label,
-            completion.detail.as_deref().unwrap_or("")
-        );
+        println!("   - {} : {}", completion.label, completion.detail.as_deref().unwrap_or(""));
     }
 
     // 2. Signature Help Demo
@@ -190,12 +186,7 @@ print "Squared: @squared\n";
                 let preview_start = edit.location.start.saturating_sub(10);
                 let preview_end = (edit.location.end + 10).min(code.len());
                 let preview = &code[preview_start..preview_end];
-                println!(
-                    "     Edit {}: {:?} -> '{}'",
-                    i + 1,
-                    edit.location,
-                    edit.new_text
-                );
+                println!("     Edit {}: {:?} -> '{}'", i + 1, edit.location, edit.new_text);
                 println!("       Context: ...{}...", preview.replace('\n', "\\n"));
             }
 
@@ -247,10 +238,7 @@ print "Squared: @squared\n";
     let completions = comp_provider.get_completions(&partial_code, partial_code.len());
     println!("   Keyword completions for 'sub':");
     for comp in completions.iter().filter(|c| c.label.contains("sub")) {
-        println!(
-            "     - {}",
-            comp.insert_text.as_deref().unwrap_or(&comp.label)
-        );
+        println!("     - {}", comp.insert_text.as_deref().unwrap_or(&comp.label));
     }
 
     // Step 2: User completes function and calls it

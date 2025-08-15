@@ -214,10 +214,7 @@ OUTER
 
             // Parser should handle errors gracefully
             // May have incomplete declarations but shouldn't panic
-            println!(
-                "Processed error case: {} declarations found",
-                declarations.len()
-            );
+            println!("Processed error case: {} declarations found", declarations.len());
         }
     }
 
@@ -241,9 +238,6 @@ E"#;
 
         let mut parser2 = ContextAwareHeredocParser::new(code2);
         let (_, declarations2) = parser2.parse();
-        assert!(
-            !declarations2.is_empty(),
-            "Should find heredoc in complex context"
-        );
+        assert!(!declarations2.is_empty(), "Should find heredoc in complex context");
     }
 }

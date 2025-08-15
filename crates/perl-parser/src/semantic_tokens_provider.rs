@@ -133,10 +133,7 @@ pub struct SemanticTokensProvider {
 impl SemanticTokensProvider {
     /// Create a new semantic tokens provider
     pub fn new(source: String) -> Self {
-        Self {
-            source,
-            declared_vars: HashMap::new(),
-        }
+        Self { source, declared_vars: HashMap::new() }
     }
 
     /// Extract semantic tokens from the AST
@@ -182,15 +179,11 @@ impl SemanticTokensProvider {
                 }
             }
 
-            NodeKind::Subroutine {
-                name, params, body, ..
-            } => {
+            NodeKind::Subroutine { name, params, body, .. } => {
                 // Function name
                 if let Some(name_str) = name {
-                    let modifiers = vec![
-                        SemanticTokenModifier::Declaration,
-                        SemanticTokenModifier::Definition,
-                    ];
+                    let modifiers =
+                        vec![SemanticTokenModifier::Declaration, SemanticTokenModifier::Definition];
                     self.add_token_from_string(
                         name_str,
                         SemanticTokenType::Function,
@@ -250,11 +243,7 @@ impl SemanticTokensProvider {
                 self.add_token(node, SemanticTokenType::Regexp, vec![], tokens);
             }
 
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
+            NodeKind::MethodCall { object, method, args } => {
                 // Object is a variable reference
                 self.visit_node(object, tokens, false);
 
@@ -276,10 +265,7 @@ impl SemanticTokensProvider {
             NodeKind::FunctionCall { name, args } => {
                 // Check if it's a built-in function
                 let modifiers = if self.is_builtin_function(name) {
-                    vec![
-                        SemanticTokenModifier::DefaultLibrary,
-                        SemanticTokenModifier::Reference,
-                    ]
+                    vec![SemanticTokenModifier::DefaultLibrary, SemanticTokenModifier::Reference]
                 } else {
                     vec![SemanticTokenModifier::Reference]
                 };
@@ -350,13 +336,7 @@ impl SemanticTokensProvider {
         let (line, start_char) = self.get_position(parent_node);
         let length = name.len() as u32;
 
-        tokens.push(SemanticToken {
-            line,
-            start_char,
-            length,
-            token_type,
-            modifiers,
-        });
+        tokens.push(SemanticToken { line, start_char, length, token_type, modifiers });
     }
 
     /// Check if a function name is a built-in
@@ -408,13 +388,7 @@ impl SemanticTokensProvider {
         let (line, start_char) = self.get_position(node);
         let length = self.get_length(node);
 
-        tokens.push(SemanticToken {
-            line,
-            start_char,
-            length,
-            token_type,
-            modifiers,
-        });
+        tokens.push(SemanticToken { line, start_char, length, token_type, modifiers });
     }
 
     /// Get the position of a node
@@ -477,25 +451,18 @@ pub fn encode_semantic_tokens(tokens: &[SemanticToken]) -> Vec<u32> {
 
     for token in tokens {
         let delta_line = token.line - prev_line;
-        let delta_start = if delta_line == 0 {
-            token.start_char - prev_start
-        } else {
-            token.start_char
-        };
+        let delta_start =
+            if delta_line == 0 { token.start_char - prev_start } else { token.start_char };
 
         // Encode token type index
-        let token_type_index = SemanticTokenType::all()
-            .iter()
-            .position(|&t| t == token.token_type)
-            .unwrap() as u32;
+        let token_type_index =
+            SemanticTokenType::all().iter().position(|&t| t == token.token_type).unwrap() as u32;
 
         // Encode modifiers as bit flags
         let mut modifier_bits = 0u32;
         for modifier in &token.modifiers {
-            let modifier_index = SemanticTokenModifier::all()
-                .iter()
-                .position(|&m| m == *modifier)
-                .unwrap();
+            let modifier_index =
+                SemanticTokenModifier::all().iter().position(|&m| m == *modifier).unwrap();
             modifier_bits |= 1 << modifier_index;
         }
 
@@ -543,15 +510,11 @@ sub test_function {
             assert!(tokens.len() >= 5);
 
             // Check package token
-            let pkg_token = tokens
-                .iter()
-                .find(|t| t.token_type == SemanticTokenType::Namespace);
+            let pkg_token = tokens.iter().find(|t| t.token_type == SemanticTokenType::Namespace);
             assert!(pkg_token.is_some());
 
             // Check function token
-            let func_token = tokens
-                .iter()
-                .find(|t| t.token_type == SemanticTokenType::Function);
+            let func_token = tokens.iter().find(|t| t.token_type == SemanticTokenType::Function);
             assert!(func_token.is_some());
         }
     }

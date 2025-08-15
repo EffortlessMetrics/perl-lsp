@@ -125,10 +125,7 @@ impl PositionMapper {
             utf16_offset += ch_utf16_len;
         }
 
-        Position {
-            line: line_idx as u32,
-            character: utf16_offset,
-        }
+        Position { line: line_idx as u32, character: utf16_offset }
     }
 
     /// Get the text content
@@ -140,9 +137,7 @@ impl PositionMapper {
     pub fn slice(&self, start_byte: usize, end_byte: usize) -> String {
         let start = start_byte.min(self.rope.len_bytes());
         let end = end_byte.min(self.rope.len_bytes());
-        self.rope
-            .slice(self.rope.byte_to_char(start)..self.rope.byte_to_char(end))
-            .to_string()
+        self.rope.slice(self.rope.byte_to_char(start)..self.rope.byte_to_char(end)).to_string()
     }
 
     /// Get total byte length
@@ -157,8 +152,7 @@ impl PositionMapper {
 
     /// Convert LSP position to char index (for rope operations)
     pub fn lsp_pos_to_char(&self, pos: Position) -> Option<usize> {
-        self.lsp_pos_to_byte(pos)
-            .map(|byte| self.rope.byte_to_char(byte))
+        self.lsp_pos_to_byte(pos).map(|byte| self.rope.byte_to_char(byte))
     }
 
     /// Convert char index to LSP position
@@ -241,52 +235,16 @@ mod tests {
         let mapper = PositionMapper::new(text);
 
         // Start of document
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 0,
-                character: 0
-            }),
-            Some(0)
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(0),
-            Position {
-                line: 0,
-                character: 0
-            }
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 0 }), Some(0));
+        assert_eq!(mapper.byte_to_lsp_pos(0), Position { line: 0, character: 0 });
 
         // Middle of first line
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 0,
-                character: 3
-            }),
-            Some(3)
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(3),
-            Position {
-                line: 0,
-                character: 3
-            }
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 3 }), Some(3));
+        assert_eq!(mapper.byte_to_lsp_pos(3), Position { line: 0, character: 3 });
 
         // Start of second line
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 1,
-                character: 0
-            }),
-            Some(7)
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(7),
-            Position {
-                line: 1,
-                character: 0
-            }
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 1, character: 0 }), Some(7));
+        assert_eq!(mapper.byte_to_lsp_pos(7), Position { line: 1, character: 0 });
     }
 
     #[test]
@@ -297,36 +255,12 @@ mod tests {
         assert_eq!(mapper.line_ending(), LineEnding::CrLf);
 
         // Start of second line (after \r\n)
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 1,
-                character: 0
-            }),
-            Some(8)
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(8),
-            Position {
-                line: 1,
-                character: 0
-            }
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 1, character: 0 }), Some(8));
+        assert_eq!(mapper.byte_to_lsp_pos(8), Position { line: 1, character: 0 });
 
         // Start of third line
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 2,
-                character: 0
-            }),
-            Some(16)
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(16),
-            Position {
-                line: 2,
-                character: 0
-            }
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 2, character: 0 }), Some(16));
+        assert_eq!(mapper.byte_to_lsp_pos(16), Position { line: 2, character: 0 });
     }
 
     #[test]
@@ -335,31 +269,13 @@ mod tests {
         let mapper = PositionMapper::new(text);
 
         // Before emoji
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 0,
-                character: 6
-            }),
-            Some(6)
-        );
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 6 }), Some(6));
 
         // After emoji (6 + 2 UTF-16 units = 8)
-        assert_eq!(
-            mapper.lsp_pos_to_byte(Position {
-                line: 0,
-                character: 8
-            }),
-            Some(10)
-        ); // 6 + 4 bytes for emoji
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 8 }), Some(10)); // 6 + 4 bytes for emoji
 
         // Convert back
-        assert_eq!(
-            mapper.byte_to_lsp_pos(10),
-            Position {
-                line: 0,
-                character: 8
-            }
-        );
+        assert_eq!(mapper.byte_to_lsp_pos(10), Position { line: 0, character: 8 });
     }
 
     #[test]
@@ -370,34 +286,10 @@ mod tests {
         assert_eq!(mapper.line_ending(), LineEnding::Mixed);
 
         // Each line start
-        assert_eq!(
-            mapper.byte_to_lsp_pos(0),
-            Position {
-                line: 0,
-                character: 0
-            }
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(8),
-            Position {
-                line: 1,
-                character: 0
-            }
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(15),
-            Position {
-                line: 2,
-                character: 0
-            }
-        );
-        assert_eq!(
-            mapper.byte_to_lsp_pos(22),
-            Position {
-                line: 3,
-                character: 0
-            }
-        );
+        assert_eq!(mapper.byte_to_lsp_pos(0), Position { line: 0, character: 0 });
+        assert_eq!(mapper.byte_to_lsp_pos(8), Position { line: 1, character: 0 });
+        assert_eq!(mapper.byte_to_lsp_pos(15), Position { line: 2, character: 0 });
+        assert_eq!(mapper.byte_to_lsp_pos(22), Position { line: 3, character: 0 });
     }
 
     #[test]

@@ -7,9 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(open: bool, all_features: bool) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     spinner.set_message("Building documentation");
@@ -22,9 +20,7 @@ pub fn run(open: bool, all_features: bool) -> Result<()> {
         args.push("--open");
     }
 
-    let status = cmd("cargo", &args)
-        .run()
-        .context("Failed to build documentation")?;
+    let status = cmd("cargo", &args).run().context("Failed to build documentation")?;
 
     if status.status.success() {
         spinner.finish_with_message("✅ Documentation built");

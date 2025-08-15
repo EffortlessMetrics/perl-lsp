@@ -143,21 +143,14 @@ mod tests {
         for (i, code) in error_cases.iter().enumerate() {
             let result = parse(code);
             // These should parse (with error nodes) rather than fail completely
-            assert!(
-                result.is_ok(),
-                "Error case {} failed to parse: {:?}",
-                i,
-                result
-            );
+            assert!(result.is_ok(), "Error case {} failed to parse: {:?}", i, result);
         }
     }
 
     #[test]
     fn test_parser_reuse() {
         let mut parser = Parser::new();
-        parser
-            .set_language(&language())
-            .expect("Failed to set language");
+        parser.set_language(&language()).expect("Failed to set language");
 
         let test_cases = ["my $var1 = 1;", "my $var2 = 2;", "my $var3 = 3;"];
 
@@ -175,12 +168,8 @@ mod unicode_tests {
 
     #[test]
     fn test_unicode_normalization() {
-        let test_cases = vec![
-            ("café", "café"),
-            ("naïve", "naïve"),
-            ("über", "über"),
-            ("変数", "変数"),
-        ];
+        let test_cases =
+            vec![("café", "café"), ("naïve", "naïve"), ("über", "über"), ("変数", "変数")];
 
         for (input, expected) in test_cases {
             let normalized = UnicodeUtils::normalize_identifier(input);
@@ -513,11 +502,7 @@ mod corpus_tests {
             }
         }
 
-        println!(
-            "\nSimple corpus: {}/{} tests passed",
-            passed,
-            passed + failed
-        );
+        println!("\nSimple corpus: {}/{} tests passed", passed, passed + failed);
         if failed > 0 {
             panic!("{} simple corpus tests failed", failed);
         }
@@ -552,11 +537,7 @@ mod corpus_tests {
             }
         }
 
-        println!(
-            "\nVariables corpus: {}/{} tests passed",
-            passed,
-            passed + failed
-        );
+        println!("\nVariables corpus: {}/{} tests passed", passed, passed + failed);
         if failed > 0 {
             panic!("{} variables corpus tests failed", failed);
         }
@@ -642,10 +623,7 @@ mod highlight_tests {
         println!("   Successfully parsed: {} ✅", parsed_files);
 
         if parsed_files < total_files {
-            panic!(
-                "{} highlight files failed to parse",
-                total_files - parsed_files
-            );
+            panic!("{} highlight files failed to parse", total_files - parsed_files);
         }
     }
 }

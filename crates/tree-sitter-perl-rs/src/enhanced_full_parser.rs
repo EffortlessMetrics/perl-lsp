@@ -56,9 +56,7 @@ impl EnhancedFullParser {
         let mut parser = PureRustPerlParser::new();
         let mut ast = None;
         for pair in pairs {
-            ast = parser
-                .build_node(pair)
-                .map_err(|_| ParseError::ParseFailed)?;
+            ast = parser.build_node(pair).map_err(|_| ParseError::ParseFailed)?;
         }
 
         // Phase 6: Postprocess and enrich AST
@@ -123,11 +121,7 @@ impl EnhancedFullParser {
         }
 
         let main_code = main_lines.join("\n");
-        let data_content = if data_lines.is_empty() {
-            None
-        } else {
-            Some(data_lines.join("\n"))
-        };
+        let data_content = if data_lines.is_empty() { None } else { Some(data_lines.join("\n")) };
 
         (main_code, data_content)
     }
@@ -138,9 +132,7 @@ impl EnhancedFullParser {
             .heredoc_declarations
             .iter()
             .filter_map(|decl| {
-                decl.content
-                    .as_ref()
-                    .map(|content| (decl.placeholder_id.clone(), content.clone()))
+                decl.content.as_ref().map(|content| (decl.placeholder_id.clone(), content.clone()))
             })
             .collect();
 
@@ -176,11 +168,7 @@ impl EnhancedFullParser {
             UnaryOp { operand, .. } => {
                 self.restore_node_content(operand, placeholder_map);
             }
-            TernaryOp {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
+            TernaryOp { condition, true_expr, false_expr } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(true_expr, placeholder_map);
                 self.restore_node_content(false_expr, placeholder_map);
@@ -201,12 +189,7 @@ impl EnhancedFullParser {
                     self.restore_node_content(arg, placeholder_map);
                 }
             }
-            IfStatement {
-                condition,
-                then_block,
-                elsif_clauses,
-                else_block,
-            } => {
+            IfStatement { condition, then_block, elsif_clauses, else_block } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(then_block, placeholder_map);
                 for (cond, block) in elsif_clauses {
@@ -217,21 +200,11 @@ impl EnhancedFullParser {
                     self.restore_node_content(block, placeholder_map);
                 }
             }
-            WhileStatement {
-                condition, block, ..
-            }
-            | UntilStatement {
-                condition, block, ..
-            } => {
+            WhileStatement { condition, block, .. } | UntilStatement { condition, block, .. } => {
                 self.restore_node_content(condition, placeholder_map);
                 self.restore_node_content(block, placeholder_map);
             }
-            ForeachStatement {
-                variable,
-                list,
-                block,
-                ..
-            } => {
+            ForeachStatement { variable, list, block, .. } => {
                 if let Some(var) = variable {
                     self.restore_node_content(var, placeholder_map);
                 }

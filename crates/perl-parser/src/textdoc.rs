@@ -71,10 +71,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
         }
     };
 
-    Position {
-        line: line as u32,
-        character,
-    }
+    Position { line: line as u32, character }
 }
 
 /// Convert LSP range to byte offsets

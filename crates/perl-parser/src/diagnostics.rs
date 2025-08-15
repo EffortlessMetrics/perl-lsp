@@ -59,12 +59,7 @@ impl DiagnosticsProvider {
         let scope_analyzer = ScopeAnalyzer::new();
         let error_classifier = ErrorClassifier::new();
 
-        Self {
-            symbol_table,
-            _source: source,
-            scope_analyzer,
-            error_classifier,
-        }
+        Self { symbol_table, _source: source, scope_analyzer, error_classifier }
     }
 
     /// Get all diagnostics for the document
@@ -321,9 +316,7 @@ impl DiagnosticsProvider {
         match &node.kind {
             NodeKind::Variable { name, .. } => {
                 // If variable is not defined in scope, it might be undef
-                self.symbol_table
-                    .find_symbol(name, 0, SymbolKind::ScalarVariable)
-                    .is_empty()
+                self.symbol_table.find_symbol(name, 0, SymbolKind::ScalarVariable).is_empty()
             }
             NodeKind::Undef => true,
             _ => false,
@@ -350,12 +343,7 @@ impl DiagnosticsProvider {
                     self.walk_node(stmt, func);
                 }
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.walk_node(condition, func);
                 self.walk_node(then_branch, func);
                 for (cond, branch) in elsif_branches {
@@ -366,9 +354,7 @@ impl DiagnosticsProvider {
                     self.walk_node(branch, func);
                 }
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 self.walk_node(condition, func);
                 self.walk_node(body, func);
             }
@@ -458,10 +444,8 @@ mod tests {
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
         assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.code == Some("undefined-variable".to_string())
-                    || d.code == Some("undeclared-variable".to_string())),
+            diagnostics.iter().any(|d| d.code == Some("undefined-variable".to_string())
+                || d.code == Some("undeclared-variable".to_string())),
             "Expected undefined/undeclared variable diagnostic, got: {:?}",
             diagnostics
         );
@@ -480,10 +464,6 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
-        assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.code == Some("unused-variable".to_string()))
-        );
+        assert!(diagnostics.iter().any(|d| d.code == Some("unused-variable".to_string())));
     }
 }

@@ -14,10 +14,7 @@ pub struct SimpleParser<'source> {
 
 impl<'source> SimpleParser<'source> {
     pub fn new(input: &'source str) -> Self {
-        Self {
-            lexer: ContextLexer::new(input),
-            current_pos: 0,
-        }
+        Self { lexer: ContextLexer::new(input), current_pos: 0 }
     }
 
     pub fn parse(&mut self) -> Result<AstNode, String> {
@@ -95,11 +92,7 @@ impl<'source> SimpleParser<'source> {
             start_position: start,
             end_position: self.current_pos,
             value: None,
-            children: if let Some(val) = value {
-                vec![var, *val]
-            } else {
-                vec![var]
-            },
+            children: if let Some(val) = value { vec![var, *val] } else { vec![var] },
         })
     }
 
@@ -385,10 +378,7 @@ mod tests {
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
         assert_eq!(ast.children[0].node_type, "binary_expression");
-        assert_eq!(
-            ast.children[0].value.as_ref().map(|s| s.as_ref()),
-            Some("+")
-        );
+        assert_eq!(ast.children[0].value.as_ref().map(|s| s.as_ref()), Some("+"));
     }
 
     #[test]

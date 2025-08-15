@@ -43,17 +43,12 @@ fn transform_to_standard(sexp: &str) -> String {
 
     // Transform variables: (variable $ x) -> (variable name: "$x")
     let var_re = Regex::new(r"\(variable (\S) (\w+)\)").unwrap();
-    result = var_re
-        .replace_all(&result, "(variable name: \"$1$2\")")
-        .to_string();
+    result = var_re.replace_all(&result, "(variable name: \"$1$2\")").to_string();
 
     // Transform binary operators: (binary_+ ...) -> (binary_expression operator: "+" ...)
     let binary_re = Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
     result = binary_re
-        .replace_all(
-            &result,
-            "(binary_expression left: $2 operator: \"$1\" right: $3)",
-        )
+        .replace_all(&result, "(binary_expression left: $2 operator: \"$1\" right: $3)")
         .to_string();
 
     // Transform declarations: (my_declaration ...) -> (variable_declaration kind: "my" ...)
@@ -93,17 +88,12 @@ fn transform_to_standard(sexp: &str) -> String {
     let assign_re =
         Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
     result = assign_re
-        .replace_all(
-            &result,
-            "(assignment_expression left: $2 operator: \"$1\" right: $3)",
-        )
+        .replace_all(&result, "(assignment_expression left: $2 operator: \"$1\" right: $3)")
         .to_string();
 
     // Transform conditionals: (if cond then) -> (if_statement condition: cond consequence: then)
     let if_re = Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = if_re
-        .replace_all(&result, "(if_statement condition: $1 consequence: $2)")
-        .to_string();
+    result = if_re.replace_all(&result, "(if_statement condition: $1 consequence: $2)").to_string();
 
     result
 }
@@ -114,10 +104,7 @@ mod tests {
 
     #[test]
     fn test_variable_transform() {
-        assert_eq!(
-            transform_to_standard("(variable $ x)"),
-            "(variable name: \"$x\")"
-        );
+        assert_eq!(transform_to_standard("(variable $ x)"), "(variable name: \"$x\")");
     }
 
     #[test]

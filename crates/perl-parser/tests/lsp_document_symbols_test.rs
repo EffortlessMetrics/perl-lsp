@@ -87,9 +87,7 @@ sub calculate {
     assert!(!symbols.is_empty());
 
     // Check for package symbol
-    let package_symbol = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("MyModule"));
+    let package_symbol = symbols.iter().find(|s| s["name"].as_str() == Some("MyModule"));
     assert!(package_symbol.is_some());
     assert_eq!(package_symbol.unwrap()["kind"], 4); // Module
 
@@ -98,22 +96,16 @@ sub calculate {
     assert!(hello_sub.is_some());
     assert_eq!(hello_sub.unwrap()["kind"], 12); // Function
 
-    let calc_sub = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("calculate"));
+    let calc_sub = symbols.iter().find(|s| s["name"].as_str() == Some("calculate"));
     assert!(calc_sub.is_some());
     assert_eq!(calc_sub.unwrap()["kind"], 12); // Function
 
     // Check for variable symbols
-    let global_var = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("$global_var"));
+    let global_var = symbols.iter().find(|s| s["name"].as_str() == Some("$global_var"));
     assert!(global_var.is_some());
     assert_eq!(global_var.unwrap()["kind"], 13); // Variable
 
-    let shared_array = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("@shared_array"));
+    let shared_array = symbols.iter().find(|s| s["name"].as_str() == Some("@shared_array"));
     assert!(shared_array.is_some());
     assert_eq!(shared_array.unwrap()["kind"], 18); // Array
 }
@@ -172,14 +164,10 @@ sub another_sub {
     assert!(inner_package.is_some());
 
     // Check for subroutines
-    let parent_sub = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("parent_sub"));
+    let parent_sub = symbols.iter().find(|s| s["name"].as_str() == Some("parent_sub"));
     assert!(parent_sub.is_some());
 
-    let another_sub = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("another_sub"));
+    let another_sub = symbols.iter().find(|s| s["name"].as_str() == Some("another_sub"));
     assert!(another_sub.is_some());
 }
 
@@ -288,9 +276,7 @@ sub process {
     let symbols = result.as_array().unwrap();
 
     // Check for subroutine
-    let process_sub = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("process"));
+    let process_sub = symbols.iter().find(|s| s["name"].as_str() == Some("process"));
     assert!(process_sub.is_some());
 }
 
@@ -330,16 +316,12 @@ state $persistent = 0;
     let symbols = result.as_array().unwrap();
 
     // Check for scalar variables
-    let scalar = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("$scalar"));
+    let scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$scalar"));
     assert!(scalar.is_some());
     assert_eq!(scalar.unwrap()["kind"], 13); // Variable
 
     // Check for array variables
-    let array = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("@array"));
+    let array = symbols.iter().find(|s| s["name"].as_str() == Some("@array"));
     assert!(array.is_some());
     assert_eq!(array.unwrap()["kind"], 18); // Array
 
@@ -349,19 +331,13 @@ state $persistent = 0;
     assert_eq!(hash.unwrap()["kind"], 19); // Object (closest to hash)
 
     // Check for shared variables
-    let shared_scalar = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("$shared_scalar"));
+    let shared_scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$shared_scalar"));
     assert!(shared_scalar.is_some());
 
-    let shared_array = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("@shared_array"));
+    let shared_array = symbols.iter().find(|s| s["name"].as_str() == Some("@shared_array"));
     assert!(shared_array.is_some());
 
-    let shared_hash = symbols
-        .iter()
-        .find(|s| s["name"].as_str() == Some("%shared_hash"));
+    let shared_hash = symbols.iter().find(|s| s["name"].as_str() == Some("%shared_hash"));
     assert!(shared_hash.is_some());
 }
 
@@ -410,19 +386,7 @@ sub child_method {
     // Check that we have the expected top-level symbols
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("Parent")));
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("Child")));
-    assert!(
-        symbols
-            .iter()
-            .any(|s| s["name"].as_str() == Some("parent_method"))
-    );
-    assert!(
-        symbols
-            .iter()
-            .any(|s| s["name"].as_str() == Some("child_method"))
-    );
-    assert!(
-        symbols
-            .iter()
-            .any(|s| s["name"].as_str() == Some("$package_var"))
-    );
+    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("parent_method")));
+    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("child_method")));
+    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("$package_var")));
 }

@@ -21,9 +21,7 @@ pub struct RecoveryParser {
 impl RecoveryParser {
     /// Create a new recovery parser
     pub fn new(source: String) -> Self {
-        RecoveryParser {
-            context: ParserContext::new(source),
-        }
+        RecoveryParser { context: ParserContext::new(source) }
     }
 
     /// Parse with error recovery, returning AST and errors
@@ -123,10 +121,7 @@ impl ParserErrorRecovery for RecoveryParser {
                     format!("Expected {:?} or {:?}", separator, terminator),
                     self.context.current_position_range(),
                 )
-                .with_expected(vec![
-                    format!("{:?}", separator),
-                    format!("{:?}", terminator),
-                ]);
+                .with_expected(vec![format!("{:?}", separator), format!("{:?}", terminator)]);
 
                 self.context.add_error(error);
 
@@ -285,24 +280,17 @@ impl RecoveryParser {
                             self.context.advance();
                             let node = Node::new(
                                 self.context.id_generator.next_id(),
-                                NodeKind::Variable {
-                                    sigil: sigil.to_string(),
-                                    name: var_name,
-                                },
+                                NodeKind::Variable { sigil: sigil.to_string(), name: var_name },
                                 range,
                             );
                             return Ok(node);
                         }
                     }
-                    Err(
-                        ParseError::new("Expected variable".to_string(), token.range())
-                            .with_expected(vec!["variable".to_string()]),
-                    )
+                    Err(ParseError::new("Expected variable".to_string(), token.range())
+                        .with_expected(vec!["variable".to_string()]))
                 }
-                _ => Err(
-                    ParseError::new("Expected variable".to_string(), token.range())
-                        .with_expected(vec!["variable".to_string()]),
-                ),
+                _ => Err(ParseError::new("Expected variable".to_string(), token.range())
+                    .with_expected(vec!["variable".to_string()])),
             },
             None => Err(ParseError::new(
                 "Expected variable".to_string(),
@@ -334,19 +322,13 @@ impl RecoveryParser {
                     self.context.advance();
                     let node = Node::new(
                         self.context.id_generator.next_id(),
-                        NodeKind::String {
-                            value,
-                            interpolated: false,
-                        },
+                        NodeKind::String { value, interpolated: false },
                         range,
                     );
                     Ok(node)
                 }
                 TokenType::Identifier(_) => self.parse_variable(),
-                _ => Err(ParseError::new(
-                    "Expected expression".to_string(),
-                    token.range(),
-                )),
+                _ => Err(ParseError::new("Expected expression".to_string(), token.range())),
             },
             None => Err(ParseError::new(
                 "Expected expression".to_string(),
@@ -376,12 +358,7 @@ impl RecoveryParser {
         let end_pos = self.context.current_position();
         Ok(Node::new(
             self.context.id_generator.next_id(),
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches: Vec::new(),
-                else_branch: None,
-            },
+            NodeKind::If { condition, then_branch, elsif_branches: Vec::new(), else_branch: None },
             Range::new(start_pos, end_pos),
         ))
     }
@@ -397,9 +374,7 @@ impl RecoveryParser {
         let end_pos = self.context.current_position();
         Ok(Node::new(
             self.context.id_generator.next_id(),
-            NodeKind::Identifier {
-                name: "while_stmt".to_string(),
-            },
+            NodeKind::Identifier { name: "while_stmt".to_string() },
             Range::new(start_pos, end_pos),
         ))
     }
@@ -415,9 +390,7 @@ impl RecoveryParser {
         let end_pos = self.context.current_position();
         Ok(Node::new(
             self.context.id_generator.next_id(),
-            NodeKind::Identifier {
-                name: "sub_decl".to_string(),
-            },
+            NodeKind::Identifier { name: "sub_decl".to_string() },
             Range::new(start_pos, end_pos),
         ))
     }

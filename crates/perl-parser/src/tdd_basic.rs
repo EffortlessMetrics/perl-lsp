@@ -12,17 +12,12 @@ pub struct TestGenerator {
 
 impl TestGenerator {
     pub fn new(framework: &str) -> Self {
-        Self {
-            framework: framework.to_string(),
-        }
+        Self { framework: framework.to_string() }
     }
 
     /// Generate basic test for a subroutine
     pub fn generate_test(&self, name: &str, params: usize) -> String {
-        let args = (0..params)
-            .map(|i| format!("'arg{}'", i + 1))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let args = (0..params).map(|i| format!("'arg{}'", i + 1)).collect::<Vec<_>>().join(", ");
 
         match self.framework.as_str() {
             "Test2::V0" => {
@@ -76,12 +71,7 @@ impl TestGenerator {
                     self.find_subroutines_recursive(stmt, subs);
                 }
             }
-            NodeKind::If {
-                then_branch,
-                elsif_branches,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
                 self.find_subroutines_recursive(then_branch, subs);
                 for (_, branch) in elsif_branches {
                     self.find_subroutines_recursive(branch, subs);
@@ -90,16 +80,8 @@ impl TestGenerator {
                     self.find_subroutines_recursive(branch, subs);
                 }
             }
-            NodeKind::While {
-                body,
-                continue_block,
-                ..
-            }
-            | NodeKind::For {
-                body,
-                continue_block,
-                ..
-            } => {
+            NodeKind::While { body, continue_block, .. }
+            | NodeKind::For { body, continue_block, .. } => {
                 self.find_subroutines_recursive(body, subs);
                 if let Some(cont) = continue_block {
                     self.find_subroutines_recursive(cont, subs);
@@ -147,11 +129,7 @@ impl Default for RefactoringAnalyzer {
 
 impl RefactoringAnalyzer {
     pub fn new() -> Self {
-        Self {
-            max_complexity: 10,
-            max_lines: 50,
-            max_params: 5,
-        }
+        Self { max_complexity: 10, max_lines: 50, max_params: 5 }
     }
 
     /// Analyze code and suggest refactorings
@@ -168,9 +146,7 @@ impl RefactoringAnalyzer {
         suggestions: &mut Vec<RefactoringSuggestion>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine {
-                name, params, body, ..
-            } => {
+            NodeKind::Subroutine { name, params, body, .. } => {
                 let sub_name = name.clone().unwrap_or_else(|| "anonymous".to_string());
 
                 // Check parameter count
@@ -219,12 +195,7 @@ impl RefactoringAnalyzer {
                     self.analyze_recursive(stmt, source, suggestions);
                 }
             }
-            NodeKind::If {
-                then_branch,
-                elsif_branches,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
                 self.analyze_recursive(then_branch, source, suggestions);
                 for (_, branch) in elsif_branches {
                     self.analyze_recursive(branch, source, suggestions);
@@ -285,12 +256,7 @@ impl RefactoringAnalyzer {
                     self.count_decision_points(stmt, complexity);
                 }
             }
-            NodeKind::If {
-                then_branch,
-                elsif_branches,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
                 self.count_decision_points(then_branch, complexity);
                 for (_, branch) in elsif_branches {
                     self.count_decision_points(branch, complexity);
@@ -374,11 +340,7 @@ impl TddWorkflow {
 
     /// Run tests and update state
     pub fn run_tests(&mut self, success: bool) -> TddResult {
-        self.state = if success {
-            TddState::Green
-        } else {
-            TddState::Red
-        };
+        self.state = if success { TddState::Green } else { TddState::Red };
 
         TddResult {
             state: self.state.clone(),
@@ -402,10 +364,7 @@ impl TddWorkflow {
     /// Complete cycle
     pub fn complete_cycle(&mut self) -> TddResult {
         self.state = TddState::Idle;
-        TddResult {
-            state: self.state.clone(),
-            message: "TDD cycle complete".to_string(),
-        }
+        TddResult { state: self.state.clone(), message: "TDD cycle complete".to_string() }
     }
 
     /// Generate test for function
@@ -491,45 +450,27 @@ mod tests {
                 name: Some("complex".to_string()),
                 params: vec![
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "a".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "b".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "c".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "c".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "d".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "d".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "e".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "e".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                     Node::new(
-                        NodeKind::Variable {
-                            sigil: "$".to_string(),
-                            name: "f".to_string(),
-                        },
+                        NodeKind::Variable { sigil: "$".to_string(), name: "f".to_string() },
                         SourceLocation { start: 0, end: 0 },
                     ),
                 ],
@@ -544,11 +485,7 @@ mod tests {
 
         let suggestions = analyzer.analyze(&ast, "sub complex { }");
         assert!(!suggestions.is_empty());
-        assert!(
-            suggestions
-                .iter()
-                .any(|s| s.category == RefactoringCategory::TooManyParameters)
-        );
+        assert!(suggestions.iter().any(|s| s.category == RefactoringCategory::TooManyParameters));
     }
 
     #[test]

@@ -2,14 +2,7 @@
 use perl_parser::Parser;
 
 fn main() {
-    let tests = vec![
-        "[]",
-        "{}",
-        "[1]",
-        "{a => 1}",
-        "my @empty = []",
-        "my %empty = {}",
-    ];
+    let tests = vec!["[]", "{}", "[1]", "{a => 1}", "my @empty = []", "my %empty = {}"];
 
     for test in tests {
         println!("\nTesting: {}", test);

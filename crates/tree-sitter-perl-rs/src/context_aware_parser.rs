@@ -50,11 +50,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
         // Phase 3: Process special contexts
         for context in contexts {
             match context {
-                ContextInfo::Eval {
-                    start,
-                    end,
-                    content,
-                } => {
+                ContextInfo::Eval { start, end, content } => {
                     // Re-parse eval content for heredocs
                     if content.contains("<<") {
                         let eval_declarations = Self::parse_eval_content_static(&content);
@@ -257,9 +253,7 @@ pub struct ContextAwareFullParser {
 
 impl Default for ContextAwareFullParser {
     fn default() -> Self {
-        Self {
-            base_parser: PureRustPerlParser::new(),
-        }
+        Self { base_parser: PureRustPerlParser::new() }
     }
 }
 
@@ -359,9 +353,7 @@ END
 
         // Should have special context marker
         assert!(
-            declarations
-                .iter()
-                .any(|d| d.terminator == "EVAL_CONTEXT" || d.terminator == "END")
+            declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT" || d.terminator == "END")
         );
     }
 

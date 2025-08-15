@@ -27,12 +27,7 @@ impl<'source> ContextLexer<'source> {
         let mut lexer = Token::lexer(source);
         let current = Self::next_raw_token(&mut lexer);
 
-        Self {
-            lexer,
-            current,
-            context: SlashContext::ExpectOperand,
-            position: 0,
-        }
+        Self { lexer, current, context: SlashContext::ExpectOperand, position: 0 }
     }
 
     /// Get next raw token from logos lexer

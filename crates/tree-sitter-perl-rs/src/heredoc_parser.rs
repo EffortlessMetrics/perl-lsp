@@ -42,13 +42,7 @@ pub struct HeredocScanner<'a> {
 
 impl<'a> HeredocScanner<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self {
-            input,
-            position: 0,
-            line_number: 1,
-            heredoc_counter: 0,
-            skip_lines: HashSet::new(),
-        }
+        Self { input, position: 0, line_number: 1, heredoc_counter: 0, skip_lines: HashSet::new() }
     }
 
     /// Scan input for heredoc declarations and mark their positions
@@ -258,11 +252,7 @@ impl<'a> HeredocScanner<'a> {
             result.push(chars[self.position]);
             self.position += 1;
         }
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        if result.is_empty() { None } else { Some(result) }
     }
 }
 
@@ -274,10 +264,7 @@ pub struct HeredocCollector<'a> {
 
 impl<'a> HeredocCollector<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self {
-            _input: input,
-            lines: input.lines().collect(),
-        }
+        Self { _input: input, lines: input.lines().collect() }
     }
 
     /// Collect content for all heredoc declarations
@@ -286,10 +273,7 @@ impl<'a> HeredocCollector<'a> {
         let mut line_to_heredocs: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for (idx, decl) in declarations.iter().enumerate() {
-            line_to_heredocs
-                .entry(decl.declaration_line)
-                .or_insert_with(Vec::new)
-                .push(idx);
+            line_to_heredocs.entry(decl.declaration_line).or_insert_with(Vec::new).push(idx);
         }
 
         // For each line with heredocs, collect content
@@ -397,9 +381,7 @@ impl HeredocIntegrator {
 }
 
 fn _escape_for_qq(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('{', "\\{")
-        .replace('}', "\\}")
+    s.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}")
 }
 
 /// High-level API for multi-phase heredoc parsing
@@ -435,10 +417,7 @@ print $text;"#;
         assert_eq!(declarations.len(), 1);
         assert_eq!(declarations[0].terminator, "EOF");
         assert!(!declarations[0].interpolated);
-        assert_eq!(
-            declarations[0].content.as_deref(),
-            Some("Hello, World!\nThis is a heredoc.")
-        );
+        assert_eq!(declarations[0].content.as_deref(), Some("Hello, World!\nThis is a heredoc."));
         assert!(processed.contains("__HEREDOC__"));
     }
 
@@ -473,10 +452,7 @@ print $text;"#;
         assert_eq!(declarations.len(), 1);
         assert!(declarations[0].indented);
         assert_eq!(declarations[0].terminator, "EOF");
-        assert_eq!(
-            declarations[0].content.as_deref(),
-            Some("Indented content\nMore content")
-        );
+        assert_eq!(declarations[0].content.as_deref(), Some("Indented content\nMore content"));
     }
 
     #[test]

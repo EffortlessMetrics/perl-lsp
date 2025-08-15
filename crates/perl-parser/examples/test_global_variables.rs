@@ -53,10 +53,8 @@ print $undefined_var;
     }
 
     // Count undeclared variable issues
-    let undeclared_count = issues
-        .iter()
-        .filter(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-        .count();
+    let undeclared_count =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UndeclaredVariable)).count();
 
     println!("\nSummary:");
     println!("  Total issues: {}", issues.len());
@@ -66,9 +64,6 @@ print $undefined_var;
     if undeclared_count == 1 {
         println!("\n✅ Test PASSED: Built-in globals are correctly recognized!");
     } else {
-        println!(
-            "\n❌ Test FAILED: Expected 1 undeclared variable, found {}",
-            undeclared_count
-        );
+        println!("\n❌ Test FAILED: Expected 1 undeclared variable, found {}", undeclared_count);
     }
 }

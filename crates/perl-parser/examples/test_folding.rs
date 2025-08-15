@@ -41,14 +41,9 @@ sub method1 {
                     range.start_offset, range.end_offset, range.kind
                 );
                 // Show the actual lines
-                let start_line = content[..range.start_offset]
-                    .chars()
-                    .filter(|&c| c == '\n')
-                    .count();
-                let end_line = content[..range.end_offset]
-                    .chars()
-                    .filter(|&c| c == '\n')
-                    .count();
+                let start_line =
+                    content[..range.start_offset].chars().filter(|&c| c == '\n').count();
+                let end_line = content[..range.end_offset].chars().filter(|&c| c == '\n').count();
                 println!("    Lines: {} to {}", start_line, end_line);
             }
         }

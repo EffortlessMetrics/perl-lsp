@@ -14,9 +14,7 @@ pub fn run(
 ) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     // Determine test profile
@@ -139,10 +137,7 @@ pub fn run(
         spinner.finish_with_message(format!("✅ Tests passed ({})", profile));
     } else {
         spinner.finish_with_message("❌ Tests failed");
-        return Err(color_eyre::eyre::eyre!(
-            "Tests failed with status: {}",
-            status.status
-        ));
+        return Err(color_eyre::eyre::eyre!("Tests failed with status: {}", status.status));
     }
 
     Ok(())

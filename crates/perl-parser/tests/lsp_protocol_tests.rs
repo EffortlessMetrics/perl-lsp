@@ -12,9 +12,7 @@ struct MockTransport {
 impl MockTransport {
     #[allow(dead_code)]
     fn new() -> Self {
-        Self {
-            output: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { output: Arc::new(Mutex::new(Vec::new())) }
     }
 
     #[allow(dead_code)]
@@ -148,9 +146,7 @@ sub another {
 "#;
 
     let uri = "file:///test/test.pl";
-    index
-        .index_file(Url::parse(uri).unwrap(), perl_code.to_string())
-        .unwrap();
+    index.index_file(Url::parse(uri).unwrap(), perl_code.to_string()).unwrap();
 
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -175,11 +171,7 @@ sub another {
 
     // There should be no duplicates in the final result
     // (The workspace/symbol handler should deduplicate)
-    assert!(
-        duplicates.is_empty(),
-        "Found duplicate symbols: {:?}",
-        duplicates
-    );
+    assert!(duplicates.is_empty(), "Found duplicate symbols: {:?}", duplicates);
 }
 
 #[test]
@@ -199,9 +191,7 @@ sub test_function {
 "#;
 
     let uri = "file:///test/test.pl";
-    index
-        .index_file(Url::parse(uri).unwrap(), perl_code.to_string())
-        .unwrap();
+    index.index_file(Url::parse(uri).unwrap(), perl_code.to_string()).unwrap();
 
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -224,17 +214,11 @@ sub test_function {
 
         let start = range.get("start").unwrap();
         assert!(start.get("line").is_some(), "Start missing 'line' field");
-        assert!(
-            start.get("character").is_some(),
-            "Start missing 'character' field"
-        );
+        assert!(start.get("character").is_some(), "Start missing 'character' field");
 
         let end = range.get("end").unwrap();
         assert!(end.get("line").is_some(), "End missing 'line' field");
-        assert!(
-            end.get("character").is_some(),
-            "End missing 'character' field"
-        );
+        assert!(end.get("character").is_some(), "End missing 'character' field");
     }
 }
 

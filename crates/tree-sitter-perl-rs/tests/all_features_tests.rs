@@ -68,9 +68,8 @@ mod tests {
         assert!(sexp.contains("typeglob_variable"));
 
         // Test typeglob slot access
-        let slots = vec![
-            "SCALAR", "ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE",
-        ];
+        let slots =
+            vec!["SCALAR", "ARRAY", "HASH", "CODE", "IO", "GLOB", "FORMAT", "NAME", "PACKAGE"];
         for slot in slots {
             let code = format!("*foo{{{}}}", slot);
             let ast = parser.parse(&code).unwrap();

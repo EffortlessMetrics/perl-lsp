@@ -23,10 +23,7 @@ $name, $age, $score
         // Labels
         ("LABEL: for (@list) { last LABEL; }", "labeled loop"),
         // Default in given/when
-        (
-            "given ($x) { when (1) { } default { } }",
-            "given/when with default",
-        ),
+        ("given ($x) { when (1) { } default { } }", "given/when with default"),
         // Class and method (Perl 5.38+)
         ("class Foo { }", "class declaration"),
         ("method bar { }", "method declaration"),

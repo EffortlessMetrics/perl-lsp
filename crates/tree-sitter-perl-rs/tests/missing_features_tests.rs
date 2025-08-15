@@ -29,11 +29,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse subroutine signature: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse subroutine signature: {}", case);
         }
     }
 
@@ -63,11 +59,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse postfix dereference: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse postfix dereference: {}", case);
         }
     }
 
@@ -211,11 +203,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse complex interpolation: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse complex interpolation: {}", case);
         }
     }
 
@@ -441,11 +429,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse operator overload: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse operator overload: {}", case);
         }
     }
 
@@ -507,11 +491,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse additional operator: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse additional operator: {}", case);
         }
     }
 
@@ -535,11 +515,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse two-char delimiter: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse two-char delimiter: {}", case);
         }
     }
 
@@ -564,11 +540,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(
-                result.is_ok(),
-                "Failed to parse method resolution: {}",
-                case
-            );
+            assert!(result.is_ok(), "Failed to parse method resolution: {}", case);
         }
     }
 

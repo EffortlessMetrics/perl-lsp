@@ -21,11 +21,8 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
             // New test separator
             if let Some(mut test) = current_test.take() {
                 test.input = input_lines.join("\n");
-                test.expected_sexp = if output_lines.is_empty() {
-                    None
-                } else {
-                    Some(output_lines.join("\n"))
-                };
+                test.expected_sexp =
+                    if output_lines.is_empty() { None } else { Some(output_lines.join("\n")) };
                 tests.push(test);
             }
 
@@ -61,11 +58,8 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
     // Handle last test
     if let Some(mut test) = current_test {
         test.input = input_lines.join("\n");
-        test.expected_sexp = if output_lines.is_empty() {
-            None
-        } else {
-            Some(output_lines.join("\n"))
-        };
+        test.expected_sexp =
+            if output_lines.is_empty() { None } else { Some(output_lines.join("\n")) };
         tests.push(test);
     }
 
@@ -88,10 +82,7 @@ pub fn load_corpus_directory(dir: &Path) -> Result<Vec<TestCase>> {
                 .with_context(|| format!("Failed to parse {:?}", path))?;
 
             // Add filename to test names for uniqueness
-            let filename = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
+            let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
 
             for test in &mut tests {
                 test.name = format!("{}::{}", filename, test.name);

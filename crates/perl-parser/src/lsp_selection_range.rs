@@ -81,10 +81,7 @@ pub fn selection_ranges(text: &str, positions: &[Position]) -> Vec<SelectionRang
 
             // Trimmed line
             let line_start = text[..off].rfind('\n').map(|i| i + 1).unwrap_or(0);
-            let line_end = text[off..]
-                .find('\n')
-                .map(|i| off + i)
-                .unwrap_or(text.len());
+            let line_end = text[off..].find('\n').map(|i| off + i).unwrap_or(text.len());
             let line_text = &text[line_start..line_end];
             let trim_left = line_text.find(|c: char| !c.is_whitespace()).unwrap_or(0);
             let trim_right = line_text
@@ -106,24 +103,15 @@ pub fn selection_ranges(text: &str, positions: &[Position]) -> Vec<SelectionRang
                         .unwrap_or(i + 1)
                 })
                 .unwrap_or(0);
-            let stmt_end = text[off..]
-                .find(';')
-                .map(|i| off + i + 1)
-                .unwrap_or_else(|| {
-                    // If no semicolon, find end of line or block
-                    text[off..]
-                        .find('\n')
-                        .map(|i| off + i)
-                        .unwrap_or(text.len())
-                });
+            let stmt_end = text[off..].find(';').map(|i| off + i + 1).unwrap_or_else(|| {
+                // If no semicolon, find end of line or block
+                text[off..].find('\n').map(|i| off + i).unwrap_or(text.len())
+            });
             let statement = make_range(text, stmt_start, stmt_end);
 
             // Block (find brace boundaries)
             let block_start = text[..off].rfind('{').unwrap_or(0);
-            let block_end = text[off..]
-                .find('}')
-                .map(|i| off + i + 1)
-                .unwrap_or(text.len());
+            let block_end = text[off..].find('}').map(|i| off + i + 1).unwrap_or(text.len());
             let block = make_range(text, block_start, block_end);
 
             // Function (find sub boundaries)

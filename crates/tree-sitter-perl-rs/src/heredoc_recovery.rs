@@ -132,9 +132,7 @@ impl HeredocRecovery {
         let expr_end = self.find_expression_end(input, position);
         let expression = &input[position..expr_end];
 
-        result
-            .diagnostics
-            .push(format!("Attempting recovery for: {}", expression));
+        result.diagnostics.push(format!("Attempting recovery for: {}", expression));
 
         // Try multiple recovery strategies in order of confidence
 
@@ -156,8 +154,7 @@ impl HeredocRecovery {
                     result.confidence = confidence;
                     result.method = RecoveryMethod::StaticAnalysis;
                     result.error_node = false;
-                    self.delimiter_cache
-                        .insert(expression.to_string(), delimiter);
+                    self.delimiter_cache.insert(expression.to_string(), delimiter);
                     return result;
                 }
             }
@@ -176,17 +173,13 @@ impl HeredocRecovery {
                     let alternatives = self.apply_heuristics(expression);
                     for alt in alternatives {
                         if alt.as_ref() != delimiter.as_ref()
-                            && !result
-                                .alternatives
-                                .iter()
-                                .any(|a| a.as_ref() == alt.as_ref())
+                            && !result.alternatives.iter().any(|a| a.as_ref() == alt.as_ref())
                         {
                             result.alternatives.push(alt);
                         }
                     }
 
-                    self.delimiter_cache
-                        .insert(expression.to_string(), delimiter);
+                    self.delimiter_cache.insert(expression.to_string(), delimiter);
                     return result;
                 } else {
                     // Add as alternative
@@ -198,9 +191,7 @@ impl HeredocRecovery {
         // 4. Try context analysis
         if self.config.enable_context_analysis {
             let context = self.build_context(tokens, position);
-            let analysis = self
-                .delimiter_recovery
-                .analyze_dynamic_delimiter(expression, &context);
+            let analysis = self.delimiter_recovery.analyze_dynamic_delimiter(expression, &context);
 
             if let Some(delim) = analysis.delimiter {
                 if analysis.confidence >= self.config.confidence_threshold {
@@ -209,8 +200,7 @@ impl HeredocRecovery {
                     result.confidence = analysis.confidence;
                     result.method = RecoveryMethod::ContextAnalysis;
                     result.error_node = false;
-                    self.delimiter_cache
-                        .insert(expression.to_string(), delimiter);
+                    self.delimiter_cache.insert(expression.to_string(), delimiter);
                     return result;
                 }
             }
@@ -239,9 +229,7 @@ impl HeredocRecovery {
                 }
 
                 result.method = RecoveryMethod::Heuristic;
-                result
-                    .alternatives
-                    .extend(heuristic_delims.into_iter().skip(1));
+                result.alternatives.extend(heuristic_delims.into_iter().skip(1));
             }
         }
 
@@ -525,11 +513,7 @@ impl HeredocRecovery {
 
         // Special handling for special variables
         // Strip << prefix if present
-        let expr = if expression.starts_with("<<") {
-            &expression[2..].trim()
-        } else {
-            expression
-        };
+        let expr = if expression.starts_with("<<") { &expression[2..].trim() } else { expression };
 
         if expr == "$_" || expr == "$@" || expr == "$!" || expr == "$?" {
             // For special variables, return common delimiters in priority order
@@ -695,11 +679,7 @@ impl HeredocRecovery {
             pos += 1;
         }
 
-        if pos > start_pos {
-            Some((input[start_pos..pos].to_string(), pos))
-        } else {
-            None
-        }
+        if pos > start_pos { Some((input[start_pos..pos].to_string(), pos)) } else { None }
     }
 }
 

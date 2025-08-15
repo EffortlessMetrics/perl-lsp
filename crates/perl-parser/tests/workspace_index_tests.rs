@@ -41,16 +41,10 @@ print $result;
 
     // Index both files
     index
-        .index_file(
-            url::Url::parse(file1_uri).unwrap(),
-            file1_content.to_string(),
-        )
+        .index_file(url::Url::parse(file1_uri).unwrap(), file1_content.to_string())
         .expect("Failed to index file1");
     index
-        .index_file(
-            url::Url::parse(file2_uri).unwrap(),
-            file2_content.to_string(),
-        )
+        .index_file(url::Url::parse(file2_uri).unwrap(), file2_content.to_string())
         .expect("Failed to index file2");
 
     // Test 1: Find the 'bar' subroutine
@@ -65,33 +59,21 @@ print $result;
     // Note: Currently FunctionCall for Foo::bar() doesn't extract "bar" separately,
     // it extracts "Foo::bar" as the function name
     // We'll check that we found at least the definition reference
-    assert!(
-        !bar_refs.is_empty(),
-        "Should find at least one reference to 'bar'"
-    );
+    assert!(!bar_refs.is_empty(), "Should find at least one reference to 'bar'");
 
     // Test 3: Find the Foo package
     let foo_symbols = index.find_symbols("Foo");
     // The search finds all symbols with "Foo" in their name or qualified name
     // This includes the package and the subroutines in the package
-    let foo_packages: Vec<_> = foo_symbols
-        .iter()
-        .filter(|s| s.kind == SymbolKind::Package)
-        .collect();
-    assert_eq!(
-        foo_packages.len(),
-        1,
-        "Should find exactly one 'Foo' package"
-    );
+    let foo_packages: Vec<_> =
+        foo_symbols.iter().filter(|s| s.kind == SymbolKind::Package).collect();
+    assert_eq!(foo_packages.len(), 1, "Should find exactly one 'Foo' package");
     assert_eq!(foo_packages[0].name, "Foo");
 
     // Test 4: Find references to Foo (the use statement)
     let foo_refs = index.find_references("Foo");
     // Should find at least one reference (the use statement)
-    assert!(
-        !foo_refs.is_empty(),
-        "Should find at least one reference to 'Foo'"
-    );
+    assert!(!foo_refs.is_empty(), "Should find at least one reference to 'Foo'");
 
     // Test 5: Find unused symbols
     let unused = index.find_unused_symbols();
@@ -100,22 +82,13 @@ print $result;
 
     // Test 6: Track dependencies
     let file2_deps = index.file_dependencies(file2_uri);
-    assert!(
-        file2_deps.contains("Foo"),
-        "script.pl should depend on Foo module"
-    );
+    assert!(file2_deps.contains("Foo"), "script.pl should depend on Foo module");
 
     // Test 7: Get package members
     let foo_members = index.get_package_members("Foo");
-    assert!(
-        foo_members.len() >= 2,
-        "Should find at least 2 members in Foo package"
-    );
+    assert!(foo_members.len() >= 2, "Should find at least 2 members in Foo package");
     let member_names: Vec<_> = foo_members.iter().map(|s| &s.name).collect();
-    assert!(
-        member_names.contains(&&"bar".to_string()),
-        "Should find 'bar' in Foo package"
-    );
+    assert!(member_names.contains(&&"bar".to_string()), "Should find 'bar' in Foo package");
     assert!(
         member_names.contains(&&"unused_func".to_string()),
         "Should find 'unused_func' in Foo package"
@@ -153,11 +126,7 @@ sub new_function {
         .expect("Failed to index v2");
 
     let old_func = index.find_symbols("old_function");
-    assert_eq!(
-        old_func.len(),
-        0,
-        "Should not find old_function after update"
-    );
+    assert_eq!(old_func.len(), 0, "Should not find old_function after update");
 
     let new_func = index.find_symbols("new_function");
     assert_eq!(new_func.len(), 1, "Should find new_function after update");
@@ -178,21 +147,14 @@ sub temp_sub { }
         .expect("Failed to index");
 
     let symbols = index.find_symbols("TempPackage");
-    let packages: Vec<_> = symbols
-        .iter()
-        .filter(|s| s.kind == SymbolKind::Package)
-        .collect();
+    let packages: Vec<_> = symbols.iter().filter(|s| s.kind == SymbolKind::Package).collect();
     assert_eq!(packages.len(), 1, "Should find TempPackage");
 
     // Clear the file
     index.clear_file(file_uri);
 
     let symbols = index.find_symbols("TempPackage");
-    assert_eq!(
-        symbols.len(),
-        0,
-        "Should not find TempPackage after clearing"
-    );
+    assert_eq!(symbols.len(), 0, "Should not find TempPackage after clearing");
 }
 
 #[test]

@@ -35,11 +35,7 @@ fn main() -> Result<()> {
     if corpus_path.exists() {
         match corpus::load_corpus_directory(&corpus_path) {
             Ok(corpus_tests) => {
-                println!(
-                    "Loaded {} corpus tests from {:?}",
-                    corpus_tests.len(),
-                    corpus_path
-                );
+                println!("Loaded {} corpus tests from {:?}", corpus_tests.len(), corpus_path);
                 tests.extend(corpus_tests);
             }
             Err(e) => {
@@ -62,11 +58,7 @@ fn main() -> Result<()> {
         let results = run_test_on_all_parsers(test);
 
         for result in results {
-            let status = if result.success {
-                "PASS".green()
-            } else {
-                "FAIL".red()
-            };
+            let status = if result.success { "PASS".green() } else { "FAIL".red() };
 
             println!(
                 "  {} {}: {} ({:?})",
@@ -83,10 +75,7 @@ fn main() -> Result<()> {
             }
 
             // Track results
-            results_by_parser
-                .entry(result.parser_name)
-                .or_default()
-                .push(result.success);
+            results_by_parser.entry(result.parser_name).or_default().push(result.success);
         }
         println!();
     }
@@ -108,13 +97,7 @@ fn main() -> Result<()> {
             format!("{:.1}%", percentage).red()
         };
 
-        println!(
-            "{}: {}/{} tests passed ({})",
-            parser.cyan(),
-            passed,
-            total,
-            status
-        );
+        println!("{}: {}/{} tests passed ({})", parser.cyan(), passed, total, status);
     }
 
     Ok(())

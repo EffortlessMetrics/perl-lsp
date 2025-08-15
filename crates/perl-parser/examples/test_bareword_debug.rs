@@ -56,10 +56,7 @@ fn walk_ast(
             }
         }
         NodeKind::Use { module, .. } => {
-            println!(
-                "{}Use '{}' at offset {}",
-                indent, module, node.location.start
-            );
+            println!("{}Use '{}' at offset {}", indent, module, node.location.start);
         }
         _ => {
             // Recursively walk children

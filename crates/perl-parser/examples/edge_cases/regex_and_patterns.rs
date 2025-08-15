@@ -225,10 +225,7 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("/^foo$/m", "multiline anchors"),
         ("/foo.bar/s", "dot matches newline"),
         // Extended regex
-        (
-            "/foo   # this is foo\n   bar  # this is bar/x",
-            "extended with comments",
-        ),
+        ("/foo   # this is foo\n   bar  # this is bar/x", "extended with comments"),
         ("/foo\\ bar/x", "extended with escaped space"),
         // Case folding
         ("/\\F/", "case fold"),

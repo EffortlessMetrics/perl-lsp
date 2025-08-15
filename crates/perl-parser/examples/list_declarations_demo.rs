@@ -10,18 +10,9 @@ fn main() {
         ("List declaration with init", "state ($a, $b) = (1, 2);"),
         ("Mixed sigils in list", "our ($scalar, @array, %hash);"),
         ("Empty list declaration", "my ();"),
-        (
-            "Complex initializer",
-            "local ($x, $y) = map { $_ * 2 } (5, 10);",
-        ),
-        (
-            "Function parameter unpacking",
-            "my ($self, $name, $value) = @_;",
-        ),
-        (
-            "List in for loop",
-            "for (my ($i, $j) = (0, 10); $i < 10; $i++) { }",
-        ),
+        ("Complex initializer", "local ($x, $y) = map { $_ * 2 } (5, 10);"),
+        ("Function parameter unpacking", "my ($self, $name, $value) = @_;"),
+        ("List in for loop", "for (my ($i, $j) = (0, 10); $i < 10; $i++) { }"),
     ];
 
     for (description, code) in examples {

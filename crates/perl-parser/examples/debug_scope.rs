@@ -53,10 +53,7 @@ fn main() {
 
         println!("Issues found: {}", issues.len());
         for issue in &issues {
-            println!(
-                "  {:?}: {} at line {}",
-                issue.kind, issue.variable_name, issue.line
-            );
+            println!("  {:?}: {} at line {}", issue.kind, issue.variable_name, issue.line);
         }
     }
 }

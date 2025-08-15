@@ -214,12 +214,7 @@ pub fn from_perl_lexer_token(token: &crate::perl_lexer::Token) -> Token {
         }
     };
 
-    Token {
-        token_type,
-        text: token.text.clone(),
-        start: token.start,
-        end: token.end,
-    }
+    Token { token_type, text: token.text.clone(), start: token.start, end: token.end }
 }
 
 /// Token with position information

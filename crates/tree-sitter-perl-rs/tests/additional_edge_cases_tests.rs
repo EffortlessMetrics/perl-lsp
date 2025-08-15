@@ -92,11 +92,7 @@ mod tests {
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse bareword filehandle: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse bareword filehandle: {}", case);
         }
     }
 
@@ -155,11 +151,7 @@ mod tests {
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse glob/readline: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse glob/readline: {}", case);
         }
     }
 
@@ -211,11 +203,7 @@ mod tests {
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse v-string: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse v-string: {}", case);
         }
     }
 
@@ -240,11 +228,7 @@ mod tests {
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse pack/unpack: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse pack/unpack: {}", case);
         }
     }
 
@@ -337,11 +321,7 @@ $name,  $score, $grade
         for case in cases {
             let result = test_parse(case);
             // Format declarations are complex, just ensure no ERROR
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse format-related code: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse format-related code: {}", case);
         }
     }
 
@@ -367,11 +347,7 @@ $name,  $score, $grade
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse complex dereferencing: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse complex dereferencing: {}", case);
         }
     }
 
@@ -399,11 +375,7 @@ $name,  $score, $grade
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse list/scalar context: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse list/scalar context: {}", case);
         }
     }
 
@@ -431,11 +403,7 @@ $name,  $score, $grade
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse obscure quoting: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse obscure quoting: {}", case);
         }
     }
 
@@ -460,11 +428,7 @@ $name,  $score, $grade
 
         for case in cases {
             let result = test_parse(case);
-            assert!(
-                !result.contains("(ERROR)"),
-                "Failed to parse compound statement: {}",
-                case
-            );
+            assert!(!result.contains("(ERROR)"), "Failed to parse compound statement: {}", case);
         }
     }
 }

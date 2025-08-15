@@ -13,12 +13,8 @@ impl TestUtils {
     /// Parse Perl code and return the tree
     pub fn parse_perl_code(code: &str) -> ParseResult<Tree> {
         let mut parser = Parser::new();
-        parser
-            .set_language(&crate::language())
-            .expect("Failed to set language");
-        parser
-            .parse(code, None)
-            .ok_or(crate::error::ParseError::ParseFailed)
+        parser.set_language(&crate::language()).expect("Failed to set language");
+        parser.parse(code, None).ok_or(crate::error::ParseError::ParseFailed)
     }
 
     /// Validate that a tree has no error nodes
@@ -27,9 +23,7 @@ impl TestUtils {
         Self::collect_errors(&tree.root_node(), &mut has_errors);
 
         if has_errors {
-            Err(crate::error::ParseError::scanner_error_simple(
-                "Tree contains error nodes",
-            ))
+            Err(crate::error::ParseError::scanner_error_simple("Tree contains error nodes"))
         } else {
             Ok(())
         }
@@ -61,10 +55,7 @@ impl TestUtils {
         if sexp1 == sexp2 {
             vec![]
         } else {
-            vec![format!(
-                "Trees differ:\nExpected: {}\nActual: {}",
-                sexp1, sexp2
-            )]
+            vec![format!("Trees differ:\nExpected: {}\nActual: {}", sexp1, sexp2)]
         }
     }
 

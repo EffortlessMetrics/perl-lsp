@@ -22,11 +22,7 @@ struct TestContext {
 impl TestContext {
     fn new() -> Self {
         let server = LspServer::new();
-        Self {
-            server,
-            documents: HashMap::new(),
-            version_counter: 0,
-        }
+        Self { server, documents: HashMap::new(), version_counter: 0 }
     }
 
     fn initialize(&mut self) -> Value {
@@ -72,9 +68,7 @@ impl TestContext {
         };
         self.version_counter += 1;
 
-        self.server
-            .handle_request(request)
-            .and_then(|response| response.result)
+        self.server.handle_request(request).and_then(|response| response.result)
     }
 
     fn send_notification(&mut self, method: &str, params: Option<Value>) {
@@ -920,10 +914,7 @@ return$x*2}
                 assert!(!formatted.is_empty(), "Formatted code should not be empty");
             }
         } else {
-            assert!(
-                res.is_null(),
-                "Formatting should return array of text edits or null"
-            );
+            assert!(res.is_null(), "Formatting should return array of text edits or null");
         }
     }
 }
@@ -1144,11 +1135,7 @@ sub function_{} {{
     let elapsed = start.elapsed();
 
     assert!(result.is_some());
-    assert!(
-        elapsed.as_millis() < 100,
-        "Symbol request took too long: {:?}",
-        elapsed
-    );
+    assert!(elapsed.as_millis() < 100, "Symbol request took too long: {:?}", elapsed);
 }
 
 /// Test 23: Unicode Support
@@ -1517,10 +1504,7 @@ sub is_valid {
 
     // Definition might be empty for external modules
     if let Some(def) = definition {
-        assert!(
-            def.is_array() || def.is_object(),
-            "Definition should be array or LocationLink"
-        );
+        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
     }
 }
 

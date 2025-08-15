@@ -158,10 +158,7 @@ impl SemanticAnalyzer {
         }
 
         // If no reference found, check if we're on a definition itself
-        self.symbol_at(SourceLocation {
-            start: position,
-            end: position,
-        })
+        self.symbol_at(SourceLocation { start: position, end: position })
     }
 
     /// Find all references to a symbol at a given position
@@ -267,12 +264,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                attributes,
-                initializer,
-            } => {
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
                 // Add semantic token for declaration
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let token_type = match declarator.as_str() {
@@ -363,12 +355,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine {
-                name,
-                params,
-                attributes,
-                body,
-            } => {
+            NodeKind::Subroutine { name, params, attributes, body } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
                         location: node.location,
@@ -412,8 +399,7 @@ impl SemanticAnalyzer {
                     } else {
                         // Check if it's a user-defined function
                         let symbols =
-                            self.symbol_table
-                                .find_symbol(name, scope_id, SymbolKind::Subroutine);
+                            self.symbol_table.find_symbol(name, scope_id, SymbolKind::Subroutine);
                         if symbols.is_empty() {
                             SemanticTokenType::Function
                         } else {
@@ -470,10 +456,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::String {
-                value: _,
-                interpolated: _,
-            } => {
+            NodeKind::String { value: _, interpolated: _ } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::String,
@@ -489,15 +472,8 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Regex {
-                pattern: _,
-                modifiers: _,
-            }
-            | NodeKind::Match {
-                pattern: _,
-                modifiers: _,
-                ..
-            } => {
+            NodeKind::Regex { pattern: _, modifiers: _ }
+            | NodeKind::Match { pattern: _, modifiers: _, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Regex,
@@ -505,10 +481,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::LabeledStatement {
-                label: _,
-                statement,
-            } => {
+            NodeKind::LabeledStatement { label: _, statement } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Label,
@@ -521,12 +494,7 @@ impl SemanticAnalyzer {
             }
 
             // Control flow keywords
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches: _,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_branch, scope_id);
                 if let Some(else_node) = else_branch {
@@ -534,22 +502,12 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::While {
-                condition,
-                body,
-                continue_block: _,
-            } => {
+            NodeKind::While { condition, body, continue_block: _ } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(body, scope_id);
             }
 
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(init_node) = init {
                     self.analyze_node(init_node, scope_id);
                 }
@@ -562,11 +520,7 @@ impl SemanticAnalyzer {
                 self.analyze_node(body, scope_id);
             }
 
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 self.analyze_node(variable, scope_id);
                 self.analyze_node(list, scope_id);
                 self.analyze_node(body, scope_id);
@@ -714,11 +668,7 @@ print $x;
             })
             .collect();
         assert!(!x_tokens.is_empty());
-        assert!(
-            x_tokens[0]
-                .modifiers
-                .contains(&SemanticTokenModifier::Declaration)
-        );
+        assert!(x_tokens[0].modifiers.contains(&SemanticTokenModifier::Declaration));
     }
 
     #[test]

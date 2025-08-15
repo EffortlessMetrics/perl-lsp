@@ -14,10 +14,7 @@ mod modernize_perl_tests {
         let suggestion = &suggestions[0];
         assert_eq!(suggestion.old_pattern, "open FH");
         assert_eq!(suggestion.new_pattern, "open my $fh");
-        assert_eq!(
-            suggestion.description,
-            "Use lexical filehandles instead of barewords"
-        );
+        assert_eq!(suggestion.description, "Use lexical filehandles instead of barewords");
 
         let modernized = modernizer.apply(old_code);
         assert_eq!(modernized, "open my $fh, '<', 'file.txt';");
@@ -89,10 +86,7 @@ mod modernize_perl_tests {
         );
 
         let modernized = modernizer.apply(old_code);
-        assert_eq!(
-            modernized,
-            "foreach my $i (0..$#array) { my $val = $array[$i]; }"
-        );
+        assert_eq!(modernized, "foreach my $i (0..$#array) { my $val = $array[$i]; }");
     }
 
     #[test]
@@ -104,10 +98,7 @@ mod modernize_perl_tests {
         assert_eq!(suggestions.len(), 1);
 
         let suggestion = &suggestions[0];
-        assert_eq!(
-            suggestion.description,
-            "String eval is risky, consider block eval or require"
-        );
+        assert_eq!(suggestion.description, "String eval is risky, consider block eval or require");
 
         // For this case, we suggest but don't auto-fix due to complexity
         let modernized = modernizer.apply(old_code);
@@ -130,10 +121,7 @@ mod modernize_perl_tests {
         );
 
         let modernized = modernizer.apply(old_code);
-        assert_eq!(
-            modernized,
-            "#!/usr/bin/perl\nuse strict;\nuse warnings;\n\nmy $x = 1;"
-        );
+        assert_eq!(modernized, "#!/usr/bin/perl\nuse strict;\nuse warnings;\n\nmy $x = 1;");
     }
 
     #[test]
@@ -190,11 +178,7 @@ my $obj = MyClass->new();
 "#;
 
         let suggestions = modernizer.analyze(modern_code);
-        assert_eq!(
-            suggestions.len(),
-            0,
-            "Modern code should have no suggestions"
-        );
+        assert_eq!(suggestions.len(), 0, "Modern code should have no suggestions");
 
         let modernized = modernizer.apply(modern_code);
         assert_eq!(modernized, modern_code, "Modern code should not be changed");

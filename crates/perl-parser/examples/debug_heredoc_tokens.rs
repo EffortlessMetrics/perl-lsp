@@ -2,12 +2,7 @@
 use perl_lexer::{PerlLexer, TokenType};
 
 fn main() {
-    let tests = vec![
-        "print <<EOF;",
-        "print <<'END';",
-        "print <<\"TEXT\";",
-        "my $x = <<~EOF;",
-    ];
+    let tests = vec!["print <<EOF;", "print <<'END';", "print <<\"TEXT\";", "my $x = <<~EOF;"];
 
     for test in tests {
         println!("\nCode: {}", test);

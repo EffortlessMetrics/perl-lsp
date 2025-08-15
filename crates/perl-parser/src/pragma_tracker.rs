@@ -22,12 +22,7 @@ pub struct PragmaState {
 impl PragmaState {
     /// Create a new pragma state with all strict modes enabled
     pub fn all_strict() -> Self {
-        Self {
-            strict_vars: true,
-            strict_subs: true,
-            strict_refs: true,
-            warnings: false,
-        }
+        Self { strict_vars: true, strict_subs: true, strict_refs: true, warnings: false }
     }
 }
 
@@ -102,17 +97,13 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges.push((
-                            node.location.start..node.location.end,
-                            current_state.clone(),
-                        ));
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "warnings" => {
                         current_state.warnings = true;
-                        ranges.push((
-                            node.location.start..node.location.end,
-                            current_state.clone(),
-                        ));
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {}
                 }
@@ -145,17 +136,13 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges.push((
-                            node.location.start..node.location.end,
-                            current_state.clone(),
-                        ));
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "warnings" => {
                         current_state.warnings = false;
-                        ranges.push((
-                            node.location.start..node.location.end,
-                            current_state.clone(),
-                        ));
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {}
                 }

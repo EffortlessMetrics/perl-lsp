@@ -7,9 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(clippy: bool, fmt: bool, all: bool) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     // Determine what to check
@@ -33,19 +31,11 @@ pub fn run(clippy: bool, fmt: bool, all: bool) -> Result<()> {
         spinner.set_message(format!("Running {} check", check));
 
         let status = match check {
-            "clippy" => cmd(
-                "cargo",
-                &[
-                    "clippy",
-                    "--all-targets",
-                    "--all-features",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
-            )
-            .run()
-            .context("Clippy check failed")?,
+            "clippy" => {
+                cmd("cargo", &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
+                    .run()
+                    .context("Clippy check failed")?
+            }
             "fmt" => cmd("cargo", &["fmt", "--all", "--", "--check"])
                 .run()
                 .context("Format check failed")?,

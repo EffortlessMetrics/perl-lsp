@@ -44,28 +44,16 @@ struct HierarchyIndex {
 
 impl HierarchyIndex {
     fn add_inheritance(&mut self, child: &str, parent: &str) {
-        self.parents
-            .entry(child.to_string())
-            .or_default()
-            .insert(parent.to_string());
-        self.children
-            .entry(parent.to_string())
-            .or_default()
-            .insert(child.to_string());
+        self.parents.entry(child.to_string()).or_default().insert(parent.to_string());
+        self.children.entry(parent.to_string()).or_default().insert(child.to_string());
     }
 
     fn get_parents(&self, package: &str) -> Vec<String> {
-        self.parents
-            .get(package)
-            .map(|set| set.iter().cloned().collect())
-            .unwrap_or_default()
+        self.parents.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
 
     fn get_children(&self, package: &str) -> Vec<String> {
-        self.children
-            .get(package)
-            .map(|set| set.iter().cloned().collect())
-            .unwrap_or_default()
+        self.children.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
 }
 
@@ -126,18 +114,9 @@ impl TypeHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 if declarator == "our" {
-                    if let NodeKind::Variable {
-                        sigil,
-                        name: var_name,
-                    } = &variable.kind
-                    {
+                    if let NodeKind::Variable { sigil, name: var_name } = &variable.kind {
                         if sigil == "@" && var_name == "ISA" {
                             if let Some(init) = initializer {
                                 for parent in self.extract_isa_parents(init) {
@@ -148,20 +127,11 @@ impl TypeHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableListDeclaration {
-                declarator,
-                variables,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
                 if declarator == "our" {
                     // Check if any variable is @ISA
                     for var in variables {
-                        if let NodeKind::Variable {
-                            sigil,
-                            name: var_name,
-                        } = &var.kind
-                        {
+                        if let NodeKind::Variable { sigil, name: var_name } = &var.kind {
                             if sigil == "@" && var_name == "ISA" {
                                 if let Some(init) = initializer {
                                     for parent in self.extract_isa_parents(init) {
@@ -306,24 +276,12 @@ impl TypeHierarchyProvider {
                 kind: SymbolKind::Class,
                 uri: "file:///current".to_string(),
                 range: Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 0,
-                    },
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
                 },
                 selection_range: Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 0,
-                    },
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
                 },
                 detail: Some("Parent Class".to_string()),
                 data: None,
@@ -343,24 +301,12 @@ impl TypeHierarchyProvider {
                 kind: SymbolKind::Class,
                 uri: "file:///current".to_string(),
                 range: Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 0,
-                    },
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
                 },
                 selection_range: Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 0,
-                    },
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 0 },
                 },
                 detail: Some("Subclass".to_string()),
                 data: None,
@@ -391,12 +337,7 @@ impl TypeHierarchyProvider {
         match &node.kind {
             NodeKind::Program { statements } => Some(statements.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for branch in elsif_branches {
                     children.push(&branch.0);
@@ -450,14 +391,8 @@ impl TypeHierarchyProvider {
         let start_pos = self.offset_to_position(node.location.start, code);
         let end_pos = self.offset_to_position(node.location.end, code);
         Range {
-            start: Position {
-                line: start_pos.0,
-                character: start_pos.1,
-            },
-            end: Position {
-                line: end_pos.0,
-                character: end_pos.1,
-            },
+            start: Position { line: start_pos.0, character: start_pos.1 },
+            end: Position { line: end_pos.0, character: end_pos.1 },
         }
     }
 
@@ -557,24 +492,12 @@ use parent 'Other';
             kind: SymbolKind::Class,
             uri: "file:///test".to_string(),
             range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
             },
             selection_range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
             },
             detail: None,
             data: None,
@@ -585,18 +508,9 @@ use parent 'Other';
         assert_eq!(subtypes.len(), 2, "Should find exactly 2 subtypes");
 
         let subtype_names: Vec<String> = subtypes.iter().map(|t| t.name.clone()).collect();
-        assert!(
-            subtype_names.contains(&"Derived1".to_string()),
-            "Should find Derived1"
-        );
-        assert!(
-            subtype_names.contains(&"Derived2".to_string()),
-            "Should find Derived2"
-        );
-        assert!(
-            !subtype_names.contains(&"Unrelated".to_string()),
-            "Should not find Unrelated"
-        );
+        assert!(subtype_names.contains(&"Derived1".to_string()), "Should find Derived1");
+        assert!(subtype_names.contains(&"Derived2".to_string()), "Should find Derived2");
+        assert!(!subtype_names.contains(&"Unrelated".to_string()), "Should not find Unrelated");
     }
 
     #[test]
@@ -637,24 +551,12 @@ use parent 'Outer';
             kind: SymbolKind::Class,
             uri: "file:///test".to_string(),
             range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
             },
             selection_range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
             },
             detail: None,
             data: None,
@@ -663,10 +565,6 @@ use parent 'Outer';
         // Find subtypes - should handle block form packages
         let subtypes = provider.find_subtypes(&ast, &outer_item);
         // Both Inner and Other inherit from Outer
-        assert_eq!(
-            subtypes.len(),
-            2,
-            "Should find both Inner and Other as subtypes"
-        );
+        assert_eq!(subtypes.len(), 2, "Should find both Inner and Other as subtypes");
     }
 }

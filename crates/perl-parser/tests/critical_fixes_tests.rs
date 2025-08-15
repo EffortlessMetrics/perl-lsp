@@ -10,9 +10,7 @@ fn test_document_store_close_uses_normalized_uri() {
     // Index a file with a non-normalized URI (missing file://)
     let uri = "/home/user/test.pl";
     let text = "sub test_func { my $x = 42; }";
-    index
-        .index_file(Url::from_file_path(uri).unwrap(), text.to_string())
-        .unwrap();
+    index.index_file(Url::from_file_path(uri).unwrap(), text.to_string()).unwrap();
 
     // The file should be indexed (accessible with both normalized and non-normalized)
     let symbols = index.find_symbols("test_func");
@@ -27,9 +25,7 @@ fn test_document_store_close_uses_normalized_uri() {
 
     // Re-index with file:// prefix
     let normalized_uri = "file:///home/user/test.pl";
-    index
-        .index_file(Url::parse(normalized_uri).unwrap(), text.to_string())
-        .unwrap();
+    index.index_file(Url::parse(normalized_uri).unwrap(), text.to_string()).unwrap();
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 1);
 
@@ -46,9 +42,7 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
     // Index a file with a regular subroutine that has internal 'has_body' field
     let uri = "file:///test.pl";
     let text = "sub test_func { return 42; } my $x = 'test';";
-    index
-        .index_file(Url::parse(uri).unwrap(), text.to_string())
-        .unwrap();
+    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
 
     // Get symbols and convert to LSP DTOs
     let internal_symbols = index.find_symbols("test_func");
@@ -71,10 +65,7 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
                 !obj.contains_key("has_body"),
                 "Internal field 'has_body' leaked to LSP output"
             );
-            assert!(
-                !obj.contains_key("hasBody"),
-                "Internal field 'hasBody' leaked to LSP output"
-            );
+            assert!(!obj.contains_key("hasBody"), "Internal field 'hasBody' leaked to LSP output");
 
             // Check location structure
             let location = &obj["location"];
@@ -137,9 +128,7 @@ fn test_workspace_symbol_deduplication() {
     // Index a file with duplicate symbol definitions (shouldn't happen, but test dedup)
     let uri = "file:///test.pl";
     let text = "sub dup_func { } sub dup_func { }"; // Parser might produce duplicates
-    index
-        .index_file(Url::parse(uri).unwrap(), text.to_string())
-        .unwrap();
+    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
 
     // Get symbols - should be deduplicated
     let symbols = index.find_symbols("dup_func");
@@ -147,12 +136,8 @@ fn test_workspace_symbol_deduplication() {
     // Convert to LSP symbols and check deduplication by position
     let mut seen = HashSet::new();
     for sym in &symbols {
-        let key = (
-            sym.uri.clone(),
-            sym.range.start.line,
-            sym.range.start.character,
-            sym.name.clone(),
-        );
+        let key =
+            (sym.uri.clone(), sym.range.start.line, sym.range.start.character, sym.name.clone());
 
         // This would fail if we had true duplicates at the same position
         if seen.contains(&key) {
@@ -187,20 +172,12 @@ fn test_uri_normalization_consistency() {
         // Should be able to find the symbol
         let func_name = format!("test_{}", input_uri.len());
         let symbols = index.find_symbols(&func_name);
-        assert!(
-            !symbols.is_empty(),
-            "Failed to find symbol indexed with URI: {}",
-            input_uri
-        );
+        assert!(!symbols.is_empty(), "Failed to find symbol indexed with URI: {}", input_uri);
 
         // Remove and verify it's gone
         index.remove_file(input_uri);
         let symbols = index.find_symbols(&func_name);
-        assert!(
-            symbols.is_empty(),
-            "Failed to remove file with URI: {}",
-            input_uri
-        );
+        assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
     }
 }
 
@@ -213,9 +190,7 @@ fn test_utf16_position_encoding() {
     // Index a file with emoji (multi-byte UTF-8, different in UTF-16)
     let uri = "file:///emoji.pl";
     let text = "my $♥ = 'love'; sub test { }";
-    index
-        .index_file(Url::parse(uri).unwrap(), text.to_string())
-        .unwrap();
+    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
 
     // Find the subroutine
     let symbols = index.find_symbols("test");
@@ -228,8 +203,5 @@ fn test_utf16_position_encoding() {
     let symbol = &symbols[0];
 
     // The exact position depends on the parser, but it should be consistent
-    assert!(
-        symbol.range.start.character < 100,
-        "Position seems unreasonably large"
-    );
+    assert!(symbol.range.start.character < 100, "Position seems unreasonably large");
 }

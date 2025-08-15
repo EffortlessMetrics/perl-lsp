@@ -4,11 +4,8 @@ use perl_parser::Parser;
 
 fn main() {
     // Test different code examples
-    let test_cases = vec![
-        "my $x = 42;",
-        "if ($x > 10) { print $x; }",
-        "sub greet { print \"Hello\"; }",
-    ];
+    let test_cases =
+        vec!["my $x = 42;", "if ($x > 10) { print $x; }", "sub greet { print \"Hello\"; }"];
 
     for code in test_cases {
         println!("\n=== Parsing: {} ===", code);

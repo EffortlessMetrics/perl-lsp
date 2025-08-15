@@ -22,11 +22,7 @@ impl CScanner {
 
     /// Create a new C scanner with custom configuration
     pub fn with_config(config: ScannerConfig) -> Self {
-        Self {
-            config,
-            state: ScannerState::default(),
-            c_scanner: std::ptr::null_mut(),
-        }
+        Self { config, state: ScannerState::default(), c_scanner: std::ptr::null_mut() }
     }
 
     /// Initialize the C scanner

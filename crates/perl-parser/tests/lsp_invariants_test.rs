@@ -28,24 +28,15 @@ fn test_response_structure_invariants() {
     );
 
     // Must have jsonrpc field
-    assert_eq!(
-        response["jsonrpc"], "2.0",
-        "Response must have jsonrpc: 2.0"
-    );
+    assert_eq!(response["jsonrpc"], "2.0", "Response must have jsonrpc: 2.0");
 
     // Must have exactly one of result or error (XOR)
     let has_result = response.get("result").is_some();
     let has_error = response.get("error").is_some();
-    assert!(
-        has_result ^ has_error,
-        "Response must have exactly one of result or error"
-    );
+    assert!(has_result ^ has_error, "Response must have exactly one of result or error");
 
     // Must have matching ID
-    assert!(
-        response.get("id").is_some(),
-        "Response must have an id field"
-    );
+    assert!(response.get("id").is_some(), "Response must have an id field");
 }
 
 /// Verify error responses have proper structure
@@ -69,10 +60,7 @@ fn test_error_response_structure() {
 
     let error = &response["error"];
     assert!(error["code"].is_number(), "Error must have numeric code");
-    assert!(
-        error["message"].is_string(),
-        "Error must have string message"
-    );
+    assert!(error["message"].is_string(), "Error must have string message");
 
     // Standard JSON-RPC error codes
     let code = error["code"].as_i64().unwrap();
@@ -123,10 +111,7 @@ fn test_id_matching_invariants() {
             }
         }),
     );
-    assert_eq!(
-        response["id"], "test-id",
-        "Response ID must match string request ID"
-    );
+    assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
 }
 
 /// Verify diagnostics always include version
@@ -159,14 +144,8 @@ fn test_diagnostics_version_invariant() {
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
-        assert!(
-            diag["params"]["version"].is_number(),
-            "Diagnostics must include version"
-        );
-        assert!(
-            diag["params"]["diagnostics"].is_array(),
-            "Diagnostics must be an array"
-        );
+        assert!(diag["params"]["version"].is_number(), "Diagnostics must include version");
+        assert!(diag["params"]["diagnostics"].is_array(), "Diagnostics must be an array");
     }
 
     // Fix the error
@@ -193,15 +172,9 @@ fn test_diagnostics_version_invariant() {
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
-        assert_eq!(
-            diag["params"]["version"], 2,
-            "Clear diagnostics must have updated version"
-        );
+        assert_eq!(diag["params"]["version"], 2, "Clear diagnostics must have updated version");
         let diags = diag["params"]["diagnostics"].as_array().unwrap();
-        assert!(
-            diags.is_empty(),
-            "Fixed code should have empty diagnostics array"
-        );
+        assert!(diags.is_empty(), "Fixed code should have empty diagnostics array");
     }
 }
 
@@ -283,10 +256,7 @@ fn test_notifications_no_response() {
     // We might get a diagnostics notification, but not a response
     if let Some(r) = resp {
         // If we got something, it should be a notification (no id field)
-        assert!(
-            r.get("id").is_none(),
-            "Notifications should not produce responses with IDs"
-        );
+        assert!(r.get("id").is_none(), "Notifications should not produce responses with IDs");
         assert_eq!(
             r.get("method").and_then(|v| v.as_str()),
             Some("textDocument/publishDiagnostics")

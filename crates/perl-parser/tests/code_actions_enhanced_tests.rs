@@ -23,16 +23,8 @@ fn test_duplicate_parameter_code_actions() {
         .collect();
 
     assert!(duplicate_actions.len() >= 2);
-    assert!(
-        duplicate_actions
-            .iter()
-            .any(|a| a.title.contains("Remove duplicate"))
-    );
-    assert!(
-        duplicate_actions
-            .iter()
-            .any(|a| a.title.contains("Rename duplicate"))
-    );
+    assert!(duplicate_actions.iter().any(|a| a.title.contains("Remove duplicate")));
+    assert!(duplicate_actions.iter().any(|a| a.title.contains("Rename duplicate")));
 }
 
 #[test]
@@ -59,11 +51,7 @@ sub process($data) {
         .collect();
 
     assert!(!shadow_actions.is_empty());
-    assert!(
-        shadow_actions
-            .iter()
-            .any(|a| a.title.contains("Rename parameter"))
-    );
+    assert!(shadow_actions.iter().any(|a| a.title.contains("Rename parameter")));
     assert!(
         shadow_actions
             .iter()
@@ -87,10 +75,8 @@ fn test_unused_parameter_code_actions() {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer to rename with underscore or add comment
-    let unused_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostic_id.as_deref() == Some("unused-parameter"))
-        .collect();
+    let unused_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")).collect();
 
     assert!(!unused_actions.is_empty());
     assert!(unused_actions.iter().any(|a| a.title.contains("$_unused")));
@@ -121,11 +107,7 @@ print FOO;"#;
     assert!(bareword_actions.iter().any(|a| a.title.contains("'FOO'")));
     assert!(bareword_actions.iter().any(|a| a.title.contains("\"FOO\"")));
     // For uppercase barewords, should also offer filehandle declaration
-    assert!(
-        bareword_actions
-            .iter()
-            .any(|a| a.title.contains("filehandle"))
-    );
+    assert!(bareword_actions.iter().any(|a| a.title.contains("filehandle")));
 }
 
 #[test]
@@ -147,21 +129,9 @@ sub test($x, $y, $x, $unused) {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should have actions for all issues
-    assert!(
-        actions
-            .iter()
-            .any(|a| a.diagnostic_id.as_deref() == Some("duplicate-parameter"))
-    );
-    assert!(
-        actions
-            .iter()
-            .any(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global"))
-    );
-    assert!(
-        actions
-            .iter()
-            .any(|a| a.diagnostic_id.as_deref() == Some("unused-parameter"))
-    );
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("duplicate-parameter")));
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global")));
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")));
 }
 
 #[test]
@@ -179,10 +149,8 @@ print LOGFILE "Starting process";"#;
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should suggest declaring as filehandle for uppercase barewords
-    let filehandle_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.title.contains("filehandle"))
-        .collect();
+    let filehandle_actions: Vec<_> =
+        actions.iter().filter(|a| a.title.contains("filehandle")).collect();
 
     assert!(!filehandle_actions.is_empty());
     assert!(filehandle_actions[0].edit.new_text.contains("open"));

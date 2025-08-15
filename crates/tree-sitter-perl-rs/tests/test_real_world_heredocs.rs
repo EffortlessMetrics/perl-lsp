@@ -20,10 +20,7 @@ $end_tag";
         }
     }
 
-    assert!(
-        found_heredoc,
-        "Should recover heredoc inside interpolated string"
-    );
+    assert!(found_heredoc, "Should recover heredoc inside interpolated string");
 }
 
 #[test]
@@ -45,11 +42,7 @@ EOF
     }
 
     // Should recover to EOF based on static analysis
-    assert!(
-        tokens
-            .iter()
-            .any(|t| matches!(t.token_type, TokenType::HeredocStart))
-    );
+    assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart)));
 }
 
 #[test]
@@ -73,10 +66,7 @@ END
         }
     }
 
-    assert!(
-        heredoc_count > 0 || error_count > 0,
-        "Should either recover or error gracefully"
-    );
+    assert!(heredoc_count > 0 || error_count > 0, "Should either recover or error gracefully");
 }
 
 #[test]
@@ -97,10 +87,7 @@ DEBUG
         }
     }
 
-    assert!(
-        found_heredoc,
-        "Should recover heredoc with ternary expression"
-    );
+    assert!(found_heredoc, "Should recover heredoc with ternary expression");
 }
 
 #[test]
@@ -195,10 +182,7 @@ BEGIN_END
         }
     }
 
-    assert!(
-        has_heredoc_or_error,
-        "Should handle or error on concatenated delimiter"
-    );
+    assert!(has_heredoc_or_error, "Should handle or error on concatenated delimiter");
 }
 
 #[test]
@@ -249,10 +233,7 @@ EOF2
     }
 
     // Should handle at least one heredoc or error gracefully
-    assert!(
-        heredoc_count > 0 || error_count > 0,
-        "Should handle multiple dynamic heredocs"
-    );
+    assert!(heredoc_count > 0 || error_count > 0, "Should handle multiple dynamic heredocs");
 }
 
 #[test]
@@ -270,18 +251,12 @@ DATA
     let mut found_token = false;
 
     while let Some(token) = lexer.next_token() {
-        if matches!(
-            token.token_type,
-            TokenType::HeredocStart | TokenType::Error(_)
-        ) {
+        if matches!(token.token_type, TokenType::HeredocStart | TokenType::Error(_)) {
             found_token = true;
         }
     }
 
-    assert!(
-        found_token,
-        "Should handle heredoc with regex capture variable"
-    );
+    assert!(found_token, "Should handle heredoc with regex capture variable");
 }
 
 #[test]
@@ -328,10 +303,7 @@ END_CONFIG
         }
     }
 
-    assert!(
-        found_heredoc,
-        "Should handle package-qualified variable heredocs"
-    );
+    assert!(found_heredoc, "Should handle package-qualified variable heredocs");
 }
 
 #[test]
@@ -348,10 +320,7 @@ TIED_END
     let mut has_token = false;
 
     while let Some(token) = lexer.next_token() {
-        if matches!(
-            token.token_type,
-            TokenType::HeredocStart | TokenType::Error(_)
-        ) {
+        if matches!(token.token_type, TokenType::HeredocStart | TokenType::Error(_)) {
             has_token = true;
         }
     }

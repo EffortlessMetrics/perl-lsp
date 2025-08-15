@@ -99,10 +99,8 @@ method $obj @params;
     }
 
     // Check if these parse without errors
-    let errors: Vec<_> = tokens
-        .iter()
-        .filter(|t| matches!(t.token_type, TokenType::Error(_)))
-        .collect();
+    let errors: Vec<_> =
+        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Error(_))).collect();
 
     println!("Indirect object syntax errors: {}", errors.len());
 }

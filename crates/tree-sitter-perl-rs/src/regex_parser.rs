@@ -35,10 +35,7 @@ pub struct RegexParser<'source> {
 
 impl<'source> RegexParser<'source> {
     pub fn new(input: &'source str, start_position: usize) -> Self {
-        Self {
-            input,
-            position: start_position,
-        }
+        Self { input, position: start_position }
     }
 
     /// Parse a bare regex starting with /
@@ -96,13 +93,7 @@ impl<'source> RegexParser<'source> {
             // Parse modifiers
             let modifiers = self.parse_modifiers();
 
-            Ok(QuoteConstruct {
-                operator,
-                delimiter,
-                pattern,
-                replacement,
-                modifiers,
-            })
+            Ok(QuoteConstruct { operator, delimiter, pattern, replacement, modifiers })
         }
     }
 
@@ -111,11 +102,7 @@ impl<'source> RegexParser<'source> {
         // Skip optional whitespace after 'm'
         self.skip_whitespace();
 
-        let delimiter = if self.current_char_is('/') {
-            '/'
-        } else {
-            self.parse_delimiter()?
-        };
+        let delimiter = if self.current_char_is('/') { '/' } else { self.parse_delimiter()? };
 
         self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
@@ -135,11 +122,7 @@ impl<'source> RegexParser<'source> {
         // Skip optional whitespace after 's'
         self.skip_whitespace();
 
-        let delimiter = if self.current_char_is('/') {
-            '/'
-        } else {
-            self.parse_delimiter()?
-        };
+        let delimiter = if self.current_char_is('/') { '/' } else { self.parse_delimiter()? };
 
         self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
