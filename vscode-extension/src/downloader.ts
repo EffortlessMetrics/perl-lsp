@@ -46,13 +46,52 @@ export class BinaryDownloader {
             return existingPath;
         }
         
+        // Show status bar while downloading
+        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        statusBar.text = '$(sync~spin) Perl LSP: downloading binary...';
+        statusBar.show();
+        
         // Download binary
         try {
             return await this.downloadWithProgress();
-        } catch (error) {
-            this.outputChannel.appendLine(`Failed to download binary: ${error}`);
-            vscode.window.showErrorMessage(`Failed to download perl-lsp: ${error}`);
+        } catch (error: any) {
+            const errorMsg = error?.message || String(error);
+            this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
+            
+            // Provide helpful error messages
+            if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('timeout')) {
+                vscode.window.showErrorMessage(
+                    'Failed to download perl-lsp: Network connection error. ' +
+                    'Please check your internet connection and proxy settings.',
+                    'Open Settings'
+                ).then(choice => {
+                    if (choice === 'Open Settings') {
+                        vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
+                    }
+                });
+            } else if (errorMsg.includes('tar') || errorMsg.includes('unzip')) {
+                vscode.window.showErrorMessage(
+                    'Failed to extract perl-lsp: Archive extraction failed. ' +
+                    'Please ensure tar (Linux/macOS) or unzip (Windows) is installed.',
+                    'Install Manually'
+                ).then(choice => {
+                    if (choice === 'Install Manually') {
+                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl#quick-install'));
+                    }
+                });
+            } else {
+                vscode.window.showErrorMessage(
+                    `Failed to download perl-lsp: ${errorMsg}`,
+                    'View Logs'
+                ).then(choice => {
+                    if (choice === 'View Logs') {
+                        this.outputChannel.show();
+                    }
+                });
+            }
             return null;
+        } finally {
+            statusBar.dispose();
         }
     }
     
@@ -246,37 +285,73 @@ export class BinaryDownloader {
         });
     }
     
-    private async downloadFile(url: string, dest: string): Promise<void> {
+    private async downloadFile(url: string, dest: string, timeoutMs = 30000): Promise<void> {
         return new Promise((resolve, reject) => {
             const file = fs.createWriteStream(dest);
+            let timedOut = false;
             
-            https.get(url, { headers: { 'User-Agent': 'vscode-perl-lsp' } }, (response) => {
+            // Set timeout
+            const timeout = setTimeout(() => {
+                timedOut = true;
+                file.destroy();
+                reject(new Error(`Download timeout after ${timeoutMs / 1000} seconds`));
+            }, timeoutMs);
+            
+            // Honor VS Code proxy settings
+            const httpConfig = vscode.workspace.getConfiguration('http');
+            const proxyStrictSSL = httpConfig.get<boolean>('proxyStrictSSL', true);
+            
+            const options: https.RequestOptions = {
+                headers: { 'User-Agent': 'vscode-perl-lsp' },
+                rejectUnauthorized: proxyStrictSSL
+            };
+            
+            const request = https.get(url, options, (response) => {
                 // Handle redirects
                 if (response.statusCode === 301 || response.statusCode === 302) {
+                    clearTimeout(timeout);
+                    file.destroy();
                     const newUrl = response.headers.location;
                     if (newUrl) {
-                        this.downloadFile(newUrl, dest).then(resolve).catch(reject);
+                        this.downloadFile(newUrl, dest, timeoutMs).then(resolve).catch(reject);
                         return;
                     }
                 }
                 
                 if (response.statusCode !== 200) {
-                    reject(new Error(`Failed to download: ${response.statusCode}`));
+                    clearTimeout(timeout);
+                    file.destroy();
+                    reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
                     return;
                 }
                 
                 response.pipe(file);
                 
                 file.on('finish', () => {
-                    file.close();
-                    resolve();
+                    if (!timedOut) {
+                        clearTimeout(timeout);
+                        file.close();
+                        resolve();
+                    }
                 });
                 
                 file.on('error', (err) => {
+                    clearTimeout(timeout);
                     fs.unlink(dest, () => {});
                     reject(err);
                 });
-            }).on('error', reject);
+            });
+            
+            request.on('error', (err) => {
+                clearTimeout(timeout);
+                file.destroy();
+                reject(err);
+            });
+            
+            request.on('timeout', () => {
+                request.destroy();
+                reject(new Error('Request timeout'));
+            });
         });
     }
     
@@ -299,7 +374,9 @@ export class BinaryDownloader {
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
-            return arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu';
+            const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            const libc = this.detectMusl() ? 'musl' : 'gnu';
+            return `${archPrefix}-unknown-linux-${libc}`;
         } else if (platform === 'win32') {
             return arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
         }
@@ -320,6 +397,23 @@ export class BinaryDownloader {
         const rustArch = archMap[arch] || arch;
         
         return `${rustArch}-${rustPlatform}`;
+    }
+    
+    private detectMusl(): boolean {
+        // Check for Alpine or musl
+        if (fs.existsSync('/etc/alpine-release')) {
+            return true;
+        }
+        
+        // Check for musl libc
+        const muslLibs = [
+            '/lib/libc.musl-x86_64.so.1',
+            '/lib/libc.musl-aarch64.so.1',
+            '/lib/ld-musl-x86_64.so.1',
+            '/lib/ld-musl-aarch64.so.1'
+        ];
+        
+        return muslLibs.some(lib => fs.existsSync(lib));
     }
     
     private getLocalBinaryPath(): string {

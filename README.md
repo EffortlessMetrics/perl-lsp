@@ -119,6 +119,19 @@ cd tree-sitter-perl
 cargo build -p perl-parser --bin perl-lsp --release
 ```
 
+### Verify Installation
+
+After installation, verify that perl-lsp is working correctly:
+
+```bash
+# Check version
+perl-lsp --version
+
+# Quick self-test
+printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio | head -n1
+# Should output: Content-Length: ... (followed by valid JSON-RPC response)
+```
+
 ### Use the Parser Library
 
 ```toml
