@@ -33,13 +33,11 @@ impl LspServer {
             })?
             .to_string();
 
-        let changes = params["contentChanges"]
-            .as_array()
-            .ok_or_else(|| JsonRpcError {
-                code: -32602,
-                message: "Invalid changes".to_string(),
-                data: None,
-            })?;
+        let changes = params["contentChanges"].as_array().ok_or_else(|| JsonRpcError {
+            code: -32602,
+            message: "Invalid changes".to_string(),
+            data: None,
+        })?;
 
         // Apply edits and get new text
         let new_text = {
@@ -74,10 +72,9 @@ impl LspServer {
                             character: range["end"]["character"].as_u64().unwrap_or(0) as u32,
                         };
 
-                        let (Some(start_byte), Some(end_byte)) = (
-                            mapper.lsp_pos_to_byte(start_pos),
-                            mapper.lsp_pos_to_byte(end_pos),
-                        ) else {
+                        let (Some(start_byte), Some(end_byte)) =
+                            (mapper.lsp_pos_to_byte(start_pos), mapper.lsp_pos_to_byte(end_pos))
+                        else {
                             return Err(JsonRpcError {
                                 code: -32602,
                                 message: "Invalid range in textDocument/didChange".to_string(),

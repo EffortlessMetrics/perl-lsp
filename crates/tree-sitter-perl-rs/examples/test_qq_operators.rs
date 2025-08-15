@@ -11,15 +11,9 @@ fn main() {
         ("qq with braces", r#"my $str = qq{Hello World};"#),
         ("qq with angles", r#"my $str = qq<Hello World>;"#),
         ("qq with custom delimiter", r#"my $str = qq|Hello World|;"#),
-        (
-            "qq with interpolation",
-            r#"my $str = qq|Path: $ENV{PATH}|;"#,
-        ),
+        ("qq with interpolation", r#"my $str = qq|Path: $ENV{PATH}|;"#),
         ("Nested delimiters", r#"my $str = q(Hello (nested) World);"#),
-        (
-            "q with escaped delimiter",
-            r#"my $str = q(Hello \) World);"#,
-        ),
+        ("q with escaped delimiter", r#"my $str = q(Hello \) World);"#),
     ];
 
     for (name, code) in test_cases {

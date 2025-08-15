@@ -213,12 +213,7 @@ fn test_invalid_utf8_in_message() {
         .unwrap()
         .write_all(format!("Content-Length: {}\r\n\r\n", invalid_content.len()).as_bytes())
         .unwrap();
-    server
-        .stdin
-        .as_mut()
-        .unwrap()
-        .write_all(&invalid_content)
-        .unwrap();
+    server.stdin.as_mut().unwrap().write_all(&invalid_content).unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should handle invalid UTF-8
@@ -571,12 +566,7 @@ fn test_batch_request_violations() {
     let mut server = start_lsp_server();
 
     // Empty batch
-    server
-        .stdin
-        .as_mut()
-        .unwrap()
-        .write_all(b"Content-Length: 2\r\n\r\n[]")
-        .unwrap();
+    server.stdin.as_mut().unwrap().write_all(b"Content-Length: 2\r\n\r\n[]").unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
 

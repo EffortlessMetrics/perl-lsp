@@ -203,9 +203,7 @@ Line 3 of data
     for event in &events {
         match event {
             ParseEvent::Node(_) => statement_count += 1,
-            ParseEvent::SpecialSection {
-                kind, start_line, ..
-            } => {
+            ParseEvent::SpecialSection { kind, start_line, .. } => {
                 special_sections += 1;
                 println!("  - Found {:?} section at line {}", kind, start_line);
             }
@@ -279,12 +277,7 @@ fn count_nodes(ast: &tree_sitter_perl::AstNode) -> usize {
         AstNode::MethodCall { object, args, .. } => {
             1 + count_nodes(object) + args.iter().map(count_nodes).sum::<usize>()
         }
-        AstNode::IfStatement {
-            condition,
-            then_block,
-            elsif_clauses,
-            else_block,
-        } => {
+        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
             let mut count = 1 + count_nodes(condition) + count_nodes(then_block);
             for (cond, block) in elsif_clauses {
                 count += count_nodes(cond) + count_nodes(block);

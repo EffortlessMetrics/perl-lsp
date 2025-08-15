@@ -133,12 +133,7 @@ pub struct Token {
 impl Token {
     /// Create a new token
     pub fn new(token_type: TokenType, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
-        Self {
-            token_type,
-            text: text.into(),
-            start,
-            end,
-        }
+        Self { token_type, text: text.into(), start, end }
     }
 
     /// Get the length of the token

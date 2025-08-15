@@ -69,11 +69,7 @@ EOF
         assert!(!analysis.phase_warnings.is_empty());
 
         // Should distinguish between phase contexts
-        let begin_warnings = analysis
-            .phase_warnings
-            .iter()
-            .filter(|w| w.contains("BEGIN"))
-            .count();
+        let begin_warnings = analysis.phase_warnings.iter().filter(|w| w.contains("BEGIN")).count();
         assert!(begin_warnings > 0);
     }
 
@@ -175,10 +171,7 @@ EOF
         ];
 
         for mode in modes {
-            let config = EdgeCaseConfig {
-                recovery_mode: mode.clone(),
-                ..Default::default()
-            };
+            let config = EdgeCaseConfig { recovery_mode: mode.clone(), ..Default::default() };
 
             let mut handler = EdgeCaseHandler::new(config);
             let analysis = handler.analyze(code);
@@ -248,16 +241,8 @@ BEGIN_END
     #[test]
     fn test_diagnostic_accuracy() {
         let test_cases = vec![
-            (
-                "my $d = 'END'; my $t = <<$d;\ntext\nEND",
-                "dynamic",
-                Severity::Error,
-            ),
-            (
-                "BEGIN { $x = <<'E';\ntext\nE\n}",
-                "BEGIN",
-                Severity::Warning,
-            ),
+            ("my $d = 'END'; my $t = <<$d;\ntext\nEND", "dynamic", Severity::Error),
+            ("BEGIN { $x = <<'E';\ntext\nE\n}", "BEGIN", Severity::Warning),
             ("format F =\n<<'E'\ntext\nE\n.", "format", Severity::Warning),
         ];
 
@@ -265,11 +250,7 @@ BEGIN_END
             let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
             let analysis = handler.analyze(code);
 
-            assert!(
-                !analysis.diagnostics.is_empty(),
-                "Expected diagnostics for {}",
-                expected_type
-            );
+            assert!(!analysis.diagnostics.is_empty(), "Expected diagnostics for {}", expected_type);
 
             let diag = &analysis.diagnostics[0];
             assert!(diag.message.to_lowercase().contains(expected_type));
@@ -330,16 +311,9 @@ UNKNOWN
         let analysis = handler.analyze(code);
 
         // Verify diagnostics are properly categorized
-        let errors = analysis
-            .diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .count();
-        let warnings = analysis
-            .diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Warning)
-            .count();
+        let errors = analysis.diagnostics.iter().filter(|d| d.severity == Severity::Error).count();
+        let warnings =
+            analysis.diagnostics.iter().filter(|d| d.severity == Severity::Warning).count();
 
         assert!(errors > 0);
         assert!(warnings > 0);
@@ -353,8 +327,6 @@ UNKNOWN
         if node.node_type == node_type {
             return true;
         }
-        node.children
-            .iter()
-            .any(|child| check_tree_for_type(child, node_type))
+        node.children.iter().any(|child| check_tree_for_type(child, node_type))
     }
 }

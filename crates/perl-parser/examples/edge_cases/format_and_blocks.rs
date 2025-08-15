@@ -54,27 +54,18 @@ $text
         // Special blocks with labels
         ("FOO: BEGIN { last FOO if $done }", "labeled special block"),
         // Special subs
-        (
-            "sub AUTOLOAD { our $AUTOLOAD; print $AUTOLOAD }",
-            "AUTOLOAD subroutine",
-        ),
+        ("sub AUTOLOAD { our $AUTOLOAD; print $AUTOLOAD }", "AUTOLOAD subroutine"),
         ("sub DESTROY { shift->{handle}->close }", "DESTROY method"),
         ("sub CLONE { ... }", "CLONE method"),
         ("sub CLONE_SKIP { 1 }", "CLONE_SKIP method"),
         // Import/unimport
         ("sub import { shift; print @_ }", "import method"),
-        (
-            "sub unimport { shift; delete $^H{feature} }",
-            "unimport method",
-        ),
+        ("sub unimport { shift; delete $^H{feature} }", "unimport method"),
         // Tying methods
         ("sub TIESCALAR { bless {}, shift }", "TIESCALAR method"),
         ("sub TIEARRAY { bless [], shift }", "TIEARRAY method"),
         ("sub TIEHASH { bless {}, shift }", "TIEHASH method"),
-        (
-            "sub TIEHANDLE { bless \\*HANDLE, shift }",
-            "TIEHANDLE method",
-        ),
+        ("sub TIEHANDLE { bless \\*HANDLE, shift }", "TIEHANDLE method"),
         // Tie interface methods
         ("sub FETCH { shift->{value} }", "FETCH method"),
         ("sub STORE { shift->{value} = shift }", "STORE method"),
@@ -90,10 +81,7 @@ $text
         ("write", "write with default format"),
         ("write STDOUT", "write with filehandle"),
         ("write HANDLE", "write with custom handle"),
-        (
-            "select((select(FH), $~ = 'MYFORMAT')[0])",
-            "changing format",
-        ),
+        ("select((select(FH), $~ = 'MYFORMAT')[0])", "changing format"),
         // Format variables
         ("$~ = 'MYFORMAT'", "set format name"),
         ("$^ = 'MYFORMAT_TOP'", "set format top name"),

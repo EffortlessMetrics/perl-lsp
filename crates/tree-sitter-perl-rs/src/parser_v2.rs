@@ -35,12 +35,7 @@ impl<'a> ParserV2<'a> {
             tokens.push(token);
         }
 
-        Self {
-            tokens,
-            current: 0,
-            source,
-            errors: Vec::new(),
-        }
+        Self { tokens, current: 0, source, errors: Vec::new() }
     }
 
     /// Parse the source into an AST
@@ -84,10 +79,7 @@ impl<'a> ParserV2<'a> {
         }
 
         let end = self.current_pos();
-        Ok(Node::new(
-            NodeKind::Program { statements },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::Program { statements }, SourceLocation { start, end }))
     }
 
     fn parse_statement(&mut self) -> Result<Node, ParseError> {
@@ -170,11 +162,7 @@ impl<'a> ParserV2<'a> {
         let name = self.expect_package_name()?;
         self.skip_whitespace();
 
-        let version = if self.check_number() {
-            Some(self.advance().text.clone())
-        } else {
-            None
-        };
+        let version = if self.check_number() { Some(self.advance().text.clone()) } else { None };
 
         self.skip_whitespace();
 
@@ -187,11 +175,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::PackageDeclaration {
-                name,
-                version,
-                block,
-            },
+            NodeKind::PackageDeclaration { name, version, block },
             SourceLocation { start, end },
         ))
     }
@@ -204,11 +188,7 @@ impl<'a> ParserV2<'a> {
         let module = self.expect_package_name()?;
         self.skip_whitespace();
 
-        let version = if self.check_number() {
-            Some(self.advance().text.clone())
-        } else {
-            None
-        };
+        let version = if self.check_number() { Some(self.advance().text.clone()) } else { None };
 
         self.skip_whitespace();
 
@@ -222,11 +202,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::UseStatement {
-                module,
-                version,
-                imports,
-            },
+            NodeKind::UseStatement { module, version, imports },
             SourceLocation { start, end },
         ))
     }
@@ -247,20 +223,14 @@ impl<'a> ParserV2<'a> {
         self.skip_whitespace();
 
         // Prototype
-        let prototype = if self.check(&TokenType::LeftParen) {
-            Some(self.parse_prototype()?)
-        } else {
-            None
-        };
+        let prototype =
+            if self.check(&TokenType::LeftParen) { Some(self.parse_prototype()?) } else { None };
 
         self.skip_whitespace();
 
         // Attributes
-        let attributes = if self.check(&TokenType::Colon) {
-            self.parse_attributes()?
-        } else {
-            Vec::new()
-        };
+        let attributes =
+            if self.check(&TokenType::Colon) { self.parse_attributes()? } else { Vec::new() };
 
         self.skip_whitespace();
 
@@ -269,12 +239,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::Subroutine {
-                name,
-                prototype,
-                attributes,
-                body,
-            },
+            NodeKind::Subroutine { name, prototype, attributes, body },
             SourceLocation { start, end },
         ))
     }
@@ -320,12 +285,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::IfStatement {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            },
+            NodeKind::IfStatement { condition, then_branch, elsif_branches, else_branch },
             SourceLocation { start, end },
         ))
     }
@@ -351,14 +311,8 @@ impl<'a> ParserV2<'a> {
 
         // Convert unless to if with negated condition
         let negated_condition = Box::new(Node::new(
-            NodeKind::Unary {
-                op: TokenType::Not,
-                operand: condition,
-            },
-            SourceLocation {
-                start,
-                end: self.current_pos(),
-            },
+            NodeKind::Unary { op: TokenType::Not, operand: condition },
+            SourceLocation { start, end: self.current_pos() },
         ));
 
         let end = self.current_pos();
@@ -394,11 +348,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::WhileStatement {
-                condition,
-                body,
-                continue_block,
-            },
+            NodeKind::WhileStatement { condition, body, continue_block },
             SourceLocation { start, end },
         ))
     }
@@ -416,23 +366,13 @@ impl<'a> ParserV2<'a> {
 
         // Convert until to while with negated condition
         let negated_condition = Box::new(Node::new(
-            NodeKind::Unary {
-                op: TokenType::Not,
-                operand: condition,
-            },
-            SourceLocation {
-                start,
-                end: self.current_pos(),
-            },
+            NodeKind::Unary { op: TokenType::Not, operand: condition },
+            SourceLocation { start, end: self.current_pos() },
         ));
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::WhileStatement {
-                condition: negated_condition,
-                body,
-                continue_block: None,
-            },
+            NodeKind::WhileStatement { condition: negated_condition, body, continue_block: None },
             SourceLocation { start, end },
         ))
     }
@@ -489,12 +429,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::ForStatement {
-                init,
-                condition,
-                update,
-                body,
-            },
+            NodeKind::ForStatement { init, condition, update, body },
             SourceLocation { start, end },
         ))
     }
@@ -509,13 +444,8 @@ impl<'a> ParserV2<'a> {
             Box::new(self.parse_primary()?)
         } else {
             Box::new(Node::new(
-                NodeKind::Variable {
-                    name: Arc::from("$_"),
-                },
-                SourceLocation {
-                    start: self.current_pos(),
-                    end: self.current_pos(),
-                },
+                NodeKind::Variable { name: Arc::from("$_") },
+                SourceLocation { start: self.current_pos(), end: self.current_pos() },
             ))
         };
 
@@ -528,11 +458,7 @@ impl<'a> ParserV2<'a> {
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::ForeachStatement {
-                variable,
-                list,
-                body,
-            },
+            NodeKind::ForeachStatement { variable, list, body },
             SourceLocation { start, end },
         ))
     }
@@ -555,13 +481,8 @@ impl<'a> ParserV2<'a> {
                 if self.check_keyword("undef") {
                     self.advance();
                     variables.push(Node::new(
-                        NodeKind::Bareword {
-                            value: Arc::from("undef"),
-                        },
-                        SourceLocation {
-                            start: self.current_pos(),
-                            end: self.current_pos(),
-                        },
+                        NodeKind::Bareword { value: Arc::from("undef") },
+                        SourceLocation { start: self.current_pos(), end: self.current_pos() },
                     ));
                 } else {
                     variables.push(self.parse_variable_or_field()?);
@@ -598,21 +519,13 @@ impl<'a> ParserV2<'a> {
                         op: TokenType::Equal,
                         right: Box::new(value),
                     },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    SourceLocation { start, end: self.current_pos() },
                 ));
             } else {
                 // List assignment
                 let lhs = Node::new(
-                    NodeKind::List {
-                        elements: variables,
-                    },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    NodeKind::List { elements: variables },
+                    SourceLocation { start, end: self.current_pos() },
                 );
                 return Ok(Node::new(
                     NodeKind::Assignment {
@@ -620,20 +533,14 @@ impl<'a> ParserV2<'a> {
                         op: TokenType::Equal,
                         right: Box::new(value),
                     },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    SourceLocation { start, end: self.current_pos() },
                 ));
             }
         }
 
         let end = self.current_pos();
         Ok(Node::new(
-            NodeKind::VariableDeclaration {
-                declarator,
-                variables,
-            },
+            NodeKind::VariableDeclaration { declarator, variables },
             SourceLocation { start, end },
         ))
     }
@@ -659,11 +566,7 @@ impl<'a> ParserV2<'a> {
             let end = else_expr.location.end;
 
             expr = Node::new(
-                NodeKind::Ternary {
-                    condition: Box::new(expr),
-                    then_expr,
-                    else_expr,
-                },
+                NodeKind::Ternary { condition: Box::new(expr), then_expr, else_expr },
                 SourceLocation { start, end },
             );
         }
@@ -680,17 +583,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_and()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -706,17 +602,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_not()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -733,18 +622,9 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let operand = self.parse_not()?;
-            let loc = SourceLocation {
-                start,
-                end: operand.location.end,
-            };
+            let loc = SourceLocation { start, end: operand.location.end };
 
-            return Ok(Node::new(
-                NodeKind::Unary {
-                    op,
-                    operand: Box::new(operand),
-                },
-                loc,
-            ));
+            return Ok(Node::new(NodeKind::Unary { op, operand: Box::new(operand) }, loc));
         }
 
         self.parse_relational()
@@ -773,17 +653,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_shift()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -799,17 +672,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_additive()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -825,17 +691,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_multiplicative()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -856,17 +715,10 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let right = self.parse_unary()?;
-            let loc = SourceLocation {
-                start: expr.location.start,
-                end: right.location.end,
-            };
+            let loc = SourceLocation { start: expr.location.start, end: right.location.end };
 
             expr = Node::new(
-                NodeKind::Binary {
-                    left: Box::new(expr),
-                    op,
-                    right: Box::new(right),
-                },
+                NodeKind::Binary { left: Box::new(expr), op, right: Box::new(right) },
                 loc,
             );
         }
@@ -889,18 +741,9 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let operand = self.parse_unary()?;
-            let loc = SourceLocation {
-                start,
-                end: operand.location.end,
-            };
+            let loc = SourceLocation { start, end: operand.location.end };
 
-            return Ok(Node::new(
-                NodeKind::Unary {
-                    op,
-                    operand: Box::new(operand),
-                },
-                loc,
-            ));
+            return Ok(Node::new(NodeKind::Unary { op, operand: Box::new(operand) }, loc));
         }
 
         // Prefix increment/decrement
@@ -910,18 +753,9 @@ impl<'a> ParserV2<'a> {
             self.skip_whitespace();
 
             let operand = self.parse_postfix()?;
-            let loc = SourceLocation {
-                start,
-                end: operand.location.end,
-            };
+            let loc = SourceLocation { start, end: operand.location.end };
 
-            return Ok(Node::new(
-                NodeKind::PrefixUpdate {
-                    op,
-                    operand: Box::new(operand),
-                },
-                loc,
-            ));
+            return Ok(Node::new(NodeKind::PrefixUpdate { op, operand: Box::new(operand) }, loc));
         }
 
         self.parse_postfix()
@@ -944,14 +778,8 @@ impl<'a> ParserV2<'a> {
 
                     let start = expr.location.start;
                     expr = Node::new(
-                        NodeKind::ArrayAccess {
-                            array: Box::new(expr),
-                            index: Box::new(index),
-                        },
-                        SourceLocation {
-                            start,
-                            end: self.current_pos(),
-                        },
+                        NodeKind::ArrayAccess { array: Box::new(expr), index: Box::new(index) },
+                        SourceLocation { start, end: self.current_pos() },
                     );
                 } else if self.check(&TokenType::LeftBrace) {
                     // Hash dereference
@@ -961,14 +789,8 @@ impl<'a> ParserV2<'a> {
 
                     let start = expr.location.start;
                     expr = Node::new(
-                        NodeKind::HashAccess {
-                            hash: Box::new(expr),
-                            key: Box::new(key),
-                        },
-                        SourceLocation {
-                            start,
-                            end: self.current_pos(),
-                        },
+                        NodeKind::HashAccess { hash: Box::new(expr), key: Box::new(key) },
+                        SourceLocation { start, end: self.current_pos() },
                     );
                 } else if self.check(&TokenType::Identifier) {
                     // Method call
@@ -994,15 +816,8 @@ impl<'a> ParserV2<'a> {
 
                     let start = expr.location.start;
                     expr = Node::new(
-                        NodeKind::MethodCall {
-                            object: Box::new(expr),
-                            method,
-                            args,
-                        },
-                        SourceLocation {
-                            start,
-                            end: self.current_pos(),
-                        },
+                        NodeKind::MethodCall { object: Box::new(expr), method, args },
+                        SourceLocation { start, end: self.current_pos() },
                     );
                 } else {
                     // Scalar dereference
@@ -1010,10 +825,7 @@ impl<'a> ParserV2<'a> {
                     let start = expr.location.start;
                     let end = deref.location.end;
                     expr = Node::new(
-                        NodeKind::Dereference {
-                            expr: Box::new(expr),
-                            type_: Box::new(deref),
-                        },
+                        NodeKind::Dereference { expr: Box::new(expr), type_: Box::new(deref) },
                         SourceLocation { start, end },
                     );
                 }
@@ -1025,14 +837,8 @@ impl<'a> ParserV2<'a> {
 
                 let start = expr.location.start;
                 expr = Node::new(
-                    NodeKind::ArrayAccess {
-                        array: Box::new(expr),
-                        index: Box::new(index),
-                    },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    NodeKind::ArrayAccess { array: Box::new(expr), index: Box::new(index) },
+                    SourceLocation { start, end: self.current_pos() },
                 );
             } else if self.check(&TokenType::LeftBrace)
                 && matches!(expr.kind, NodeKind::Variable { .. })
@@ -1044,14 +850,8 @@ impl<'a> ParserV2<'a> {
 
                 let start = expr.location.start;
                 expr = Node::new(
-                    NodeKind::HashAccess {
-                        hash: Box::new(expr),
-                        key: Box::new(key),
-                    },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    NodeKind::HashAccess { hash: Box::new(expr), key: Box::new(key) },
+                    SourceLocation { start, end: self.current_pos() },
                 );
             } else if self.match_any(&[TokenType::Increment, TokenType::Decrement]) {
                 // Postfix increment/decrement
@@ -1059,14 +859,8 @@ impl<'a> ParserV2<'a> {
 
                 let start = expr.location.start;
                 expr = Node::new(
-                    NodeKind::PostfixUpdate {
-                        op,
-                        operand: Box::new(expr),
-                    },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    NodeKind::PostfixUpdate { op, operand: Box::new(expr) },
+                    SourceLocation { start, end: self.current_pos() },
                 );
             } else {
                 break;
@@ -1083,13 +877,8 @@ impl<'a> ParserV2<'a> {
         if self.check(&TokenType::Number) {
             let token = self.advance();
             return Ok(Node::new(
-                NodeKind::Number {
-                    value: token.text.clone(),
-                },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                NodeKind::Number { value: token.text.clone() },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -1101,13 +890,8 @@ impl<'a> ParserV2<'a> {
         ]) {
             let token = self.advance();
             return Ok(Node::new(
-                NodeKind::String {
-                    value: token.text.clone(),
-                },
-                SourceLocation {
-                    start: token.start,
-                    end: token.end,
-                },
+                NodeKind::String { value: token.text.clone() },
+                SourceLocation { start: token.start, end: token.end },
             ));
         }
 
@@ -1151,20 +935,14 @@ impl<'a> ParserV2<'a> {
 
                 return Ok(Node::new(
                     NodeKind::FunctionCall { name, args },
-                    SourceLocation {
-                        start: id_token.start,
-                        end: self.current_pos(),
-                    },
+                    SourceLocation { start: id_token.start, end: self.current_pos() },
                 ));
             }
 
             // Bareword
             return Ok(Node::new(
                 NodeKind::Bareword { value: name },
-                SourceLocation {
-                    start: id_token.start,
-                    end: id_token.end,
-                },
+                SourceLocation { start: id_token.start, end: id_token.end },
             ));
         }
 
@@ -1177,13 +955,8 @@ impl<'a> ParserV2<'a> {
             if self.check(&TokenType::RightParen) {
                 self.advance();
                 return Ok(Node::new(
-                    NodeKind::List {
-                        elements: Vec::new(),
-                    },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    NodeKind::List { elements: Vec::new() },
+                    SourceLocation { start, end: self.current_pos() },
                 ));
             }
 
@@ -1210,10 +983,7 @@ impl<'a> ParserV2<'a> {
 
                 return Ok(Node::new(
                     NodeKind::List { elements },
-                    SourceLocation {
-                        start,
-                        end: self.current_pos(),
-                    },
+                    SourceLocation { start, end: self.current_pos() },
                 ));
             }
 
@@ -1241,10 +1011,7 @@ impl<'a> ParserV2<'a> {
 
             return Ok(Node::new(
                 NodeKind::ArrayRef { elements },
-                SourceLocation {
-                    start,
-                    end: self.current_pos(),
-                },
+                SourceLocation { start, end: self.current_pos() },
             ));
         }
 
@@ -1282,10 +1049,7 @@ impl<'a> ParserV2<'a> {
 
             return Ok(Node::new(
                 NodeKind::HashRef { pairs },
-                SourceLocation {
-                    start,
-                    end: self.current_pos(),
-                },
+                SourceLocation { start, end: self.current_pos() },
             ));
         }
 
@@ -1309,10 +1073,7 @@ impl<'a> ParserV2<'a> {
 
         Ok(Node::new(
             NodeKind::Variable { name: var_name },
-            SourceLocation {
-                start: var_token.start,
-                end: var_token.end,
-            },
+            SourceLocation { start: var_token.start, end: var_token.end },
         ))
     }
 
@@ -1324,10 +1085,7 @@ impl<'a> ParserV2<'a> {
 
         Ok(Node::new(
             NodeKind::Regex { pattern, modifiers },
-            SourceLocation {
-                start: token.start,
-                end: token.end,
-            },
+            SourceLocation { start: token.start, end: token.end },
         ))
     }
 
@@ -1335,13 +1093,8 @@ impl<'a> ParserV2<'a> {
         let token = self.advance();
         // For now, treat as a special string
         Ok(Node::new(
-            NodeKind::String {
-                value: token.text.clone(),
-            },
-            SourceLocation {
-                start: token.start,
-                end: token.end,
-            },
+            NodeKind::String { value: token.text.clone() },
+            SourceLocation { start: token.start, end: token.end },
         ))
     }
 
@@ -1361,23 +1114,14 @@ impl<'a> ParserV2<'a> {
 
             return Ok(Node::new(
                 NodeKind::Heredoc { marker, content },
-                SourceLocation {
-                    start: start_pos,
-                    end: body_end,
-                },
+                SourceLocation { start: start_pos, end: body_end },
             ));
         }
 
         // No body found - error
         Ok(Node::new(
-            NodeKind::Heredoc {
-                marker,
-                content: Arc::from(""),
-            },
-            SourceLocation {
-                start: start_pos,
-                end: end_pos,
-            },
+            NodeKind::Heredoc { marker, content: Arc::from("") },
+            SourceLocation { start: start_pos, end: end_pos },
         ))
     }
 
@@ -1402,19 +1146,12 @@ impl<'a> ParserV2<'a> {
         self.consume(&TokenType::RightBrace)?;
 
         let end = self.current_pos();
-        Ok(Node::new(
-            NodeKind::Block { statements },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
     }
 
     fn parse_block_or_statement(&mut self) -> Result<Node, ParseError> {
         self.skip_whitespace();
-        if self.check(&TokenType::LeftBrace) {
-            self.parse_block()
-        } else {
-            self.parse_statement()
-        }
+        if self.check(&TokenType::LeftBrace) { self.parse_block() } else { self.parse_statement() }
     }
 
     fn parse_prototype(&mut self) -> Result<Arc<str>, ParseError> {
@@ -1542,10 +1279,7 @@ impl<'a> ParserV2<'a> {
         };
 
         let end = self.current_pos();
-        Ok(Node::new(
-            NodeKind::Return { value },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::Return { value }, SourceLocation { start, end }))
     }
 
     fn parse_loop_control(&mut self) -> Result<Node, ParseError> {
@@ -1560,13 +1294,7 @@ impl<'a> ParserV2<'a> {
         };
 
         let end = self.current_pos();
-        Ok(Node::new(
-            NodeKind::LoopControl {
-                control_type,
-                label,
-            },
-            SourceLocation { start, end },
-        ))
+        Ok(Node::new(NodeKind::LoopControl { control_type, label }, SourceLocation { start, end }))
     }
 
     fn expect_package_name(&mut self) -> Result<Arc<str>, ParseError> {
@@ -1598,10 +1326,7 @@ impl<'a> ParserV2<'a> {
 
     fn is_at_end(&self) -> bool {
         self.current >= self.tokens.len()
-            || self
-                .peek()
-                .map(|t| matches!(t.token_type, TokenType::EOF))
-                .unwrap_or(true)
+            || self.peek().map(|t| matches!(t.token_type, TokenType::EOF)).unwrap_or(true)
     }
 
     fn peek(&self) -> Option<&Token> {

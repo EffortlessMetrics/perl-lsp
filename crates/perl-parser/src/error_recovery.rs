@@ -105,11 +105,7 @@ impl ErrorRecovery for ParserContext {
 
         Node::new(
             self.id_generator.next_id(),
-            NodeKind::Error {
-                message,
-                expected,
-                partial: partial.map(Box::new),
-            },
+            NodeKind::Error { message, expected, partial: partial.map(Box::new) },
             range,
         )
     }
@@ -127,11 +123,7 @@ impl ErrorRecovery for ParserContext {
         let error_node = self.create_error_node(error.message, error.expected, None);
 
         // Try to synchronize
-        let sync_points = vec![
-            SyncPoint::Semicolon,
-            SyncPoint::CloseBrace,
-            SyncPoint::Keyword,
-        ];
+        let sync_points = vec![SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword];
         self.synchronize(&sync_points);
 
         error_node
@@ -227,12 +219,9 @@ pub mod recovery_patterns {
             || ctx.current_token().is_none()
         {
             Some(
-                ParseError::new(
-                    "Missing semicolon".to_string(),
-                    ctx.current_position_range(),
-                )
-                .with_expected(vec![";".to_string()])
-                .with_hint("Add a semicolon to end the statement".to_string()),
+                ParseError::new("Missing semicolon".to_string(), ctx.current_position_range())
+                    .with_expected(vec![";".to_string()])
+                    .with_hint("Add a semicolon to end the statement".to_string()),
             )
         } else {
             None
@@ -252,11 +241,7 @@ pub mod recovery_patterns {
 
         ParseError::new(message, ctx.current_position_range())
             .with_expected(vec![expected.to_string()])
-            .with_found(
-                found
-                    .map(|t| format!("{:?}", t))
-                    .unwrap_or_else(|| "EOF".to_string()),
-            )
+            .with_found(found.map(|t| format!("{:?}", t)).unwrap_or_else(|| "EOF".to_string()))
             .with_hint(format!("Add '{}' to match the opening delimiter", expected))
     }
 
@@ -296,9 +281,6 @@ mod tests {
         assert_eq!(error.message, "Syntax error");
         assert_eq!(error.expected, vec!["identifier"]);
         assert_eq!(error.found, "number");
-        assert_eq!(
-            error.recovery_hint,
-            Some("Did you mean to use a variable?".to_string())
-        );
+        assert_eq!(error.recovery_hint, Some("Did you mean to use a variable?".to_string()));
     }
 }

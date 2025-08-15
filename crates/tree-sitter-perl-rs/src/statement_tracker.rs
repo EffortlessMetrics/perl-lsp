@@ -22,11 +22,7 @@ pub struct StatementTracker {
 #[allow(dead_code)]
 impl StatementTracker {
     pub fn new() -> Self {
-        Self {
-            bracket_stack: Vec::new(),
-            in_string: None,
-            escape_next: false,
-        }
+        Self { bracket_stack: Vec::new(), in_string: None, escape_next: false }
     }
 
     /// Process a character and return true if we're at a statement boundary
@@ -135,10 +131,7 @@ pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
         for ch in line.chars() {
             if in_string {
                 if ch == string_char
-                    && line
-                        .chars()
-                        .nth(line.find(ch).unwrap_or(0).saturating_sub(1))
-                        != Some('\\')
+                    && line.chars().nth(line.find(ch).unwrap_or(0).saturating_sub(1)) != Some('\\')
                 {
                     in_string = false;
                 }

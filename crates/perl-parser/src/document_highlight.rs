@@ -94,22 +94,14 @@ impl DocumentHighlightProvider {
     fn get_children<'a>(&self, node: &'a Node) -> Option<Vec<&'a Node>> {
         match &node.kind {
             NodeKind::Program { statements } => Some(statements.iter().collect()),
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
                 }
                 Some(children)
             }
-            NodeKind::VariableListDeclaration {
-                variables,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
                 let mut children: Vec<&Node> = variables.iter().collect();
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
@@ -126,12 +118,7 @@ impl DocumentHighlightProvider {
             }
             NodeKind::FunctionCall { args, .. } => Some(args.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for (cond, branch) in elsif_branches {
                     children.push(cond.as_ref());
@@ -142,13 +129,7 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 let mut children = Vec::new();
                 if let Some(i) = init {
                     children.push(i.as_ref());
@@ -162,14 +143,12 @@ impl DocumentHighlightProvider {
                 children.push(body.as_ref());
                 Some(children)
             }
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()]),
-            NodeKind::While {
-                condition, body, ..
-            } => Some(vec![condition.as_ref(), body.as_ref()]),
+            NodeKind::Foreach { variable, list, body } => {
+                Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
+            }
+            NodeKind::While { condition, body, .. } => {
+                Some(vec![condition.as_ref(), body.as_ref()])
+            }
             NodeKind::Subroutine { body, .. } => Some(vec![body.as_ref()]),
             NodeKind::Return { value } => value.as_ref().map(|v| vec![v.as_ref()]),
             NodeKind::ArrayLiteral { elements } => Some(elements.iter().collect()),
@@ -181,15 +160,9 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => Some(vec![
-                condition.as_ref(),
-                then_expr.as_ref(),
-                else_expr.as_ref(),
-            ]),
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                Some(vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()])
+            }
             NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
             _ => None,
         }
@@ -263,10 +236,7 @@ impl DocumentHighlightProvider {
         // Check if this node matches our symbol
         if self.node_matches_symbol(node, source, target) {
             let kind = self.determine_highlight_kind(node);
-            highlights.push(DocumentHighlight {
-                location: node.location,
-                kind,
-            });
+            highlights.push(DocumentHighlight { location: node.location, kind });
         }
 
         // Recursively check children

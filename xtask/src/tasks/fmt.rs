@@ -7,9 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(check: bool) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     let action = if check { "Checking" } else { "Formatting" };

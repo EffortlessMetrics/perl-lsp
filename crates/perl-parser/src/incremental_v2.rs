@@ -24,11 +24,7 @@ pub struct IncrementalTree {
 impl IncrementalTree {
     /// Create a new incremental tree
     pub fn new(root: Node, source: String) -> Self {
-        let mut tree = IncrementalTree {
-            root,
-            source,
-            node_map: HashMap::new(),
-        };
+        let mut tree = IncrementalTree { root, source, node_map: HashMap::new() };
         tree.build_node_map();
         tree
     }
@@ -41,10 +37,7 @@ impl IncrementalTree {
 
     fn map_node(&mut self, node: &Node) {
         // Map start position to node
-        self.node_map
-            .entry(node.location.start)
-            .or_default()
-            .push(node.clone());
+        self.node_map.entry(node.location.start).or_default().push(node.clone());
 
         // Recursively map child nodes
         match &node.kind {
@@ -53,11 +46,7 @@ impl IncrementalTree {
                     self.map_node(stmt);
                 }
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 self.map_node(variable);
                 if let Some(init) = initializer {
                     self.map_node(init);
@@ -75,12 +64,7 @@ impl IncrementalTree {
                     self.map_node(arg);
                 }
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.map_node(condition);
                 self.map_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -244,13 +228,8 @@ impl IncrementalParserV2 {
                         let new_value = &new_source[new_start..new_end];
 
                         return Node::new(
-                            NodeKind::Number {
-                                value: new_value.to_string(),
-                            },
-                            SourceLocation {
-                                start: new_start,
-                                end: new_end,
-                            },
+                            NodeKind::Number { value: new_value.to_string() },
+                            SourceLocation { start: new_start, end: new_end },
                         );
                     }
                 }
@@ -268,10 +247,7 @@ impl IncrementalParserV2 {
                                 value: new_value.to_string(),
                                 interpolated: *interpolated,
                             },
-                            SourceLocation {
-                                start: new_start,
-                                end: new_end,
-                            },
+                            SourceLocation { start: new_start, end: new_end },
                         );
                     }
                 }
@@ -325,19 +301,16 @@ impl IncrementalParserV2 {
                     .map(|s| self.clone_with_shifted_positions(s, shift))
                     .collect(),
             },
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                attributes,
-                initializer,
-            } => NodeKind::VariableDeclaration {
-                declarator: declarator.clone(),
-                variable: Box::new(self.clone_with_shifted_positions(variable, shift)),
-                attributes: attributes.clone(),
-                initializer: initializer
-                    .as_ref()
-                    .map(|i| Box::new(self.clone_with_shifted_positions(i, shift))),
-            },
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                NodeKind::VariableDeclaration {
+                    declarator: declarator.clone(),
+                    variable: Box::new(self.clone_with_shifted_positions(variable, shift)),
+                    attributes: attributes.clone(),
+                    initializer: initializer
+                        .as_ref()
+                        .map(|i| Box::new(self.clone_with_shifted_positions(i, shift))),
+                }
+            }
             NodeKind::Binary { op, left, right } => NodeKind::Binary {
                 op: op.clone(),
                 left: Box::new(self.clone_with_shifted_positions(left, shift)),
@@ -349,17 +322,9 @@ impl IncrementalParserV2 {
             },
             NodeKind::FunctionCall { name, args } => NodeKind::FunctionCall {
                 name: name.clone(),
-                args: args
-                    .iter()
-                    .map(|a| self.clone_with_shifted_positions(a, shift))
-                    .collect(),
+                args: args.iter().map(|a| self.clone_with_shifted_positions(a, shift)).collect(),
             },
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => NodeKind::If {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => NodeKind::If {
                 condition: Box::new(self.clone_with_shifted_positions(condition, shift)),
                 then_branch: Box::new(self.clone_with_shifted_positions(then_branch, shift)),
                 elsif_branches: elsif_branches
@@ -393,12 +358,8 @@ impl IncrementalParserV2 {
         // Check if nodes are structurally equivalent
         match (&old_node.kind, &new_node.kind) {
             (
-                NodeKind::Program {
-                    statements: old_stmts,
-                },
-                NodeKind::Program {
-                    statements: new_stmts,
-                },
+                NodeKind::Program { statements: old_stmts },
+                NodeKind::Program { statements: new_stmts },
             ) => {
                 let mut reused = 1; // Program node itself
                 let mut reparsed = 0;
@@ -412,16 +373,8 @@ impl IncrementalParserV2 {
                 (reused, reparsed)
             }
             (
-                NodeKind::VariableDeclaration {
-                    variable: old_var,
-                    initializer: old_init,
-                    ..
-                },
-                NodeKind::VariableDeclaration {
-                    variable: new_var,
-                    initializer: new_init,
-                    ..
-                },
+                NodeKind::VariableDeclaration { variable: old_var, initializer: old_init, .. },
+                NodeKind::VariableDeclaration { variable: new_var, initializer: new_init, .. },
             ) => {
                 let mut reused = 1; // VarDecl itself
                 let mut reparsed = 0;
@@ -446,14 +399,8 @@ impl IncrementalParserV2 {
                 }
             }
             (
-                NodeKind::Variable {
-                    sigil: old_s,
-                    name: old_n,
-                },
-                NodeKind::Variable {
-                    sigil: new_s,
-                    name: new_n,
-                },
+                NodeKind::Variable { sigil: old_s, name: old_n },
+                NodeKind::Variable { sigil: new_s, name: new_n },
             ) => {
                 if old_s == new_s && old_n == new_n {
                     (1, 0) // Reused
@@ -485,14 +432,8 @@ impl IncrementalParserV2 {
             (NodeKind::Number { value: v1 }, NodeKind::Number { value: v2 }) => v1 == v2,
             (NodeKind::String { value: v1, .. }, NodeKind::String { value: v2, .. }) => v1 == v2,
             (
-                NodeKind::Variable {
-                    sigil: s1,
-                    name: n1,
-                },
-                NodeKind::Variable {
-                    sigil: s2,
-                    name: n2,
-                },
+                NodeKind::Variable { sigil: s1, name: n1 },
+                NodeKind::Variable { sigil: s2, name: n2 },
             ) => s1 == s2 && n1 == n2,
             _ => true, // Consider structural nodes as reused if their type matches
         }
@@ -509,16 +450,8 @@ impl IncrementalParserV2 {
                 }
             }
             (
-                NodeKind::VariableDeclaration {
-                    variable: old_v,
-                    initializer: old_i,
-                    ..
-                },
-                NodeKind::VariableDeclaration {
-                    variable: new_v,
-                    initializer: new_i,
-                    ..
-                },
+                NodeKind::VariableDeclaration { variable: old_v, initializer: old_i, .. },
+                NodeKind::VariableDeclaration { variable: new_v, initializer: new_i, .. },
             ) => {
                 count += self.count_reused(old_v, new_v);
                 if let (Some(old_init), Some(new_init)) = (old_i, new_i) {
@@ -541,11 +474,7 @@ impl IncrementalParserV2 {
                     count += self.count_nodes(stmt);
                 }
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 count += self.count_nodes(variable);
                 if let Some(init) = initializer {
                     count += self.count_nodes(init);
@@ -563,12 +492,7 @@ impl IncrementalParserV2 {
                     count += self.count_nodes(arg);
                 }
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -629,10 +553,8 @@ mod tests {
 
         // Verify the tree is correct
         if let NodeKind::Program { statements } = &tree2.kind {
-            if let NodeKind::VariableDeclaration {
-                initializer: Some(init),
-                ..
-            } = &statements[0].kind
+            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
+                &statements[0].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "4242");

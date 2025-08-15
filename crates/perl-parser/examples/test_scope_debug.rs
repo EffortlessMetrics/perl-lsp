@@ -54,10 +54,7 @@ print $y;"#;
     } else {
         println!("\n❌ FAILURE: Undefined variable $y was NOT detected!");
         println!("\nDebugging info:");
-        println!(
-            "  - Code contains 'use strict': {}",
-            code.contains("use strict")
-        );
+        println!("  - Code contains 'use strict': {}", code.contains("use strict"));
         println!("  - Total issues found: {}", issues.len());
     }
 }

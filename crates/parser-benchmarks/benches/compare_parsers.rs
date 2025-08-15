@@ -170,11 +170,9 @@ fn bench_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("parser-comparison");
     group.measurement_time(Duration::from_secs(10));
 
-    for (name, code) in &[
-        ("simple", SIMPLE_CODE),
-        ("medium", MEDIUM_CODE),
-        ("complex", COMPLEX_CODE),
-    ] {
+    for (name, code) in
+        &[("simple", SIMPLE_CODE), ("medium", MEDIUM_CODE), ("complex", COMPLEX_CODE)]
+    {
         // perl-parser
         group.bench_with_input(BenchmarkId::new("perl-parser", name), code, |b, code| {
             b.iter(|| {
@@ -186,31 +184,23 @@ fn bench_comparison(c: &mut Criterion) {
 
         // tree-sitter-perl-rs
         #[cfg(feature = "tree-sitter-perl-rs")]
-        group.bench_with_input(
-            BenchmarkId::new("tree-sitter-perl-rs", name),
-            code,
-            |b, code| {
-                b.iter(|| {
-                    use tree_sitter_perl::PureRustParser;
-                    let parser = PureRustParser::new();
-                    let _ = parser.parse(black_box(code));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("tree-sitter-perl-rs", name), code, |b, code| {
+            b.iter(|| {
+                use tree_sitter_perl::PureRustParser;
+                let parser = PureRustParser::new();
+                let _ = parser.parse(black_box(code));
+            });
+        });
 
         // tree-sitter-perl C
         #[cfg(feature = "tree-sitter-perl-c")]
-        group.bench_with_input(
-            BenchmarkId::new("tree-sitter-perl-c", name),
-            code,
-            |b, code| {
-                b.iter(|| {
-                    use tree_sitter_perl_c::create_parser;
-                    let mut parser = create_parser();
-                    let _ = parser.parse(black_box(code), None);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("tree-sitter-perl-c", name), code, |b, code| {
+            b.iter(|| {
+                use tree_sitter_perl_c::create_parser;
+                let mut parser = create_parser();
+                let _ = parser.parse(black_box(code), None);
+            });
+        });
     }
 
     group.finish();
@@ -227,25 +217,12 @@ criterion_group!(
 );
 
 #[cfg(all(feature = "tree-sitter-perl-rs", not(feature = "tree-sitter-perl-c")))]
-criterion_group!(
-    benches,
-    bench_perl_parser,
-    bench_tree_sitter_perl_rs,
-    bench_comparison
-);
+criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_rs, bench_comparison);
 
 #[cfg(all(not(feature = "tree-sitter-perl-rs"), feature = "tree-sitter-perl-c"))]
-criterion_group!(
-    benches,
-    bench_perl_parser,
-    bench_tree_sitter_perl_c,
-    bench_comparison
-);
+criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_c, bench_comparison);
 
-#[cfg(all(
-    not(feature = "tree-sitter-perl-rs"),
-    not(feature = "tree-sitter-perl-c")
-))]
+#[cfg(all(not(feature = "tree-sitter-perl-rs"), not(feature = "tree-sitter-perl-c")))]
 criterion_group!(benches, bench_perl_parser, bench_comparison);
 
 criterion_main!(benches);

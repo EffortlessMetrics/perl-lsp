@@ -76,10 +76,7 @@ impl ErrorClassifier {
         {
             let pos = error_node.location.start;
             let line_start = source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
-            let line_end = source[pos..]
-                .find('\n')
-                .map(|i| pos + i)
-                .unwrap_or(source.len());
+            let line_end = source[pos..].find('\n').map(|i| pos + i).unwrap_or(source.len());
 
             let line = &source[line_start..line_end];
 
@@ -185,13 +182,8 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = parser.parse().unwrap_or_else(|_| {
             Node::new(
-                NodeKind::Error {
-                    message: "Parse error".to_string(),
-                },
-                SourceLocation {
-                    start: 0,
-                    end: source.len(),
-                },
+                NodeKind::Error { message: "Parse error".to_string() },
+                SourceLocation { start: 0, end: source.len() },
             )
         });
 
@@ -212,9 +204,7 @@ mod tests {
 
         // Simulate an error node at the end of first line
         let error = Node::new(
-            NodeKind::Error {
-                message: "".to_string(),
-            },
+            NodeKind::Error { message: "".to_string() },
             SourceLocation { start: 10, end: 11 },
         );
         let kind = classifier.classify(&error, source);

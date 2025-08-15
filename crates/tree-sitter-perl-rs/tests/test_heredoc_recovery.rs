@@ -100,10 +100,8 @@ EOF
 
 #[test]
 fn test_recovery_confidence_levels() {
-    let mut recovery = HeredocRecovery::new(RecoveryConfig {
-        confidence_threshold: 0.7,
-        ..Default::default()
-    });
+    let mut recovery =
+        HeredocRecovery::new(RecoveryConfig { confidence_threshold: 0.7, ..Default::default() });
 
     // Test various expressions and their recovery confidence
     let test_cases = vec![
@@ -121,11 +119,7 @@ fn test_recovery_confidence_levels() {
         for expected in expected_alternatives {
             assert!(
                 result.alternatives.iter().any(|a| a.as_ref() == expected)
-                    || result
-                        .delimiter
-                        .as_ref()
-                        .map(|d| d.as_ref() == expected)
-                        .unwrap_or(false),
+                    || result.delimiter.as_ref().map(|d| d.as_ref() == expected).unwrap_or(false),
                 "Expected '{}' in alternatives for expression '{}'",
                 expected,
                 expr
@@ -157,10 +151,7 @@ fn test_error_token_generation() {
         }
     }
 
-    assert!(
-        error_found,
-        "Should generate error token for unresolvable delimiter"
-    );
+    assert!(error_found, "Should generate error token for unresolvable delimiter");
 }
 
 #[test]

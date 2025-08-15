@@ -19,15 +19,7 @@ impl TestContext {
     fn new() -> Self {
         // Start LSP server
         let mut server = std::process::Command::new("cargo")
-            .args([
-                "run",
-                "-p",
-                "perl-parser",
-                "--bin",
-                "perl-lsp",
-                "--",
-                "--stdio",
-            ])
+            .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -37,11 +29,7 @@ impl TestContext {
         let reader = std::io::BufReader::new(server.stdout.take().unwrap());
         let writer = server.stdin.take().unwrap();
 
-        let mut ctx = TestContext {
-            server,
-            reader,
-            writer,
-        };
+        let mut ctx = TestContext { server, reader, writer };
 
         // Initialize the server
         ctx.send_request(
@@ -225,10 +213,7 @@ fn test_completion_golden() {
         let items = if let Some(arr) = comp.as_array() {
             arr.clone()
         } else if let Some(obj) = comp.as_object() {
-            obj.get("items")
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default()
+            obj.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default()
         } else {
             vec![]
         };
@@ -241,14 +226,8 @@ fn test_completion_golden() {
             .collect();
 
         // In a real snapshot test, we'd compare the exact list
-        assert!(
-            labels.iter().any(|l| l.contains("user_name")),
-            "Should complete $user_name"
-        );
-        assert!(
-            labels.iter().any(|l| l.contains("user_age")),
-            "Should complete $user_age"
-        );
+        assert!(labels.iter().any(|l| l.contains("user_name")), "Should complete $user_name");
+        assert!(labels.iter().any(|l| l.contains("user_age")), "Should complete $user_age");
     }
 }
 
@@ -270,10 +249,7 @@ fn test_semantic_tokens_golden() {
         // In a real snapshot test, we'd verify the exact token positions and types
         if let Some(token_data) = data {
             // Tokens come in groups of 5: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
-            assert!(
-                token_data.len() % 5 == 0,
-                "Token data should be multiple of 5"
-            );
+            assert!(token_data.len() % 5 == 0, "Token data should be multiple of 5");
             assert!(token_data.len() >= 5, "Should have at least one token");
         }
     }

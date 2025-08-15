@@ -27,15 +27,9 @@ fn lsp_range_for_line_start(text: &str, line: u32) -> Range {
     for (cur, l) in text.split_inclusive('\n').enumerate() {
         if cur as u32 == line {
             // Leading whitespace span
-            let ws = l
-                .chars()
-                .take_while(|c| c.is_whitespace() && *c != '\n')
-                .count();
+            let ws = l.chars().take_while(|c| c.is_whitespace() && *c != '\n').count();
             // Build range [line:0 .. line:ws]
-            return Range {
-                start: Position::new(line, 0),
-                end: Position::new(line, ws as u32),
-            };
+            return Range { start: Position::new(line, 0), end: Position::new(line, ws as u32) };
         }
     }
     Range::new(Position::new(line, 0), Position::new(line, 0))
@@ -106,10 +100,8 @@ pub fn format_on_type(
         compute_indent(text, off.saturating_sub(1), tab_size).saturating_sub(tab_size)
     } else if ch == "\n" {
         // For newline, compute indent based on previous content
-        let prev_line_end = byte_offset(
-            text,
-            Position::new(position.line.saturating_sub(1), u32::MAX),
-        );
+        let prev_line_end =
+            byte_offset(text, Position::new(position.line.saturating_sub(1), u32::MAX));
         compute_indent(text, prev_line_end, tab_size)
     } else {
         compute_indent(text, off, tab_size)
@@ -123,8 +115,5 @@ pub fn format_on_type(
         "\t".repeat(level)
     };
 
-    vec![TextEdit {
-        range: line_start_range,
-        new_text: indent_str,
-    }]
+    vec![TextEdit { range: line_start_range, new_text: indent_str }]
 }

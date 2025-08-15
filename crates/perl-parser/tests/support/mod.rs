@@ -135,19 +135,13 @@ fn line_col_to_offset(lines: &[&str], line: usize, col_utf16: usize) -> usize {
 /// Extract object from optional value with meaningful error
 #[allow(dead_code)]
 pub fn expect_obj(v: &Option<Value>) -> &serde_json::Map<String, Value> {
-    v.as_ref()
-        .expect("expected Some value, got None")
-        .as_object()
-        .expect("expected JSON object")
+    v.as_ref().expect("expected Some value, got None").as_object().expect("expected JSON object")
 }
 
 /// Extract array from optional value with meaningful error
 #[allow(dead_code)]
 pub fn expect_arr(v: &Option<Value>) -> &Vec<Value> {
-    v.as_ref()
-        .expect("expected Some value, got None")
-        .as_array()
-        .expect("expected JSON array")
+    v.as_ref().expect("expected Some value, got None").as_array().expect("expected JSON array")
 }
 
 // ===================== Assertion Helpers =====================
@@ -158,10 +152,7 @@ pub fn assert_hover_has_text(v: &Option<Value>) {
     if let Some(hover) = v {
         if !hover.is_null() {
             let obj = hover.as_object().expect("hover should be object");
-            assert!(
-                obj.contains_key("contents"),
-                "hover must have contents field"
-            );
+            assert!(obj.contains_key("contents"), "hover must have contents field");
 
             let contents = &obj["contents"];
             let has_text = contents.is_string()
@@ -192,18 +183,12 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
                 panic!("completion response must be array or object with items");
             };
 
-            assert!(
-                !items.is_empty(),
-                "completion must return at least one item"
-            );
+            assert!(!items.is_empty(), "completion must return at least one item");
 
             // Validate first item has required fields
             if let Some(first) = items.first() {
                 let item = first.as_object().expect("completion item must be object");
-                assert!(
-                    item.contains_key("label"),
-                    "completion item must have label"
-                );
+                assert!(item.contains_key("label"), "completion item must have label");
             }
         }
     }
@@ -287,21 +272,10 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
             if !items.is_empty() {
                 // Validate each item has required fields
                 for item in items {
-                    let item_obj = item
-                        .as_object()
-                        .expect("call hierarchy item must be object");
-                    assert!(
-                        item_obj.contains_key("name"),
-                        "call hierarchy item must have name"
-                    );
-                    assert!(
-                        item_obj.contains_key("uri"),
-                        "call hierarchy item must have uri"
-                    );
-                    assert!(
-                        item_obj.contains_key("range"),
-                        "call hierarchy item must have range"
-                    );
+                    let item_obj = item.as_object().expect("call hierarchy item must be object");
+                    assert!(item_obj.contains_key("name"), "call hierarchy item must have name");
+                    assert!(item_obj.contains_key("uri"), "call hierarchy item must have uri");
+                    assert!(item_obj.contains_key("range"), "call hierarchy item must have range");
 
                     // Either selectionRange or detail should be present
                     let has_selection = item_obj.contains_key("selectionRange");
@@ -341,10 +315,8 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
             .and_then(|v| v.as_u64())
             .expect("folding range must have startLine");
 
-        let end = obj
-            .get("endLine")
-            .and_then(|v| v.as_u64())
-            .expect("folding range must have endLine");
+        let end =
+            obj.get("endLine").and_then(|v| v.as_u64()).expect("folding range must have endLine");
 
         assert!(end > start, "folding range must span multiple lines");
 
@@ -367,18 +339,12 @@ pub fn assert_code_actions_available(v: &Option<Value>) {
 
             for action in arr {
                 let action_obj = action.as_object().expect("code action must be object");
-                assert!(
-                    action_obj.contains_key("title"),
-                    "code action must have title"
-                );
+                assert!(action_obj.contains_key("title"), "code action must have title");
 
                 // Must have either command or edit
                 let has_command = action_obj.contains_key("command");
                 let has_edit = action_obj.contains_key("edit");
-                assert!(
-                    has_command || has_edit,
-                    "code action must have command or edit"
-                );
+                assert!(has_command || has_edit, "code action must have command or edit");
 
                 // If has kind, validate it's a string
                 if let Some(kind) = action_obj.get("kind") {
@@ -394,18 +360,13 @@ pub fn assert_code_actions_available(v: &Option<Value>) {
 pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(symbols) = v {
         if !symbols.is_null() {
-            let arr = symbols
-                .as_array()
-                .expect("workspace symbols should be array");
+            let arr = symbols.as_array().expect("workspace symbols should be array");
 
             if !arr.is_empty() {
                 // Validate each symbol
                 for symbol in arr {
                     let sym_obj = symbol.as_object().expect("workspace symbol must be object");
-                    assert!(
-                        sym_obj.contains_key("name"),
-                        "workspace symbol must have name"
-                    );
+                    assert!(sym_obj.contains_key("name"), "workspace symbol must have name");
 
                     // Must have either location or containerName
                     let has_location = sym_obj.contains_key("location");
@@ -439,38 +400,25 @@ pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&
 
 /// Validate a range object
 fn assert_range_valid(range: &Value, context: &str) {
-    let range_obj = range
-        .as_object()
-        .unwrap_or_else(|| panic!("{} must be object", context));
+    let range_obj = range.as_object().unwrap_or_else(|| panic!("{} must be object", context));
 
     // Check start position
-    let start = range_obj
-        .get("start")
-        .unwrap_or_else(|| panic!("{} must have start", context));
-    let start_obj = start
-        .as_object()
-        .unwrap_or_else(|| panic!("{} start must be object", context));
+    let start = range_obj.get("start").unwrap_or_else(|| panic!("{} must have start", context));
+    let start_obj = start.as_object().unwrap_or_else(|| panic!("{} start must be object", context));
     assert!(
         start_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} start must have line number",
         context
     );
     assert!(
-        start_obj
-            .get("character")
-            .and_then(|v| v.as_u64())
-            .is_some(),
+        start_obj.get("character").and_then(|v| v.as_u64()).is_some(),
         "{} start must have character",
         context
     );
 
     // Check end position
-    let end = range_obj
-        .get("end")
-        .unwrap_or_else(|| panic!("{} must have end", context));
-    let end_obj = end
-        .as_object()
-        .unwrap_or_else(|| panic!("{} end must be object", context));
+    let end = range_obj.get("end").unwrap_or_else(|| panic!("{} must have end", context));
+    let end_obj = end.as_object().unwrap_or_else(|| panic!("{} end must be object", context));
     assert!(
         end_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} end must have line number",
@@ -486,9 +434,7 @@ fn assert_range_valid(range: &Value, context: &str) {
 /// Validate a location object
 #[allow(dead_code)]
 fn assert_location_valid(location: &Value, context: &str) {
-    let loc_obj = location
-        .as_object()
-        .unwrap_or_else(|| panic!("{} must be object", context));
+    let loc_obj = location.as_object().unwrap_or_else(|| panic!("{} must be object", context));
     assert!(loc_obj.contains_key("uri"), "{} must have uri", context);
     assert!(
         loc_obj.get("uri").and_then(|v| v.as_str()).is_some(),

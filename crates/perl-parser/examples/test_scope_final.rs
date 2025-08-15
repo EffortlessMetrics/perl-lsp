@@ -146,10 +146,7 @@ fn main() {
                 relevant_issues.len()
             );
             for issue in &issues {
-                println!(
-                    "    {:?}: {} at line {}",
-                    issue.kind, issue.variable_name, issue.line
-                );
+                println!("    {:?}: {} at line {}", issue.kind, issue.variable_name, issue.line);
             }
             failed += 1;
         }

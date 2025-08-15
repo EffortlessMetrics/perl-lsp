@@ -241,9 +241,8 @@ impl<'a> DeclarationProvider<'a> {
 
         // If we have a current package, prefer subs in the same package
         if let Some(pkg_name) = current_package {
-            if let Some(decl) = declarations
-                .iter()
-                .find(|d| self.find_current_package(d) == Some(pkg_name.clone()))
+            if let Some(decl) =
+                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name.clone()))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -286,9 +285,8 @@ impl<'a> DeclarationProvider<'a> {
             let mut declarations = Vec::new();
             self.collect_subroutine_declarations(&self.ast, method_name, &mut declarations);
 
-            if let Some(decl) = declarations
-                .iter()
-                .find(|d| self.find_current_package(d) == Some(pkg.clone()))
+            if let Some(decl) =
+                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg.clone()))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -635,9 +633,7 @@ impl<'a> DeclarationProvider<'a> {
             }
             if start < i {
                 let w = &s[start..i];
-                if w.chars()
-                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
-                {
+                if w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
                     return Some((start, i));
                 }
             }
@@ -651,10 +647,7 @@ impl<'a> DeclarationProvider<'a> {
         if text.starts_with("sub ") {
             let name_start = decl.location.start + 4;
             let rest = &self.content[name_start..decl.location.end];
-            let name_len = rest
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .count();
+            let name_len = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').count();
             return (name_start, name_start + name_len);
         }
         (decl.location.start, decl.location.end)
@@ -666,10 +659,8 @@ impl<'a> DeclarationProvider<'a> {
         if text.starts_with("package ") {
             let name_start = decl.location.start + 8;
             let rest = &self.content[name_start..decl.location.end];
-            let name_len = rest
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == ':')
-                .count();
+            let name_len =
+                rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == ':').count();
             return (name_start, name_start + name_len);
         }
         (decl.location.start, decl.location.end)
@@ -710,10 +701,8 @@ impl<'a> DeclarationProvider<'a> {
         self.for_each_qw_window(&text, |start, end| {
             // Find the exact token position within this qw window
             if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
-                found_range = Some((
-                    decl.location.start + start + lo,
-                    decl.location.start + start + hi,
-                ));
+                found_range =
+                    Some((decl.location.start + start + lo, decl.location.start + start + hi));
                 true // Stop searching
             } else {
                 false // Continue to next window
@@ -726,10 +715,8 @@ impl<'a> DeclarationProvider<'a> {
         // Try inside all { ... } blocks (hash form)
         self.for_each_brace_window(&text, |start, end| {
             if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
-                found_range = Some((
-                    decl.location.start + start + lo,
-                    decl.location.start + start + hi,
-                ));
+                found_range =
+                    Some((decl.location.start + start + lo, decl.location.start + start + hi));
                 true // Stop searching
             } else {
                 false // Continue to next window
@@ -751,12 +738,7 @@ impl<'a> DeclarationProvider<'a> {
         match &node.kind {
             NodeKind::Program { statements } => statements.iter().collect(),
             NodeKind::Block { statements } => statements.iter().collect(),
-            NodeKind::If {
-                condition,
-                then_branch,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { condition, then_branch, else_branch, .. } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 if let Some(else_b) = else_branch {
                     children.push(else_b.as_ref());
@@ -765,11 +747,7 @@ impl<'a> DeclarationProvider<'a> {
             }
             NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
             NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
@@ -787,18 +765,10 @@ impl<'a> DeclarationProvider<'a> {
                 children.extend(args.iter());
                 children
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 vec![condition.as_ref(), body.as_ref()]
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 let mut children = Vec::new();
                 if let Some(i) = init {
                     children.push(i.as_ref());
@@ -812,12 +782,7 @@ impl<'a> DeclarationProvider<'a> {
                 children.push(body.as_ref());
                 children
             }
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-                ..
-            } => {
+            NodeKind::Foreach { variable, list, body, .. } => {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
             _ => vec![],

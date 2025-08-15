@@ -204,14 +204,8 @@ impl PerlLanguageServer {
             Err(e) => {
                 diagnostics.push(Diagnostic {
                     range: Range {
-                        start: Position {
-                            line: 0,
-                            character: 0,
-                        },
-                        end: Position {
-                            line: 0,
-                            character: 1,
-                        },
+                        start: Position { line: 0, character: 0 },
+                        end: Position { line: 0, character: 1 },
                     },
                     severity: Some(DiagnosticSeverity::Error),
                     code: None,
@@ -276,14 +270,8 @@ impl PerlLanguageServer {
                         Err(e) => {
                             state.diagnostics = vec![Diagnostic {
                                 range: Range {
-                                    start: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                    end: Position {
-                                        line: 0,
-                                        character: 1,
-                                    },
+                                    start: Position { line: 0, character: 0 },
+                                    end: Position { line: 0, character: 1 },
                                 },
                                 severity: Some(DiagnosticSeverity::Error),
                                 code: None,
@@ -304,9 +292,7 @@ impl PerlLanguageServer {
     /// Get diagnostics for a document
     pub fn get_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
         let docs = self.documents.lock().unwrap();
-        docs.get(uri)
-            .map(|state| state.diagnostics.clone())
-            .unwrap_or_default()
+        docs.get(uri).map(|state| state.diagnostics.clone()).unwrap_or_default()
     }
 
     /// Get completions at a position
@@ -360,9 +346,7 @@ impl PerlLanguageServer {
     /// Get document symbols
     pub fn get_document_symbols(&self, uri: &str) -> Vec<SymbolInformation> {
         let docs = self.documents.lock().unwrap();
-        docs.get(uri)
-            .map(|state| state.symbols.clone())
-            .unwrap_or_default()
+        docs.get(uri).map(|state| state.symbols.clone()).unwrap_or_default()
     }
 
     /// Extract symbols from source
@@ -394,14 +378,8 @@ impl PerlLanguageServer {
                     location: Location {
                         uri: uri.to_string(),
                         range: Range {
-                            start: Position {
-                                line: 0,
-                                character: 0,
-                            },
-                            end: Position {
-                                line: 0,
-                                character: 0,
-                            },
+                            start: Position { line: 0, character: 0 },
+                            end: Position { line: 0, character: 0 },
                         },
                     },
                     container_name: container.map(|s| s.to_string()),
@@ -415,14 +393,8 @@ impl PerlLanguageServer {
                     location: Location {
                         uri: uri.to_string(),
                         range: Range {
-                            start: Position {
-                                line: 0,
-                                character: 0,
-                            },
-                            end: Position {
-                                line: 0,
-                                character: 0,
-                            },
+                            start: Position { line: 0, character: 0 },
+                            end: Position { line: 0, character: 0 },
                         },
                     },
                     container_name: container.map(|s| s.to_string()),
@@ -443,14 +415,8 @@ impl PerlLanguageServer {
                             location: Location {
                                 uri: uri.to_string(),
                                 range: Range {
-                                    start: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                    end: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
+                                    start: Position { line: 0, character: 0 },
+                                    end: Position { line: 0, character: 0 },
                                 },
                             },
                             container_name: container.map(|s| s.to_string()),
@@ -572,13 +538,7 @@ mod tests {
 
         server.did_open(uri.clone(), text, 1);
 
-        let completions = server.get_completions(
-            &uri,
-            Position {
-                line: 1,
-                character: 5,
-            },
-        );
+        let completions = server.get_completions(&uri, Position { line: 1, character: 5 });
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "$_"));
         assert!(completions.iter().any(|c| c.label == "test"));

@@ -33,10 +33,7 @@ mod tests {
 
                 // Verify correct precedence: + at top, * below
                 assert_eq!(ast.children[0].node_type, "binary_expression");
-                assert_eq!(
-                    ast.children[0].value.as_ref().map(|s| s.as_ref()),
-                    Some("Plus")
-                );
+                assert_eq!(ast.children[0].value.as_ref().map(|s| s.as_ref()), Some("Plus"));
             }
             Err(e) => panic!("Parse error: {}", e),
         }
@@ -125,10 +122,7 @@ sub hello {
             Ok(ast) => {
                 println!("Subroutine parsed successfully");
                 assert_eq!(ast.children[0].node_type, "subroutine");
-                assert_eq!(
-                    ast.children[0].value.as_ref().map(|s| s.as_ref()),
-                    Some("Identifier")
-                );
+                assert_eq!(ast.children[0].value.as_ref().map(|s| s.as_ref()), Some("Identifier"));
             }
             Err(e) => panic!("Parse error: {}", e),
         }

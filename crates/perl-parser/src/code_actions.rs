@@ -107,10 +107,7 @@ impl CodeActionsProvider {
                 diagnostics: vec!["undefined-variable".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: insert_pos,
-                            end: insert_pos,
-                        },
+                        location: SourceLocation { start: insert_pos, end: insert_pos },
                         new_text: format!("my {};\n", var_name),
                     }],
                 },
@@ -124,10 +121,7 @@ impl CodeActionsProvider {
                 diagnostics: vec!["undefined-variable".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: insert_pos,
-                            end: insert_pos,
-                        },
+                        location: SourceLocation { start: insert_pos, end: insert_pos },
                         new_text: format!("our {};\n", var_name),
                     }],
                 },
@@ -143,10 +137,7 @@ impl CodeActionsProvider {
         let mut actions = Vec::new();
 
         // Find the declaration line
-        let line_start = self.source[..diagnostic.range.0]
-            .rfind('\n')
-            .map(|p| p + 1)
-            .unwrap_or(0);
+        let line_start = self.source[..diagnostic.range.0].rfind('\n').map(|p| p + 1).unwrap_or(0);
         let line_end = self.source[diagnostic.range.1..]
             .find('\n')
             .map(|p| diagnostic.range.1 + p)
@@ -158,10 +149,7 @@ impl CodeActionsProvider {
             diagnostics: vec!["unused-variable".to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation {
-                        start: line_start,
-                        end: line_end + 1,
-                    },
+                    location: SourceLocation { start: line_start, end: line_end + 1 },
                     new_text: String::new(),
                 }],
             },
@@ -206,10 +194,7 @@ impl CodeActionsProvider {
                 diagnostics: vec!["assignment-in-condition".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: pos,
-                            end: pos + 1,
-                        },
+                        location: SourceLocation { start: pos, end: pos + 1 },
                         new_text: "==".to_string(),
                     }],
                 },
@@ -296,10 +281,7 @@ impl CodeActionsProvider {
                 diagnostics: vec!["deprecated-defined".to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation {
-                            start: defined_start,
-                            end: diagnostic.range.1,
-                        },
+                        location: SourceLocation { start: defined_start, end: diagnostic.range.1 },
                         new_text: arg_text.to_string(),
                     }],
                 },
@@ -415,17 +397,11 @@ impl CodeActionsProvider {
             changes: vec![
                 // Insert variable declaration
                 TextEdit {
-                    location: SourceLocation {
-                        start: stmt_start,
-                        end: stmt_start,
-                    },
+                    location: SourceLocation { start: stmt_start, end: stmt_start },
                     new_text: format!("my {} = {};\n", var_name, expr_text),
                 },
                 // Replace expression with variable
-                TextEdit {
-                    location: node.location,
-                    new_text: var_name.to_string(),
-                },
+                TextEdit { location: node.location, new_text: var_name.to_string() },
             ],
         }
     }
@@ -442,17 +418,11 @@ impl CodeActionsProvider {
             changes: vec![
                 // Insert function definition
                 TextEdit {
-                    location: SourceLocation {
-                        start: insert_pos,
-                        end: insert_pos,
-                    },
+                    location: SourceLocation { start: insert_pos, end: insert_pos },
                     new_text: format!("\nsub {} {{\n{}\n}}\n", func_name, body_text),
                 },
                 // Replace statements with function call
-                TextEdit {
-                    location: node.location,
-                    new_text: format!("{}();", func_name),
-                },
+                TextEdit { location: node.location, new_text: format!("{}();", func_name) },
             ],
         }
     }
@@ -503,12 +473,7 @@ impl CodeActionsProvider {
                         }
                     }
                 }
-                NodeKind::If {
-                    condition,
-                    then_branch,
-                    elsif_branches,
-                    else_branch,
-                } => {
+                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                     if let Some(result) = self.find_node_at_range(condition, range) {
                         return Some(result);
                     }
@@ -567,14 +532,9 @@ mod tests {
         eprintln!("Diagnostics: {:?}", diagnostics);
         eprintln!("Actions: {:?}", actions);
 
+        assert!(!diagnostics.is_empty(), "Expected diagnostics for undefined variable");
         assert!(
-            !diagnostics.is_empty(),
-            "Expected diagnostics for undefined variable"
-        );
-        assert!(
-            actions
-                .iter()
-                .any(|a| a.title.contains("Declare") || a.title.contains("my")),
+            actions.iter().any(|a| a.title.contains("Declare") || a.title.contains("my")),
             "Expected action to declare variable, got: {:?}",
             actions
         );

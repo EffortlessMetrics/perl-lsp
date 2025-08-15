@@ -57,9 +57,7 @@ fn get_signature_help(
         })),
     };
 
-    server
-        .handle_request(request)
-        .and_then(|response| response.result)
+    server.handle_request(request).and_then(|response| response.result)
 }
 
 #[test]
@@ -73,17 +71,9 @@ fn test_file_operation_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("seek"));
     assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("seek")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("FILEHANDLE, POSITION, WHENCE")
+        sig["signatures"][0]["label"].as_str().unwrap().contains("FILEHANDLE, POSITION, WHENCE")
     );
 
     // Test chmod signature - cursor after first comma
@@ -93,18 +83,8 @@ fn test_file_operation_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("chmod")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("MODE, LIST")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("chmod"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("MODE, LIST"));
 
     // Test stat signature - cursor just inside parentheses
     let code = "stat($file);";
@@ -113,12 +93,7 @@ fn test_file_operation_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("stat")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("stat"));
 }
 
 #[test]
@@ -132,18 +107,8 @@ fn test_string_data_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("pack")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("TEMPLATE, LIST")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("pack"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("TEMPLATE, LIST"));
 
     // Test unpack signature
     let code = "unpack($template, $data);";
@@ -152,12 +117,7 @@ fn test_string_data_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("unpack")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("unpack"));
 
     // Test hex signature
     let code = "hex($str);";
@@ -166,12 +126,7 @@ fn test_string_data_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("hex")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("hex"));
 }
 
 #[test]
@@ -195,12 +150,7 @@ fn test_math_signatures() {
         assert!(result.is_some(), "Failed for function: {}", func_name);
         let sig = result.unwrap();
         let label = sig["signatures"][0]["label"].as_str().unwrap();
-        assert!(
-            label.contains(func_name),
-            "Label doesn't contain {}: {}",
-            func_name,
-            label
-        );
+        assert!(label.contains(func_name), "Label doesn't contain {}: {}", func_name, label);
         assert!(
             label.contains(expected_params),
             "Label doesn't contain params for {}: {}",
@@ -221,12 +171,7 @@ fn test_system_process_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("fork")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("fork"));
 
     // Test kill signature
     let code = "kill(9, @pids);";
@@ -235,18 +180,8 @@ fn test_system_process_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("kill")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("SIGNAL, LIST")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("kill"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("SIGNAL, LIST"));
 
     // Test system signature
     let code = "system($cmd);";
@@ -255,12 +190,7 @@ fn test_system_process_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("system")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("system"));
 }
 
 #[test]
@@ -274,18 +204,8 @@ fn test_network_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("socket")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("DOMAIN, TYPE, PROTOCOL")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("socket"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("DOMAIN, TYPE, PROTOCOL"));
 
     // Test bind signature
     let code = "bind(SOCK, $addr);";
@@ -294,18 +214,8 @@ fn test_network_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("bind")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("SOCKET, NAME")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("bind"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("SOCKET, NAME"));
 }
 
 #[test]
@@ -319,12 +229,7 @@ fn test_control_flow_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("eval")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("eval"));
 
     // Test require signature
     let code = "require($module);";
@@ -333,12 +238,7 @@ fn test_control_flow_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("require")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("require"));
 }
 
 #[test]
@@ -352,18 +252,8 @@ fn test_misc_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("tie")
-    );
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("VARIABLE, CLASSNAME")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("tie"));
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("VARIABLE, CLASSNAME"));
 
     // Test select signature
     let code = "select(STDOUT);";
@@ -372,12 +262,7 @@ fn test_misc_signatures() {
 
     assert!(result.is_some());
     let sig = result.unwrap();
-    assert!(
-        sig["signatures"][0]["label"]
-            .as_str()
-            .unwrap()
-            .contains("select")
-    );
+    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("select"));
 }
 
 #[test]
@@ -565,11 +450,7 @@ fn test_all_114_builtins_are_recognized() {
         let cursor_pos = func.len() as u32 + 1;
         let result = get_signature_help(&mut server, &uri, 0, cursor_pos);
 
-        assert!(
-            result.is_some(),
-            "No signature found for function: {}",
-            func
-        );
+        assert!(result.is_some(), "No signature found for function: {}", func);
         let sig = result.unwrap();
         let label = sig["signatures"][0]["label"].as_str().unwrap();
         assert!(

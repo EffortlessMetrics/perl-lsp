@@ -101,9 +101,7 @@ fn test_lsp_initialize() {
     });
 
     // Send request
-    tx_in
-        .send(create_lsp_message(&init_request.to_string()))
-        .unwrap();
+    tx_in.send(create_lsp_message(&init_request.to_string())).unwrap();
 
     // TODO: The current LspServer implementation expects real stdin/stdout
     // We need to refactor it to accept generic Read/Write traits for testing

@@ -93,11 +93,8 @@ fn test_duplicate_content_length() {
 
     // Send duplicate Content-Length headers
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
-    let header = format!(
-        "Content-Length: {}\r\nContent-Length: {}\r\n\r\n",
-        body.len(),
-        body.len()
-    );
+    let header =
+        format!("Content-Length: {}\r\nContent-Length: {}\r\n\r\n", body.len(), body.len());
 
     if let Some(stdin) = server.stdin.as_mut() {
         stdin.write_all(header.as_bytes()).unwrap();

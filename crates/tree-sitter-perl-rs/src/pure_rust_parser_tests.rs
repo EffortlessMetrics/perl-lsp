@@ -17,11 +17,7 @@ mod tests {
     #[allow(dead_code)]
     fn parse_fails(input: &str) {
         let mut parser = PureRustPerlParser::new();
-        assert!(
-            parser.parse(input).is_err(),
-            "Expected parse to fail for: {}",
-            input
-        );
+        assert!(parser.parse(input).is_err(), "Expected parse to fail for: {}", input);
     }
 
     // Helper to check S-expression output contains pattern

@@ -24,21 +24,12 @@ $text
         ("sub baz (*) { }", "sub with * prototype"),
         ("sub qux (;$) { }", "sub with optional scalar prototype"),
         // Variable attributes with multiple attributes
-        (
-            "my $x :shared :unique;",
-            "variable with multiple attributes",
-        ),
-        (
-            "our @arr :shared :unique = ();",
-            "array with attributes and init",
-        ),
+        ("my $x :shared :unique;", "variable with multiple attributes"),
+        ("our @arr :shared :unique = ();", "array with attributes and init"),
         // Complex tie with list
         ("tie my ($a, $b), 'Class'", "tie with list of variables"),
         // Complex given/when
-        (
-            "given ($x) { when ([1,2,3]) { } when (/foo/) { } default { } }",
-            "complex given/when",
-        ),
+        ("given ($x) { when ([1,2,3]) { } when (/foo/) { } default { } }", "complex given/when"),
         // Indirect object syntax
         ("new Class $arg1, $arg2", "indirect object syntax"),
         ("print STDERR $message", "indirect filehandle"),
@@ -51,19 +42,13 @@ $text
         // State variables with attributes
         ("state $x :shared = 42;", "state variable with attribute"),
         // Complex package declarations
-        (
-            "package Foo::Bar 1.23 { }",
-            "package with version and block",
-        ),
+        ("package Foo::Bar 1.23 { }", "package with version and block"),
         ("package Foo::Bar v1.2.3;", "package with v-string version"),
         // Typeglobs and symbol table manipulation
         ("*foo = \\&bar", "typeglob assignment"),
         ("*{$name} = \\&code", "dynamic typeglob"),
         // Experimental features
-        (
-            "use feature 'switch'; given ($x) { when (1) { } }",
-            "feature pragma with given/when",
-        ),
+        ("use feature 'switch'; given ($x) { when (1) { } }", "feature pragma with given/when"),
         // Complex heredoc edge cases
         (
             r#"print <<"EOF", <<"EOF2";
@@ -78,10 +63,7 @@ EOF2
         ("qq{foo {bar} baz}", "nested braces in qq"),
         ("qr{(?:{foo})}", "nested braces in qr"),
         // Signature with slurpy and optional
-        (
-            "sub foo ($x, $y = 42, @rest) { }",
-            "signature with default and slurpy",
-        ),
+        ("sub foo ($x, $y = 42, @rest) { }", "signature with default and slurpy"),
         // Complex file tests
         ("-f -r -w -x $file", "chained file tests"),
         // Smartmatch variations
@@ -113,11 +95,7 @@ EOF2
     println!("✅ Passed: {}", passed);
     println!("❌ Failed: {}", failed);
     let total = passed + failed;
-    let percentage = if total > 0 {
-        (passed as f64 / total as f64) * 100.0
-    } else {
-        100.0
-    };
+    let percentage = if total > 0 { (passed as f64 / total as f64) * 100.0 } else { 100.0 };
     println!("Success rate: {:.1}%", percentage);
 
     if !failures.is_empty() {

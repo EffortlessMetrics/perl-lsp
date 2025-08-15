@@ -21,12 +21,8 @@ use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 #[cfg(not(feature = "pure-rust"))]
 fn parse(code: &str) -> Result<tree_sitter::Tree, String> {
     let mut parser = Parser::new();
-    parser
-        .set_language(&language())
-        .map_err(|e| e.to_string())?;
-    parser
-        .parse(code, None)
-        .ok_or_else(|| "Failed to parse".to_string())
+    parser.set_language(&language()).map_err(|e| e.to_string())?;
+    parser.parse(code, None).ok_or_else(|| "Failed to parse".to_string())
 }
 
 #[cfg(feature = "pure-rust")]
@@ -210,12 +206,7 @@ fn bench_large_file_parsing(c: &mut Criterion) {
 
 fn bench_memory_usage(c: &mut Criterion) {
     let test_cases = (0..100)
-        .map(|i| {
-            format!(
-                "my $var{} = {}; print \"Variable {} = $var{}\";",
-                i, i, i, i
-            )
-        })
+        .map(|i| format!("my $var{} = {}; print \"Variable {} = $var{}\";", i, i, i, i))
         .collect::<Vec<_>>();
 
     c.bench_function("memory_usage", |b| {

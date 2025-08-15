@@ -46,24 +46,15 @@ fn main() {
 
             println!("Tree-sitter:");
             if tree_sitter_result.success {
-                println!(
-                    "  ✓ Success ({})",
-                    format_duration(tree_sitter_result.parse_time)
-                );
+                println!("  ✓ Success ({})", format_duration(tree_sitter_result.parse_time));
                 println!("  S-expr: {}", tree_sitter_result.s_expression);
             } else {
-                println!(
-                    "  ✗ Failed: {}",
-                    tree_sitter_result.error.unwrap_or_default()
-                );
+                println!("  ✗ Failed: {}", tree_sitter_result.error.unwrap_or_default());
             }
 
             println!("Pure Rust:");
             if pure_rust_result.success {
-                println!(
-                    "  ✓ Success ({})",
-                    format_duration(pure_rust_result.parse_time)
-                );
+                println!("  ✓ Success ({})", format_duration(pure_rust_result.parse_time));
                 println!("  S-expr: {}", pure_rust_result.s_expression);
             } else {
                 println!("  ✗ Failed: {}", pure_rust_result.error.unwrap_or_default());
@@ -94,27 +85,18 @@ fn main() {
             println!("Tree-sitter parser:");
             if tree_sitter_result.success {
                 println!("  ✓ Success");
-                println!(
-                    "  Parse time: {}",
-                    format_duration(tree_sitter_result.parse_time)
-                );
+                println!("  Parse time: {}", format_duration(tree_sitter_result.parse_time));
                 if source.len() < 1000 {
                     println!("  S-expression: {}", tree_sitter_result.s_expression);
                 }
             } else {
-                println!(
-                    "  ✗ Failed: {}",
-                    tree_sitter_result.error.unwrap_or_default()
-                );
+                println!("  ✗ Failed: {}", tree_sitter_result.error.unwrap_or_default());
             }
 
             println!("\nPure Rust parser:");
             if pure_rust_result.success {
                 println!("  ✓ Success");
-                println!(
-                    "  Parse time: {}",
-                    format_duration(pure_rust_result.parse_time)
-                );
+                println!("  Parse time: {}", format_duration(pure_rust_result.parse_time));
                 if source.len() < 1000 {
                     println!("  S-expression: {}", pure_rust_result.s_expression);
                 }

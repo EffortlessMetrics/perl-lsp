@@ -12,11 +12,7 @@ pub enum ParseError {
     UnexpectedEof,
 
     #[error("Unexpected token: expected {expected}, found {found} at {location}")]
-    UnexpectedToken {
-        expected: String,
-        found: String,
-        location: usize,
-    },
+    UnexpectedToken { expected: String, found: String, location: usize },
 
     #[error("Invalid syntax at position {location}: {message}")]
     SyntaxError { message: String, location: usize },
@@ -43,10 +39,7 @@ pub enum ParseError {
 impl ParseError {
     /// Create a new syntax error
     pub fn syntax(message: impl Into<String>, location: usize) -> Self {
-        ParseError::SyntaxError {
-            message: message.into(),
-            location,
-        }
+        ParseError::SyntaxError { message: message.into(), location }
     }
 
     /// Create a new unexpected token error
@@ -55,10 +48,6 @@ impl ParseError {
         found: impl Into<String>,
         location: usize,
     ) -> Self {
-        ParseError::UnexpectedToken {
-            expected: expected.into(),
-            found: found.into(),
-            location,
-        }
+        ParseError::UnexpectedToken { expected: expected.into(), found: found.into(), location }
     }
 }

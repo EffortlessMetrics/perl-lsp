@@ -5,21 +5,14 @@ use perl_parser::parser::Parser;
 fn print_ast_with_ranges(node: &Node, source: &str, depth: usize) {
     let indent = "  ".repeat(depth);
     let text = &source[node.location.start..node.location.end.min(source.len())];
-    let preview = if text.len() > 40 {
-        format!("{}...", &text[..37])
-    } else {
-        text.to_string()
-    };
+    let preview = if text.len() > 40 { format!("{}...", &text[..37]) } else { text.to_string() };
 
     println!(
         "{}[{}-{}] {:?}: \"{}\"",
         indent,
         node.location.start,
         node.location.end,
-        std::any::type_name_of_val(&node.kind)
-            .split("::")
-            .last()
-            .unwrap_or("Unknown"),
+        std::any::type_name_of_val(&node.kind).split("::").last().unwrap_or("Unknown"),
         preview.replace('\n', "\\n")
     );
 
@@ -71,12 +64,7 @@ fn main() {
                 ];
 
                 for (start, end) in test_ranges {
-                    println!(
-                        "\nTrying range [{}-{}]: \"{}\"",
-                        start,
-                        end,
-                        &source[start..end]
-                    );
+                    println!("\nTrying range [{}-{}]: \"{}\"", start, end, &source[start..end]);
                     let provider = EnhancedCodeActionsProvider::new(source.to_string());
                     let actions = provider.get_enhanced_refactoring_actions(&ast, (start, end));
 

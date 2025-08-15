@@ -70,9 +70,7 @@ impl TestableParser for TreeSitterPerlRsWrapper {
         use tree_sitter_perl::PureRustParser;
 
         let parser = PureRustParser::new();
-        let ast = parser
-            .parse(input)
-            .map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
+        let ast = parser.parse(input).map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
         // The Pest parser returns an AstNode, need to convert to S-expression
         Ok(format!("{:?}", ast)) // TODO: Implement proper to_sexp for Pest AST
     }
@@ -90,9 +88,7 @@ impl TestableParser for TreeSitterPerlCWrapper {
         use tree_sitter_perl_c::create_parser;
 
         let mut parser = create_parser();
-        let tree = parser
-            .parse(input, None)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse"))?;
+        let tree = parser.parse(input, None).ok_or_else(|| anyhow::anyhow!("Failed to parse"))?;
 
         let sexp = tree.root_node().to_sexp();
         Ok(sexp)

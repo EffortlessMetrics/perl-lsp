@@ -147,11 +147,7 @@ impl EncodingAwareLexer {
         self.context.encoding_stack.push(EncodingChange {
             encoding: self.context.current_encoding,
             line_number: line,
-            pragma_type: if is_use {
-                PragmaType::UseUtf8
-            } else {
-                PragmaType::NoUtf8
-            },
+            pragma_type: if is_use { PragmaType::UseUtf8 } else { PragmaType::NoUtf8 },
         });
 
         self.context.current_encoding = new_encoding;
@@ -195,9 +191,7 @@ impl EncodingAwareLexer {
         }
 
         let normalized = decoded.into_owned();
-        self.context
-            .normalization_cache
-            .insert(text.to_string(), normalized.clone());
+        self.context.normalization_cache.insert(text.to_string(), normalized.clone());
 
         Ok(normalized)
     }
@@ -246,12 +240,7 @@ impl EncodingAwareLexer {
                     self.context.encoding_stack.len()
                 ),
                 severity: DiagnosticSeverity::Warning,
-                locations: self
-                    .context
-                    .encoding_stack
-                    .iter()
-                    .map(|c| c.line_number)
-                    .collect(),
+                locations: self.context.encoding_stack.iter().map(|c| c.line_number).collect(),
             });
         }
 

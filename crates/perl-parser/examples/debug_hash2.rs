@@ -13,10 +13,7 @@ fn main() {
                 for (i, stmt) in statements.iter().enumerate() {
                     println!("Statement {}: {:?}", i, stmt.kind);
 
-                    if let NodeKind::Block {
-                        statements: block_stmts,
-                    } = &stmt.kind
-                    {
+                    if let NodeKind::Block { statements: block_stmts } = &stmt.kind {
                         for (j, block_stmt) in block_stmts.iter().enumerate() {
                             println!("  Block statement {}: {:?}", j, block_stmt.kind);
                         }

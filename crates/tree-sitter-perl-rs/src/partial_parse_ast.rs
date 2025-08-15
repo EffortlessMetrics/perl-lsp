@@ -14,10 +14,7 @@ pub enum ExtendedAstNode {
     Normal(AstNode),
 
     /// Node with associated warnings but successful parse
-    WithWarning {
-        node: Box<AstNode>,
-        diagnostics: Vec<Diagnostic>,
-    },
+    WithWarning { node: Box<AstNode>, diagnostics: Vec<Diagnostic> },
 
     /// Partially parsed construct with anti-pattern
     PartialParse {
@@ -84,30 +81,14 @@ impl ExtendedAstNode {
                 )
             }
 
-            ExtendedAstNode::PartialParse {
-                pattern,
-                parsed_fragments,
-                ..
-            } => {
-                let fragments = parsed_fragments
-                    .iter()
-                    .map(|f| f.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+            ExtendedAstNode::PartialParse { pattern, parsed_fragments, .. } => {
+                let fragments =
+                    parsed_fragments.iter().map(|f| f.to_sexp()).collect::<Vec<_>>().join(" ");
 
-                format!(
-                    "(partial_parse ({:?}) {})",
-                    pattern_type(pattern),
-                    fragments
-                )
+                format!("(partial_parse ({:?}) {})", pattern_type(pattern), fragments)
             }
 
-            ExtendedAstNode::Unparseable {
-                pattern,
-                raw_text,
-                reason,
-                ..
-            } => {
+            ExtendedAstNode::Unparseable { pattern, raw_text, reason, .. } => {
                 format!(
                     "(unparseable ({:?}) {:?} ; reason: {})",
                     pattern_type(pattern),
@@ -116,16 +97,8 @@ impl ExtendedAstNode {
                 )
             }
 
-            ExtendedAstNode::RuntimeDependentParse {
-                construct_type,
-                static_parts,
-                ..
-            } => {
-                let parts = static_parts
-                    .iter()
-                    .map(|p| p.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+            ExtendedAstNode::RuntimeDependentParse { construct_type, static_parts, .. } => {
+                let parts = static_parts.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
 
                 format!("(runtime_dependent {} {})", construct_type, parts)
             }
@@ -139,36 +112,22 @@ impl ExtendedAstNode {
         match self {
             ExtendedAstNode::Normal(_) => {}
 
-            ExtendedAstNode::WithWarning {
-                diagnostics: diags, ..
-            }
-            | ExtendedAstNode::PartialParse {
-                diagnostics: diags, ..
-            }
-            | ExtendedAstNode::Unparseable {
-                diagnostics: diags, ..
-            }
-            | ExtendedAstNode::RuntimeDependentParse {
-                diagnostics: diags, ..
-            } => {
+            ExtendedAstNode::WithWarning { diagnostics: diags, .. }
+            | ExtendedAstNode::PartialParse { diagnostics: diags, .. }
+            | ExtendedAstNode::Unparseable { diagnostics: diags, .. }
+            | ExtendedAstNode::RuntimeDependentParse { diagnostics: diags, .. } => {
                 diagnostics.extend(diags.clone());
             }
         }
 
         // Recursively collect from children
         match self {
-            ExtendedAstNode::PartialParse {
-                parsed_fragments, ..
-            } => {
+            ExtendedAstNode::PartialParse { parsed_fragments, .. } => {
                 for fragment in parsed_fragments {
                     diagnostics.extend(fragment.collect_diagnostics());
                 }
             }
-            ExtendedAstNode::RuntimeDependentParse {
-                static_parts,
-                dynamic_parts,
-                ..
-            } => {
+            ExtendedAstNode::RuntimeDependentParse { static_parts, dynamic_parts, .. } => {
                 for part in static_parts {
                     diagnostics.extend(part.collect_diagnostics());
                 }
@@ -218,11 +177,7 @@ fn pattern_type(pattern: &AntiPattern) -> &'static str {
 }
 
 fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len])
-    }
+    if s.len() <= max_len { s.to_string() } else { format!("{}...", &s[..max_len]) }
 }
 
 /// Builder for creating ExtendedAstNode with proper diagnostics
@@ -232,9 +187,7 @@ pub struct ExtendedAstBuilder {
 
 impl ExtendedAstBuilder {
     pub fn new() -> Self {
-        Self {
-            diagnostics: Vec::new(),
-        }
+        Self { diagnostics: Vec::new() }
     }
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
@@ -245,10 +198,7 @@ impl ExtendedAstBuilder {
         if self.diagnostics.is_empty() {
             ExtendedAstNode::Normal(node)
         } else {
-            ExtendedAstNode::WithWarning {
-                node: Box::new(node),
-                diagnostics: self.diagnostics,
-            }
+            ExtendedAstNode::WithWarning { node: Box::new(node), diagnostics: self.diagnostics }
         }
     }
 
@@ -300,11 +250,7 @@ mod tests {
         let diagnostic = Diagnostic {
             severity: Severity::Warning,
             pattern: AntiPattern::FormatHeredoc {
-                location: Location {
-                    line: 1,
-                    column: 1,
-                    offset: 0,
-                },
+                location: Location { line: 1, column: 1, offset: 0 },
                 format_name: "REPORT".to_string(),
                 heredoc_delimiter: "END".to_string(),
             },
@@ -330,11 +276,7 @@ mod tests {
         builder.add_diagnostic(Diagnostic {
             severity: Severity::Info,
             pattern: AntiPattern::DynamicHeredocDelimiter {
-                location: Location {
-                    line: 1,
-                    column: 1,
-                    offset: 0,
-                },
+                location: Location { line: 1, column: 1, offset: 0 },
                 expression: "<<$var".to_string(),
             },
             message: "Info".to_string(),

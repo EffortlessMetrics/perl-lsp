@@ -14,11 +14,7 @@ print $output;
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse backtick heredoc: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse backtick heredoc: {:?}", result.err());
     }
 
     #[test]
@@ -33,11 +29,7 @@ print $literal;
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse escaped heredoc: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse escaped heredoc: {:?}", result.err());
     }
 
     #[test]
@@ -51,11 +43,7 @@ print $spaced;
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc with whitespace: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc with whitespace: {:?}", result.err());
     }
 
     #[test]
@@ -70,11 +58,7 @@ print $indented;
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse indented heredoc: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse indented heredoc: {:?}", result.err());
     }
 
     #[test]
@@ -89,11 +73,7 @@ LITERAL
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse multiple heredocs: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse multiple heredocs: {:?}", result.err());
     }
 
     #[test]
@@ -111,11 +91,7 @@ Multiple lines are supported
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse DATA section: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse DATA section: {:?}", result.err());
 
         // Verify DATA section was extracted
         assert!(parser.data_section_start.is_some());
@@ -134,11 +110,7 @@ And this one too
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse END section: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse END section: {:?}", result.err());
     }
 
     #[test]
@@ -195,11 +167,7 @@ DESC
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc in hash: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc in hash: {:?}", result.err());
     }
 
     #[test]
@@ -218,11 +186,7 @@ MSG2
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc in array: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc in array: {:?}", result.err());
     }
 
     #[test]
@@ -241,11 +205,7 @@ sub process_text {
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse heredoc as sub arg: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse heredoc as sub arg: {:?}", result.err());
     }
 
     #[test]
@@ -270,11 +230,7 @@ COMMAND
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse mixed quote heredocs: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse mixed quote heredocs: {:?}", result.err());
     }
 
     #[test]
@@ -295,11 +251,7 @@ __END__
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse special terminators: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse special terminators: {:?}", result.err());
     }
 
     #[test]
@@ -369,11 +321,7 @@ More data here
 
         let mut parser = EnhancedFullParser::new();
         let result = parser.parse(input);
-        assert!(
-            result.is_ok(),
-            "Failed to parse complex mixed content: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed to parse complex mixed content: {:?}", result.err());
     }
 
     #[test]

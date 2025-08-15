@@ -12,14 +12,7 @@ pub fn run(source: PathBuf, sexp: bool, ast: bool, bench: bool) -> Result<()> {
 
     // Build the command to run the compare_parsers binary with pure-rust feature
     let mut cmd = Command::new("cargo");
-    cmd.args(&[
-        "run",
-        "--features",
-        "pure-rust test-utils",
-        "--bin",
-        "compare_parsers",
-        "--",
-    ]);
+    cmd.args(&["run", "--features", "pure-rust test-utils", "--bin", "compare_parsers", "--"]);
 
     // Add the source file
     cmd.arg(&source);
@@ -32,9 +25,7 @@ pub fn run(source: PathBuf, sexp: bool, ast: bool, bench: bool) -> Result<()> {
     }
 
     // Run the command
-    let output = cmd
-        .output()
-        .context("Failed to run compare_parsers binary")?;
+    let output = cmd.output().context("Failed to run compare_parsers binary")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

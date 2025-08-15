@@ -217,12 +217,7 @@ impl LspServer {
 
         let notification_str = serde_json::to_string(&notification)?;
         let mut output = self.output.lock().unwrap();
-        write!(
-            output,
-            "Content-Length: {}\r\n\r\n{}",
-            notification_str.len(),
-            notification_str
-        )?;
+        write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
         output.flush()
     }
 
@@ -267,11 +262,7 @@ impl LspServer {
             content_length
         );
 
-        write!(
-            stdout,
-            "Content-Length: {}\r\n\r\n{}",
-            content_length, content
-        )?;
+        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
         stdout.flush()?;
 
         Ok(())
@@ -286,11 +277,7 @@ impl LspServer {
                 if let Ok(mut output) = self.output.lock() {
                     let content = serde_json::to_string(&response)?;
                     let content_length = content.len();
-                    write!(
-                        output,
-                        "Content-Length: {}\r\n\r\n{}",
-                        content_length, content
-                    )?;
+                    write!(output, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
                     output.flush()?;
                 }
             }
@@ -498,10 +485,7 @@ impl LspServer {
                 None // Notification, no response
             }
             Err(error) => {
-                eprintln!(
-                    "Sending error response for request {}: {:?}",
-                    request.method, error
-                );
+                eprintln!("Sending error response for request {}: {:?}", request.method, error);
                 Some(JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
                     id,
@@ -566,10 +550,7 @@ impl LspServer {
             .map(|s| s.success())
             .unwrap_or(false);
 
-        eprintln!(
-            "Tool availability: perltidy={}, perlcritic={}",
-            has_perltidy, has_perlcritic
-        );
+        eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
 
         // Check if incremental parsing is enabled
         let sync_kind =
@@ -680,8 +661,7 @@ impl LspServer {
                 match parser.parse() {
                     Ok(ast) => {
                         let arc_ast = Arc::new(ast);
-                        self.ast_cache
-                            .put(uri.to_string(), text, Arc::clone(&arc_ast));
+                        self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), vec![])
                     }
                     Err(e) => (None, vec![e]),
@@ -768,24 +748,18 @@ impl LspServer {
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock().unwrap();
-                let mut doc_state = documents
-                    .get(uri)
-                    .cloned()
-                    .unwrap_or_else(|| DocumentState {
-                        content: String::new(),
-                        _version: version,
-                        ast: None,
-                        parse_errors: vec![],
-                        parent_map: ParentMap::default(),
-                        line_starts: LineStartsCache::new(""),
-                        generation: Arc::new(AtomicU32::new(0)),
-                    });
+                let mut doc_state = documents.get(uri).cloned().unwrap_or_else(|| DocumentState {
+                    content: String::new(),
+                    _version: version,
+                    ast: None,
+                    parse_errors: vec![],
+                    parent_map: ParentMap::default(),
+                    line_starts: LineStartsCache::new(""),
+                    generation: Arc::new(AtomicU32::new(0)),
+                });
 
                 // Increment generation counter for this change
-                let next_gen = doc_state
-                    .generation
-                    .fetch_add(1, Ordering::SeqCst)
-                    .wrapping_add(1);
+                let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
@@ -793,16 +767,11 @@ impl LspServer {
                 use lsp_types::TextDocumentContentChangeEvent;
                 use ropey::Rope;
 
-                let mut doc = Doc {
-                    rope: Rope::from_str(&doc_state.content),
-                    version,
-                };
+                let mut doc = Doc { rope: Rope::from_str(&doc_state.content), version };
 
                 // Convert JSON changes to proper LSP types
-                let lsp_changes: Vec<TextDocumentContentChangeEvent> = changes
-                    .iter()
-                    .filter_map(|c| serde_json::from_value(c.clone()).ok())
-                    .collect();
+                let lsp_changes: Vec<TextDocumentContentChangeEvent> =
+                    changes.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect();
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
@@ -820,8 +789,7 @@ impl LspServer {
                     match parser.parse() {
                         Ok(ast) => {
                             let arc_ast = Arc::new(ast);
-                            self.ast_cache
-                                .put(uri.to_string(), &text, Arc::clone(&arc_ast));
+                            self.ast_cache.put(uri.to_string(), &text, Arc::clone(&arc_ast));
                             (Some((*arc_ast).clone()), vec![])
                         }
                         Err(e) => (None, vec![e]),
@@ -1033,10 +1001,8 @@ impl LspServer {
     fn handle_did_save(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let _version = params["textDocument"]
-                .get("version")
-                .and_then(|v| v.as_i64())
-                .map(|v| v as i32);
+            let _version =
+                params["textDocument"].get("version").and_then(|v| v.as_i64()).map(|v| v as i32);
 
             eprintln!("Document saved: {}", uri);
 
@@ -1630,11 +1596,8 @@ impl LspServer {
         let full_name: String = chars[start..end].iter().collect();
 
         // Extract just the function name (strip package prefix if present)
-        let func_name = if let Some(pos) = full_name.rfind("::") {
-            &full_name[pos + 2..]
-        } else {
-            &full_name
-        };
+        let func_name =
+            if let Some(pos) = full_name.rfind("::") { &full_name[pos + 2..] } else { &full_name };
 
         // Count commas at depth 0 to determine active parameter
         let mut comma_count = 0;
@@ -1659,12 +1622,7 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine {
-            params: sub_params,
-            body,
-            ..
-        } = &sub_node.kind
-        {
+        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
             if !sub_params.is_empty() {
                 // Extract parameter names from the params node
                 for param in sub_params {
@@ -1734,11 +1692,8 @@ impl LspServer {
         if let NodeKind::Block { statements } = &body.kind {
             if let Some(first_stmt) = statements.first() {
                 // Look for my (...) = @_ pattern
-                if let NodeKind::VariableListDeclaration {
-                    variables,
-                    initializer,
-                    ..
-                } = &first_stmt.kind
+                if let NodeKind::VariableListDeclaration { variables, initializer, .. } =
+                    &first_stmt.kind
                 {
                     // Check if initializer is @_
                     if let Some(init) = initializer {
@@ -1746,10 +1701,8 @@ impl LspServer {
                             if sigil == "@" && name == "_" {
                                 // Extract params from variables
                                 for var in variables {
-                                    if let NodeKind::Variable {
-                                        sigil: var_sigil,
-                                        name: var_name,
-                                    } = &var.kind
+                                    if let NodeKind::Variable { sigil: var_sigil, name: var_name } =
+                                        &var.kind
                                     {
                                         params.push(format!("{}{}", var_sigil, var_name));
                                     }
@@ -1792,10 +1745,7 @@ impl LspServer {
         let signature = match function_name {
             "print" => Some(("print LIST", vec!["LIST"])),
             "printf" => Some(("printf FORMAT, LIST", vec!["FORMAT", "LIST"])),
-            "open" => Some((
-                "open FILEHANDLE, MODE, EXPR",
-                vec!["FILEHANDLE", "MODE", "EXPR"],
-            )),
+            "open" => Some(("open FILEHANDLE, MODE, EXPR", vec!["FILEHANDLE", "MODE", "EXPR"])),
             "close" => Some(("close FILEHANDLE", vec!["FILEHANDLE"])),
             "read" => Some((
                 "read FILEHANDLE, SCALAR, LENGTH, OFFSET",
@@ -1809,20 +1759,11 @@ impl LspServer {
                 vec!["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"],
             )),
             "length" => Some(("length EXPR", vec!["EXPR"])),
-            "index" => Some((
-                "index STR, SUBSTR, POSITION",
-                vec!["STR", "SUBSTR", "POSITION"],
-            )),
-            "rindex" => Some((
-                "rindex STR, SUBSTR, POSITION",
-                vec!["STR", "SUBSTR", "POSITION"],
-            )),
+            "index" => Some(("index STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
+            "rindex" => Some(("rindex STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
             "sprintf" => Some(("sprintf FORMAT, LIST", vec!["FORMAT", "LIST"])),
             "join" => Some(("join EXPR, LIST", vec!["EXPR", "LIST"])),
-            "split" => Some((
-                "split /PATTERN/, EXPR, LIMIT",
-                vec!["/PATTERN/", "EXPR", "LIMIT"],
-            )),
+            "split" => Some(("split /PATTERN/, EXPR, LIMIT", vec!["/PATTERN/", "EXPR", "LIMIT"])),
             "push" => Some(("push ARRAY, LIST", vec!["ARRAY", "LIST"])),
             "pop" => Some(("pop ARRAY", vec!["ARRAY"])),
             "shift" => Some(("shift ARRAY", vec!["ARRAY"])),
@@ -1915,10 +1856,9 @@ impl LspServer {
             "setpgrp" => Some(("setpgrp PID, PGRP", vec!["PID", "PGRP"])),
             "getppid" => Some(("getppid", vec![])),
             "getpriority" => Some(("getpriority WHICH, WHO", vec!["WHICH", "WHO"])),
-            "setpriority" => Some((
-                "setpriority WHICH, WHO, PRIORITY",
-                vec!["WHICH", "WHO", "PRIORITY"],
-            )),
+            "setpriority" => {
+                Some(("setpriority WHICH, WHO, PRIORITY", vec!["WHICH", "WHO", "PRIORITY"]))
+            }
 
             // Time functions
             "time" => Some(("time", vec![])),
@@ -1940,15 +1880,11 @@ impl LspServer {
             )),
             "bind" => Some(("bind SOCKET, NAME", vec!["SOCKET", "NAME"])),
             "listen" => Some(("listen SOCKET, QUEUESIZE", vec!["SOCKET", "QUEUESIZE"])),
-            "accept" => Some((
-                "accept NEWSOCKET, GENERICSOCKET",
-                vec!["NEWSOCKET", "GENERICSOCKET"],
-            )),
+            "accept" => {
+                Some(("accept NEWSOCKET, GENERICSOCKET", vec!["NEWSOCKET", "GENERICSOCKET"]))
+            }
             "connect" => Some(("connect SOCKET, NAME", vec!["SOCKET", "NAME"])),
-            "send" => Some((
-                "send SOCKET, MSG, FLAGS, TO",
-                vec!["SOCKET", "MSG", "FLAGS", "TO"],
-            )),
+            "send" => Some(("send SOCKET, MSG, FLAGS, TO", vec!["SOCKET", "MSG", "FLAGS", "TO"])),
             "recv" => Some((
                 "recv SOCKET, SCALAR, LENGTH, FLAGS",
                 vec!["SOCKET", "SCALAR", "LENGTH", "FLAGS"],
@@ -1969,10 +1905,7 @@ impl LspServer {
             "redo" => Some(("redo LABEL", vec!["LABEL"])),
 
             // Misc functions
-            "tie" => Some((
-                "tie VARIABLE, CLASSNAME, LIST",
-                vec!["VARIABLE", "CLASSNAME", "LIST"],
-            )),
+            "tie" => Some(("tie VARIABLE, CLASSNAME, LIST", vec!["VARIABLE", "CLASSNAME", "LIST"])),
             "untie" => Some(("untie VARIABLE", vec!["VARIABLE"])),
             "tied" => Some(("tied VARIABLE", vec!["VARIABLE"])),
             "dbmopen" => Some(("dbmopen HASH, DBNAME, MODE", vec!["HASH", "DBNAME", "MODE"])),
@@ -2145,10 +2078,7 @@ impl LspServer {
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Get the symbol at the current position
                         let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                        let source_loc = crate::SourceLocation {
-                            start: offset,
-                            end: offset + 1,
-                        };
+                        let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
                         if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
                             // Look for qualified name (e.g., Module::function)
                             let symbol_name = if symbol_info.name.contains("::") {
@@ -2226,10 +2156,7 @@ impl LspServer {
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Get the symbol at the current position
                         let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                        let source_loc = crate::SourceLocation {
-                            start: offset,
-                            end: offset + 1,
-                        };
+                        let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
                         if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
                             // Look for qualified name (e.g., Module::function)
                             let symbol_name = if symbol_info.name.contains("::") {
@@ -2433,24 +2360,12 @@ impl LspServer {
                             kind: crate::type_hierarchy::SymbolKind::Class,
                             uri: uri.to_string(),
                             range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
                             },
                             selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
                             },
                             detail: None,
                             data: None,
@@ -2526,24 +2441,12 @@ impl LspServer {
                             kind: crate::type_hierarchy::SymbolKind::Class,
                             uri: uri.to_string(),
                             range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
                             },
                             selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: 0,
-                                    character: 0,
-                                },
+                                start: crate::type_hierarchy::Position { line: 0, character: 0 },
+                                end: crate::type_hierarchy::Position { line: 0, character: 0 },
                             },
                             detail: None,
                             data: None,
@@ -2615,10 +2518,7 @@ impl LspServer {
                         && (token.starts_with('$')
                             || token.starts_with('@')
                             || token.starts_with('%')
-                            || token
-                                .chars()
-                                .next()
-                                .is_some_and(|c| c.is_alphabetic() || c == '_'))
+                            || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_'))
                     {
                         // Find the token bounds
                         let (start_offset, end_offset) =
@@ -2909,10 +2809,7 @@ impl LspServer {
 
     /// Helper function to convert offset to line number
     fn offset_to_line(&self, content: &str, offset: usize) -> usize {
-        content[..offset.min(content.len())]
-            .chars()
-            .filter(|&c| c == '\n')
-            .count()
+        content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
     }
 
     /// Fallback folding extraction using text-based analysis
@@ -3266,10 +3163,7 @@ impl LspServer {
             .collect::<String>();
 
         // Check what sigil we're after (if any)
-        let sigil = text_before
-            .chars()
-            .rev()
-            .find(|&c| !(c.is_alphanumeric() || c == '_'));
+        let sigil = text_before.chars().rev().find(|&c| !(c.is_alphanumeric() || c == '_'));
 
         // Basic keywords that match the prefix
         let keywords = [
@@ -3528,11 +3422,8 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query = params
-            .as_ref()
-            .and_then(|p| p.get("query"))
-            .and_then(|q| q.as_str())
-            .unwrap_or("");
+        let query =
+            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
 
         eprintln!("Workspace symbol search: '{}'", query);
 
@@ -3653,11 +3544,7 @@ impl LspServer {
             }
         }
 
-        Err(JsonRpcError {
-            code: -32602,
-            message: "Invalid parameters".to_string(),
-            data: None,
-        })
+        Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
     }
 
     /// Count references to a symbol in an AST
@@ -3688,11 +3575,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
+            NodeKind::MethodCall { object, method, args } => {
                 if symbol_kind == "subroutine" && method == symbol_name {
                     count += 1;
                 }
@@ -3720,12 +3603,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_branch, symbol_name, symbol_kind);
                 for (cond, branch) in elsif_branches {
@@ -3737,17 +3615,8 @@ impl LspServer {
                 }
             }
 
-            NodeKind::While {
-                condition,
-                body,
-                continue_block,
-            }
-            | NodeKind::For {
-                condition: Some(condition),
-                body,
-                continue_block,
-                ..
-            } => {
+            NodeKind::While { condition, body, continue_block }
+            | NodeKind::For { condition: Some(condition), body, continue_block, .. } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
                 if let Some(cont) = continue_block {
@@ -3755,11 +3624,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Foreach {
-                variable: _,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable: _, list, body } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
@@ -3781,11 +3646,7 @@ impl LspServer {
                 count += self.count_references(operand, symbol_name, symbol_kind);
             }
 
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_expr, symbol_name, symbol_kind);
                 count += self.count_references(else_expr, symbol_name, symbol_kind);
@@ -3825,11 +3686,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Try {
-                body,
-                catch_blocks,
-                finally_block,
-            } => {
+            NodeKind::Try { body, catch_blocks, finally_block } => {
                 count += self.count_references(body, symbol_name, symbol_kind);
                 for (_var, block) in catch_blocks {
                     count += self.count_references(block, symbol_name, symbol_kind);
@@ -3934,10 +3791,7 @@ impl LspServer {
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
 
-            eprintln!(
-                "Preparing call hierarchy at: {} ({}:{})",
-                uri, line, character
-            );
+            eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -3960,10 +3814,7 @@ impl LspServer {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
 
-            eprintln!(
-                "Getting incoming calls for: {}",
-                item["name"].as_str().unwrap_or("")
-            );
+            eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -3989,10 +3840,7 @@ impl LspServer {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
 
-            eprintln!(
-                "Getting outgoing calls for: {}",
-                item["name"].as_str().unwrap_or("")
-            );
+            eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
@@ -4040,31 +3888,19 @@ impl LspServer {
 
         let selection_range = Range {
             start: Position {
-                line: json["selectionRange"]["start"]["line"]
-                    .as_u64()
-                    .unwrap_or(0) as u32,
-                character: json["selectionRange"]["start"]["character"]
-                    .as_u64()
-                    .unwrap_or(0) as u32,
+                line: json["selectionRange"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                character: json["selectionRange"]["start"]["character"].as_u64().unwrap_or(0)
+                    as u32,
             },
             end: Position {
                 line: json["selectionRange"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                character: json["selectionRange"]["end"]["character"]
-                    .as_u64()
-                    .unwrap_or(0) as u32,
+                character: json["selectionRange"]["end"]["character"].as_u64().unwrap_or(0) as u32,
             },
         };
 
         let detail = json["detail"].as_str().map(|s| s.to_string());
 
-        Ok(CallHierarchyItem {
-            name,
-            kind,
-            uri,
-            range,
-            selection_range,
-            detail,
-        })
+        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail })
     }
 
     /// Handle inlay hint request
@@ -4215,11 +4051,7 @@ impl LspServer {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
-                            return Err(JsonRpcError {
-                                code: -32603,
-                                message: e,
-                                data: None,
-                            });
+                            return Err(JsonRpcError { code: -32603, message: e, data: None });
                         }
                     }
                 }
@@ -4233,9 +4065,7 @@ impl LspServer {
             }
         }
 
-        Ok(Some(
-            json!({"status": "error", "message": "Invalid parameters"}),
-        ))
+        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
     }
 
     /// Run a specific test
@@ -4245,9 +4075,7 @@ impl LspServer {
         // Parse test ID to get URI and test name
         let parts: Vec<&str> = test_id.split("::").collect();
         if parts.len() < 2 {
-            return Ok(Some(
-                json!({"status": "error", "message": "Invalid test ID"}),
-            ));
+            return Ok(Some(json!({"status": "error", "message": "Invalid test ID"})));
         }
 
         let uri = parts[0];
@@ -4277,9 +4105,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(
-            json!({"status": "error", "message": "Document not found"}),
-        ))
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 
     /// Run all tests in a file
@@ -4310,9 +4136,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(
-            json!({"status": "error", "message": "Document not found"}),
-        ))
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 
     /// Handle workspace/configuration request
@@ -4680,9 +4504,7 @@ impl LspServer {
             return Ok(Some(json!({"applied": true})));
         }
 
-        Ok(Some(
-            json!({"applied": false, "failureReason": "Invalid parameters"}),
-        ))
+        Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
     }
 
     // Test-only public methods (enabled for unit tests or integration tests with expose_lsp_test_api)
@@ -4833,9 +4655,7 @@ impl LspServer {
             register_options: Some(serde_json::to_value(opts).unwrap_or(Value::Null)),
         };
 
-        let params = RegistrationParams {
-            registrations: vec![reg],
-        };
+        let params = RegistrationParams { registrations: vec![reg] };
 
         // Send the registration request
         let request = json!({
@@ -4857,9 +4677,8 @@ impl LspServer {
 /// Convert a file path to a Perl module name
 fn path_to_module_name(uri: &str) -> String {
     #[cfg(feature = "workspace")]
-    let path = uri_to_fs_path(uri)
-        .and_then(|p| p.to_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| {
+    let path =
+        uri_to_fs_path(uri).and_then(|p| p.to_str().map(|s| s.to_string())).unwrap_or_else(|| {
             // Fallback to trim_start_matches for backward compatibility
             uri.trim_start_matches("file://").to_string()
         });

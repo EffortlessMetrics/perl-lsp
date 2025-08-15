@@ -6,10 +6,7 @@ fn main() {
         ("Simple pipe delimiter", r#"my $str = qq|Hello|;"#),
         ("Pipe with text", r#"my $str = qq|Hello World|;"#),
         ("Pipe with simple var", r#"my $str = qq|Hello $name|;"#),
-        (
-            "Pipe with hash element",
-            r#"my $str = qq|Path: $ENV{PATH}|;"#,
-        ),
+        ("Pipe with hash element", r#"my $str = qq|Path: $ENV{PATH}|;"#),
     ];
 
     for (name, code) in test_cases {

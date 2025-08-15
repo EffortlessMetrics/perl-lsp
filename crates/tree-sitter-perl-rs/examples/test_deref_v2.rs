@@ -12,10 +12,7 @@ fn main() {
         ("Hash deref", r#"my %h = %{$hash_ref};"#),
         ("Code deref call", r#"$code_ref->();"#),
         ("Code deref with &", r#"&{$code_ref}();"#),
-        (
-            "Complex deref chain",
-            r#"my $val = $hash->{key}->[0]->{nested};"#,
-        ),
+        ("Complex deref chain", r#"my $val = $hash->{key}->[0]->{nested};"#),
     ];
 
     for (name, code) in test_cases {
@@ -60,9 +57,7 @@ fn print_ast(node: &AstNode, depth: usize) {
             println!("{}Statement", indent);
             print_ast(content, depth + 1);
         }
-        AstNode::VariableDeclaration {
-            scope, initializer, ..
-        } => {
+        AstNode::VariableDeclaration { scope, initializer, .. } => {
             println!("{}VarDecl: {}", indent, scope);
             if let Some(init) = initializer {
                 print_ast(init, depth + 1);

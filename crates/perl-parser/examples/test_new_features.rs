@@ -72,8 +72,5 @@ LITERAL
     println!("Passed: {}", passed);
     println!("Failed: {}", failed);
     println!("Total:  {}", passed + failed);
-    println!(
-        "Success rate: {:.1}%",
-        (passed as f64 / (passed + failed) as f64) * 100.0
-    );
+    println!("Success rate: {:.1}%", (passed as f64 / (passed + failed) as f64) * 100.0);
 }

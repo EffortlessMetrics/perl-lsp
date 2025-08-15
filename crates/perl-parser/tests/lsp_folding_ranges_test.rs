@@ -85,20 +85,13 @@ sub nested {
     let ranges = result.as_array().unwrap();
 
     // Should have ranges for both subroutines, the if block, and the while block
-    assert!(
-        ranges.len() >= 4,
-        "Expected at least 4 folding ranges, got {}",
-        ranges.len()
-    );
+    assert!(ranges.len() >= 4, "Expected at least 4 folding ranges, got {}", ranges.len());
 
     // Check that subroutine ranges exist
     let has_sub_range = ranges
         .iter()
         .any(|r| r["startLine"].as_u64() == Some(1) && r["endLine"].as_u64().is_some());
-    assert!(
-        has_sub_range,
-        "Should have folding range for first subroutine"
-    );
+    assert!(has_sub_range, "Should have folding range for first subroutine");
 }
 
 #[test]
@@ -147,10 +140,7 @@ foreach my $item (@items) {
     let ranges = result.as_array().unwrap();
 
     // Should have ranges for if, while, for, and foreach blocks
-    assert!(
-        ranges.len() >= 4,
-        "Expected at least 4 folding ranges for control structures"
-    );
+    assert!(ranges.len() >= 4, "Expected at least 4 folding ranges for control structures");
 }
 
 #[test]
@@ -198,10 +188,7 @@ package AnotherModule {
     let ranges = result.as_array().unwrap();
 
     // Should have ranges for both packages and their subroutines
-    assert!(
-        ranges.len() >= 2,
-        "Expected at least 2 folding ranges for packages"
-    );
+    assert!(ranges.len() >= 2, "Expected at least 2 folding ranges for packages");
 }
 
 #[test]
@@ -241,10 +228,7 @@ try {
     let ranges = result.as_array().unwrap();
 
     // Should have ranges for try, catch, and finally blocks
-    assert!(
-        !ranges.is_empty(),
-        "Expected folding ranges for try-catch-finally"
-    );
+    assert!(!ranges.is_empty(), "Expected folding ranges for try-catch-finally");
 }
 
 #[test]
@@ -289,10 +273,7 @@ my %hash = (
     let ranges = result.as_array().unwrap();
 
     // Should have ranges for multi-line array and hash literals
-    assert!(
-        ranges.len() >= 2,
-        "Expected folding ranges for array and hash literals"
-    );
+    assert!(ranges.len() >= 2, "Expected folding ranges for array and hash literals");
 }
 
 #[test]
@@ -333,13 +314,9 @@ sub main {
     let ranges = result.as_array().unwrap();
 
     // Check for import group folding
-    let has_import_range = ranges
-        .iter()
-        .any(|r| r.get("kind").and_then(|k| k.as_str()) == Some("imports"));
-    assert!(
-        has_import_range,
-        "Should have folding range for import group"
-    );
+    let has_import_range =
+        ranges.iter().any(|r| r.get("kind").and_then(|k| k.as_str()) == Some("imports"));
+    assert!(has_import_range, "Should have folding range for import group");
 }
 
 #[test]
@@ -367,9 +344,5 @@ fn test_folding_ranges_empty_document() {
     let ranges = result.as_array().unwrap();
 
     // Empty document should have no folding ranges
-    assert_eq!(
-        ranges.len(),
-        0,
-        "Empty document should have no folding ranges"
-    );
+    assert_eq!(ranges.len(), 0, "Empty document should have no folding ranges");
 }

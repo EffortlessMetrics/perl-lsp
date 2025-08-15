@@ -20,11 +20,7 @@ enum BuildState<'a> {
         original_str: &'a str,
     },
     /// Build node from processed children
-    BuildFromChildren {
-        rule: Rule,
-        children: Vec<AstNode>,
-        original_str: &'a str,
-    },
+    BuildFromChildren { rule: Rule, children: Vec<AstNode>, original_str: &'a str },
 }
 
 /// Result of processing a state
@@ -148,9 +144,9 @@ impl PureRustPerlParser {
                         )))));
                     }
                     Rule::identifier => {
-                        return Ok(ProcessResult::Complete(Some(AstNode::Identifier(
-                            Arc::from(pair_str),
-                        ))));
+                        return Ok(ProcessResult::Complete(Some(AstNode::Identifier(Arc::from(
+                            pair_str,
+                        )))));
                     }
                     Rule::int_number => {
                         return Ok(ProcessResult::Complete(Some(AstNode::Number(Arc::from(
@@ -170,9 +166,7 @@ impl PureRustPerlParser {
 
                 if children.is_empty() {
                     // No children, return based on rule
-                    Ok(ProcessResult::Complete(
-                        self.build_leaf_node(rule, pair_str)?,
-                    ))
+                    Ok(ProcessResult::Complete(self.build_leaf_node(rule, pair_str)?))
                 } else {
                     // Need to process children
                     let mut states = vec![BuildState::WaitingForChildren {
@@ -211,11 +205,7 @@ impl PureRustPerlParser {
                 panic!("WaitingForChildren should be handled in main loop")
             }
 
-            BuildState::BuildFromChildren {
-                rule,
-                children,
-                original_str,
-            } => {
+            BuildState::BuildFromChildren { rule, children, original_str } => {
                 // Build node from processed children
                 Ok(ProcessResult::Complete(self.build_node_from_children(
                     rule,
@@ -236,10 +226,7 @@ impl PureRustPerlParser {
             Rule::EOI => Ok(None),
             Rule::WHITESPACE => Ok(None),
             Rule::comment => Ok(None),
-            _ => Ok(Some(AstNode::Identifier(Arc::from(format!(
-                "unhandled_leaf_{:?}",
-                rule
-            ))))),
+            _ => Ok(Some(AstNode::Identifier(Arc::from(format!("unhandled_leaf_{:?}", rule))))),
         }
     }
 
@@ -407,10 +394,7 @@ mod tests {
         let pair = pairs.into_iter().next().unwrap();
 
         let result = parser.build_node_iterative(pair);
-        assert!(
-            result.is_ok(),
-            "Deep nesting should work with iterative approach"
-        );
+        assert!(result.is_ok(), "Deep nesting should work with iterative approach");
 
         // Now test with even deeper nesting
         let deep_depth = 500;
@@ -423,9 +407,6 @@ mod tests {
         let deep_pair = deep_pairs.into_iter().next().unwrap();
 
         let deep_result = parser.build_node_iterative(deep_pair);
-        assert!(
-            deep_result.is_ok(),
-            "Very deep nesting should work with iterative approach"
-        );
+        assert!(deep_result.is_ok(), "Very deep nesting should work with iterative approach");
     }
 }

@@ -68,10 +68,8 @@ fn test_many_open_documents() {
 
     // Open 1000 documents
     for i in 0..1000 {
-        let content = format!(
-            "package Module{};\nmy $var = {};\nsub func {{ return $var; }}\n1;",
-            i, i
-        );
+        let content =
+            format!("package Module{};\nmy $var = {};\nsub func {{ return $var; }}\n1;", i, i);
 
         send_notification(
             &mut server,

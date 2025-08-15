@@ -18,11 +18,7 @@ impl<'source> SimpleParser<'source> {
         let mut lexer = ContextLexer::new(input);
         let current = lexer.next();
 
-        Self {
-            lexer,
-            current,
-            source: input,
-        }
+        Self { lexer, current, source: input }
     }
 
     /// Get current token or EOF
@@ -138,11 +134,7 @@ impl<'source> SimpleParser<'source> {
             start_position: 0,
             end_position: 0,
             value: None,
-            children: if let Some(val) = value {
-                vec![var, *val]
-            } else {
-                vec![var]
-            },
+            children: if let Some(val) = value { vec![var, *val] } else { vec![var] },
         })
     }
 
@@ -728,27 +720,18 @@ impl<'source> SimpleParser<'source> {
             self.next();
 
             // Init
-            let init = if !self.check(&Token::Semicolon) {
-                Some(self.parse_expression()?)
-            } else {
-                None
-            };
+            let init =
+                if !self.check(&Token::Semicolon) { Some(self.parse_expression()?) } else { None };
             self.consume(Token::Semicolon)?;
 
             // Condition
-            let cond = if !self.check(&Token::Semicolon) {
-                Some(self.parse_expression()?)
-            } else {
-                None
-            };
+            let cond =
+                if !self.check(&Token::Semicolon) { Some(self.parse_expression()?) } else { None };
             self.consume(Token::Semicolon)?;
 
             // Update
-            let update = if !self.check(&Token::RParen) {
-                Some(self.parse_expression()?)
-            } else {
-                None
-            };
+            let update =
+                if !self.check(&Token::RParen) { Some(self.parse_expression()?) } else { None };
             self.consume(Token::RParen)?;
 
             let body = self.parse_block()?;

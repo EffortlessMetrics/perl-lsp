@@ -18,14 +18,8 @@ fn main() {
         ("@hash{@keys}", "hash slice"),
         ("$ref->@[0..5]", "postfix array slice"),
         // Assignment in conditionals
-        (
-            "while (my $line = <>) { }",
-            "declaration in while condition",
-        ),
-        (
-            "if (my $result = compute()) { }",
-            "declaration in if condition",
-        ),
+        ("while (my $line = <>) { }", "declaration in while condition"),
+        ("if (my $result = compute()) { }", "declaration in if condition"),
         // Named regex captures
         ("m{(?<name>\\w+)}g", "named capture group"),
         ("$+{name}", "access named capture"),

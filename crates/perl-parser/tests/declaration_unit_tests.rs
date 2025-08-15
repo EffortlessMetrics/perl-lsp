@@ -43,9 +43,7 @@ my $x = 1;
     assert_eq!(links.len(), 1);
 
     // Should point to the inner declaration, not the outer one
-    let inner_decl_pos = content
-        .rfind("my $x = 2")
-        .expect("Could not find inner decl");
+    let inner_decl_pos = content.rfind("my $x = 2").expect("Could not find inner decl");
     assert!(
         links[0].target_selection_range.0 >= inner_decl_pos,
         "Should resolve to inner declaration"
@@ -105,10 +103,7 @@ Foo::bar();
 
     // Should point to sub bar in package Foo
     let sub_pos = content.find("sub bar").expect("Could not find sub");
-    assert!(
-        links[0].target_selection_range.0 >= sub_pos,
-        "Should resolve to sub bar"
-    );
+    assert!(links[0].target_selection_range.0 >= sub_pos, "Should resolve to sub bar");
 }
 
 #[test]
@@ -173,10 +168,7 @@ fn test_unicode_and_crlf() {
 
     // Should point to the declaration
     let pi_decl = content.find("my $π").expect("Could not find π decl");
-    assert!(
-        links[0].target_selection_range.0 >= pi_decl,
-        "Should find π declaration"
-    );
+    assert!(links[0].target_selection_range.0 >= pi_decl, "Should find π declaration");
 
     // Find usage of $🐍 (snake emoji - surrogate pair)
     let snake_usage = content.rfind("$🐍;").expect("Could not find snake usage");
@@ -211,9 +203,7 @@ métód_π();
     assert!(links.is_some(), "Should find _priv declaration");
 
     // Test métód_π (unicode method name)
-    let unicode_call = content
-        .rfind("métód_π()")
-        .expect("Could not find unicode call");
+    let unicode_call = content.rfind("métód_π()").expect("Could not find unicode call");
     let links = provider.find_declaration(unicode_call, 0);
     assert!(links.is_some(), "Should find unicode method declaration");
 }

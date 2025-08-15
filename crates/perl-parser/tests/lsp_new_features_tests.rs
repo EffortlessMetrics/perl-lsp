@@ -44,22 +44,14 @@ require Module::Load;
     );
 
     let links = response["result"].as_array().unwrap();
-    assert!(
-        links.len() >= 3,
-        "Should have links for Data::Dumper, File::Path, and Module::Load"
-    );
+    assert!(links.len() >= 3, "Should have links for Data::Dumper, File::Path, and Module::Load");
 
     // Check Data::Dumper link
     let dumper_link = links
         .iter()
         .find(|l| l["target"].as_str().unwrap_or("").contains("Data::Dumper"))
         .expect("Should have Data::Dumper link");
-    assert!(
-        dumper_link["target"]
-            .as_str()
-            .unwrap()
-            .contains("metacpan.org")
-    );
+    assert!(dumper_link["target"].as_str().unwrap().contains("metacpan.org"));
 }
 
 /// Test document links for local files
@@ -101,18 +93,12 @@ do "config/settings.pl";
     );
 
     let links = response["result"].as_array().unwrap();
-    assert!(
-        links.len() >= 2,
-        "Should have links for lib/Utils.pm and config/settings.pl"
-    );
+    assert!(links.len() >= 2, "Should have links for lib/Utils.pm and config/settings.pl");
 
     // Check that links are file:// URIs
     for link in links {
         let target = link["target"].as_str().unwrap_or("");
-        assert!(
-            target.starts_with("file://"),
-            "Local file links should use file:// protocol"
-        );
+        assert!(target.starts_with("file://"), "Local file links should use file:// protocol");
     }
 }
 
@@ -175,10 +161,7 @@ sub process_data {
         current = parent;
         depth += 1;
     }
-    assert!(
-        depth >= 2,
-        "Should have at least 2 levels of selection hierarchy"
-    );
+    assert!(depth >= 2, "Should have at least 2 levels of selection hierarchy");
 }
 
 /// Test on-type formatting for braces
@@ -316,10 +299,7 @@ fn test_file_watcher_registration() {
         }),
     );
 
-    assert!(
-        response.get("result").is_some(),
-        "Initialize should succeed"
-    );
+    assert!(response.get("result").is_some(), "Initialize should succeed");
 
     // Send initialized notification - this should trigger file watcher registration
     send_notification(

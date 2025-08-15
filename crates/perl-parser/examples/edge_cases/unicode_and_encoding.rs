@@ -32,10 +32,7 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         (r#"q{Hello 世界}"#, "unicode in q{}"),
         (r#"qq{Hello 世界}"#, "unicode in qq{}"),
         (r#""café \x{E9}""#, "unicode escape in string"),
-        (
-            r#""\N{LATIN SMALL LETTER E WITH ACUTE}""#,
-            "unicode name in string",
-        ),
+        (r#""\N{LATIN SMALL LETTER E WITH ACUTE}""#, "unicode name in string"),
         (r#""\N{U+00E9}""#, "unicode code point in string"),
         // Unicode in regex
         ("/café/", "unicode in regex"),
@@ -70,10 +67,7 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         // Unicode filehandles
         ("open my $fh, '<:utf8', 'file.txt'", "utf8 input layer"),
         ("open my $fh, '>:utf8', 'file.txt'", "utf8 output layer"),
-        (
-            "open my $fh, '<:encoding(UTF-8)', 'file.txt'",
-            "encoding layer",
-        ),
+        ("open my $fh, '<:encoding(UTF-8)', 'file.txt'", "encoding layer"),
         ("binmode STDOUT, ':utf8'", "binmode utf8"),
         ("binmode $fh, ':encoding(UTF-8)'", "binmode encoding"),
         // Unicode and bytes
@@ -117,16 +111,10 @@ $英語, $日本語
             "unicode in format",
         ),
         // Mixed encodings
-        (
-            r#"my $mixed = "ASCII " . "\x{1F600}" . " UTF-8""#,
-            "mixed encoding concat",
-        ),
+        (r#"my $mixed = "ASCII " . "\x{1F600}" . " UTF-8""#, "mixed encoding concat"),
         // Unicode constants
         ("use constant π => 3.14159", "unicode constant name"),
-        (
-            "use constant CAFÉ => 'coffee'",
-            "unicode constant uppercase",
-        ),
+        ("use constant CAFÉ => 'coffee'", "unicode constant uppercase"),
         // Unicode in attributes
         ("my $x :café", "unicode attribute"),
         ("sub foo :café { }", "unicode sub attribute"),
@@ -135,10 +123,7 @@ $英語, $日本語
         ("*{café}", "unicode in glob"),
         // Source filters with encoding
         ("use Filter::Util::Call", "filter module"),
-        (
-            "filter_add(sub { s/café/coffee/g; $_ })",
-            "unicode in filter",
-        ),
+        ("filter_add(sub { s/café/coffee/g; $_ })", "unicode in filter"),
         // Unicode in special variables
         ("local $café = 1", "local unicode var"),
         ("our $café = 1", "our unicode var"),

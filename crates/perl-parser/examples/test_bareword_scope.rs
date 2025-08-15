@@ -24,10 +24,7 @@ print FOO;  # Bareword not allowed
 
             println!("\nScope analyzer found {} issues:", issues.len());
             for issue in &issues {
-                println!(
-                    "  {:?}: {} ({})",
-                    issue.kind, issue.variable_name, issue.description
-                );
+                println!("  {:?}: {} ({})", issue.kind, issue.variable_name, issue.description);
             }
         }
         Err(e) => {

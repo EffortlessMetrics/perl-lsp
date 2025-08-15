@@ -19,12 +19,7 @@ fn test_stacker_with_deep_nesting() {
 
         let mut parser = PureRustPerlParser::new();
         let result = parser.parse(&expr);
-        assert!(
-            result.is_ok(),
-            "Failed at depth {}: {:?}",
-            depth,
-            result.err()
-        );
+        assert!(result.is_ok(), "Failed at depth {}: {:?}", depth, result.err());
     }
 }
 
@@ -42,9 +37,5 @@ fn test_stacker_with_deep_blocks() {
 
     let mut parser = PureRustPerlParser::new();
     let result = parser.parse(&code);
-    assert!(
-        result.is_ok(),
-        "Failed with nested blocks: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Failed with nested blocks: {:?}", result.err());
 }

@@ -132,11 +132,7 @@ impl TreeSitterAdapter {
             ts_diagnostics.push(Self::convert_diagnostic(diag));
         }
 
-        TreeSitterOutput {
-            tree: TreeSitterAST { root },
-            diagnostics: ts_diagnostics,
-            metadata,
-        }
+        TreeSitterOutput { tree: TreeSitterAST { root }, diagnostics: ts_diagnostics, metadata }
     }
 
     fn convert_node(
@@ -151,10 +147,7 @@ impl TreeSitterAdapter {
                 Self::convert_normal_node(ast_node, source)
             }
 
-            ExtendedAstNode::WithWarning {
-                node,
-                diagnostics: node_diags,
-            } => {
+            ExtendedAstNode::WithWarning { node, diagnostics: node_diags } => {
                 // Convert node normally but add diagnostics
                 let ts_node = Self::convert_normal_node(node, source);
 
@@ -166,11 +159,7 @@ impl TreeSitterAdapter {
                 ts_node
             }
 
-            ExtendedAstNode::PartialParse {
-                pattern,
-                parsed_fragments,
-                ..
-            } => {
+            ExtendedAstNode::PartialParse { pattern, parsed_fragments, .. } => {
                 // Create error node with recoverable children
                 metadata.edge_case_count += 1;
 
@@ -220,11 +209,7 @@ impl TreeSitterAdapter {
                 }
             }
 
-            ExtendedAstNode::RuntimeDependentParse {
-                construct_type,
-                static_parts,
-                ..
-            } => {
+            ExtendedAstNode::RuntimeDependentParse { construct_type, static_parts, .. } => {
                 // Create specialized node type
                 metadata.edge_case_count += 1;
 
@@ -345,10 +330,7 @@ impl TreeSitterAdapter {
             end_byte: location.offset, // Would calculate actual end
             start_point: (location.line, location.column),
             end_point: (location.line, location.column),
-            code: Some(format!(
-                "PERL{:03}",
-                Self::get_diagnostic_code(&diag.pattern)
-            )),
+            code: Some(format!("PERL{:03}", Self::get_diagnostic_code(&diag.pattern))),
             source: Some("tree-sitter-perl".to_string()),
         }
     }
@@ -394,12 +376,7 @@ impl TreeSitterNode {
         }
 
         if !self.children.is_empty() {
-            obj["children"] = json!(
-                self.children
-                    .iter()
-                    .map(|c| c.to_json())
-                    .collect::<Vec<_>>()
-            );
+            obj["children"] = json!(self.children.iter().map(|c| c.to_json()).collect::<Vec<_>>());
         }
 
         if let Some(ref text) = self.text {
@@ -432,11 +409,7 @@ mod tests {
     fn test_error_node_conversion() {
         let ast = ExtendedAstNode::Unparseable {
             pattern: AntiPattern::DynamicHeredocDelimiter {
-                location: crate::anti_pattern_detector::Location {
-                    line: 1,
-                    column: 1,
-                    offset: 0,
-                },
+                location: crate::anti_pattern_detector::Location { line: 1, column: 1, offset: 0 },
                 expression: "<<$var".to_string(),
             },
             raw_text: Arc::from("<<$var"),

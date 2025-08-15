@@ -88,10 +88,7 @@ impl AdvancedTestContext {
             "script".to_string(),
             "#!/usr/bin/perl\nuse strict;\nuse warnings;\n".to_string(),
         );
-        template_cache.insert(
-            "test".to_string(),
-            "use Test::More;\ndone_testing();\n".to_string(),
-        );
+        template_cache.insert("test".to_string(), "use Test::More;\ndone_testing();\n".to_string());
 
         Self {
             server,
@@ -112,9 +109,7 @@ impl AdvancedTestContext {
             })),
         };
 
-        self.server
-            .handle_request(request)
-            .and_then(|response| response.result)
+        self.server.handle_request(request).and_then(|response| response.result)
     }
 
     fn get_snippet_completions(&self, trigger: &str) -> Vec<Value> {
@@ -168,20 +163,12 @@ fn test_snippet_completion() {
     let completions = ctx.get_snippet_completions("su");
     assert!(!completions.is_empty(), "Should find 'sub' snippet");
 
-    let sub_snippet = completions
-        .iter()
-        .find(|c| c["label"] == "sub")
-        .expect("Should have sub snippet");
+    let sub_snippet =
+        completions.iter().find(|c| c["label"] == "sub").expect("Should have sub snippet");
 
-    assert_eq!(
-        sub_snippet["insertTextFormat"], 2,
-        "Should be snippet format"
-    );
+    assert_eq!(sub_snippet["insertTextFormat"], 2, "Should be snippet format");
     assert!(
-        sub_snippet["insertText"]
-            .as_str()
-            .unwrap()
-            .contains("${1:function_name}"),
+        sub_snippet["insertText"].as_str().unwrap().contains("${1:function_name}"),
         "Should contain snippet placeholders"
     );
 }
@@ -219,10 +206,7 @@ fn test_create_module_from_template() {
     let content = ctx.create_from_template("module", "lib/MyApp/Utils.pm", params);
 
     // Template should be created (or error handled gracefully)
-    assert!(
-        content.is_ok() || content.is_err(),
-        "Template creation should complete"
-    );
+    assert!(content.is_ok() || content.is_err(), "Template creation should complete");
 }
 
 #[test]
@@ -236,10 +220,7 @@ fn test_create_test_from_template() {
     let content = ctx.create_from_template("test", "t/calculator.t", params);
 
     // Test template should be created
-    assert!(
-        content.is_ok() || content.is_err(),
-        "Test template creation should complete"
-    );
+    assert!(content.is_ok() || content.is_err(), "Test template creation should complete");
 }
 
 // ===================== Test Runner Integration =====================
@@ -276,10 +257,7 @@ fn test_run_test_suite() {
     );
 
     // Verify test suite execution
-    assert!(
-        result.is_some(),
-        "Test suite execution should return results"
-    );
+    assert!(result.is_some(), "Test suite execution should return results");
 }
 
 #[test]
@@ -384,14 +362,8 @@ fn test_dependency_management() {
 
     // Verify dependency operations
     assert!(add_result.is_some(), "Dependency add should return status");
-    assert!(
-        update_result.is_some(),
-        "Dependency update should return status"
-    );
-    assert!(
-        check_result.is_some(),
-        "Dependency check should return results"
-    );
+    assert!(update_result.is_some(), "Dependency update should return status");
+    assert!(check_result.is_some(), "Dependency check should return results");
 }
 
 // ===================== Linting and Formatting =====================

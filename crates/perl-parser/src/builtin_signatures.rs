@@ -18,12 +18,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
     signatures.insert(
         "print",
         BuiltinSignature {
-            signatures: vec![
-                "print FILEHANDLE LIST",
-                "print FILEHANDLE",
-                "print LIST",
-                "print",
-            ],
+            signatures: vec!["print FILEHANDLE LIST", "print FILEHANDLE", "print LIST", "print"],
             documentation: "Prints a string or list of strings to a filehandle",
         },
     );
@@ -397,10 +392,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "delete",
-        BuiltinSignature {
-            signatures: vec!["delete EXPR"],
-            documentation: "Deletes hash element",
-        },
+        BuiltinSignature { signatures: vec!["delete EXPR"], documentation: "Deletes hash element" },
     );
 
     // ===== File Test Operators =====
@@ -561,18 +553,12 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "fork",
-        BuiltinSignature {
-            signatures: vec!["fork"],
-            documentation: "Creates a child process",
-        },
+        BuiltinSignature { signatures: vec!["fork"], documentation: "Creates a child process" },
     );
 
     signatures.insert(
         "wait",
-        BuiltinSignature {
-            signatures: vec!["wait"],
-            documentation: "Waits for child process",
-        },
+        BuiltinSignature { signatures: vec!["wait"], documentation: "Waits for child process" },
     );
 
     signatures.insert(
@@ -593,10 +579,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "getpid",
-        BuiltinSignature {
-            signatures: vec!["getpid"],
-            documentation: "Returns process ID",
-        },
+        BuiltinSignature { signatures: vec!["getpid"], documentation: "Returns process ID" },
     );
 
     signatures.insert(
@@ -610,10 +593,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
     // ===== Time Functions =====
     signatures.insert(
         "time",
-        BuiltinSignature {
-            signatures: vec!["time"],
-            documentation: "Returns current time",
-        },
+        BuiltinSignature { signatures: vec!["time"], documentation: "Returns current time" },
     );
 
     signatures.insert(
@@ -659,26 +639,17 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "atan2",
-        BuiltinSignature {
-            signatures: vec!["atan2 Y, X"],
-            documentation: "Returns arctangent",
-        },
+        BuiltinSignature { signatures: vec!["atan2 Y, X"], documentation: "Returns arctangent" },
     );
 
     signatures.insert(
         "cos",
-        BuiltinSignature {
-            signatures: vec!["cos EXPR", "cos"],
-            documentation: "Returns cosine",
-        },
+        BuiltinSignature { signatures: vec!["cos EXPR", "cos"], documentation: "Returns cosine" },
     );
 
     signatures.insert(
         "sin",
-        BuiltinSignature {
-            signatures: vec!["sin EXPR", "sin"],
-            documentation: "Returns sine",
-        },
+        BuiltinSignature { signatures: vec!["sin EXPR", "sin"], documentation: "Returns sine" },
     );
 
     signatures.insert(
@@ -821,10 +792,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "last",
-        BuiltinSignature {
-            signatures: vec!["last LABEL", "last"],
-            documentation: "Exits loop",
-        },
+        BuiltinSignature { signatures: vec!["last LABEL", "last"], documentation: "Exits loop" },
     );
 
     signatures.insert(
@@ -847,12 +815,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
     signatures.insert(
         "require",
         BuiltinSignature {
-            signatures: vec![
-                "require VERSION",
-                "require MODULE",
-                "require EXPR",
-                "require",
-            ],
+            signatures: vec!["require VERSION", "require MODULE", "require EXPR", "require"],
             documentation: "Loads module or file",
         },
     );
@@ -1078,10 +1041,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "format",
-        BuiltinSignature {
-            signatures: vec!["format NAME ="],
-            documentation: "Declares format",
-        },
+        BuiltinSignature { signatures: vec!["format NAME ="], documentation: "Declares format" },
     );
 
     // ===== Miscellaneous =====
@@ -1111,10 +1071,7 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
 
     signatures.insert(
         "lock",
-        BuiltinSignature {
-            signatures: vec!["lock THING"],
-            documentation: "Locks shared variable",
-        },
+        BuiltinSignature { signatures: vec!["lock THING"], documentation: "Locks shared variable" },
     );
 
     signatures

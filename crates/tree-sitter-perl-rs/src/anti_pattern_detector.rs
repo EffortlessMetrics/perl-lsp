@@ -307,10 +307,7 @@ impl AntiPatternDetector {
             return report;
         }
 
-        report.push_str(&format!(
-            "Found {} problematic patterns:\n\n",
-            diagnostics.len()
-        ));
+        report.push_str(&format!("Found {} problematic patterns:\n\n", diagnostics.len()));
 
         for (i, diag) in diagnostics.iter().enumerate() {
             report.push_str(&format!(
@@ -376,10 +373,7 @@ END
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(
-            diagnostics[0].pattern,
-            AntiPattern::FormatHeredoc { .. }
-        ));
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::FormatHeredoc { .. }));
     }
 
     #[test]
@@ -395,10 +389,7 @@ END
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(
-            diagnostics[0].pattern,
-            AntiPattern::BeginTimeHeredoc { .. }
-        ));
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::BeginTimeHeredoc { .. }));
     }
 
     #[test]
@@ -413,9 +404,6 @@ EOF
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(
-            diagnostics[0].pattern,
-            AntiPattern::DynamicHeredocDelimiter { .. }
-        ));
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::DynamicHeredocDelimiter { .. }));
     }
 }

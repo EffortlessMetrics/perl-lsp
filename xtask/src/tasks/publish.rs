@@ -33,16 +33,10 @@ pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
         args.push("--dry-run");
     }
 
-    let output = Command::new("cargo")
-        .current_dir("crates/perl-lexer")
-        .args(&args)
-        .output()?;
+    let output = Command::new("cargo").current_dir("crates/perl-lexer").args(&args).output()?;
 
     if !output.status.success() {
-        bail!(
-            "Failed to publish perl-lexer: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("Failed to publish perl-lexer: {}", String::from_utf8_lossy(&output.stderr));
     }
     println!("✅ perl-lexer published");
 
@@ -54,16 +48,10 @@ pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
 
     // Publish perl-parser
     println!("Publishing perl-parser...");
-    let output = Command::new("cargo")
-        .current_dir("crates/perl-parser")
-        .args(&args)
-        .output()?;
+    let output = Command::new("cargo").current_dir("crates/perl-parser").args(&args).output()?;
 
     if !output.status.success() {
-        bail!(
-            "Failed to publish perl-parser: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("Failed to publish perl-parser: {}", String::from_utf8_lossy(&output.stderr));
     }
     println!("✅ perl-parser published");
 
@@ -100,16 +88,11 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
 
     // First compile the extension
     println!("Compiling extension...");
-    let output = Command::new("npm")
-        .current_dir("vscode-extension")
-        .args(&["run", "compile"])
-        .output()?;
+    let output =
+        Command::new("npm").current_dir("vscode-extension").args(&["run", "compile"]).output()?;
 
     if !output.status.success() {
-        bail!(
-            "Failed to compile extension: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("Failed to compile extension: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // Publish to marketplace
@@ -121,10 +104,7 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
         .output()?;
 
     if !output.status.success() {
-        bail!(
-            "Failed to publish extension: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("Failed to publish extension: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     println!("✅ VSCode extension published successfully!");

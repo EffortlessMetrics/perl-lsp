@@ -115,10 +115,7 @@ fn analyze_and_convert(code: &str) -> String {
     use tree_sitter_perl::edge_case_handler::EdgeCaseHandler;
 
     // Analyze with edge case handler
-    let config = EdgeCaseConfig {
-        recovery_mode: RecoveryMode::BestGuess,
-        ..Default::default()
-    };
+    let config = EdgeCaseConfig { recovery_mode: RecoveryMode::BestGuess, ..Default::default() };
 
     let mut handler = EdgeCaseHandler::new(config);
     let analysis = handler.analyze(code);
@@ -169,18 +166,8 @@ fn format_output(output: &tree_sitter_perl::tree_sitter_adapter::TreeSitterOutpu
 
     // Metadata
     writeln!(&mut result, "\nMetadata:").unwrap();
-    writeln!(
-        &mut result,
-        "  Parse coverage: {:.1}%",
-        output.metadata.parse_coverage
-    )
-    .unwrap();
-    writeln!(
-        &mut result,
-        "  Edge cases: {}",
-        output.metadata.edge_case_count
-    )
-    .unwrap();
+    writeln!(&mut result, "  Parse coverage: {:.1}%", output.metadata.parse_coverage).unwrap();
+    writeln!(&mut result, "  Edge cases: {}", output.metadata.edge_case_count).unwrap();
 
     result
 }

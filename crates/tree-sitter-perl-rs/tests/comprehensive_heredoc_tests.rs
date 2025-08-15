@@ -17,10 +17,7 @@ EOF
 print $text;"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse simple heredoc"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse simple heredoc");
     }
 
     #[test]
@@ -36,10 +33,7 @@ DESC
 print $config{description};"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse heredoc in multi-line statement"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse heredoc in multi-line statement");
     }
 
     #[test]
@@ -47,20 +41,14 @@ print $config{description};"#;
         // Testing the new builtin list operator support
         let input = "print $x;";
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse print without parentheses"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse print without parentheses");
     }
 
     #[test]
     fn test_builtin_print_multiple_args() {
         let input = "print $a, $b, $c;";
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse print with multiple arguments"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse print with multiple arguments");
     }
 
     #[test]
@@ -74,10 +62,7 @@ print $config{description};"#;
     fn test_builtin_warn() {
         let input = r#"warn "Something went wrong";"#;
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse warn statement"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse warn statement");
     }
 
     #[test]
@@ -95,10 +80,7 @@ Hello world
 EOF"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse print with heredoc"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse print with heredoc");
     }
 
     #[test]
@@ -113,10 +95,7 @@ DOUBLE
 print $single, $double;"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse mixed heredocs with print"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse mixed heredocs with print");
     }
 
     #[test]
@@ -133,10 +112,7 @@ content
 EOF"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse heredoc in nested function call"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse heredoc in nested function call");
     }
 
     #[test]
@@ -150,10 +126,7 @@ Third
 C"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse multiple heredocs on same line"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse multiple heredocs on same line");
     }
 
     #[test]
@@ -165,10 +138,7 @@ C"#;
 print $text;"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse indented heredoc"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse indented heredoc");
     }
 
     #[test]
@@ -179,10 +149,7 @@ CMD
 print $output;"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse backtick heredoc"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse backtick heredoc");
     }
 
     #[test]
@@ -197,10 +164,7 @@ HEREDOC
 print $ref->[1];"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse heredoc in array reference"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse heredoc in array reference");
     }
 
     #[test]
@@ -211,9 +175,6 @@ An error occurred
 ERROR"#;
 
         let mut parser = FullPerlParser::new();
-        assert!(
-            parser.parse(input).is_ok(),
-            "Failed to parse print to filehandle with heredoc"
-        );
+        assert!(parser.parse(input).is_ok(), "Failed to parse print to filehandle with heredoc");
     }
 }

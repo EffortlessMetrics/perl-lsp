@@ -265,16 +265,8 @@ if ($@) {
 
     println!("\n=== Summary ===");
     println!("Total tests: {}", passed + failed);
-    println!(
-        "Passed: {} ({}%)",
-        passed,
-        (passed * 100) / (passed + failed)
-    );
-    println!(
-        "Failed: {} ({}%)",
-        failed,
-        (failed * 100) / (passed + failed)
-    );
+    println!("Passed: {} ({}%)", passed, (passed * 100) / (passed + failed));
+    println!("Failed: {} ({}%)", failed, (failed * 100) / (passed + failed));
 
     if passed == passed + failed {
         println!("\n🎉 All supported edge cases passed!");
@@ -309,12 +301,7 @@ fn count_nodes(ast: &AstNode) -> usize {
                 count += count_nodes(stmt);
             }
         }
-        AstNode::IfStatement {
-            condition,
-            then_block,
-            elsif_clauses,
-            else_block,
-        } => {
+        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
             count += count_nodes(condition);
             count += count_nodes(then_block);
             for (cond, block) in elsif_clauses {

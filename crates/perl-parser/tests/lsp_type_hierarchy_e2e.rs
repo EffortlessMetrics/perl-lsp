@@ -22,9 +22,8 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .expect("prepareTypeHierarchy should return an array");
+    let items =
+        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let base_item = &items[0];
@@ -38,9 +37,7 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let subtypes = subtypes_response["result"]
-        .as_array()
-        .expect("subtypes should return an array");
+    let subtypes = subtypes_response["result"].as_array().expect("subtypes should return an array");
 
     assert_eq!(subtypes.len(), 1, "Base should have one direct subtype");
     assert_eq!(subtypes[0]["name"], "Child", "Subtype should be Child");
@@ -55,9 +52,8 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let child_items = child_prep["result"]
-        .as_array()
-        .expect("prepareTypeHierarchy should return an array");
+    let child_items =
+        child_prep["result"].as_array().expect("prepareTypeHierarchy should return an array");
     let child_item = &child_items[0];
 
     let supertypes_response = client.request(
@@ -67,15 +63,10 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .expect("supertypes should return an array");
+    let supertypes =
+        supertypes_response["result"].as_array().expect("supertypes should return an array");
 
-    assert_eq!(
-        supertypes.len(),
-        1,
-        "Child should have one direct supertype"
-    );
+    assert_eq!(supertypes.len(), 1, "Child should have one direct supertype");
     assert_eq!(supertypes[0]["name"], "Base", "Supertype should be Base");
 
     client.shutdown();
@@ -109,9 +100,8 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .expect("prepareTypeHierarchy should return an array");
+    let items =
+        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let combined_item = &items[0];
@@ -124,25 +114,16 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .expect("supertypes should return an array");
+    let supertypes =
+        supertypes_response["result"].as_array().expect("supertypes should return an array");
 
     assert_eq!(supertypes.len(), 2, "Combined should have two supertypes");
 
-    let names: Vec<String> = supertypes
-        .iter()
-        .map(|item| item["name"].as_str().unwrap().to_string())
-        .collect();
+    let names: Vec<String> =
+        supertypes.iter().map(|item| item["name"].as_str().unwrap().to_string()).collect();
 
-    assert!(
-        names.contains(&"Mixin1".to_string()),
-        "Should have Mixin1 as parent"
-    );
-    assert!(
-        names.contains(&"Mixin2".to_string()),
-        "Should have Mixin2 as parent"
-    );
+    assert!(names.contains(&"Mixin1".to_string()), "Should have Mixin1 as parent");
+    assert!(names.contains(&"Mixin2".to_string()), "Should have Mixin2 as parent");
 
     client.shutdown();
 }
@@ -175,9 +156,8 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .expect("prepareTypeHierarchy should return an array");
+    let items =
+        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let child_item = &items[0];
@@ -190,29 +170,16 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .expect("supertypes should return an array");
+    let supertypes =
+        supertypes_response["result"].as_array().expect("supertypes should return an array");
 
-    assert_eq!(
-        supertypes.len(),
-        2,
-        "Child should have two supertypes via @ISA"
-    );
+    assert_eq!(supertypes.len(), 2, "Child should have two supertypes via @ISA");
 
-    let names: Vec<String> = supertypes
-        .iter()
-        .map(|item| item["name"].as_str().unwrap().to_string())
-        .collect();
+    let names: Vec<String> =
+        supertypes.iter().map(|item| item["name"].as_str().unwrap().to_string()).collect();
 
-    assert!(
-        names.contains(&"Parent1".to_string()),
-        "Should have Parent1 in @ISA"
-    );
-    assert!(
-        names.contains(&"Parent2".to_string()),
-        "Should have Parent2 in @ISA"
-    );
+    assert!(names.contains(&"Parent1".to_string()), "Should have Parent1 in @ISA");
+    assert!(names.contains(&"Parent2".to_string()), "Should have Parent2 in @ISA");
 
     client.shutdown();
 }
@@ -250,15 +217,9 @@ sub test {
     // Should return empty or null for string literals
     let result = &prep_response["result"];
     if let Some(items) = result.as_array() {
-        assert!(
-            items.is_empty(),
-            "String literals should not have type hierarchy"
-        );
+        assert!(items.is_empty(), "String literals should not have type hierarchy");
     } else {
-        assert!(
-            result.is_null(),
-            "String literals should return null for type hierarchy"
-        );
+        assert!(result.is_null(), "String literals should return null for type hierarchy");
     }
 
     // Now test that the actual package Base works
@@ -271,9 +232,7 @@ sub test {
         }),
     );
 
-    let items = prep_response2["result"]
-        .as_array()
-        .expect("Package should have type hierarchy");
+    let items = prep_response2["result"].as_array().expect("Package should have type hierarchy");
     assert!(!items.is_empty(), "Package Base should be found");
     assert_eq!(items[0]["name"], "Base", "Should find the Base package");
 

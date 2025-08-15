@@ -47,9 +47,7 @@ mod tests {
     fn string_strategy() -> impl Strategy<Value = String> {
         prop_oneof![
             // Single quoted strings - avoid backslash at end
-            prop::string::string_regex("[^'\\\\]*")
-                .unwrap()
-                .prop_map(|s| format!("'{}'", s)),
+            prop::string::string_regex("[^'\\\\]*").unwrap().prop_map(|s| format!("'{}'", s)),
             // Double quoted strings (avoid control chars and quotes)
             prop::string::string_regex("[^\"\\\\\\n\\r]*")
                 .unwrap()

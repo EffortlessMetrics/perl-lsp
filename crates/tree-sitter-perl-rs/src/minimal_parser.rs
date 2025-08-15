@@ -22,10 +22,7 @@ impl MinimalParser {
             use crate::perl_lexer::TokenType;
 
             // Skip whitespace and comments
-            if matches!(
-                token.token_type,
-                TokenType::Whitespace | TokenType::Comment(_)
-            ) {
+            if matches!(token.token_type, TokenType::Whitespace | TokenType::Comment(_)) {
                 continue;
             }
 
@@ -68,18 +65,14 @@ impl MinimalParser {
                                             },
                                         ),
                                         TokenType::StringLiteral => Node::new(
-                                            NodeKind::String {
-                                                value: val_token.text.clone(),
-                                            },
+                                            NodeKind::String { value: val_token.text.clone() },
                                             SourceLocation {
                                                 start: val_token.start,
                                                 end: val_token.end,
                                             },
                                         ),
                                         _ => Node::new(
-                                            NodeKind::Bareword {
-                                                value: val_token.text.clone(),
-                                            },
+                                            NodeKind::Bareword { value: val_token.text.clone() },
                                             SourceLocation {
                                                 start: val_token.start,
                                                 end: val_token.end,
@@ -101,18 +94,12 @@ impl MinimalParser {
                             NodeKind::Assignment {
                                 left: Box::new(Node::new(
                                     NodeKind::Variable { name: var_name },
-                                    SourceLocation {
-                                        start: token.start,
-                                        end: token.end,
-                                    },
+                                    SourceLocation { start: token.start, end: token.end },
                                 )),
                                 op: crate::token_compat::TokenType::Equal,
                                 right: value,
                             },
-                            SourceLocation {
-                                start: token.start,
-                                end: last_pos,
-                            },
+                            SourceLocation { start: token.start, end: last_pos },
                         )
                     } else {
                         Node::new(
@@ -120,16 +107,10 @@ impl MinimalParser {
                                 declarator: Arc::from("my"),
                                 variables: vec![Node::new(
                                     NodeKind::Variable { name: var_name },
-                                    SourceLocation {
-                                        start: token.start,
-                                        end: token.end,
-                                    },
+                                    SourceLocation { start: token.start, end: token.end },
                                 )],
                             },
-                            SourceLocation {
-                                start: token.start,
-                                end: last_pos,
-                            },
+                            SourceLocation { start: token.start, end: last_pos },
                         )
                     }
                 }
@@ -144,13 +125,8 @@ impl MinimalParser {
                         match &arg_token.token_type {
                             TokenType::StringLiteral => {
                                 args.push(Node::new(
-                                    NodeKind::String {
-                                        value: arg_token.text.clone(),
-                                    },
-                                    SourceLocation {
-                                        start: arg_token.start,
-                                        end: arg_token.end,
-                                    },
+                                    NodeKind::String { value: arg_token.text.clone() },
+                                    SourceLocation { start: arg_token.start, end: arg_token.end },
                                 ));
                                 end_pos = arg_token.end;
                             }
@@ -164,27 +140,16 @@ impl MinimalParser {
                     }
 
                     Node::new(
-                        NodeKind::FunctionCall {
-                            name: Arc::from("print"),
-                            args,
-                        },
-                        SourceLocation {
-                            start: token.start,
-                            end: end_pos,
-                        },
+                        NodeKind::FunctionCall { name: Arc::from("print"), args },
+                        SourceLocation { start: token.start, end: end_pos },
                     )
                 }
 
                 _ => {
                     // Generic node
                     Node::new(
-                        NodeKind::Bareword {
-                            value: token.text.clone(),
-                        },
-                        SourceLocation {
-                            start: token.start,
-                            end: token.end,
-                        },
+                        NodeKind::Bareword { value: token.text.clone() },
+                        SourceLocation { start: token.start, end: token.end },
                     )
                 }
             };
@@ -193,13 +158,7 @@ impl MinimalParser {
         }
 
         // Return program node
-        Node::new(
-            NodeKind::Program { statements },
-            SourceLocation {
-                start: 0,
-                end: last_pos,
-            },
-        )
+        Node::new(NodeKind::Program { statements }, SourceLocation { start: 0, end: last_pos })
     }
 }
 

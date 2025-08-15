@@ -54,20 +54,10 @@ pub struct DelimiterResolution {
 
 #[derive(Debug)]
 pub enum RecommendedAction {
-    RefactorCode {
-        reason: String,
-        suggestion: String,
-    },
-    EnableFeature {
-        feature: String,
-        risk_level: RiskLevel,
-    },
-    ManualReview {
-        reason: String,
-    },
-    RunInSandbox {
-        command: String,
-    },
+    RefactorCode { reason: String, suggestion: String },
+    EnableFeature { feature: String, risk_level: RiskLevel },
+    ManualReview { reason: String },
+    RunInSandbox { command: String },
 }
 
 #[derive(Debug)]
@@ -144,9 +134,7 @@ impl EdgeCaseHandler {
         expression: &str,
         context: &ParseContext,
     ) -> DelimiterResolution {
-        let analysis = self
-            .delimiter_recovery
-            .analyze_dynamic_delimiter(expression, context);
+        let analysis = self.delimiter_recovery.analyze_dynamic_delimiter(expression, context);
 
         DelimiterResolution {
             expression: expression.to_string(),
@@ -223,14 +211,8 @@ impl EdgeCaseHandler {
 
         // Summary
         report.push_str(&format!("Total Issues: {}\n", analysis.diagnostics.len()));
-        report.push_str(&format!(
-            "Phase Warnings: {}\n",
-            analysis.phase_warnings.len()
-        ));
-        report.push_str(&format!(
-            "Dynamic Delimiters: {}\n",
-            analysis.delimiter_resolutions.len()
-        ));
+        report.push_str(&format!("Phase Warnings: {}\n", analysis.phase_warnings.len()));
+        report.push_str(&format!("Dynamic Delimiters: {}\n", analysis.delimiter_resolutions.len()));
 
         // Phase warnings
         if !analysis.phase_warnings.is_empty() {
@@ -268,11 +250,7 @@ impl EdgeCaseHandler {
         // Anti-pattern details
         if !analysis.diagnostics.is_empty() {
             report.push_str("\n## Detailed Diagnostics\n");
-            report.push_str(
-                &self
-                    .anti_pattern_detector
-                    .format_report(&analysis.diagnostics),
-            );
+            report.push_str(&self.anti_pattern_detector.format_report(&analysis.diagnostics));
         }
 
         report
@@ -283,10 +261,7 @@ impl EdgeCaseHandler {
             RecommendedAction::RefactorCode { reason, suggestion } => {
                 format!("Refactor: {} - {}", reason, suggestion)
             }
-            RecommendedAction::EnableFeature {
-                feature,
-                risk_level,
-            } => {
+            RecommendedAction::EnableFeature { feature, risk_level } => {
                 format!("Enable Feature: {} (Risk: {:?})", feature, risk_level)
             }
             RecommendedAction::ManualReview { reason } => {

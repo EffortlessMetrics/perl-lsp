@@ -49,9 +49,7 @@ fn get_diagnostics(server: &mut LspServer, uri: &str) -> Option<Value> {
         })),
     };
 
-    server
-        .handle_request(request)
-        .and_then(|response| response.result)
+    server.handle_request(request).and_then(|response| response.result)
 }
 
 #[test]

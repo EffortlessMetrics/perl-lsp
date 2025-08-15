@@ -108,10 +108,7 @@ impl CodeActionsProvider {
             actions.push(CodeAction {
                 title: format!("Declare '{}' with 'my'", var_name),
                 kind: CodeActionKind::QuickFix,
-                edit: TextEdit {
-                    range: (insert_pos, insert_pos),
-                    new_text: declaration,
-                },
+                edit: TextEdit { range: (insert_pos, insert_pos), new_text: declaration },
                 diagnostic_id: diagnostic.code.clone(),
             });
 
@@ -158,15 +155,9 @@ impl CodeActionsProvider {
             };
 
             actions.push(CodeAction {
-                title: format!(
-                    "Rename to '{}' (mark as intentionally unused)",
-                    underscore_name
-                ),
+                title: format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
                 kind: CodeActionKind::QuickFix,
-                edit: TextEdit {
-                    range: diagnostic.range,
-                    new_text: underscore_name,
-                },
+                edit: TextEdit { range: diagnostic.range, new_text: underscore_name },
                 diagnostic_id: diagnostic.code.clone(),
             });
         }
@@ -194,10 +185,7 @@ impl CodeActionsProvider {
                 actions.push(CodeAction {
                     title: format!("Rename shadowing variable to '{}'", alt_name),
                     kind: CodeActionKind::QuickFix,
-                    edit: TextEdit {
-                        range: diagnostic.range,
-                        new_text: alt_name.clone(),
-                    },
+                    edit: TextEdit { range: diagnostic.range, new_text: alt_name.clone() },
                     diagnostic_id: diagnostic.code.clone(),
                 });
             }
@@ -240,10 +228,7 @@ impl CodeActionsProvider {
                 actions.push(CodeAction {
                     title: "Add missing semicolon".to_string(),
                     kind: CodeActionKind::QuickFix,
-                    edit: TextEdit {
-                        range: (line_end, line_end),
-                        new_text: ";".to_string(),
-                    },
+                    edit: TextEdit { range: (line_end, line_end), new_text: ";".to_string() },
                     diagnostic_id: diagnostic.code.clone(),
                 });
             }
@@ -301,10 +286,7 @@ impl CodeActionsProvider {
             actions.push(CodeAction {
                 title: format!("Remove duplicate parameter '{}'", param_name),
                 kind: CodeActionKind::QuickFix,
-                edit: TextEdit {
-                    range: diagnostic.range,
-                    new_text: String::new(),
-                },
+                edit: TextEdit { range: diagnostic.range, new_text: String::new() },
                 diagnostic_id: diagnostic.code.clone(),
             });
 
@@ -316,10 +298,7 @@ impl CodeActionsProvider {
             actions.push(CodeAction {
                 title: format!("Rename duplicate to '{}'", new_name),
                 kind: CodeActionKind::QuickFix,
-                edit: TextEdit {
-                    range: diagnostic.range,
-                    new_text: new_name,
-                },
+                edit: TextEdit { range: diagnostic.range, new_text: new_name },
                 diagnostic_id: diagnostic.code.clone(),
             });
         }
@@ -346,10 +325,7 @@ impl CodeActionsProvider {
                 actions.push(CodeAction {
                     title: format!("Rename parameter to '{}'", alt_name),
                     kind: CodeActionKind::QuickFix,
-                    edit: TextEdit {
-                        range: diagnostic.range,
-                        new_text: alt_name.clone(),
-                    },
+                    edit: TextEdit { range: diagnostic.range, new_text: alt_name.clone() },
                     diagnostic_id: diagnostic.code.clone(),
                 });
             }
@@ -375,15 +351,9 @@ impl CodeActionsProvider {
             };
 
             actions.push(CodeAction {
-                title: format!(
-                    "Rename to '{}' (mark as intentionally unused)",
-                    underscore_name
-                ),
+                title: format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
                 kind: CodeActionKind::QuickFix,
-                edit: TextEdit {
-                    range: diagnostic.range,
-                    new_text: underscore_name,
-                },
+                edit: TextEdit { range: diagnostic.range, new_text: underscore_name },
                 diagnostic_id: diagnostic.code.clone(),
             });
 
@@ -415,10 +385,7 @@ impl CodeActionsProvider {
                 actions.push(CodeAction {
                     title: format!("Quote bareword as '{}'", bareword),
                     kind: CodeActionKind::QuickFix,
-                    edit: TextEdit {
-                        range: diagnostic.range,
-                        new_text: format!("'{}'", bareword),
-                    },
+                    edit: TextEdit { range: diagnostic.range, new_text: format!("'{}'", bareword) },
                     diagnostic_id: diagnostic.code.clone(),
                 });
 
@@ -484,10 +451,8 @@ impl CodeActionsProvider {
 
         // Check if we're after 'use strict' or 'use warnings'
         let before_line = if line_start > 0 {
-            let prev_line_start = self.source[..line_start - 1]
-                .rfind('\n')
-                .map(|i| i + 1)
-                .unwrap_or(0);
+            let prev_line_start =
+                self.source[..line_start - 1].rfind('\n').map(|i| i + 1).unwrap_or(0);
             &self.source[prev_line_start..line_start]
         } else {
             ""
@@ -532,10 +497,7 @@ impl CodeActionsProvider {
 
     /// Find the end of the current line
     fn find_line_end(&self, pos: usize) -> usize {
-        self.source[pos..]
-            .find('\n')
-            .map(|i| pos + i)
-            .unwrap_or(self.source.len())
+        self.source[pos..].find('\n').map(|i| pos + i).unwrap_or(self.source.len())
     }
 
     /// Detect the quote character used at the given position

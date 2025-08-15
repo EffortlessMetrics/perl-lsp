@@ -10,17 +10,11 @@ pub enum PerlType {
     /// Array type
     Array(Box<PerlType>),
     /// Hash type with key and value types
-    Hash {
-        key: Box<PerlType>,
-        value: Box<PerlType>,
-    },
+    Hash { key: Box<PerlType>, value: Box<PerlType> },
     /// Reference to another type
     Reference(Box<PerlType>),
     /// Subroutine type with parameter and return types
-    Subroutine {
-        params: Vec<PerlType>,
-        returns: Vec<PerlType>,
-    },
+    Subroutine { params: Vec<PerlType>, returns: Vec<PerlType> },
     /// Object type with class name
     Object(String),
     /// Glob/typeglob type
@@ -80,11 +74,7 @@ impl Default for TypeEnvironment {
 
 impl TypeEnvironment {
     pub fn new() -> Self {
-        Self {
-            variables: HashMap::new(),
-            subroutines: HashMap::new(),
-            parent: None,
-        }
+        Self { variables: HashMap::new(), subroutines: HashMap::new(), parent: None }
     }
 
     pub fn with_parent(parent: TypeEnvironment) -> Self {
@@ -100,9 +90,7 @@ impl TypeEnvironment {
     }
 
     pub fn get_variable(&self, name: &str) -> Option<&PerlType> {
-        self.variables
-            .get(name)
-            .or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
+        self.variables.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
     }
 
     pub fn set_subroutine(&mut self, name: String, ty: PerlType) {
@@ -156,10 +144,7 @@ impl TypeInferenceEngine {
         // String functions
         self.builtins.insert(
             "length".to_string(),
-            Subroutine {
-                params: vec![Scalar(String)],
-                returns: vec![Scalar(Integer)],
-            },
+            Subroutine { params: vec![Scalar(String)], returns: vec![Scalar(Integer)] },
         );
 
         self.builtins.insert(
@@ -173,28 +158,19 @@ impl TypeInferenceEngine {
         // Array functions
         self.builtins.insert(
             "push".to_string(),
-            Subroutine {
-                params: vec![Array(Box::new(Any)), Any],
-                returns: vec![Scalar(Integer)],
-            },
+            Subroutine { params: vec![Array(Box::new(Any)), Any], returns: vec![Scalar(Integer)] },
         );
 
         self.builtins.insert(
             "pop".to_string(),
-            Subroutine {
-                params: vec![Array(Box::new(Any))],
-                returns: vec![Any],
-            },
+            Subroutine { params: vec![Array(Box::new(Any))], returns: vec![Any] },
         );
 
         // Hash functions
         self.builtins.insert(
             "keys".to_string(),
             Subroutine {
-                params: vec![Hash {
-                    key: Box::new(Scalar(String)),
-                    value: Box::new(Any),
-                }],
+                params: vec![Hash { key: Box::new(Scalar(String)), value: Box::new(Any) }],
                 returns: vec![Array(Box::new(Scalar(String)))],
             },
         );
@@ -202,10 +178,7 @@ impl TypeInferenceEngine {
         // I/O functions
         self.builtins.insert(
             "print".to_string(),
-            Subroutine {
-                params: vec![Any],
-                returns: vec![Scalar(Boolean)],
-            },
+            Subroutine { params: vec![Any], returns: vec![Scalar(Boolean)] },
         );
 
         self.builtins.insert(
@@ -219,19 +192,13 @@ impl TypeInferenceEngine {
         // Reference functions
         self.builtins.insert(
             "ref".to_string(),
-            Subroutine {
-                params: vec![Any],
-                returns: vec![Scalar(String)],
-            },
+            Subroutine { params: vec![Any], returns: vec![Scalar(String)] },
         );
 
         // Type checking functions
         self.builtins.insert(
             "defined".to_string(),
-            Subroutine {
-                params: vec![Any],
-                returns: vec![Scalar(Boolean)],
-            },
+            Subroutine { params: vec![Any], returns: vec![Scalar(Boolean)] },
         );
     }
 
@@ -301,18 +268,14 @@ impl TypeInferenceEngine {
                     "@" => {
                         // Array variable - store type for later retrieval
                         let array_type = Array(Box::new(Any));
-                        self.global_env
-                            .set_variable(name.to_string(), array_type.clone());
+                        self.global_env.set_variable(name.to_string(), array_type.clone());
                         Ok(array_type)
                     }
                     "%" => {
                         // Hash variable - store type for later retrieval
-                        let hash_type = Hash {
-                            key: Box::new(Scalar(String)),
-                            value: Box::new(Any),
-                        };
-                        self.global_env
-                            .set_variable(name.to_string(), hash_type.clone());
+                        let hash_type =
+                            Hash { key: Box::new(Scalar(String)), value: Box::new(Any) };
+                        self.global_env.set_variable(name.to_string(), hash_type.clone());
                         Ok(hash_type)
                     }
                     "*" => {
@@ -348,10 +311,7 @@ impl TypeInferenceEngine {
 
             NodeKind::HashLiteral { pairs } => {
                 if pairs.is_empty() {
-                    return Ok(Hash {
-                        key: Box::new(Scalar(String)),
-                        value: Box::new(Any),
-                    });
+                    return Ok(Hash { key: Box::new(Scalar(String)), value: Box::new(Any) });
                 }
 
                 // Collect all key and value types
@@ -369,10 +329,7 @@ impl TypeInferenceEngine {
                 // Unify value types - use smart unification
                 let value_type = self.unify_types(&value_types);
 
-                Ok(Hash {
-                    key: Box::new(key_type),
-                    value: Box::new(value_type),
-                })
+                Ok(Hash { key: Box::new(key_type), value: Box::new(value_type) })
             }
 
             NodeKind::Binary { left, op, right } => {
@@ -468,10 +425,7 @@ impl TypeInferenceEngine {
                 // Infer return type from body
                 let return_type = self.infer_node(body, &mut sub_env)?;
 
-                let sub_type = Subroutine {
-                    params: param_types,
-                    returns: vec![return_type],
-                };
+                let sub_type = Subroutine { params: param_types, returns: vec![return_type] };
 
                 // Register subroutine in environment
                 if let Some(sub_name) = name {
@@ -481,11 +435,7 @@ impl TypeInferenceEngine {
                 Ok(sub_type)
             }
 
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 // Determine type from variable sigil and initializer
                 let var_type = if let NodeKind::Variable { sigil, name } = &variable.kind {
                     // Use the sigil field to determine type
@@ -509,8 +459,7 @@ impl TypeInferenceEngine {
                     };
 
                     // Store in both environments using the name (without sigil)
-                    self.global_env
-                        .set_variable(name.to_string(), inferred_type.clone());
+                    self.global_env.set_variable(name.to_string(), inferred_type.clone());
                     env.set_variable(name.to_string(), inferred_type.clone());
 
                     inferred_type
@@ -521,12 +470,7 @@ impl TypeInferenceEngine {
                 Ok(var_type)
             }
 
-            NodeKind::If {
-                condition,
-                then_branch,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { condition, then_branch, else_branch, .. } => {
                 let _cond_ty = self.infer_node(condition, env)?;
 
                 let then_ty = self.infer_node(then_branch, env)?;
@@ -636,9 +580,7 @@ impl TypeInferenceEngine {
         let all_scalars = types.iter().all(|t| matches!(t, Scalar(_)));
         if all_scalars {
             // Check if all are numeric
-            let all_numeric = types
-                .iter()
-                .all(|t| matches!(t, Scalar(Integer) | Scalar(Float)));
+            let all_numeric = types.iter().all(|t| matches!(t, Scalar(Integer) | Scalar(Float)));
             if all_numeric {
                 // If any float, return float, else integer
                 if types.iter().any(|t| matches!(t, Scalar(Float))) {
@@ -661,16 +603,13 @@ impl TypeInferenceEngine {
         // Special case: all arrays with same element type
         let all_arrays = types.iter().all(|t| matches!(t, Array(_)));
         if all_arrays {
-            let element_types: Vec<PerlType> = types
-                .iter()
-                .filter_map(|t| {
-                    if let Array(elem) = t {
-                        Some(elem.as_ref().clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let element_types: Vec<PerlType> =
+                types
+                    .iter()
+                    .filter_map(|t| {
+                        if let Array(elem) = t { Some(elem.as_ref().clone()) } else { None }
+                    })
+                    .collect();
 
             return Array(Box::new(self.unify_types(&element_types)));
         }
@@ -889,18 +828,9 @@ mod tests {
         let result = engine.infer(&ast);
 
         assert!(result.is_ok());
-        assert_eq!(
-            engine.get_type_at("x"),
-            Some(PerlType::Scalar(ScalarType::Integer))
-        );
-        assert_eq!(
-            engine.get_type_at("y"),
-            Some(PerlType::Scalar(ScalarType::String))
-        );
-        assert_eq!(
-            engine.get_type_at("z"),
-            Some(PerlType::Scalar(ScalarType::Float))
-        );
+        assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
+        assert_eq!(engine.get_type_at("y"), Some(PerlType::Scalar(ScalarType::String)));
+        assert_eq!(engine.get_type_at("z"), Some(PerlType::Scalar(ScalarType::Float)));
     }
 
     #[test]
@@ -917,18 +847,9 @@ mod tests {
         let ast = parser.parse().unwrap();
         let _result = engine.infer(&ast);
 
-        assert!(matches!(
-            engine.get_type_at("numbers"),
-            Some(PerlType::Array(_))
-        ));
-        assert!(matches!(
-            engine.get_type_at("strings"),
-            Some(PerlType::Array(_))
-        ));
-        assert!(matches!(
-            engine.get_type_at("mixed"),
-            Some(PerlType::Array(_))
-        ));
+        assert!(matches!(engine.get_type_at("numbers"), Some(PerlType::Array(_))));
+        assert!(matches!(engine.get_type_at("strings"), Some(PerlType::Array(_))));
+        assert!(matches!(engine.get_type_at("mixed"), Some(PerlType::Array(_))));
     }
 
     #[test]

@@ -22,9 +22,8 @@ fn highlights_read_and_write() {
         }),
     );
 
-    let highlights = response["result"]
-        .as_array()
-        .expect("documentHighlight should return an array");
+    let highlights =
+        response["result"].as_array().expect("documentHighlight should return an array");
 
     // Should find 3 occurrences of $x
     assert_eq!(highlights.len(), 3, "Should find all 3 occurrences of $x");
@@ -56,11 +55,7 @@ fn highlights_read_and_write() {
             "Highlight {} should have correct range",
             i
         );
-        assert_eq!(
-            kind, expected_positions[i].2,
-            "Highlight {} should have correct kind",
-            i
-        );
+        assert_eq!(kind, expected_positions[i].2, "Highlight {} should have correct kind", i);
     }
 
     // Also verify all line numbers (all on line 0)
@@ -99,16 +94,11 @@ $global++;
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
     }));
 
-    let highlights = response["result"]
-        .as_array()
-        .expect("documentHighlight should return an array");
+    let highlights =
+        response["result"].as_array().expect("documentHighlight should return an array");
 
     // Should find 4 occurrences of $global
-    assert_eq!(
-        highlights.len(),
-        4,
-        "Should find all 4 occurrences of $global"
-    );
+    assert_eq!(highlights.len(), 4, "Should find all 4 occurrences of $global");
 
     client.shutdown();
 }
@@ -132,9 +122,8 @@ fn no_highlights_for_different_variables() {
         }),
     );
 
-    let highlights = response["result"]
-        .as_array()
-        .expect("documentHighlight should return an array");
+    let highlights =
+        response["result"].as_array().expect("documentHighlight should return an array");
 
     // Should only find $foo occurrences, not $bar
     assert_eq!(highlights.len(), 2, "Should only find $foo occurrences");
@@ -145,14 +134,8 @@ fn no_highlights_for_different_variables() {
         let start_char = range["start"]["character"].as_i64().unwrap() as usize;
         let end_char = range["end"]["character"].as_i64().unwrap() as usize;
         let text = &source[start_char..end_char];
-        assert!(
-            text.contains("foo"),
-            "Highlight should only contain 'foo' variable"
-        );
-        assert!(
-            !text.contains("bar"),
-            "Highlight should not contain 'bar' variable"
-        );
+        assert!(text.contains("foo"), "Highlight should only contain 'foo' variable");
+        assert!(!text.contains("bar"), "Highlight should not contain 'bar' variable");
     }
 
     client.shutdown();

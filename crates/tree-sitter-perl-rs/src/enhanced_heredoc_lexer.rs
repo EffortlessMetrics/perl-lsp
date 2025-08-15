@@ -218,11 +218,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
             }
 
             // Check if this is the terminator
-            let trimmed = if heredoc.indented {
-                line_content.trim()
-            } else {
-                &line_content
-            };
+            let trimmed = if heredoc.indented { line_content.trim() } else { &line_content };
 
             if trimmed == heredoc.terminator {
                 // Found terminator
@@ -321,12 +317,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
     }
 
     fn make_token(&self, kind: HeredocTokenKind, text: &str) -> HeredocToken {
-        HeredocToken {
-            kind,
-            text: text.to_string(),
-            position: self.position,
-            line: self.line,
-        }
+        HeredocToken { kind, text: text.to_string(), position: self.position, line: self.line }
     }
 }
 

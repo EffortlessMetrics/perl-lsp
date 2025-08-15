@@ -1035,9 +1035,8 @@ impl<'a> PerlLexer<'a> {
             if ch == b'$' || ch == b'@' || ch == b'%' || ch == b'{' {
                 // This might be a dynamic heredoc delimiter
                 // First, parse the complete expression
-                if let Some((_expression, expr_end)) = self
-                    .heredoc_recovery
-                    .parse_delimiter_expression(self.input, self.position)
+                if let Some((_expression, expr_end)) =
+                    self.heredoc_recovery.parse_delimiter_expression(self.input, self.position)
                 {
                     // Now try to recover the delimiter
                     let recovery_result = self.heredoc_recovery.recover_dynamic_heredoc(
@@ -2161,38 +2160,20 @@ mod tests {
     fn test_slash_disambiguation() {
         // Test case 1: Division after identifier
         let mut lexer = PerlLexer::new("x / 2");
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::Identifier(Arc::from("x"))
-        );
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Identifier(Arc::from("x")));
         assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Division);
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::Number(Arc::from("2"))
-        );
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Number(Arc::from("2")));
 
         // Test case 2: Regex after operator
         let mut lexer = PerlLexer::new("=~ /foo/");
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::Operator(Arc::from("=~"))
-        );
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::RegexMatch
-        );
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Operator(Arc::from("=~")));
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::RegexMatch);
 
         // Test case 3: Division then regex
         let mut lexer = PerlLexer::new("1/ /abc/");
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::Number(Arc::from("1"))
-        );
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Number(Arc::from("1")));
         assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Division);
-        assert_eq!(
-            lexer.next_token().unwrap().token_type,
-            TokenType::RegexMatch
-        );
+        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::RegexMatch);
 
         // Test case 4: Substitution
         let mut lexer = PerlLexer::new("s/foo/bar/g");

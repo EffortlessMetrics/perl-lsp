@@ -24,9 +24,7 @@ impl LspClient {
     /// Spawn a new LSP server process with environment variables
     pub fn spawn_with_env(bin: &str, env_vars: &[(&str, &str)]) -> Self {
         let mut cmd = Command::new(bin);
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
 
         // Add any environment variables
         for (key, value) in env_vars {
@@ -37,12 +35,7 @@ impl LspClient {
 
         let reader = BufReader::new(child.stdout.take().expect("Failed to get stdout"));
 
-        let mut client = Self {
-            child,
-            reader,
-            buf: Vec::new(),
-            next_id: 1,
-        };
+        let mut client = Self { child, reader, buf: Vec::new(), next_id: 1 };
 
         client.initialize();
         client
@@ -54,12 +47,8 @@ impl LspClient {
         let header = format!("Content-Length: {}\r\n\r\n", content.len());
 
         let stdin = self.child.stdin.as_mut().expect("stdin not available");
-        stdin
-            .write_all(header.as_bytes())
-            .expect("Failed to write header");
-        stdin
-            .write_all(content.as_bytes())
-            .expect("Failed to write content");
+        stdin.write_all(header.as_bytes()).expect("Failed to write header");
+        stdin.write_all(content.as_bytes()).expect("Failed to write content");
         stdin.flush().expect("Failed to flush stdin");
     }
 
@@ -73,12 +62,7 @@ impl LspClient {
 
         loop {
             line.clear();
-            if self
-                .reader
-                .read_line(&mut line)
-                .expect("Failed to read line")
-                == 0
-            {
+            if self.reader.read_line(&mut line).expect("Failed to read line") == 0 {
                 panic!("LSP server closed stdout unexpectedly");
             }
 
@@ -105,9 +89,7 @@ impl LspClient {
 
         // Read the message body
         let mut body = vec![0u8; content_length];
-        self.reader
-            .read_exact(&mut body)
-            .expect("Failed to read body");
+        self.reader.read_exact(&mut body).expect("Failed to read body");
 
         serde_json::from_slice(&body).expect("Failed to parse JSON")
     }
@@ -119,10 +101,8 @@ impl LspClient {
 
         loop {
             // First check buffered messages
-            if let Some(pos) = self
-                .buf
-                .iter()
-                .position(|m| m.get("id") == Some(&serde_json::json!(id)))
+            if let Some(pos) =
+                self.buf.iter().position(|m| m.get("id") == Some(&serde_json::json!(id)))
             {
                 return self.buf.remove(pos);
             }

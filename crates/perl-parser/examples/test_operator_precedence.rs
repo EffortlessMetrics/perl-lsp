@@ -18,23 +18,11 @@ fn main() {
         ("$y = $a and $b", "Should parse as: ($y = $a) and $b"),
         ("$z = $a || $b", "Should parse as: $z = ($a || $b)"),
         // Comparison with and/or
-        (
-            "$a > 0 and $b < 10",
-            "Should parse as: ($a > 0) and ($b < 10)",
-        ),
-        (
-            "$a == 1 or $b == 0",
-            "Should parse as: ($a == 1) or ($b == 0)",
-        ),
+        ("$a > 0 and $b < 10", "Should parse as: ($a > 0) and ($b < 10)"),
+        ("$a == 1 or $b == 0", "Should parse as: ($a == 1) or ($b == 0)"),
         // Complex nesting
-        (
-            "$a and $b or $c and $d",
-            "Left associative: (($a and $b) or $c) and $d",
-        ),
-        (
-            "$a or $b and $c or $d",
-            "Should parse with correct precedence",
-        ),
+        ("$a and $b or $c and $d", "Left associative: (($a and $b) or $c) and $d"),
+        ("$a or $b and $c or $d", "Should parse with correct precedence"),
     ];
 
     for (test, expected) in tests {

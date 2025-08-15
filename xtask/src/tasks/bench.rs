@@ -46,9 +46,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     spinner.set_message("Running benchmarks");
@@ -62,18 +60,13 @@ pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>)
     }
 
     // Execute benchmarks
-    let status = cmd("cargo", &args)
-        .run()
-        .context("Failed to run benchmarks")?;
+    let status = cmd("cargo", &args).run().context("Failed to run benchmarks")?;
 
     if status.status.success() {
         spinner.finish_with_message("✅ Benchmarks completed");
     } else {
         spinner.finish_with_message("❌ Benchmarks failed");
-        return Err(color_eyre::eyre::eyre!(
-            "Benchmarks failed with status: {}",
-            status.status
-        ));
+        return Err(color_eyre::eyre::eyre!("Benchmarks failed with status: {}", status.status));
     }
 
     if save {

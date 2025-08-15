@@ -21,44 +21,19 @@ struct TestResult {
 fn main() {
     println!("🧪 Running comprehensive Perl parser edge case tests...\n");
 
-    let mut total_result = TestResult {
-        passed: 0,
-        failed: 0,
-        failures: Vec::new(),
-    };
+    let mut total_result = TestResult { passed: 0, failed: 0, failures: Vec::new() };
 
     let mut category_results = HashMap::new();
 
     // Run all test categories
     let categories = vec![
-        (
-            "Format & Blocks",
-            edge_cases::format_and_blocks::get_tests(),
-        ),
-        (
-            "Operator Overloading",
-            edge_cases::operator_overloading::get_tests(),
-        ),
-        (
-            "Indirect & Methods",
-            edge_cases::indirect_and_methods::get_tests(),
-        ),
-        (
-            "Versions & V-strings",
-            edge_cases::versions_and_vstrings::get_tests(),
-        ),
-        (
-            "Unicode & Encoding",
-            edge_cases::unicode_and_encoding::get_tests(),
-        ),
-        (
-            "File I/O Operations",
-            edge_cases::file_io_operations::get_tests(),
-        ),
-        (
-            "Regex & Patterns",
-            edge_cases::regex_and_patterns::get_tests(),
-        ),
+        ("Format & Blocks", edge_cases::format_and_blocks::get_tests()),
+        ("Operator Overloading", edge_cases::operator_overloading::get_tests()),
+        ("Indirect & Methods", edge_cases::indirect_and_methods::get_tests()),
+        ("Versions & V-strings", edge_cases::versions_and_vstrings::get_tests()),
+        ("Unicode & Encoding", edge_cases::unicode_and_encoding::get_tests()),
+        ("File I/O Operations", edge_cases::file_io_operations::get_tests()),
+        ("Regex & Patterns", edge_cases::regex_and_patterns::get_tests()),
     ];
 
     // Also include the original test suites
@@ -70,11 +45,7 @@ fn main() {
 
     // Run new comprehensive tests
     for (category_name, tests) in categories {
-        let mut category_result = TestResult {
-            passed: 0,
-            failed: 0,
-            failures: Vec::new(),
-        };
+        let mut category_result = TestResult { passed: 0, failed: 0, failures: Vec::new() };
 
         println!("📁 Testing {}: {} tests", category_name, tests.len());
 
@@ -103,16 +74,10 @@ fn main() {
         }
 
         let total = category_result.passed + category_result.failed;
-        let percentage = if total > 0 {
-            (category_result.passed as f64 / total as f64) * 100.0
-        } else {
-            100.0
-        };
+        let percentage =
+            if total > 0 { (category_result.passed as f64 / total as f64) * 100.0 } else { 100.0 };
 
-        println!(
-            "  ✅ Passed: {}/{} ({:.1}%)",
-            category_result.passed, total, percentage
-        );
+        println!("  ✅ Passed: {}/{} ({:.1}%)", category_result.passed, total, percentage);
         if category_result.failed > 0 {
             println!("  ❌ Failed: {}", category_result.failed);
             if category_result.failed <= 5 {
@@ -134,11 +99,7 @@ fn main() {
     // Run original test suites
     println!("📁 Running original test suites...\n");
     for (suite_name, tests) in original_tests {
-        let mut suite_result = TestResult {
-            passed: 0,
-            failed: 0,
-            failures: Vec::new(),
-        };
+        let mut suite_result = TestResult { passed: 0, failed: 0, failures: Vec::new() };
 
         println!("  Testing {}: {} tests", suite_name, tests.len());
 
@@ -162,16 +123,10 @@ fn main() {
         }
 
         let total = suite_result.passed + suite_result.failed;
-        let percentage = if total > 0 {
-            (suite_result.passed as f64 / total as f64) * 100.0
-        } else {
-            100.0
-        };
+        let percentage =
+            if total > 0 { (suite_result.passed as f64 / total as f64) * 100.0 } else { 100.0 };
 
-        println!(
-            "    ✅ Passed: {}/{} ({:.1}%)",
-            suite_result.passed, total, percentage
-        );
+        println!("    ✅ Passed: {}/{} ({:.1}%)", suite_result.passed, total, percentage);
         if suite_result.failed > 0 {
             println!("    ❌ Failed: {}", suite_result.failed);
         }
@@ -190,28 +145,15 @@ fn main() {
     };
 
     println!("Total Tests: {}", grand_total);
-    println!(
-        "✅ Passed: {} ({:.1}%)",
-        total_result.passed, overall_percentage
-    );
-    println!(
-        "❌ Failed: {} ({:.1}%)",
-        total_result.failed,
-        100.0 - overall_percentage
-    );
+    println!("✅ Passed: {} ({:.1}%)", total_result.passed, overall_percentage);
+    println!("❌ Failed: {} ({:.1}%)", total_result.failed, 100.0 - overall_percentage);
 
     println!("\n📈 Category Breakdown:");
     for (category, result) in &category_results {
         let total = result.passed + result.failed;
-        let percentage = if total > 0 {
-            (result.passed as f64 / total as f64) * 100.0
-        } else {
-            100.0
-        };
-        println!(
-            "  {}: {}/{} ({:.1}%)",
-            category, result.passed, total, percentage
-        );
+        let percentage =
+            if total > 0 { (result.passed as f64 / total as f64) * 100.0 } else { 100.0 };
+        println!("  {}: {}/{} ({:.1}%)", category, result.passed, total, percentage);
     }
 
     // Show some failure examples if any
@@ -241,10 +183,7 @@ fn get_original_128_tests() -> Vec<(&'static str, &'static str)> {
         // ... (include all 128 original tests here)
         // For brevity, I'll just include a few examples
         ("eval { die 'error' }", "eval block with die"),
-        (
-            "try { risky_operation() } catch { warn $_ }",
-            "try-catch block",
-        ),
+        ("try { risky_operation() } catch { warn $_ }", "try-catch block"),
         ("defer { cleanup() }", "defer block"),
         // ... rest of the 128 tests
     ]

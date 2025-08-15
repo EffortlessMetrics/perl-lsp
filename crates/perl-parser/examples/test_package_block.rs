@@ -8,10 +8,7 @@ fn main() {
         ("package Foo::Bar;", "package with namespace"),
         // Package blocks (Perl 5.14+)
         ("package Foo { }", "empty package block"),
-        (
-            "package Bar { sub method { } }",
-            "package block with method",
-        ),
+        ("package Bar { sub method { } }", "package block with method"),
         // The test case
         (
             r#"package Bar {

@@ -50,10 +50,7 @@ print "Config loaded\n";
     println!("Input code:{}", code);
     println!("\nFound {} heredoc declarations", declarations.len());
     for decl in &declarations {
-        println!(
-            "  - Delimiter: '{}', Line: {}",
-            decl.terminator, decl.declaration_line
-        );
+        println!("  - Delimiter: '{}', Line: {}", decl.terminator, decl.declaration_line);
     }
     println!();
 }
@@ -83,10 +80,7 @@ print $template;
     println!("Input code:{}", code);
     println!("\nHeredocs in s///e context:");
     for decl in &declarations {
-        println!(
-            "  - Delimiter: '{}', Interpolate: {}",
-            decl.terminator, decl.interpolated
-        );
+        println!("  - Delimiter: '{}', Interpolate: {}", decl.terminator, decl.interpolated);
     }
     println!();
 }
@@ -145,12 +139,8 @@ EOF"#;
 
     // Example 2: Variable interpolation
     let mut context = RuntimeHeredocContext::default();
-    context
-        .variables
-        .insert("user".to_string(), "Alice".to_string());
-    context
-        .variables
-        .insert("action".to_string(), "logged in".to_string());
+    context.variables.insert("user".to_string(), "Alice".to_string());
+    context.variables.insert("action".to_string(), "logged in".to_string());
 
     let heredoc_content = "User $user has $action";
     match runtime.evaluate_heredoc(heredoc_content, &context) {

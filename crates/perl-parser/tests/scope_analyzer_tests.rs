@@ -20,11 +20,7 @@ print $undefined_var;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -36,11 +32,7 @@ print "Hello";
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UnusedVariable))
-    );
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UnusedVariable)));
 }
 
 #[test]
@@ -54,11 +46,7 @@ my $x = 1;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::VariableShadowing))
-    );
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::VariableShadowing)));
 }
 
 #[test]
@@ -70,11 +58,7 @@ print $global_var;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -103,12 +87,8 @@ print $Foo::package_var;  # Should be ok
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-                && (i.variable_name == "$Foo::package_var"))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+        && (i.variable_name == "$Foo::package_var")));
 }
 
 #[test]
@@ -122,11 +102,7 @@ sub foo {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -140,11 +116,7 @@ foreach my $item (@arr) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -157,11 +129,7 @@ while (my $line = <STDIN>) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -221,11 +189,7 @@ print $$;
 
     let issues = analyze_code(code);
     // None of these should be undefined
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -237,10 +201,8 @@ my $unused = 42;
     let issues = analyze_code(code);
 
     // Check for unused variables
-    let unused_issues: Vec<_> = issues
-        .iter()
-        .filter(|i| matches!(i.kind, IssueKind::UnusedVariable))
-        .collect();
+    let unused_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnusedVariable)).collect();
     assert!(!unused_issues.is_empty());
 }
 
@@ -253,11 +215,7 @@ print "$x $y $z";
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -270,11 +228,7 @@ print @values;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -287,11 +241,7 @@ print @slice;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -309,11 +259,7 @@ END {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -327,11 +273,7 @@ $global_var = 42;
 
     let issues = analyze_code(code);
     // Variables declared with 'use vars' should not be undefined
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -359,11 +301,7 @@ sub counter {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -378,12 +316,8 @@ if ($text =~ /(\w+)\s+(\w+)/) {
 
     let issues = analyze_code(code);
     // $1, $2 etc. are special regex capture variables
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-                && (i.variable_name == "$1" || i.variable_name == "$2"))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+        && (i.variable_name == "$1" || i.variable_name == "$2")));
 }
 
 #[test]
@@ -414,11 +348,7 @@ print $result;
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
 
 #[test]
@@ -435,9 +365,5 @@ given ($value) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        !issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
-    );
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }

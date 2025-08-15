@@ -30,19 +30,11 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let children = statements
-                    .iter()
-                    .map(|s| s.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let children = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(program {})", children)
             }
 
-            NodeKind::PackageDeclaration {
-                name,
-                version,
-                block,
-            } => {
+            NodeKind::PackageDeclaration { name, version, block } => {
                 let mut parts = vec![format!("(package_name {})", name)];
                 if let Some(v) = version {
                     parts.push(format!("(version {})", v));
@@ -53,11 +45,7 @@ impl Node {
                 format!("(package_declaration {})", parts.join(" "))
             }
 
-            NodeKind::UseStatement {
-                module,
-                version,
-                imports,
-            } => {
+            NodeKind::UseStatement { module, version, imports } => {
                 let mut parts = vec![format!("(module_name {})", module)];
                 if let Some(v) = version {
                     parts.push(format!("(version {})", v));
@@ -73,12 +61,7 @@ impl Node {
                 format!("(use_statement {})", parts.join(" "))
             }
 
-            NodeKind::Subroutine {
-                name,
-                prototype,
-                attributes,
-                body,
-            } => {
+            NodeKind::Subroutine { name, prototype, attributes, body } => {
                 let mut parts = Vec::new();
                 if let Some(n) = name {
                     parts.push(format!("(sub_name {})", n));
@@ -99,20 +82,11 @@ impl Node {
             }
 
             NodeKind::Block { statements } => {
-                let children = statements
-                    .iter()
-                    .map(|s| s.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let children = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(block {})", children)
             }
 
-            NodeKind::IfStatement {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::IfStatement { condition, then_branch, elsif_branches, else_branch } => {
                 let mut parts = vec![
                     format!("(condition {})", condition.to_sexp()),
                     format!("(then {})", then_branch.to_sexp()),
@@ -133,15 +107,9 @@ impl Node {
                 format!("(if_statement {})", parts.join(" "))
             }
 
-            NodeKind::WhileStatement {
-                condition,
-                body,
-                continue_block,
-            } => {
-                let mut parts = vec![
-                    format!("(condition {})", condition.to_sexp()),
-                    body.to_sexp(),
-                ];
+            NodeKind::WhileStatement { condition, body, continue_block } => {
+                let mut parts =
+                    vec![format!("(condition {})", condition.to_sexp()), body.to_sexp()];
 
                 if let Some(cont) = continue_block {
                     parts.push(format!("(continue {})", cont.to_sexp()));
@@ -150,12 +118,7 @@ impl Node {
                 format!("(while_statement {})", parts.join(" "))
             }
 
-            NodeKind::ForStatement {
-                init,
-                condition,
-                update,
-                body,
-            } => {
+            NodeKind::ForStatement { init, condition, update, body } => {
                 let mut parts = Vec::new();
 
                 if let Some(i) = init {
@@ -172,11 +135,7 @@ impl Node {
                 format!("(for_statement {})", parts.join(" "))
             }
 
-            NodeKind::ForeachStatement {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::ForeachStatement { variable, list, body } => {
                 format!(
                     "(foreach_statement (var {}) (list {}) {})",
                     variable.to_sexp(),
@@ -194,12 +153,7 @@ impl Node {
                     TokenType::SlashEqual => "/=",
                     _ => "=",
                 };
-                format!(
-                    "(assignment (op {}) {} {})",
-                    op_str,
-                    left.to_sexp(),
-                    right.to_sexp()
-                )
+                format!("(assignment (op {}) {} {})", op_str, left.to_sexp(), right.to_sexp())
             }
 
             NodeKind::Binary { left, op, right } => {
@@ -218,24 +172,12 @@ impl Node {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                let arg_list = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let arg_list = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(function_call (name {}) (args {}))", name, arg_list)
             }
 
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
-                let arg_list = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+            NodeKind::MethodCall { object, method, args } => {
+                let arg_list = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!(
                     "(method_call {} (method {}) (args {}))",
                     object.to_sexp(),
@@ -245,11 +187,7 @@ impl Node {
             }
 
             NodeKind::ArrayAccess { array, index } => {
-                format!(
-                    "(array_access {} (index {}))",
-                    array.to_sexp(),
-                    index.to_sexp()
-                )
+                format!("(array_access {} (index {}))", array.to_sexp(), index.to_sexp())
             }
 
             NodeKind::HashAccess { hash, key } => {
@@ -273,11 +211,7 @@ impl Node {
             }
 
             NodeKind::List { elements } => {
-                let items = elements
-                    .iter()
-                    .map(|e| e.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let items = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(list {})", items)
             }
 
@@ -289,30 +223,16 @@ impl Node {
                 format!("(heredoc (marker {}) (content {}))", marker, content)
             }
 
-            NodeKind::VariableDeclaration {
-                declarator,
-                variables,
-            } => {
-                let var_list = variables
-                    .iter()
-                    .map(|v| v.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!(
-                    "(variable_declaration (declarator {}) {})",
-                    declarator, var_list
-                )
+            NodeKind::VariableDeclaration { declarator, variables } => {
+                let var_list = variables.iter().map(|v| v.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(variable_declaration (declarator {}) {})", declarator, var_list)
             }
 
             NodeKind::Error { message } => {
                 format!("(ERROR {})", message)
             }
 
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
                 format!(
                     "(ternary {} {} {})",
                     condition.to_sexp(),
@@ -332,11 +252,7 @@ impl Node {
             }
 
             NodeKind::ArrayRef { elements } => {
-                let items = elements
-                    .iter()
-                    .map(|e| e.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let items = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(array_ref {})", items)
             }
 
@@ -361,10 +277,7 @@ impl Node {
                 }
             }
 
-            NodeKind::LoopControl {
-                control_type,
-                label,
-            } => {
+            NodeKind::LoopControl { control_type, label } => {
                 if let Some(lbl) = label {
                     format!("({} {})", control_type, lbl)
                 } else {
@@ -603,9 +516,7 @@ mod tests {
     #[test]
     fn test_node_to_sexp() {
         let node = Node::new(
-            NodeKind::Variable {
-                name: Arc::from("$x"),
-            },
+            NodeKind::Variable { name: Arc::from("$x") },
             SourceLocation { start: 0, end: 2 },
         );
 
@@ -617,9 +528,7 @@ mod tests {
         let program = Node::new(
             NodeKind::Program {
                 statements: vec![Node::new(
-                    NodeKind::Variable {
-                        name: Arc::from("$x"),
-                    },
+                    NodeKind::Variable { name: Arc::from("$x") },
                     SourceLocation { start: 0, end: 2 },
                 )],
             },

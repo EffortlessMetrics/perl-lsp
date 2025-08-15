@@ -166,13 +166,8 @@ impl SymbolTable {
         let scope_id = self.next_scope_id;
         self.next_scope_id += 1;
 
-        let scope = Scope {
-            id: scope_id,
-            parent: Some(parent),
-            kind,
-            location,
-            symbols: HashSet::new(),
-        };
+        let scope =
+            Scope { id: scope_id, parent: Some(parent), kind, location, symbols: HashSet::new() };
 
         self.scopes.insert(scope_id, scope);
         self.scope_stack.push(scope_id);
@@ -187,11 +182,7 @@ impl SymbolTable {
     /// Add a symbol definition
     fn add_symbol(&mut self, symbol: Symbol) {
         let name = symbol.name.clone();
-        self.scopes
-            .get_mut(&symbol.scope_id)
-            .unwrap()
-            .symbols
-            .insert(name.clone());
+        self.scopes.get_mut(&symbol.scope_id).unwrap().symbols.insert(name.clone());
         self.symbols.entry(name).or_default().push(symbol);
     }
 
@@ -263,9 +254,7 @@ impl Default for SymbolExtractor {
 impl SymbolExtractor {
     /// Create a new symbol extractor
     pub fn new() -> Self {
-        SymbolExtractor {
-            table: SymbolTable::new(),
-        }
+        SymbolExtractor { table: SymbolTable::new() }
     }
 
     /// Extract symbols from an AST node
@@ -283,12 +272,7 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                attributes,
-                initializer,
-            } => {
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
                 self.handle_variable_declaration(
                     declarator,
                     variable,
@@ -333,16 +317,9 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
             }
 
-            NodeKind::Subroutine {
-                name,
-                params: _,
-                attributes,
-                body,
-            } => {
-                let sub_name = name
-                    .as_ref()
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| "<anon>".to_string());
+            NodeKind::Subroutine { name, params: _, attributes, body } => {
+                let sub_name =
+                    name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
 
                 if name.is_some() {
                     let symbol = Symbol {
@@ -405,16 +382,10 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches: _,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
                 self.visit_node(condition);
 
-                self.table
-                    .push_scope(ScopeKind::Block, then_branch.location);
+                self.table.push_scope(ScopeKind::Block, then_branch.location);
                 self.visit_node(then_branch);
                 self.table.pop_scope();
 
@@ -425,11 +396,7 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::While {
-                condition,
-                body,
-                continue_block: _,
-            } => {
+            NodeKind::While { condition, body, continue_block: _ } => {
                 self.visit_node(condition);
 
                 self.table.push_scope(ScopeKind::Block, body.location);
@@ -437,13 +404,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 if let Some(init_node) = init {
@@ -460,11 +421,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared
@@ -508,11 +465,7 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::MethodCall {
-                object,
-                method: _,
-                args,
-            } => {
+            NodeKind::MethodCall { object, method: _, args } => {
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -533,11 +486,7 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
                 self.visit_node(condition);
                 self.visit_node(then_expr);
                 self.visit_node(else_expr);
@@ -563,10 +512,7 @@ impl SymbolExtractor {
             }
 
             // Handle interpolated strings specially to extract variable references
-            NodeKind::String {
-                value,
-                interpolated,
-            } => {
+            NodeKind::String { value, interpolated } => {
                 if *interpolated {
                     // Extract variable references from interpolated strings
                     self.extract_vars_from_string(value, node.location);
@@ -583,11 +529,7 @@ impl SymbolExtractor {
                 self.visit_node(block);
             }
 
-            NodeKind::StatementModifier {
-                statement,
-                modifier: _,
-                condition,
-            } => {
+            NodeKind::StatementModifier { statement, modifier: _, condition } => {
                 self.visit_node(statement);
                 self.visit_node(condition);
             }
@@ -596,11 +538,7 @@ impl SymbolExtractor {
                 self.visit_node(block);
             }
 
-            NodeKind::Try {
-                body,
-                catch_blocks,
-                finally_block,
-            } => {
+            NodeKind::Try { body, catch_blocks, finally_block } => {
                 self.visit_node(body);
                 for (_, catch_block) in catch_blocks {
                     self.visit_node(catch_block);
@@ -639,11 +577,7 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Method {
-                name,
-                params: _,
-                body,
-            } => {
+            NodeKind::Method { name, params: _, body } => {
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
@@ -681,19 +615,11 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Match {
-                expr,
-                pattern: _,
-                modifiers: _,
-            } => {
+            NodeKind::Match { expr, pattern: _, modifiers: _ } => {
                 self.visit_node(expr);
             }
 
-            NodeKind::IndirectCall {
-                method: _,
-                object,
-                args,
-            } => {
+            NodeKind::IndirectCall { method: _, object, args } => {
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -718,10 +644,7 @@ impl SymbolExtractor {
 
             _ => {
                 // For any unhandled node types, log a warning
-                eprintln!(
-                    "Warning: Unhandled node type in symbol extractor: {:?}",
-                    node.kind
-                );
+                eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
             }
         }
     }
@@ -778,11 +701,7 @@ impl SymbolExtractor {
         let scalar_re = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})").unwrap();
 
         // The value includes quotes, so strip them
-        let content = if value.len() >= 2 {
-            &value[1..value.len() - 1]
-        } else {
-            value
-        };
+        let content = if value.len() >= 2 { &value[1..value.len() - 1] } else { value };
 
         for cap in scalar_re.captures_iter(content) {
             if let Some(m) = cap.get(0) {
@@ -802,10 +721,7 @@ impl SymbolExtractor {
                 let reference = SymbolReference {
                     name: var_name.to_string(),
                     kind: SymbolKind::ScalarVariable,
-                    location: SourceLocation {
-                        start: start_offset,
-                        end: end_offset,
-                    },
+                    location: SourceLocation { start: start_offset, end: end_offset },
                     scope_id: self.table.current_scope(),
                     is_write: false,
                 };

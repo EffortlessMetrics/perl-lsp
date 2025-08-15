@@ -51,10 +51,8 @@ $cou
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     // Check that both $count and $counter are suggested
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"$count".to_string()));
     assert!(labels.contains(&"$counter".to_string()));
@@ -105,10 +103,8 @@ my @data = qw(a b c);
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"@items".to_string()));
     assert!(labels.contains(&"@iterator".to_string()));
@@ -158,10 +154,8 @@ my %settings = ();
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"%config".to_string()));
     assert!(labels.contains(&"%connection".to_string()));
@@ -217,10 +211,8 @@ proc
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"process_data".to_string()));
     assert!(labels.contains(&"process_items".to_string()));
@@ -264,10 +256,8 @@ fn test_builtin_completion() {
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have print and printf");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"print".to_string()));
     assert!(labels.contains(&"printf".to_string()));
@@ -318,10 +308,8 @@ fn test_keyword_completion() {
 
     assert!(items.len() >= 2, "Should have for and foreach");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.contains(&"for".to_string()));
     assert!(labels.contains(&"foreach".to_string()));
@@ -374,20 +362,15 @@ fn test_special_variable_completion() {
     // in this context, so we'll be more lenient
     assert!(items.len() >= 2, "Should have at least some completions");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     // Check if we got special variables or keywords (both are acceptable)
     let has_special_vars =
         labels.contains(&"$^O".to_string()) && labels.contains(&"$^V".to_string());
     let has_keywords = labels.contains(&"print".to_string()) || labels.contains(&"my".to_string());
 
-    assert!(
-        has_special_vars || has_keywords,
-        "Should have either special variables or keywords"
-    );
+    assert!(has_special_vars || has_keywords, "Should have either special variables or keywords");
 }
 
 /// Test method completion after ->
@@ -435,16 +418,11 @@ fn test_method_completion() {
 
     assert!(items.len() >= 3, "Should have common methods");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     // Check that we have some method completions
-    assert!(
-        !labels.is_empty(),
-        "Should have at least some method completions"
-    );
+    assert!(!labels.is_empty(), "Should have at least some method completions");
 }
 
 /// Test completion in mixed context
@@ -495,10 +473,8 @@ va
     let items = completion_items(&response);
     assert!(items.len() >= 3, "Should have variables and function");
 
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     // Should suggest both variables and the function
     assert!(labels.contains(&"$value".to_string()));
@@ -544,10 +520,8 @@ fn test_completion_details() {
     let items = completion_items(&response);
 
     // Find @ARGV in completions
-    let argv_item = items
-        .iter()
-        .find(|item| item["label"] == "@ARGV")
-        .expect("Should have @ARGV completion");
+    let argv_item =
+        items.iter().find(|item| item["label"] == "@ARGV").expect("Should have @ARGV completion");
 
     // Check it has details
     assert!(argv_item["detail"].is_string());
@@ -598,16 +572,11 @@ fn test_empty_prefix_completion() {
     );
 
     let items = completion_items(&response);
-    assert!(
-        items.len() > 10,
-        "Should have many completions for empty prefix"
-    );
+    assert!(items.len() > 10, "Should have many completions for empty prefix");
 
     // Should include keywords, built-ins, and defined items
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels.iter().any(|l| l.starts_with("if")));
     assert!(labels.iter().any(|l| l.starts_with("print")));
@@ -699,10 +668,7 @@ MyModule::"#
 
     let items = completion_items(&response);
     // Since package completion is TODO, this might be empty for now
-    assert!(
-        items.is_empty() || !items.is_empty(),
-        "Package completion handling"
-    );
+    assert!(items.is_empty() || !items.is_empty(), "Package completion handling");
 }
 
 /// Test snippet expansion in completions
@@ -741,10 +707,7 @@ fn test_snippet_completion() {
     );
 
     // Check if response has items
-    assert!(
-        response["result"].get("items").is_some(),
-        "Response should have items field"
-    );
+    assert!(response["result"].get("items").is_some(), "Response should have items field");
     let items = completion_items(&response);
 
     // Allow empty completions in this case (partial keyword)
@@ -779,10 +742,7 @@ fn test_snippet_completion() {
     // Check if it's a snippet kind (15) or keyword kind (14)
     if let Some(kind) = sub_item.get("kind") {
         let kind_num = kind.as_i64().unwrap_or(0);
-        assert!(
-            kind_num == 14 || kind_num == 15,
-            "Should be keyword or snippet kind"
-        );
+        assert!(kind_num == 14 || kind_num == 15, "Should be keyword or snippet kind");
     }
 }
 
@@ -828,10 +788,8 @@ $arr"#
     let items = completion_items(&response);
 
     // Should suggest $array[...] for array element access
-    let labels: Vec<String> = items
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels: Vec<String> =
+        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     // The provider might need enhancement to handle this case
     assert!(items.is_empty() || labels.iter().any(|l| l.contains("array")));
@@ -875,18 +833,11 @@ fn test_completion_ranking() {
     let items = completion_items(&response);
 
     // Special variables should appear first (they have sort_text starting with "0_")
-    let first_items: Vec<String> = items
-        .iter()
-        .take(5)
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let first_items: Vec<String> =
+        items.iter().take(5).map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     // Check that special variables are prioritized
-    assert!(
-        first_items
-            .iter()
-            .any(|l| l == "$_" || l == "$$" || l == "$@")
-    );
+    assert!(first_items.iter().any(|l| l == "$_" || l == "$$" || l == "$@"));
 }
 
 /// Test completion with incremental typing
@@ -933,11 +884,7 @@ $p"#
     );
 
     let items1 = response1["result"]["items"].as_array().unwrap();
-    assert_eq!(
-        items1.len(),
-        3,
-        "Should have all three variables starting with 'p'"
-    );
+    assert_eq!(items1.len(), 3, "Should have all three variables starting with 'p'");
 
     // Update document to narrow down
     send_notification(
@@ -1017,10 +964,8 @@ $prefi"#
     let items3 = response3["result"]["items"].as_array().unwrap();
     assert_eq!(items3.len(), 2, "Should have only prefix and prefixed_var");
 
-    let labels3: Vec<String> = items3
-        .iter()
-        .map(|item| item["label"].as_str().unwrap().to_string())
-        .collect();
+    let labels3: Vec<String> =
+        items3.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
 
     assert!(labels3.contains(&"$prefix".to_string()));
     assert!(labels3.contains(&"$prefixed_var".to_string()));

@@ -50,10 +50,8 @@ fn bench_position_conversions(c: &mut Criterion) {
 
     c.bench_function("pos16_to_offset_cached", |b| {
         // Pre-compute positions for round-trip
-        let positions: Vec<(u32, u32)> = sample_offsets
-            .iter()
-            .map(|&o| cache.offset_to_position(&text, o))
-            .collect();
+        let positions: Vec<(u32, u32)> =
+            sample_offsets.iter().map(|&o| cache.offset_to_position(&text, o)).collect();
 
         b.iter(|| {
             for &(line, col) in &positions {

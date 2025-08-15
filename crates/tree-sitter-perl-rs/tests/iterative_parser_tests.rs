@@ -50,11 +50,7 @@ mod tests {
         // Test more complex Perl constructs
         assert!(parser.parse("if ($x) { print $x }").is_ok());
         assert!(parser.parse("for (1..10) { print }").is_ok());
-        assert!(
-            parser
-                .parse("@sorted = sort { $a <=> $b } @numbers")
-                .is_ok()
-        );
+        assert!(parser.parse("@sorted = sort { $a <=> $b } @numbers").is_ok());
         // This is a complex dereferencing case that might not be fully supported
         // assert!(parser.parse(r#"$ref = \@{$hash{key}->[0]}"#).is_ok());
     }

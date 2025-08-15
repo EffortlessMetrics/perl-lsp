@@ -39,19 +39,13 @@ impl ComparisonHarness {
         {
             let mut parser = Parser::new();
             let language = crate::language();
-            parser
-                .set_language(&language)
-                .expect("Failed to set language");
-            Self {
-                tree_sitter_parser: parser,
-            }
+            parser.set_language(&language).expect("Failed to set language");
+            Self { tree_sitter_parser: parser }
         }
 
         #[cfg(feature = "pure-rust")]
         {
-            Self {
-                pure_rust_parser: PureRustPerlParser::new(),
-            }
+            Self { pure_rust_parser: PureRustPerlParser::new() }
         }
     }
 
@@ -180,11 +174,7 @@ impl ComparisonHarness {
 
         if child_count == 0 {
             if node.is_named() {
-                format!(
-                    "({} {})",
-                    kind,
-                    node.utf8_text(source.as_bytes()).unwrap_or("")
-                )
+                format!("({} {})", kind, node.utf8_text(source.as_bytes()).unwrap_or(""))
             } else {
                 node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
             }

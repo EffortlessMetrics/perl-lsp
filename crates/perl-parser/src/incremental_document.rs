@@ -113,10 +113,8 @@ impl IncrementalDocument {
         }
 
         // Find all affected ranges
-        let affected_ranges: Vec<_> = sorted_edits
-            .iter()
-            .map(|e| (e.start_byte, e.old_end_byte))
-            .collect();
+        let affected_ranges: Vec<_> =
+            sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
 
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
@@ -250,11 +248,7 @@ impl IncrementalDocument {
         let mut new_root = (*self.root).clone();
 
         // Find and update the affected token
-        if self.update_token_in_tree(&mut new_root, source, edit) {
-            Some(new_root)
-        } else {
-            None
-        }
+        if self.update_token_in_tree(&mut new_root, source, edit) { Some(new_root) } else { None }
     }
 
     /// Update a single token in the tree
@@ -270,9 +264,7 @@ impl IncrementalDocument {
                     // Update the value
                     let new_text = &source[node.location.start..node.location.end];
                     if let Ok(value) = new_text.parse::<f64>() {
-                        node.kind = NodeKind::Number {
-                            value: value.to_string(),
-                        };
+                        node.kind = NodeKind::Number { value: value.to_string() };
                         return true;
                     }
                 }
@@ -413,15 +405,11 @@ impl IncrementalDocument {
     fn cache_node(&mut self, node: &Node) {
         // Cache this subtree by range
         let range = (node.location.start, node.location.end);
-        self.subtree_cache
-            .by_range
-            .insert(range, Arc::new(node.clone()));
+        self.subtree_cache.by_range.insert(range, Arc::new(node.clone()));
 
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
-        self.subtree_cache
-            .by_content
-            .insert(hash, Arc::new(node.clone()));
+        self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
 
         // Recursively cache children
         match &node.kind {

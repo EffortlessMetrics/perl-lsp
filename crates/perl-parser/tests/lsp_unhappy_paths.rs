@@ -26,10 +26,7 @@ fn test_malformed_json_request() {
     // Any behavior is acceptable - we just verify the server doesn't crash
 
     // Server must remain alive
-    assert!(
-        server.process.try_wait().unwrap().is_none(),
-        "server crashed"
-    );
+    assert!(server.process.try_wait().unwrap().is_none(), "server crashed");
     shutdown_and_exit(&mut server);
 }
 
@@ -50,10 +47,7 @@ fn test_invalid_method() {
     );
 
     // Check for error response
-    assert!(
-        response.get("error").is_some(),
-        "expected error for invalid method"
-    );
+    assert!(response.get("error").is_some(), "expected error for invalid method");
     assert_eq!(response["error"]["code"], -32601); // Method not found
     shutdown_and_exit(&mut server);
 }
@@ -98,10 +92,7 @@ fn test_missing_required_params() {
             );
         }
     } else {
-        panic!(
-            "Expected either error or result in response, got: {:?}",
-            response
-        );
+        panic!("Expected either error or result in response, got: {:?}", response);
     }
     shutdown_and_exit(&mut server);
 }
@@ -144,10 +135,7 @@ fn test_invalid_uri_format() {
     );
 
     let response = read_response(&mut server);
-    let empty_items = response["result"]["items"]
-        .as_array()
-        .map(|a| a.is_empty())
-        .unwrap_or(true);
+    let empty_items = response["result"]["items"].as_array().map(|a| a.is_empty()).unwrap_or(true);
     assert!(response["error"].is_object() || empty_items);
 }
 
@@ -176,10 +164,7 @@ fn test_document_not_found() {
     );
 
     let response = read_response(&mut server);
-    let empty_items = response["result"]["items"]
-        .as_array()
-        .map(|a| a.is_empty())
-        .unwrap_or(true);
+    let empty_items = response["result"]["items"].as_array().map(|a| a.is_empty()).unwrap_or(true);
     assert!(response["error"].is_object() || empty_items);
 }
 
@@ -226,10 +211,7 @@ fn test_out_of_bounds_position() {
 
     let response = read_response(&mut server);
     // Should handle gracefully, return empty or error
-    let empty_items = response["result"]["items"]
-        .as_array()
-        .map(|a| a.is_empty())
-        .unwrap_or(true);
+    let empty_items = response["result"]["items"].as_array().map(|a| a.is_empty()).unwrap_or(true);
     assert!(response["error"].is_object() || empty_items);
 }
 
@@ -625,20 +607,14 @@ fn test_binary_frame() {
     initialize_lsp(&mut server);
 
     // Send actual binary junk as a frame body; behavior is implementation-defined
-    send_raw(
-        &mut server,
-        b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07",
-    );
+    send_raw(&mut server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
 
     // Server might ignore or error, we just verify it doesn't hang or crash
     let _maybe = read_response_timeout(&mut server, short_timeout());
     // Any behavior is acceptable - ignore, error, or notification
 
     // Server must remain alive
-    assert!(
-        server.process.try_wait().unwrap().is_none(),
-        "server crashed on binary frame"
-    );
+    assert!(server.process.try_wait().unwrap().is_none(), "server crashed on binary frame");
     shutdown_and_exit(&mut server);
 }
 

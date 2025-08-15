@@ -268,11 +268,7 @@ impl CompletionProvider {
         .into_iter()
         .collect();
 
-        CompletionProvider {
-            symbol_table,
-            keywords,
-            builtins,
-        }
+        CompletionProvider { symbol_table, keywords, builtins }
     }
 
     /// Get completions at a given position
@@ -329,10 +325,7 @@ impl CompletionProvider {
 
         // Sort completions by relevance
         completions.sort_by(|a, b| {
-            a.sort_text
-                .as_ref()
-                .unwrap_or(&a.label)
-                .cmp(b.sort_text.as_ref().unwrap_or(&b.label))
+            a.sort_text.as_ref().unwrap_or(&a.label).cmp(b.sort_text.as_ref().unwrap_or(&b.label))
         });
 
         completions
@@ -360,11 +353,7 @@ impl CompletionProvider {
         let word_prefix = source[word_start..position].to_string();
 
         // Detect trigger character
-        let trigger_character = if position > 0 {
-            source.chars().nth(position - 1)
-        } else {
-            None
-        };
+        let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
 
         // Simple heuristics for context detection
         let in_string = self.is_in_string(source, position);

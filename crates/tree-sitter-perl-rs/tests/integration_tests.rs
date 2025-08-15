@@ -268,10 +268,8 @@ EOF
 "#;
 
         // Test BestGuess mode
-        let config = EdgeCaseConfig {
-            recovery_mode: RecoveryMode::BestGuess,
-            ..Default::default()
-        };
+        let config =
+            EdgeCaseConfig { recovery_mode: RecoveryMode::BestGuess, ..Default::default() };
 
         let mut handler = EdgeCaseHandler::new(config);
         let analysis = handler.analyze(code);
@@ -279,13 +277,7 @@ EOF
         // Should successfully recover the delimiter
         assert_eq!(analysis.delimiter_resolutions.len(), 1);
         assert!(analysis.delimiter_resolutions[0].resolved_to.is_some());
-        assert_eq!(
-            analysis.delimiter_resolutions[0]
-                .resolved_to
-                .as_ref()
-                .unwrap(),
-            "EOF"
-        );
+        assert_eq!(analysis.delimiter_resolutions[0].resolved_to.as_ref().unwrap(), "EOF");
     }
 
     #[test]

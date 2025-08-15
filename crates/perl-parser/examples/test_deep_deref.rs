@@ -1,11 +1,7 @@
 use perl_parser::Parser;
 
 fn main() {
-    let tests = vec![
-        "$hash->{key}",
-        "$hash->{key}->[0]",
-        "$hash->{key}->[0]->{sub}",
-    ];
+    let tests = vec!["$hash->{key}", "$hash->{key}->[0]", "$hash->{key}->[0]->{sub}"];
 
     for test in tests {
         println!("\nTesting: {}", test);

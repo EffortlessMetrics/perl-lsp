@@ -63,10 +63,7 @@ impl BenchmarkSuite {
             let success_rate =
                 results.iter().filter(|r| r.success).count() as f64 / results.len() as f64 * 100.0;
 
-            println!(
-                "{:30} | Avg: {:>8.2?} | Success: {:>5.1}%",
-                name, avg_duration, success_rate
-            );
+            println!("{:30} | Avg: {:>8.2?} | Success: {:>5.1}%", name, avg_duration, success_rate);
 
             // Show min/max
             let min = results.iter().map(|r| r.duration).min().unwrap_or_default();
@@ -88,17 +85,13 @@ impl BenchmarkSuite {
         if let (Some(baseline_results), Some(comparison_results)) =
             (self.results.get(baseline), self.results.get(comparison))
         {
-            let baseline_avg: Duration = baseline_results
-                .iter()
-                .map(|r| r.duration)
-                .sum::<Duration>()
-                / baseline_results.len() as u32;
+            let baseline_avg: Duration =
+                baseline_results.iter().map(|r| r.duration).sum::<Duration>()
+                    / baseline_results.len() as u32;
 
-            let comparison_avg: Duration = comparison_results
-                .iter()
-                .map(|r| r.duration)
-                .sum::<Duration>()
-                / comparison_results.len() as u32;
+            let comparison_avg: Duration =
+                comparison_results.iter().map(|r| r.duration).sum::<Duration>()
+                    / comparison_results.len() as u32;
 
             let speedup = baseline_avg.as_secs_f64() / comparison_avg.as_secs_f64();
 
@@ -129,9 +122,7 @@ pub struct ParserBenchmark {
 
 impl Default for ParserBenchmark {
     fn default() -> Self {
-        Self {
-            parser: PureRustPerlParser::new(),
-        }
+        Self { parser: PureRustPerlParser::new() }
     }
 }
 
@@ -145,10 +136,7 @@ impl ParserBenchmark {
         // Parse input
         let pairs =
             PerlParser::parse(Rule::program, input).map_err(|e| format!("Parse error: {:?}", e))?;
-        let pair = pairs
-            .into_iter()
-            .next()
-            .ok_or_else(|| "No pairs found".to_string())?;
+        let pair = pairs.into_iter().next().ok_or_else(|| "No pairs found".to_string())?;
 
         // Build AST with specified implementation
         match impl_type {
@@ -188,10 +176,7 @@ macro_rules! bench_parsers {
         // Benchmark recursive parser (without stacker)
         $suite.bench("Recursive", iterations, || {
             let mut bench = ParserBenchmark::new();
-            bench
-                .bench_parser(ParserImpl::Recursive, &input)
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+            bench.bench_parser(ParserImpl::Recursive, &input).map(|_| ()).map_err(|e| e.to_string())
         });
 
         // Benchmark recursive parser with stacker
@@ -206,10 +191,7 @@ macro_rules! bench_parsers {
         // Benchmark iterative parser
         $suite.bench("Iterative", iterations, || {
             let mut bench = ParserBenchmark::new();
-            bench
-                .bench_parser(ParserImpl::Iterative, &input)
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+            bench.bench_parser(ParserImpl::Iterative, &input).map(|_| ()).map_err(|e| e.to_string())
         });
     }};
 }

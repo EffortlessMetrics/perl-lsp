@@ -250,10 +250,7 @@ pub struct PerlLexer<'source> {
 
 impl<'source> PerlLexer<'source> {
     pub fn new(input: &'source str) -> Self {
-        Self {
-            lexer: Token::lexer(input),
-            peeked: None,
-        }
+        Self { lexer: Token::lexer(input), peeked: None }
     }
 
     pub fn next_token(&mut self) -> Token {

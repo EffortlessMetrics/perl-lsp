@@ -45,11 +45,7 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Assert performance: should be < 50ms (allow 150ms for CI)
-        assert!(
-            elapsed.as_millis() < 150,
-            "Edit took {}ms, expected < 150ms",
-            elapsed.as_millis()
-        );
+        assert!(elapsed.as_millis() < 150, "Edit took {}ms, expected < 150ms", elapsed.as_millis());
 
         // Verify the edit was applied correctly
         let lines: Vec<&str> = text.lines().collect();
@@ -81,10 +77,7 @@ mod tests {
 
         // Test round-trip
         let new_mapper = PositionMapper::new(&mutable_text);
-        let pos = Position {
-            line: 0,
-            character: 8,
-        }; // After "let crab"
+        let pos = Position { line: 0, character: 8 }; // After "let crab"
         let byte = new_mapper.lsp_pos_to_byte(pos).unwrap();
         let back_pos = new_mapper.byte_to_lsp_pos(byte);
         assert_eq!(back_pos.character, 8);
@@ -99,18 +92,12 @@ mod tests {
         // Test positions at line boundaries
 
         // Start of line 2 (after \r\n)
-        let line2_start = Position {
-            line: 1,
-            character: 0,
-        };
+        let line2_start = Position { line: 1, character: 0 };
         let byte = mapper.lsp_pos_to_byte(line2_start).unwrap();
         assert_eq!(byte, 10); // "line one\r\n" = 10 bytes
 
         // Middle of line 2
-        let line2_mid = Position {
-            line: 1,
-            character: 5,
-        };
+        let line2_mid = Position { line: 1, character: 5 };
         let byte = mapper.lsp_pos_to_byte(line2_mid).unwrap();
         assert_eq!(byte, 15); // 10 + 5
 
@@ -137,10 +124,7 @@ mod tests {
         let mapper = PositionMapper::new(text);
 
         // Test position in middle of multibyte sequence
-        let pos = Position {
-            line: 0,
-            character: 5,
-        }; // After "café "
+        let pos = Position { line: 0, character: 5 }; // After "café "
         let byte_offset = mapper.lsp_pos_to_byte(pos).unwrap();
 
         // "café " = 'c'(1) + 'a'(1) + 'f'(1) + 'é'(2) + ' '(1) = 6 bytes

@@ -41,17 +41,11 @@ struct Scope {
 
 impl Scope {
     fn new() -> Self {
-        Self {
-            variables: RefCell::new(HashMap::new()),
-            parent: None,
-        }
+        Self { variables: RefCell::new(HashMap::new()), parent: None }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
-        Self {
-            variables: RefCell::new(HashMap::new()),
-            parent: Some(parent),
-        }
+        Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
     }
 
     fn declare_variable(&self, name: &str, line: usize, is_our: bool) -> Option<IssueKind> {
@@ -82,11 +76,7 @@ impl Scope {
             }),
         );
 
-        if shadows {
-            Some(IssueKind::VariableShadowing)
-        } else {
-            None
-        }
+        if shadows { Some(IssueKind::VariableShadowing) } else { None }
     }
 
     fn lookup_variable(&self, name: &str) -> Option<Rc<Variable>> {
@@ -164,11 +154,7 @@ impl ScopeAnalyzer {
         let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
         let strict_mode = pragma_state.strict_subs;
         match &node.kind {
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { declarator, variable, .. } => {
                 let var_name = self.extract_variable_name(variable);
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
@@ -244,13 +230,7 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&block_scope, issues, code);
             }
 
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 if let Some(init_node) = init {
@@ -267,11 +247,7 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
 
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Declare the loop variable
@@ -404,11 +380,7 @@ impl ScopeAnalyzer {
     }
 
     fn get_line_number(&self, code: &str, offset: usize) -> usize {
-        code[..offset.min(code.len())]
-            .chars()
-            .filter(|&c| c == '\n')
-            .count()
-            + 1
+        code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
     #[allow(dead_code)]
@@ -423,10 +395,7 @@ impl ScopeAnalyzer {
             .iter()
             .map(|issue| match issue.kind {
                 IssueKind::VariableShadowing => {
-                    format!(
-                        "Consider rename '{}' to avoid shadowing",
-                        issue.variable_name
-                    )
+                    format!("Consider rename '{}' to avoid shadowing", issue.variable_name)
                 }
                 IssueKind::UnusedVariable => {
                     format!(
@@ -435,37 +404,22 @@ impl ScopeAnalyzer {
                     )
                 }
                 IssueKind::UndeclaredVariable => {
-                    format!(
-                        "Declare '{}' with 'my', 'our', or 'local'",
-                        issue.variable_name
-                    )
+                    format!("Declare '{}' with 'my', 'our', or 'local'", issue.variable_name)
                 }
                 IssueKind::VariableRedeclaration => {
                     format!("Remove duplicate declaration of '{}'", issue.variable_name)
                 }
                 IssueKind::DuplicateParameter => {
-                    format!(
-                        "Remove or rename duplicate parameter '{}'",
-                        issue.variable_name
-                    )
+                    format!("Remove or rename duplicate parameter '{}'", issue.variable_name)
                 }
                 IssueKind::ParameterShadowsGlobal => {
-                    format!(
-                        "Rename parameter '{}' to avoid shadowing",
-                        issue.variable_name
-                    )
+                    format!("Rename parameter '{}' to avoid shadowing", issue.variable_name)
                 }
                 IssueKind::UnusedParameter => {
-                    format!(
-                        "Rename '{}' with underscore or add comment",
-                        issue.variable_name
-                    )
+                    format!("Rename '{}' with underscore or add comment", issue.variable_name)
                 }
                 IssueKind::UnquotedBareword => {
-                    format!(
-                        "Quote bareword '{}' or declare as filehandle",
-                        issue.variable_name
-                    )
+                    format!("Quote bareword '{}' or declare as filehandle", issue.variable_name)
                 }
             })
             .collect()
@@ -479,12 +433,7 @@ impl Node {
             NodeKind::Block { statements } => statements.iter().collect(),
             NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
             NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
-            NodeKind::If {
-                condition,
-                then_branch,
-                else_branch,
-                ..
-            } => {
+            NodeKind::If { condition, then_branch, else_branch, .. } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 if let Some(else_b) = else_branch {
                     children.push(else_b.as_ref());
@@ -508,13 +457,7 @@ impl Node {
             NodeKind::Subroutine { body, .. } => {
                 vec![body.as_ref()]
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 let mut children = vec![body.as_ref()];
                 if let Some(i) = init {
                     children.push(i.as_ref());
@@ -527,9 +470,7 @@ impl Node {
                 }
                 children
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 vec![condition.as_ref(), body.as_ref()]
             }
             _ => vec![],

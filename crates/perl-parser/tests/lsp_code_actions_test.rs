@@ -28,11 +28,7 @@ fn test_undefined_variable_quick_fix() {
     let actions = provider.get_code_actions(undefined_diag.range, &diagnostics);
 
     // Should have at least 2 actions (my and our)
-    assert!(
-        actions.len() >= 2,
-        "Should have at least 2 actions, got {}",
-        actions.len()
-    );
+    assert!(actions.len() >= 2, "Should have at least 2 actions, got {}", actions.len());
 
     // Check first action (declare with 'my')
     assert_eq!(actions[0].title, "Declare '$x' with 'my'");
@@ -66,10 +62,8 @@ fn test_unused_variable_quick_fix() {
     assert!(actions.len() >= 2, "Should have at least 2 actions");
 
     // Check rename action
-    let rename_action = actions
-        .iter()
-        .find(|a| a.title.contains("$_unused"))
-        .expect("Should have rename action");
+    let rename_action =
+        actions.iter().find(|a| a.title.contains("$_unused")).expect("Should have rename action");
     assert_eq!(rename_action.kind, CodeActionKindV2::QuickFix);
 }
 
@@ -119,10 +113,7 @@ fn test_parse_error_semicolon_fix() {
         // Create error node for test
         perl_parser::Node {
             kind: perl_parser::NodeKind::Program { statements: vec![] },
-            location: perl_parser::SourceLocation {
-                start: 0,
-                end: source.len(),
-            },
+            location: perl_parser::SourceLocation { start: 0, end: source.len() },
         }
     });
 
@@ -159,9 +150,8 @@ fn test_multiple_diagnostics_multiple_actions() {
     let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
 
     // Should have undeclared variable diagnostic
-    let has_undeclared = diagnostics
-        .iter()
-        .any(|d| d.code.as_ref().is_some_and(|c| c == "undeclared-variable"));
+    let has_undeclared =
+        diagnostics.iter().any(|d| d.code.as_ref().is_some_and(|c| c == "undeclared-variable"));
 
     assert!(has_undeclared, "Should have undeclared variable diagnostic");
     // Note: unused variable detection not yet implemented
@@ -171,16 +161,10 @@ fn test_multiple_diagnostics_multiple_actions() {
     let actions = provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should have actions for undeclared variable
-    assert!(
-        actions.len() >= 2,
-        "Should have at least 2 actions for undeclared variable"
-    );
+    assert!(actions.len() >= 2, "Should have at least 2 actions for undeclared variable");
 
     // Check we have declare actions
     let has_declare_action = actions.iter().any(|a| a.title.contains("Declare"));
 
-    assert!(
-        has_declare_action,
-        "Should have declare action for undeclared variable"
-    );
+    assert!(has_declare_action, "Should have declare action for undeclared variable");
 }

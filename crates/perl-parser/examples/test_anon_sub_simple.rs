@@ -8,15 +8,9 @@ fn main() {
         // With semicolon in statement
         ("my $f = sub { return 42; }", "anonymous sub with semicolon"),
         // The failing case
-        (
-            r#"my $anon = sub { return "anonymous"; };"#,
-            "anonymous sub with string and semicolon",
-        ),
+        (r#"my $anon = sub { return "anonymous"; };"#, "anonymous sub with string and semicolon"),
         // Without the trailing semicolon
-        (
-            r#"my $anon = sub { return "anonymous"; }"#,
-            "anonymous sub without trailing semicolon",
-        ),
+        (r#"my $anon = sub { return "anonymous"; }"#, "anonymous sub without trailing semicolon"),
     ];
 
     for (test, desc) in tests {

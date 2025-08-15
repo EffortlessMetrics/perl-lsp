@@ -318,19 +318,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build {
-            release,
-            features,
-            c_scanner,
-            rust_scanner,
-        } => build::run(release, features, c_scanner, rust_scanner),
-        Commands::Test {
-            release,
-            suite,
-            features,
-            verbose,
-            coverage,
-        } => test::run(release, suite, features, verbose, coverage),
+        Commands::Build { release, features, c_scanner, rust_scanner } => {
+            build::run(release, features, c_scanner, rust_scanner)
+        }
+        Commands::Test { release, suite, features, verbose, coverage } => {
+            test::run(release, suite, features, verbose, coverage)
+        }
         Commands::Bench { name, save, output } => bench::run(name, save, output),
         Commands::Compare {
             c_only,
@@ -352,22 +345,16 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
-        Commands::Corpus {
-            path,
-            scanner,
-            diagnose,
-            test,
-        } => corpus::run(path, scanner, diagnose, test),
+        Commands::Corpus { path, scanner, diagnose, test } => {
+            corpus::run(path, scanner, diagnose, test)
+        }
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
         Commands::Bindings { output } => bindings::run(output),
         Commands::Dev { watch, port } => dev::run(watch, port),
-        Commands::ParseRust {
-            source,
-            sexp,
-            ast,
-            bench,
-        } => parse_rust::run(source, sexp, ast, bench),
+        Commands::ParseRust { source, sexp, ast, bench } => {
+            parse_rust::run(source, sexp, ast, bench)
+        }
         Commands::Release { version, yes } => release::run(version, yes),
         Commands::TestHeredoc { release, verbose } => {
             // Run heredoc tests using the test module with heredoc suite
@@ -379,19 +366,13 @@ fn main() -> Result<()> {
                 false,
             )
         }
-        Commands::TestEdgeCases {
-            bench,
-            coverage,
-            test,
-        } => edge_cases::run(bench, coverage, test),
+        Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }
-        Commands::TestLsp {
-            create_only,
-            test,
-            cleanup,
-        } => test_lsp::run(create_only, test, cleanup),
+        Commands::TestLsp { create_only, test, cleanup } => {
+            test_lsp::run(create_only, test, cleanup)
+        }
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),

@@ -23,20 +23,11 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let stmts = statements
-                    .iter()
-                    .map(|s| s.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(program {})", stmts)
             }
 
-            NodeKind::VariableDeclaration {
-                declarator,
-                variable,
-                attributes,
-                initializer,
-            } => {
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
                 let attrs_str = if attributes.is_empty() {
                     String::new()
                 } else {
@@ -51,12 +42,7 @@ impl Node {
                         init.to_sexp()
                     )
                 } else {
-                    format!(
-                        "({}_declaration {}{})",
-                        declarator,
-                        variable.to_sexp(),
-                        attrs_str
-                    )
+                    format!("({}_declaration {}{})", declarator, variable.to_sexp(), attrs_str)
                 }
             }
 
@@ -66,11 +52,7 @@ impl Node {
                 attributes,
                 initializer,
             } => {
-                let vars = variables
-                    .iter()
-                    .map(|v| v.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let vars = variables.iter().map(|v| v.to_sexp()).collect::<Vec<_>>().join(" ");
                 let attrs_str = if attributes.is_empty() {
                     String::new()
                 } else {
@@ -93,10 +75,7 @@ impl Node {
                 format!("(variable {} {})", sigil, name)
             }
 
-            NodeKind::VariableWithAttributes {
-                variable,
-                attributes,
-            } => {
+            NodeKind::VariableWithAttributes { variable, attributes } => {
                 let attrs = attributes.join(" ");
                 format!("({} (attributes {}))", variable.to_sexp(), attrs)
             }
@@ -114,11 +93,7 @@ impl Node {
                 format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
             }
 
-            NodeKind::Ternary {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
                 format!(
                     "(ternary {} {} {})",
                     condition.to_sexp(),
@@ -153,10 +128,7 @@ impl Node {
                 format!("(number {})", value)
             }
 
-            NodeKind::String {
-                value,
-                interpolated,
-            } => {
+            NodeKind::String { value, interpolated } => {
                 if *interpolated {
                     format!("(string_interpolated {:?})", value)
                 } else {
@@ -164,18 +136,9 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc {
-                delimiter,
-                content,
-                interpolated,
-                indented,
-            } => {
+            NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
                 let type_str = if *indented {
-                    if *interpolated {
-                        "heredoc_indented_interpolated"
-                    } else {
-                        "heredoc_indented"
-                    }
+                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
                 } else if *interpolated {
                     "heredoc_interpolated"
                 } else {
@@ -185,11 +148,7 @@ impl Node {
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                let elems = elements
-                    .iter()
-                    .map(|e| e.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let elems = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(array {})", elems)
             }
 
@@ -203,11 +162,7 @@ impl Node {
             }
 
             NodeKind::Block { statements } => {
-                let stmts = statements
-                    .iter()
-                    .map(|s| s.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(block {})", stmts)
             }
 
@@ -219,11 +174,7 @@ impl Node {
                 format!("(do {})", block.to_sexp())
             }
 
-            NodeKind::Try {
-                body,
-                catch_blocks,
-                finally_block,
-            } => {
+            NodeKind::Try { body, catch_blocks, finally_block } => {
                 let mut parts = vec![format!("(try {})", body.to_sexp())];
 
                 for (var, block) in catch_blocks {
@@ -241,17 +192,9 @@ impl Node {
                 parts.join(" ")
             }
 
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
-                let mut parts = vec![format!(
-                    "(if {} {})",
-                    condition.to_sexp(),
-                    then_branch.to_sexp()
-                )];
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                let mut parts =
+                    vec![format!("(if {} {})", condition.to_sexp(), then_branch.to_sexp())];
 
                 for (cond, block) in elsif_branches {
                     parts.push(format!("(elsif {} {})", cond.to_sexp(), block.to_sexp()));
@@ -268,11 +211,7 @@ impl Node {
                 format!("(labeled_statement {} {})", label, statement.to_sexp())
             }
 
-            NodeKind::While {
-                condition,
-                body,
-                continue_block,
-            } => {
+            NodeKind::While { condition, body, continue_block } => {
                 let mut result = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
                 if let Some(cont) = continue_block {
                     result.push_str(&format!(" (continue {})", cont.to_sexp()));
@@ -280,49 +219,23 @@ impl Node {
                 result
             }
 
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                continue_block,
-            } => {
-                let init_str = init
-                    .as_ref()
-                    .map(|i| i.to_sexp())
-                    .unwrap_or_else(|| "()".to_string());
-                let cond_str = condition
-                    .as_ref()
-                    .map(|c| c.to_sexp())
-                    .unwrap_or_else(|| "()".to_string());
-                let update_str = update
-                    .as_ref()
-                    .map(|u| u.to_sexp())
-                    .unwrap_or_else(|| "()".to_string());
-                let mut result = format!(
-                    "(for {} {} {} {})",
-                    init_str,
-                    cond_str,
-                    update_str,
-                    body.to_sexp()
-                );
+            NodeKind::For { init, condition, update, body, continue_block } => {
+                let init_str =
+                    init.as_ref().map(|i| i.to_sexp()).unwrap_or_else(|| "()".to_string());
+                let cond_str =
+                    condition.as_ref().map(|c| c.to_sexp()).unwrap_or_else(|| "()".to_string());
+                let update_str =
+                    update.as_ref().map(|u| u.to_sexp()).unwrap_or_else(|| "()".to_string());
+                let mut result =
+                    format!("(for {} {} {} {})", init_str, cond_str, update_str, body.to_sexp());
                 if let Some(cont) = continue_block {
                     result.push_str(&format!(" (continue {})", cont.to_sexp()));
                 }
                 result
             }
 
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
-                format!(
-                    "(foreach {} {} {})",
-                    variable.to_sexp(),
-                    list.to_sexp(),
-                    body.to_sexp()
-                )
+            NodeKind::Foreach { variable, list, body } => {
+                format!("(foreach {} {} {})", variable.to_sexp(), list.to_sexp(), body.to_sexp())
             }
 
             NodeKind::Given { expr, body } => {
@@ -337,11 +250,7 @@ impl Node {
                 format!("(default {})", body.to_sexp())
             }
 
-            NodeKind::StatementModifier {
-                statement,
-                modifier,
-                condition,
-            } => {
+            NodeKind::StatementModifier { statement, modifier, condition } => {
                 format!(
                     "(statement_modifier_{} {} {})",
                     modifier,
@@ -350,30 +259,15 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine {
-                name,
-                params,
-                attributes,
-                body,
-            } => {
+            NodeKind::Subroutine { name, params, attributes, body } => {
                 let name_str = name.as_deref().unwrap_or("anonymous");
-                let params_str = params
-                    .iter()
-                    .map(|p| p.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
                 let attrs_str = if attributes.is_empty() {
                     String::new()
                 } else {
                     format!(" (attributes {})", attributes.join(" "))
                 };
-                format!(
-                    "(sub {} ({}){}{})",
-                    name_str,
-                    params_str,
-                    attrs_str,
-                    body.to_sexp()
-                )
+                format!("(sub {} ({}){}{})", name_str, params_str, attrs_str, body.to_sexp())
             }
 
             NodeKind::Return { value } => {
@@ -384,74 +278,30 @@ impl Node {
                 }
             }
 
-            NodeKind::MethodCall {
-                object,
-                method,
-                args,
-            } => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!(
-                    "(method_call {} {} ({}))",
-                    object.to_sexp(),
-                    method,
-                    args_str
-                )
+            NodeKind::MethodCall { object, method, args } => {
+                let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
 
             NodeKind::FunctionCall { name, args } => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(call {} ({}))", name, args_str)
             }
 
-            NodeKind::IndirectCall {
-                method,
-                object,
-                args,
-            } => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!(
-                    "(indirect_call {} {} ({}))",
-                    method,
-                    object.to_sexp(),
-                    args_str
-                )
+            NodeKind::IndirectCall { method, object, args } => {
+                let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
             }
 
             NodeKind::Regex { pattern, modifiers } => {
                 format!("(regex {:?} {:?})", pattern, modifiers)
             }
 
-            NodeKind::Match {
-                expr,
-                pattern,
-                modifiers,
-            } => {
-                format!(
-                    "(match {} (regex {:?} {:?}))",
-                    expr.to_sexp(),
-                    pattern,
-                    modifiers
-                )
+            NodeKind::Match { expr, pattern, modifiers } => {
+                format!("(match {} (regex {:?} {:?}))", expr.to_sexp(), pattern, modifiers)
             }
 
-            NodeKind::Substitution {
-                expr,
-                pattern,
-                replacement,
-                modifiers,
-            } => {
+            NodeKind::Substitution { expr, pattern, replacement, modifiers } => {
                 format!(
                     "(substitution {} {:?} {:?} {:?})",
                     expr.to_sexp(),
@@ -461,12 +311,7 @@ impl Node {
                 )
             }
 
-            NodeKind::Transliteration {
-                expr,
-                search,
-                replace,
-                modifiers,
-            } => {
+            NodeKind::Transliteration { expr, search, replace, modifiers } => {
                 format!(
                     "(transliteration {} {:?} {:?} {:?})",
                     expr.to_sexp(),
@@ -511,11 +356,7 @@ impl Node {
             }
 
             NodeKind::Method { name, params, body } => {
-                let params_str = params
-                    .iter()
-                    .map(|p| p.to_sexp())
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(method {} ({}) {})", name, params_str, body.to_sexp())
             }
 

@@ -72,10 +72,7 @@ fn test_cancel_request() {
             assert!(code != 0, "Should have an error code");
         } else {
             // Request completed before cancellation took effect - that's okay too
-            assert!(
-                resp.get("result").is_some(),
-                "Should have result if not cancelled"
-            );
+            assert!(resp.get("result").is_some(), "Should have result if not cancelled");
         }
     }
     // If no response, that's also fine - the request was cancelled before processing
@@ -88,11 +85,7 @@ fn test_cancel_request_no_response() {
     initialize_lsp(&mut server);
 
     // Clear any pending messages (like diagnostics)
-    drain_until_quiet(
-        &mut server,
-        Duration::from_millis(100),
-        Duration::from_millis(500),
-    );
+    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(500));
 
     // Send a cancel request for a non-existent ID
     send_notification(

@@ -94,9 +94,7 @@ fn extract_symbols(node: &perl_parser::ast::Node, indent: &str) {
         NodeKind::Package { name, .. } => {
             println!("{}  - Package: {}", indent, name);
         }
-        NodeKind::Subroutine {
-            name: Some(name), ..
-        } => {
+        NodeKind::Subroutine { name: Some(name), .. } => {
             println!("{}  - Subroutine: {}", indent, name);
         }
         NodeKind::Subroutine { name: None, .. } => {}

@@ -139,11 +139,7 @@ void tree_sitter_perl_external_scanner_destroy(void *payload) {
 
 fn find_tree_sitter_runtime() -> Option<PathBuf> {
     // Try to find tree-sitter runtime in common locations
-    let possible_paths = [
-        "tree-sitter/lib",
-        "../tree-sitter/lib",
-        "../../tree-sitter/lib",
-    ];
+    let possible_paths = ["tree-sitter/lib", "../tree-sitter/lib", "../../tree-sitter/lib"];
 
     // Check static paths first
     for path in possible_paths.iter() {
@@ -178,7 +174,5 @@ fn generate_bindings() {
         .expect("Unable to generate bindings");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    bindings.write_to_file(out_path.join("bindings.rs")).expect("Couldn't write bindings!");
 }

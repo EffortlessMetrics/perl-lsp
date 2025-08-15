@@ -66,9 +66,7 @@ impl Default for WorkspaceSymbolsProvider {
 impl WorkspaceSymbolsProvider {
     /// Create a new workspace symbols provider
     pub fn new() -> Self {
-        Self {
-            documents: HashMap::new(),
-        }
+        Self { documents: HashMap::new() }
     }
 
     /// Index a document's symbols
@@ -111,14 +109,8 @@ impl WorkspaceSymbolsProvider {
                     location: Location {
                         uri: uri.clone(),
                         range: Range {
-                            start: Position {
-                                line: 0,
-                                character: 0,
-                            },
-                            end: Position {
-                                line: 0,
-                                character: 0,
-                            },
+                            start: Position { line: 0, character: 0 },
+                            end: Position { line: 0, character: 0 },
                         },
                     },
                     container_name: symbol.container.clone(),
@@ -284,14 +276,8 @@ impl WorkspaceSymbolsProvider {
             location: Location {
                 uri: uri.to_string(),
                 range: Range {
-                    start: Position {
-                        line: start_line as u32,
-                        character: start_col as u32,
-                    },
-                    end: Position {
-                        line: end_line as u32,
-                        character: end_col as u32,
-                    },
+                    start: Position { line: start_line as u32, character: start_col as u32 },
+                    end: Position { line: end_line as u32, character: end_col as u32 },
                 },
             },
             container_name: symbol.container.clone(),

@@ -144,9 +144,7 @@ fn print_ast(node: &AstNode, indent: usize) {
         AstNode::UseStatement { module, .. } => {
             println!("{}Use: {}", prefix, module);
         }
-        AstNode::VariableDeclaration {
-            scope, variables, ..
-        } => {
+        AstNode::VariableDeclaration { scope, variables, .. } => {
             println!("{}VarDecl: {} ({} vars)", prefix, scope, variables.len());
         }
         AstNode::BinaryOp { left, op, right } => {
@@ -172,11 +170,7 @@ fn print_ast(node: &AstNode, indent: usize) {
             println!("{}Identifier: {}", prefix, name);
         }
         AstNode::String(s) => {
-            let display = if s.len() > 20 {
-                format!("{}...", &s[..20])
-            } else {
-                s.to_string()
-            };
+            let display = if s.len() > 20 { format!("{}...", &s[..20]) } else { s.to_string() };
             println!("{}String: \"{}\"", prefix, display);
         }
         AstNode::Number(n) => {
@@ -238,11 +232,7 @@ fn collect_stats_recursive(node: &AstNode, depth: usize, stats: &mut Stats) {
 }
 
 fn truncate(s: &str, max_len: usize) -> &str {
-    if s.len() <= max_len {
-        s
-    } else {
-        &s[..max_len.min(s.len())]
-    }
+    if s.len() <= max_len { s } else { &s[..max_len.min(s.len())] }
 }
 
 #[derive(Default)]

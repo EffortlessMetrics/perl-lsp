@@ -26,12 +26,7 @@ struct CorpusTestResults {
 
 impl CorpusTestResults {
     fn new() -> Self {
-        Self {
-            total: 0,
-            passed: 0,
-            failed: 0,
-            errors: Vec::new(),
-        }
+        Self { total: 0, passed: 0, failed: 0, errors: Vec::new() }
     }
 
     fn add_passed(&mut self) {
@@ -277,11 +272,7 @@ fn find_missing_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
 
-    expected_nodes
-        .iter()
-        .filter(|node| !actual_nodes.contains(node))
-        .cloned()
-        .collect()
+    expected_nodes.iter().filter(|node| !actual_nodes.contains(node)).cloned().collect()
 }
 
 /// Find nodes that are in actual but not in expected
@@ -289,11 +280,7 @@ fn find_extra_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
 
-    actual_nodes
-        .iter()
-        .filter(|node| !expected_nodes.contains(node))
-        .cloned()
-        .collect()
+    actual_nodes.iter().filter(|node| !expected_nodes.contains(node)).cloned().collect()
 }
 
 /// Extract node types from S-expression
@@ -375,19 +362,14 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path = if path.exists() {
-        path
-    } else {
-        PathBuf::from("crates/tree-sitter-perl/test/corpus")
-    };
+    let corpus_path =
+        if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/corpus") };
 
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
@@ -451,10 +433,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     results.print_summary();
 
     if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!(
-            "{} corpus tests failed",
-            results.failed
-        ))
+        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
     } else {
         Ok(())
     }

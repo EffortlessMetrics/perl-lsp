@@ -87,16 +87,7 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Fallback: use cargo run
     {
         let mut c = Command::new("cargo");
-        c.args([
-            "run",
-            "-q",
-            "-p",
-            "perl-parser",
-            "--bin",
-            "perl-lsp",
-            "--",
-            "--stdio",
-        ]);
+        c.args(["run", "-q", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"]);
         v.push(c);
     }
 
@@ -109,12 +100,7 @@ pub fn start_lsp_server() -> LspServer {
     let mut process: Child = {
         let mut spawned: Option<Child> = None;
         for mut cmd in resolve_perl_lsp_cmds() {
-            match cmd
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-            {
+            match cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
                 Ok(child) => {
                     spawned = Some(child);
                     break;
@@ -130,10 +116,7 @@ pub fn start_lsp_server() -> LspServer {
             }
         }
         spawned.unwrap_or_else(|| {
-            panic!(
-                "Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}",
-                last_err
-            )
+            panic!("Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}", last_err)
         })
     };
 
@@ -202,14 +185,7 @@ pub fn start_lsp_server() -> LspServer {
         })
         .unwrap();
 
-    LspServer {
-        process,
-        stdin,
-        rx,
-        _stdout_thread,
-        _stderr_thread,
-        pending: VecDeque::new(),
-    }
+    LspServer { process, stdin, rx, _stdout_thread, _stderr_thread, pending: VecDeque::new() }
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
@@ -252,13 +228,8 @@ pub fn send_notification(server: &mut LspServer, notification: Value) {
     let notification_str = serde_json::to_string(&notification).unwrap();
     let stdin = server.stdin.as_mut().unwrap();
 
-    writeln!(
-        stdin,
-        "Content-Length: {}\r\n\r\n{}",
-        notification_str.len(),
-        notification_str
-    )
-    .unwrap();
+    writeln!(stdin, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)
+        .unwrap();
     stdin.flush().unwrap();
 }
 
@@ -369,10 +340,7 @@ pub fn read_notification_method(
 
     // then poll
     while Instant::now() < deadline {
-        match server
-            .rx
-            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        {
+        match server.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(msg) => {
                 let is_match = msg.get("id").is_none() && msg.get("method") == Some(&json!(method));
                 if is_match {

@@ -117,10 +117,7 @@ fn test_complex_perl_with_all_features() {
     let simple_heredoc = r#"my $greeting = <<~EOF;
     Hello World!
     EOF"#;
-    assert!(
-        parser.parse(simple_heredoc).is_ok(),
-        "Failed to parse simple indented heredoc"
-    );
+    assert!(parser.parse(simple_heredoc).is_ok(), "Failed to parse simple indented heredoc");
 
     // Test regex
     let regex_test = r#"if ("test" =~ /test/) { print "ok"; }"#;
@@ -169,20 +166,8 @@ my $x = 10 / 2;"#;
     let sexp = parser.to_sexp(&ast);
     // The parser uses placeholders for heredocs in the S-expression output
     // We just need to verify it parses correctly and the structure is right
-    assert!(
-        sexp.contains("__HEREDOC_"),
-        "Expected heredoc placeholder in output"
-    );
-    assert!(
-        sexp.contains("(variable_declaration $text"),
-        "Expected variable declaration"
-    );
-    assert!(
-        sexp.contains("(variable_declaration $x"),
-        "Expected second variable declaration"
-    );
-    assert!(
-        sexp.contains("(binary_expression"),
-        "Expected binary expression for division"
-    );
+    assert!(sexp.contains("__HEREDOC_"), "Expected heredoc placeholder in output");
+    assert!(sexp.contains("(variable_declaration $text"), "Expected variable declaration");
+    assert!(sexp.contains("(variable_declaration $x"), "Expected second variable declaration");
+    assert!(sexp.contains("(binary_expression"), "Expected binary expression for division");
 }

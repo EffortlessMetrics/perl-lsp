@@ -87,10 +87,7 @@ print "Hello, World!\n";
     let time_per_kb = duration.as_micros() as f64 / size_kb;
 
     println!("Parse time: {:?} ({:.0} µs/KB)", duration, time_per_kb);
-    assert!(
-        duration < MAX_PARSE_TIME_PER_KB * (size_kb.ceil() as u32),
-        "Parsing took too long"
-    );
+    assert!(duration < MAX_PARSE_TIME_PER_KB * (size_kb.ceil() as u32), "Parsing took too long");
 }
 
 #[test]
@@ -203,10 +200,7 @@ fn benchmark_incremental_parsing() {
 
     let avg_duration = total_duration / iterations;
     println!("Average incremental parse time: {:?}", avg_duration);
-    assert!(
-        avg_duration < Duration::from_millis(10),
-        "Incremental parsing too slow"
-    );
+    assert!(avg_duration < Duration::from_millis(10), "Incremental parsing too slow");
 }
 
 #[test]
@@ -574,10 +568,7 @@ fn benchmark_concurrent_requests() {
     println!("Total time for 30 concurrent requests: {:?}", duration);
     println!("Average time per request: {:?}", avg_per_request);
 
-    assert!(
-        avg_per_request < Duration::from_millis(50),
-        "Concurrent request handling too slow"
-    );
+    assert!(avg_per_request < Duration::from_millis(50), "Concurrent request handling too slow");
 }
 
 #[test]
@@ -631,10 +622,7 @@ fn benchmark_memory_usage() {
     let duration = start.elapsed();
 
     println!("Time to process 50 documents: {:?}", duration);
-    assert!(
-        duration < Duration::from_secs(5),
-        "Processing many documents took too long"
-    );
+    assert!(duration < Duration::from_secs(5), "Processing many documents took too long");
 }
 
 #[test]
@@ -679,10 +667,7 @@ fn benchmark_deep_nesting() {
     let duration = start.elapsed();
 
     println!("Deep nesting parse time: {:?}", duration);
-    assert!(
-        duration < Duration::from_millis(500),
-        "Deep nesting took too long to parse"
-    );
+    assert!(duration < Duration::from_millis(500), "Deep nesting took too long to parse");
 }
 
 /// Summary benchmark that runs all tests and reports overall performance
@@ -692,43 +677,16 @@ fn benchmark_summary() {
     println!("\n=== LSP Performance Benchmark Summary ===\n");
 
     let benchmarks: Vec<(&str, fn() -> Duration)> = vec![
-        (
-            "Initialization",
-            benchmark_initialization_time as fn() -> Duration,
-        ),
-        (
-            "Simple file parsing",
-            benchmark_simple_file_time as fn() -> Duration,
-        ),
-        (
-            "Large file parsing",
-            benchmark_large_file_time as fn() -> Duration,
-        ),
-        (
-            "Incremental updates",
-            benchmark_incremental_time as fn() -> Duration,
-        ),
-        (
-            "Diagnostics",
-            benchmark_diagnostics_time as fn() -> Duration,
-        ),
-        (
-            "Symbol extraction",
-            benchmark_symbols_time as fn() -> Duration,
-        ),
-        (
-            "Go to definition",
-            benchmark_definition_time as fn() -> Duration,
-        ),
-        (
-            "Find references",
-            benchmark_references_time as fn() -> Duration,
-        ),
+        ("Initialization", benchmark_initialization_time as fn() -> Duration),
+        ("Simple file parsing", benchmark_simple_file_time as fn() -> Duration),
+        ("Large file parsing", benchmark_large_file_time as fn() -> Duration),
+        ("Incremental updates", benchmark_incremental_time as fn() -> Duration),
+        ("Diagnostics", benchmark_diagnostics_time as fn() -> Duration),
+        ("Symbol extraction", benchmark_symbols_time as fn() -> Duration),
+        ("Go to definition", benchmark_definition_time as fn() -> Duration),
+        ("Find references", benchmark_references_time as fn() -> Duration),
         ("Hover", benchmark_hover_time as fn() -> Duration),
-        (
-            "Concurrent requests",
-            benchmark_concurrent_time as fn() -> Duration,
-        ),
+        ("Concurrent requests", benchmark_concurrent_time as fn() -> Duration),
     ];
 
     for (name, benchmark_fn) in benchmarks {

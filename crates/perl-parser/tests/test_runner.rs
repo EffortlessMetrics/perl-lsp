@@ -93,11 +93,7 @@ impl LspTestRunner {
             );
         }
 
-        Self {
-            features,
-            test_results: Vec::new(),
-            start_time: Instant::now(),
-        }
+        Self { features, test_results: Vec::new(), start_time: Instant::now() }
     }
 
     /// Run a single test and track results
@@ -197,12 +193,8 @@ impl LspTestRunner {
         }
 
         // Untested features
-        let untested: Vec<_> = self
-            .features
-            .values()
-            .filter(|f| !f.tested)
-            .map(|f| f.name.as_str())
-            .collect();
+        let untested: Vec<_> =
+            self.features.values().filter(|f| !f.tested).map(|f| f.name.as_str()).collect();
 
         if !untested.is_empty() {
             println!("\n{}", "Untested Features:".bold().yellow());
@@ -223,17 +215,9 @@ impl LspTestRunner {
         println!(
             "Tests Failed: {} {}",
             failed_tests,
-            if failed_tests > 0 {
-                "✗".red()
-            } else {
-                "✓".green()
-            }
+            if failed_tests > 0 { "✗".red() } else { "✓".green() }
         );
-        println!(
-            "Features Tested: {}/{}",
-            tested_features,
-            self.features.len()
-        );
+        println!("Features Tested: {}/{}", tested_features, self.features.len());
         println!(
             "Overall Coverage: {:.1}%",
             (tested_features as f64 / self.features.len() as f64) * 100.0
@@ -380,10 +364,7 @@ impl LspTestRunner {
         writeln!(
             file,
             "Generated: {}\n",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
         )?;
 
         writeln!(file, "## Summary\n")?;
@@ -393,17 +374,8 @@ impl LspTestRunner {
 
         writeln!(file, "- **Total Tests**: {}", self.test_results.len())?;
         writeln!(file, "- **Passed**: {} ✅", passed_tests)?;
-        writeln!(
-            file,
-            "- **Failed**: {} ❌",
-            self.test_results.len() - passed_tests
-        )?;
-        writeln!(
-            file,
-            "- **Features Tested**: {}/{}",
-            tested_features,
-            self.features.len()
-        )?;
+        writeln!(file, "- **Failed**: {} ❌", self.test_results.len() - passed_tests)?;
+        writeln!(file, "- **Features Tested**: {}/{}", tested_features, self.features.len())?;
         writeln!(
             file,
             "- **Coverage**: {:.1}%\n",
@@ -416,11 +388,7 @@ impl LspTestRunner {
 
         for coverage in self.features.values() {
             if coverage.tested {
-                let status = if coverage.fail_count == 0 {
-                    "✅"
-                } else {
-                    "⚠️"
-                };
+                let status = if coverage.fail_count == 0 { "✅" } else { "⚠️" };
                 writeln!(
                     file,
                     "| {} | {} | {} | {} | {:.1}% |",
@@ -454,11 +422,7 @@ impl LspTestRunner {
             let total_ms: u128 = self.test_results.iter().map(|r| r.duration_ms).sum();
             let avg_ms = total_ms / self.test_results.len() as u128;
 
-            writeln!(
-                file,
-                "- **Total Duration**: {:.2}s",
-                total_ms as f64 / 1000.0
-            )?;
+            writeln!(file, "- **Total Duration**: {:.2}s", total_ms as f64 / 1000.0)?;
             writeln!(file, "- **Average Test Duration**: {}ms", avg_ms)?;
 
             let mut sorted = self.test_results.clone();

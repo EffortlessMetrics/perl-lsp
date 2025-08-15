@@ -34,12 +34,7 @@ impl UnderstandingParser {
             Ok(pairs) => {
                 // Normal parse succeeded, but we might still have warnings
                 let ast = self.build_extended_ast(pairs, &diagnostics, code);
-                Ok(ParseResult {
-                    ast,
-                    diagnostics,
-                    parse_coverage: 100.0,
-                    recovery_points: vec![],
-                })
+                Ok(ParseResult { ast, diagnostics, parse_coverage: 100.0, recovery_points: vec![] })
             }
             Err(parse_error) => {
                 // Parse failed, attempt recovery
@@ -206,12 +201,7 @@ impl UnderstandingParser {
             }
         };
 
-        Ok(ParseResult {
-            ast: final_ast,
-            diagnostics,
-            parse_coverage,
-            recovery_points,
-        })
+        Ok(ParseResult { ast: final_ast, diagnostics, parse_coverage, recovery_points })
     }
 
     /// Handle a specific anti-pattern and return a node representing it
@@ -222,11 +212,7 @@ impl UnderstandingParser {
         recovery_state: &mut RecoveryState,
     ) -> (ExtendedAstNode, usize) {
         match pattern {
-            AntiPattern::FormatHeredoc {
-                format_name,
-                heredoc_delimiter,
-                ..
-            } => {
+            AntiPattern::FormatHeredoc { format_name, heredoc_delimiter, .. } => {
                 // Find the end of the format
                 let end_pos = code.find("\n.").unwrap_or(code.len());
                 let format_text = &code[..end_pos];
@@ -248,9 +234,7 @@ impl UnderstandingParser {
                 (node, end_pos + 2) // +2 for "\n."
             }
 
-            AntiPattern::BeginTimeHeredoc {
-                heredoc_content, ..
-            } => {
+            AntiPattern::BeginTimeHeredoc { heredoc_content, .. } => {
                 // Create a runtime-dependent node
                 let node = ExtendedAstNode::RuntimeDependentParse {
                     construct_type: "BEGIN_heredoc".to_string(),

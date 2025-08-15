@@ -160,11 +160,7 @@ pub struct TokenStream<'a> {
 impl<'a> TokenStream<'a> {
     /// Create a new token stream from source code
     pub fn new(input: &'a str) -> Self {
-        TokenStream {
-            lexer: PerlLexer::new(input),
-            peeked: None,
-            peeked_second: None,
-        }
+        TokenStream { lexer: PerlLexer::new(input), peeked: None, peeked_second: None }
     }
 
     /// Peek at the next token without consuming it
@@ -404,11 +400,6 @@ impl<'a> TokenStream<'a> {
             _ => TokenKind::Unknown,
         };
 
-        Token {
-            kind,
-            text: token.text.to_string(),
-            start: token.start,
-            end: token.end,
-        }
+        Token { kind, text: token.text.to_string(), start: token.start, end: token.end }
     }
 }

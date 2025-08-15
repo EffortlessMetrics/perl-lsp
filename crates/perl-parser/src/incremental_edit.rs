@@ -40,13 +40,7 @@ impl IncrementalEdit {
         start_position: Position,
         old_end_position: Position,
     ) -> Self {
-        IncrementalEdit {
-            start_byte,
-            old_end_byte,
-            new_text,
-            start_position,
-            old_end_position,
-        }
+        IncrementalEdit { start_byte, old_end_byte, new_text, start_position, old_end_position }
     }
 
     /// Get the new end byte after applying this edit

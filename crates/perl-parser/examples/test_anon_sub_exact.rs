@@ -12,10 +12,7 @@ fn main() {
     let mut lexer = PerlLexer::new(input);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next_token() {
-        println!(
-            "  {:?} at positions {}-{}",
-            token.token_type, token.start, token.end
-        );
+        println!("  {:?} at positions {}-{}", token.token_type, token.start, token.end);
         tokens.push(token.clone());
         if matches!(token.token_type, perl_lexer::TokenType::EOF) {
             break;

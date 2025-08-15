@@ -21,11 +21,7 @@ EOF
         if matches!(&token.token_type, TokenType::Error(msg) if msg.contains("heredoc")) {
             println!(
                 "  ^ Heredoc error detected: {}",
-                if let TokenType::Error(msg) = &token.token_type {
-                    msg
-                } else {
-                    ""
-                }
+                if let TokenType::Error(msg) = &token.token_type { msg } else { "" }
             );
         }
     }

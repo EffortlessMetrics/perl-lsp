@@ -55,14 +55,8 @@ fn test_range_formatting() {
 
     // Format only the middle line
     let range = perl_parser::formatting::Range {
-        start: perl_parser::formatting::Position {
-            line: 1,
-            character: 0,
-        },
-        end: perl_parser::formatting::Position {
-            line: 1,
-            character: 20,
-        },
+        start: perl_parser::formatting::Position { line: 1, character: 0 },
+        end: perl_parser::formatting::Position { line: 1, character: 20 },
     };
 
     match formatter.format_range(code, &range, &options) {

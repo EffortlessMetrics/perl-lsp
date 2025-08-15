@@ -293,29 +293,19 @@ pub mod assertions {
 
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
-        let items = response["result"]["items"]
-            .as_array()
-            .expect("Expected diagnostic items array");
+        let items =
+            response["result"]["items"].as_array().expect("Expected diagnostic items array");
 
         let found = items.iter().any(|item| {
-            item["message"]
-                .as_str()
-                .map(|msg| msg.contains(expected_message))
-                .unwrap_or(false)
+            item["message"].as_str().map(|msg| msg.contains(expected_message)).unwrap_or(false)
         });
 
-        assert!(
-            found,
-            "Expected diagnostic containing '{}', got: {:?}",
-            expected_message, items
-        );
+        assert!(found, "Expected diagnostic containing '{}', got: {:?}", expected_message, items);
     }
 
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
-        let symbols = response["result"]
-            .as_array()
-            .expect("Expected symbols array");
+        let symbols = response["result"].as_array().expect("Expected symbols array");
         assert_eq!(
             symbols.len(),
             expected_count,
@@ -432,15 +422,7 @@ pub mod generators {
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
     let process = Command::new("cargo")
-        .args([
-            "run",
-            "-p",
-            "perl-parser",
-            "--bin",
-            "perl-lsp",
-            "--",
-            "--stdio",
-        ])
+        .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

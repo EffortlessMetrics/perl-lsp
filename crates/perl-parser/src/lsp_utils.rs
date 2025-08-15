@@ -21,11 +21,7 @@ pub fn position_to_offset(content: &str, line: u32, character: u32) -> Option<us
     }
 
     // Handle end of file
-    if current_line == line && current_char == character {
-        Some(content.len())
-    } else {
-        None
-    }
+    if current_line == line && current_char == character { Some(content.len()) } else { None }
 }
 
 /// Convert a byte offset to an LSP position

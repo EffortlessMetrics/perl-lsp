@@ -150,15 +150,14 @@ impl PhaseAwareParser {
 
             // Track any variables modified in this phase
             for var in context.variables_modified {
-                self.phase_variables
-                    .entry(var.clone())
-                    .or_insert_with(Vec::new)
-                    .push(PhaseAssignment {
+                self.phase_variables.entry(var.clone()).or_insert_with(Vec::new).push(
+                    PhaseAssignment {
                         variable: var,
                         value: None, // Would need data flow analysis
                         phase: self.current_phase.clone(),
                         line: context.start_line,
-                    });
+                    },
+                );
             }
         }
     }
@@ -244,16 +243,10 @@ impl PhaseAwareParser {
     /// Check if a variable might have phase-dependent values
     pub fn is_phase_dependent(&self, var_name: &str) -> Option<PhaseWarning> {
         if let Some(assignments) = self.phase_variables.get(var_name) {
-            let phases: Vec<_> = assignments
-                .iter()
-                .map(|a| self.phase_name_for(&a.phase))
-                .collect();
+            let phases: Vec<_> =
+                assignments.iter().map(|a| self.phase_name_for(&a.phase)).collect();
 
-            if phases.len() > 1
-                || assignments
-                    .iter()
-                    .any(|a| matches!(a.phase, PerlPhase::Begin))
-            {
+            if phases.len() > 1 || assignments.iter().any(|a| matches!(a.phase, PerlPhase::Begin)) {
                 return Some(PhaseWarning {
                     variable: var_name.to_string(),
                     phases,
@@ -354,14 +347,8 @@ DONE
         let mut parser = PhaseAwareParser::new();
         parser.enter_phase(PerlPhase::Begin, 1);
 
-        let action = parser.handle_phase_heredoc(
-            "END",
-            Location {
-                line: 2,
-                column: 5,
-                offset: 20,
-            },
-        );
+        let action =
+            parser.handle_phase_heredoc("END", Location { line: 2, column: 5, offset: 20 });
 
         match action {
             PhaseAction::Defer { reason, severity } => {

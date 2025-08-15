@@ -32,12 +32,7 @@ impl LspHarness {
         })
             as Box<dyn Write + Send>)));
 
-        Self {
-            server,
-            output_buffer,
-            notification_buffer,
-            next_request_id: 1,
-        }
+        Self { server, output_buffer, notification_buffer, next_request_id: 1 }
     }
 
     /// Initialize the LSP server
@@ -120,11 +115,7 @@ impl LspHarness {
         });
 
         let request_str = format!("{}\r\n", notification);
-        let content = format!(
-            "Content-Length: {}\r\n\r\n{}",
-            request_str.len(),
-            request_str
-        );
+        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
 
         let mut input = Cursor::new(content.into_bytes());
         let _result = self.server.handle_message(&mut input);
@@ -184,11 +175,7 @@ impl LspHarness {
 
         // Format request with Content-Length header
         let request_str = request.to_string();
-        let content = format!(
-            "Content-Length: {}\r\n\r\n{}",
-            request_str.len(),
-            request_str
-        );
+        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
 
         // Send to server
         let mut input = Cursor::new(content.into_bytes());
@@ -332,11 +319,7 @@ macro_rules! assert_highlights {
 macro_rules! assert_no_diags {
     ($harness:expr) => {{
         let diags = $harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
-        assert!(
-            diags.is_empty(),
-            "Expected no diagnostics, got: {:?}",
-            diags
-        );
+        assert!(diags.is_empty(), "Expected no diagnostics, got: {:?}", diags);
     }};
 }
 

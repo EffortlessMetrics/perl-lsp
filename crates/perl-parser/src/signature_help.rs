@@ -55,10 +55,7 @@ impl SignatureHelpProvider {
         let symbol_table = SymbolExtractor::new().extract(ast);
         let builtin_signatures = create_builtin_signatures();
 
-        SignatureHelpProvider {
-            symbol_table,
-            builtin_signatures,
-        }
+        SignatureHelpProvider { symbol_table, builtin_signatures }
     }
 
     /// Check if a built-in function exists
@@ -131,11 +128,7 @@ impl SignatureHelpProvider {
         let before_paren = &source[..call_start];
         let function_name = self.extract_function_name(before_paren)?;
 
-        Some(CallContext {
-            function_name,
-            call_start,
-            position,
-        })
+        Some(CallContext { function_name, call_start, position })
     }
 
     /// Extract function name from text before parenthesis
@@ -159,11 +152,7 @@ impl SignatureHelpProvider {
             .rev()
             .collect::<String>();
 
-        if word_chars.is_empty() {
-            None
-        } else {
-            Some(word_chars)
-        }
+        if word_chars.is_empty() { None } else { Some(word_chars) }
     }
 
     /// Get signatures for a function
@@ -211,10 +200,7 @@ impl SignatureHelpProvider {
                 .collect();
 
             for part in parts {
-                params.push(ParameterInfo {
-                    label: part.to_string(),
-                    documentation: None,
-                });
+                params.push(ParameterInfo { label: part.to_string(), documentation: None });
             }
         }
 
@@ -230,9 +216,8 @@ impl SignatureHelpProvider {
         // In Perl, we might have prototype like: sub foo($$$) or sub foo :prototype($$$)
         for attr in &symbol.attributes {
             if attr.starts_with("prototype(") {
-                if let Some(proto) = attr
-                    .strip_prefix("prototype(")
-                    .and_then(|s| s.strip_suffix(")"))
+                if let Some(proto) =
+                    attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")"))
                 {
                     label.push_str(proto);
                     // Parse prototype

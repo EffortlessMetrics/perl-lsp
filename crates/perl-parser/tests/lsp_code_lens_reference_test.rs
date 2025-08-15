@@ -85,10 +85,7 @@ sub unused_function {
     let greet_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data")
-                .and_then(|d| d.get("name"))
-                .and_then(|n| n.as_str())
-                == Some("greet")
+            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str()) == Some("greet")
         })
         .expect("Should find lens for 'greet'");
 
@@ -109,19 +106,13 @@ sub unused_function {
 
     // We expect at least 2 references (2 direct calls)
     // The \&greet reference might not be counted depending on how it's parsed
-    assert!(
-        title.contains("2 reference"),
-        "Expected at least 2 references, got: {}",
-        title
-    );
+    assert!(title.contains("2 reference"), "Expected at least 2 references, got: {}", title);
 
     // Find the lens for the "unused_function" subroutine
     let unused_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data")
-                .and_then(|d| d.get("name"))
-                .and_then(|n| n.as_str())
+            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str())
                 == Some("unused_function")
         })
         .expect("Should find lens for 'unused_function'");
@@ -142,11 +133,7 @@ sub unused_function {
     let unused_title = unused_command.get("title").unwrap().as_str().unwrap();
 
     // We expect 0 references
-    assert!(
-        unused_title.contains("0 references"),
-        "Expected 0 references, got: {}",
-        unused_title
-    );
+    assert!(unused_title.contains("0 references"), "Expected 0 references, got: {}", unused_title);
 }
 
 #[test]
@@ -208,14 +195,9 @@ MyModule::some_method();
     let package_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data")
-                .and_then(|d| d.get("name"))
-                .and_then(|n| n.as_str())
+            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str())
                 == Some("MyModule")
-                && lens
-                    .get("data")
-                    .and_then(|d| d.get("kind"))
-                    .and_then(|k| k.as_str())
+                && lens.get("data").and_then(|d| d.get("kind")).and_then(|k| k.as_str())
                     == Some("package")
         })
         .expect("Should find lens for 'MyModule' package");
@@ -237,9 +219,5 @@ MyModule::some_method();
 
     // We expect at least 1 reference (the 'use MyModule' statement)
     // The actual count may be higher depending on how the parser handles method calls
-    assert!(
-        !title.contains("0 references"),
-        "Expected at least 1 reference, got: {}",
-        title
-    );
+    assert!(!title.contains("0 references"), "Expected at least 1 reference, got: {}", title);
 }

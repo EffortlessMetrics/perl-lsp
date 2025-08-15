@@ -6,11 +6,7 @@ use support::lsp_client::LspClient;
 #[test]
 fn document_formatting_with_perltidy() {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
         eprintln!("Skipping test: perltidy not installed");
         return;
     }
@@ -32,34 +28,18 @@ fn document_formatting_with_perltidy() {
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .expect("formatting should return an array of edits");
+    let edits = response["result"].as_array().expect("formatting should return an array of edits");
 
     assert!(!edits.is_empty(), "Should return formatting edits");
 
     // The server typically returns a single edit that replaces the whole document
-    let edit_text = edits[0]["newText"]
-        .as_str()
-        .expect("Edit should have newText");
+    let edit_text = edits[0]["newText"].as_str().expect("Edit should have newText");
 
     // Check that formatting improved the code
-    assert!(
-        edit_text.contains("sub test {"),
-        "Should format subroutine declaration"
-    );
-    assert!(
-        edit_text.contains("my $x = 1;"),
-        "Should add spaces around operators"
-    );
-    assert!(
-        edit_text.contains("return $x;"),
-        "Should format return statement"
-    );
-    assert!(
-        edit_text.contains("sub another {"),
-        "Should format second subroutine"
-    );
+    assert!(edit_text.contains("sub test {"), "Should format subroutine declaration");
+    assert!(edit_text.contains("my $x = 1;"), "Should add spaces around operators");
+    assert!(edit_text.contains("return $x;"), "Should format return statement");
+    assert!(edit_text.contains("sub another {"), "Should format second subroutine");
 
     client.shutdown();
 }
@@ -67,11 +47,7 @@ fn document_formatting_with_perltidy() {
 #[test]
 fn range_formatting() {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
         eprintln!("Skipping test: perltidy not installed");
         return;
     }
@@ -106,19 +82,11 @@ sub second{my$b=2;return$b;}
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {
             if !edits.is_empty() {
-                let edit_text = edits[0]["newText"]
-                    .as_str()
-                    .expect("Edit should have newText");
+                let edit_text = edits[0]["newText"].as_str().expect("Edit should have newText");
 
                 // Check that only the first sub was formatted
-                assert!(
-                    edit_text.contains("sub first {"),
-                    "Should format first subroutine"
-                );
-                assert!(
-                    edit_text.contains("my $a = 1;"),
-                    "Should format first sub's content"
-                );
+                assert!(edit_text.contains("sub first {"), "Should format first subroutine");
+                assert!(edit_text.contains("my $a = 1;"), "Should format first sub's content");
             }
         }
     }
@@ -129,11 +97,7 @@ sub second{my$b=2;return$b;}
 #[test]
 fn formatting_preserves_comments() {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
         eprintln!("Skipping test: perltidy not installed");
         return;
     }
@@ -163,42 +127,20 @@ return$x;
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .expect("formatting should return an array of edits");
+    let edits = response["result"].as_array().expect("formatting should return an array of edits");
 
     if !edits.is_empty() {
-        let edit_text = edits[0]["newText"]
-            .as_str()
-            .expect("Edit should have newText");
+        let edit_text = edits[0]["newText"].as_str().expect("Edit should have newText");
 
         // Check that comments are preserved
-        assert!(
-            edit_text.contains("# Main script comment"),
-            "Should preserve main comment"
-        );
-        assert!(
-            edit_text.contains("# Function comment"),
-            "Should preserve function comment"
-        );
-        assert!(
-            edit_text.contains("# Inner comment"),
-            "Should preserve inner comment"
-        );
-        assert!(
-            edit_text.contains("# Inline comment"),
-            "Should preserve inline comment"
-        );
+        assert!(edit_text.contains("# Main script comment"), "Should preserve main comment");
+        assert!(edit_text.contains("# Function comment"), "Should preserve function comment");
+        assert!(edit_text.contains("# Inner comment"), "Should preserve inner comment");
+        assert!(edit_text.contains("# Inline comment"), "Should preserve inline comment");
 
         // Check that code is still formatted
-        assert!(
-            edit_text.contains("use strict;"),
-            "Should format use statements"
-        );
-        assert!(
-            edit_text.contains("use warnings;"),
-            "Should separate use statements"
-        );
+        assert!(edit_text.contains("use strict;"), "Should format use statements");
+        assert!(edit_text.contains("use warnings;"), "Should separate use statements");
         assert!(edit_text.contains("sub test {"), "Should format subroutine");
     }
 
@@ -208,11 +150,7 @@ return$x;
 #[test]
 fn formatting_with_custom_config() {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
         eprintln!("Skipping test: perltidy not installed");
         return;
     }
@@ -246,24 +184,14 @@ fn formatting_with_custom_config() {
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .expect("formatting should return an array of edits");
+    let edits = response["result"].as_array().expect("formatting should return an array of edits");
 
     if !edits.is_empty() {
-        let edit_text = edits[0]["newText"]
-            .as_str()
-            .expect("Edit should have newText");
+        let edit_text = edits[0]["newText"].as_str().expect("Edit should have newText");
 
         // Check for some formatting (exact format depends on perltidy version)
-        assert!(
-            edit_text.contains("sub test"),
-            "Should contain formatted subroutine"
-        );
-        assert!(
-            edit_text.contains("@array"),
-            "Should contain array variable"
-        );
+        assert!(edit_text.contains("sub test"), "Should contain formatted subroutine");
+        assert!(edit_text.contains("@array"), "Should contain array variable");
     }
 
     // Clean up

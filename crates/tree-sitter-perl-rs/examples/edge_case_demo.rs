@@ -56,18 +56,12 @@ Delimiter unknown until runtime
 UNKNOWN
 "#;
 
-    let config = EdgeCaseConfig {
-        recovery_mode: RecoveryMode::BestGuess,
-        ..Default::default()
-    };
+    let config = EdgeCaseConfig { recovery_mode: RecoveryMode::BestGuess, ..Default::default() };
 
     let mut handler = EdgeCaseHandler::new(config);
     let analysis = handler.analyze(code);
 
-    println!(
-        "Found {} dynamic delimiter issues",
-        analysis.delimiter_resolutions.len()
-    );
+    println!("Found {} dynamic delimiter issues", analysis.delimiter_resolutions.len());
 
     for resolution in &analysis.delimiter_resolutions {
         println!(
@@ -228,10 +222,7 @@ EOF
     for (name, mode) in modes {
         println!("\n  Recovery mode: {}", name);
 
-        let config = EdgeCaseConfig {
-            recovery_mode: mode,
-            ..Default::default()
-        };
+        let config = EdgeCaseConfig { recovery_mode: mode, ..Default::default() };
 
         let mut handler = EdgeCaseHandler::new(config);
         let analysis = handler.analyze(code);
@@ -240,11 +231,7 @@ EOF
             println!("    Strategy: {}", resolution.method);
             println!(
                 "    Result: {}",
-                if resolution.resolved_to.is_some() {
-                    "Success"
-                } else {
-                    "Failed"
-                }
+                if resolution.resolved_to.is_some() { "Success" } else { "Failed" }
             );
         }
     }

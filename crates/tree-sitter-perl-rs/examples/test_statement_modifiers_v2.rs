@@ -10,10 +10,7 @@ fn main() {
         ("Simple while modifier", "next while $iterator->has_next;"),
         ("Simple until modifier", "sleep 1 until $ready;"),
         ("For modifier", "$count++ for @items;"),
-        (
-            "Complex expression",
-            "$hash{$key} = $value if defined $value && $value ne '';",
-        ),
+        ("Complex expression", "$hash{$key} = $value if defined $value && $value ne '';"),
     ];
 
     for (name, code) in test_cases {

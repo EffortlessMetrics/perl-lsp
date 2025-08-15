@@ -1,12 +1,8 @@
 use perl_parser::Parser;
 
 fn main() {
-    let test_cases = vec![
-        "{}",
-        "{ key => 'value' }",
-        "{ a => 1, b => 2 }",
-        "{ 'one', 1, 'two', 2 }",
-    ];
+    let test_cases =
+        vec!["{}", "{ key => 'value' }", "{ a => 1, b => 2 }", "{ 'one', 1, 'two', 2 }"];
 
     for code in test_cases {
         println!("Testing: {}", code);

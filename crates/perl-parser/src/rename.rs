@@ -59,10 +59,7 @@ impl RenameProvider {
     pub fn new(ast: &Node, source: String) -> Self {
         let symbol_table = SymbolExtractor::new().extract(ast);
 
-        RenameProvider {
-            symbol_table,
-            source,
-        }
+        RenameProvider { symbol_table, source }
     }
 
     /// Prepare rename at a position (check if rename is possible)
@@ -96,11 +93,7 @@ impl RenameProvider {
         // Validate the new name
         if options.validate_new_name {
             if let Err(error) = self.validate_name(new_name, kind) {
-                return RenameResult {
-                    edits: vec![],
-                    is_valid: false,
-                    error: Some(error),
-                };
+                return RenameResult { edits: vec![], is_valid: false, error: Some(error) };
             }
         }
 
@@ -152,11 +145,7 @@ impl RenameProvider {
         // Remove duplicates
         edits.dedup();
 
-        RenameResult {
-            edits,
-            is_valid: true,
-            error: None,
-        }
+        RenameResult { edits, is_valid: true, error: None }
     }
 
     /// Find the symbol at a given position
@@ -372,20 +361,10 @@ impl RenameProvider {
             {
                 // Make sure it's a whole word
                 let before_ok = absolute_pos == 0
-                    || !self
-                        .source
-                        .chars()
-                        .nth(absolute_pos - 1)
-                        .unwrap()
-                        .is_alphanumeric();
+                    || !self.source.chars().nth(absolute_pos - 1).unwrap().is_alphanumeric();
                 let after_pos = absolute_pos + pattern.len();
                 let after_ok = after_pos >= self.source.len()
-                    || !self
-                        .source
-                        .chars()
-                        .nth(after_pos)
-                        .unwrap()
-                        .is_alphanumeric();
+                    || !self.source.chars().nth(after_pos).unwrap().is_alphanumeric();
 
                 if before_ok && after_ok {
                     let start = if kind.sigil().is_some() {
@@ -395,10 +374,7 @@ impl RenameProvider {
                     };
 
                     edits.push(TextEdit {
-                        location: SourceLocation {
-                            start,
-                            end: start + name.len(),
-                        },
+                        location: SourceLocation { start, end: start + name.len() },
                         new_text: name.to_string(),
                     });
                 }
@@ -412,10 +388,7 @@ impl RenameProvider {
 
     /// Check if position is in a comment
     fn is_in_comment(&self, position: usize) -> bool {
-        let line_start = self.source[..position]
-            .rfind('\n')
-            .map(|p| p + 1)
-            .unwrap_or(0);
+        let line_start = self.source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
         let line = &self.source[line_start..];
 
         if let Some(comment_pos) = line.find('#') {
@@ -528,42 +501,14 @@ my $result = calculate();
         let provider = RenameProvider::new(&ast, code.to_string());
 
         // Invalid names
-        assert!(
-            provider
-                .validate_name("", SymbolKind::ScalarVariable)
-                .is_err()
-        );
-        assert!(
-            provider
-                .validate_name("123abc", SymbolKind::ScalarVariable)
-                .is_err()
-        );
-        assert!(
-            provider
-                .validate_name("my", SymbolKind::ScalarVariable)
-                .is_err()
-        );
-        assert!(
-            provider
-                .validate_name("test-var", SymbolKind::ScalarVariable)
-                .is_err()
-        );
+        assert!(provider.validate_name("", SymbolKind::ScalarVariable).is_err());
+        assert!(provider.validate_name("123abc", SymbolKind::ScalarVariable).is_err());
+        assert!(provider.validate_name("my", SymbolKind::ScalarVariable).is_err());
+        assert!(provider.validate_name("test-var", SymbolKind::ScalarVariable).is_err());
 
         // Valid names
-        assert!(
-            provider
-                .validate_name("valid_name", SymbolKind::ScalarVariable)
-                .is_ok()
-        );
-        assert!(
-            provider
-                .validate_name("_private", SymbolKind::ScalarVariable)
-                .is_ok()
-        );
-        assert!(
-            provider
-                .validate_name("camelCase", SymbolKind::ScalarVariable)
-                .is_ok()
-        );
+        assert!(provider.validate_name("valid_name", SymbolKind::ScalarVariable).is_ok());
+        assert!(provider.validate_name("_private", SymbolKind::ScalarVariable).is_ok());
+        assert!(provider.validate_name("camelCase", SymbolKind::ScalarVariable).is_ok());
     }
 }

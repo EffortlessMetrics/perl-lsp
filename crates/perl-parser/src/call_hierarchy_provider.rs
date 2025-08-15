@@ -208,10 +208,7 @@ impl CallHierarchyProvider {
                 if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == name) {
                     existing.from_ranges.extend(ranges);
                 } else {
-                    calls.push(CallHierarchyOutgoingCall {
-                        to: item,
-                        from_ranges: ranges,
-                    });
+                    calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
                 }
             }
             NodeKind::MethodCall { method, object, .. } => {
@@ -235,10 +232,7 @@ impl CallHierarchyProvider {
                 if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == method) {
                     existing.from_ranges.extend(ranges);
                 } else {
-                    calls.push(CallHierarchyOutgoingCall {
-                        to: item,
-                        from_ranges: ranges,
-                    });
+                    calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
                 }
             }
             _ => {}
@@ -282,12 +276,7 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-            } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -308,9 +297,7 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::While {
-                condition, body, ..
-            } => {
+            NodeKind::While { condition, body, .. } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -318,13 +305,7 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::For {
-                init,
-                condition,
-                update,
-                body,
-                ..
-            } => {
+            NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(init_node) = init {
                     if let Some(result) = f(init_node) {
                         return Some(result);
@@ -344,11 +325,7 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Foreach {
-                variable,
-                list,
-                body,
-            } => {
+            NodeKind::Foreach { variable, list, body } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -431,11 +408,7 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration {
-                variable,
-                initializer,
-                ..
-            } => {
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -474,10 +447,7 @@ impl CallHierarchyProvider {
             }
         }
 
-        Position {
-            line,
-            character: col,
-        }
+        Position { line, character: col }
     }
 
     /// Convert line/character position to byte offset
@@ -657,24 +627,12 @@ sub target_func {
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position {
-                        line: 10,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 12,
-                        character: 1,
-                    },
+                    start: Position { line: 10, character: 0 },
+                    end: Position { line: 12, character: 1 },
                 },
                 selection_range: Range {
-                    start: Position {
-                        line: 10,
-                        character: 4,
-                    },
-                    end: Position {
-                        line: 10,
-                        character: 15,
-                    },
+                    start: Position { line: 10, character: 4 },
+                    end: Position { line: 10, character: 15 },
                 },
                 detail: None,
             };
@@ -717,24 +675,12 @@ sub helper {
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position {
-                        line: 1,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 5,
-                        character: 1,
-                    },
+                    start: Position { line: 1, character: 0 },
+                    end: Position { line: 5, character: 1 },
                 },
                 selection_range: Range {
-                    start: Position {
-                        line: 1,
-                        character: 4,
-                    },
-                    end: Position {
-                        line: 1,
-                        character: 8,
-                    },
+                    start: Position { line: 1, character: 4 },
+                    end: Position { line: 1, character: 8 },
                 },
                 detail: None,
             };
