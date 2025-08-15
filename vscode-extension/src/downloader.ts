@@ -108,7 +108,6 @@ export class BinaryDownloader {
             // Download to temp directory
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-'));
             const archivePath = path.join(tempDir, assetName);
-            const checksumPath = checksumAsset ? path.join(tempDir, checksumName) : null;
             
             try {
                 // Download binary archive
