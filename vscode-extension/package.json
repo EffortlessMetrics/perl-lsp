@@ -45,11 +45,7 @@
   },
   "license": "MIT",
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onLanguage:perl",
-    "onCommand:perl-lsp.restart",
-    "onCommand:perl-lsp.showVersion"
-  ],
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
@@ -128,6 +124,11 @@
           "type": "boolean",
           "default": false,
           "description": "Format document on save"
+        },
+        "perl-lsp.downloadBaseUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp`"
         },
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
