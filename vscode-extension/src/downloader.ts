@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as https from 'https';
+import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -244,6 +245,12 @@ export class BinaryDownloader {
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
         const versionTag = config.get<string>('versionTag', '');
+        const downloadBaseUrl = config.get<string>('downloadBaseUrl', '');
+        
+        // Handle internal base URL hosting
+        if (downloadBaseUrl) {
+            return this.getInternalRelease(downloadBaseUrl, versionTag || 'latest');
+        }
         
         let url: string;
         if (channel === 'tag' && versionTag) {
@@ -258,7 +265,10 @@ export class BinaryDownloader {
         }
         
         return new Promise((resolve, reject) => {
-            https.get(url, { headers: { 'User-Agent': 'vscode-perl-lsp' } }, (res) => {
+            const isHttps = url.startsWith('https:');
+            const httpModule = isHttps ? https : http;
+            
+            httpModule.get(url, { headers: { 'User-Agent': 'vscode-perl-lsp' } }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
@@ -285,6 +295,39 @@ export class BinaryDownloader {
         });
     }
     
+    private async getInternalRelease(baseUrl: string, version: string): Promise<Release> {
+        // For internal hosting, create a synthetic release object
+        // This assumes the internal server hosts files directly without GitHub API
+        const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        const target = this.getPlatformTarget();
+        const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
+        
+        // Try multiple naming patterns that might be used internally
+        const possibleFilenames = [
+            `perl-lsp-${version}-${target}${ext}`,
+            `perl-lsp-v${version.replace('v', '')}-${target}${ext}`,
+            `perl-lsp-${target}${ext}`,
+            `perl-lsp${ext}` // Simplest case for internal hosting
+        ];
+        
+        // Create synthetic release with all possible asset URLs
+        const assets: ReleaseAsset[] = possibleFilenames.map(filename => ({
+            name: filename,
+            browser_download_url: `${normalizedBaseUrl}/${filename}`
+        }));
+        
+        // Add potential checksum file
+        assets.push({
+            name: 'SHA256SUMS',
+            browser_download_url: `${normalizedBaseUrl}/SHA256SUMS`
+        });
+        
+        return {
+            tag_name: version,
+            assets
+        };
+    }
+    
     private async downloadFile(url: string, dest: string, timeoutMs = 30000): Promise<void> {
         return new Promise((resolve, reject) => {
             const file = fs.createWriteStream(dest);
@@ -301,12 +344,16 @@ export class BinaryDownloader {
             const httpConfig = vscode.workspace.getConfiguration('http');
             const proxyStrictSSL = httpConfig.get<boolean>('proxyStrictSSL', true);
             
-            const options: https.RequestOptions = {
+            const options = {
                 headers: { 'User-Agent': 'vscode-perl-lsp' },
                 rejectUnauthorized: proxyStrictSSL
             };
             
-            const request = https.get(url, options, (response) => {
+            // Use appropriate module based on URL protocol
+            const isHttps = url.startsWith('https:');
+            const httpModule = isHttps ? https : http;
+            
+            const request = httpModule.get(url, options, (response) => {
                 // Handle redirects
                 if (response.statusCode === 301 || response.statusCode === 302) {
                     clearTimeout(timeout);

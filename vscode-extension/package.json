@@ -89,6 +89,16 @@
           "default": "",
           "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
         },
+        "perl-lsp.autoDownload": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically download `perl-lsp` binary if not found locally. Set to false for internal deployments using `serverPath`."
+        },
+        "perl-lsp.downloadBaseUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Base URL for internal binary hosting. When set, downloads from this location instead of GitHub releases. Should point to a directory containing release files."
+        },
         "perl-lsp.trace.server": {
           "type": "string",
           "enum": [

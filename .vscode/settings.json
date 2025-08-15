@@ -1,0 +1,49 @@
+{
+  "//": "Team configuration for internal Perl LSP deployment",
+  "//": "Copy this file to your workspace .vscode/settings.json",
+  "//": "and customize the paths for your environment",
+  
+  "perl-lsp.serverPath": "/path/to/your/perl-lsp",
+  "perl-lsp.autoDownload": false,
+  "perl-lsp.downloadBaseUrl": "",
+  
+  "//": "Alternative: Use internal hosting instead of serverPath",
+  "// perl-lsp.autoDownload": true,
+  "// perl-lsp.downloadBaseUrl": "https://your-internal-server.com/binaries",
+  "// perl-lsp.versionTag": "v0.8.3",
+  
+  "//": "Recommended LSP settings for development",
+  "perl-lsp.enableDiagnostics": true,
+  "perl-lsp.enableSemanticTokens": true,
+  "perl-lsp.enableFormatting": true,
+  "perl-lsp.formatOnSave": false,
+  "perl-lsp.enableRefactoring": true,
+  "perl-lsp.enableTestIntegration": true,
+  "perl-lsp.trace.server": "off",
+  
+  "//": "Common Perl include paths - adjust for your project",
+  "perl-lsp.includePaths": [
+    "lib",
+    "local/lib/perl5",
+    "vendor/lib"
+  ],
+  
+  "//": "Editor settings for Perl files",
+  "files.associations": {
+    "*.pl": "perl",
+    "*.pm": "perl",
+    "*.pod": "perl",
+    "*.t": "perl",
+    "*.psgi": "perl"
+  },
+  
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": true,
+  
+  "[perl]": {
+    "editor.rulers": [79, 100],
+    "editor.wordBasedSuggestions": "off",
+    "editor.semanticHighlighting.enabled": true
+  }
+}
