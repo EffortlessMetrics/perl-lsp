@@ -94,16 +94,21 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 ```
 
-#### Option 2: Homebrew (macOS)
+#### Option 2: Quick Install (Windows PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+```
+
+#### Option 3: Homebrew (macOS/Linux)
 ```bash
-brew tap tree-sitter-perl/tap
+brew tap effortlesssteven/tap
 brew install perl-lsp
 ```
 
-#### Option 3: Download Binary
+#### Option 4: Download Binary
 Download pre-built binaries from the [latest release](https://github.com/EffortlessSteven/tree-sitter-perl/releases/latest).
 
-#### Option 4: Build from Source
+#### Option 5: Build from Source
 ```bash
 # Install via cargo
 cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
@@ -187,31 +192,92 @@ cargo install --path crates/perl-parser --bin perl-lsp
 
 ### Editor Integration
 
-#### VSCode
-Configure in `.vscode/settings.json`:
+#### VS Code
+Install the **Perl Language Server** extension from the marketplace (auto-downloads perl-lsp):
+```bash
+code --install-extension effortlesssteven.perl-lsp
+```
+
+Or configure manually in `.vscode/settings.json`:
 ```json
 {
-  "perl.languageServer.path": "perl-lsp",
-  "perl.languageServer.args": ["--stdio"]
+  "perl-lsp.serverPath": "perl-lsp",
+  "perl-lsp.channel": "latest"  // or "stable" for stable releases
 }
 ```
 
 #### Neovim
 With nvim-lspconfig:
 ```lua
-require'lspconfig'.perl_lsp.setup{
+require('lspconfig').perl_lsp.setup{
   cmd = {'perl-lsp', '--stdio'},
   filetypes = {'perl'},
+  root_dir = require('lspconfig').util.root_pattern('.git', '*.pm', '*.pl'),
+  single_file_support = true,
+  settings = {
+    perl = {
+      -- Optional configuration
+      enableWarnings = true,
+      perltidyPath = 'perltidy',
+      includePaths = { 'lib', 'local/lib/perl5' }
+    }
+  }
 }
 ```
 
 #### Emacs
 With lsp-mode:
 ```elisp
-(lsp-register-client
- (make-lsp-client :new-connection (lsp-stdio-connection "perl-lsp --stdio")
-                  :major-modes '(perl-mode cperl-mode)
-                  :server-id 'perl-lsp))
+(use-package lsp-mode
+  :hook (perl-mode . lsp)
+  :config
+  (add-to-list 'lsp-language-id-configuration '(perl-mode . "perl"))
+  (lsp-register-client
+   (make-lsp-client :new-connection (lsp-stdio-connection '("perl-lsp" "--stdio"))
+                    :activation-fn (lsp-activate-on "perl")
+                    :major-modes '(perl-mode cperl-mode)
+                    :server-id 'perl-lsp)))
+```
+
+With eglot:
+```elisp
+(use-package eglot
+  :hook (perl-mode . eglot-ensure)
+  :config
+  (add-to-list 'eglot-server-programs '(perl-mode . ("perl-lsp" "--stdio"))))
+```
+
+#### Sublime Text
+Install LSP package, then add to LSP settings:
+```json
+{
+  "clients": {
+    "perl-lsp": {
+      "enabled": true,
+      "command": ["perl-lsp", "--stdio"],
+      "selector": "source.perl"
+    }
+  }
+}
+```
+
+#### Helix
+Add to `~/.config/helix/languages.toml`:
+```toml
+[[language]]
+name = "perl"
+language-server = { command = "perl-lsp", args = ["--stdio"] }
+```
+
+#### Vim (with vim-lsp)
+```vim
+if executable('perl-lsp')
+  au User lsp_setup call lsp#register_server({
+    \ 'name': 'perl-lsp',
+    \ 'cmd': {server_info->['perl-lsp', '--stdio']},
+    \ 'allowlist': ['perl'],
+    \ })
+endif
 ```
 
 ---

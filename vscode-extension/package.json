@@ -2,10 +2,10 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
-  "version": "0.8.1",
-  "publisher": "tree-sitter-perl",
+  "version": "0.8.3",
+  "publisher": "effortlesssteven",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.88.0"
   },
   "categories": [
     "Programming Languages",
@@ -46,7 +46,9 @@
   "license": "MIT",
   "main": "./out/extension.js",
   "activationEvents": [
-    "onLanguage:perl"
+    "onLanguage:perl",
+    "onCommand:perl-lsp.restart",
+    "onCommand:perl-lsp.showVersion"
   ],
   "contributes": {
     "languages": [
@@ -71,15 +73,21 @@
     "configuration": {
       "title": "Perl LSP",
       "properties": {
-        "perl-lsp.autoDownload": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically download the language server if not found"
+        "perl-lsp.channel": {
+          "type": "string",
+          "enum": ["latest", "stable", "tag"],
+          "default": "latest",
+          "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
+        },
+        "perl-lsp.versionTag": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Specific release tag (e.g., `v0.8.3`) when channel is set to `tag`"
         },
         "perl-lsp.serverPath": {
           "type": "string",
-          "default": "perl-lsp",
-          "description": "Path to the perl-lsp executable"
+          "default": "",
+          "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
         },
         "perl-lsp.trace.server": {
           "type": "string",
@@ -140,6 +148,11 @@
       {
         "command": "perl-lsp.restart",
         "title": "Restart Perl Language Server",
+        "category": "Perl"
+      },
+      {
+        "command": "perl-lsp.showVersion",
+        "title": "Show Server Version",
         "category": "Perl"
       },
       {
@@ -220,11 +233,17 @@
     "watch": "tsc -watch -p ./"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "node-fetch": "^3.3.2",
+    "adm-zip": "^0.5.10",
+    "tar": "^6.2.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.75.0",
-    "typescript": "^5.0.0"
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.88.0",
+    "@types/adm-zip": "^0.5.5",
+    "@types/tar": "^6.1.11",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.4.0"
   }
 }

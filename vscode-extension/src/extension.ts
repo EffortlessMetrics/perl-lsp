@@ -73,7 +73,7 @@ export async function activate(context: vscode.ExtensionContext) {
     activateDebugger(context);
     
     // Register commands
-    const restartCommand = vscode.commands.registerCommand('perl.restartServer', async () => {
+    const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
         await restartServer(context);
     });
     
@@ -81,7 +81,18 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.show();
     });
     
-    context.subscriptions.push(restartCommand, showOutputCommand);
+    const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
+        const { exec } = require('child_process');
+        exec(`${serverPath} --version`, (error: any, stdout: string, stderr: string) => {
+            if (error) {
+                vscode.window.showErrorMessage(`Failed to get version: ${error.message}`);
+            } else {
+                vscode.window.showInformationMessage(`Perl LSP Version: ${stdout.trim()}`);
+            }
+        });
+    });
+    
+    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand);
     
     vscode.window.showInformationMessage('Perl Language Server started successfully');
 }
