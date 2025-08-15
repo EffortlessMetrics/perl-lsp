@@ -1298,18 +1298,19 @@ impl LspServer {
                             "insertText": c.insert_text,
                             "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
                         });
-                        
+
                         // Only add commit characters for functions and variables, not keywords
-                        let needs_commit_chars = matches!(c.kind, 
-                            CompletionItemKind::Function | 
-                            CompletionItemKind::Variable |
-                            CompletionItemKind::Module |
-                            CompletionItemKind::Constant
+                        let needs_commit_chars = matches!(
+                            c.kind,
+                            CompletionItemKind::Function
+                                | CompletionItemKind::Variable
+                                | CompletionItemKind::Module
+                                | CompletionItemKind::Constant
                         );
                         if needs_commit_chars {
                             item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
                         }
-                        
+
                         item
                     })
                     .collect();
