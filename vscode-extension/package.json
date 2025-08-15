@@ -45,7 +45,11 @@
   },
   "license": "MIT",
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:perl",
+    "onCommand:perl-lsp.restart",
+    "onCommand:perl-lsp.showVersion"
+  ],
   "contributes": {
     "languages": [
       {
