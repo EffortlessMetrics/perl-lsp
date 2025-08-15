@@ -30,6 +30,15 @@ export class BinaryDownloader {
     ) {}
     
     async ensureBinary(): Promise<string | null> {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const channel = config.get<string>('channel', 'latest');
+        const versionTag = config.get<string>('versionTag', '');
+        
+        // If channel is 'tag' and versionTag is specified, use that specific version
+        if (channel === 'tag' && versionTag) {
+            this.outputChannel.appendLine(`Using specific version: ${versionTag}`);
+        }
+        
         // Check if binary already exists
         const existingPath = this.getLocalBinaryPath();
         if (existingPath && fs.existsSync(existingPath)) {
@@ -64,14 +73,12 @@ export class BinaryDownloader {
             // Determine platform and architecture
             const target = this.getPlatformTarget();
             
-            // Try multiple naming patterns that cargo-dist might use
+            // Try multiple naming patterns for our release format
+            const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
             const possibleNames = [
-                `perl-lsp-${release.tag_name}-${target}.tar.xz`,
-                `perl-lsp-${release.tag_name}-${target}.tar.gz`,
-                `perl-lsp-${release.tag_name}-${target}.zip`,
-                `perl-lsp-${target}.tar.xz`,
-                `perl-lsp-${target}.tar.gz`,
-                `perl-lsp-${target}.zip`
+                `perl-lsp-${release.tag_name}-${target}${ext}`,
+                `perl-lsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
+                `perl-lsp-${target}${ext}`
             ];
             
             let assetName: string | undefined;
@@ -95,9 +102,8 @@ export class BinaryDownloader {
             
             this.outputChannel.appendLine(`Found matching asset: ${assetName}`);
             
-            // Find checksum file (try both extensions)
-            const checksumName = `${assetName}.sha256`;
-            const checksumAsset = release.assets.find(a => a.name === checksumName);
+            // Find checksum file (SHA256SUMS file contains all checksums)
+            const checksumAsset = release.assets.find(a => a.name === 'SHA256SUMS');
             
             // Download to temp directory
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-'));
@@ -114,17 +120,27 @@ export class BinaryDownloader {
                 }
                 
                 // Download and verify checksum if available
-                if (checksumAsset && checksumPath) {
+                if (checksumAsset) {
                     progress.report({ increment: 40, message: 'Verifying checksum...' });
+                    const checksumPath = path.join(tempDir, 'SHA256SUMS');
                     await this.downloadFile(checksumAsset.browser_download_url, checksumPath);
                     
-                    const expectedChecksum = fs.readFileSync(checksumPath, 'utf8').trim().split(' ')[0];
-                    const actualChecksum = await this.calculateSHA256(archivePath);
+                    // Find the checksum line for our file
+                    const checksums = fs.readFileSync(checksumPath, 'utf8');
+                    const lines = checksums.split('\n');
+                    const checksumLine = lines.find(line => line.includes(assetName));
                     
-                    if (expectedChecksum !== actualChecksum) {
-                        throw new Error('Checksum verification failed');
+                    if (checksumLine) {
+                        const expectedChecksum = checksumLine.split(/\s+/)[0].toLowerCase();
+                        const actualChecksum = await this.calculateSHA256(archivePath);
+                        
+                        if (expectedChecksum !== actualChecksum) {
+                            throw new Error('Checksum verification failed');
+                        }
+                        this.outputChannel.appendLine('Checksum verified successfully');
+                    } else {
+                        this.outputChannel.appendLine('Warning: Could not find checksum for file');
                     }
-                    this.outputChannel.appendLine('Checksum verified successfully');
                 }
                 
                 // Extract archive
@@ -187,7 +203,21 @@ export class BinaryDownloader {
     }
     
     private async getLatestRelease(): Promise<Release> {
-        const url = `https://api.github.com/repos/${BinaryDownloader.REPO_OWNER}/${BinaryDownloader.REPO_NAME}/releases/latest`;
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const channel = config.get<string>('channel', 'latest');
+        const versionTag = config.get<string>('versionTag', '');
+        
+        let url: string;
+        if (channel === 'tag' && versionTag) {
+            // Get specific release by tag
+            url = `https://api.github.com/repos/${BinaryDownloader.REPO_OWNER}/${BinaryDownloader.REPO_NAME}/releases/tags/${versionTag}`;
+        } else if (channel === 'stable') {
+            // Get latest non-prerelease
+            url = `https://api.github.com/repos/${BinaryDownloader.REPO_OWNER}/${BinaryDownloader.REPO_NAME}/releases`;
+        } else {
+            // Get latest release (including prereleases)
+            url = `https://api.github.com/repos/${BinaryDownloader.REPO_OWNER}/${BinaryDownloader.REPO_NAME}/releases/latest`;
+        }
         
         return new Promise((resolve, reject) => {
             https.get(url, { headers: { 'User-Agent': 'vscode-perl-lsp' } }, (res) => {
@@ -195,11 +225,19 @@ export class BinaryDownloader {
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
-                        const release = JSON.parse(data);
-                        if (release.message && release.message.includes('Not Found')) {
+                        const parsed = JSON.parse(data);
+                        if (parsed.message && parsed.message.includes('Not Found')) {
                             reject(new Error('No releases found'));
+                        } else if (Array.isArray(parsed)) {
+                            // For stable channel, find first non-prerelease
+                            const stableRelease = parsed.find((r: any) => !r.prerelease);
+                            if (stableRelease) {
+                                resolve(stableRelease);
+                            } else {
+                                resolve(parsed[0]); // Fall back to latest
+                            }
                         } else {
-                            resolve(release);
+                            resolve(parsed);
                         }
                     } catch (e) {
                         reject(e);
