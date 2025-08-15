@@ -18,14 +18,15 @@ jobs:
       matrix:
         target: 
           - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+          # TODO: Re-enable ARM64 builds after resolving GitHub billing limits
+          # - aarch64-unknown-linux-gnu
         include:
           - target: x86_64-unknown-linux-gnu
             arch: amd64
             rpm_arch: x86_64
-          - target: aarch64-unknown-linux-gnu
-            arch: arm64
-            rpm_arch: aarch64
+          # - target: aarch64-unknown-linux-gnu
+          #   arch: arm64
+          #   rpm_arch: aarch64
     
     steps:
       - name: Checkout
