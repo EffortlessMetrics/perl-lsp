@@ -148,17 +148,33 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Prepare release files
         run: |
-          # Move all artifacts to current directory
-          find artifacts -name '*.tar.gz' -o -name '*.zip' | xargs -I {} mv {} .
+          set -euo pipefail
+          
+          # Check if artifacts exist
+          echo "Contents of artifacts directory:"
+          ls -la artifacts/ || echo "No artifacts directory found"
+          
+          # Find and move artifacts
+          ASSETS=$(find artifacts -name '*.tar.gz' -o -name '*.zip' 2>/dev/null || true)
+          if [ -z "$ASSETS" ]; then
+            echo "ERROR: No artifacts found. Did the build steps succeed?"
+            exit 1
+          fi
+          
+          echo "Found artifacts:"
+          echo "$ASSETS"
+          echo "$ASSETS" | xargs -I {} mv {} .
           
           # Generate aggregate checksums
-          sha256sum *.tar.gz *.zip > SHA256SUMS 2>/dev/null || true
+          sha256sum *.tar.gz *.zip > SHA256SUMS
           
           # List files for verification
-          ls -la *.tar.gz *.zip SHA256SUMS 2>/dev/null || true
+          echo "Files ready for release:"
+          ls -la *.tar.gz *.zip SHA256SUMS
 
       - name: Generate release body
         run: |
