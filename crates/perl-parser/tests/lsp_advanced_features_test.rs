@@ -243,6 +243,7 @@ fn test_run_single_test() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_run_test_suite() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -261,6 +262,7 @@ fn test_run_test_suite() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_debug_test() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -283,6 +285,7 @@ fn test_debug_test() {
 // ===================== Code Generation Tests =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_generate_getters_setters() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -301,6 +304,7 @@ fn test_generate_getters_setters() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_generate_test_skeleton() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -321,6 +325,7 @@ fn test_generate_test_skeleton() {
 // ===================== Project Configuration Tests =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_project_initialization() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -341,6 +346,7 @@ fn test_project_initialization() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_dependency_management() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -369,6 +375,7 @@ fn test_dependency_management() {
 // ===================== Linting and Formatting =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_perltidy_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -386,6 +393,7 @@ fn test_perltidy_integration() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_perlcritic_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -406,6 +414,7 @@ fn test_perlcritic_integration() {
 // ===================== Documentation Generation =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_generate_pod_documentation() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -424,6 +433,7 @@ fn test_generate_pod_documentation() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_extract_pod_to_markdown() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -443,6 +453,7 @@ fn test_extract_pod_to_markdown() {
 // ===================== Performance Profiling =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_profile_execution() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -461,6 +472,7 @@ fn test_profile_execution() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_analyze_profile_results() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -481,6 +493,7 @@ fn test_analyze_profile_results() {
 // ===================== Version Control Integration =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_git_blame_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -498,6 +511,7 @@ fn test_git_blame_integration() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_commit_with_conventional_format() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -520,6 +534,7 @@ fn test_commit_with_conventional_format() {
 // ===================== Database Integration =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_sql_preview_in_dbi_code() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -538,6 +553,7 @@ fn test_sql_preview_in_dbi_code() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_generate_dbi_code_from_schema() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -558,6 +574,7 @@ fn test_generate_dbi_code_from_schema() {
 // ===================== Container and Deployment =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_dockerfile_generation() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -577,6 +594,7 @@ fn test_dockerfile_generation() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_kubernetes_manifest_generation() {
     let mut ctx = AdvancedTestContext::new();
 

@@ -57,6 +57,16 @@ tree-sitter-perl/
 
 ## Testing Guidelines
 
+### No New Ignored Tests Policy
+We enforce a strict "no new ignored tests" policy. The CI guard (`ci/check_ignored.sh`) tracks the count of `#[ignore]` attributes and will fail if the count increases.
+
+**Current baseline: 40 ignored tests**
+
+To check current count:
+```bash
+./ci/check_ignored.sh
+```
+
 ### Running Tests
 
 ```bash
@@ -73,7 +83,48 @@ cargo xtask corpus --diagnose
 cargo test test_name
 ```
 
+#### Feature-Gated Tests (Aspirational Features)
+Some tests are gated behind feature flags for functionality that's planned but not yet implemented:
+
+```bash
+# Test advanced constant pragma parsing
+cargo test -p perl-parser --features constant-advanced
+
+# Test qw delimiter variants
+cargo test -p perl-parser --features qw-variants
+
+# Test package-qualified subroutine resolution
+cargo test -p perl-parser --features package-qualified
+
+# Test next-gen error classification
+cargo test -p perl-parser --features error-classifier-v2
+
+# Test advanced LSP features
+cargo test -p perl-parser --features lsp-advanced
+```
+
+These tests run nightly in CI to ensure they don't rot. You can manually trigger the nightly run via GitHub Actions UI.
+
 ### Writing Tests
+
+When adding new tests:
+1. **Prefer fixing over ignoring**: If a test fails, fix the underlying issue
+2. **Use feature flags for aspirational features**: Instead of `#[ignore]`, use:
+   ```rust
+   #[cfg_attr(not(feature = "your-feature"), ignore = "Requires your-feature")]
+   ```
+3. **Document why**: If you must ignore a test, always provide a reason:
+   ```rust
+   #[ignore = "Parser doesn't yet support X - see issue #123"]
+   ```
+
+#### Lowering the Ignored Baseline
+
+When you fix an ignored test:
+1. Remove the `#[ignore]` attribute
+2. Run `./ci/check_ignored.sh` to see the new count
+3. Update `ci/ignored_baseline.txt` with the new (lower) number
+4. Commit both changes together
 
 #### 1. Unit Tests
 

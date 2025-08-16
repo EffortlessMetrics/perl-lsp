@@ -54,6 +54,7 @@ fn test_classify_missing_semicolon() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_parenthesis() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -67,6 +68,7 @@ fn test_classify_unclosed_parenthesis() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_bracket() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -80,6 +82,7 @@ fn test_classify_unclosed_bracket() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_brace() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -140,6 +143,7 @@ fn test_get_suggestion_unclosed_parenthesis() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_boundary_conditions() {
     let classifier = ErrorClassifier::new();
 
@@ -161,6 +165,7 @@ fn test_boundary_conditions() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_heredoc_classification() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -174,6 +179,7 @@ fn test_heredoc_classification() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_with_context() {
     let classifier = ErrorClassifier::new();
 

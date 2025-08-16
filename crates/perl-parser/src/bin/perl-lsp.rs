@@ -2,6 +2,8 @@
 //!
 //! This binary implements a Language Server Protocol server for Perl
 //! that can be used with any LSP-compatible editor.
+
+#![deny(clippy::option_env_unwrap)]
 //!
 //! Usage:
 //!   perl-lsp [options]
@@ -11,6 +13,7 @@
 //!   --socket     Use TCP socket for communication
 //!   --port       Port to listen on (default: 9257)
 //!   --log        Enable logging to stderr
+//!   --health     Quick health check
 //!   --version    Show version information
 //!   --help       Show this help message
 
@@ -38,8 +41,14 @@ fn main() {
                 }
             }
             "--log" => enable_logging = true,
+            "--health" => {
+                println!("ok {}", env!("CARGO_PKG_VERSION"));
+                process::exit(0);
+            }
             "--version" => {
-                println!("perl-lsp 0.1.0");
+                println!("perl-lsp {}", env!("CARGO_PKG_VERSION"));
+                // build.rs always sets GIT_TAG (falls back to "unknown"), so env! is safe
+                println!("Git tag: {}", env!("GIT_TAG"));
                 println!("Perl Language Server using perl-parser v3");
                 process::exit(0);
             }
@@ -91,6 +100,7 @@ fn print_help() {
     println!("  --socket     Use TCP socket for communication");
     println!("  --port       Port to listen on (default: 9257)");
     println!("  --log        Enable logging to stderr");
+    println!("  --health     Quick health check (prints 'ok <version>')");
     println!("  --version    Show version information");
     println!("  --help       Show this help message");
     println!();

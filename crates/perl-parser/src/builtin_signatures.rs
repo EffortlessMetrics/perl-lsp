@@ -988,6 +988,22 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
         },
     );
 
+    signatures.insert(
+        "getsockopt",
+        BuiltinSignature {
+            signatures: vec!["getsockopt SOCKET, LEVEL, OPTNAME"],
+            documentation: "Gets socket options",
+        },
+    );
+
+    signatures.insert(
+        "setsockopt",
+        BuiltinSignature {
+            signatures: vec!["setsockopt SOCKET, LEVEL, OPTNAME, OPTVAL"],
+            documentation: "Sets socket options",
+        },
+    );
+
     // ===== Pack/Unpack =====
     signatures.insert(
         "pack",
@@ -1050,6 +1066,22 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
         BuiltinSignature {
             signatures: vec!["dump LABEL", "dump"],
             documentation: "Creates core dump",
+        },
+    );
+
+    signatures.insert(
+        "dbmopen",
+        BuiltinSignature {
+            signatures: vec!["dbmopen HASH, DBNAME, MASK"],
+            documentation: "Opens DBM file (deprecated, use tie instead)",
+        },
+    );
+
+    signatures.insert(
+        "dbmclose",
+        BuiltinSignature {
+            signatures: vec!["dbmclose HASH"],
+            documentation: "Closes DBM file (deprecated, use untie instead)",
         },
     );
 

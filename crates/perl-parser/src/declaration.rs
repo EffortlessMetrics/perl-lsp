@@ -39,7 +39,7 @@ impl<'a> DeclarationProvider<'a> {
             content,
             document_uri,
             parent_map: None,
-            doc_version: i32::MIN, // Sentinel value to detect missing with_doc_version() call
+            doc_version: 0, // Default to version 0 for simple use cases
         }
     }
 

@@ -13,3 +13,9 @@ package-lock.json
 src/*
 tree-sitter-perl.wasm
 log.html
+
+# Release artifacts
+/releases/
+*.tar.gz
+*.zip
+*.vsix

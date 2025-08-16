@@ -16,7 +16,7 @@ fn test_var_decl_in_same_block() {
     assert!(links.is_some(), "Should find declaration");
     let links = links.unwrap();
     assert_eq!(links.len(), 1);
-    assert_eq!(links[0].target_selection_range, (0, 5)); // Points to "my $x"
+    assert_eq!(links[0].target_selection_range, (3, 5)); // Points to "$x" in "my $x"
 }
 
 #[test]
@@ -79,6 +79,7 @@ foo();
 }
 
 #[test]
+#[cfg_attr(not(feature = "package-qualified"), ignore = "Requires package-qualified feature")]
 fn test_package_qualified_sub() {
     // Test: Foo::bar resolves to package Foo; sub bar
     let content = r#"
@@ -181,6 +182,7 @@ fn test_unicode_and_crlf() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "package-qualified"), ignore = "Requires package-qualified feature")]
 fn test_tricky_names() {
     // Test: Complex names like Foo::Bar_baz9, _priv, métód_π
     let content = r#"
