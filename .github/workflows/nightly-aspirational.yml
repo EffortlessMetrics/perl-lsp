@@ -39,3 +39,35 @@ jobs:
         run: |
           echo "Feature ${{ matrix.feature }} test results:"
           echo "Tests that would pass with this feature enabled"
+
+  combos:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - "constant-advanced qw-variants"
+          - "constant-advanced package-qualified"
+          - "error-classifier-v2 lsp-advanced"
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: combo-${{ matrix.features }}
+      
+      - name: Run combo tests
+        run: |
+          set -euxo pipefail
+          cargo test -p perl-parser --all-targets --features "${{ matrix.features }}"
+      
+      - name: Report combo results
+        if: always()
+        run: |
+          echo "Feature combo '${{ matrix.features }}' test results:"
+          echo "Testing interactions between features"
