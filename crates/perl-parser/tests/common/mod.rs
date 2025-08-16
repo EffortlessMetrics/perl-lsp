@@ -62,6 +62,13 @@ pub struct LspServer {
     pending: VecDeque<Value>,
 }
 
+impl LspServer {
+    /// Check if the server process is still running
+    pub fn is_alive(&mut self) -> bool {
+        self.process.try_wait().unwrap().is_none()
+    }
+}
+
 fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
     let mut v: Vec<Command> = Vec::new();

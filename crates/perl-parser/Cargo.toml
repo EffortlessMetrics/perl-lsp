@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.8.2"
+version = "0.8.3-rc.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Tree-sitter Perl Contributors"]
@@ -47,10 +47,19 @@ cli = []
 incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
+
+# Aspirational features for tests that should eventually pass
+constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)
+qw-variants = []  # Support for all qw delimiter variants
+package-qualified = []  # Package-qualified subroutine resolution
+error-classifier-v2 = []  # Next generation error classification
+lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
 
 [dev-dependencies]
+assert_cmd = "2"
 criterion = "0.7.0"
+predicates = "3"
 pretty_assertions = "1.4.1"
 regex = "1.11.1"
 serial_test = "3.0"

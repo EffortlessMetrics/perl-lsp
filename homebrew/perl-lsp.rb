@@ -20,7 +20,7 @@ class PerlLsp < Formula
       sha256 "PLACEHOLDER_SHA256_AARCH64_LINUX"
     else
       url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "49c6621f2ede2822f202dfaafa52c9dbe8351af36368f53e3d85b20094efa1f1"
+      sha256 "8af781a0e0aed47f22517ab15cce80dbf78e7bcafb62e1eed5ab236b481b920d"
     end
   end
 

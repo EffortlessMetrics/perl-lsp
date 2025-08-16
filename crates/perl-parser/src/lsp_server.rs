@@ -232,16 +232,25 @@ impl LspServer {
 
         loop {
             // Read LSP message
-            if let Some(request) = self.read_message_from(&mut reader)? {
-                eprintln!("Received request: {}", request.method);
+            match self.read_message_from(&mut reader)? {
+                Some(request) => {
+                    eprintln!("Received request: {}", request.method);
 
-                // Handle the request
-                if let Some(response) = self.handle_request(request) {
-                    // Send response
-                    self.send_message(&mut stdout, &response)?;
+                    // Handle the request
+                    if let Some(response) = self.handle_request(request) {
+                        // Send response
+                        self.send_message(&mut stdout, &response)?;
+                    }
+                }
+                None => {
+                    // EOF reached, exit cleanly
+                    eprintln!("LSP server: EOF on stdin, shutting down");
+                    break;
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Send an LSP message to stdout
@@ -636,8 +645,8 @@ impl LspServer {
         Ok(Some(json!({
             "capabilities": capabilities,
             "serverInfo": {
-                "name": "perl-language-server",
-                "version": "0.8.2"
+                "name": "perl-lsp",
+                "version": env!("CARGO_PKG_VERSION")
             }
         })))
     }
