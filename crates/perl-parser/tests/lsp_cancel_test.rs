@@ -79,13 +79,30 @@ fn test_cancel_request() {
 
 /// Test that $/cancelRequest itself doesn't produce a response
 #[test]
-#[ignore = "Test infrastructure issue: server exits prematurely in test harness"]
+#[ignore = "Known test harness issue: stdin closes unexpectedly after initialization (issue #TBD)"]
 fn test_cancel_request_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Clear any pending messages (like diagnostics)
-    drain_until_quiet(&mut server, Duration::from_millis(150), Duration::from_millis(800));
+    // Send a didOpen to keep server active
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": "file:///dummy.pl",
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "# empty\n"
+                }
+            }
+        }),
+    );
+
+    // Wait a bit for server to process
+    std::thread::sleep(Duration::from_millis(50));
 
     // Check server is still alive before sending cancel
     assert!(server.is_alive(), "server exited before cancel test started");
