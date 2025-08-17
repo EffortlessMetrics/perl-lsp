@@ -7,7 +7,7 @@
 #### 1. **Enhanced CI Guard for Ignored Tests** ✅
 - Updated `ci/check_ignored.sh` to count both integration tests and unit tests in src/
 - Updated GitHub Actions workflow to trigger on src/ changes
-- Baseline reduced from 74 to **40 ignored tests**
+- Baseline reduced from 74 to **39 ignored tests**
 - No escape hatches - all `#[ignore]` attributes are tracked
 
 #### 2. **Nightly CI for Aspirational Features** ✅
