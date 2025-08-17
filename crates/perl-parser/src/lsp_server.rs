@@ -8,6 +8,7 @@ use crate::{
     CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
     DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
+    code_actions_enhanced::EnhancedCodeActionsProvider,
     call_hierarchy_provider::CallHierarchyProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
@@ -1397,7 +1398,50 @@ impl LspServer {
                         }));
                     }
 
-                    eprintln!("Returning {} code actions", code_actions.len());
+                    // Get enhanced refactorings (extract variable, convert loops, etc.)
+                    let enhanced_provider = EnhancedCodeActionsProvider::new(doc.content.clone());
+                    let enhanced_actions = enhanced_provider.get_enhanced_refactoring_actions(
+                        ast,
+                        (start_offset, end_offset),
+                    );
+
+                    for action in enhanced_actions {
+                        let mut changes = HashMap::new();
+                        let edits: Vec<Value> = action
+                            .edit
+                            .changes
+                            .into_iter()
+                            .map(|edit| {
+                                let (start_line, start_char) =
+                                    self.offset_to_pos16(doc, edit.location.start);
+                                let (end_line, end_char) =
+                                    self.offset_to_pos16(doc, edit.location.end);
+                                json!({
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "newText": edit.new_text,
+                                })
+                            })
+                            .collect();
+                        changes.insert(uri.to_string(), edits);
+
+                        code_actions.push(json!({
+                            "title": action.title,
+                            "kind": match action.kind {
+                                InternalCodeActionKind::QuickFix => "quickfix",
+                                InternalCodeActionKind::Refactor => "refactor",
+                                InternalCodeActionKind::RefactorExtract => "refactor.extract",
+                                InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
+                                _ => "refactor",
+                            },
+                            "edit": {
+                                "changes": changes,
+                            },
+                        }));
+                    }
+
                     return Ok(Some(json!(code_actions)));
                 }
             }
