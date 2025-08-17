@@ -257,7 +257,7 @@ impl LspServer {
     /// Send an LSP message to stdout
     fn send_message(
         &self,
-        stdout: &mut io::StdoutLock,
+        stdout: &mut io::StdoutLock<'_>,
         response: &JsonRpcResponse,
     ) -> io::Result<()> {
         let content = serde_json::to_string(response)?;
