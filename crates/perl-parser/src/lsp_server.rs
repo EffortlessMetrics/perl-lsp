@@ -3522,7 +3522,7 @@ impl LspServer {
         #[cfg(not(feature = "workspace"))]
         {
             // Without workspace feature, return empty results
-            return Ok(Some(json!([])));
+            Ok(Some(json!([])))
         }
     }
 
