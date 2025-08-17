@@ -198,9 +198,10 @@ impl<'a> Parser<'a> {
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
-        if !self.at_stmt_start {
-            return false;
-        }
+        // TODO: Re-enable this check once we fix statement tracking
+        // if !self.at_stmt_start {
+        //     return false;
+        // }
 
         // Known builtins that commonly use indirect object syntax
         let indirect_builtins = [
@@ -241,6 +242,8 @@ impl<'a> Parser<'a> {
                     // Only treat $var as an indirect object if a typical argument follows.
                     // This prevents misclassifying arithmetic like `print $x + 1`
                     if let Ok(second) = self.tokens.peek_second() {
+                        // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
+                        let second_text = second.text.as_str();
                         return matches!(
                             second.kind,
                             TokenKind::Comma          // print $fh, "x"
@@ -248,8 +251,9 @@ impl<'a> Parser<'a> {
                             | TokenKind::LeftParen    // print $fh ($x)
                             | TokenKind::LeftBracket  // print $fh [$x]
                             | TokenKind::LeftBrace    // print $fh { ... }
-                            | TokenKind::Identifier // print $fh something
-                        );
+                        ) || second_text.starts_with('$')    // print $fh $x
+                          || second_text.starts_with('@')    // print $fh @array
+                          || second_text.starts_with('%');   // print $fh %hash
                     }
                     return false; // Can't see more; be conservative
                 }
