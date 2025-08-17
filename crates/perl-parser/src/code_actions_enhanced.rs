@@ -114,6 +114,27 @@ impl EnhancedCodeActionsProvider {
                     self.collect_actions_for_range(init, range, actions);
                 }
             }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(init) = init {
+                    self.collect_actions_for_range(init, range, actions);
+                }
+                if let Some(condition) = condition {
+                    self.collect_actions_for_range(condition, range, actions);
+                }
+                if let Some(update) = update {
+                    self.collect_actions_for_range(update, range, actions);
+                }
+                self.collect_actions_for_range(body, range, actions);
+            }
+            NodeKind::Foreach { variable, list, body } => {
+                self.collect_actions_for_range(variable, range, actions);
+                self.collect_actions_for_range(list, range, actions);
+                self.collect_actions_for_range(body, range, actions);
+            }
+            NodeKind::While { condition, body, .. } => {
+                self.collect_actions_for_range(condition, range, actions);
+                self.collect_actions_for_range(body, range, actions);
+            }
             _ => {}
         }
     }
@@ -545,15 +566,27 @@ impl EnhancedCodeActionsProvider {
         // Pattern: for (my $i = 0; $i < @array; $i++)
         // Convert to: foreach my $item (@array)
 
-        // This is complex pattern matching - simplified version
-        if init.is_some() && condition.is_some() && update.is_some() {
-            let body_text = &self.source[body.location.start..body.location.end];
-            // Check if it's array iteration pattern
-            if self.source
-                [init.as_ref().unwrap().location.start..init.as_ref().unwrap().location.end]
-                .contains("= 0")
-            {
-                return Some(format!("foreach my $item (@array) {}", body_text));
+        // Check that we have all parts of a C-style for loop
+        if let (Some(init), Some(condition), Some(_update)) = (init, condition, update) {
+            // Check if init is "my $i = 0" pattern
+            // Note: The init might be a VariableDeclaration or other node
+            if matches!(&init.kind, NodeKind::VariableDeclaration { .. }) {
+                let init_text = &self.source[init.location.start..init.location.end];
+                if init_text.contains("= 0") {
+                    // Check if condition involves an array
+                    let condition_text = &self.source[condition.location.start..condition.location.end];
+                    if condition_text.contains("@") {
+                        // Extract array name from condition
+                        let array_start = condition_text.find('@').unwrap();
+                        let array_chars: String = condition_text[array_start..]
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '@')
+                            .collect();
+                        
+                        let body_text = &self.source[body.location.start..body.location.end];
+                        return Some(format!("foreach my $item ({}) {}", array_chars, body_text));
+                    }
+                }
             }
         }
 

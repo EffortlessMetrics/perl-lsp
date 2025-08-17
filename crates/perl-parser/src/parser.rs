@@ -200,19 +200,28 @@ impl<'a> Parser<'a> {
         // Check if it's a known builtin
         if indirect_builtins.contains(&name) {
             // Peek at the next token (not second - we're already at the first)
-            if let Ok(next) = self.tokens.peek() {
-                match next.kind {
-                    // print STDOUT ...
-                    TokenKind::Identifier => {
-                        // Check if it's uppercase (likely a filehandle)
-                        if next.text.chars().next().is_some_and(|c| c.is_uppercase()) {
-                            return true;
-                        }
+            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek() {
+                (next.kind, next.text.clone())
+            } else {
+                return false;
+            };
+            
+            match next_kind {
+                // print STDOUT ...
+                TokenKind::Identifier => {
+                    // Check if it's uppercase (likely a filehandle)
+                    if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        return true;
                     }
-                    // print $fh ...
-                    _ if next.text.starts_with('$') => return true,
-                    _ => {}
                 }
+                // print $fh ... (only if more args follow)
+                _ if next_text.starts_with('$') => {
+                    // TODO: This should check if more args follow to distinguish
+                    // print $var; from print $fh "text";
+                    // For now, always treat as indirect object syntax
+                    return true;
+                }
+                _ => {}
             }
         }
 
