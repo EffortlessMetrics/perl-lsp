@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Git pre-push hook - ensures code quality before pushing
+# 
+# Installation:
+#   cp hooks/pre-push .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+#
+# To bypass (use sparingly):
+#   git push --no-verify
+
+set -e
+
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}Running pre-push checks...${NC}"
+
+# Check if local check script exists
+if [ -x "./ci/check_local.sh" ]; then
+    ./ci/check_local.sh
+else
+    # Fallback to inline checks if script doesn't exist
+    echo "Running inline quality checks..."
+    
+    # Format
+    echo "Checking format..."
+    cargo fmt --all -- --check
+    
+    # Clippy
+    echo "Running clippy..."
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    
+    # Docs
+    echo "Building docs..."
+    RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls" cargo doc --workspace --no-deps >/dev/null
+    
+    # Tests
+    echo "Running tests..."
+    cargo test --workspace --all-features --quiet
+    
+    echo -e "${GREEN}✓ All checks passed${NC}"
+fi
+
+echo -e "${GREEN}Pre-push checks completed successfully!${NC}"
