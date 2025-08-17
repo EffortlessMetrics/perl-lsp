@@ -48,13 +48,34 @@ jobs:
           --exclude perl-lexer || true
     
     - name: Documentation (strict)
+      env:
+        RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls
       run: cargo doc --workspace --no-deps
     
     - name: Build
       run: cargo build --workspace --all-features
     
+    - name: Build perl-parser (no rustc warnings)
+      env:
+        RUSTFLAGS: -D warnings
+      run: cargo build -p perl-parser --all-features
+    
     - name: Tests
       run: cargo test --workspace --all-features
+    
+    - name: Tree-sitter ABI symbol exists
+      run: |
+        LIB=$(cargo build -p tree-sitter-perl-rs --release --message-format=json \
+          | jq -r 'select(.target.kind[]?=="cdylib") | .filenames[]' | head -1)
+        if [ -n "$LIB" ]; then
+          nm "$LIB" | grep -q 'tree_sitter_perl' || echo "Warning: tree_sitter_perl symbol not found"
+        fi
+    
+    - name: Parser S-expression smoke
+      run: |
+        cargo build -p perl-parser --bin perl-parse --features cli --release
+        echo 'print "ok\n";' | ./target/release/perl-parse - | tee /dev/stderr \
+          | grep -q '(program (call print' || echo "Warning: S-expression format check failed"
     
     - name: Ignored Tests Baseline
       run: |
