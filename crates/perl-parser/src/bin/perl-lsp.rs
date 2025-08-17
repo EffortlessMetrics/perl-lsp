@@ -6,7 +6,7 @@
 #![deny(clippy::option_env_unwrap)]
 //!
 //! Usage:
-//!   perl-lsp [options]
+//!   perl-lsp \[options\]
 //!
 //! Options:
 //!   --stdio      Use stdio for communication (default)
