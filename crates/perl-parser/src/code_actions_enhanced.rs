@@ -567,24 +567,115 @@ impl EnhancedCodeActionsProvider {
         // Convert to: foreach my $item (@array)
 
         // Check that we have all parts of a C-style for loop
-        if let (Some(init), Some(condition), Some(_update)) = (init, condition, update) {
+        if let (Some(init), Some(condition), Some(update)) = (init, condition, update) {
             // Check if init is "my $i = 0" pattern
-            // Note: The init might be a VariableDeclaration or other node
-            if matches!(&init.kind, NodeKind::VariableDeclaration { .. }) {
-                let init_text = &self.source[init.location.start..init.location.end];
-                if init_text.contains("= 0") {
-                    // Check if condition involves an array
-                    let condition_text = &self.source[condition.location.start..condition.location.end];
-                    if condition_text.contains("@") {
-                        // Extract array name from condition
-                        let array_start = condition_text.find('@').unwrap();
-                        let array_chars: String = condition_text[array_start..]
-                            .chars()
-                            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '@')
-                            .collect();
-                        
-                        let body_text = &self.source[body.location.start..body.location.end];
-                        return Some(format!("foreach my $item ({}) {}", array_chars, body_text));
+            if let NodeKind::VariableDeclaration { variable, initializer, .. } = &init.kind {
+                // Get iterator variable name
+                if let NodeKind::Variable { name: iter_name, .. } = &variable.kind {
+                    // Check if initialized to 0
+                    if let Some(init_val) = initializer {
+                        if let NodeKind::Number { value } = &init_val.kind {
+                            if value == "0" {
+                                // Check if condition is $i < @array or $i < scalar @array
+                                if let NodeKind::Binary { op, left, right } = &condition.kind {
+                                    if op == "<" {
+                                        // Check if left is our iterator variable
+                                        if let NodeKind::Variable { name: left_name, .. } =
+                                            &left.kind
+                                        {
+                                            if left_name == iter_name {
+                                                // Check if right is an array
+                                                let array_name = if let NodeKind::Variable {
+                                                    sigil,
+                                                    name,
+                                                    ..
+                                                } = &right.kind
+                                                {
+                                                    if sigil == "@" {
+                                                        Some(format!("@{}", name))
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else if let NodeKind::FunctionCall {
+                                                    name: func_name,
+                                                    args,
+                                                } = &right.kind
+                                                {
+                                                    if func_name == "scalar" && args.len() == 1 {
+                                                        if let NodeKind::Variable {
+                                                            sigil,
+                                                            name,
+                                                            ..
+                                                        } = &args[0].kind
+                                                        {
+                                                            if sigil == "@" {
+                                                                Some(format!("@{}", name))
+                                                            } else {
+                                                                None
+                                                            }
+                                                        } else {
+                                                            None
+                                                        }
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else {
+                                                    None
+                                                };
+
+                                                if let Some(array) = array_name {
+                                                    // Check if update is $i++ or ++$i
+                                                    let is_increment = match &update.kind {
+                                                        NodeKind::Unary { op, operand } => {
+                                                            matches!(op.as_str(), "++" | "--")
+                                                                && if let NodeKind::Variable {
+                                                                    name,
+                                                                    ..
+                                                                } = &operand.kind
+                                                                {
+                                                                    name == iter_name
+                                                                } else {
+                                                                    false
+                                                                }
+                                                        }
+                                                        _ => false,
+                                                    };
+
+                                                    if is_increment {
+                                                        // Replace array subscripts in body with $item
+                                                        let body_text =
+                                                            &self.source[body.location.start
+                                                                ..body.location.end];
+                                                        let modified_body = body_text
+                                                            .replace(
+                                                                &format!(
+                                                                    "${}[${}",
+                                                                    array.trim_start_matches('@'),
+                                                                    iter_name
+                                                                ),
+                                                                "$item",
+                                                            )
+                                                            .replace(
+                                                                &format!(
+                                                                    "${}[${}]",
+                                                                    array.trim_start_matches('@'),
+                                                                    iter_name
+                                                                ),
+                                                                "$item",
+                                                            );
+
+                                                        return Some(format!(
+                                                            "foreach my $item ({}) {}",
+                                                            array, modified_body
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
