@@ -18,10 +18,10 @@ fn test_malformed_content_length_header() {
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
     let header = format!("Content-Length   : {}\r\n\r\n", body.len());
 
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(body.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+    {
+        server.stdin_writer().write_all(header.as_bytes()).unwrap();
+        server.stdin_writer().write_all(body.as_bytes()).unwrap();
+        server.stdin_writer().flush().unwrap();
     }
 
     // Server behavior varies - some handle this, some don't
@@ -36,9 +36,9 @@ fn test_header_only_no_body() {
     // Send header without body
     let header = "Content-Length: 50\r\n\r\n";
 
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+    {
+        server.stdin_writer().write_all(header.as_bytes()).unwrap();
+        server.stdin_writer().flush().unwrap();
     }
 
     // Wait a bit then send a valid request
@@ -96,10 +96,10 @@ fn test_duplicate_content_length() {
     let header =
         format!("Content-Length: {}\r\nContent-Length: {}\r\n\r\n", body.len(), body.len());
 
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(body.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+    {
+        server.stdin_writer().write_all(header.as_bytes()).unwrap();
+        server.stdin_writer().write_all(body.as_bytes()).unwrap();
+        server.stdin_writer().flush().unwrap();
     }
 
     // Server should handle it (typically using last value)
@@ -117,10 +117,10 @@ fn test_wrong_content_length() {
     let body = json!({"jsonrpc": "2.0", "id": 100, "method": "shutdown"}).to_string();
     let header = format!("Content-Length: {}\r\n\r\n", body.len() + 10); // Wrong length
 
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(body.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+    {
+        server.stdin_writer().write_all(header.as_bytes()).unwrap();
+        server.stdin_writer().write_all(body.as_bytes()).unwrap();
+        server.stdin_writer().flush().unwrap();
     }
 
     // Wait a bit for server to process
@@ -175,10 +175,10 @@ fn test_case_sensitive_headers() {
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
     let header = format!("content-length: {}\r\n\r\n", body.len()); // lowercase
 
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(body.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+    {
+        server.stdin_writer().write_all(header.as_bytes()).unwrap();
+        server.stdin_writer().write_all(body.as_bytes()).unwrap();
+        server.stdin_writer().flush().unwrap();
     }
 
     // Server should handle case-insensitive headers

@@ -79,7 +79,6 @@ fn test_cancel_request() {
 
 /// Test that $/cancelRequest itself doesn't produce a response
 #[test]
-#[ignore = "Known test harness issue: stdin closes unexpectedly after initialization (issue #TBD)"]
 fn test_cancel_request_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -101,8 +100,8 @@ fn test_cancel_request_no_response() {
         }),
     );
 
-    // Wait a bit for server to process
-    std::thread::sleep(Duration::from_millis(50));
+    // Drain any diagnostics or other notifications from didOpen
+    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(500));
 
     // Check server is still alive before sending cancel
     assert!(server.is_alive(), "server exited before cancel test started");

@@ -32,8 +32,8 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::process::{Child, Command, Stdio};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
@@ -54,7 +54,7 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
 
 pub struct LspServer {
     pub process: Child,
-    pub stdin: Option<std::process::ChildStdin>,
+    writer: BufWriter<ChildStdin>,  // keep stdin pinned and flushed
     rx: Receiver<Value>,
     // Keep threads alive for the lifetime of the server
     _stdout_thread: std::thread::JoinHandle<()>,
@@ -66,6 +66,11 @@ impl LspServer {
     /// Check if the server process is still running
     pub fn is_alive(&mut self) -> bool {
         self.process.try_wait().unwrap().is_none()
+    }
+    
+    /// Get mutable access to the stdin writer
+    pub fn stdin_writer(&mut self) -> &mut BufWriter<ChildStdin> {
+        &mut self.writer
     }
 }
 
@@ -127,7 +132,7 @@ pub fn start_lsp_server() -> LspServer {
         })
     };
 
-    let stdin = process.stdin.take();
+    let stdin = process.stdin.take().expect("child stdin should be available");
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
     let stderr = process.stderr.take().expect("stderr piped");
@@ -192,12 +197,10 @@ pub fn start_lsp_server() -> LspServer {
         })
         .unwrap();
 
-    LspServer { process, stdin, rx, _stdout_thread, _stderr_thread, pending: VecDeque::new() }
+    LspServer { process, writer: BufWriter::new(stdin), rx, _stdout_thread, _stderr_thread, pending: VecDeque::new() }
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
-    use std::io::Write as _;
-
     // Ensure every request has an id so we can match the response deterministically
     let id = match request.get("id") {
         Some(v) => Some(v.clone()),
@@ -209,12 +212,8 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     };
 
     let body = request.to_string();
-    let header = format!("Content-Length: {}\r\n\r\n", body.len());
-
-    let w = server.stdin.as_mut().expect("child stdin");
-    w.write_all(header.as_bytes()).unwrap();
-    w.write_all(body.as_bytes()).unwrap();
-    w.flush().unwrap();
+    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+    server.writer.flush().unwrap();
 
     // Match by ID to avoid confusion with interleaved notifications
     match id {
@@ -232,12 +231,9 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
 }
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {
-    let notification_str = serde_json::to_string(&notification).unwrap();
-    let stdin = server.stdin.as_mut().unwrap();
-
-    writeln!(stdin, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)
-        .unwrap();
-    stdin.flush().unwrap();
+    let body = notification.to_string();
+    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+    server.writer.flush().unwrap();
 }
 
 fn default_timeout() -> Duration {
@@ -321,10 +317,8 @@ pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration
 
 /// Write raw bytes (for malformed/binary frame tests).
 pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
-    use std::io::Write as _;
-    let w = server.stdin.as_mut().expect("child stdin");
-    w.write_all(bytes).unwrap();
-    w.flush().unwrap();
+    server.writer.write_all(bytes).unwrap();
+    server.writer.flush().unwrap();
 }
 
 /// Read a notification matching the given method name
@@ -397,13 +391,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // write without reading
     {
-        use std::io::Write as _;
-        let w = server.stdin.as_mut().expect("child stdin");
         let body = init.to_string();
-        let header = format!("Content-Length: {}\r\n\r\n", body.len());
-        w.write_all(header.as_bytes()).unwrap();
-        w.write_all(body.as_bytes()).unwrap();
-        w.flush().unwrap();
+        write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+        server.writer.flush().unwrap();
     }
 
     // wait specifically for id=1
@@ -437,25 +427,15 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &mut LspServer, content: &str) {
-    use std::io::Write as _;
-    let header = format!("Content-Length: {}\r\n\r\n", content.len());
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(content.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-    }
+    write!(server.writer, "Content-Length: {}\r\n\r\n{}", content.len(), content).unwrap();
+    server.writer.flush().unwrap();
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
-    use std::io::Write as _;
     let body = req.to_string();
-    let header = format!("Content-Length: {}\r\n\r\n", body.len());
-    if let Some(stdin) = server.stdin.as_mut() {
-        stdin.write_all(header.as_bytes()).unwrap();
-        stdin.write_all(body.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-    }
+    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+    server.writer.flush().unwrap();
 }
 
 impl Drop for LspServer {

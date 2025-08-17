@@ -132,11 +132,10 @@ fn test_invalid_content_length_header() {
 
     // Send malformed content-length
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(b"Content-Length: not-a-number\r\n\r\n{\"jsonrpc\":\"2.0\"}")
         .unwrap();
+    server.stdin_writer().flush().unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should recover
@@ -151,11 +150,10 @@ fn test_mismatched_content_length() {
     let wrong_length = content.len() + 100;
 
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(format!("Content-Length: {}\r\n\r\n{}", wrong_length, content).as_bytes())
         .unwrap();
+    server.stdin_writer().flush().unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should handle gracefully
@@ -167,11 +165,10 @@ fn test_missing_content_length_header() {
 
     // Send without Content-Length
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(b"\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")
         .unwrap();
+    server.stdin_writer().flush().unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should reject
@@ -184,13 +181,14 @@ fn test_additional_headers() {
     // Send with additional headers
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
 
-    server.stdin.as_mut().unwrap().write_all(
+    server.stdin_writer().write_all(
         format!(
             "Content-Length: {}\r\nContent-Type: application/vscode-jsonrpc; charset=utf-8\r\nX-Custom: test\r\n\r\n{}",
             content.len(),
             content
         ).as_bytes()
     ).unwrap();
+    server.stdin_writer().flush().unwrap();
 
     let response = read_response(&mut server);
     assert!(response["id"].is_number());
@@ -208,12 +206,11 @@ fn test_invalid_utf8_in_message() {
     invalid_content.extend_from_slice(b"\"}}}");
 
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(format!("Content-Length: {}\r\n\r\n", invalid_content.len()).as_bytes())
         .unwrap();
-    server.stdin.as_mut().unwrap().write_all(&invalid_content).unwrap();
+    server.stdin_writer().write_all(&invalid_content).unwrap();
+    server.stdin_writer().flush().unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should handle invalid UTF-8
@@ -566,7 +563,8 @@ fn test_batch_request_violations() {
     let mut server = start_lsp_server();
 
     // Empty batch
-    server.stdin.as_mut().unwrap().write_all(b"Content-Length: 2\r\n\r\n[]").unwrap();
+    server.stdin_writer().write_all(b"Content-Length: 2\r\n\r\n[]").unwrap();
+    server.stdin_writer().flush().unwrap();
 
     std::thread::sleep(Duration::from_millis(100));
 
@@ -579,11 +577,10 @@ fn test_batch_request_violations() {
 
     let content = batch.to_string();
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(format!("Content-Length: {}\r\n\r\n{}", content.len(), content).as_bytes())
         .unwrap();
+    server.stdin_writer().flush().unwrap();
 
     // Should process valid ones and error on invalid
     std::thread::sleep(Duration::from_millis(200));
@@ -597,11 +594,10 @@ fn test_incomplete_message() {
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}"#; // Missing closing brace
 
     server
-        .stdin
-        .as_mut()
-        .unwrap()
+        .stdin_writer()
         .write_all(format!("Content-Length: {}\r\n\r\n{}", content.len() + 1, content).as_bytes())
         .unwrap();
+    server.stdin_writer().flush().unwrap();
 
     // Server should timeout or error
     std::thread::sleep(Duration::from_millis(500));
