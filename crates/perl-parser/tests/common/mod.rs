@@ -54,7 +54,7 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
 
 pub struct LspServer {
     pub process: Child,
-    writer: BufWriter<ChildStdin>,  // keep stdin pinned and flushed
+    writer: BufWriter<ChildStdin>, // keep stdin pinned and flushed
     rx: Receiver<Value>,
     // Keep threads alive for the lifetime of the server
     _stdout_thread: std::thread::JoinHandle<()>,
@@ -67,7 +67,7 @@ impl LspServer {
     pub fn is_alive(&mut self) -> bool {
         self.process.try_wait().unwrap().is_none()
     }
-    
+
     /// Get mutable access to the stdin writer
     pub fn stdin_writer(&mut self) -> &mut BufWriter<ChildStdin> {
         &mut self.writer
@@ -197,7 +197,14 @@ pub fn start_lsp_server() -> LspServer {
         })
         .unwrap();
 
-    LspServer { process, writer: BufWriter::new(stdin), rx, _stdout_thread, _stderr_thread, pending: VecDeque::new() }
+    LspServer {
+        process,
+        writer: BufWriter::new(stdin),
+        rx,
+        _stdout_thread,
+        _stderr_thread,
+        pending: VecDeque::new(),
+    }
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
