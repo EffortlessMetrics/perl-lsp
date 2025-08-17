@@ -438,7 +438,7 @@ tree-sitter-perl/
 
 ### Prerequisites
 
-* Rust 1.87+ (2024 edition)
+* Rust 1.89+ (2024 edition)
 * Cargo
 
 ### Quick Start

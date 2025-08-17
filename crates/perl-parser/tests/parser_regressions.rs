@@ -120,3 +120,185 @@ fn new_constructor_pattern() {
     assert_parses("new Class('arg')");
     assert_parses("$obj = new Class;");
 }
+
+#[test]
+fn statement_modifier_inside_block_if() {
+    let code = r#"
+    {
+        my @array = (1, 2, 3);
+        foreach my $item (@array) {
+            print "$item\n" if $item > 1;
+        }
+    }
+    "#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("should parse postfix if inside block");
+    let sexp = ast.to_sexp();
+    // We accept the statement modifier node in the output
+    assert!(
+        sexp.contains("statement_modifier") || sexp.contains("(if "),
+        "expected statement_modifier or if in output; got: {sexp}"
+    );
+}
+
+#[test]
+fn statement_modifier_inside_block_for() {
+    let code = r#"
+    {
+        my @arr = (1,2,3);
+        print $_ for @arr;
+    }
+    "#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("should parse postfix for inside block");
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("statement_modifier") || sexp.contains("(for ") || sexp.contains("(foreach "),
+        "expected statement_modifier or for/foreach in output"
+    );
+}
+
+// Regression tests for declaration + control flow issues
+#[test]
+fn decl_then_if_allows_assignment() {
+    let code = r#"my $x; if (1) { $x = 5; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_if_allows_call() {
+    let code = r#"my $x; if (1) { foo("bar"); }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_if_allows_print() {
+    let code = r#"my $x; if (1) { print "hi"; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_if_allows_postfix_if() {
+    let code = r#"my @a=(1,2,3); if (1) { print "$_" if 1; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_foreach_allows_postfix_if() {
+    let code = r#"my @a=(1,2,3); foreach my $x (@a) { print "$x\n" if $x > 1; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn package_then_if_allows_assignment() {
+    let code = r#"package Foo; if (1) { $x = 5; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn our_then_if_allows_assignment() {
+    let code = r#"our $x; if (1) { $x = 5; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_while_allows_assignment() {
+    let code = r#"my $x; while (1) { $x = 5; last; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn decl_then_foreach_allows_print() {
+    let code = r#"my $x; foreach my $y (@a) { print "hi"; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn multiple_semicolons_in_block() {
+    let code = r#"{ print "hi";; print "bye";;; }"#;
+    assert_parses(code);
+}
+
+#[test]
+fn empty_statements_allowed() {
+    let code = r#";;; print "hi"; ;;;"#;
+    assert_parses(code);
+}
+
+#[test]
+fn statement_modifier_in_foreach_with_prior_decl() {
+    let code = r#"
+    my @array = (1, 2, 3);
+    foreach my $item (@array) {
+        print "$item\n" if $item > 1;
+    }
+    "#;
+    assert_parses(code);
+}
+
+#[test]
+fn complex_foreach_with_modifiers() {
+    let code = r#"
+    sub test {
+        for my $i (1..10) {
+            print "$i\n" if $i % 2;
+        }
+    }
+    "#;
+    assert_parses(code);
+}
+
+#[test]
+fn statement_modifier_unless_and_while() {
+    let code = r#"
+    {
+        my $x = 0;
+        print "ok\n" unless $x;
+        print "loop\n" while $x < 0;
+    }
+    "#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("should parse postfix unless/while inside block");
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("statement_modifier"),
+        "expected statement_modifier nodes in output"
+    );
+}
+
+#[test]
+fn statement_modifier_nested_blocks() {
+    let code = r#"
+    sub test {
+        {
+            my $count = 10;
+            print "Count: $count\n" if $count > 5;
+            last if $count == 10;
+        }
+    }
+    "#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("should parse statement modifiers in nested blocks");
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("statement_modifier"),
+        "expected statement_modifier nodes in nested blocks"
+    );
+}
+
+#[test]
+fn statement_modifier_with_complex_expression() {
+    let code = r#"
+    {
+        my $x = 5;
+        print $x * 2, "\n" if $x > 0 && $x < 10;
+    }
+    "#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("should parse statement modifier with complex expression");
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("statement_modifier"),
+        "expected statement_modifier with complex expression"
+    );
+}
