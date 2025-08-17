@@ -15,7 +15,7 @@ pub struct Parser<'a> {
     recursion_depth: usize,
     last_end_position: usize,
     in_for_loop_init: bool,
-    at_stmt_start: bool,  // Track if we're at statement start for indirect object detection
+    at_stmt_start: bool, // Track if we're at statement start for indirect object detection
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
@@ -113,7 +113,7 @@ impl<'a> Parser<'a> {
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         // Every new statement begins here
         self.at_stmt_start = true;
-        
+
         let token = self.tokens.peek()?.clone();
 
         // Don't check for labels here - it breaks regular identifier parsing
@@ -201,7 +201,7 @@ impl<'a> Parser<'a> {
         if !self.at_stmt_start {
             return false;
         }
-        
+
         // Known builtins that commonly use indirect object syntax
         let indirect_builtins = [
             "print", "printf", "say", "open", "close", "pipe", "sysopen", "sysread", "syswrite",
@@ -248,7 +248,7 @@ impl<'a> Parser<'a> {
                             | TokenKind::LeftParen    // print $fh ($x)
                             | TokenKind::LeftBracket  // print $fh [$x]
                             | TokenKind::LeftBrace    // print $fh { ... }
-                            | TokenKind::Identifier   // print $fh something
+                            | TokenKind::Identifier // print $fh something
                         );
                     }
                     return false; // Can't see more; be conservative
@@ -271,7 +271,7 @@ impl<'a> Parser<'a> {
 
         false
     }
-    
+
     /// Mark that we're no longer at statement start (called after consuming statement head)
     fn mark_not_stmt_start(&mut self) {
         self.at_stmt_start = false;
@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         let method_token = self.consume_token()?; // consume method name
         let method = method_token.text.clone();
-        
+
         // We're consuming the function name, no longer at statement start
         self.mark_not_stmt_start();
 
@@ -1914,7 +1914,7 @@ impl<'a> Parser<'a> {
 
                     // Consume the function name token
                     self.consume_token()?;
-                    
+
                     // We're consuming the function name, no longer at statement start
                     self.mark_not_stmt_start();
 
