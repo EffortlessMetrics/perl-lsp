@@ -155,9 +155,11 @@ for (my $i = 0; $i < @array; $i++) {
     );
 
     let actions = response["result"].as_array().unwrap();
-    // For now, just check that we get some refactoring actions
-    // The loop conversion implementation needs more work
-    assert!(!actions.is_empty(), "Expected refactoring actions for the for loop");
+    assert!(
+        actions.iter().any(|a| a["title"].as_str().unwrap().contains("foreach loop")),
+        "Expected 'foreach loop' conversion action but got: {:?}",
+        actions.iter().map(|a| a["title"].as_str()).collect::<Vec<_>>()
+    );
 }
 
 /// Test converting to postfix form
