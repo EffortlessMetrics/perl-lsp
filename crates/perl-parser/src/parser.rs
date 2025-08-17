@@ -15,6 +15,7 @@ pub struct Parser<'a> {
     recursion_depth: usize,
     last_end_position: usize,
     in_for_loop_init: bool,
+    at_stmt_start: bool,  // Track if we're at statement start for indirect object detection
 }
 
 const MAX_RECURSION_DEPTH: usize = 1000;
@@ -27,6 +28,7 @@ impl<'a> Parser<'a> {
             recursion_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
+            at_stmt_start: true,
         }
     }
 
@@ -109,6 +111,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
+        // Every new statement begins here
+        self.at_stmt_start = true;
+        
         let token = self.tokens.peek()?.clone();
 
         // Don't check for labels here - it breaks regular identifier parsing
@@ -189,7 +194,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if this might be an indirect call pattern
+    /// We only consider this at statement start to avoid ambiguous mid-expression cases.
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
+        // Only check for indirect objects at statement start to avoid false positives
+        // in contexts like: my $x = 1; if (1) { print $x; }
+        if !self.at_stmt_start {
+            return false;
+        }
+        
         // Known builtins that commonly use indirect object syntax
         let indirect_builtins = [
             "print", "printf", "say", "open", "close", "pipe", "sysopen", "sysread", "syswrite",
@@ -205,7 +217,17 @@ impl<'a> Parser<'a> {
             } else {
                 return false;
             };
-            
+
+            // These tokens *cannot* start an indirect object
+            match next_kind {
+                TokenKind::Semicolon
+                | TokenKind::RightBrace
+                | TokenKind::RightParen
+                | TokenKind::Comma
+                | TokenKind::Eof => return false,
+                _ => {}
+            }
+
             match next_kind {
                 // print STDOUT ...
                 TokenKind::Identifier => {
@@ -214,12 +236,22 @@ impl<'a> Parser<'a> {
                         return true;
                     }
                 }
-                // print $fh ... (only if more args follow)
+                // print $fh ... (only if typical args follow)
                 _ if next_text.starts_with('$') => {
-                    // TODO: This should check if more args follow to distinguish
-                    // print $var; from print $fh "text";
-                    // For now, always treat as indirect object syntax
-                    return true;
+                    // Only treat $var as an indirect object if a typical argument follows.
+                    // This prevents misclassifying arithmetic like `print $x + 1`
+                    if let Ok(second) = self.tokens.peek_second() {
+                        return matches!(
+                            second.kind,
+                            TokenKind::Comma          // print $fh, "x"
+                            | TokenKind::String       // print $fh "x"
+                            | TokenKind::LeftParen    // print $fh ($x)
+                            | TokenKind::LeftBracket  // print $fh [$x]
+                            | TokenKind::LeftBrace    // print $fh { ... }
+                            | TokenKind::Identifier   // print $fh something
+                        );
+                    }
+                    return false; // Can't see more; be conservative
                 }
                 _ => {}
             }
@@ -239,12 +271,20 @@ impl<'a> Parser<'a> {
 
         false
     }
+    
+    /// Mark that we're no longer at statement start (called after consuming statement head)
+    fn mark_not_stmt_start(&mut self) {
+        self.at_stmt_start = false;
+    }
 
     /// Parse indirect object/method call
     fn parse_indirect_call(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let method_token = self.consume_token()?; // consume method name
         let method = method_token.text.clone();
+        
+        // We're consuming the function name, no longer at statement start
+        self.mark_not_stmt_start();
 
         // Parse the object/filehandle
         let object = self.parse_primary()?;
@@ -1874,6 +1914,9 @@ impl<'a> Parser<'a> {
 
                     // Consume the function name token
                     self.consume_token()?;
+                    
+                    // We're consuming the function name, no longer at statement start
+                    self.mark_not_stmt_start();
 
                     // Check if there are arguments (not followed by semicolon or modifier)
                     match self.peek_kind() {
