@@ -3,6 +3,8 @@
 //! Provides go-to-declaration functionality for finding where symbols are declared.
 //! Supports LocationLink for enhanced client experience.
 
+#![allow(unsafe_code)]
+
 use crate::ast::{Node, NodeKind};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;

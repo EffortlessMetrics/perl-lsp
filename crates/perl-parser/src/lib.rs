@@ -4,6 +4,11 @@
 //! the perl-lexer crate and produces a well-structured Abstract Syntax Tree (AST).
 //!
 
+#![deny(unsafe_code)]
+#![deny(unreachable_pub)] // prevent stray pub items from escaping
+#![warn(rust_2018_idioms)]
+// TODO: Enable missing_docs warning once documentation is complete
+// #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code

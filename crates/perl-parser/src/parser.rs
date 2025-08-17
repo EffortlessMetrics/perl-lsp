@@ -253,7 +253,7 @@ impl<'a> Parser<'a> {
                             | TokenKind::LeftBrace    // print $fh { ... }
                         ) || second_text.starts_with('$')    // print $fh $x
                           || second_text.starts_with('@')    // print $fh @array
-                          || second_text.starts_with('%');   // print $fh %hash
+                          || second_text.starts_with('%'); // print $fh %hash
                     }
                     return false; // Can't see more; be conservative
                 }
