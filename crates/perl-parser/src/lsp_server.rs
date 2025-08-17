@@ -8,8 +8,8 @@ use crate::{
     CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
     DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
-    code_actions_enhanced::EnhancedCodeActionsProvider,
     call_hierarchy_provider::CallHierarchyProvider,
+    code_actions_enhanced::EnhancedCodeActionsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
@@ -1400,10 +1400,8 @@ impl LspServer {
 
                     // Get enhanced refactorings (extract variable, convert loops, etc.)
                     let enhanced_provider = EnhancedCodeActionsProvider::new(doc.content.clone());
-                    let enhanced_actions = enhanced_provider.get_enhanced_refactoring_actions(
-                        ast,
-                        (start_offset, end_offset),
-                    );
+                    let enhanced_actions = enhanced_provider
+                        .get_enhanced_refactoring_actions(ast, (start_offset, end_offset));
 
                     for action in enhanced_actions {
                         let mut changes = HashMap::new();
