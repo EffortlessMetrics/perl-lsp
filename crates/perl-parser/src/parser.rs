@@ -120,6 +120,17 @@ impl<'a> Parser<'a> {
         // Labels will be handled differently
 
         let mut stmt = match token.kind {
+            // Empty statement (lone semicolon) - just consume and return a no-op
+            TokenKind::Semicolon => {
+                let pos = self.current_position();
+                self.consume_token()?;
+                // Return an empty block as a no-op placeholder
+                return Ok(Node::new(
+                    NodeKind::Block { statements: vec![] },
+                    SourceLocation { start: pos, end: pos },
+                ));
+            }
+            
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
                 self.parse_variable_declaration()
@@ -162,21 +173,25 @@ impl<'a> Parser<'a> {
             // Block
             TokenKind::LeftBrace => self.parse_block(),
 
-            // Expression statement
+            // Expression-ish statement
             _ => {
                 // Check if this might be a labeled statement
                 if self.is_label_start() {
                     return self.parse_labeled_statement();
                 }
 
-                // Check for indirect object syntax (print STDOUT "hello")
+                // Either build via indirect-object path or the normal expression path
                 if let TokenKind::Identifier = token.kind {
                     if self.is_indirect_call_pattern(&token.text) {
-                        return self.parse_indirect_call();
+                        // Parse indirect call but DON'T return early - let it go through
+                        // the same modifier/semicolon handling as other statements
+                        self.parse_indirect_call()
+                    } else {
+                        self.parse_expression_statement()
                     }
+                } else {
+                    self.parse_expression_statement()
                 }
-
-                self.parse_expression_statement()
             }
         }?;
 
@@ -198,10 +213,14 @@ impl<'a> Parser<'a> {
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
-        // TODO: Re-enable this check once we fix statement tracking
-        // if !self.at_stmt_start {
-        //     return false;
-        // }
+        if !self.at_stmt_start {
+            return false;
+        }
+
+        // print "string" should not be treated as indirect object syntax
+        if name == "print" && matches!(self.peek_kind(), Some(TokenKind::String)) {
+            return false;
+        }
 
         // Known builtins that commonly use indirect object syntax
         let indirect_builtins = [
@@ -945,11 +964,14 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'foreach'
 
+        // Set flag to prevent semicolon consumption in variable declaration
+        self.in_for_loop_init = true;
         let variable = if self.peek_kind() == Some(TokenKind::My) {
             self.parse_variable_declaration()?
         } else {
             self.parse_variable()?
         };
+        self.in_for_loop_init = false;
 
         self.expect(TokenKind::LeftParen)?;
         let list = self.parse_expression()?;
@@ -970,11 +992,14 @@ impl<'a> Parser<'a> {
 
     /// Parse foreach-style for loop
     fn parse_foreach_style_for(&mut self) -> ParseResult<Node> {
+        // Set flag to prevent semicolon consumption in variable declaration
+        self.in_for_loop_init = true;
         let variable = if self.peek_kind() == Some(TokenKind::My) {
             self.parse_variable_declaration()?
         } else {
             self.parse_variable()?
         };
+        self.in_for_loop_init = false;
 
         self.expect(TokenKind::LeftParen)?;
         let list = self.parse_expression()?;
@@ -1894,7 +1919,7 @@ impl<'a> Parser<'a> {
         // Check for word operators (or, and, xor) which have very low precedence
         expr = self.parse_word_or_expr(expr)?;
 
-        // Statement modifiers are now handled at the statement level
+        // Statement modifiers are handled at the statement level in parse_statement()
 
         Ok(expr)
     }
@@ -2042,7 +2067,15 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
-            statements.push(self.parse_statement()?);
+            let stmt = self.parse_statement()?;
+            // Don't add empty blocks (from lone semicolons) to the statement list
+            if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
+                statements.push(stmt);
+            }
+            // Swallow any stray semicolons before checking for the next statement or closing brace
+            while self.peek_kind() == Some(TokenKind::Semicolon) {
+                self.consume_token()?;
+            }
         }
 
         self.expect(TokenKind::RightBrace)?;
