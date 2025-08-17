@@ -60,7 +60,7 @@ tree-sitter-perl/
 ### No New Ignored Tests Policy
 We enforce a strict "no new ignored tests" policy. The CI guard (`ci/check_ignored.sh`) tracks the count of `#[ignore]` attributes and will fail if the count increases.
 
-**Current baseline: 40 ignored tests**
+**Current baseline: 39 ignored tests**
 
 To check current count:
 ```bash
