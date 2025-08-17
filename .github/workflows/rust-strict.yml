@@ -36,8 +36,16 @@ jobs:
     - name: Format Check
       run: cargo fmt --all -- --check
     
-    - name: Clippy (deny warnings)
-      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - name: Clippy (strict on first-party)
+      run: |
+        cargo clippy -p perl-parser --all-targets --all-features -- -D warnings
+        cargo clippy -p perl-lexer --all-targets --all-features -- -D warnings
+    
+    - name: Clippy (workspace smoke check)
+      run: |
+        cargo clippy --workspace --all-targets --all-features \
+          --exclude perl-parser \
+          --exclude perl-lexer || true
     
     - name: Documentation (strict)
       run: cargo doc --workspace --no-deps

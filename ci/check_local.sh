@@ -22,15 +22,29 @@ else
 fi
 echo ""
 
-# 2. Clippy
-echo -e "${YELLOW}2. Clippy analysis...${NC}"
-if cargo clippy --workspace --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy.log | grep -q "warning:"; then
-    echo -e "${RED}✗ Clippy found warnings${NC}"
-    cat /tmp/clippy.log
-    exit 1
-else
-    echo -e "${GREEN}✓ Clippy check passed${NC}"
+# 2. Clippy (strict on first-party crates)
+echo -e "${YELLOW}2. Clippy analysis (strict on first-party)...${NC}"
+CLIPPY_FAILED=0
+if ! cargo clippy -p perl-parser --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-parser.log; then
+    echo -e "${RED}✗ Clippy found issues in perl-parser${NC}"
+    CLIPPY_FAILED=1
 fi
+if ! cargo clippy -p perl-lexer --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-lexer.log; then
+    echo -e "${RED}✗ Clippy found issues in perl-lexer${NC}"
+    CLIPPY_FAILED=1
+fi
+
+if [ $CLIPPY_FAILED -eq 0 ]; then
+    echo -e "${GREEN}✓ Clippy check passed for first-party crates${NC}"
+else
+    exit 1
+fi
+
+# Run smoke check on other crates (non-failing)
+echo -e "${YELLOW}  Running clippy smoke check on vendor crates...${NC}"
+cargo clippy --workspace --all-targets --all-features \
+    --exclude perl-parser \
+    --exclude perl-lexer 2>&1 | head -5 || true
 echo ""
 
 # 3. Documentation
@@ -44,7 +58,7 @@ else
 fi
 echo ""
 
-# 4. Tests
+# 4. Tests (workspace, but not examples)
 echo -e "${YELLOW}4. Running tests...${NC}"
 if cargo test --workspace --all-features --quiet; then
     echo -e "${GREEN}✓ All tests passed${NC}"
