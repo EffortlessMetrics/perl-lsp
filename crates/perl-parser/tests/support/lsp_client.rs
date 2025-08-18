@@ -46,10 +46,12 @@ impl LspClient {
         let content = message.to_string();
         let header = format!("Content-Length: {}\r\n\r\n", content.len());
 
-        let stdin = self.child.stdin.as_mut().expect("stdin not available");
-        stdin.write_all(header.as_bytes()).expect("Failed to write header");
-        stdin.write_all(content.as_bytes()).expect("Failed to write content");
-        stdin.flush().expect("Failed to flush stdin");
+        // Don't panic if stdin is not available (e.g., during drop after error)
+        if let Some(stdin) = self.child.stdin.as_mut() {
+            let _ = stdin.write_all(header.as_bytes());
+            let _ = stdin.write_all(content.as_bytes());
+            let _ = stdin.flush();
+        }
     }
 
     /// Receive one message from the server

@@ -155,12 +155,24 @@ fn test_non_existent_file() {
 }
 
 #[test]
+#[cfg(unix)]
 fn test_permission_denied_directory() {
+    // Skip test if running as root (no permission denied for root)
+    // Check if we're root by trying to read a protected file
+    if std::env::var("USER").unwrap_or_default() == "root" {
+        eprintln!("Skipping permission-denied test when running as root.");
+        return;
+    }
+
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
-    let restricted_dir = &temp_dir.join("restricted");
+    // Use unique directory name to avoid conflicts
+    let restricted_dir = &temp_dir.join(format!("restricted_{}", std::process::id()));
+
+    // Clean up any existing directory first
+    let _ = fs::remove_dir_all(restricted_dir);
     fs::create_dir(restricted_dir).unwrap();
 
     // Create file in directory
@@ -194,16 +206,32 @@ fn test_permission_denied_directory() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+
+    // Clean up directory
+    let _ = fs::remove_dir_all(restricted_dir);
 }
 
 #[test]
+#[cfg(windows)]
+fn test_permission_denied_directory() {
+    // Windows permission handling is different, skip for now
+    eprintln!("Skipping Unix-specific permission test on Windows");
+}
+
+#[test]
+#[cfg(unix)]
 fn test_symlink_loop() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
-    let link1 = &temp_dir.join("link1.pl");
-    let link2 = &temp_dir.join("link2.pl");
+    // Use unique names to avoid conflicts
+    let link1 = &temp_dir.join(format!("loop_a_{}.pl", std::process::id()));
+    let link2 = &temp_dir.join(format!("loop_b_{}.pl", std::process::id()));
+
+    // Remove any existing links first
+    let _ = fs::remove_file(link1);
+    let _ = fs::remove_file(link2);
 
     // Create symlink loop
     std::os::unix::fs::symlink(link2, link1).unwrap();
@@ -243,6 +271,17 @@ fn test_symlink_loop() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+
+    // Clean up symlinks
+    let _ = fs::remove_file(link1);
+    let _ = fs::remove_file(link2);
+}
+
+#[test]
+#[cfg(windows)]
+fn test_symlink_loop() {
+    // Windows symlink handling requires admin privileges, skip for now
+    eprintln!("Skipping Unix-specific symlink test on Windows");
 }
 
 #[test]
@@ -659,7 +698,24 @@ fn test_workspace_folder_deleted() {
     );
 
     // Delete workspace folder
-    drop(temp_dir); // This deletes the temp directory
+    // Note: We can't actually delete temp_dir while we're using it
+    // Instead, simulate by removing workspace folder via LSP
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeWorkspaceFolders",
+            "params": {
+                "event": {
+                    "added": [],
+                    "removed": [{
+                        "uri": format!("file://{}", workspace_path.display()),
+                        "name": "test"
+                    }]
+                }
+            }
+        }),
+    );
 
     // Try to perform workspace operations
     send_request(
@@ -675,7 +731,9 @@ fn test_workspace_folder_deleted() {
     );
 
     let response = read_response(&mut server);
+    // Should return an array (possibly empty) or null
     assert!(response.is_object());
+    assert!(response["result"].is_array() || response["result"].is_null());
 }
 
 #[test]
