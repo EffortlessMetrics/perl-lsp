@@ -211,17 +211,17 @@ impl<'a> TokenStream<'a> {
         // Clear any cached lookahead tokens
         self.peeked = None;
         self.peeked_second = None;
-        
+
         // Reset lexer to expect a term (start of new statement)
         self.lexer.set_mode(LexerMode::ExpectTerm);
     }
-    
+
     /// Pure peek cache invalidation - no mode changes
     pub fn invalidate_peek(&mut self) {
         self.peeked = None;
         self.peeked_second = None;
     }
-    
+
     /// Convenience method for a one-shot fresh peek
     pub fn peek_fresh_kind(&mut self) -> Option<TokenKind> {
         self.invalidate_peek();

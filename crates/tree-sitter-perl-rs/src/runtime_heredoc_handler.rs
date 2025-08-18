@@ -322,7 +322,7 @@ EOF"#;
     #[test]
     fn test_max_eval_depth() {
         let mut handler = RuntimeHeredocHandler::new();
-        let mut context = RuntimeHeredocContext { eval_depth: 10, ..Default::default() };
+        let context = RuntimeHeredocContext { eval_depth: 10, ..Default::default() };
 
         let result = handler.evaluate_heredoc("test", &context);
         assert!(matches!(result, Err(RuntimeError::MaxEvalDepthExceeded)));

@@ -24,14 +24,14 @@ END
         let mut lexer = PerlLexer::new(code);
         let mut token_count = 0;
 
-        while let Some(token) = lexer.next_token() {
+        while let Some(token) = lexer.next() {
             if matches!(token.token_type, TokenType::EOF) {
                 break;
             }
 
             println!(
                 "  {:?} @ {}..{}: {:?}",
-                token.token_type, token.start, token.end, token.value
+                token.token_type, token.start, token.end, token.text
             );
 
             token_count += 1;
@@ -60,7 +60,7 @@ print $data;
     println!("Code: {}", heredoc_code.trim());
     println!("\nRecovery process:");
 
-    let mut lexer = PerlLexer::with_heredoc_recovery(heredoc_code);
+    let mut lexer = PerlLexer::new(heredoc_code);
     let mut in_heredoc = false;
 
     while let Some(token) = lexer.next_token() {
@@ -69,12 +69,8 @@ print $data;
         }
 
         match token.token_type {
-            TokenType::HeredocMarker => {
-                println!("  Found heredoc marker: {:?}", token.value);
-                in_heredoc = true;
-            }
-            TokenType::HeredocBody => {
-                println!("  Found heredoc body");
+            TokenType::HeredocBody(_) => {
+                println!("  Found heredoc body: {:?}", token.text);
                 in_heredoc = false;
             }
             _ if in_heredoc => {

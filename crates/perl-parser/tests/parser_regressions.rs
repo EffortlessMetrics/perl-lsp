@@ -260,10 +260,7 @@ fn statement_modifier_unless_and_while() {
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("should parse postfix unless/while inside block");
     let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("statement_modifier"),
-        "expected statement_modifier nodes in output"
-    );
+    assert!(sexp.contains("statement_modifier"), "expected statement_modifier nodes in output");
 }
 
 #[test]
