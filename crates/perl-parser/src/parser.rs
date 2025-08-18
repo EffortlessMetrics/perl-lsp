@@ -200,7 +200,8 @@ impl<'a> Parser<'a> {
             stmt = self.parse_statement_modifier(stmt)?;
         }
 
-        // Consume optional semicolon
+        // Check for optional semicolon
+        // Don't use peek_fresh_kind() here as it can cause issues with nested blocks
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             self.consume_token()?;
         }
@@ -408,13 +409,10 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            // Consume semicolon if present (but not in for loop context)
-            if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
-                self.consume_token()?;
-            }
+            // Don't consume semicolon here - let parse_statement handle it uniformly
 
             let end = self.previous_position();
-            Ok(Node::new(
+            let node = Node::new(
                 NodeKind::VariableListDeclaration {
                     declarator,
                     variables,
@@ -422,7 +420,8 @@ impl<'a> Parser<'a> {
                     initializer,
                 },
                 SourceLocation { start, end },
-            ))
+            );
+            Ok(node)
         } else {
             // Single variable declaration
             let variable = self.parse_variable()?;
@@ -442,13 +441,10 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            // Consume semicolon if present (but not in for loop context)
-            if self.peek_kind() == Some(TokenKind::Semicolon) && !self.in_for_loop_init {
-                self.consume_token()?;
-            }
+            // Don't consume semicolon here - let parse_statement handle it uniformly
 
             let end = self.previous_position();
-            Ok(Node::new(
+            let node = Node::new(
                 NodeKind::VariableDeclaration {
                     declarator,
                     variable: Box::new(variable),
@@ -456,7 +452,8 @@ impl<'a> Parser<'a> {
                     initializer,
                 },
                 SourceLocation { start, end },
-            ))
+            );
+            Ok(node)
         }
     }
 
@@ -1369,7 +1366,7 @@ impl<'a> Parser<'a> {
         let block = if self.peek_kind() == Some(TokenKind::LeftBrace) {
             Some(Box::new(self.parse_block()?))
         } else {
-            self.expect(TokenKind::Semicolon)?;
+            // Don't consume semicolon here - let parse_statement handle it uniformly
             None
         };
 
@@ -1551,10 +1548,7 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightParen)?;
         }
 
-        // Semicolon is optional at EOF
-        if !matches!(self.peek_kind(), Some(TokenKind::Eof) | None) {
-            self.expect(TokenKind::Semicolon)?;
-        }
+        // Don't consume semicolon here - let parse_statement handle it uniformly
 
         let end = self.previous_position();
         Ok(Node::new(NodeKind::Use { module, args }, SourceLocation { start, end }))
@@ -1694,10 +1688,7 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightParen)?;
         }
 
-        // Semicolon is optional at EOF
-        if !matches!(self.peek_kind(), Some(TokenKind::Eof) | None) {
-            self.expect(TokenKind::Semicolon)?;
-        }
+        // Don't consume semicolon here - let parse_statement handle it uniformly
 
         let end = self.previous_position();
         Ok(Node::new(NodeKind::No { module, args }, SourceLocation { start, end }))
@@ -2072,9 +2063,13 @@ impl<'a> Parser<'a> {
             if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
                 statements.push(stmt);
             }
+            
+            // parse_statement already invalidates peek, so we don't need to do it again
+            
             // Swallow any stray semicolons before checking for the next statement or closing brace
             while self.peek_kind() == Some(TokenKind::Semicolon) {
                 self.consume_token()?;
+                self.tokens.invalidate_peek();
             }
         }
 
