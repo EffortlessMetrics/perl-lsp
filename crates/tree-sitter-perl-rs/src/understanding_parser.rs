@@ -209,7 +209,7 @@ impl UnderstandingParser {
         &self,
         pattern: &AntiPattern,
         code: &str,
-        recovery_state: &mut RecoveryState,
+        _recovery_state: &mut RecoveryState,
     ) -> (ExtendedAstNode, usize) {
         match pattern {
             AntiPattern::FormatHeredoc { format_name, heredoc_delimiter, .. } => {

@@ -713,7 +713,7 @@ impl<'source> SimpleParser<'source> {
     }
 
     fn parse_for_statement(&mut self) -> Result<AstNode, String> {
-        let keyword = self.next(); // for or foreach
+        let _keyword = self.next(); // for or foreach
 
         // C-style for loop
         if self.check(&Token::LParen) {

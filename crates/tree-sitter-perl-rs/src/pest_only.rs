@@ -5,6 +5,7 @@ pub use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule}
 
 /// Benchmark-friendly wrapper that provides the expected interface
 pub struct PestOnlyParser {
+    #[allow(dead_code)]
     inner: PureRustPerlParser,
 }
 

@@ -193,7 +193,6 @@ my $status = do {
     #[test]
     fn test_edge_case_integration() {
         use tree_sitter_perl::{
-            dynamic_delimiter_recovery::RecoveryMode,
             edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
             tree_sitter_adapter::TreeSitterAdapter,
         };

@@ -48,7 +48,7 @@ impl<'source> SimpleParser<'source> {
     }
 
     fn parse_statement(&mut self) -> Result<AstNode, String> {
-        let start = self.current_pos;
+        let _start = self.current_pos;
 
         match self.lexer.peek() {
             Some(Token::My) | Some(Token::Our) | Some(Token::Local) => {
