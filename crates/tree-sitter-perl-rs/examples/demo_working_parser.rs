@@ -92,7 +92,5 @@ print "Fibonacci(10) = $result\n";
 
 #[cfg(feature = "pure-rust-standalone")]
 fn main() {
-    eprintln!(
-        "'demo_working_parser' example is disabled with the 'pure-rust-standalone' feature."
-    );
+    eprintln!("'demo_working_parser' example is disabled with the 'pure-rust-standalone' feature.");
 }

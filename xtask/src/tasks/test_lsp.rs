@@ -246,7 +246,7 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
 }
 
 /// Test syntax highlighting
-fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
+fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
 
     // Check if LSP server is available

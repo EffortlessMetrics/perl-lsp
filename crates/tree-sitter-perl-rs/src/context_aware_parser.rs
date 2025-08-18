@@ -25,8 +25,10 @@ pub struct ContextAwareHeredocParser<'a> {
     /// Base heredoc scanner
     scanner: HeredocScanner<'a>,
     /// Current parsing context stack
+    #[allow(dead_code)]
     context_stack: Vec<ParseContext>,
     /// Cached eval content for re-parsing
+    #[allow(dead_code)]
     eval_cache: HashMap<String, Vec<HeredocDeclaration>>,
 }
 
@@ -199,7 +201,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     fn handle_substitution_heredoc_static(
         processed: &mut String,
         declarations: &mut Vec<HeredocDeclaration>,
-        pattern_start: usize,
+        _pattern_start: usize,
         replacement_start: usize,
         replacement_end: usize,
     ) {
@@ -232,7 +234,9 @@ enum ContextInfo {
         content: String,
     },
     SubstitutionWithE {
+        #[allow(dead_code)]
         pattern_start: usize,
+        #[allow(dead_code)]
         pattern_end: usize,
         replacement_start: usize,
         replacement_end: usize,
@@ -328,7 +332,7 @@ EOF
 "#;
 
         let parser = ContextAwareHeredocParser::new(input);
-        let (processed, declarations) = parser.parse();
+        let (_processed, declarations) = parser.parse();
 
         // Should find both heredocs
         assert!(!declarations.is_empty(), "Should find eval heredoc");
@@ -346,7 +350,7 @@ END
 "#;
 
         let parser = ContextAwareHeredocParser::new(input);
-        let (processed, declarations) = parser.parse();
+        let (_processed, declarations) = parser.parse();
 
         // Should detect heredoc in s///e context
         assert!(!declarations.is_empty(), "Should find heredoc in s///e");
@@ -368,7 +372,7 @@ OUTER
 "#;
 
         let parser = ContextAwareHeredocParser::new(input);
-        let (processed, declarations) = parser.parse();
+        let (_processed, declarations) = parser.parse();
 
         // Should handle nested evals
         assert!(!declarations.is_empty(), "Should find outer eval heredoc");

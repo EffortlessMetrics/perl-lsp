@@ -68,10 +68,12 @@ impl Default for StreamConfig {
 pub struct StreamingParser<R: Read> {
     reader: BufReader<R>,
     config: StreamConfig,
+    #[allow(dead_code)]
     buffer: String,
     line_number: usize,
     in_pod: bool,
     in_data_section: bool,
+    #[allow(dead_code)]
     pending_heredocs: VecDeque<HeredocDeclaration>,
     statement_buffer: String,
     statement_start_line: usize,

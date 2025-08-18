@@ -21,6 +21,7 @@ mod tests {
     }
 
     // Strategy for generating hash variable names
+    #[allow(dead_code)]
     fn hash_var_strategy() -> impl Strategy<Value = String> {
         identifier_strategy().prop_map(|s| format!("%{}", s))
     }
