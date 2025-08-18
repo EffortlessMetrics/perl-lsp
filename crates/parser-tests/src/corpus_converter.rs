@@ -2,8 +2,6 @@
 
 use crate::TestCase;
 use anyhow::Result;
-use std::fs;
-use std::path::Path;
 
 /// Convert perl-parser test files
 pub fn convert_perl_parser_tests() -> Result<Vec<TestCase>> {

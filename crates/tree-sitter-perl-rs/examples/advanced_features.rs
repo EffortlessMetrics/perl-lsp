@@ -55,7 +55,7 @@ print "Result: $result\n";
     let edited_source = initial_source.replace("10", "15");
 
     match parser.apply_edit(edit.clone(), &edited_source) {
-        Ok(tree) => {
+        Ok(_tree) => {
             println!("\n✓ Incremental update successful");
             println!("  - Edit applied at byte {}", edit.start_byte);
             println!("  - New tree created efficiently");

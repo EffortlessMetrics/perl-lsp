@@ -479,8 +479,8 @@ mod tests {
 
     #[test]
     fn test_simple_heredoc() {
-        let parser = StatefulPerlParser::new();
-        let input = r#"print <<EOF;
+        let _parser = StatefulPerlParser::new();
+        let _input = r#"print <<EOF;
 Hello World
 This is heredoc content
 EOF
@@ -492,8 +492,8 @@ print "after heredoc";"#;
 
     #[test]
     fn test_indented_heredoc() {
-        let parser = StatefulPerlParser::new();
-        let input = r#"print <<~EOF;
+        let _parser = StatefulPerlParser::new();
+        let _input = r#"print <<~EOF;
     Hello World
     This is indented content
     EOF
@@ -504,8 +504,8 @@ print "after heredoc";"#;
 
     #[test]
     fn test_quoted_heredoc() {
-        let parser = StatefulPerlParser::new();
-        let input = r#"print <<'EOF';
+        let _parser = StatefulPerlParser::new();
+        let _input = r#"print <<'EOF';
 No $interpolation here
 EOF
 print <<"INTERP";

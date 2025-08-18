@@ -27,9 +27,9 @@ impl DisambiguatedParser {
         }
 
         // Step 2: Parse with the modified input
-        let pairs = PerlParser::parse(Rule::program, &preprocessed).map_err(|e| {
+        let pairs = PerlParser::parse(Rule::program, &preprocessed).map_err(|_e| {
             #[cfg(test)]
-            eprintln!("Parse error: {:?}", e);
+            eprintln!("Parse error: {:?}", _e);
             ParseError::ParseFailed
         })?;
 

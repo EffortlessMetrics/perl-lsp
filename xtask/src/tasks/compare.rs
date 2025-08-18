@@ -542,6 +542,7 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     Ok(serde_json::Value::Object(results))
 }
 
+#[allow(dead_code)]
 fn generate_comparison(
     c_results: &PathBuf,
     rust_results: &PathBuf,
@@ -666,6 +667,7 @@ fn extract_median_time(results: &serde_json::Value, bench_name: &str) -> Option<
     results.get(bench_name)?.get("median")?.get("estimate")?.as_f64()
 }
 
+#[allow(dead_code)]
 fn validate_results(
     c_results: &PathBuf,
     rust_results: &PathBuf,
@@ -755,6 +757,7 @@ fn check_performance_gates(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Result<()> {
     println!("\n📊 Benchmark Summary");
     println!("==================");

@@ -21,7 +21,7 @@ pub fn run_three_way(verbose: bool, format: &str) -> Result<()> {
     }
 }
 
-fn run_table_format(verbose: bool) -> Result<()> {
+fn run_table_format(_verbose: bool) -> Result<()> {
     println!("\n{}", "=== Three-Way Parser Comparison ===".bright_blue().bold());
     println!("{}", "Comparing: Pure Rust vs Legacy C vs Modern Parser".yellow());
 
@@ -236,13 +236,13 @@ fn run_markdown_format(verbose: bool) -> Result<()> {
         let legacy_c_time = bench_legacy_c(code)?;
         let modern_time = bench_modern(code)?;
 
-        let pr_µs = pure_rust_time.as_secs_f64() * 1_000_000.0;
-        let lc_µs = legacy_c_time.as_secs_f64() * 1_000_000.0;
-        let m_µs = modern_time.as_secs_f64() * 1_000_000.0;
+        let pr_us = pure_rust_time.as_secs_f64() * 1_000_000.0;
+        let lc_us = legacy_c_time.as_secs_f64() * 1_000_000.0;
+        let m_us = modern_time.as_secs_f64() * 1_000_000.0;
 
-        let fastest = if lc_µs <= pr_µs && lc_µs <= m_µs {
+        let fastest = if lc_us <= pr_us && lc_us <= m_us {
             "Legacy C"
-        } else if m_µs <= pr_µs && m_µs <= lc_µs {
+        } else if m_us <= pr_us && m_us <= lc_us {
             "Modern"
         } else {
             "Pure Rust"
@@ -252,13 +252,13 @@ fn run_markdown_format(verbose: bool) -> Result<()> {
             "| {} | {} | {:.2} | {:.2} | {:.2} | {} |",
             name,
             code.len(),
-            pr_µs,
-            lc_µs,
-            m_µs,
+            pr_us,
+            lc_us,
+            m_us,
             fastest
         );
 
-        all_results.push((name, pr_µs, lc_µs, m_µs));
+        all_results.push((name, pr_us, lc_us, m_us));
     }
 
     // Summary

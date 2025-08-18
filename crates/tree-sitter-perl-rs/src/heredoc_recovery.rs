@@ -48,12 +48,15 @@ struct HeredocMatchers {
     /// Pattern for <<$var syntax
     dynamic_delimiter: Regex,
     /// Pattern for <<${expr} syntax
+    #[allow(dead_code)]
     expr_delimiter: Regex,
     /// Pattern for << $var (with space)
+    #[allow(dead_code)]
     spaced_delimiter: Regex,
     /// Pattern for method calls like <<$obj->method()
     method_delimiter: Regex,
     /// Pattern for concatenated delimiters like <<($var . "END")
+    #[allow(dead_code)]
     concat_delimiter: Regex,
 }
 
