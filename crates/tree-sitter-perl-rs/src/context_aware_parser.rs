@@ -327,7 +327,7 @@ print $x;
 EOF
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(input);
+        let parser = ContextAwareHeredocParser::new(input);
         let (processed, declarations) = parser.parse();
 
         // Should find both heredocs
@@ -345,7 +345,7 @@ replacement text
 END
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(input);
+        let parser = ContextAwareHeredocParser::new(input);
         let (processed, declarations) = parser.parse();
 
         // Should detect heredoc in s///e context
@@ -367,7 +367,7 @@ INNER
 OUTER
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(input);
+        let parser = ContextAwareHeredocParser::new(input);
         let (processed, declarations) = parser.parse();
 
         // Should handle nested evals

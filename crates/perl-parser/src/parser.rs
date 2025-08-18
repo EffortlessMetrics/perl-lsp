@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
                     SourceLocation { start: pos, end: pos },
                 ));
             }
-            
+
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
                 self.parse_variable_declaration()
@@ -2063,9 +2063,9 @@ impl<'a> Parser<'a> {
             if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
                 statements.push(stmt);
             }
-            
+
             // parse_statement already invalidates peek, so we don't need to do it again
-            
+
             // Swallow any stray semicolons before checking for the next statement or closing brace
             while self.peek_kind() == Some(TokenKind::Semicolon) {
                 self.consume_token()?;

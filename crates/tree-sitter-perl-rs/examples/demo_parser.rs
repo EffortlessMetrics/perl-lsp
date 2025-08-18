@@ -37,8 +37,9 @@ print "Sum: $sum\n";
 
         #[cfg(feature = "pure-rust")]
         {
-            let ast = PureRustPerlParser::parse(source).unwrap();
-            println!("S-expression:\n{}\n", ast.to_sexp());
+            let mut parser = PureRustPerlParser::new();
+            let ast = parser.parse(source).unwrap();
+            println!("AST:\n{:#?}\n", ast);
         }
     }
 
@@ -59,9 +60,9 @@ print "5! = $result\n";
     println!("Source:\n{}", complex);
     #[cfg(feature = "pure-rust")]
     {
-        let ast = PureRustPerlParser::parse(complex).unwrap();
-        println!("\nS-expression:\n{}", ast.to_sexp());
-
+        let mut parser = PureRustPerlParser::new();
+        let ast = parser.parse(complex).unwrap();
+        
         // Show AST structure
         println!("\n=== AST Debug Output ===");
         println!("{:#?}", ast);
