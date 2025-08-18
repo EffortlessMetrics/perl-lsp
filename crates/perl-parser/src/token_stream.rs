@@ -4,7 +4,7 @@
 //! and the parser's token consumption model.
 
 use crate::error::{ParseError, ParseResult};
-use perl_lexer::{PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
+use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 
 /// A simplified token representation for the parser
 #[derive(Debug, Clone, PartialEq)]
@@ -204,6 +204,31 @@ impl<'a> TokenStream<'a> {
     /// Enter format body parsing mode in the lexer
     pub fn enter_format_mode(&mut self) {
         self.lexer.enter_format_mode();
+    }
+
+    /// Called at statement boundaries to reset lexer state and clear cached lookahead
+    pub fn on_stmt_boundary(&mut self) {
+        // Clear any cached lookahead tokens
+        self.peeked = None;
+        self.peeked_second = None;
+        
+        // Reset lexer to expect a term (start of new statement)
+        self.lexer.set_mode(LexerMode::ExpectTerm);
+    }
+    
+    /// Pure peek cache invalidation - no mode changes
+    pub fn invalidate_peek(&mut self) {
+        self.peeked = None;
+        self.peeked_second = None;
+    }
+    
+    /// Convenience method for a one-shot fresh peek
+    pub fn peek_fresh_kind(&mut self) -> Option<TokenKind> {
+        self.invalidate_peek();
+        match self.peek() {
+            Ok(token) => Some(token.kind),
+            Err(_) => None,
+        }
     }
 
     /// Get the next token from the lexer

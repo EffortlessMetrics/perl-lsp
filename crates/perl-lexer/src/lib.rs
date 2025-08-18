@@ -101,6 +101,11 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// Set the lexer mode (for resetting state at statement boundaries)
+    pub fn set_mode(&mut self, mode: LexerMode) {
+        self.mode = mode;
+    }
+
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Option<Token> {
         // Handle format body parsing if we're in that mode
