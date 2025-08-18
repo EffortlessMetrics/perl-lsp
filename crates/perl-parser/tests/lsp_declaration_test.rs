@@ -25,15 +25,17 @@ fn get_declaration(
 #[test]
 fn test_variable_declaration_same_block() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
@@ -53,7 +55,7 @@ print $x;"#;
 
     // Should point to line 0
     let location = &locations[0];
-    
+
     // Handle both Location and LocationLink formats
     if let Some(range) = location.get("range") {
         // It's a Location
@@ -69,15 +71,17 @@ print $x;"#;
 #[test]
 fn test_variable_shadowing() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
@@ -131,15 +135,17 @@ print $x;  # Should resolve to outer $x"#;
 #[test]
 fn test_subroutine_declaration() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"sub foo {
@@ -173,15 +179,17 @@ my $result = foo();"#;
 #[test]
 fn test_cross_package_subroutine() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"package Foo;
@@ -217,15 +225,17 @@ my $result = Foo::bar();"#;
 #[test]
 fn test_constant_declaration() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"use constant FOO => 42;
@@ -256,15 +266,17 @@ my $x = FOO;"#;
 #[test]
 fn test_unicode_variable_name() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({
-        "capabilities": {
-            "textDocument": {
-                "declaration": {
-                    "linkSupport": true
+    harness
+        .initialize(Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "declaration": {
+                        "linkSupport": true
+                    }
                 }
             }
-        }
-    }))).unwrap();
+        })))
+        .unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $π = 3.14159;

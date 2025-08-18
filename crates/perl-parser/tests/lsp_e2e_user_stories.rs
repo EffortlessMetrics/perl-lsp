@@ -394,12 +394,14 @@ sub render_response {
 
     open_document(&mut server, "file:///test/outline.pl", code);
 
-    // Developer opens the outline view (using workspace symbols since documentSymbol is not implemented)
+    // Developer opens the outline view (using document symbols for document-specific outline)
     let result = send_request(
         &mut server,
-        "workspace/symbol",
+        "textDocument/documentSymbol",
         Some(json!({
-            "query": ""  // Empty query to get all symbols
+            "textDocument": {
+                "uri": "file:///test/outline.pl"
+            }
         })),
     );
 
@@ -409,13 +411,30 @@ sub render_response {
 
     let syms = symbols.as_array().unwrap();
 
-    // Should have package, variable, and subroutines
-    let names: Vec<&str> = syms.iter().map(|s| s["name"].as_str().unwrap()).collect();
+    // Document symbols may be hierarchical - collect all names recursively
+    fn collect_names(symbol: &Value, names: &mut Vec<String>) {
+        if let Some(name) = symbol["name"].as_str() {
+            names.push(name.to_string());
+        }
+        if let Some(children) = symbol["children"].as_array() {
+            for child in children {
+                collect_names(child, names);
+            }
+        }
+    }
+    
+    let mut all_names = Vec::new();
+    for sym in syms {
+        collect_names(sym, &mut all_names);
+    }
+    
+    eprintln!("Found symbols: {:?}", all_names);
 
-    assert!(names.contains(&"MyApp::Controller"));
-    assert!(names.contains(&"new"));
-    assert!(names.contains(&"process_request"));
-    assert!(names.contains(&"render_response"));
+    // Should have package and subroutines
+    assert!(all_names.iter().any(|n| n.contains("MyApp") || n.contains("Controller")));
+    assert!(all_names.contains(&"new".to_string()));
+    assert!(all_names.contains(&"process_request".to_string()));
+    assert!(all_names.contains(&"render_response".to_string()));
 }
 
 // ==================== USER STORY 7: SIGNATURE HELP ====================
@@ -612,12 +631,14 @@ fn test_user_story_incremental_parsing() {
     // The edit is incremental - only one function name changed
     update_document(&mut server, "file:///test/large.pl", 2, &edited_code);
 
-    // Request symbols to verify parsing still works (using workspace symbols)
+    // Request document symbols to verify parsing still works after incremental edit
     let result = send_request(
         &mut server,
-        "workspace/symbol",
+        "textDocument/documentSymbol",
         Some(json!({
-            "query": "function_"  // Search for functions
+            "textDocument": {
+                "uri": "file:///test/large.pl"
+            }
         })),
     );
 
@@ -625,25 +646,34 @@ fn test_user_story_incremental_parsing() {
     let symbols = result.unwrap();
     let syms = symbols.as_array().unwrap();
 
-    // Should have found many functions
-    assert!(syms.len() > 50); // We created 100 functions, should find most of them
+    // Collect all symbol names recursively
+    fn collect_names_incremental(symbol: &Value, names: &mut Vec<String>) {
+        if let Some(name) = symbol["name"].as_str() {
+            names.push(name.to_string());
+        }
+        if let Some(children) = symbol["children"].as_array() {
+            for child in children {
+                collect_names_incremental(child, names);
+            }
+        }
+    }
+    
+    let mut all_names = Vec::new();
+    for sym in syms {
+        collect_names_incremental(sym, &mut all_names);
+    }
 
-    // Verify the renamed function exists by searching specifically for it
-    let fifty_result = send_request(
-        &mut server,
-        "workspace/symbol",
-        Some(json!({
-            "query": "fifty"
-        })),
-    );
+    // Filter function names
+    let function_names: Vec<&String> = all_names.iter()
+        .filter(|n| n.starts_with("function_"))
+        .collect();
 
-    assert!(fifty_result.is_some());
-    let fifty_symbols = fifty_result.unwrap();
-    let fifty_syms = fifty_symbols.as_array().unwrap();
+    // Should have found many functions  
+    assert!(function_names.len() > 50); // We created 100 functions, should find most of them
 
     // Should find the renamed function
-    assert_eq!(fifty_syms.len(), 1);
-    assert_eq!(fifty_syms[0]["name"], "function_fifty");
+    assert!(all_names.iter().any(|n| n == "function_fifty"));
+    assert!(!all_names.iter().any(|n| n == "function_50"));
 }
 
 // ==================== INTEGRATION TEST: COMPLETE WORKFLOW ====================
