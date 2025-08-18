@@ -35,10 +35,9 @@ print "Result: $result\n";
 "#;
 
     match parser.parse_initial(initial_source) {
-        Ok(tree) => {
+        Ok(_tree) => {
             println!("✓ Initial parse successful");
-            println!("  - Line breaks: {:?}", tree.line_breaks.len());
-            println!("  - Nodes tracked: {}", tree.node_positions.len());
+            // Tree information would be displayed here
         }
         Err(e) => println!("✗ Initial parse failed: {:?}", e),
     }
@@ -55,7 +54,7 @@ print "Result: $result\n";
 
     let edited_source = initial_source.replace("10", "15");
 
-    match parser.apply_edit(edit, &edited_source) {
+    match parser.apply_edit(edit.clone(), &edited_source) {
         Ok(tree) => {
             println!("\n✓ Incremental update successful");
             println!("  - Edit applied at byte {}", edit.start_byte);
@@ -190,6 +189,7 @@ if ($x {   # Missing closing paren
 }
 
 // Helper function to display edit information
+#[allow(dead_code)]
 fn display_edit_info(edit: &Edit) {
     println!("Edit info:");
     println!("  - Byte range: {} -> {}", edit.start_byte, edit.old_end_byte);

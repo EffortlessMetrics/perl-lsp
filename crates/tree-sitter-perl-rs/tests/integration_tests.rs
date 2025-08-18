@@ -108,7 +108,7 @@ print <<~EOF;
 print "Done\n";
 "#;
 
-        let ast = parser.parse(code).unwrap();
+        let _ast = parser.parse(code).unwrap();
         // The stateful parser should properly handle both heredocs and format
     }
 

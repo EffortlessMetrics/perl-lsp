@@ -24,17 +24,17 @@ END
         let mut lexer = PerlLexer::new(code);
         let mut token_count = 0;
 
-        while let Some(token) = lexer.next() {
-            if matches!(token.token_type, TokenType::EOF) {
+        loop {
+            let token = lexer.next_token();
+            if let Some(tok) = token {
+                if matches!(tok.token_type, TokenType::EOF) {
+                    break;
+                }
+                println!("  {:?} @ {}..{}: {:?}", tok.token_type, tok.start, tok.end, tok.text);
+                token_count += 1;
+            } else {
                 break;
             }
-
-            println!(
-                "  {:?} @ {}..{}: {:?}",
-                token.token_type, token.start, token.end, token.text
-            );
-
-            token_count += 1;
 
             // Limit output for long examples
             if token_count > 20 {

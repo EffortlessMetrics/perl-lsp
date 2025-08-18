@@ -62,7 +62,7 @@ print "5! = $result\n";
     {
         let mut parser = PureRustPerlParser::new();
         let ast = parser.parse(complex).unwrap();
-        
+
         // Show AST structure
         println!("\n=== AST Debug Output ===");
         println!("{:#?}", ast);

@@ -2,7 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
-    use tree_sitter_perl::pure_rust_parser::{AstNode, PureRustPerlParser};
+    use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 
     #[test]
     fn test_pratt_parser_precedence() {

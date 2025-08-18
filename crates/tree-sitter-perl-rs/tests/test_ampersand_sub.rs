@@ -1,5 +1,5 @@
 //! Test how & subroutines are tokenized
-use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
+use tree_sitter_perl::perl_lexer::PerlLexer;
 
 #[test]
 fn test_ampersand_sub() {
