@@ -422,13 +422,11 @@ sub render_response {
             }
         }
     }
-    
+
     let mut all_names = Vec::new();
     for sym in syms {
         collect_names(sym, &mut all_names);
     }
-    
-    eprintln!("Found symbols: {:?}", all_names);
 
     // Should have package and subroutines
     assert!(all_names.iter().any(|n| n.contains("MyApp") || n.contains("Controller")));
@@ -657,18 +655,17 @@ fn test_user_story_incremental_parsing() {
             }
         }
     }
-    
+
     let mut all_names = Vec::new();
     for sym in syms {
         collect_names_incremental(sym, &mut all_names);
     }
 
     // Filter function names
-    let function_names: Vec<&String> = all_names.iter()
-        .filter(|n| n.starts_with("function_"))
-        .collect();
+    let function_names: Vec<&String> =
+        all_names.iter().filter(|n| n.starts_with("function_")).collect();
 
-    // Should have found many functions  
+    // Should have found many functions
     assert!(function_names.len() > 50); // We created 100 functions, should find most of them
 
     // Should find the renamed function
