@@ -1,5 +1,5 @@
 //! Debug glob assignment
-use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
+use tree_sitter_perl::perl_lexer::PerlLexer;
 
 #[test]
 fn test_glob_assignment_debug() {

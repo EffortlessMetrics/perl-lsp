@@ -24,7 +24,7 @@ fn test_deep_nested_expression() {
     let result = parser.parse(&expr);
 
     match result {
-        Ok(ast) => {
+        Ok(_ast) => {
             println!("Successfully parsed!");
             // Should not reach here in debug builds
         }
@@ -51,7 +51,7 @@ fn test_deep_nested_blocks() {
     let result = parser.parse(&code);
 
     match result {
-        Ok(ast) => {
+        Ok(_ast) => {
             println!("Successfully parsed!");
         }
         Err(e) => {
@@ -77,7 +77,7 @@ fn test_deep_nested_arrays() {
     let result = parser.parse(&expr);
 
     match result {
-        Ok(ast) => {
+        Ok(_ast) => {
             println!("Successfully parsed!");
         }
         Err(e) => {
@@ -103,7 +103,7 @@ fn test_deep_method_chain() {
     let result = parser.parse(&expr);
 
     match result {
-        Ok(ast) => {
+        Ok(_ast) => {
             println!("Successfully parsed!");
         }
         Err(e) => {
@@ -117,6 +117,7 @@ fn test_deep_method_chain() {
 mod helpers {
     use std::env;
 
+    #[allow(dead_code)]
     pub fn run_with_backtrace<F: FnOnce()>(test_fn: F) {
         unsafe {
             env::set_var("RUST_BACKTRACE", "1");

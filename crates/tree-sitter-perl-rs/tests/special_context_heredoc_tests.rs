@@ -18,8 +18,8 @@ EOF
 print "After eval\n";
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (_processed, declarations) = parser.parse();
 
         assert_eq!(declarations.len(), 1, "Should find one heredoc");
         assert_eq!(declarations[0].terminator, "EOF");
@@ -39,8 +39,8 @@ print $result;
 CODE
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (_processed, declarations) = parser.parse();
 
         // Should find the outer heredoc
         assert!(declarations.iter().any(|d| d.terminator == "CODE"));
@@ -68,8 +68,8 @@ REPLACEMENT
 print $text;
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (_processed, declarations) = parser.parse();
 
         // Should detect heredoc in s///e
         assert!(
@@ -105,7 +105,7 @@ B"#,
         ];
 
         for code in test_cases {
-            let mut parser = ContextAwareHeredocParser::new(code);
+            let parser = ContextAwareHeredocParser::new(code);
             let (_, declarations) = parser.parse();
             assert!(!declarations.is_empty(), "Should find heredoc in: {}", code);
         }
@@ -126,8 +126,8 @@ INNER
 OUTER
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (_processed, declarations) = parser.parse();
 
         // Should find at least the outer heredoc
         assert!(declarations.iter().any(|d| d.terminator == "OUTER"));
@@ -142,8 +142,8 @@ print "Hello from subshell"
 EOF'`;
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (processed, _declarations) = parser.parse();
 
         // This is a complex case - heredoc is in a subshell
         // Parser should at least not crash
@@ -160,8 +160,8 @@ if ($text =~ /<<EOF/) {
 EOF
 "#;
 
-        let mut parser = ContextAwareHeredocParser::new(code);
-        let (processed, declarations) = parser.parse();
+        let parser = ContextAwareHeredocParser::new(code);
+        let (_processed, declarations) = parser.parse();
 
         // Should NOT treat this as a heredoc (it's in a regex pattern)
         assert!(declarations.is_empty() || !declarations.iter().any(|d| d.terminator == "EOF"));
@@ -209,8 +209,8 @@ OUTER
         ];
 
         for code in error_cases {
-            let mut parser = ContextAwareHeredocParser::new(code);
-            let (processed, declarations) = parser.parse();
+            let parser = ContextAwareHeredocParser::new(code);
+            let (_processed, declarations) = parser.parse();
 
             // Parser should handle errors gracefully
             // May have incomplete declarations but shouldn't panic
@@ -227,7 +227,7 @@ A
 print content
 B"#;
 
-        let mut parser = ContextAwareHeredocParser::new(code1);
+        let parser = ContextAwareHeredocParser::new(code1);
         let (_, declarations) = parser.parse();
         assert_eq!(declarations.len(), 2, "Should find both heredocs");
 
@@ -236,7 +236,7 @@ B"#;
 bar
 E"#;
 
-        let mut parser2 = ContextAwareHeredocParser::new(code2);
+        let parser2 = ContextAwareHeredocParser::new(code2);
         let (_, declarations2) = parser2.parse();
         assert!(!declarations2.is_empty(), "Should find heredoc in complex context");
     }

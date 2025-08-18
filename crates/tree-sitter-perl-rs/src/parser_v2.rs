@@ -7,7 +7,6 @@ use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::perl_lexer::PerlLexer;
 use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 /// Perl parser with proper memory management

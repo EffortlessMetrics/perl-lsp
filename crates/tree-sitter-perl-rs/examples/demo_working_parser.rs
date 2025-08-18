@@ -1,6 +1,11 @@
 //! Demo of the working Perl parser integration
+
+#![allow(unused_variables, unused_imports)]
+
+#[cfg(not(feature = "pure-rust-standalone"))]
 use tree_sitter_perl::working_parser::WorkingParser;
 
+#[cfg(not(feature = "pure-rust-standalone"))]
 fn main() {
     println!("=== Working Perl Parser Demo ===\n");
 
@@ -83,4 +88,11 @@ print "Fibonacci(10) = $result\n";
     } else {
         println!("\n❌ Complex example failed to parse");
     }
+}
+
+#[cfg(feature = "pure-rust-standalone")]
+fn main() {
+    eprintln!(
+        "'demo_working_parser' example is disabled with the 'pure-rust-standalone' feature."
+    );
 }

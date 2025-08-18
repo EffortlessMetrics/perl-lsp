@@ -1,5 +1,5 @@
 //! Test simple qq case
-use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
+use tree_sitter_perl::EnhancedFullParser;
 
 fn main() {
     let test_cases = vec![
@@ -15,7 +15,7 @@ fn main() {
 
         let mut parser = EnhancedFullParser::new();
         match parser.parse(code) {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("✓ Parsed successfully");
             }
             Err(e) => {

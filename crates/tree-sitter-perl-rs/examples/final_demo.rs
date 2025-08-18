@@ -5,7 +5,7 @@ use tree_sitter_perl::{
     EnhancedFullParser,
     error_recovery::{ErrorRecoveryParser, RecoveryStrategy},
     sexp_formatter::SexpFormatter,
-    streaming_parser::{ParseEvent, SectionKind, StreamConfig, StreamingParser},
+    streaming_parser::{ParseEvent, StreamConfig, StreamingParser},
 };
 
 fn main() {

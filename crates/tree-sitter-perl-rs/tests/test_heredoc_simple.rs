@@ -1,6 +1,6 @@
 //! Simple test to debug heredoc recovery
 
-use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
+use tree_sitter_perl::perl_lexer::PerlLexer;
 
 #[test]
 fn test_simple_dynamic_heredoc() {

@@ -21,6 +21,7 @@ fn main() {
         example_substitution_heredoc();
         example_nested_contexts();
         example_runtime_handling();
+        demonstrate_edge_cases();
     }
 }
 
@@ -44,8 +45,8 @@ CONFIG
 print "Config loaded\n";
 "#;
 
-    let mut parser = ContextAwareHeredocParser::new(code);
-    let (processed, declarations) = parser.parse();
+    let parser = ContextAwareHeredocParser::new(code);
+    let (_processed, declarations) = parser.parse();
 
     println!("Input code:{}", code);
     println!("\nFound {} heredoc declarations", declarations.len());
@@ -74,8 +75,8 @@ END
 print $template;
 "#;
 
-    let mut parser = ContextAwareHeredocParser::new(code);
-    let (processed, declarations) = parser.parse();
+    let parser = ContextAwareHeredocParser::new(code);
+    let (_processed, declarations) = parser.parse();
 
     println!("Input code:{}", code);
     println!("\nHeredocs in s///e context:");
@@ -108,7 +109,7 @@ OUTER
 
     let mut parser = ContextAwareFullParser::new();
     match parser.parse(code) {
-        Ok(ast) => {
+        Ok(_ast) => {
             println!("Successfully parsed nested eval contexts");
             // In a real implementation, we'd inspect the AST
         }
@@ -133,7 +134,7 @@ Runtime evaluated content
 EOF"#;
 
     match runtime.eval_with_heredoc(eval_content) {
-        Ok(result) => println!("Eval result: processed successfully"),
+        Ok(_result) => println!("Eval result: processed successfully"),
         Err(e) => println!("Eval error: {:?}", e),
     }
 
@@ -155,7 +156,7 @@ EOF"#;
     let flags = "e";
 
     match runtime.substitute_with_heredoc(text, pattern, replacement, flags) {
-        Ok(result) => println!("Substitution: processed successfully"),
+        Ok(_result) => println!("Substitution: processed successfully"),
         Err(e) => println!("Substitution error: {:?}", e),
     }
 
@@ -186,7 +187,7 @@ END_OF_DATA"#;
 
     for (i, code) in [code1, code2, code3].iter().enumerate() {
         println!("\nEdge case {}: ", i + 1);
-        let mut parser = ContextAwareHeredocParser::new(code);
+        let parser = ContextAwareHeredocParser::new(code);
         let (_, declarations) = parser.parse();
         println!("Found {} heredocs", declarations.len());
     }
