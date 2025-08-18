@@ -208,7 +208,7 @@ impl LspClient {
 
         // Wait for the process to exit
         let _ = self.child.wait();
-        
+
         // Prevent Drop from being called since we already shut down
         std::mem::forget(self);
     }
