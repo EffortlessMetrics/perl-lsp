@@ -302,7 +302,7 @@ impl CompletionProvider {
             self.add_package_completions(&mut completions, &context);
         } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
             // Method completion
-            self.add_method_completions(&mut completions, &context);
+            self.add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
             // String interpolation or file path
             if context.prefix.contains('/') {
@@ -338,19 +338,31 @@ impl CompletionProvider {
         let _prefix = source[line_start..position].to_string();
 
         // Find the word being typed
-        let word_start = source[..position]
-            .rfind(|c: char| {
-                !c.is_alphanumeric()
-                    && c != '_'
-                    && c != ':'
-                    && c != '$'
-                    && c != '@'
-                    && c != '%'
-                    && c != '&'
-            })
-            .map(|p| p + 1)
-            .unwrap_or(0);
-        let word_prefix = source[word_start..position].to_string();
+        // Special handling for method calls: include the -> and the receiver
+        let word_prefix = if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
+            // We're right after ->, find the receiver variable
+            let receiver_start = source[..position.saturating_sub(2)]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
+                })
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            source[receiver_start..position].to_string()
+        } else {
+            let word_start = source[..position]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric()
+                        && c != '_'
+                        && c != ':'
+                        && c != '$'
+                        && c != '@'
+                        && c != '%'
+                        && c != '&'
+                })
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            source[word_start..position].to_string()
+        };
 
         // Detect trigger character
         let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
@@ -586,16 +598,62 @@ impl CompletionProvider {
     fn add_method_completions(
         &self,
         completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        context: &CompletionContext,
+        source: &str,
     ) {
-        // Common object methods
-        let methods = [
-            ("new", "Constructor"),
-            ("isa", "Check if object is of given class"),
-            ("can", "Check if object can call method"),
-            ("DOES", "Check if object does role"),
-            ("VERSION", "Get version"),
+        // Try to infer the receiver type from context
+        let receiver_type = self.infer_receiver_type(context, source);
+        
+        // DBI database handle methods
+        const DBI_DB_METHODS: &[(&str, &str)] = &[
+            ("do", "Execute a single SQL statement"),
+            ("prepare", "Prepare a SQL statement"),
+            ("prepare_cached", "Prepare and cache a SQL statement"),
+            ("selectrow_array", "Execute and fetch a single row as array"),
+            ("selectrow_arrayref", "Execute and fetch a single row as arrayref"),
+            ("selectrow_hashref", "Execute and fetch a single row as hashref"),
+            ("selectall_arrayref", "Execute and fetch all rows as arrayref"),
+            ("selectall_hashref", "Execute and fetch all rows as hashref"),
+            ("begin_work", "Begin a database transaction"),
+            ("commit", "Commit the current transaction"),
+            ("rollback", "Rollback the current transaction"),
+            ("disconnect", "Disconnect from the database"),
+            ("last_insert_id", "Get the last inserted row ID"),
+            ("quote", "Quote a string for SQL"),
+            ("quote_identifier", "Quote an identifier for SQL"),
+            ("ping", "Check if database connection is alive"),
         ];
+        
+        // DBI statement handle methods
+        const DBI_ST_METHODS: &[(&str, &str)] = &[
+            ("bind_param", "Bind a parameter to the statement"),
+            ("bind_param_inout", "Bind an in/out parameter"),
+            ("execute", "Execute the prepared statement"),
+            ("fetch", "Fetch the next row as arrayref"),
+            ("fetchrow_array", "Fetch the next row as array"),
+            ("fetchrow_arrayref", "Fetch the next row as arrayref"),
+            ("fetchrow_hashref", "Fetch the next row as hashref"),
+            ("fetchall_arrayref", "Fetch all remaining rows as arrayref"),
+            ("fetchall_hashref", "Fetch all remaining rows as hashref of hashrefs"),
+            ("finish", "Finish the statement handle"),
+            ("rows", "Get the number of rows affected"),
+        ];
+        
+        // Choose methods based on inferred type
+        let methods: Vec<(&str, &str)> = match receiver_type.as_deref() {
+            Some("DBI::db") => DBI_DB_METHODS.to_vec(),
+            Some("DBI::st") => DBI_ST_METHODS.to_vec(),
+            _ => {
+                // Default common object methods
+                vec![
+                    ("new", "Constructor"),
+                    ("isa", "Check if object is of given class"),
+                    ("can", "Check if object can call method"),
+                    ("DOES", "Check if object does role"),
+                    ("VERSION", "Get version"),
+                ]
+            }
+        };
 
         for (method, desc) in methods {
             completions.push(CompletionItem {
@@ -609,6 +667,60 @@ impl CompletionProvider {
                 additional_edits: vec![],
             });
         }
+        
+        // If we have a DBI type, also add common methods at lower priority
+        if receiver_type.as_deref() == Some("DBI::db") || receiver_type.as_deref() == Some("DBI::st") {
+            for (method, desc) in [
+                ("isa", "Check if object is of given class"),
+                ("can", "Check if object can call method"),
+            ] {
+                completions.push(CompletionItem {
+                    label: method.to_string(),
+                    kind: CompletionItemKind::Function,
+                    detail: Some("method".to_string()),
+                    documentation: Some(desc.to_string()),
+                    insert_text: Some(format!("{}()", method)),
+                    sort_text: Some(format!("9_{}", method)), // Lower priority
+                    filter_text: Some(method.to_string()),
+                    additional_edits: vec![],
+                });
+            }
+        }
+    }
+    
+    /// Infer receiver type from context (for DBI method completion)
+    fn infer_receiver_type(&self, context: &CompletionContext, source: &str) -> Option<String> {
+        // Look backwards from the position to find the receiver
+        let prefix = context.prefix.trim_end_matches("->");
+        
+        // Simple heuristics for DBI types based on variable name
+        if prefix.ends_with("$dbh") {
+            return Some("DBI::db".to_string());
+        }
+        if prefix.ends_with("$sth") {
+            return Some("DBI::st".to_string());
+        }
+        
+        // Look at the broader context - check if variable was assigned from DBI->connect
+        if let Some(var_pos) = source.rfind(prefix) {
+            // Look backwards for assignment
+            let before_var = &source[..var_pos];
+            if let Some(assign_pos) = before_var.rfind('=') {
+                let assignment = &source[assign_pos..var_pos + prefix.len()];
+                
+                // Check if this looks like DBI->connect result
+                if assignment.contains("DBI") && assignment.contains("connect") {
+                    return Some("DBI::db".to_string());
+                }
+                
+                // Check if this looks like prepare/prepare_cached result
+                if assignment.contains("prepare") {
+                    return Some("DBI::st".to_string());
+                }
+            }
+        }
+        
+        None
     }
 
     /// Add file path completions
