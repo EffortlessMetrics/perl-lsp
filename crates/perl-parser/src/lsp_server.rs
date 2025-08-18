@@ -1505,9 +1505,10 @@ impl LspServer {
                 } else {
                     // No AST (parse error), but we can still offer some actions
                     let mut code_actions: Vec<Value> = Vec::new();
-                    
+
                     // Check if source lacks strict/warnings
-                    if !doc.content.contains("use strict") || !doc.content.contains("use warnings") {
+                    if !doc.content.contains("use strict") || !doc.content.contains("use warnings")
+                    {
                         let mut changes = HashMap::new();
                         // Find first non-shebang line
                         let insert_pos = if doc.content.starts_with("#!") {
@@ -1515,24 +1516,29 @@ impl LspServer {
                         } else {
                             0
                         };
-                        
-                        let new_text = if !doc.content.contains("use strict") && !doc.content.contains("use warnings") {
+
+                        let new_text = if !doc.content.contains("use strict")
+                            && !doc.content.contains("use warnings")
+                        {
                             "use strict;\nuse warnings;\n\n"
                         } else if !doc.content.contains("use strict") {
                             "use strict;\n"
                         } else {
                             "use warnings;\n"
                         };
-                        
+
                         let (line, char) = self.offset_to_pos16(doc, insert_pos);
-                        changes.insert(uri.to_string(), vec![json!({
-                            "range": {
-                                "start": {"line": line, "character": char},
-                                "end": {"line": line, "character": char},
-                            },
-                            "newText": new_text,
-                        })]);
-                        
+                        changes.insert(
+                            uri.to_string(),
+                            vec![json!({
+                                "range": {
+                                    "start": {"line": line, "character": char},
+                                    "end": {"line": line, "character": char},
+                                },
+                                "newText": new_text,
+                            })],
+                        );
+
                         code_actions.push(json!({
                             "title": "Add 'use strict' and 'use warnings'",
                             "kind": "quickfix",
@@ -1541,7 +1547,7 @@ impl LspServer {
                             },
                         }));
                     }
-                    
+
                     // Always offer debug actions for files with issues
                     code_actions.push(json!({
                         "title": "Add debug print",
@@ -1552,7 +1558,23 @@ impl LspServer {
                             "arguments": [json!({ "uri": uri })]
                         }
                     }));
-                    
+
+                    // Check for global variables that could use 'my' declarations
+                    let global_var_pattern = regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=").ok();
+                    if let Some(re) = global_var_pattern {
+                        if re.is_match(&doc.content) {
+                            code_actions.push(json!({
+                                "title": "Convert globals to 'my' declarations",
+                                "kind": "refactor.rewrite",
+                                "command": {
+                                    "title": "Convert to my declarations",
+                                    "command": "perl.convertToMyDeclarations",
+                                    "arguments": [json!({ "uri": uri })]
+                                }
+                            }));
+                        }
+                    }
+
                     return Ok(Some(json!(code_actions)));
                 }
             }
@@ -2238,10 +2260,13 @@ impl LspServer {
                 let offset = self.pos16_to_offset(doc, line, character);
 
                 // Extract text around cursor to check for module references
-                let text_around = self.get_text_around_offset(&doc.content, offset, 50);
+                let radius = 50;
+                let text_start = offset.saturating_sub(radius);
+                let text_around = self.get_text_around_offset(&doc.content, offset, radius);
+                let cursor_in_text = offset - text_start;
 
                 // Check for patterns like "use Module::Name", "require Module::Name", or "Module::Name->method"
-                if let Some(module_name) = self.extract_module_reference(&text_around, 50) {
+                if let Some(module_name) = self.extract_module_reference(&text_around, cursor_in_text) {
                     // Try to resolve module to file path
                     if let Some(module_path) = self.resolve_module_to_path(&module_name) {
                         return Ok(Some(json!([{
@@ -2259,19 +2284,23 @@ impl LspServer {
                         }])));
                     }
                 }
-                
+
                 // Also check if we're on a package name followed by ->
-                let package_pattern = regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->").ok();
+                let package_pattern = regex::Regex::new(
+                    r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->",
+                )
+                .ok();
                 if let Some(re) = package_pattern {
                     for cap in re.captures_iter(&text_around) {
                         if let Some(package_match) = cap.get(1) {
                             let match_start = package_match.start();
                             let match_end = package_match.end();
-                            
+
                             // Check if cursor is within the package name
-                            if 50 >= match_start && 50 <= match_end {
+                            if cursor_in_text >= match_start && cursor_in_text <= match_end {
                                 let package_name = package_match.as_str();
-                                if let Some(module_path) = self.resolve_module_to_path(package_name) {
+                                if let Some(module_path) = self.resolve_module_to_path(package_name)
+                                {
                                     return Ok(Some(json!([{
                                         "uri": module_path,
                                         "range": {
@@ -5015,6 +5044,15 @@ impl LspServer {
     fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
         // Convert Module::Name to Module/Name.pm
         let relative_path = format!("{}.pm", module_name.replace("::", "/"));
+
+        // First check if we have the document already opened
+        let documents = self.documents.lock().unwrap();
+        for (uri, _doc) in documents.iter() {
+            if uri.ends_with(&relative_path) {
+                return Some(uri.clone());
+            }
+        }
+        drop(documents);
 
         // Get workspace folders from initialization
         let workspace_folders = self.workspace_folders.lock().unwrap();
