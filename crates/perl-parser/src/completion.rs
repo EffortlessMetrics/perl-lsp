@@ -339,7 +339,8 @@ impl CompletionProvider {
 
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
-        let word_prefix = if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
+        let word_prefix = if position >= 2 && &source[position.saturating_sub(2)..position] == "->"
+        {
             // We're right after ->, find the receiver variable
             let receiver_start = source[..position.saturating_sub(2)]
                 .rfind(|c: char| {
@@ -603,7 +604,7 @@ impl CompletionProvider {
     ) {
         // Try to infer the receiver type from context
         let receiver_type = self.infer_receiver_type(context, source);
-        
+
         // DBI database handle methods
         const DBI_DB_METHODS: &[(&str, &str)] = &[
             ("do", "Execute a single SQL statement"),
@@ -623,7 +624,7 @@ impl CompletionProvider {
             ("quote_identifier", "Quote an identifier for SQL"),
             ("ping", "Check if database connection is alive"),
         ];
-        
+
         // DBI statement handle methods
         const DBI_ST_METHODS: &[(&str, &str)] = &[
             ("bind_param", "Bind a parameter to the statement"),
@@ -638,7 +639,7 @@ impl CompletionProvider {
             ("finish", "Finish the statement handle"),
             ("rows", "Get the number of rows affected"),
         ];
-        
+
         // Choose methods based on inferred type
         let methods: Vec<(&str, &str)> = match receiver_type.as_deref() {
             Some("DBI::db") => DBI_DB_METHODS.to_vec(),
@@ -667,9 +668,11 @@ impl CompletionProvider {
                 additional_edits: vec![],
             });
         }
-        
+
         // If we have a DBI type, also add common methods at lower priority
-        if receiver_type.as_deref() == Some("DBI::db") || receiver_type.as_deref() == Some("DBI::st") {
+        if receiver_type.as_deref() == Some("DBI::db")
+            || receiver_type.as_deref() == Some("DBI::st")
+        {
             for (method, desc) in [
                 ("isa", "Check if object is of given class"),
                 ("can", "Check if object can call method"),
@@ -687,12 +690,12 @@ impl CompletionProvider {
             }
         }
     }
-    
+
     /// Infer receiver type from context (for DBI method completion)
     fn infer_receiver_type(&self, context: &CompletionContext, source: &str) -> Option<String> {
         // Look backwards from the position to find the receiver
         let prefix = context.prefix.trim_end_matches("->");
-        
+
         // Simple heuristics for DBI types based on variable name
         if prefix.ends_with("$dbh") {
             return Some("DBI::db".to_string());
@@ -700,26 +703,26 @@ impl CompletionProvider {
         if prefix.ends_with("$sth") {
             return Some("DBI::st".to_string());
         }
-        
+
         // Look at the broader context - check if variable was assigned from DBI->connect
         if let Some(var_pos) = source.rfind(prefix) {
             // Look backwards for assignment
             let before_var = &source[..var_pos];
             if let Some(assign_pos) = before_var.rfind('=') {
                 let assignment = &source[assign_pos..var_pos + prefix.len()];
-                
+
                 // Check if this looks like DBI->connect result
                 if assignment.contains("DBI") && assignment.contains("connect") {
                     return Some("DBI::db".to_string());
                 }
-                
+
                 // Check if this looks like prepare/prepare_cached result
                 if assignment.contains("prepare") {
                     return Some("DBI::st".to_string());
                 }
             }
         }
-        
+
         None
     }
 
