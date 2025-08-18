@@ -628,7 +628,9 @@ impl LspServer {
                     "perl.runTestFile",
                     "perl.runTests",
                     "perl.runFile",
-                    "perl.runTestSub"
+                    "perl.runTestSub",
+                    "perl.debugFile",
+                    "perl.debugTests"
                 ]
             },
             "experimental": {
