@@ -25,7 +25,15 @@ fn get_declaration(
 #[test]
 fn test_variable_declaration_same_block() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
@@ -45,14 +53,31 @@ print $x;"#;
 
     // Should point to line 0
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 0);
+    
+    // Handle both Location and LocationLink formats
+    if let Some(range) = location.get("range") {
+        // It's a Location
+        assert_eq!(range["start"]["line"], 0);
+    } else if let Some(target_range) = location.get("targetRange") {
+        // It's a LocationLink
+        assert_eq!(target_range["start"]["line"], 0);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }
 
 #[test]
 fn test_variable_shadowing() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
@@ -75,8 +100,13 @@ print $x;  # Should resolve to outer $x"#;
 
     // Should point to line 2 (inner declaration)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 2);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 2);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 2);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 
     // Click on outer $x usage (line 5, character 6)
     let result = get_declaration(&mut harness, uri, 5, 6);
@@ -89,14 +119,27 @@ print $x;  # Should resolve to outer $x"#;
 
     // Should point to line 0 (outer declaration)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 0);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 0);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 0);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }
 
 #[test]
 fn test_subroutine_declaration() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"sub foo {
@@ -118,14 +161,27 @@ my $result = foo();"#;
 
     // Should point to line 0 (sub declaration)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 0);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 0);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 0);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }
 
 #[test]
 fn test_cross_package_subroutine() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"package Foo;
@@ -149,14 +205,27 @@ my $result = Foo::bar();"#;
 
     // Should point to line 1 (sub bar in package Foo)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 1);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 1);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 1);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }
 
 #[test]
 fn test_constant_declaration() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"use constant FOO => 42;
@@ -175,14 +244,27 @@ my $x = FOO;"#;
 
     // Should point to line 0 (constant declaration)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 0);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 0);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 0);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }
 
 #[test]
 fn test_unicode_variable_name() {
     let mut harness = LspHarness::new();
-    harness.initialize(Some(json!({}))).unwrap();
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
+                }
+            }
+        }
+    }))).unwrap();
 
     let uri = "file:///test.pl";
     let content = r#"my $π = 3.14159;
@@ -202,6 +284,11 @@ print $π;"#;
 
     // Should point to line 0 (declaration)
     let location = &locations[0];
-    let target_range = location["targetRange"].as_object().unwrap();
-    assert_eq!(target_range["start"]["line"], 0);
+    if let Some(range) = location.get("range") {
+        assert_eq!(range["start"]["line"], 0);
+    } else if let Some(target_range) = location.get("targetRange") {
+        assert_eq!(target_range["start"]["line"], 0);
+    } else {
+        panic!("Unknown location format: {:?}", location);
+    }
 }

@@ -234,15 +234,23 @@ impl<'a> DeclarationProvider<'a> {
         node: &Node,
         func_name: &str,
     ) -> Option<Vec<LocationLink>> {
-        // First check current package context
-        let current_package = self.find_current_package(node);
+        // Check if the function name is package-qualified (contains ::)
+        let (target_package, target_name) = if let Some(pos) = func_name.rfind("::") {
+            // Split into package and function name
+            let package = &func_name[..pos];
+            let name = &func_name[pos + 2..];
+            (Some(package.to_string()), name)
+        } else {
+            // No package qualifier, use current package context
+            (self.find_current_package(node), func_name)
+        };
 
-        // Search for subroutines, preferring same package
+        // Search for subroutines with the target name
         let mut declarations = Vec::new();
-        self.collect_subroutine_declarations(&self.ast, func_name, &mut declarations);
+        self.collect_subroutine_declarations(&self.ast, target_name, &mut declarations);
 
-        // If we have a current package, prefer subs in the same package
-        if let Some(pkg_name) = current_package {
+        // If we have a target package, find subs in that specific package
+        if let Some(pkg_name) = target_package {
             if let Some(decl) =
                 declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name.clone()))
             {
