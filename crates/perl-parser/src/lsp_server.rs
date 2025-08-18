@@ -551,9 +551,11 @@ impl LspServer {
                 .and_then(|d| d.get("linkSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
-            
+
             // Initialize workspace folders
-            if let Some(workspace_folders) = params.get("workspaceFolders").and_then(|f| f.as_array()) {
+            if let Some(workspace_folders) =
+                params.get("workspaceFolders").and_then(|f| f.as_array())
+            {
                 let mut folders = self.workspace_folders.lock().unwrap();
                 for folder in workspace_folders {
                     if let Some(uri) = folder["uri"].as_str() {
@@ -2151,10 +2153,10 @@ impl LspServer {
             if let Some(doc) = documents.get(uri) {
                 // First check if we're on a module name in use/require statement
                 let offset = self.pos16_to_offset(doc, line, character);
-                
+
                 // Extract text around cursor to check for module references
                 let text_around = self.get_text_around_offset(&doc.content, offset, 50);
-                
+
                 // Check for patterns like "use Module::Name" or "require Module::Name"
                 if let Some(module_name) = self.extract_module_reference(&text_around, 50) {
                     // Try to resolve module to file path
@@ -2174,7 +2176,7 @@ impl LspServer {
                         }])));
                     }
                 }
-                
+
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -4164,7 +4166,9 @@ impl LspServer {
                 "perl.debugFile" | "perl.debugTests" => {
                     eprintln!("Debug command requested: {}", command);
                     // Return a success status - actual DAP integration can be added later
-                    return Ok(Some(json!({"status": "started", "message": format!("Debug session {} initiated", command)})));
+                    return Ok(Some(
+                        json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
+                    ));
                 }
                 _ => {
                     return Err(JsonRpcError {
@@ -4513,7 +4517,10 @@ impl LspServer {
     }
 
     /// Handle workspace/didChangeWorkspaceFolders notification
-    fn handle_did_change_workspace_folders(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+    fn handle_did_change_workspace_folders(
+        &self,
+        params: Option<Value>,
+    ) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             if let Some(event) = params.get("event") {
                 // Handle added folders
@@ -4526,7 +4533,7 @@ impl LspServer {
                         }
                     }
                 }
-                
+
                 // Handle removed folders
                 if let Some(removed) = event["removed"].as_array() {
                     let mut workspace_folders = self.workspace_folders.lock().unwrap();
@@ -4534,7 +4541,7 @@ impl LspServer {
                         if let Some(uri) = folder["uri"].as_str() {
                             eprintln!("Removed workspace folder: {}", uri);
                             workspace_folders.retain(|f| f.as_str() != uri);
-                            
+
                             // Also remove documents from the removed workspace
                             let mut documents = self.documents.lock().unwrap();
                             let docs_to_remove: Vec<String> = documents
@@ -4542,7 +4549,7 @@ impl LspServer {
                                 .filter(|doc_uri| doc_uri.starts_with(uri))
                                 .cloned()
                                 .collect();
-                            
+
                             for doc_uri in docs_to_remove {
                                 eprintln!("Removing document from removed workspace: {}", doc_uri);
                                 documents.remove(&doc_uri);
@@ -4552,7 +4559,7 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -4863,7 +4870,7 @@ impl LspServer {
         let end = (offset + radius).min(content.len());
         content[start..end].to_string()
     }
-    
+
     /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
     fn extract_module_reference(&self, text: &str, cursor_pos: usize) -> Option<String> {
         // Look for patterns like "use Module::Name" or "require Module::Name"
@@ -4871,14 +4878,14 @@ impl LspServer {
             r"use\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
             r"require\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
         ];
-        
+
         for pattern in patterns {
             let re = regex::Regex::new(pattern).ok()?;
             for cap in re.captures_iter(text) {
                 if let Some(module_match) = cap.get(1) {
                     let match_start = module_match.start();
                     let match_end = module_match.end();
-                    
+
                     // Check if cursor is within the module name
                     if cursor_pos >= match_start && cursor_pos <= match_end {
                         return Some(module_match.as_str().to_string());
@@ -4886,21 +4893,21 @@ impl LspServer {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Resolve a module name to a file path URI
     fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
         // Convert Module::Name to Module/Name.pm
         let relative_path = format!("{}.pm", module_name.replace("::", "/"));
-        
+
         // Get workspace folders from initialization
         let workspace_folders = self.workspace_folders.lock().unwrap();
-        
+
         // Common Perl library directories
         let search_dirs = ["lib", ".", "local/lib/perl5"];
-        
+
         for workspace_folder in workspace_folders.iter() {
             // Parse the workspace folder URI to get the file path
             let workspace_path = if workspace_folder.starts_with("file://") {
@@ -4908,21 +4915,21 @@ impl LspServer {
             } else {
                 workspace_folder
             };
-            
+
             for dir in &search_dirs {
                 let full_path = if *dir == "." {
                     format!("{}/{}", workspace_path, relative_path)
                 } else {
                     format!("{}/{}/{}", workspace_path, dir, relative_path)
                 };
-                
+
                 // Check if file exists
                 if std::path::Path::new(&full_path).exists() {
                     return Some(format!("file://{}", full_path));
                 }
             }
         }
-        
+
         // Also check in @INC paths (simplified version)
         let inc_paths = ["/usr/share/perl5", "/usr/lib/perl5"];
         for inc_path in &inc_paths {
@@ -4931,7 +4938,7 @@ impl LspServer {
                 return Some(format!("file://{}", full_path));
             }
         }
-        
+
         None
     }
 }
