@@ -23,6 +23,7 @@ pub struct NodeSpan {
 }
 
 pub struct SexpFormatter {
+    #[allow(dead_code)]
     source: String,
     include_positions: bool,
     compact: bool,

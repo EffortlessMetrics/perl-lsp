@@ -2,8 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 use tree_sitter_perl::{
-    dynamic_delimiter_recovery::RecoveryMode,
-    edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
+    dynamic_delimiter_recovery::RecoveryMode, edge_case_handler::EdgeCaseConfig,
     tree_sitter_adapter::TreeSitterAdapter,
 };
 

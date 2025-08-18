@@ -174,7 +174,7 @@ impl DynamicDelimiterRecovery {
     }
 
     /// Try to resolve a variable to its value
-    fn try_resolve_variable(&self, expr: &str, context: &ParseContext) -> Option<&PossibleValue> {
+    fn try_resolve_variable(&self, expr: &str, _context: &ParseContext) -> Option<&PossibleValue> {
         // Simple case: just a variable like $delimiter
         if let Some(var_name) = expr.strip_prefix("$") {
             if let Some(values) = self.variable_values.get(var_name) {

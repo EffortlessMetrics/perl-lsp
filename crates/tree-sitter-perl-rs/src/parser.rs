@@ -17,6 +17,7 @@ pub struct Parser<'a> {
     /// Current position in token stream
     current: usize,
     /// Source code for error reporting
+    #[allow(dead_code)]
     source: &'a str,
     /// Error accumulator
     errors: Vec<ParseError>,

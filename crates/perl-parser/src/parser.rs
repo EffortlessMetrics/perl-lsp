@@ -673,14 +673,14 @@ impl<'a> Parser<'a> {
         if sigil == "&" {
             // Check if there are parentheses for arguments
             let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
-                self.tokens.next()?; // consume (
+                self.consume_token()?; // consume (
                 let mut args = vec![];
 
                 while self.peek_kind() != Some(TokenKind::RightParen) {
                     args.push(self.parse_expression()?);
 
                     if self.peek_kind() == Some(TokenKind::Comma) {
-                        self.tokens.next()?; // consume comma
+                        self.consume_token()?; // consume comma
                     } else if self.peek_kind() != Some(TokenKind::RightParen) {
                         return Err(ParseError::syntax(
                             "Expected comma or right parenthesis",
@@ -1060,7 +1060,7 @@ impl<'a> Parser<'a> {
 
                 // Check if attribute has a value in parentheses (like :prototype($))
                 if self.peek_kind() == Some(TokenKind::LeftParen) {
-                    self.tokens.next()?; // consume (
+                    self.consume_token()?; // consume (
                     attr_name.push('(');
 
                     // Collect tokens until matching )
@@ -1377,14 +1377,14 @@ impl<'a> Parser<'a> {
     /// Parse use statement
     fn parse_use(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
-        self.tokens.next()?; // consume 'use'
+        self.consume_token()?; // consume 'use'
 
         // Parse module name, version, or identifier
         let mut module = if self.peek_kind() == Some(TokenKind::Number) {
             // Numeric version like 5.036
-            self.tokens.next()?.text.clone()
+            self.consume_token()?.text.clone()
         } else {
-            let first_token = self.tokens.next()?;
+            let first_token = self.consume_token()?;
 
             // Check for version strings
             if first_token.kind == TokenKind::Identifier
@@ -1398,9 +1398,9 @@ impl<'a> Parser<'a> {
                 if self.peek_kind() == Some(TokenKind::Unknown) {
                     if let Ok(dot_token) = self.tokens.peek() {
                         if dot_token.text == "." {
-                            self.tokens.next()?; // consume dot
+                            self.consume_token()?; // consume dot
                             if self.peek_kind() == Some(TokenKind::Number) {
-                                let num = self.tokens.next()?;
+                                let num = self.consume_token()?;
                                 version.push('.');
                                 version.push_str(&num.text);
                             }
@@ -1424,7 +1424,7 @@ impl<'a> Parser<'a> {
 
         // Handle :: in module names
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.tokens.next()?; // consume ::
+            self.consume_token()?; // consume ::
             module.push_str("::");
             module.push_str(&self.expect(TokenKind::Identifier)?.text);
         }
@@ -1432,7 +1432,7 @@ impl<'a> Parser<'a> {
         // Parse optional version number
         if self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
-            module.push_str(&self.tokens.next()?.text);
+            module.push_str(&self.consume_token()?.text);
         }
 
         // Parse optional import list
@@ -1446,17 +1446,17 @@ impl<'a> Parser<'a> {
                 match self.peek_kind() {
                     Some(TokenKind::LeftBrace) => {
                         depth += 1;
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                     }
                     Some(TokenKind::RightBrace) => {
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                         depth -= 1;
                         if depth == 0 {
                             break;
                         }
                     }
                     _ => {
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                     }
                 }
             }
@@ -1469,18 +1469,18 @@ impl<'a> Parser<'a> {
             loop {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                     }
                     Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
                         // Handle qw()
-                        self.tokens.next()?; // consume qw
+                        self.consume_token()?; // consume qw
                         if self.peek_kind() == Some(TokenKind::LeftParen) {
-                            self.tokens.next()?; // consume (
+                            self.consume_token()?; // consume (
                             while self.peek_kind() != Some(TokenKind::RightParen)
                                 && !self.tokens.is_eof()
                             {
                                 if let Some(TokenKind::Identifier) = self.peek_kind() {
-                                    args.push(self.tokens.next()?.text.clone());
+                                    args.push(self.consume_token()?.text.clone());
                                 }
                             }
                             self.expect(TokenKind::RightParen)?;
@@ -1488,24 +1488,24 @@ impl<'a> Parser<'a> {
                     }
                     Some(TokenKind::Identifier) => {
                         // Check if this might be a constant declaration
-                        let ident = self.tokens.next()?;
+                        let ident = self.consume_token()?;
                         args.push(ident.text.clone());
 
                         // If we see a fat arrow after an identifier, parse the value
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
-                            self.tokens.next()?; // consume =>
+                            self.consume_token()?; // consume =>
                             // Parse the value as a simple expression
                             match self.peek_kind() {
                                 Some(TokenKind::Number | TokenKind::String) => {
-                                    args.push(self.tokens.next()?.text.clone());
+                                    args.push(self.consume_token()?.text.clone());
                                 }
                                 Some(TokenKind::Identifier) => {
-                                    args.push(self.tokens.next()?.text.clone());
+                                    args.push(self.consume_token()?.text.clone());
                                 }
                                 _ => {
                                     // For more complex expressions, just consume tokens until semicolon
                                     while !Self::is_statement_terminator(self.peek_kind()) {
-                                        args.push(self.tokens.next()?.text.clone());
+                                        args.push(self.consume_token()?.text.clone());
                                     }
                                 }
                             }
@@ -1520,14 +1520,14 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.tokens.next()?; // consume (
+            self.consume_token()?; // consume (
 
             // Parse import list
             while self.peek_kind() != Some(TokenKind::RightParen) {
                 if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.tokens.next()?.text.clone());
+                    args.push(self.consume_token()?.text.clone());
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.tokens.next()?.text.clone());
+                    args.push(self.consume_token()?.text.clone());
                 } else {
                     return Err(ParseError::syntax(
                         "Expected string or identifier in import list",
@@ -1536,7 +1536,7 @@ impl<'a> Parser<'a> {
                 }
 
                 if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.tokens.next()?; // consume comma
+                    self.consume_token()?; // consume comma
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis",
@@ -1609,7 +1609,7 @@ impl<'a> Parser<'a> {
 
         // Handle :: in module names
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.tokens.next()?; // consume ::
+            self.consume_token()?; // consume ::
             module.push_str("::");
             module.push_str(&self.expect(TokenKind::Identifier)?.text);
         }
@@ -1617,7 +1617,7 @@ impl<'a> Parser<'a> {
         // Parse optional version number
         if self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
-            module.push_str(&self.tokens.next()?.text);
+            module.push_str(&self.consume_token()?.text);
         }
 
         // Parse optional arguments list
@@ -1631,25 +1631,25 @@ impl<'a> Parser<'a> {
             loop {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                     }
                     Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
                         // Handle qw()
-                        self.tokens.next()?; // consume qw
+                        self.consume_token()?; // consume qw
                         if self.peek_kind() == Some(TokenKind::LeftParen) {
-                            self.tokens.next()?; // consume (
+                            self.consume_token()?; // consume (
                             while self.peek_kind() != Some(TokenKind::RightParen)
                                 && !self.tokens.is_eof()
                             {
                                 if let Some(TokenKind::Identifier) = self.peek_kind() {
-                                    args.push(self.tokens.next()?.text.clone());
+                                    args.push(self.consume_token()?.text.clone());
                                 }
                             }
                             self.expect(TokenKind::RightParen)?;
                         }
                     }
                     Some(TokenKind::Identifier) => {
-                        args.push(self.tokens.next()?.text.clone());
+                        args.push(self.consume_token()?.text.clone());
                     }
                     _ => break,
                 }
@@ -1660,14 +1660,14 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.tokens.next()?; // consume (
+            self.consume_token()?; // consume (
 
             // Parse argument list
             while self.peek_kind() != Some(TokenKind::RightParen) {
                 if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.tokens.next()?.text.clone());
+                    args.push(self.consume_token()?.text.clone());
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.tokens.next()?.text.clone());
+                    args.push(self.consume_token()?.text.clone());
                 } else {
                     return Err(ParseError::syntax(
                         "Expected string or identifier in argument list",
@@ -1676,7 +1676,7 @@ impl<'a> Parser<'a> {
                 }
 
                 if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.tokens.next()?; // consume comma
+                    self.consume_token()?; // consume comma
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis",
@@ -2109,7 +2109,7 @@ impl<'a> Parser<'a> {
                 || self.peek_kind() == Some(TokenKind::FatArrow)
             {
                 if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.tokens.next()?; // consume comma
+                    self.consume_token()?; // consume comma
                 }
 
                 // Check for end of expression
@@ -3061,7 +3061,7 @@ impl<'a> Parser<'a> {
 
                     // Look for comma-separated indices
                     while self.peek_kind() == Some(TokenKind::Comma) {
-                        self.tokens.next()?; // consume comma
+                        self.consume_token()?; // consume comma
                         indices.push(self.parse_expression()?);
                     }
 
@@ -3868,7 +3868,7 @@ impl<'a> Parser<'a> {
                         || self.peek_kind() == Some(TokenKind::FatArrow)
                     {
                         if self.peek_kind() == Some(TokenKind::Comma) {
-                            self.tokens.next()?; // consume comma
+                            self.consume_token()?; // consume comma
                         }
 
                         if self.peek_kind() == Some(TokenKind::RightParen) {
@@ -3879,7 +3879,7 @@ impl<'a> Parser<'a> {
 
                         // Check for fat arrow after element
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
-                            self.tokens.next()?; // consume =>
+                            self.consume_token()?; // consume =>
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
                                 elements.push(self.parse_expression()?);
@@ -4261,7 +4261,7 @@ impl<'a> Parser<'a> {
                 || self.peek_kind() == Some(TokenKind::FatArrow)
             {
                 if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.tokens.next()?; // consume comma
+                    self.consume_token()?; // consume comma
                 }
 
                 if self.peek_kind() == Some(TokenKind::RightBrace) {
@@ -4276,7 +4276,7 @@ impl<'a> Parser<'a> {
                     let value = self.parse_expression()?;
                     pairs.push((key, value));
                 } else if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.tokens.next()?; // consume comma
+                    self.consume_token()?; // consume comma
 
                     if self.peek_kind() == Some(TokenKind::RightBrace) {
                         // Odd number of elements - last one becomes undef value

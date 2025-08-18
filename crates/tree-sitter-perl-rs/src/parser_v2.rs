@@ -378,7 +378,7 @@ impl<'a> ParserV2<'a> {
 
     fn parse_for_statement(&mut self) -> Result<Node, ParseError> {
         let start = self.current_pos();
-        let is_foreach = self.peek_text() == "foreach";
+        let _is_foreach = self.peek_text() == "foreach";
         self.advance(); // consume 'for' or 'foreach'
         self.skip_whitespace();
 
@@ -577,7 +577,7 @@ impl<'a> ParserV2<'a> {
         let mut expr = self.parse_and()?;
 
         while self.match_any(&[TokenType::OrOr]) || self.match_keyword("or") {
-            let op_start = self.current_pos();
+            let _op_start = self.current_pos();
             let op = self.previous().token_type.clone();
             self.skip_whitespace();
 

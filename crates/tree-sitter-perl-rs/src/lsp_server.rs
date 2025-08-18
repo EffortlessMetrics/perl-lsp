@@ -136,6 +136,7 @@ pub enum SymbolKind {
 
 /// Document state
 struct DocumentState {
+    #[allow(dead_code)]
     uri: String,
     content: String,
     version: i32,

@@ -296,6 +296,7 @@ pub enum DiagnosticSeverity {
 /// Integration with heredoc parser
 pub struct EncodingAwareHeredocScanner<'a> {
     lexer: &'a mut EncodingAwareLexer,
+    #[allow(dead_code)]
     source: &'a str,
 }
 
