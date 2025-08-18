@@ -191,8 +191,13 @@ impl LspClient {
 
     /// Shutdown the LSP server gracefully
     pub fn shutdown(mut self) {
-        // Send shutdown request
-        let _ = self.request("shutdown", json!(null));
+        // Send shutdown request (don't wait for response as server may already be closing)
+        self.send(&json!({
+            "jsonrpc": "2.0",
+            "id": self.next_id,
+            "method": "shutdown",
+            "params": null
+        }));
 
         // Send exit notification
         self.send(&json!({
@@ -203,13 +208,21 @@ impl LspClient {
 
         // Wait for the process to exit
         let _ = self.child.wait();
+        
+        // Prevent Drop from being called since we already shut down
+        std::mem::forget(self);
     }
 }
 
 impl Drop for LspClient {
     fn drop(&mut self) {
-        // Try to gracefully shutdown
-        let _ = self.request("shutdown", json!(null));
+        // Try to gracefully shutdown (but don't wait for response)
+        self.send(&json!({
+            "jsonrpc": "2.0",
+            "id": self.next_id,
+            "method": "shutdown",
+            "params": null
+        }));
         self.send(&json!({
             "jsonrpc": "2.0",
             "method": "exit"
