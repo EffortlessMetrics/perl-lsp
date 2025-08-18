@@ -256,7 +256,12 @@ fn test_broken_symlink() {
 
     // Create file and symlink
     fs::write(target, "print 'target';").unwrap();
+    // Remove any existing symlink first to make test idempotent
+    let _ = fs::remove_file(link);
+    #[cfg(unix)]
     std::os::unix::fs::symlink(target, link).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file(target, link).unwrap();
 
     // Delete target, leaving broken symlink
     fs::remove_file(target).unwrap();
