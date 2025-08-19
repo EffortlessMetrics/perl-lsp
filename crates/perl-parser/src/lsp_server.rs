@@ -522,6 +522,15 @@ impl LspServer {
 
     /// Handle initialize request
     fn handle_initialize(&mut self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Check if already initialized
+        if self.initialized {
+            return Err(JsonRpcError {
+                code: -32002, // Server not initialized error code (reused for already initialized)
+                message: "Server already initialized".to_string(),
+                data: None,
+            });
+        }
+        
         // Parse client capabilities
         if let Some(params) = &params {
             self.client_capabilities.declaration_link_support = params
