@@ -19,8 +19,9 @@ fn is_range(v: &Value) -> bool {
         && v.pointer("/end/character").and_then(|x| x.as_u64()).is_some()
 }
 
+#[allow(dead_code)]
 fn is_location(v: &Value) -> bool {
-    v.get("uri").and_then(|u| u.as_str()).is_some() && v.get("range").map_or(false, is_range)
+    v.get("uri").and_then(|u| u.as_str()).is_some() && v.get("range").is_some_and(is_range)
 }
 
 fn open_doc(harness: &mut LspHarness, text: &str) -> String {
@@ -241,7 +242,7 @@ fn test_document_highlight_contract() {
 
                 // Kind is optional but if present must be 1, 2, or 3
                 if let Some(kind) = item.get("kind").and_then(|v| v.as_u64()) {
-                    assert!(kind >= 1 && kind <= 3, "Invalid highlight kind: {}", kind);
+                    assert!((1..=3).contains(&kind), "Invalid highlight kind: {}", kind);
                 }
             }
 
@@ -281,7 +282,7 @@ fn test_error_response_contract() {
                         && result
                             .get("items")
                             .and_then(|v| v.as_array())
-                            .map_or(false, |a| a.is_empty())),
+                            .is_some_and(|a| a.is_empty())),
                 "Expected null or empty result for non-existent document"
             );
         }
@@ -312,7 +313,7 @@ fn test_workspace_folders_contract() {
 
     // Only send workspace folder changes if server explicitly supports it
     // and won't trigger reverse requests
-    let wf_supported = caps
+    let _wf_supported = caps
         .pointer("/workspace/workspaceFolders/supported")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);

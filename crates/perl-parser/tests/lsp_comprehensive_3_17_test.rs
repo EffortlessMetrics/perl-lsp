@@ -544,11 +544,11 @@ fn test_type_definition_3_17() {
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None).expect("init");
     let caps = &init_response["capabilities"];
-    
+
     // Check if server advertises typeDefinition support
-    let supported = caps.get("typeDefinitionProvider").is_some() 
-        && !caps["typeDefinitionProvider"].is_null();
-    
+    let supported =
+        caps.get("typeDefinitionProvider").is_some() && !caps["typeDefinitionProvider"].is_null();
+
     harness.open("file:///test.pl", "my $obj = bless {}, 'MyClass'").expect("open");
 
     let response = harness.request_raw(json!({
@@ -560,7 +560,7 @@ fn test_type_definition_3_17() {
             "position": { "line": 0, "character": 4 }
         }
     }));
-    
+
     if supported {
         // If supported, should have a result field
         assert!(response.get("result").is_some(), "Expected result for typeDefinition");
@@ -581,11 +581,11 @@ fn test_implementation_3_17() {
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None).expect("init");
     let caps = &init_response["capabilities"];
-    
+
     // Check if server advertises implementation support
-    let supported = caps.get("implementationProvider").is_some() 
-        && !caps["implementationProvider"].is_null();
-    
+    let supported =
+        caps.get("implementationProvider").is_some() && !caps["implementationProvider"].is_null();
+
     harness
         .open("file:///test.pl", "package Base;\nsub method {}\npackage Derived;\nuse base 'Base';")
         .expect("open");
@@ -599,7 +599,7 @@ fn test_implementation_3_17() {
             "position": { "line": 1, "character": 4 }
         }
     }));
-    
+
     if supported {
         // If supported, should have a result field
         assert!(response.get("result").is_some(), "Expected result for implementation");
@@ -1562,6 +1562,7 @@ fn test_error_codes_3_17() {
     const REQUEST_FAILED: i32 = -32803;
 
     // Validate error code ranges
+    #[allow(clippy::assertions_on_constants)] // Intentional: validating spec constants
     assert!(PARSE_ERROR < -32000);
     assert_eq!(SERVER_NOT_INITIALIZED, -32002);
     assert_eq!(REQUEST_CANCELLED, -32800);
@@ -1724,17 +1725,17 @@ fn test_partial_result_streaming_contract() {
 fn test_full_lsp_3_17_compliance() {
     // This test validates that all required LSP 3.17 methods are handled
     // Note: Some methods are optional based on server capabilities
-    
+
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None).expect("init");
     let caps = &init_response["capabilities"];
-    
+
     // Check which optional features are supported
-    let type_def_supported = caps.get("typeDefinitionProvider").is_some() 
-        && !caps["typeDefinitionProvider"].is_null();
-    let impl_supported = caps.get("implementationProvider").is_some() 
-        && !caps["implementationProvider"].is_null();
-    
+    let type_def_supported =
+        caps.get("typeDefinitionProvider").is_some() && !caps["typeDefinitionProvider"].is_null();
+    let impl_supported =
+        caps.get("implementationProvider").is_some() && !caps["implementationProvider"].is_null();
+
     let methods = vec![
         // Lifecycle
         "initialize",
@@ -1854,14 +1855,18 @@ fn test_full_lsp_3_17_compliance() {
     }
 
     println!("Full LSP 3.17 compliance validated:");
-    println!("- {} core methods defined", methods.len());
+    println!(
+        "- {} core methods defined ({} expected with current capabilities)",
+        methods.len(),
+        expected_count
+    );
     println!("- TypeDefinition support: {}", type_def_supported);
     println!("- Implementation support: {}", impl_supported);
     println!("- All required request/response shapes tested");
     println!("- All notification formats validated");
     println!("- Error codes verified (including -32801, -32802, -32803)");
     println!("- Capability negotiation tested");
-    
+
     // Note: we still list all 91 methods in the vec for documentation,
     // but some are optional based on server capabilities
     assert!(methods.len() >= 89, "LSP 3.17 defines 91 methods, with some optional");
