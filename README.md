@@ -16,21 +16,21 @@ This project provides **three Perl parser implementations** and a **full-feature
 1. **v1: C-based tree-sitter parser** - Original implementation (~95% coverage)
 2. **v2: Pest-based Pure Rust parser** - PEG grammar approach (~99.995% coverage)
 3. **v3: Native Rust lexer+parser** ⭐ - Hand-written for maximum performance (~100% coverage)
-4. **LSP Server** 🚀 - Professional IDE support for any LSP-compatible editor
+4. **LSP Server** ⚠️ - Partial IDE support (~35% functional, ~70% infrastructure exists)
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
 
 ---
 
-## 📦 Latest Release: v0.8.2
+## 📦 Latest Release: v0.8.3-rc.1
 
-### v0.8.2 - Windows-Safe Document Links & New LSP Features
-- 🔗 **Document Links**: MetaCPAN links for modules, local file links with Windows-safe paths
-- 🎯 **Selection Ranges**: Smart hierarchical selection (identifier → expression → statement → block)
-- ⌨️ **On-Type Formatting**: Auto-formatting on `{`, `}`, `)`, `;`, and newline
-- 📁 **File Watching**: Live synchronization with external file changes
-- ✅ **100% Test Coverage**: All LSP features comprehensively tested
-- 🪟 **Windows Support**: Proper URI and path handling across all platforms
+### v0.8.3-rc.1 - Honest Assessment of LSP Implementation
+- ⚠️ **Reality Check**: Only ~35% of advertised LSP features actually work
+- 📊 **Parser Complete**: v3 parser has ~100% Perl coverage and ~70% LSP infrastructure
+- 🔌 **Wiring Needed**: Most "missing" features exist but aren't connected to LSP
+- ✅ **Working Features**: Diagnostics, basic completion/hover, single-file navigation
+- ❌ **Stub Features**: Workspace refactoring, import optimization return empty results
+- 📝 **Documentation**: Added LSP_ACTUAL_STATUS.md with complete transparency
 
 ### Previous: v0.8.0 - Production-Hardened Position Helpers
 - ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking
@@ -157,41 +157,44 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features (30+ Professional IDE Features) ✅
+### LSP Features ⚠️ (~35% Functional, ~70% Infrastructure Built)
 
-#### Core Features
-- ✅ **Real-time Diagnostics**: Live syntax checking with detailed error messages
-- ✅ **Code Completion**: Context-aware suggestions for variables, functions, keywords, and modules
-- ✅ **Go to Definition**: Jump to symbol definitions across files
-- ✅ **Find References**: Locate all uses of a symbol (including string interpolation)
-- ✅ **Hover Information**: Display documentation and type information
-- ✅ **Signature Help**: Function parameter hints for 150+ built-in functions
-- ✅ **Document Symbols**: Hierarchical outline view with icons
-- ✅ **Rename Symbol**: Safe renaming across all references
-- ✅ **Document Links**: Navigate to modules (MetaCPAN) and local files (v0.8.2)
-- ✅ **Selection Ranges**: Smart hierarchical selection expansion (v0.8.2)
-- ✅ **On-Type Formatting**: Auto-formatting as you type (v0.8.2)
-- ✅ **File Watching**: External change synchronization (v0.8.2)
-- ✅ **Document Highlights**: Highlight all occurrences of symbol at cursor
-- ✅ **Type Hierarchy**: Navigate inheritance relationships (supertypes/subtypes)
+> **Important**: While the parser has ~70% of LSP infrastructure built, only ~35% is wired to the LSP layer. See [LSP_ACTUAL_STATUS.md](crates/perl-parser/LSP_ACTUAL_STATUS.md) for complete details.
 
-#### Advanced Refactoring (NEW!)
-- ✅ **Extract Variable**: Extract expressions to named variables with smart naming
-- ✅ **Extract Subroutine**: Extract code blocks to functions
-- ✅ **Convert Loop Styles**: Modernize C-style for loops to foreach
-- ✅ **Add Error Checking**: Add `or die` to file operations
-- ✅ **Convert to Postfix**: Transform if/unless to postfix form
-- ✅ **Organize Imports**: Sort and group use statements
-- ✅ **Add Missing Pragmas**: Quick fix to add `use strict; use warnings;`
+#### ✅ Actually Working Features
+- **Real-time Diagnostics**: Live syntax checking with detailed error messages
+- **Basic Code Completion**: Variables in current scope, built-in functions, keywords
+- **Go to Definition**: Jump to symbol definitions (single-file only)
+- **Find References**: Locate uses in current file
+- **Hover Information**: Basic documentation for variables and built-ins
+- **Signature Help**: Function parameter hints for 150+ built-in functions
+- **Document Symbols**: Hierarchical outline view with icons
+- **Document Formatting**: Integration with Perl::Tidy
+- **Folding Ranges**: Code folding for subroutines and blocks
 
-#### Enhanced Features
-- ✅ **Semantic Tokens**: Advanced syntax highlighting with modifiers
-- ✅ **CodeLens**: Inline actions for running tests and debugging
-- ✅ **Call Hierarchy**: View incoming/outgoing function calls
-- ✅ **Inlay Hints**: Type and parameter hints inline
-- ✅ **Workspace Symbols**: Search across entire project
-- ✅ **Folding Ranges**: Code folding for subroutines and blocks
-- ✅ **Incremental Parsing**: Efficient updates on document changes
+#### ⚠️ Partially Working
+- **Rename Symbol**: Works in single file only
+- **Code Completion**: No package members, imports, or file paths
+- **Navigation**: No cross-file or workspace-wide support
+
+#### ❌ Not Actually Working (Stub Implementations)
+These features exist in code but return empty results:
+- **Workspace Refactoring**: All methods return empty edits
+- **Extract Variable/Subroutine**: Logic exists but returns empty
+- **Import Organization**: Returns empty analysis
+- **Dead Code Detection**: Returns zero results
+- **Cross-file Navigation**: Infrastructure exists but not wired
+- **Workspace Symbols**: Index exists but not connected
+- **Debug Adapter**: Not implemented
+
+#### 🔧 Infrastructure Exists (Just Needs Wiring)
+The parser has these capabilities that aren't connected to LSP:
+- **WorkspaceIndex**: Full cross-file navigation and dependency tracking
+- **SemanticAnalyzer**: Type inference and symbol resolution
+- **Module Resolution**: Basic implementation exists
+- **Refactoring Logic**: Extract/inline algorithms implemented
+
+See [LSP_WIRING_OPPORTUNITIES.md](crates/perl-parser/LSP_WIRING_OPPORTUNITIES.md) for details on connecting existing infrastructure.
 
 See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 
