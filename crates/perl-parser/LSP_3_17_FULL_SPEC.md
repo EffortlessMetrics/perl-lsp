@@ -41,8 +41,9 @@ This document provides comprehensive documentation of the Perl LSP server's comp
 -32002  Server not initialized
 -32001  Unknown error code
 -32800  Request cancelled
--32801  Content modified (3.17)
--32803  Request failed
+-32801  Content modified
+-32802  Server cancelled (3.17)
+-32803  Request failed (3.17)
 ```
 
 ## 2. Lifecycle Messages
@@ -75,9 +76,17 @@ interface InitializeResult {
 
 **Contract:**
 - MUST be first request
-- Second initialize → `-32600 InvalidRequest`
+- Second initialize → `-32600 InvalidRequest` with message "initialize may only be sent once"
 - Server announces all capabilities
 - Position encoding negotiation (3.17)
+- Until `initialize` returns, server MUST NOT send requests/notifications EXCEPT:
+  - `window/showMessage`
+  - `window/logMessage`
+  - `window/showMessageRequest`
+  - `telemetry/event`
+  - `$/progress` ONLY on the `workDoneToken` provided in the `initialize` params
+- Requests received before `initialize` → `-32002 ServerNotInitialized`
+- Notifications before `initialize` → dropped (except `exit`)
 
 ### 2.2 initialized (notification)
 **Status:** ✅ Implemented  
@@ -758,7 +767,7 @@ Client → Server notification.
 
 Server → Client notification.
 
-**Params:** `LSPAny` (no PII)
+**Params:** `object | array` (no scalars in 3.17, no PII)
 
 ## 13. Progress Reporting
 
@@ -776,9 +785,14 @@ interface ProgressParams<T> {
 ```
 
 **Progress Sequence:**
-1. `{ kind: "begin", title: string, ... }`
-2. `{ kind: "report", message?: string, percentage?: number }` (0+)
-3. `{ kind: "end", message?: string }`
+1. `{ kind: "begin", title: string, ... }` (exactly once)
+2. `{ kind: "report", message?: string, percentage?: number }` (0 or more)
+3. `{ kind: "end", message?: string }` (exactly once)
+
+**Token Rules:**
+- Server-created tokens (via `window/workDoneProgress/create`) must be used exactly once
+- Percentage must be monotonic (0-100)
+- Client-supplied tokens in request params can be used without `create`
 
 ### 13.2 $/cancelRequest
 **Status:** ✅ Implemented  
@@ -789,6 +803,10 @@ interface CancelParams {
   id: integer | string;
 }
 ```
+
+**Contract:**
+- Cancelled requests should return `-32800 RequestCancelled`
+- Server may also cancel with `-32802 ServerCancelled` for server-cancellable requests
 
 ### 13.3 $/setTrace
 **Status:** ✅ Implemented  
@@ -806,6 +824,11 @@ interface SetTraceParams {
 
 Server → Client notification when tracing is on.
 
+**Contract:**
+- With trace=`messages`: MUST NOT include `verbose` field
+- With trace=`off`: MUST NOT send `$/logTrace`
+- With trace=`verbose`: may include `verbose` field
+
 ### 13.5 General Progress Support
 **Status:** ✅ Implemented  
 **Test:** `test_progress_with_partial_results`
@@ -813,6 +836,17 @@ Server → Client notification when tracing is on.
 All long-running operations support:
 - `workDoneToken` for progress
 - `partialResultToken` for streaming results
+
+**Partial Result Contract:**
+- When using `partialResultToken`, entire payload streamed via `$/progress`
+- Final response must be empty (e.g., `[]` for arrays, `null` for objects)
+
+### 13.6 $-Prefixed Messages
+**Status:** ✅ Implemented
+
+**Contract:**
+- Unknown `$/` requests → `-32601 MethodNotFound`
+- Unknown `$/` notifications → ignored/dropped
 
 ## 14. Notebook Support (3.17)
 
