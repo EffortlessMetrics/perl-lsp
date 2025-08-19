@@ -20,8 +20,8 @@ pub struct LspHarness {
 }
 
 impl LspHarness {
-    /// Create a new test harness
-    pub fn new() -> Self {
+    /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
+    pub fn new_raw() -> Self {
         let output_buffer = Arc::new(Mutex::new(Vec::new()));
         let notification_buffer = Arc::new(Mutex::new(VecDeque::new()));
 
@@ -35,10 +35,15 @@ impl LspHarness {
         Self { server, output_buffer, notification_buffer, next_request_id: 1 }
     }
 
+    /// Create a new test harness
+    pub fn new() -> Self {
+        Self::new_raw()
+    }
+
     /// Create a new test harness without sending initialize
     /// Used for testing pre-initialization behavior
     pub fn new_without_initialize() -> Self {
-        Self::new()
+        Self::new_raw()
     }
 
     /// Initialize the LSP server
