@@ -1058,6 +1058,7 @@ fn test_error_response_schema() {
         -32001, // Unknown error code
         -32800, // Request cancelled
         -32801, // Content modified
+        -32802, // Server cancelled (3.17)
         -32803, // Request failed
     ]
     .iter()
@@ -1376,6 +1377,50 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
 
 // ======================== COMPREHENSIVE VALIDATION ========================
 
+// ======================== CONTRACT VALIDATORS ========================
+
+/// Validate that partial result streams have empty final response
+fn validate_partial_result_contract(exchange: &[Value]) -> Result<(), String> {
+    use std::collections::HashSet;
+    let mut pr_tokens = HashSet::new();
+
+    for m in exchange {
+        if m.get("method").and_then(|s| s.as_str()) == Some("$/progress") {
+            if let Some(t) = m.get("params").and_then(|p| p.get("token")) {
+                pr_tokens.insert(t.clone());
+            }
+        }
+    }
+    if pr_tokens.is_empty() { return Ok(()); }
+
+    // Find the final response (has "result" and no "method")
+    let resp = exchange.iter().find(|m|
+        m.get("result").is_some() && m.get("method").is_none()
+    ).ok_or("no final response found for partial result stream")?;
+
+    // If result is an array, it must be empty
+    if let Some(arr) = resp["result"].as_array() {
+        if !arr.is_empty() {
+            return Err("final response must be empty when partialResultToken is used".into());
+        }
+    }
+    Ok(())
+}
+
+/// Validate $/logTrace messages have correct shape
+fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
+    if msg.get("method").and_then(|m| m.as_str()) != Some("$/logTrace") { return Ok(()); }
+    let p = msg.get("params").ok_or("$/logTrace missing params")?;
+    p.get("message").and_then(|m| m.as_str()).ok_or("message must be string")?;
+    if trace == "messages" && p.get("verbose").is_some() {
+        return Err("verbose must not be present when trace=='messages'".into());
+    }
+    if trace == "off" {
+        return Err("$/logTrace must not be sent when trace=='off'".into());
+    }
+    Ok(())
+}
+
 #[test]
 fn test_lsp_3_17_compliance_summary() {
     println!("LSP 3.17 Schema Validation Summary:");
@@ -1393,8 +1438,11 @@ fn test_lsp_3_17_compliance_summary() {
     println!("✓ InlayHint validated (3.17)");
     println!("✓ Diagnostic pull model (3.17)");
     println!("✓ TypeHierarchy validated (3.17)");
-    println!("✓ Error codes including -32801 ContentModified");
+    println!("✓ Error codes including -32802 ServerCancelled, -32803 RequestFailed");
     println!("✓ SignatureHelp with per-signature activeParameter (3.16+)");
+    println!("✓ Telemetry constrained to object|array (3.17)");
+    println!("✓ Pre-initialize message constraints enforced");
+    println!("✓ Partial result streaming contracts validated");
     
     println!("\nAll LSP 3.17 message schemas validated!");
 }

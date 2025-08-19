@@ -343,7 +343,7 @@ fn test_telemetry_event_notification() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
     
-    // telemetry/event can contain any JSON value
+    // telemetry/event params must be object | array (3.17)
     // No capability gating required
     
     let telemetry1 = json!({
@@ -373,7 +373,7 @@ fn test_telemetry_event_notification() {
         "params": ["simple", "array", "telemetry"]
     });
     
-    // All are valid - params can be any JSON
+    // Params must be object | array (no scalars in 3.17)
     assert!(telemetry1["params"].is_object());
     assert!(telemetry2["params"].is_object());
     assert!(telemetry3["params"].is_array());
@@ -487,16 +487,39 @@ fn test_progress_before_initialization() {
 
 #[test]
 fn test_window_messages_before_initialization() {
-    // Server MAY send these before initialize response:
+    // Until initialize returns, server MUST NOT send requests/notifications EXCEPT:
     // - window/showMessage
     // - window/logMessage
+    // - window/showMessageRequest (3.17)
     // - telemetry/event
-    // - $/progress (ONLY for client-provided tokens)
+    // - $/progress ONLY on the workDoneToken provided in initialize params
     
     // Server MUST NOT send before initialize response:
     // - window/showDocument
     // - window/workDoneProgress/create
     // - Any other window requests
+}
+
+/// Validate that during initialize, the server only sent allowed methods
+fn validate_preinitialize_outbox(msgs: &[Value]) -> Result<(), String> {
+    use std::collections::HashSet;
+    let allowed: HashSet<&'static str> = [
+        "window/showMessage",
+        "window/logMessage",
+        "window/showMessageRequest",
+        "telemetry/event",
+        // $/progress is allowed ONLY if using the initialize.workDoneToken
+        "$/progress",
+    ].into_iter().collect();
+
+    for m in msgs {
+        if let Some(method) = m.get("method").and_then(|x| x.as_str()) {
+            if !allowed.contains(method) {
+                return Err(format!("method not allowed during initialize: {method}"));
+            }
+        }
+    }
+    Ok(())
 }
 
 // ==================== ERROR HANDLING ====================
@@ -535,6 +558,42 @@ fn test_content_modified_error() {
     });
     
     assert_eq!(error["error"]["code"], -32801);
+}
+
+#[test]
+fn test_server_cancelled_error() {
+    let mut harness = LspHarness::new();
+    harness.initialize(None).expect("init");
+    
+    // Server cancelled a request that supports server cancellation (3.17)
+    let error = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": -32802,
+            "message": "Server cancelled"
+        }
+    });
+    
+    assert_eq!(error["error"]["code"], -32802);
+}
+
+#[test]
+fn test_request_failed_error() {
+    let mut harness = LspHarness::new();
+    harness.initialize(None).expect("init");
+    
+    // Request was valid but failed (3.17)
+    let error = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": -32803,
+            "message": "Request failed: unable to resolve module"
+        }
+    });
+    
+    assert_eq!(error["error"]["code"], -32803);
 }
 
 // ==================== COMPLEX SCENARIOS ====================

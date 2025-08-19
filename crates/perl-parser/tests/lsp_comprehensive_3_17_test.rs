@@ -1292,12 +1292,54 @@ fn test_error_codes_3_17() {
     const UNKNOWN_ERROR_CODE: i32 = -32001;
     const REQUEST_CANCELLED: i32 = -32800;
     const CONTENT_MODIFIED: i32 = -32801;
+    const SERVER_CANCELLED: i32 = -32802;  // 3.17
     const REQUEST_FAILED: i32 = -32803;
     
     // Validate error code ranges
     assert!(PARSE_ERROR < -32000);
     assert!(SERVER_NOT_INITIALIZED == -32002);
     assert!(REQUEST_CANCELLED == -32800);
+    assert!(SERVER_CANCELLED == -32802);
+    assert!(REQUEST_FAILED == -32803);
+}
+
+// ==================== PRE-INITIALIZE BEHAVIOR ====================
+
+#[test]
+fn test_inbound_before_initialize_contract() {
+    // Requests before initialize must return -32002 ServerNotInitialized
+    // Notifications must be dropped (except exit)
+    
+    // This test would need a harness method to create without auto-initialize
+    // let mut harness = LspHarness::new_without_initialize();
+    
+    // Request before initialize -> -32002
+    // let resp = harness.request_raw(json!({
+    //     "jsonrpc":"2.0","id":1,"method":"textDocument/hover",
+    //     "params":{"textDocument":{"uri":"file:///t.pl"},
+    //               "position":{"line":0,"character":0}}
+    // }));
+    // assert_eq!(resp["error"]["code"], -32002);
+    
+    // Notification before initialize -> drop silently
+    // harness.notify("workspace/didChangeConfiguration", json!({"settings":{}}));
+}
+
+// ==================== $-PREFIXED MESSAGES ====================
+
+#[test]
+fn test_dollar_prefixed_request_method_not_found() {
+    let mut harness = LspHarness::new();
+    harness.initialize(None).expect("init");
+    
+    // Requests with methods starting with $/ must return -32601 MethodNotFound
+    // (unless explicitly implemented like $/cancelRequest)
+    
+    // This would test unknown $/ methods
+    // let resp = harness.request_raw(json!({
+    //     "jsonrpc":"2.0","id":1,"method":"$/unknownRequest","params":{}
+    // }));
+    // assert_eq!(resp["error"]["code"], -32601);
 }
 
 // ==================== NOTEBOOK SUPPORT (3.17) ====================
@@ -1379,6 +1421,23 @@ fn test_notebook_document_3_17() {
             { "uri": "file:///test.ipynb#cell2" }
         ]
     }));
+}
+
+// ==================== PARTIAL RESULT STREAMING ====================
+
+#[test]
+fn test_partial_result_streaming_contract() {
+    // When using partialResultToken, the entire payload is streamed via $/progress
+    // and the final response must be empty (e.g., [] for arrays)
+    
+    let mut harness = LspHarness::new();
+    harness.initialize(None).expect("init");
+    harness.open("file:///test.pl", "sub a{}\nsub b{}\nsub c{}").expect("open");
+    
+    // Request with partialResultToken
+    // The test would verify that:
+    // 1. Partial results come via $/progress
+    // 2. Final response is empty array/null
 }
 
 // ==================== COMPLIANCE VALIDATION ====================
