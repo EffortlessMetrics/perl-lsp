@@ -104,7 +104,8 @@ fn validate_location_link(link: &Value) -> Result<(), String> {
     validate_range(target_range).map_err(|e| format!("LocationLink.targetRange: {}", e))?;
 
     // targetSelectionRange is required
-    let target_sel = link.get("targetSelectionRange").ok_or("LocationLink missing 'targetSelectionRange'")?;
+    let target_sel =
+        link.get("targetSelectionRange").ok_or("LocationLink missing 'targetSelectionRange'")?;
     validate_range(target_sel).map_err(|e| format!("LocationLink.targetSelectionRange: {}", e))?;
 
     Ok(())
@@ -190,11 +191,12 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
 
     // 3.17 fields
     if let Some(code_desc) = diag.get("codeDescription") {
-        let href = code_desc.get("href")
+        let href = code_desc
+            .get("href")
             .ok_or("codeDescription missing 'href'")?
             .as_str()
             .ok_or("href must be string")?;
-        
+
         if !href.starts_with("http://") && !href.starts_with("https://") {
             return Err("codeDescription.href must be valid HTTP(S) URL".into());
         }
@@ -249,11 +251,11 @@ fn test_initialize_response_schema_3_17() {
 
     // LSP 3.17 structure validation
     assert!(result.is_object(), "Initialize result must be object");
-    
+
     // Required: capabilities
     let capabilities = &result["capabilities"];
     assert!(capabilities.is_object(), "capabilities must be object");
-    
+
     // Optional: serverInfo (3.15)
     if let Some(info) = result.get("serverInfo") {
         assert!(info.is_object());
@@ -263,7 +265,7 @@ fn test_initialize_response_schema_3_17() {
             assert!(v.is_string());
         }
     }
-    
+
     // Optional: positionEncoding (3.17)
     if let Some(enc) = capabilities.get("positionEncoding") {
         assert!(enc.is_string());
@@ -645,8 +647,7 @@ fn test_workspace_symbol_response_schema() {
 
     for symbol in result.as_array().unwrap() {
         // 3.17: Can be WorkspaceSymbol (with optional location.range)
-        if symbol.get("location").is_some() && 
-           symbol["location"].get("range").is_none() {
+        if symbol.get("location").is_some() && symbol["location"].get("range").is_none() {
             // WorkspaceSymbol - location.range can be missing
             validate_workspace_symbol(symbol).unwrap();
         } else {
@@ -674,17 +675,18 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
 
     // location with only URI (range is optional until resolved)
     let location = sym.get("location").ok_or("WorkspaceSymbol missing 'location'")?;
-    
+
     if location.is_object() {
-        let uri = location.get("uri")
+        let uri = location
+            .get("uri")
             .ok_or("location missing 'uri'")?
             .as_str()
             .ok_or("uri must be string")?;
-        
+
         if !uri.contains(':') {
             return Err("uri must be valid URI".into());
         }
-        
+
         // range is optional for WorkspaceSymbol
         if let Some(range) = location.get("range") {
             validate_range(range)?;
@@ -777,7 +779,8 @@ fn validate_code_action(action: &Value) -> Result<(), String> {
 
         if let Some(disabled) = action.get("disabled") {
             if disabled.is_object() {
-                disabled.get("reason")
+                disabled
+                    .get("reason")
                     .and_then(|r| r.as_str())
                     .ok_or("disabled.reason must be string")?;
             } else {
@@ -840,18 +843,17 @@ fn validate_workspace_edit(edit: &Value) -> Result<(), String> {
 
 fn validate_text_document_edit(edit: &Value) -> Result<(), String> {
     let doc = edit.get("textDocument").ok_or("TextDocumentEdit missing 'textDocument'")?;
-    
-    // Must have uri and version
-    doc.get("uri")
-        .ok_or("textDocument missing 'uri'")?
-        .as_str()
-        .ok_or("uri must be string")?;
-    
-    doc.get("version")
-        .ok_or("textDocument missing 'version'")?;
 
-    let edits = edit.get("edits").ok_or("TextDocumentEdit missing 'edits'")?
-        .as_array().ok_or("edits must be array")?;
+    // Must have uri and version
+    doc.get("uri").ok_or("textDocument missing 'uri'")?.as_str().ok_or("uri must be string")?;
+
+    doc.get("version").ok_or("textDocument missing 'version'")?;
+
+    let edits = edit
+        .get("edits")
+        .ok_or("TextDocumentEdit missing 'edits'")?
+        .as_array()
+        .ok_or("edits must be array")?;
 
     for e in edits {
         // Can be TextEdit or AnnotatedTextEdit
@@ -862,10 +864,7 @@ fn validate_text_document_edit(edit: &Value) -> Result<(), String> {
 }
 
 fn validate_create_file(op: &Value) -> Result<(), String> {
-    op.get("uri")
-        .ok_or("CreateFile missing 'uri'")?
-        .as_str()
-        .ok_or("uri must be string")?;
+    op.get("uri").ok_or("CreateFile missing 'uri'")?.as_str().ok_or("uri must be string")?;
 
     if let Some(options) = op.get("options") {
         if let Some(overwrite) = options.get("overwrite") {
@@ -903,10 +902,7 @@ fn validate_rename_file(op: &Value) -> Result<(), String> {
 }
 
 fn validate_delete_file(op: &Value) -> Result<(), String> {
-    op.get("uri")
-        .ok_or("DeleteFile missing 'uri'")?
-        .as_str()
-        .ok_or("uri must be string")?;
+    op.get("uri").ok_or("DeleteFile missing 'uri'")?.as_str().ok_or("uri must be string")?;
 
     if let Some(options) = op.get("options") {
         if let Some(recursive) = options.get("recursive") {
@@ -1165,10 +1161,11 @@ fn test_semantic_tokens_response_schema() {
 
     if response.get("result").is_some() && !response["result"].is_null() {
         let tokens = &response["result"];
-        
+
         if tokens.is_object() {
             // SemanticTokens
-            let data = tokens.get("data")
+            let data = tokens
+                .get("data")
                 .and_then(|d| d.as_array())
                 .expect("SemanticTokens must have 'data' array");
 
@@ -1269,15 +1266,17 @@ fn test_diagnostic_pull_response_schema() {
 
     if response.get("result").is_some() && !response["result"].is_null() {
         let report = &response["result"];
-        
-        let kind = report.get("kind")
+
+        let kind = report
+            .get("kind")
             .and_then(|k| k.as_str())
             .expect("DocumentDiagnosticReport must have 'kind'");
 
         match kind {
             "full" => {
                 // DocumentDiagnosticReportFull
-                let items = report.get("items")
+                let items = report
+                    .get("items")
                     .and_then(|i| i.as_array())
                     .expect("Full report must have 'items' array");
 
@@ -1292,11 +1291,12 @@ fn test_diagnostic_pull_response_schema() {
             }
             "unchanged" => {
                 // DocumentDiagnosticReportUnchanged
-                report.get("resultId")
+                report
+                    .get("resultId")
                     .and_then(|r| r.as_str())
                     .expect("Unchanged report must have 'resultId'");
             }
-            _ => panic!("Invalid diagnostic report kind: {}", kind)
+            _ => panic!("Invalid diagnostic report kind: {}", kind),
         }
 
         // Optional relatedDocuments
@@ -1343,7 +1343,8 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
         .as_str()
         .ok_or("name must be string")?;
 
-    let kind = item.get("kind")
+    let kind = item
+        .get("kind")
         .ok_or("TypeHierarchyItem missing 'kind'")?
         .as_u64()
         .ok_or("kind must be number")?;
@@ -1352,7 +1353,8 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
         return Err("kind must be 1-26".into());
     }
 
-    let uri = item.get("uri")
+    let uri = item
+        .get("uri")
         .ok_or("TypeHierarchyItem missing 'uri'")?
         .as_str()
         .ok_or("uri must be string")?;
@@ -1364,7 +1366,8 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
     let range = item.get("range").ok_or("TypeHierarchyItem missing 'range'")?;
     validate_range(range)?;
 
-    let sel_range = item.get("selectionRange").ok_or("TypeHierarchyItem missing 'selectionRange'")?;
+    let sel_range =
+        item.get("selectionRange").ok_or("TypeHierarchyItem missing 'selectionRange'")?;
     validate_range(sel_range)?;
 
     // Optional detail
@@ -1391,12 +1394,15 @@ fn validate_partial_result_contract(exchange: &[Value]) -> Result<(), String> {
             }
         }
     }
-    if pr_tokens.is_empty() { return Ok(()); }
+    if pr_tokens.is_empty() {
+        return Ok(());
+    }
 
     // Find the final response (has "result" and no "method")
-    let resp = exchange.iter().find(|m|
-        m.get("result").is_some() && m.get("method").is_none()
-    ).ok_or("no final response found for partial result stream")?;
+    let resp = exchange
+        .iter()
+        .find(|m| m.get("result").is_some() && m.get("method").is_none())
+        .ok_or("no final response found for partial result stream")?;
 
     // If result is an array, it must be empty
     if let Some(arr) = resp["result"].as_array() {
@@ -1409,7 +1415,9 @@ fn validate_partial_result_contract(exchange: &[Value]) -> Result<(), String> {
 
 /// Validate $/logTrace messages have correct shape
 fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
-    if msg.get("method").and_then(|m| m.as_str()) != Some("$/logTrace") { return Ok(()); }
+    if msg.get("method").and_then(|m| m.as_str()) != Some("$/logTrace") {
+        return Ok(());
+    }
     let p = msg.get("params").ok_or("$/logTrace missing params")?;
     p.get("message").and_then(|m| m.as_str()).ok_or("message must be string")?;
     if trace == "messages" && p.get("verbose").is_some() {
@@ -1443,6 +1451,6 @@ fn test_lsp_3_17_compliance_summary() {
     println!("✓ Telemetry constrained to object|array (3.17)");
     println!("✓ Pre-initialize message constraints enforced");
     println!("✓ Partial result streaming contracts validated");
-    
+
     println!("\nAll LSP 3.17 message schemas validated!");
 }
