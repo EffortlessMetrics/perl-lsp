@@ -71,8 +71,11 @@ impl LspHarness {
 
         let response = self.send_request(init_request)?;
 
-        // Send initialized notification
-        self.notify("initialized", json!({}));
+        // Only send initialized notification if initialization succeeded
+        // (The response will contain capabilities if successful)
+        if response.get("capabilities").is_some() {
+            self.notify("initialized", json!({}));
+        }
 
         Ok(response)
     }
