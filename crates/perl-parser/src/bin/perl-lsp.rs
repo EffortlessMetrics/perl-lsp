@@ -91,23 +91,23 @@ fn main() {
 }
 
 fn print_help() {
-    println!("Perl Language Server");
-    println!();
-    println!("Usage: perl-lsp [options]");
-    println!();
-    println!("Options:");
-    println!("  --stdio      Use stdio for communication (default)");
-    println!("  --socket     Use TCP socket for communication");
-    println!("  --port       Port to listen on (default: 9257)");
-    println!("  --log        Enable logging to stderr");
-    println!("  --health     Quick health check (prints 'ok <version>')");
-    println!("  --version    Show version information");
-    println!("  --help       Show this help message");
-    println!();
-    println!("Examples:");
-    println!("  # Run in stdio mode (for VSCode, Neovim, etc.)");
-    println!("  perl-lsp --stdio");
-    println!();
-    println!("  # Run with logging enabled");
-    println!("  perl-lsp --stdio --log");
+    eprintln!("Perl Language Server");
+    eprintln!();
+    eprintln!("Usage: perl-lsp [options]");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --stdio      Use stdio for communication (default)");
+    eprintln!("  --socket     Use TCP socket for communication");
+    eprintln!("  --port       Port to listen on (default: 9257)");
+    eprintln!("  --log        Enable logging to stderr");
+    eprintln!("  --health     Quick health check (prints 'ok <version>')");
+    eprintln!("  --version    Show version information");
+    eprintln!("  --help       Show this help message");
+    eprintln!();
+    eprintln!("Examples:");
+    eprintln!("  # Run in stdio mode (for VSCode, Neovim, etc.)");
+    eprintln!("  perl-lsp --stdio");
+    eprintln!();
+    eprintln!("  # Run with logging enabled");
+    eprintln!("  perl-lsp --stdio --log");
 }

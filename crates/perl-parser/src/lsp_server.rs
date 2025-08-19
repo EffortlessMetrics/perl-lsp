@@ -571,22 +571,43 @@ impl LspServer {
             }
         }
 
-        // Check for available tools by trying to execute them
-        let has_perltidy = std::process::Command::new("perltidy")
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        // Check for available tools quickly with a timeout
+        // Use which/where command which is much faster than spawning the actual tools
+        let has_perltidy = if cfg!(target_os = "windows") {
+            std::process::Command::new("where")
+                .arg("perltidy")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        } else {
+            std::process::Command::new("which")
+                .arg("perltidy")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
 
-        let has_perlcritic = std::process::Command::new("perlcritic")
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let has_perlcritic = if cfg!(target_os = "windows") {
+            std::process::Command::new("where")
+                .arg("perlcritic")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        } else {
+            std::process::Command::new("which")
+                .arg("perlcritic")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
 
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
 
@@ -1560,7 +1581,8 @@ impl LspServer {
                     }));
 
                     // Check for global variables that could use 'my' declarations
-                    let global_var_pattern = regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=").ok();
+                    let global_var_pattern =
+                        regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=").ok();
                     if let Some(re) = global_var_pattern {
                         if re.is_match(&doc.content) {
                             code_actions.push(json!({
@@ -2266,7 +2288,9 @@ impl LspServer {
                 let cursor_in_text = offset - text_start;
 
                 // Check for patterns like "use Module::Name", "require Module::Name", or "Module::Name->method"
-                if let Some(module_name) = self.extract_module_reference(&text_around, cursor_in_text) {
+                if let Some(module_name) =
+                    self.extract_module_reference(&text_around, cursor_in_text)
+                {
                     // Try to resolve module to file path
                     if let Some(module_path) = self.resolve_module_to_path(&module_name) {
                         return Ok(Some(json!([{
@@ -4970,10 +4994,12 @@ impl LspServer {
             "params": params
         });
 
-        // Print to stdout to send to client
-        let msg = serde_json::to_string(&request).unwrap();
-        print!("Content-Length: {}\r\n\r\n{}", msg.len(), msg);
-        std::io::stdout().flush().unwrap();
+        // Send using the proper output mechanism
+        if let Ok(mut output) = self.output.lock() {
+            let msg = serde_json::to_string(&request).unwrap();
+            write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg).ok();
+            output.flush().ok();
+        }
 
         eprintln!("Registered file watchers for Perl files");
     }
