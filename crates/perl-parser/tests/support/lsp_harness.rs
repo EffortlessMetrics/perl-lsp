@@ -84,12 +84,12 @@ impl LspHarness {
     pub fn initialize_default(&mut self) -> Result<Value, String> {
         self.initialize(None)
     }
-    
+
     /// Open a document (alias for open)
     pub fn open_document(&mut self, uri: &str, text: &str) -> Result<(), String> {
         self.open(uri, text)
     }
-    
+
     /// Open a document
     pub fn open(&mut self, uri: &str, text: &str) -> Result<(), String> {
         self.notify(
@@ -118,7 +118,7 @@ impl LspHarness {
 
         self.send_request(request)
     }
-    
+
     /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
     pub fn request_raw(&mut self, request: Value) -> Value {
         // Handle full JSON-RPC request object

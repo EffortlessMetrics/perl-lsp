@@ -530,7 +530,7 @@ impl LspServer {
                 data: None,
             });
         }
-        
+
         // Parse client capabilities
         if let Some(params) = &params {
             self.client_capabilities.declaration_link_support = params
@@ -5409,7 +5409,11 @@ impl LspServer {
         for workspace_folder in workspace_folders.iter() {
             // Early timeout check
             if start_time.elapsed() > timeout {
-                eprintln!("Module resolution timeout for: {} (elapsed: {:?})", module_name, start_time.elapsed());
+                eprintln!(
+                    "Module resolution timeout for: {} (elapsed: {:?})",
+                    module_name,
+                    start_time.elapsed()
+                );
                 return None;
             }
 
@@ -5431,7 +5435,7 @@ impl LspServer {
                 if start_time.elapsed() > timeout {
                     return None;
                 }
-                
+
                 // Use metadata() instead of exists() as it's slightly more predictable
                 // and we can potentially wrap this in a timeout later
                 match std::fs::metadata(&full_path) {
@@ -5442,7 +5446,7 @@ impl LspServer {
                         // File doesn't exist or isn't a regular file, continue
                     }
                 }
-                
+
                 // Final timeout check
                 if start_time.elapsed() > timeout {
                     return None;
