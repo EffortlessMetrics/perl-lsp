@@ -145,7 +145,7 @@ fn test_completion_response_schema() {
     let uri = "file:///test.pl";
     harness.open_document(uri, "my $var = 1;\n$v");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/completion",
@@ -224,7 +224,7 @@ fn test_document_symbol_response_schema() {
     let uri = "file:///test.pl";
     harness.open_document(uri, "sub test { my $x = 1; }");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/documentSymbol",
@@ -308,7 +308,7 @@ fn test_hover_response_schema() {
     let uri = "file:///test.pl";
     harness.open_document(uri, "print 'hello'");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/hover",
@@ -368,7 +368,7 @@ fn test_workspace_symbol_response_schema() {
 
     harness.open_document("file:///test.pl", "sub test { }");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "workspace/symbol",
@@ -391,7 +391,7 @@ fn test_code_action_response_schema() {
     let uri = "file:///test.pl";
     harness.open_document(uri, "open(FH, 'file.txt');");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/codeAction",
@@ -555,7 +555,7 @@ fn test_error_response_schema() {
     let mut harness = TestHarness::new();
 
     // Request before initialization
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/completion",
@@ -606,7 +606,7 @@ fn test_signature_help_response_schema() {
     let uri = "file:///test.pl";
     harness.open_document(uri, "print(");
 
-    let response = harness.request(json!({
+    let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "textDocument/signatureHelp",

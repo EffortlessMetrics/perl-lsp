@@ -80,6 +80,16 @@ impl LspHarness {
         Ok(response)
     }
 
+    /// Initialize with default capabilities
+    pub fn initialize_default(&mut self) -> Result<Value, String> {
+        self.initialize(None)
+    }
+    
+    /// Open a document (alias for open)
+    pub fn open_document(&mut self, uri: &str, text: &str) -> Result<(), String> {
+        self.open(uri, text)
+    }
+    
     /// Open a document
     pub fn open(&mut self, uri: &str, text: &str) -> Result<(), String> {
         self.notify(
@@ -107,6 +117,36 @@ impl LspHarness {
         self.next_request_id += 1;
 
         self.send_request(request)
+    }
+    
+    /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
+    pub fn request_raw(&mut self, request: Value) -> Value {
+        // Handle full JSON-RPC request object
+        if request.is_object() && request.get("jsonrpc").is_some() {
+            let mut req = request;
+            req["id"] = json!(self.next_request_id);
+            self.next_request_id += 1;
+            self.send_request(req).unwrap_or_else(|e| {
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": {
+                        "code": -32603,
+                        "message": e
+                    }
+                })
+            })
+        } else {
+            // This shouldn't happen, but handle gracefully
+            json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid request"
+                }
+            })
+        }
     }
 
     /// Send a notification (no response expected)
