@@ -233,32 +233,29 @@ impl DocumentHighlightProvider {
         target: &SymbolInfo,
         highlights: &mut Vec<DocumentHighlight>,
     ) {
+        self.collect_highlights_with_parent(node, source, target, highlights, None);
+    }
+
+    /// Collect all highlights for a symbol with parent context
+    fn collect_highlights_with_parent(
+        &self,
+        node: &Node,
+        source: &str,
+        target: &SymbolInfo,
+        highlights: &mut Vec<DocumentHighlight>,
+        parent: Option<&Node>,
+    ) {
         // Check if this node matches our symbol
         if self.node_matches_symbol(node, source, target) {
-            let kind = self.determine_highlight_kind(node);
-            // Adjust location to exclude sigil if it's a variable
-            let location = if let Some(sigil) = &target.sigil {
-                // Skip the sigil character at the start
-                let text = &source[node.location.start..node.location.end];
-                if text.starts_with(sigil) {
-                    // For variables, we want just the name part without the sigil
-                    SourceLocation {
-                        start: node.location.start + sigil.len(),
-                        end: node.location.end,
-                    }
-                } else {
-                    node.location
-                }
-            } else {
-                node.location
-            };
-            highlights.push(DocumentHighlight { location, kind });
+            let kind = self.determine_highlight_kind_with_parent(node, parent);
+            // Use the full location including the sigil
+            highlights.push(DocumentHighlight { location: node.location, kind });
         }
 
-        // Recursively check children
+        // Recursively check children with this node as parent
         if let Some(children) = self.get_children(node) {
             for child in children {
-                self.collect_highlights(child, source, target, highlights);
+                self.collect_highlights_with_parent(child, source, target, highlights, Some(node));
             }
         }
     }
@@ -291,15 +288,58 @@ impl DocumentHighlightProvider {
         }
     }
 
-    /// Determine the kind of highlight based on context
-    fn determine_highlight_kind(&self, node: &Node) -> DocumentHighlightKind {
+    /// Determine the kind of highlight based on context with parent information
+    fn determine_highlight_kind_with_parent(
+        &self,
+        node: &Node,
+        parent: Option<&Node>,
+    ) -> DocumentHighlightKind {
         // Check if this variable is being written to (declaration or assignment)
         // Look for parent nodes that indicate write access
         match &node.kind {
             NodeKind::Variable { .. } => {
-                // This is a simplification - in practice we'd need to check the parent context
-                // to see if this is in an assignment, declaration, or increment/decrement
-                DocumentHighlightKind::Write
+                // Check parent context to determine if this is a write or read
+                if let Some(parent_node) = parent {
+                    match &parent_node.kind {
+                        // Variable declarations are writes
+                        NodeKind::VariableDeclaration { variable, .. } => {
+                            if std::ptr::eq(variable.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Variables in list declarations are writes
+                        NodeKind::VariableListDeclaration { variables, .. } => {
+                            if variables.iter().any(|v| std::ptr::eq(v, node)) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Left side of assignment is write
+                        NodeKind::Assignment { lhs, .. } => {
+                            if std::ptr::eq(lhs.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Increment/decrement operations are writes
+                        NodeKind::Unary { op, operand, .. } => {
+                            if (op == "++" || op == "--") && std::ptr::eq(operand.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Default to read for other contexts
+                        _ => DocumentHighlightKind::Read,
+                    }
+                } else {
+                    // If we don't have parent context, default to read
+                    DocumentHighlightKind::Read
+                }
             }
             _ => DocumentHighlightKind::Read,
         }

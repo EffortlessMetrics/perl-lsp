@@ -43,9 +43,9 @@ fn highlights_read_and_write() {
     sorted_highlights.sort_by_key(|&(start, _, _)| start);
 
     let expected_positions = [
-        (30, 32, 3), // First $x at "my $x=1" - Write (declaration)
-        (37, 39, 3), // Second $x at "$x++" - Write (modification)
-        (48, 50, 2), // Third $x at "print $x" - Read
+        (29, 31, 3), // First $x at "my $x=1" - Write (declaration)
+        (35, 37, 3), // Second $x at "$x++" - Write (modification)
+        (47, 49, 2), // Third $x at "print $x" - Read
     ];
 
     for (i, &(start, end, kind)) in sorted_highlights.iter().enumerate() {
