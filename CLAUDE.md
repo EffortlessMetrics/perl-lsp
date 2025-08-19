@@ -31,26 +31,29 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - **v0.7.5**: Enterprise release automation, enhanced type inference, CI/CD pipeline
 - **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
 
-### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) 🚀 **PRODUCTION READY**
-- **30+ Professional IDE Features** implemented (v0.8.2)
-- **Core Features**: Diagnostics, completion, go-to-definition, find-references, hover, signature help, symbols, rename, document highlights, type hierarchy
-- **Navigation** (v0.8.2): Document links (MetaCPAN + local files), selection ranges, file watching
-- **Formatting** (v0.8.2): On-type formatting with smart indentation
-- **Advanced Refactoring**: Extract variable/subroutine, convert loops, add error checking, organize imports
-- **Enhanced Features**: Semantic tokens, CodeLens, call hierarchy, inlay hints, workspace symbols, folding
-- **Workspace File Operations**: File watching, rename tracking, deletion handling, multi-file edits
-- **Type System**: Smart hash literal inference, type unification, union types
-- **Code Completion**: Variables, functions, keywords, modules with smart filtering and documentation
-- **Document Highlights**: Smart symbol highlighting with exact matching
-- **Type Hierarchy**: Full inheritance navigation with @ISA and use parent/base support
-- **150+ Built-in Functions**: Complete signature help with parameter hints
-- **530+ Tests Running**: Comprehensive test coverage for all features
-- **Robust Error Recovery**: Fallback mechanisms for incomplete/invalid code
-- **Real-time Diagnostics**: Undefined variables, unused variables, strict/warnings suggestions
-- **Cross-Platform** (v0.8.2): Windows-safe path handling, proper URI resolution
-- **Performance**: <50ms response times for all operations
-- **Distribution**: Internal pre-built binaries (public packages & installers TBD)
+### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) ⚠️ **PARTIALLY FUNCTIONAL**
+- **~35% of advertised features actually work** (many are stubs returning empty results)
+- **Working Features**: 
+  - ✅ Syntax checking and diagnostics
+  - ✅ Basic hover (variables, built-in functions)
+  - ✅ Simple completion (variables, keywords, built-ins)
+  - ✅ Single-file navigation (go-to-definition, references)
+  - ✅ Document symbols and outline
+  - ✅ Basic formatting (Perl::Tidy integration)
+- **Stub Implementations** (return empty results):
+  - ❌ Workspace refactoring (all methods)
+  - ❌ Import optimization
+  - ❌ Dead code detection
+  - ❌ Cross-file navigation
+  - ❌ Debug adapter
+- **Not Implemented**:
+  - ❌ Type definition navigation
+  - ❌ Implementation navigation
+  - ❌ Socket mode (stdio only)
+- **Test Reality**: 530+ tests exist but many only check response shape, not functionality
+- **Performance**: <50ms for working operations
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
+- **See `LSP_ACTUAL_STATUS.md` for honest assessment of what actually works**
 
 ## Default Build Configuration
 
@@ -514,17 +517,21 @@ To extend the Pest grammar:
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.8.2)
-- **Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
-- **Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
-- **Status**: Production ready, feature complete
-- **Latest improvements (v0.8.2)**:
-  - ✅ Added document links for MetaCPAN and local files with Windows-safe paths
-  - ✅ Implemented selection ranges for smart hierarchical selection
-  - ✅ Added on-type formatting with smart indentation
-  - ✅ Enhanced file watching for external change synchronization
-  - ✅ Improved test infrastructure with 530+ tests running
-  - ✅ Full cross-platform support with proper URI handling
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED FOR PARSING** (v0.8.3-rc.1)
+- **Parser Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
+- **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
+- **Parser Status**: Production ready, feature complete
+- **LSP Status**: ⚠️ ~35% functional (many features are stubs)
+- **Working LSP features**:
+  - ✅ Syntax checking and diagnostics
+  - ✅ Basic code completion and hover
+  - ✅ Single-file navigation
+  - ✅ Document formatting
+- **Non-functional LSP features**:
+  - ❌ Workspace-wide operations (stubs return empty results)
+  - ❌ Cross-file navigation
+  - ❌ Import optimization
+  - ❌ Debug adapter
 - **Previous improvements (v0.7.5)**:
   - ✅ Added enterprise-grade release automation with cargo-dist
   - ✅ Created comprehensive CI/CD pipeline with test matrix and coverage
