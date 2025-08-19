@@ -236,7 +236,23 @@ impl DocumentHighlightProvider {
         // Check if this node matches our symbol
         if self.node_matches_symbol(node, source, target) {
             let kind = self.determine_highlight_kind(node);
-            highlights.push(DocumentHighlight { location: node.location, kind });
+            // Adjust location to exclude sigil if it's a variable
+            let location = if let Some(sigil) = &target.sigil {
+                // Skip the sigil character at the start
+                let text = &source[node.location.start..node.location.end];
+                if text.starts_with(sigil) {
+                    // For variables, we want just the name part without the sigil
+                    SourceLocation {
+                        start: node.location.start + sigil.len(),
+                        end: node.location.end,
+                    }
+                } else {
+                    node.location
+                }
+            } else {
+                node.location
+            };
+            highlights.push(DocumentHighlight { location, kind });
         }
 
         // Recursively check children
@@ -276,10 +292,17 @@ impl DocumentHighlightProvider {
     }
 
     /// Determine the kind of highlight based on context
-    fn determine_highlight_kind(&self, _node: &Node) -> DocumentHighlightKind {
-        // For now, simplified detection
-        // In a full implementation, we'd check parent context
-        DocumentHighlightKind::Read
+    fn determine_highlight_kind(&self, node: &Node) -> DocumentHighlightKind {
+        // Check if this variable is being written to (declaration or assignment)
+        // Look for parent nodes that indicate write access
+        match &node.kind {
+            NodeKind::Variable { .. } => {
+                // This is a simplification - in practice we'd need to check the parent context
+                // to see if this is in an assignment, declaration, or increment/decrement
+                DocumentHighlightKind::Write
+            }
+            _ => DocumentHighlightKind::Read,
+        }
     }
 }
 

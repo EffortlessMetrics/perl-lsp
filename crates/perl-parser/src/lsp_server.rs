@@ -644,7 +644,7 @@ impl LspServer {
                 }
             },
             "completionProvider": {
-                "triggerCharacters": ["$", "@", "%", ">", "-"], // covers '->'
+                "triggerCharacters": ["$", "@", "%", "->"],
                 "allCommitCharacters": [";", " ", ")", "]", "}"]
             },
             "hoverProvider": true,
@@ -3714,7 +3714,44 @@ impl LspServer {
 
         eprintln!("Workspace symbol search: '{}'", query);
 
-        // Use workspace index for all symbol searches
+        // First, get symbols from currently open documents (synchronous)
+        #[cfg(feature = "workspace")]
+        let mut all_symbols = Vec::new();
+
+        #[cfg(feature = "workspace")]
+        {
+            let documents = self.documents.lock().unwrap();
+            for (uri, doc) in documents.iter() {
+                if let Some(ref ast) = doc.ast {
+                    // Extract symbols from this document
+                    let doc_symbols = self.extract_document_symbols(ast, &doc.content, uri);
+
+                    // Filter by query
+                    let query_lower = query.to_lowercase();
+                    for sym in doc_symbols {
+                        if sym.name.to_lowercase().contains(&query_lower) {
+                            all_symbols.push(sym);
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        let all_symbols = {
+            // Simple synchronous extraction without workspace feature
+            let mut symbols = Vec::new();
+            let documents = self.documents.lock().unwrap();
+            for (uri, doc) in documents.iter() {
+                if let Some(ref ast) = doc.ast {
+                    // Extract symbols using document symbol provider
+                    self.extract_simple_symbols(ast, &doc.content, uri, query, &mut symbols);
+                }
+            }
+            symbols
+        };
+
+        // Also use workspace index if available
         #[cfg(feature = "workspace")]
         {
             let index_symbols = if let Some(ref workspace_index) = self.workspace_index {
@@ -3727,8 +3764,19 @@ impl LspServer {
             use std::collections::HashSet;
             let mut seen = HashSet::new();
 
-            // First deduplicate the internal symbols
-            let deduped_symbols: Vec<WorkspaceSymbol> = index_symbols
+            // Track what we already have from open docs
+            for sym in &all_symbols {
+                seen.insert((
+                    sym.location.uri.clone(),
+                    sym.location.range.start.line,
+                    sym.location.range.start.character,
+                    sym.name.clone(),
+                    sym.kind,
+                ));
+            }
+
+            // Add index symbols that aren't already in the results
+            let additional_symbols: Vec<WorkspaceSymbol> = index_symbols
                 .into_iter()
                 .filter(|sym| {
                     // Deduplicate by (uri, start position, name, kind)
@@ -3737,29 +3785,40 @@ impl LspServer {
                         sym.range.start.line,
                         sym.range.start.character,
                         sym.name.clone(),
-                        sym.kind,
+                        sym.kind.to_lsp_kind(),
                     ))
                 })
                 .collect();
 
-            // Convert to LSP DTOs (no internal fields)
-            let lsp_symbols: Vec<LspWorkspaceSymbol> =
-                deduped_symbols.iter().map(|sym| sym.into()).collect();
-
-            eprintln!("Found {} symbols (after deduplication)", lsp_symbols.len());
-
-            // Convert to JSON for LSP response
-            // Now we're only serializing LSP-compliant fields
-            let result = serde_json::to_value(&lsp_symbols).unwrap_or_else(|_| json!([]));
-
-            Ok(Some(result))
+            // Convert to LSP DTOs and add to results
+            for sym in additional_symbols {
+                all_symbols.push(LspWorkspaceSymbol {
+                    name: sym.name,
+                    kind: sym.kind.to_lsp_kind(),
+                    location: crate::workspace_index::LspLocation {
+                        uri: sym.uri,
+                        range: crate::workspace_index::LspRange {
+                            start: crate::workspace_index::LspPosition {
+                                line: sym.range.start.line,
+                                character: sym.range.start.character,
+                            },
+                            end: crate::workspace_index::LspPosition {
+                                line: sym.range.end.line,
+                                character: sym.range.end.character,
+                            },
+                        },
+                    },
+                    container_name: sym.container_name,
+                });
+            }
         }
 
-        #[cfg(not(feature = "workspace"))]
-        {
-            // Without workspace feature, return empty results
-            Ok(Some(json!([])))
-        }
+        eprintln!("Found {} symbols total", all_symbols.len());
+
+        // Convert to JSON for LSP response
+        let result = serde_json::to_value(&all_symbols).unwrap_or_else(|_| json!([]));
+
+        Ok(Some(result))
     }
 
     /// Handle textDocument/codeLens request
@@ -3832,6 +3891,233 @@ impl LspServer {
         }
 
         Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
+    }
+
+    /// Extract workspace symbols from a document's AST
+    #[cfg(feature = "workspace")]
+    fn extract_document_symbols(
+        &self,
+        ast: &crate::ast::Node,
+        source: &str,
+        uri: &str,
+    ) -> Vec<LspWorkspaceSymbol> {
+        let mut symbols = Vec::new();
+        self.extract_symbols_recursive(ast, source, uri, None, &mut symbols);
+        symbols
+    }
+
+    #[cfg(not(feature = "workspace"))]
+    fn extract_document_symbols(
+        &self,
+        _ast: &crate::ast::Node,
+        _source: &str,
+        _uri: &str,
+    ) -> Vec<serde_json::Value> {
+        Vec::new()
+    }
+
+    /// Recursively extract symbols from an AST node
+    #[cfg(feature = "workspace")]
+    fn extract_symbols_recursive(
+        &self,
+        node: &crate::ast::Node,
+        source: &str,
+        uri: &str,
+        container: Option<&str>,
+        symbols: &mut Vec<LspWorkspaceSymbol>,
+    ) {
+        use crate::ast::NodeKind;
+
+        match &node.kind {
+            NodeKind::Subroutine { name, body, .. } => {
+                // Add the subroutine as a symbol if it has a name
+                if let Some(sub_name) = name {
+                    let (start_line, start_char) =
+                        self.byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+
+                    symbols.push(LspWorkspaceSymbol {
+                        name: sub_name.clone(),
+                        kind: 12, // Function
+                        location: crate::workspace_index::LspLocation {
+                            uri: uri.to_string(),
+                            range: crate::workspace_index::LspRange {
+                                start: crate::workspace_index::LspPosition {
+                                    line: start_line,
+                                    character: start_char,
+                                },
+                                end: crate::workspace_index::LspPosition {
+                                    line: end_line,
+                                    character: end_char,
+                                },
+                            },
+                        },
+                        container_name: container.map(|s| s.to_string()),
+                    });
+
+                    // Recurse into body with this subroutine as container
+                    self.extract_symbols_recursive(
+                        body,
+                        source,
+                        uri,
+                        Some(sub_name.as_str()),
+                        symbols,
+                    );
+                }
+            }
+
+            NodeKind::Package { name, block, .. } => {
+                // Add the package as a symbol
+                let (start_line, start_char) = self.byte_to_line_col(source, node.location.start);
+                let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+
+                symbols.push(LspWorkspaceSymbol {
+                    name: name.clone(),
+                    kind: 2, // Module
+                    location: crate::workspace_index::LspLocation {
+                        uri: uri.to_string(),
+                        range: crate::workspace_index::LspRange {
+                            start: crate::workspace_index::LspPosition {
+                                line: start_line,
+                                character: start_char,
+                            },
+                            end: crate::workspace_index::LspPosition {
+                                line: end_line,
+                                character: end_char,
+                            },
+                        },
+                    },
+                    container_name: container.map(|s| s.to_string()),
+                });
+
+                // Recurse into block with this package as container
+                if let Some(block) = block {
+                    self.extract_symbols_recursive(
+                        block,
+                        source,
+                        uri,
+                        Some(name.as_str()),
+                        symbols,
+                    );
+                }
+            }
+
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.extract_symbols_recursive(stmt, source, uri, container, symbols);
+                }
+            }
+
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.extract_symbols_recursive(stmt, source, uri, container, symbols);
+                }
+            }
+
+            _ => {
+                // For other node types, recurse into children if they might contain symbols
+                // This is a simplified version - you might want to handle more node types
+            }
+        }
+    }
+
+    /// Extract simple symbols without workspace feature
+    #[cfg(not(feature = "workspace"))]
+    fn extract_simple_symbols(
+        &self,
+        node: &crate::ast::Node,
+        source: &str,
+        uri: &str,
+        query: &str,
+        symbols: &mut Vec<serde_json::Value>,
+    ) {
+        use crate::ast::NodeKind;
+
+        let query_lower = query.to_lowercase();
+
+        match &node.kind {
+            NodeKind::Subroutine { name, body, .. } => {
+                if let Some(sub_name) = name {
+                    if sub_name.to_lowercase().contains(&query_lower) {
+                        let (start_line, start_char) =
+                            self.byte_to_line_col(source, node.location.start);
+                        let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+
+                        symbols.push(json!({
+                            "name": sub_name,
+                            "kind": 12, // Function
+                            "location": {
+                                "uri": uri,
+                                "range": {
+                                    "start": {"line": start_line, "character": start_char},
+                                    "end": {"line": end_line, "character": end_char}
+                                }
+                            }
+                        }));
+                    }
+                }
+                // Recurse into body
+                self.extract_simple_symbols(body, source, uri, query, symbols);
+            }
+
+            NodeKind::Package { name, block, .. } => {
+                if name.to_lowercase().contains(&query_lower) {
+                    let (start_line, start_char) =
+                        self.byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+
+                    symbols.push(json!({
+                        "name": name,
+                        "kind": 2, // Module
+                        "location": {
+                            "uri": uri,
+                            "range": {
+                                "start": {"line": start_line, "character": start_char},
+                                "end": {"line": end_line, "character": end_char}
+                            }
+                        }
+                    }));
+                }
+                // Recurse into block
+                if let Some(block) = block {
+                    self.extract_simple_symbols(block, source, uri, query, symbols);
+                }
+            }
+
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.extract_simple_symbols(stmt, source, uri, query, symbols);
+                }
+            }
+
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.extract_simple_symbols(stmt, source, uri, query, symbols);
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    /// Convert byte offset to line and column
+    fn byte_to_line_col(&self, source: &str, offset: usize) -> (u32, u32) {
+        let mut line = 0;
+        let mut col = 0;
+
+        for (i, ch) in source.char_indices() {
+            if i >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                col = 0;
+            } else {
+                col += 1;
+            }
+        }
+
+        (line, col)
     }
 
     /// Count references to a symbol in an AST
