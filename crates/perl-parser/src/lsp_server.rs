@@ -525,8 +525,8 @@ impl LspServer {
         // Check if already initialized
         if self.initialized {
             return Err(JsonRpcError {
-                code: -32002, // Server not initialized error code (reused for already initialized)
-                message: "Server already initialized".to_string(),
+                code: -32600, // InvalidRequest per LSP spec 3.17
+                message: "initialize may only be sent once".to_string(),
                 data: None,
             });
         }
@@ -5398,18 +5398,18 @@ impl LspServer {
 
         // Set a timeout for file system operations
         let start_time = Instant::now();
-        let timeout = Duration::from_millis(100); // 100ms timeout for module resolution
+        let timeout = Duration::from_millis(50); // Reduced timeout for faster response
 
         // Get workspace folders from initialization
         let workspace_folders = self.workspace_folders.lock().unwrap().clone();
 
-        // Common Perl library directories (prioritized)
+        // Only check workspace-local directories to avoid blocking
         let search_dirs = ["lib", ".", "local/lib/perl5"];
 
         for workspace_folder in workspace_folders.iter() {
-            // Check timeout
+            // Early timeout check
             if start_time.elapsed() > timeout {
-                eprintln!("Module resolution timeout for: {}", module_name);
+                eprintln!("Module resolution timeout for: {} (elapsed: {:?})", module_name, start_time.elapsed());
                 return None;
             }
 
@@ -5427,33 +5427,30 @@ impl LspServer {
                     format!("{}/{}/{}", workspace_path, dir, relative_path)
                 };
 
-                // Check if file exists (with timeout check)
+                // Check timeout before each FS operation
                 if start_time.elapsed() > timeout {
                     return None;
                 }
-
-                if std::path::Path::new(&full_path).exists() {
-                    return Some(format!("file://{}", full_path));
+                
+                // Use metadata() instead of exists() as it's slightly more predictable
+                // and we can potentially wrap this in a timeout later
+                match std::fs::metadata(&full_path) {
+                    Ok(meta) if meta.is_file() => {
+                        return Some(format!("file://{}", full_path));
+                    }
+                    _ => {
+                        // File doesn't exist or isn't a regular file, continue
+                    }
                 }
-            }
-        }
-
-        // Skip @INC paths if we're running out of time
-        if start_time.elapsed() < timeout {
-            // Also check in @INC paths (simplified version, only check first few)
-            let inc_paths = ["/usr/share/perl5", "/usr/lib/perl5"];
-            for inc_path in &inc_paths[..2.min(inc_paths.len())] {
+                
+                // Final timeout check
                 if start_time.elapsed() > timeout {
-                    break;
-                }
-
-                let full_path = format!("{}/{}", inc_path, relative_path);
-                if std::path::Path::new(&full_path).exists() {
-                    return Some(format!("file://{}", full_path));
+                    return None;
                 }
             }
         }
 
+        // Don't check system paths (@INC) to avoid blocking on network filesystems
         None
     }
 }
