@@ -231,6 +231,9 @@ interface DidCloseTextDocumentParams {
 - Per-signature active parameter (3.16)
 - 150+ Perl built-in functions
 
+**Note:** Even when `capabilities.positionEncoding` is negotiated to `utf-8` or `utf-32`, 
+`ParameterInformation.label: [start, end]` offsets remain **UTF-16 code units** per spec.
+
 ### 4.5 textDocument/declaration
 **Status:** ✅ Implemented  
 **Test:** `test_declaration_3_17`  

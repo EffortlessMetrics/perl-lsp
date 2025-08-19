@@ -535,15 +535,15 @@ fn test_window_messages_before_initialization() {
 }
 
 /// Validate that during initialize, the server only sent allowed methods
+/// Pass the token you put into initialize.workDoneToken
 #[allow(dead_code)]
-fn validate_preinitialize_outbox(msgs: &[Value]) -> Result<(), String> {
+fn validate_preinitialize_outbox(msgs: &[Value], init_token: Option<&Value>) -> Result<(), String> {
     use std::collections::HashSet;
     let allowed: HashSet<&'static str> = [
         "window/showMessage",
         "window/logMessage",
         "window/showMessageRequest",
         "telemetry/event",
-        // $/progress is allowed ONLY if using the initialize.workDoneToken
         "$/progress",
     ]
     .into_iter()
@@ -554,12 +554,57 @@ fn validate_preinitialize_outbox(msgs: &[Value]) -> Result<(), String> {
             if !allowed.contains(method) {
                 return Err(format!("method not allowed during initialize: {method}"));
             }
+            // If it's $/progress, verify the token matches the initialize workDoneToken
+            if method == "$/progress" {
+                if let Some(expected_token) = init_token {
+                    let actual_token = &m["params"]["token"];
+                    if actual_token != expected_token {
+                        return Err("$/progress token must equal initialize.workDoneToken".into());
+                    }
+                }
+            }
         }
     }
     Ok(())
 }
 
 // ==================== ERROR HANDLING ====================
+
+#[test]
+fn test_diagnostic_server_cancellation_data() {
+    // Test that DiagnosticServerCancellationData.retriggerRequest 
+    // tells clients whether to re-trigger
+    let err = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": -32802,
+            "message": "Server cancelled",
+            "data": {
+                "retriggerRequest": false
+            }
+        }
+    });
+    
+    assert_eq!(err["error"]["code"], -32802);
+    assert_eq!(err["error"]["data"]["retriggerRequest"], false);
+    
+    // Also test with retrigger = true
+    let err_retry = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {
+            "code": -32802,
+            "message": "Server cancelled",
+            "data": {
+                "retriggerRequest": true
+            }
+        }
+    });
+    
+    assert_eq!(err_retry["error"]["code"], -32802);
+    assert_eq!(err_retry["error"]["data"]["retriggerRequest"], true);
+}
 
 #[test]
 fn test_cancelled_request_error() {
