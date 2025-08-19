@@ -190,13 +190,16 @@ If you want to help complete these implementations:
 ## Version Reality
 
 Current version: **0.8.3-rc.1**
-Actual readiness: **~0.3.0** (if measuring actual functionality)
+Parser readiness: **~0.8.0** (parser is nearly complete)
+LSP wiring: **~0.3.0** (most features not wired to parser)
 
-A more honest version would be:
-- **0.3.x** - Current actual functionality level
-- **0.5.0** - When workspace features work
-- **0.8.0** - When all stubs are implemented
-- **1.0.0** - Production ready with all features
+**UPDATE**: Investigation reveals that ~70% of "missing" features actually exist in the parser but aren't wired to the LSP layer. See `LSP_WIRING_OPPORTUNITIES.md` for details.
+
+A more accurate assessment:
+- **Parser**: 80% complete (v3 parser has most infrastructure)
+- **LSP Wiring**: 30% complete (connections not made)
+- **Quick Win Potential**: Could reach 70% with proper wiring
+- **True Stubs**: Only ~20% are actual stubs without implementation
 
 ---
 

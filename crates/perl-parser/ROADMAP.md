@@ -1,36 +1,42 @@
 # Perl LSP Implementation Roadmap
 
 ## Current State (v0.8.3-rc.1)
-**Actual Functionality: ~35% Complete**
+**Parser Infrastructure: ~80% Complete**
+**LSP Wiring: ~30% Complete**
+**Overall Functionality: ~35% Available to Users**
 
-Despite version number suggesting near-completion, many features are stubs or incomplete. This roadmap provides a realistic path to full implementation.
+**UPDATE**: Investigation reveals the parser has ~70% of required infrastructure built but not wired to LSP. See `LSP_WIRING_OPPORTUNITIES.md` for details. This roadmap has been updated to reflect that much work is wiring, not reimplementation.
 
 ## Immediate Priorities (Q1 2025)
 
-### 🔴 Critical: Fix False Advertising
-- [ ] Update all documentation to reflect actual state
-- [ ] Add clear "STUB" or "NOT IMPLEMENTED" markers in code
-- [ ] Fix test assertions that only check shape, not functionality
-- [ ] Create integration tests that verify actual behavior
+### 🔴 Critical: Quick Wins by Wiring Existing Infrastructure
+- [ ] **Enable workspace feature by default** (1 line change!)
+  - [ ] Add `workspace` to default features in Cargo.toml
+  - [ ] This immediately enables cross-file navigation
+- [ ] **Wire existing WorkspaceIndex to LSP** (~200 lines)
+  - [ ] Connect `find_definition()` to LSP handler
+  - [ ] Connect `find_references()` to LSP handler
+  - [ ] Enable workspace symbol search
+- [ ] **Complete existing refactoring actions** (~300 lines)
+  - [ ] Make `extract_variable` return real edits
+  - [ ] Make `extract_subroutine` return real edits
+  - [ ] Wire to LSP code actions
 
-### 🟡 High Priority: Core Features
-- [ ] **Workspace Indexing** - Currently non-existent
-  - [ ] Build real symbol index on startup
-  - [ ] Track file dependencies
-  - [ ] Cache parse trees for performance
-  - [ ] Implement incremental updates
+### 🟡 High Priority: Complete Partial Implementations
+- [ ] **Semantic Analyzer Integration** (Exists, needs wiring)
+  - [ ] Wire type inference to hover
+  - [ ] Connect to diagnostics for unused variables
+  - [ ] Expose symbol information to completion
 
-- [ ] **Cross-file Navigation**
-  - [ ] Module resolution (`use`, `require`)
-  - [ ] Package inheritance tracking
-  - [ ] Symbol import/export analysis
-  - [ ] Go-to-definition across files
+- [ ] **Module Resolution** (Basic version exists)
+  - [ ] Extend existing `resolve_module_to_path()`
+  - [ ] Add local::lib support
+  - [ ] Cache module locations
 
-- [ ] **Complete Code Completion**
-  - [ ] Package member completion
-  - [ ] Method completion on objects
-  - [ ] File path completion for use/require
-  - [ ] Context-aware keyword completion
+- [ ] **Code Completion** (Infrastructure exists)
+  - [ ] Wire SymbolIndex to completion provider
+  - [ ] Use semantic analyzer for context
+  - [ ] Add package member completion using existing data
 
 ## Phase 1: Foundation (Q2 2025)
 
