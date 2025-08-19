@@ -1243,7 +1243,7 @@ impl LspServer {
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    provider.get_completions(&doc.content, offset)
+                    provider.get_completions_with_path(&doc.content, offset, Some(uri))
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
                     self.lexical_complete(&doc.content, offset)
@@ -5005,7 +5005,7 @@ impl LspServer {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        
+
         let request = json!({
             "jsonrpc": "2.0",
             "id": serde_json::Value::Number(serde_json::Number::from(request_id)),
@@ -5088,7 +5088,7 @@ impl LspServer {
     /// Resolve a module name to a file path URI
     fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
         use std::time::{Duration, Instant};
-        
+
         // Convert Module::Name to Module/Name.pm
         let relative_path = format!("{}.pm", module_name.replace("::", "/"));
 
@@ -5136,7 +5136,7 @@ impl LspServer {
                 if start_time.elapsed() > timeout {
                     return None;
                 }
-                
+
                 if std::path::Path::new(&full_path).exists() {
                     return Some(format!("file://{}", full_path));
                 }
@@ -5151,7 +5151,7 @@ impl LspServer {
                 if start_time.elapsed() > timeout {
                     break;
                 }
-                
+
                 let full_path = format!("{}/{}", inc_path, relative_path);
                 if std::path::Path::new(&full_path).exists() {
                     return Some(format!("file://{}", full_path));

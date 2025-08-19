@@ -375,16 +375,19 @@ sub connect {
     ctx.open_document("file:///workspace/lib/MyApp/Database.pm", database_module);
 
     // Test go-to-definition from variable usage to declaration within same file
-    let _defs = ctx.get_definition("file:///workspace/main.pl", 11, 2);  // $db position
+    let _defs = ctx.get_definition("file:///workspace/main.pl", 11, 2); // $db position
     // For cross-file module resolution, we'd need the files to actually exist
     // so we skip that for now and test same-file navigation
-    
+
     // Instead test that the module shows up in document symbols
     let doc_symbols = ctx.get_document_symbols("file:///workspace/lib/MyApp/Database.pm");
     assert!(!doc_symbols.is_empty(), "Should find symbols in Database module");
-    assert!(doc_symbols.iter().any(|s| {
-        s.get("name").and_then(|n| n.as_str()).map(|n| n == "connect").unwrap_or(false)
-    }), "Should find connect method");
+    assert!(
+        doc_symbols.iter().any(|s| {
+            s.get("name").and_then(|n| n.as_str()).map(|n| n == "connect").unwrap_or(false)
+        }),
+        "Should find connect method"
+    );
 
     // Test workspace symbols
     let symbols = ctx.get_workspace_symbols("Database");

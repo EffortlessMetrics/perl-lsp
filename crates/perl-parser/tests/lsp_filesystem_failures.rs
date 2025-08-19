@@ -667,7 +667,7 @@ fn test_workspace_folder_deleted() {
     let workspace_path = &temp_dir.to_path_buf();
 
     // Initialize with workspace folder
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -685,7 +685,7 @@ fn test_workspace_folder_deleted() {
         }),
     );
 
-    let response = read_response(&mut server);
+    eprintln!("Initialize response: {:?}", response);
     assert!(response["result"].is_object());
 
     send_notification(
