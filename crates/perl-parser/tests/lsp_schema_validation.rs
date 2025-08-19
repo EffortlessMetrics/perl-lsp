@@ -78,6 +78,7 @@ fn validate_location(loc: &Value) -> Result<(), String> {
 }
 
 /// Validates LocationLink object per LSP 3.14+
+#[allow(dead_code)]
 fn validate_location_link(link: &Value) -> Result<(), String> {
     if !link.is_object() {
         return Err("LocationLink must be an object".into());
@@ -112,6 +113,7 @@ fn validate_location_link(link: &Value) -> Result<(), String> {
 }
 
 /// Validates TextDocumentIdentifier
+#[allow(dead_code)]
 fn validate_text_document_identifier(doc: &Value) -> Result<(), String> {
     if !doc.is_object() {
         return Err("TextDocumentIdentifier must be object".into());
@@ -178,7 +180,7 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
     }
 
     // 3.16+ fields
-    if let Some(data) = diag.get("data") {
+    if let Some(_data) = diag.get("data") {
         // data can be any LSPAny value
     }
 
@@ -1302,7 +1304,7 @@ fn test_diagnostic_pull_response_schema() {
         // Optional relatedDocuments
         if let Some(related) = report.get("relatedDocuments") {
             let obj = related.as_object().expect("relatedDocuments must be object");
-            for (uri, doc_report) in obj {
+            for (uri, _doc_report) in obj {
                 assert!(uri.contains(':'), "relatedDocuments key must be valid URI");
                 // Recursively validate document reports
             }
@@ -1383,6 +1385,7 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
 // ======================== CONTRACT VALIDATORS ========================
 
 /// Validate that partial result streams have empty final response
+#[allow(dead_code)]
 fn validate_partial_result_contract(exchange: &[Value]) -> Result<(), String> {
     use std::collections::HashSet;
     let mut pr_tokens = HashSet::new();
@@ -1414,6 +1417,7 @@ fn validate_partial_result_contract(exchange: &[Value]) -> Result<(), String> {
 }
 
 /// Validate $/logTrace messages have correct shape
+#[allow(dead_code)]
 fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
     if msg.get("method").and_then(|m| m.as_str()) != Some("$/logTrace") {
         return Ok(());

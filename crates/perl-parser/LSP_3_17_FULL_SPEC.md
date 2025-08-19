@@ -915,6 +915,8 @@ All operations meet or exceed these targets:
 - **Performance contracts**: 100% enforced
 - **Edge cases**: 141/141 passing
 
+**See also:** [LSP 3.17 Test Coverage Report](tests/LSP_3_17_TEST_COVERAGE_REPORT.md)
+
 ## 18. Breaking Changes Policy
 
 This server maintains strict backwards compatibility:
