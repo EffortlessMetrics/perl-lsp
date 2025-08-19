@@ -103,42 +103,90 @@ This document provides a comprehensive list of parsing limitations across all th
 
 ## LSP Server Limitations
 
-The perl-lsp server provides comprehensive IDE features but has some limitations:
+### ⚠️ CRITICAL: Only ~35% of Advertised Features Actually Work
 
-### Current Limitations
+The perl-lsp server has many **non-functional stub implementations** that return empty results:
 
-1. **Type Inference**
-   - Limited type information for complex references
-   - Cannot infer types through dynamic dispatch
-   - No support for Moose/Moo type constraints
+### ❌ Non-Functional Features (Stub Implementations)
 
-2. **Cross-file Analysis**
-   - Symbol resolution limited to explicit imports
-   - Cannot track dynamic module loading (`require $module`)
-   - No analysis of eval'd code
+These features exist in code but **DO NOT WORK** - they return empty results or placeholder text:
 
-3. **Framework Support**
-   - Limited understanding of Moose/Moo/Mouse attributes
-   - No special handling for Catalyst/Dancer/Mojolicious
-   - Template files not analyzed
+1. **Workspace Refactoring** (`workspace_refactor.rs` - ALL METHODS ARE STUBS)
+   - `rename_symbol` - Returns empty edits
+   - `extract_module` - Returns empty edits
+   - `optimize_imports` - Returns empty edits
+   - `move_subroutine` - Returns empty edits
+   - `inline_variable` - Returns empty edits
 
-4. **Performance**
-   - Full reparse on changes (no true incremental parsing yet)
-   - Large files (>1MB) may have slower response times
-   - No persistent indexing between sessions
+2. **Import Optimization** (`import_optimizer.rs` - ENTIRE MODULE IS STUB)
+   - `analyze_file` - Returns empty analysis
+   - `generate_optimized_imports` - Returns empty string
+   - No actual import tracking or optimization
 
-5. **Refactoring Scope**
-   - Some refactorings only work within single file
-   - Cannot rename across module boundaries safely
-   - Extract method doesn't handle closures perfectly
+3. **Dead Code Detection** (`dead_code_detector.rs` - ENTIRE MODULE IS STUB)
+   - `analyze_file` - Returns empty vector
+   - `analyze_workspace` - Returns zero stats
+   - No actual dead code detection
 
-### Planned Improvements
+4. **Debug Adapter** (`debug_adapter.rs` - NOT IMPLEMENTED)
+   - All methods contain "TODO: Implement"
+   - Breakpoints not actually set
+   - Continue/step/next commands do nothing
 
-- True incremental parsing for better performance
-- Persistent workspace indexing
-- Better type inference system
-- Framework-specific support
-- Multi-file refactoring support
+### ⚠️ Partially Working Features
+
+1. **Code Completion** 
+   - ✅ Variables in current scope
+   - ✅ Built-in functions
+   - ❌ Package members (`$obj->`)
+   - ❌ Module imports
+   - ❌ File paths
+
+2. **Navigation**
+   - ✅ Same-file go-to-definition
+   - ✅ Same-file references
+   - ❌ Cross-file navigation
+   - ❌ Module resolution
+   - ❌ Workspace-wide search
+
+3. **Type System**
+   - ✅ Basic scalar/array/hash detection
+   - ❌ Reference type inference
+   - ❌ Complex type tracking
+   - ❌ Type flow analysis
+
+### 🚫 Not Implemented At All
+
+- `textDocument/typeDefinition` - Returns error -32601
+- `textDocument/implementation` - Returns error -32601  
+- Socket mode - "Socket mode is not implemented yet"
+- Real workspace indexing - No actual implementation
+- Incremental parsing - Does full reparse every time
+
+### Test Coverage Reality
+
+- **530+ tests exist** BUT many only check response shape, not functionality
+- Tests like `assert!(response.is_null() || response.is_object())` don't verify correctness
+- Many tests marked `TODO: Feature not implemented yet`
+- "100% coverage" includes testing stub implementations that don't work
+
+### Actual Working Features (~35%)
+
+✅ **These actually work:**
+- Basic syntax checking
+- Simple hover information
+- Variable completion in current file
+- Single-file navigation
+- Document formatting (Perl::Tidy)
+- Basic diagnostics
+
+❌ **These are advertised but don't work:**
+- Any workspace-wide operation
+- Cross-file refactoring
+- Import management
+- Dead code detection
+- Debug adapter
+- Most "advanced" features
 
 ## Common Limitations Across All Parsers
 
