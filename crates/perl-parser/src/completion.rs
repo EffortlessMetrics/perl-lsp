@@ -99,7 +99,11 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
     ("plan", "plan tests => ${1:num};", "Declare test plan"),
     ("use_ok", "use_ok('${1:Module}');", "Test module loads"),
     ("require_ok", "require_ok('${1:Module}');", "Test module requires"),
-    ("is_deeply", "is_deeply(${1:\\$got}, ${2:\\$expected}, ${3:name});", "Deep structure comparison"),
+    (
+        "is_deeply",
+        "is_deeply(${1:\\$got}, ${2:\\$expected}, ${3:name});",
+        "Deep structure comparison",
+    ),
     ("new_ok", "new_ok('${1:Class}', [${2:args}], ${3:name});", "Test object creation"),
 ];
 
@@ -299,7 +303,12 @@ impl CompletionProvider {
     }
 
     /// Get completions at a given position (with optional filepath for test detection)
-    pub fn get_completions_with_path(&self, source: &str, position: usize, filepath: Option<&str>) -> Vec<CompletionItem> {
+    pub fn get_completions_with_path(
+        &self,
+        source: &str,
+        position: usize,
+        filepath: Option<&str>,
+    ) -> Vec<CompletionItem> {
         let context = self.analyze_context(source, position);
 
         if context.in_comment {
@@ -348,7 +357,7 @@ impl CompletionProvider {
 
             // Also suggest variables without sigils in some contexts
             self.add_all_variables(&mut completions, &context);
-            
+
             // Add Test::More completions if in test context
             if self.is_test_context(source, filepath) {
                 self.add_test_more_completions(&mut completions, &context);
@@ -362,7 +371,7 @@ impl CompletionProvider {
 
         completions
     }
-    
+
     /// Get completions at a given position (backward compatibility)
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
@@ -868,7 +877,7 @@ impl CompletionProvider {
         let line = &source[line_start..position];
         line.contains('#')
     }
-    
+
     /// Check if we're in a test context
     fn is_test_context(&self, source: &str, filepath: Option<&str>) -> bool {
         // Check if file ends with .t
@@ -877,11 +886,11 @@ impl CompletionProvider {
                 return true;
             }
         }
-        
+
         // Check if source contains Test::More or Test2::V0
         source.contains("use Test::More") || source.contains("use Test2::V0")
     }
-    
+
     /// Add Test::More completions
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_test_more_completions(
