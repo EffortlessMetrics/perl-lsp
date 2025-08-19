@@ -76,6 +76,33 @@ pub struct CompletionProvider {
     builtins: HashSet<&'static str>,
 }
 
+// Test::More function completions
+const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
+    ("ok", "ok(${1:condition}, ${2:name});", "Test condition is true"),
+    ("is", "is(${1:got}, ${2:expected}, ${3:name});", "Test values are equal"),
+    ("isnt", "isnt(${1:got}, ${2:not_expected}, ${3:name});", "Test values are not equal"),
+    ("like", "like(${1:got}, ${2:qr/.../}, ${3:name});", "Test string matches regex"),
+    ("unlike", "unlike(${1:got}, ${2:qr/.../}, ${3:name});", "Test string doesn't match regex"),
+    ("cmp_ok", "cmp_ok(${1:got}, '${2:op}', ${3:expected}, ${4:name});", "Compare using operator"),
+    ("isa_ok", "isa_ok(${1:ref}, '${2:class}', ${3:name});", "Test object is of class"),
+    ("can_ok", "can_ok(${1:class_or_obj}, ${2:@methods});", "Test object/class can do methods"),
+    ("pass", "pass(${1:name});", "Unconditionally pass test"),
+    ("fail", "fail(${1:name});", "Unconditionally fail test"),
+    ("diag", "diag(${1:message});", "Print diagnostic message"),
+    ("note", "note(${1:message});", "Print note message"),
+    ("explain", "explain(${1:\\$ref});", "Dump data structure"),
+    ("skip", "skip(${1:why}, ${2:how_many});", "Skip tests"),
+    ("todo_skip", "todo_skip(${1:why}, ${2:how_many});", "Mark tests as TODO"),
+    ("BAIL_OUT", "BAIL_OUT(${1:reason});", "Stop all testing"),
+    ("subtest", "subtest '${1:name}' => sub {\n    ${0}\n};", "Run a subtest"),
+    ("done_testing", "done_testing(${1:tests});", "Finish testing"),
+    ("plan", "plan tests => ${1:num};", "Declare test plan"),
+    ("use_ok", "use_ok('${1:Module}');", "Test module loads"),
+    ("require_ok", "require_ok('${1:Module}');", "Test module requires"),
+    ("is_deeply", "is_deeply(${1:\\$got}, ${2:\\$expected}, ${3:name});", "Deep structure comparison"),
+    ("new_ok", "new_ok('${1:Class}', [${2:args}], ${3:name});", "Test object creation"),
+];
+
 impl CompletionProvider {
     /// Create a new completion provider from parsed AST
     pub fn new(ast: &Node) -> Self {
@@ -271,8 +298,8 @@ impl CompletionProvider {
         CompletionProvider { symbol_table, keywords, builtins }
     }
 
-    /// Get completions at a given position
-    pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
+    /// Get completions at a given position (with optional filepath for test detection)
+    pub fn get_completions_with_path(&self, source: &str, position: usize, filepath: Option<&str>) -> Vec<CompletionItem> {
         let context = self.analyze_context(source, position);
 
         if context.in_comment {
@@ -321,6 +348,11 @@ impl CompletionProvider {
 
             // Also suggest variables without sigils in some contexts
             self.add_all_variables(&mut completions, &context);
+            
+            // Add Test::More completions if in test context
+            if self.is_test_context(source, filepath) {
+                self.add_test_more_completions(&mut completions, &context);
+            }
         }
 
         // Sort completions by relevance
@@ -329,6 +361,11 @@ impl CompletionProvider {
         });
 
         completions
+    }
+    
+    /// Get completions at a given position (backward compatibility)
+    pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
+        self.get_completions_with_path(source, position, None)
     }
 
     /// Analyze the context at the cursor position
@@ -830,6 +867,42 @@ impl CompletionProvider {
         let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
         let line = &source[line_start..position];
         line.contains('#')
+    }
+    
+    /// Check if we're in a test context
+    fn is_test_context(&self, source: &str, filepath: Option<&str>) -> bool {
+        // Check if file ends with .t
+        if let Some(path) = filepath {
+            if path.ends_with(".t") {
+                return true;
+            }
+        }
+        
+        // Check if source contains Test::More or Test2::V0
+        source.contains("use Test::More") || source.contains("use Test2::V0")
+    }
+    
+    /// Add Test::More completions
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
+    fn add_test_more_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
+        for (name, snippet, doc) in TEST_MORE_EXPORTS {
+            if context.prefix.is_empty() || name.starts_with(&context.prefix) {
+                completions.push(CompletionItem {
+                    label: name.to_string(),
+                    kind: CompletionItemKind::Function,
+                    detail: Some("Test::More".to_string()),
+                    documentation: Some(doc.to_string()),
+                    insert_text: Some(snippet.to_string()),
+                    sort_text: Some(format!("2_{}", name)),
+                    filter_text: Some(name.to_string()),
+                    additional_edits: vec![],
+                });
+            }
+        }
     }
 }
 
