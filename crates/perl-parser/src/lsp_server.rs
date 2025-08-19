@@ -50,6 +50,8 @@ struct ClientCapabilities {
     type_definition_link_support: bool,
     /// Supports LocationLink for goto implementation
     implementation_link_support: bool,
+    /// Supports dynamic registration for file watching
+    dynamic_registration_support: bool,
 }
 
 /// LSP server that handles JSON-RPC communication
@@ -383,8 +385,10 @@ impl LspServer {
                 self.initialized = true;
                 eprintln!("Server initialized");
 
-                // Register file watchers for Perl files
-                self.register_file_watchers();
+                // Register file watchers for Perl files only if client supports it
+                if self.client_capabilities.dynamic_registration_support {
+                    self.register_file_watchers_async();
+                }
 
                 Ok(None)
             }
@@ -549,6 +553,15 @@ impl LspServer {
                 .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("implementation"))
                 .and_then(|d| d.get("linkSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+
+            // Check if client supports dynamic registration for file watching
+            self.client_capabilities.dynamic_registration_support = params
+                .get("capabilities")
+                .and_then(|c| c.get("workspace"))
+                .and_then(|w| w.get("didChangeWatchedFiles"))
+                .and_then(|d| d.get("dynamicRegistration"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
 
@@ -4955,7 +4968,7 @@ impl LspServer {
     }
 
     /// Register file watchers for Perl files
-    fn register_file_watchers(&self) {
+    fn register_file_watchers_async(&self) {
         use lsp_types::{
             DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
             RegistrationParams, WatchKind,
@@ -4986,22 +4999,28 @@ impl LspServer {
 
         let params = RegistrationParams { registrations: vec![reg] };
 
-        // Send the registration request
+        // Send the registration request without waiting for a response
+        // Use a random ID since we're not tracking the response
+        let request_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        
         let request = json!({
             "jsonrpc": "2.0",
-            "id": serde_json::Value::Number(serde_json::Number::from(9999)),
+            "id": serde_json::Value::Number(serde_json::Number::from(request_id)),
             "method": "client/registerCapability",
             "params": params
         });
 
-        // Send using the proper output mechanism
+        // Send using the proper output mechanism (fire and forget)
         if let Ok(mut output) = self.output.lock() {
             let msg = serde_json::to_string(&request).unwrap();
             write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg).ok();
             output.flush().ok();
         }
 
-        eprintln!("Registered file watchers for Perl files");
+        eprintln!("Sent file watcher registration request (async)");
     }
 }
 
@@ -5068,10 +5087,12 @@ impl LspServer {
 
     /// Resolve a module name to a file path URI
     fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
+        use std::time::{Duration, Instant};
+        
         // Convert Module::Name to Module/Name.pm
         let relative_path = format!("{}.pm", module_name.replace("::", "/"));
 
-        // First check if we have the document already opened
+        // First check if we have the document already opened (fast path)
         let documents = self.documents.lock().unwrap();
         for (uri, _doc) in documents.iter() {
             if uri.ends_with(&relative_path) {
@@ -5080,13 +5101,23 @@ impl LspServer {
         }
         drop(documents);
 
-        // Get workspace folders from initialization
-        let workspace_folders = self.workspace_folders.lock().unwrap();
+        // Set a timeout for file system operations
+        let start_time = Instant::now();
+        let timeout = Duration::from_millis(100); // 100ms timeout for module resolution
 
-        // Common Perl library directories
+        // Get workspace folders from initialization
+        let workspace_folders = self.workspace_folders.lock().unwrap().clone();
+
+        // Common Perl library directories (prioritized)
         let search_dirs = ["lib", ".", "local/lib/perl5"];
 
         for workspace_folder in workspace_folders.iter() {
+            // Check timeout
+            if start_time.elapsed() > timeout {
+                eprintln!("Module resolution timeout for: {}", module_name);
+                return None;
+            }
+
             // Parse the workspace folder URI to get the file path
             let workspace_path = if workspace_folder.starts_with("file://") {
                 workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder)
@@ -5101,19 +5132,30 @@ impl LspServer {
                     format!("{}/{}/{}", workspace_path, dir, relative_path)
                 };
 
-                // Check if file exists
+                // Check if file exists (with timeout check)
+                if start_time.elapsed() > timeout {
+                    return None;
+                }
+                
                 if std::path::Path::new(&full_path).exists() {
                     return Some(format!("file://{}", full_path));
                 }
             }
         }
 
-        // Also check in @INC paths (simplified version)
-        let inc_paths = ["/usr/share/perl5", "/usr/lib/perl5"];
-        for inc_path in &inc_paths {
-            let full_path = format!("{}/{}", inc_path, relative_path);
-            if std::path::Path::new(&full_path).exists() {
-                return Some(format!("file://{}", full_path));
+        // Skip @INC paths if we're running out of time
+        if start_time.elapsed() < timeout {
+            // Also check in @INC paths (simplified version, only check first few)
+            let inc_paths = ["/usr/share/perl5", "/usr/lib/perl5"];
+            for inc_path in &inc_paths[..2.min(inc_paths.len())] {
+                if start_time.elapsed() > timeout {
+                    break;
+                }
+                
+                let full_path = format!("{}/{}", inc_path, relative_path);
+                if std::path::Path::new(&full_path).exists() {
+                    return Some(format!("file://{}", full_path));
+                }
             }
         }
 
