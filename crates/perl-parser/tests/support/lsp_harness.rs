@@ -35,6 +35,12 @@ impl LspHarness {
         Self { server, output_buffer, notification_buffer, next_request_id: 1 }
     }
 
+    /// Create a new test harness without sending initialize
+    /// Used for testing pre-initialization behavior
+    pub fn new_without_initialize() -> Self {
+        Self::new()
+    }
+
     /// Initialize the LSP server
     pub fn initialize(&mut self, capabilities: Option<Value>) -> Result<Value, String> {
         let caps = capabilities.unwrap_or_else(|| {

@@ -572,7 +572,7 @@ fn validate_preinitialize_outbox(msgs: &[Value], init_token: Option<&Value>) -> 
 
 #[test]
 fn test_diagnostic_server_cancellation_data() {
-    // Test that DiagnosticServerCancellationData.retriggerRequest 
+    // Test that DiagnosticServerCancellationData.retriggerRequest
     // tells clients whether to re-trigger
     let err = json!({
         "jsonrpc": "2.0",
@@ -585,10 +585,10 @@ fn test_diagnostic_server_cancellation_data() {
             }
         }
     });
-    
+
     assert_eq!(err["error"]["code"], -32802);
     assert_eq!(err["error"]["data"]["retriggerRequest"], false);
-    
+
     // Also test with retrigger = true
     let err_retry = json!({
         "jsonrpc": "2.0",
@@ -601,7 +601,7 @@ fn test_diagnostic_server_cancellation_data() {
             }
         }
     });
-    
+
     assert_eq!(err_retry["error"]["code"], -32802);
     assert_eq!(err_retry["error"]["data"]["retriggerRequest"], true);
 }
