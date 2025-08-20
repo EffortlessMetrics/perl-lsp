@@ -1,10 +1,10 @@
 # Perl Parser Project - Roadmap
 
-> **Status**: 🚀 **Production Ready** - Three complete parsers + Full LSP server with v3 achieving 100% edge case coverage!
+> **Status**: 🚀 **Release Candidate (rc.1)** – Three complete parsers + Full LSP server; v3 achieves 100% edge-case coverage on our test corpus.
 
 ---
 
-## 🎉 Current State (v0.8.3-rc.1 - February 2025)
+## 🎉 Current State (v0.8.3-rc.1 – February 2025)
 
 We've built the most comprehensive Perl parsing solution available, **exceeding our Q1-Q2 2025 goals**:
 
@@ -12,9 +12,9 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 |---------|--------------|-----------|----------------|---------------|
 | **Status** | Legacy | Production | **Recommended** | **Enterprise-Ready** |
 | **Performance** | ~12-68µs | ~200-450µs | **~1-150µs** | <50ms response |
-| **Perl Coverage** | ~95% | ~99.995% | **~100%** | Full support |
+| **Perl Coverage** | ~95% | ~99.995% | **~100% of our test corpus** | Full support |
 | **Edge Cases** | Limited | 95% | **141/141** | All handled |
-| **Features** | Basic | Advanced | **Complete** | **35+ IDE features** |
+| **Features** | Basic | Advanced | **Complete** | **35+ IDE features**<sup>†</sup> |
 
 ---
 
@@ -203,7 +203,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 **Impact**: AI-augmented Perl development
 
-### Q4 2025: v0.9.0 - Perl 7 & Beyond
+### Q4 2025: v0.10.0 - Perl 7 & Beyond
 **Goal**: Future-proof for next-generation Perl
 
 #### Modern Perl Support
@@ -286,8 +286,8 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 ### Current Achievements (February 2025)
 - ✅ **Performance Leadership**
-  - Fastest Perl parser (1-150µs)*
-  - 4-19x faster than alternatives*
+  - 1–150µs parser timings on our benchmark corpus*
+  - 4–19× speedups observed vs. our C baseline in the same harness*
   - <50ms LSP response times
   - Efficient memory usage with caching
 - ✅ **Quality Excellence**
@@ -322,7 +322,9 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 ## 📊 Benchmark Methodology
 
-*Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See `BENCHMARKS.md` for reproducible test harness.
+*Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[BENCHMARKS.md](BENCHMARKS.md)** for the corpus, hardware, and exact commands; see **[FEATURE_ROADMAP.md](FEATURE_ROADMAP.md)** for the canonical feature matrix.
+
+<sup>†</sup> *"IDE features" refers to user-visible LSP capabilities surfaced in editors (completion, hover, code actions, formatting, diagnostics, symbols, folding, etc.). Internal or experimental endpoints not exposed in an editor are excluded from the count.*
 
 ---
 
@@ -341,6 +343,15 @@ cargo install --path crates/perl-parser --bin perl-lsp
 
 # Use in your editor
 ./target/release/perl-lsp --stdio
+```
+
+**Run Perl::Critic via LSP**
+```json
+// LSP command (editor invokes this)
+workspace/executeCommand: {
+  "command": "perl.runCritic",
+  "arguments": ["file:///path/to/file.pl"]
+}
 ```
 
 ### For Contributors
