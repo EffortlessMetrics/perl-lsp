@@ -7,11 +7,11 @@
 use perl_parser::lsp_server::LspServer;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::fs;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-use std::fs;
 use url::Url;
 
 /// Temporary workspace for testing with real files
@@ -29,7 +29,7 @@ impl TempWorkspace {
             .to_string();
         Ok(Self { dir, root_uri })
     }
-    
+
     /// Write a file to the workspace
     pub fn write(&self, relative_path: &str, content: &str) -> Result<(), String> {
         let path = self.dir.path().join(relative_path);
@@ -39,13 +39,11 @@ impl TempWorkspace {
         fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
         Ok(())
     }
-    
+
     /// Get the full URI for a relative path
     pub fn uri(&self, relative_path: &str) -> String {
         let path = self.dir.path().join(relative_path);
-        Url::from_file_path(&path)
-            .expect("Valid file path")
-            .to_string()
+        Url::from_file_path(&path).expect("Valid file path").to_string()
     }
 }
 
@@ -88,9 +86,13 @@ impl LspHarness {
     pub fn initialize(&mut self, capabilities: Option<Value>) -> Result<Value, String> {
         self.initialize_with_root("file:///workspace", capabilities)
     }
-    
+
     /// Initialize the LSP server with a specific root URI
-    pub fn initialize_with_root(&mut self, root_uri: &str, capabilities: Option<Value>) -> Result<Value, String> {
+    pub fn initialize_with_root(
+        &mut self,
+        root_uri: &str,
+        capabilities: Option<Value>,
+    ) -> Result<Value, String> {
         let caps = capabilities.unwrap_or_else(|| {
             json!({
                 "textDocument": {
@@ -133,19 +135,19 @@ impl LspHarness {
 
         Ok(response)
     }
-    
+
     /// Create a harness with a temporary workspace
     pub fn with_workspace(files: &[(&str, &str)]) -> Result<(Self, TempWorkspace), String> {
         let workspace = TempWorkspace::new()?;
-        
+
         // Write all files to disk
         for (path, content) in files {
             workspace.write(path, content)?;
         }
-        
+
         let mut harness = Self::new_raw();
         harness.initialize_with_root(&workspace.root_uri, None)?;
-        
+
         Ok((harness, workspace))
     }
 
@@ -179,9 +181,14 @@ impl LspHarness {
     pub fn request(&mut self, method: &str, params: Value) -> Result<Value, String> {
         self.request_with_timeout(method, params, Duration::from_secs(2))
     }
-    
+
     /// Send a request and wait for response with custom timeout
-    pub fn request_with_timeout(&mut self, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
+    pub fn request_with_timeout(
+        &mut self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         let request = json!({
             "jsonrpc": "2.0",
             "id": self.next_request_id,
@@ -192,17 +199,20 @@ impl LspHarness {
 
         self.send_request_with_timeout(request, timeout)
     }
-    
+
     /// Send a didSave notification
     pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
-        self.notify("textDocument/didSave", json!({
-            "textDocument": {
-                "uri": uri
-            }
-        }));
+        self.notify(
+            "textDocument/didSave",
+            json!({
+                "textDocument": {
+                    "uri": uri
+                }
+            }),
+        );
         Ok(())
     }
-    
+
     /// Wait for the server to become idle by draining notifications
     pub fn wait_for_idle(&mut self, duration: Duration) {
         let start = Instant::now();
@@ -221,7 +231,7 @@ impl LspHarness {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
-    
+
     /// Poll workspace/symbol until query appears (optionally at want_uri)
     pub fn wait_for_symbol(
         &mut self,
@@ -240,10 +250,10 @@ impl LspHarness {
                 if let Some(arr) = v.as_array() {
                     let ok = arr.iter().any(|s| {
                         let uri = s.pointer("/location/uri").and_then(|u| u.as_str());
-                        want_uri.map_or(true, |expect| uri == Some(expect))
+                        want_uri.is_none_or(|expect| uri == Some(expect))
                     });
-                    if ok { 
-                        return Ok(()); 
+                    if ok {
+                        return Ok(());
                     }
                 }
             }
@@ -348,9 +358,13 @@ impl LspHarness {
     fn send_request(&mut self, request: Value) -> Result<Value, String> {
         self.send_request_with_timeout(request, Duration::from_secs(30))
     }
-    
+
     // Private helper to send request with timeout
-    fn send_request_with_timeout(&mut self, request: Value, timeout: Duration) -> Result<Value, String> {
+    fn send_request_with_timeout(
+        &mut self,
+        request: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         // Clear output buffer
         self.output_buffer.lock().unwrap().clear();
 
@@ -372,26 +386,50 @@ impl LspHarness {
             if start.elapsed() > timeout {
                 return Err(format!("Request timed out after {:?}", timeout));
             }
-            
+
             // Check if we have a response
             let output = self.output_buffer.lock().unwrap();
             let output_str = String::from_utf8_lossy(&output);
 
-            // Find the JSON response after headers
-            if let Some(json_start) = output_str.find("{") {
-                let json_str = &output_str[json_start..];
-                if let Ok(response) = serde_json::from_str::<Value>(json_str) {
-                    if let Some(error) = response.get("error") {
-                        return Err(format!("LSP error: {:?}", error));
-                    }
-                    if let Some(result) = response.get("result") {
-                        return Ok(result.clone());
+            // Parse all messages in the output (might be multiple)
+            let mut remaining = output_str.as_ref();
+            while !remaining.is_empty() {
+                // Look for Content-Length header
+                if let Some(content_start) = remaining.find("Content-Length:") {
+                    remaining = &remaining[content_start..];
+
+                    // Parse content length
+                    if let Some(header_end) = remaining.find("\r\n\r\n") {
+                        let header = &remaining[..header_end];
+                        if let Some(length_str) = header.strip_prefix("Content-Length:") {
+                            if let Ok(length) = length_str.trim().parse::<usize>() {
+                                let json_start = header_end + 4; // Skip \r\n\r\n
+                                if remaining.len() >= json_start + length {
+                                    let json_str = &remaining[json_start..json_start + length];
+                                    if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
+                                        // Check if this is our response (has matching id)
+                                        if msg.get("id").is_some() {
+                                            if let Some(error) = msg.get("error") {
+                                                return Err(format!("LSP error: {:?}", error));
+                                            }
+                                            if let Some(result) = msg.get("result") {
+                                                return Ok(result.clone());
+                                            }
+                                        }
+                                    }
+                                    // Move to next message
+                                    remaining = &remaining[json_start + length..];
+                                    continue;
+                                }
+                            }
+                        }
                     }
                 }
+                break; // No more complete messages
             }
-            
+
             drop(output);
-            
+
             // If no response yet, wait a bit
             if start.elapsed() < timeout {
                 std::thread::sleep(Duration::from_millis(10));
