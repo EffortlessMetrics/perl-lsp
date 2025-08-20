@@ -10,6 +10,45 @@ use std::collections::VecDeque;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tempfile::TempDir;
+use std::fs;
+use std::path::Path;
+use url::Url;
+
+/// Temporary workspace for testing with real files
+pub struct TempWorkspace {
+    pub dir: TempDir,
+    pub root_uri: String,
+}
+
+impl TempWorkspace {
+    /// Create a new temporary workspace
+    pub fn new() -> Result<Self, String> {
+        let dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let root_uri = Url::from_directory_path(dir.path())
+            .map_err(|_| "Failed to create file URL")?
+            .to_string();
+        Ok(Self { dir, root_uri })
+    }
+    
+    /// Write a file to the workspace
+    pub fn write(&self, relative_path: &str, content: &str) -> Result<(), String> {
+        let path = self.dir.path().join(relative_path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create dirs: {}", e))?;
+        }
+        fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        Ok(())
+    }
+    
+    /// Get the full URI for a relative path
+    pub fn uri(&self, relative_path: &str) -> String {
+        let path = self.dir.path().join(relative_path);
+        Url::from_file_path(&path)
+            .expect("Valid file path")
+            .to_string()
+    }
+}
 
 /// LSP Test Harness for testing with real JSON-RPC protocol
 pub struct LspHarness {
@@ -48,6 +87,11 @@ impl LspHarness {
 
     /// Initialize the LSP server
     pub fn initialize(&mut self, capabilities: Option<Value>) -> Result<Value, String> {
+        self.initialize_with_root("file:///workspace", capabilities)
+    }
+    
+    /// Initialize the LSP server with a specific root URI
+    pub fn initialize_with_root(&mut self, root_uri: &str, capabilities: Option<Value>) -> Result<Value, String> {
         let caps = capabilities.unwrap_or_else(|| {
             json!({
                 "textDocument": {
@@ -75,12 +119,12 @@ impl LspHarness {
             "params": {
                 "processId": std::process::id(),
                 "capabilities": caps,
-                "rootUri": "file:///workspace"
+                "rootUri": root_uri
             }
         });
         self.next_request_id += 1;
 
-        let response = self.send_request(init_request)?;
+        let response = self.send_request_with_timeout(init_request, Duration::from_secs(2))?;
 
         // Only send initialized notification if initialization succeeded
         // (The response will contain capabilities if successful)
@@ -89,6 +133,21 @@ impl LspHarness {
         }
 
         Ok(response)
+    }
+    
+    /// Create a harness with a temporary workspace
+    pub fn with_workspace(files: &[(&str, &str)]) -> Result<(Self, TempWorkspace), String> {
+        let workspace = TempWorkspace::new()?;
+        
+        // Write all files to disk
+        for (path, content) in files {
+            workspace.write(path, content)?;
+        }
+        
+        let mut harness = Self::new_raw();
+        harness.initialize_with_root(&workspace.root_uri, None)?;
+        
+        Ok((harness, workspace))
     }
 
     /// Initialize with default capabilities
@@ -117,8 +176,13 @@ impl LspHarness {
         Ok(())
     }
 
-    /// Send a request and wait for response
+    /// Send a request and wait for response with default timeout
     pub fn request(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        self.request_with_timeout(method, params, Duration::from_secs(2))
+    }
+    
+    /// Send a request and wait for response with custom timeout
+    pub fn request_with_timeout(&mut self, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
         let request = json!({
             "jsonrpc": "2.0",
             "id": self.next_request_id,
@@ -127,7 +191,36 @@ impl LspHarness {
         });
         self.next_request_id += 1;
 
-        self.send_request(request)
+        self.send_request_with_timeout(request, timeout)
+    }
+    
+    /// Send a didSave notification
+    pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
+        self.notify("textDocument/didSave", json!({
+            "textDocument": {
+                "uri": uri
+            }
+        }));
+        Ok(())
+    }
+    
+    /// Wait for the server to become idle by draining notifications
+    pub fn wait_for_idle(&mut self, duration: Duration) {
+        let start = Instant::now();
+        while start.elapsed() < duration {
+            // Try to drain any pending notifications
+            let notifications = self.notification_buffer.lock().unwrap();
+            if notifications.is_empty() {
+                // No notifications for a bit, assume idle
+                std::thread::sleep(Duration::from_millis(20));
+                let notifications = self.notification_buffer.lock().unwrap();
+                if notifications.is_empty() {
+                    break; // Quiet period confirmed
+                }
+            }
+            drop(notifications);
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
@@ -224,6 +317,11 @@ impl LspHarness {
 
     // Private helper to send request and get response
     fn send_request(&mut self, request: Value) -> Result<Value, String> {
+        self.send_request_with_timeout(request, Duration::from_secs(30))
+    }
+    
+    // Private helper to send request with timeout
+    fn send_request_with_timeout(&mut self, request: Value, timeout: Duration) -> Result<Value, String> {
         // Clear output buffer
         self.output_buffer.lock().unwrap().clear();
 
@@ -239,24 +337,37 @@ impl LspHarness {
             return Err(format!("Server error: {:?}", e));
         }
 
-        // Parse response from output buffer
-        let output = self.output_buffer.lock().unwrap();
-        let output_str = String::from_utf8_lossy(&output);
+        // Wait for response with timeout
+        let start = Instant::now();
+        loop {
+            if start.elapsed() > timeout {
+                return Err(format!("Request timed out after {:?}", timeout));
+            }
+            
+            // Check if we have a response
+            let output = self.output_buffer.lock().unwrap();
+            let output_str = String::from_utf8_lossy(&output);
 
-        // Find the JSON response after headers
-        if let Some(json_start) = output_str.find("{") {
-            let json_str = &output_str[json_start..];
-            if let Ok(response) = serde_json::from_str::<Value>(json_str) {
-                if let Some(error) = response.get("error") {
-                    return Err(format!("LSP error: {:?}", error));
-                }
-                if let Some(result) = response.get("result") {
-                    return Ok(result.clone());
+            // Find the JSON response after headers
+            if let Some(json_start) = output_str.find("{") {
+                let json_str = &output_str[json_start..];
+                if let Ok(response) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(error) = response.get("error") {
+                        return Err(format!("LSP error: {:?}", error));
+                    }
+                    if let Some(result) = response.get("result") {
+                        return Ok(result.clone());
+                    }
                 }
             }
+            
+            drop(output);
+            
+            // If no response yet, wait a bit
+            if start.elapsed() < timeout {
+                std::thread::sleep(Duration::from_millis(10));
+            }
         }
-
-        Err("No valid response received".to_string())
     }
 }
 
