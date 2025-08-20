@@ -1241,6 +1241,23 @@ impl LspServer {
         })
     }
 
+    /// Format type information concisely for completion detail
+    fn format_type_for_detail(t: &crate::type_inference::PerlType) -> String {
+        use crate::type_inference::PerlType;
+        match t {
+            PerlType::Scalar(_) => "scalar".to_string(),
+            PerlType::Array(_) => "array".to_string(),
+            PerlType::Hash { .. } => "hash".to_string(),
+            PerlType::Subroutine { .. } => "code".to_string(),
+            PerlType::Reference(inner) => format!("ref {}", Self::format_type_for_detail(inner)),
+            PerlType::Object(name) => format!("object {}", name),
+            PerlType::Glob => "glob".to_string(),
+            PerlType::Union(_) => "mixed".to_string(),
+            PerlType::Any => "any".to_string(),
+            PerlType::Void => "void".to_string(),
+        }
+    }
+
     /// Handle completion request
     fn handle_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -1266,13 +1283,25 @@ impl LspServer {
 
                     // Enhance completions with type information
                     let mut type_engine = TypeInferenceEngine::new();
-                    if let Ok(inferred_type) = type_engine.infer(ast) {
-                        // Add type information to completion items where possible
-                        for completion in &mut base_completions {
-                            // Add type detail to variables based on inferred types
-                            if completion.kind == CompletionItemKind::Variable {
-                                completion.detail = Some(format!("{:?}", inferred_type));
-                            }
+                    let _ = type_engine.infer(ast); // Build type environment
+                    
+                    // Add type information to completion items where possible
+                    for completion in &mut base_completions {
+                        // Add type detail to variables based on inferred types
+                        if completion.kind == CompletionItemKind::Variable {
+                            // For now, just add a simple type hint based on sigil
+                            let type_hint = if completion.label.starts_with('$') {
+                                "scalar"
+                            } else if completion.label.starts_with('@') {
+                                "array"
+                            } else if completion.label.starts_with('%') {
+                                "hash"
+                            } else if completion.label.starts_with('&') {
+                                "code"
+                            } else {
+                                "unknown"
+                            };
+                            completion.detail = Some(type_hint.to_string());
                         }
                     }
 
