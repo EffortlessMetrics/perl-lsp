@@ -1289,19 +1289,25 @@ impl LspServer {
                     for completion in &mut base_completions {
                         // Add type detail to variables based on inferred types
                         if completion.kind == CompletionItemKind::Variable {
-                            // For now, just add a simple type hint based on sigil
-                            let type_hint = if completion.label.starts_with('$') {
-                                "scalar"
-                            } else if completion.label.starts_with('@') {
-                                "array"
-                            } else if completion.label.starts_with('%') {
-                                "hash"
-                            } else if completion.label.starts_with('&') {
-                                "code"
+                            // Try to get the actual inferred type for the variable
+                            let var_name = completion.label.trim_start_matches(['$', '@', '%', '&']);
+                            if let Some(perl_type) = type_engine.get_type_at(var_name) {
+                                completion.detail = Some(Self::format_type_for_detail(&perl_type));
                             } else {
-                                "unknown"
-                            };
-                            completion.detail = Some(type_hint.to_string());
+                                // Fallback to sigil-based type hint
+                                let type_hint = if completion.label.starts_with('$') {
+                                    "scalar"
+                                } else if completion.label.starts_with('@') {
+                                    "array"
+                                } else if completion.label.starts_with('%') {
+                                    "hash"
+                                } else if completion.label.starts_with('&') {
+                                    "code"
+                                } else {
+                                    "unknown"
+                                };
+                                completion.detail = Some(type_hint.to_string());
+                            }
                         }
                     }
 
