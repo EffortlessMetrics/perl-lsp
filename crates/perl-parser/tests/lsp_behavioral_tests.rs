@@ -3,10 +3,11 @@
 /// They ensure the wired infrastructure produces real results
 
 use serde_json::json;
+use std::time::Duration;
 
 // Import the proper test harness
 mod support;
-use support::lsp_harness::LspHarness;
+use support::lsp_harness::{LspHarness, TempWorkspace};
 
 mod test_fixtures {
     pub const MAIN_FILE: &str = r#"#!/usr/bin/env perl
@@ -53,37 +54,41 @@ sub process {
 }
 
 /// Create and initialize a test server with the fixture files
-fn create_test_server() -> LspHarness {
-    let mut harness = LspHarness::new();
+fn create_test_server() -> (LspHarness, TempWorkspace) {
+    // Create harness with real temp workspace
+    let (mut harness, workspace) = LspHarness::with_workspace(&[
+        ("script.pl", test_fixtures::MAIN_FILE),
+        ("lib/My/Module.pm", test_fixtures::MODULE_FILE),
+    ]).expect("Failed to create test workspace");
     
-    // Initialize the server
-    harness.initialize_default().expect("Failed to initialize");
-    
-    // Open main file
+    // Open documents with real file URIs from the temp workspace
     harness.open_document(
-        "file:///workspace/script.pl",
+        &workspace.uri("script.pl"),
         test_fixtures::MAIN_FILE
     ).expect("Failed to open main file");
     
-    // Open module file  
     harness.open_document(
-        "file:///workspace/lib/My/Module.pm",
+        &workspace.uri("lib/My/Module.pm"),
         test_fixtures::MODULE_FILE
     ).expect("Failed to open module file");
     
-    // Give server a moment to process the files
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    // Send didSave notifications to trigger any incremental indexing
+    harness.did_save(&workspace.uri("script.pl")).ok();
+    harness.did_save(&workspace.uri("lib/My/Module.pm")).ok();
     
-    harness
+    // Wait for the server to process files and become idle
+    harness.wait_for_idle(Duration::from_millis(200));
+    
+    (harness, workspace)
 }
 
 #[test]
 fn test_cross_file_definition() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request go-to-definition for My::Module usage
     let result = harness.request("textDocument/definition", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "position": {"line": 4, "character": 10} // On "My::Module"
     })).expect("Definition request failed");
     
@@ -95,7 +100,7 @@ fn test_cross_file_definition() {
         let first_location = &locations[0];
         assert_eq!(
             first_location["uri"].as_str(),
-            Some("file:///workspace/lib/My/Module.pm"),
+            Some(workspace.uri("lib/My/Module.pm").as_str()),
             "Should navigate to module file"
         );
     }
@@ -103,11 +108,11 @@ fn test_cross_file_definition() {
 
 #[test]
 fn test_cross_file_references() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request references for the 'new' method
     let result = harness.request("textDocument/references", json!({
-        "textDocument": {"uri": "file:///workspace/lib/My/Module.pm"},
+        "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
         "position": {"line": 4, "character": 4}, // On "new" method
         "context": {"includeDeclaration": true}
     })).expect("References request failed");
@@ -118,7 +123,7 @@ fn test_cross_file_references() {
         
         // Check for reference in script.pl
         let has_script_ref = references.iter().any(|r| {
-            r["uri"].as_str() == Some("file:///workspace/script.pl")
+            r["uri"].as_str() == Some(workspace.uri("script.pl").as_str())
         });
         assert!(has_script_ref, "Should find reference in script.pl");
     }
@@ -126,7 +131,7 @@ fn test_cross_file_references() {
 
 #[test]
 fn test_workspace_symbol_search() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Search for symbols across workspace
     let result = harness.request("workspace/symbol", json!({"query": "process"})).expect("Symbol search failed");
@@ -144,7 +149,7 @@ fn test_workspace_symbol_search() {
         // Verify it's in the module file
         assert_eq!(
             process_symbol.unwrap()["location"]["uri"].as_str(),
-            Some("file:///workspace/lib/My/Module.pm"),
+            Some(workspace.uri("lib/My/Module.pm").as_str()),
             "Process method should be in Module.pm"
         );
     }
@@ -152,11 +157,11 @@ fn test_workspace_symbol_search() {
 
 #[test]
 fn test_extract_variable_returns_edits() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request code actions for expression extraction
     let result = harness.request("textDocument/codeAction", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "range": {
             "start": {"line": 11, "character": 11},
             "end": {"line": 11, "character": 18} // Select "$x + $y"
@@ -189,14 +194,14 @@ fn test_extract_variable_returns_edits() {
 
 #[test]
 fn test_critic_violations_emit_diagnostics() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Perl::Critic would flag missing return in calculate sub
     // Note: In real implementation, we'd need to capture published diagnostics
     // For now, we'll request diagnostics through a code action context
     
     let result = harness.request("textDocument/codeAction", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "range": {
             "start": {"line": 0, "character": 0},
             "end": {"line": 20, "character": 0}
@@ -214,11 +219,11 @@ fn test_critic_violations_emit_diagnostics() {
 
 #[test]
 fn test_test_generation_actions_present() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request code actions for the calculate subroutine
     let result = harness.request("textDocument/codeAction", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "range": {
             "start": {"line": 9, "character": 0},
             "end": {"line": 12, "character": 1} // Cover "calculate" subroutine
@@ -257,11 +262,11 @@ fn test_test_generation_actions_present() {
 
 #[test]
 fn test_completion_detail_formatting() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request completion after $obj->
     let result = harness.request("textDocument/completion", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "position": {"line": 7, "character": 6} // After "$obj->"
     })).expect("Completion request failed");
     
@@ -291,11 +296,11 @@ fn test_completion_detail_formatting() {
 
 #[test]
 fn test_hover_enriched_information() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request hover for My::Module
     let result = harness.request("textDocument/hover", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"},
+        "textDocument": {"uri": workspace.uri("script.pl")},
         "position": {"line": 4, "character": 10} // On "My::Module"
     })).expect("Hover request failed");
     
@@ -326,11 +331,11 @@ fn test_hover_enriched_information() {
 
 #[test]
 fn test_folding_ranges_work() {
-    let mut harness = create_test_server();
+    let (mut harness, workspace) = create_test_server();
     
     // Request folding ranges
     let result = harness.request("textDocument/foldingRange", json!({
-        "textDocument": {"uri": "file:///workspace/script.pl"}
+        "textDocument": {"uri": workspace.uri("script.pl")}
     })).expect("Folding range request failed");
     
     {
