@@ -1638,7 +1638,7 @@ impl LspServer {
                     // Use SemanticAnalyzer for type information
                     let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
                     let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
-                    
+
                     // Try to get symbol information from semantic analyzer
                     if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
                         // Get symbol kind as string
@@ -1652,25 +1652,29 @@ impl LspServer {
                             crate::symbol::SymbolKind::Label => "Label",
                             crate::symbol::SymbolKind::Format => "Format",
                         };
-                        
+
                         // Add sigil if applicable
                         let sigil = symbol_info.kind.sigil().unwrap_or("");
                         let full_name = format!("{}{}", sigil, symbol_info.name);
-                        
+
                         // Add declaration type if available
-                        let decl_info = symbol_info.declaration.as_ref()
+                        let decl_info = symbol_info
+                            .declaration
+                            .as_ref()
                             .map(|d| format!("\n**Declaration**: `{}`", d))
                             .unwrap_or_default();
-                        
+
                         // Add documentation if available
-                        let doc_info = symbol_info.documentation.as_ref()
+                        let doc_info = symbol_info
+                            .documentation
+                            .as_ref()
                             .map(|d| format!("\n\n{}", d))
                             .unwrap_or_default();
-                        
+
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
-                                "value": format!("**{}**\n\n`{}`{}{}", 
+                                "value": format!("**{}**\n\n`{}`{}{}",
                                     kind_str,
                                     full_name,
                                     decl_info,
