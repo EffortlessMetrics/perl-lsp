@@ -361,6 +361,33 @@ impl BuiltInAnalyzer {
 
         violations
     }
+
+    /// Get quick fix for a violation
+    pub fn get_quick_fix(&self, violation: &Violation, _content: &str) -> Option<QuickFix> {
+        match violation.policy.as_str() {
+            "TestingAndDebugging::RequireUseStrict" => Some(QuickFix {
+                title: "Add 'use strict'".to_string(),
+                edit: TextEdit {
+                    range: Range {
+                        start: Position { byte: 0, line: 0, column: 0 },
+                        end: Position { byte: 0, line: 0, column: 0 },
+                    },
+                    new_text: "use strict;\n".to_string(),
+                },
+            }),
+            "TestingAndDebugging::RequireUseWarnings" => Some(QuickFix {
+                title: "Add 'use warnings'".to_string(),
+                edit: TextEdit {
+                    range: Range {
+                        start: Position { byte: 0, line: 0, column: 0 },
+                        end: Position { byte: 0, line: 0, column: 0 },
+                    },
+                    new_text: "use warnings;\n".to_string(),
+                },
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

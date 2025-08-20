@@ -10,16 +10,16 @@ use crate::{
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
-    perl_critic::BuiltInAnalyzer,
-    tdd_basic::TestGenerator,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
     performance::{AstCache, SymbolIndex},
+    perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+    tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
@@ -29,11 +29,11 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
 };
-use std::path::{Path, PathBuf};
 use url::Url;
 
 #[cfg(feature = "workspace")]
@@ -450,7 +450,7 @@ impl LspServer {
             }
             "textDocument/declaration" => self.handle_declaration(request.params),
             "textDocument/references" => {
-                // Use test fallback in test mode, production handler otherwise  
+                // Use test fallback in test mode, production handler otherwise
                 let use_fallback = std::env::var("LSP_TEST_FALLBACKS").is_ok();
                 if use_fallback {
                     match self.on_references(request.params.clone().unwrap_or(json!({}))) {
@@ -743,7 +743,8 @@ impl LspServer {
                     "perl.runFile",
                     "perl.runTestSub",
                     "perl.debugFile",
-                    "perl.debugTests"
+                    "perl.debugTests",
+                    "perl.runCritic"
                 ]
             },
             "experimental": {
@@ -1006,7 +1007,8 @@ impl LspServer {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
                 let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                let mut diagnostics =
+                    provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
 
                 // Add Perl::Critic built-in analysis
                 let built_in_analyzer = BuiltInAnalyzer::new();
@@ -1331,13 +1333,14 @@ impl LspServer {
                     // Enhance completions with type information
                     let mut type_engine = TypeInferenceEngine::new();
                     let _ = type_engine.infer(ast); // Build type environment
-                    
+
                     // Add type information to completion items where possible
                     for completion in &mut base_completions {
                         // Add type detail to variables based on inferred types
                         if completion.kind == CompletionItemKind::Variable {
                             // Try to get the actual inferred type for the variable
-                            let var_name = completion.label.trim_start_matches(['$', '@', '%', '&']);
+                            let var_name =
+                                completion.label.trim_start_matches(['$', '@', '%', '&']);
                             if let Some(perl_type) = type_engine.get_type_at(var_name) {
                                 completion.detail = Some(Self::format_type_for_detail(&perl_type));
                             } else {
@@ -1501,6 +1504,55 @@ impl LspServer {
                     // Get code actions from both providers
                     let mut code_actions: Vec<Value> = Vec::new();
 
+                    // Add Perl::Critic quick fixes
+                    let builtin_analyzer = BuiltInAnalyzer::new();
+                    let violations = builtin_analyzer.analyze(ast, &doc.content);
+                    for violation in &violations {
+                        if let Some(quick_fix) =
+                            builtin_analyzer.get_quick_fix(violation, &doc.content)
+                        {
+                            let mut changes = HashMap::new();
+                            let (start_line, start_char) =
+                                self.offset_to_pos16(doc, violation.range.start.byte);
+                            let (end_line, end_char) =
+                                self.offset_to_pos16(doc, violation.range.end.byte);
+
+                            changes.insert(
+                                uri.to_string(),
+                                vec![json!({
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "newText": quick_fix.edit.new_text,
+                                })],
+                            );
+
+                            code_actions.push(json!({
+                                "title": quick_fix.title,
+                                "kind": "quickfix",
+                                "diagnostics": [{
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "severity": match violation.severity {
+                                        crate::perl_critic::Severity::Brutal |
+                                        crate::perl_critic::Severity::Cruel => 1, // Error
+                                        crate::perl_critic::Severity::Harsh => 2, // Warning
+                                        _ => 3, // Information
+                                    },
+                                    "code": violation.policy.clone(),
+                                    "source": "Perl::Critic",
+                                    "message": violation.description.clone()
+                                }],
+                                "edit": {
+                                    "changes": changes,
+                                },
+                            }));
+                        }
+                    }
+
                     // Get quick-fixes from the V2 provider (diagnostic-based)
                     let provider_v2 = CodeActionsProviderV2::new(doc.content.clone());
                     let quick_fixes =
@@ -1581,7 +1633,7 @@ impl LspServer {
                     let enhanced_provider = EnhancedCodeActionsProvider::new(doc.content.clone());
                     let enhanced_actions = enhanced_provider
                         .get_enhanced_refactoring_actions(ast, (start_offset, end_offset));
-                    
+
                     // Add test generation actions
                     let test_generator = TestGenerator::new("Test::More");
                     let subroutines = test_generator.find_subroutines(ast);
@@ -1622,11 +1674,12 @@ impl LspServer {
                             },
                         }));
                     }
-                    
+
                     // Add test generation actions for subroutines in range
                     for sub_info in subroutines {
                         // Check if cursor is near this subroutine
-                        let test_code = test_generator.generate_test(&sub_info.name, sub_info.param_count);
+                        let test_code =
+                            test_generator.generate_test(&sub_info.name, sub_info.param_count);
                         code_actions.push(json!({
                             "title": format!("Generate test for '{}'", sub_info.name),
                             "kind": "source",
@@ -4823,6 +4876,18 @@ impl LspServer {
                         json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
                     ));
                 }
+                // Perl::Critic command
+                "perl.runCritic" => {
+                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
+                        return self.run_perl_critic(file_uri);
+                    } else {
+                        return Err(JsonRpcError {
+                            code: -32602,
+                            message: "Missing file URI argument".to_string(),
+                            data: None,
+                        });
+                    }
+                }
                 _ => {
                     return Err(JsonRpcError {
                         code: ERR_METHOD_NOT_FOUND,
@@ -4901,6 +4966,115 @@ impl LspServer {
             return Ok(Some(json!({
                 "status": "success",
                 "results": json_results
+            })));
+        }
+
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+    }
+
+    /// Run Perl::Critic on a file
+    fn run_perl_critic(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
+        use crate::perl_critic::{CriticAnalyzer, CriticConfig};
+        use std::path::Path;
+
+        eprintln!("Running Perl::Critic on: {}", uri);
+
+        // Get the document content
+        let documents = self.documents.lock().unwrap();
+        if let Some(doc) = documents.get(uri) {
+            // Try to get file path from URI
+            let file_path = if uri.starts_with("file://") {
+                uri.strip_prefix("file://").unwrap_or(uri)
+            } else {
+                uri
+            };
+
+            // First, try external perlcritic if available
+            let violations = if Path::new("/usr/bin/perlcritic").exists()
+                || Path::new("/usr/local/bin/perlcritic").exists()
+                || std::process::Command::new("which")
+                    .arg("perlcritic")
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            {
+                // Use external perlcritic
+                let mut analyzer = CriticAnalyzer::new(CriticConfig::default());
+                match analyzer.analyze_file(Path::new(file_path)) {
+                    Ok(violations) => violations,
+                    Err(e) => {
+                        eprintln!("External perlcritic failed: {}, using built-in analyzer", e);
+                        // Fall back to built-in analyzer
+                        let builtin = BuiltInAnalyzer::new();
+                        let mut parser = Parser::new(&doc.content);
+                        if let Ok(ast) = parser.parse() {
+                            builtin.analyze(&ast, &doc.content)
+                        } else {
+                            builtin.analyze(
+                                &Node::new(
+                                    NodeKind::Error { message: "Parse error".to_string() },
+                                    crate::ast::SourceLocation { start: 0, end: 0 },
+                                ),
+                                &doc.content,
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Use built-in analyzer
+                eprintln!("Using built-in Perl::Critic analyzer");
+                let builtin = BuiltInAnalyzer::new();
+                let mut parser = Parser::new(&doc.content);
+                if let Ok(ast) = parser.parse() {
+                    builtin.analyze(&ast, &doc.content)
+                } else {
+                    builtin.analyze(
+                        &Node::new(
+                            NodeKind::Error { message: "Parse error".to_string() },
+                            crate::ast::SourceLocation { start: 0, end: 0 },
+                        ),
+                        &doc.content,
+                    )
+                }
+            };
+
+            // Convert violations to diagnostics and publish them
+            let diagnostics: Vec<Value> = violations.iter().map(|v| {
+                json!({
+                    "range": {
+                        "start": {"line": v.range.start.line, "character": v.range.start.column},
+                        "end": {"line": v.range.end.line, "character": v.range.end.column}
+                    },
+                    "severity": match v.severity {
+                        crate::perl_critic::Severity::Brutal |
+                        crate::perl_critic::Severity::Cruel => 1, // Error
+                        crate::perl_critic::Severity::Harsh => 2, // Warning
+                        _ => 3, // Information
+                    },
+                    "code": v.policy,
+                    "source": "Perl::Critic",
+                    "message": v.description
+                })
+            }).collect();
+
+            // Send publishDiagnostics notification
+            let _ = self.notify(
+                "textDocument/publishDiagnostics",
+                json!({
+                    "uri": uri,
+                    "diagnostics": diagnostics
+                }),
+            );
+
+            return Ok(Some(json!({
+                "status": "success",
+                "violationCount": violations.len(),
+                "violations": violations.iter().map(|v| json!({
+                    "policy": v.policy,
+                    "severity": format!("{:?}", v.severity),
+                    "message": v.description,
+                    "line": v.range.start.line + 1
+                })).collect::<Vec<_>>()
             })));
         }
 
@@ -5638,9 +5812,7 @@ impl LspServer {
 
     /// Set the root path from the root URI during initialization
     fn set_root_uri(&self, root_uri: &str) {
-        let root_path = Url::parse(root_uri)
-            .ok()
-            .and_then(|u| u.to_file_path().ok());
+        let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
         *self.root_path.lock().unwrap() = root_path;
     }
 
@@ -5650,8 +5822,8 @@ impl LspServer {
         let rel = module.replace("::", "/") + ".pm";
         for base in ["lib", "inc", "local/lib/perl5"] {
             let p = root.join(base).join(&rel);
-            if p.exists() { 
-                return Some(p); 
+            if p.exists() {
+                return Some(p);
             }
         }
         // Best-effort even if not present (for test workspaces)
@@ -5674,7 +5846,8 @@ impl LspServer {
     fn on_definition(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
         let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
         let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch   = params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch =
+            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
         let text = self.buffer_text(uri).unwrap_or_default();
         let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));
@@ -5695,11 +5868,14 @@ impl LspServer {
     fn on_references(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
         let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
         let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch   = params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch =
+            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
         let text = self.buffer_text(uri).unwrap_or_default();
         let needle = token_under_cursor(&text, line, ch).unwrap_or_default();
-        if needle.is_empty() { return Ok(serde_json::json!([])); }
+        if needle.is_empty() {
+            return Ok(serde_json::json!([]));
+        }
 
         // Fallback: search all open docs with word boundary checking
         let mut out = Vec::new();
@@ -5726,20 +5902,25 @@ impl LspServer {
                 }
             }
         }
-        
+
         // Sort for deterministic output and deduplicate
-        out.sort_by_key(|loc| (
-            loc["uri"].as_str().unwrap_or("").to_string(),
-            loc["range"]["start"]["line"].as_u64().unwrap_or(0),
-            loc["range"]["start"]["character"].as_u64().unwrap_or(0)
-        ));
+        out.sort_by_key(|loc| {
+            (
+                loc["uri"].as_str().unwrap_or("").to_string(),
+                loc["range"]["start"]["line"].as_u64().unwrap_or(0),
+                loc["range"]["start"]["character"].as_u64().unwrap_or(0),
+            )
+        });
         out.dedup();
-        
+
         Ok(serde_json::Value::Array(out))
     }
 
     /// Non-blocking folding range handler with text-based fallback
-    fn on_folding_range(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
+    fn on_folding_range(
+        &self,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, JsonRpcError> {
         let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
         let text = self.buffer_text(uri).unwrap_or_default();
         let ranges = folding_ranges_from_text(&text, 128);
@@ -5753,8 +5934,8 @@ impl LspServer {
 fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
     let mut units = 0;
     for (i, ch) in line_text.char_indices() {
-        if units == col_utf16 { 
-            return i; 
+        if units == col_utf16 {
+            return i;
         }
         // UTF-16 encoding: chars >= U+10000 use 2 units (surrogate pairs)
         let add = if ch as u32 >= 0x10000 { 2 } else { 1 };
@@ -5768,51 +5949,64 @@ fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<Strin
     let l = text.lines().nth(line)?;
     let byte_pos = byte_offset_utf16(l, col_utf16);
     let bytes = l.as_bytes();
-    
-    if byte_pos >= bytes.len() { return None; }
-    
+
+    if byte_pos >= bytes.len() {
+        return None;
+    }
+
     // Expand to a "word" containing :: and \w
     // Also include sigils if we're on or after one
     let mut s = byte_pos;
     let mut e = byte_pos;
-    
+
     // Expand left - if we hit a sigil, include it
-    while s > 0 && is_modchar(bytes[s-1]) { s -= 1; }
-    if s > 0 && (bytes[s-1] == b'$' || bytes[s-1] == b'@' || bytes[s-1] == b'%' || bytes[s-1] == b'&' || bytes[s-1] == b'*') {
+    while s > 0 && is_modchar(bytes[s - 1]) {
         s -= 1;
     }
-    
+    if s > 0
+        && (bytes[s - 1] == b'$'
+            || bytes[s - 1] == b'@'
+            || bytes[s - 1] == b'%'
+            || bytes[s - 1] == b'&'
+            || bytes[s - 1] == b'*')
+    {
+        s -= 1;
+    }
+
     // Expand right
-    while e < bytes.len() && is_modchar(bytes[e]) { e += 1; }
-    
+    while e < bytes.len() && is_modchar(bytes[e]) {
+        e += 1;
+    }
+
     Some(l[s..e].to_string())
 }
 
-fn is_modchar(b: u8) -> bool { 
-    b.is_ascii_alphanumeric() || b == b':' || b == b'_' 
+fn is_modchar(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b':' || b == b'_'
 }
 
 /// Check if position is at word boundary (for accurate reference matching)
 fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
     // For Perl variables with sigils, we need special handling
     // If the match starts with a sigil ($, @, %), check the character after the variable name
-    let sigil_offset = if pos < text.len() && (text[pos] == b'$' || text[pos] == b'@' || text[pos] == b'%') {
-        1
-    } else {
-        0
-    };
-    
+    let _sigil_offset =
+        if pos < text.len() && (text[pos] == b'$' || text[pos] == b'@' || text[pos] == b'%') {
+            1
+        } else {
+            0
+        };
+
     // Check left boundary (before the sigil if present)
     if pos > 0 && is_modchar(text[pos - 1]) {
         return false;
     }
-    
+
     // Check right boundary (after the identifier part)
     let end_pos = pos + word_len;
     if end_pos < text.len() && is_modchar(text[end_pos]) {
         return false;
     }
-    
+
     true
 }
 
@@ -5845,15 +6039,15 @@ fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
     // Track different types of blocks
     let mut sub_stack: Vec<usize> = Vec::new();
     let mut pod_start: Option<usize> = None;
-    
+
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim_start();
-        
+
         // Skip lines that look like strings (basic heuristic)
         if trimmed.starts_with('"') || trimmed.starts_with('\'') || trimmed.starts_with('`') {
             continue;
         }
-        
+
         // POD documentation blocks
         if trimmed.starts_with("=pod") || trimmed.starts_with("=head") {
             pod_start = Some(i);
@@ -5868,7 +6062,7 @@ fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
                 }
             }
         }
-        
+
         // Subroutine blocks
         if trimmed.starts_with("sub ") && trimmed.contains('{') {
             sub_stack.push(i);
@@ -5885,7 +6079,9 @@ fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
         }
     }
 
-    if out.len() > limit { out.truncate(limit); }
+    if out.len() > limit {
+        out.truncate(limit);
+    }
     out
 }
 
