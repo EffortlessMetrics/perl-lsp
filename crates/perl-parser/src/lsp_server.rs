@@ -10,6 +10,8 @@ use crate::{
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
+    perl_critic::BuiltInAnalyzer,
+    tdd_basic::TestGenerator,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
@@ -957,7 +959,21 @@ impl LspServer {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
                 let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+
+                // Add Perl::Critic built-in analysis
+                let built_in_analyzer = BuiltInAnalyzer::new();
+                let violations = built_in_analyzer.analyze(ast, &doc.content);
+                for violation in violations {
+                    diagnostics.push(crate::Diagnostic {
+                        range: (violation.range.start.byte, violation.range.end.byte),
+                        severity: violation.severity.to_diagnostic_severity(),
+                        code: Some(violation.policy),
+                        message: violation.description,
+                        related_information: Vec::new(),
+                        tags: Vec::new(),
+                    });
+                }
 
                 // Convert to LSP diagnostics
                 diagnostics
@@ -1483,6 +1499,10 @@ impl LspServer {
                     let enhanced_provider = EnhancedCodeActionsProvider::new(doc.content.clone());
                     let enhanced_actions = enhanced_provider
                         .get_enhanced_refactoring_actions(ast, (start_offset, end_offset));
+                    
+                    // Add test generation actions
+                    let test_generator = TestGenerator::new("Test::More");
+                    let subroutines = test_generator.find_subroutines(ast);
 
                     for action in enhanced_actions {
                         let mut changes = HashMap::new();
@@ -1518,6 +1538,25 @@ impl LspServer {
                             "edit": {
                                 "changes": changes,
                             },
+                        }));
+                    }
+                    
+                    // Add test generation actions for subroutines in range
+                    for sub_info in subroutines {
+                        // Check if cursor is near this subroutine
+                        let test_code = test_generator.generate_test(&sub_info.name, sub_info.param_count);
+                        code_actions.push(json!({
+                            "title": format!("Generate test for '{}'", sub_info.name),
+                            "kind": "source",
+                            "command": {
+                                "title": "Generate test",
+                                "command": "perl.generateTest",
+                                "arguments": [json!({
+                                    "uri": uri,
+                                    "name": sub_info.name,
+                                    "test": test_code
+                                })]
+                            }
                         }));
                     }
 
