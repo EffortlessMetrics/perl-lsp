@@ -83,7 +83,6 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
 }
 
 #[test]
-#[ignore = "Cross-file navigation not fully implemented"]
 fn test_cross_file_definition() {
     let (mut harness, workspace) = create_test_server();
     
@@ -112,7 +111,6 @@ fn test_cross_file_definition() {
 }
 
 #[test]
-#[ignore = "Cross-file references not fully implemented"]
 fn test_cross_file_references() {
     let (mut harness, workspace) = create_test_server();
     
@@ -341,7 +339,6 @@ fn test_hover_enriched_information() {
 }
 
 #[test]
-#[ignore = "Folding ranges need fixing - returns empty array"]
 fn test_folding_ranges_work() {
     let (mut harness, workspace) = create_test_server();
     
@@ -351,19 +348,12 @@ fn test_folding_ranges_work() {
     }), Duration::from_millis(500)).expect("Folding range request failed");
     
     {
-        // Debug the response first
-        eprintln!("Folding range response: {:?}", result);
-        
         let ranges = result.as_array().expect("Should return folding ranges");
         assert!(!ranges.is_empty(), "Should have folding ranges");
         
-        // Check for subroutine folding - the calculate sub starts at line 9 (0-indexed)
+        // Check for subroutine folding
         let has_sub_fold = ranges.iter().any(|r| {
-            let start_line = r["startLine"].as_u64();
-            let kind = r["kind"].as_str();
-            eprintln!("Range: start={:?}, kind={:?}", start_line, kind);
-            // Line 9 (0-indexed) is line 10 in 1-indexed editor
-            start_line == Some(9) || kind == Some("region")
+            r["kind"].as_str() == Some("region")
         });
         assert!(has_sub_fold, "Should have foldable regions");
     }
