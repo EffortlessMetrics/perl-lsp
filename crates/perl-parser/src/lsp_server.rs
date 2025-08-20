@@ -10,6 +10,7 @@ use crate::{
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
+    type_inference::TypeInferenceEngine,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
@@ -954,7 +955,7 @@ impl LspServer {
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
-                // Get diagnostics
+                // Get diagnostics (already includes unused variable detection)
                 let provider = DiagnosticsProvider::new(ast, doc.content.clone());
                 let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
 
@@ -1244,7 +1245,21 @@ impl LspServer {
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    provider.get_completions_with_path(&doc.content, offset, Some(uri))
+                    let mut base_completions = provider.get_completions_with_path(&doc.content, offset, Some(uri));
+                    
+                    // Enhance completions with type information
+                    let mut type_engine = TypeInferenceEngine::new();
+                    if let Ok(inferred_type) = type_engine.infer(ast) {
+                        // Add type information to completion items where possible
+                        for completion in &mut base_completions {
+                            // Add type detail to variables based on inferred types
+                            if completion.kind == CompletionItemKind::Variable {
+                                completion.detail = Some(format!("{:?}", inferred_type));
+                            }
+                        }
+                    }
+                    
+                    base_completions
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
                     self.lexical_complete(&doc.content, offset)
