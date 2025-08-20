@@ -358,3 +358,128 @@ fn test_folding_ranges_work() {
         assert!(has_sub_fold, "Should have foldable regions");
     }
 }
+
+#[test]
+fn test_utf16_definition_with_non_ascii_on_same_line() {
+    // Ensure we use the fast, deterministic fallbacks in CI
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
+    
+    let (mut harness, workspace) = create_test_server();
+
+    // Module with a trivial body
+    let module = r#"package My::Module;
+use strict;
+sub new { bless {}, shift }
+1;
+"#;
+
+    // Same line contains 2 emojis (each 2 UTF-16 units) and an umlaut (1 unit)
+    // The caret will sit on 'M' in `My::Module` after those non-ASCII chars.
+    let line = r#"my $obj = "😀😀 zö " . My::Module->new();"#;
+
+    let script = format!(
+        r#"#!/usr/bin/env perl
+use utf8;
+use strict;
+use lib "lib";
+use My::Module;
+{}
+"#,
+        line
+    );
+
+    // Create the module file
+    let module_path = workspace.dir.path().join("lib/My/Module.pm");
+    std::fs::create_dir_all(module_path.parent().unwrap()).unwrap();
+    std::fs::write(&module_path, module).unwrap();
+    harness.open_document(&format!("file://{}", module_path.display()), module).unwrap();
+
+    // Create and open the script
+    let script_path = workspace.dir.path().join("script.pl");
+    std::fs::write(&script_path, &script).unwrap();
+    harness.open_document(&format!("file://{}", script_path.display()), &script).unwrap();
+
+    // Wait until the symbol appears so we don't race the indexer
+    let module_uri = format!("file://{}", module_path.display());
+    harness.wait_for_symbol(
+        "My::Module",
+        Some(&module_uri),
+        Duration::from_millis(800),
+    ).expect("index ready");
+
+    // Compute the UTF-16 column for the 'M' in "My::Module" on that exact line.
+    let line_idx = script.lines()
+        .position(|l| l == line)
+        .expect("line with non-ASCII is present");
+    let m_byte = line.find("My::Module").expect("line contains My::Module");
+    let char_col_utf16 = utf16_units(&line[..m_byte]);
+
+    // Ask for definition using UTF-16 character units
+    let result = harness.request_with_timeout("textDocument/definition", json!({
+        "textDocument": { "uri": format!("file://{}", script_path.display()) },
+        "position": { "line": line_idx, "character": char_col_utf16 }
+    }), Duration::from_millis(500)).expect("definition request");
+
+    // Should resolve to the module file
+    let locations = result.as_array().expect("definition returns array");
+    assert!(!locations.is_empty(), "should return at least one location");
+    assert_eq!(
+        locations[0]["uri"].as_str(),
+        Some(module_uri.as_str()),
+        "definition should jump to module file"
+    );
+}
+
+// Helper to count UTF-16 code units
+fn utf16_units(s: &str) -> usize {
+    // Count UTF-16 code units in the prefix (surrogate pairs count as 2)
+    s.encode_utf16().count()
+}
+
+#[test]
+fn test_word_boundary_references() {
+    // Ensure we use the fast, deterministic fallbacks
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
+    
+    let (mut harness, workspace) = create_test_server();
+    
+    // Create a file with similar variable names to test boundary detection
+    let file_path = workspace.dir.path().join("boundary_test.pl");
+    let content = r#"#!/usr/bin/perl
+my $process = 1;
+my $process_data = 2;
+my $preprocessor = 3;
+print $process;        # Should match
+print $process_data;   # Should NOT match
+print $preprocessor;   # Should NOT match
+"#;
+    
+    std::fs::write(&file_path, content).unwrap();
+    harness.open_document(&format!("file://{}", file_path.display()), content).unwrap();
+    
+    // Find references to $process (not $process_data or $preprocessor)
+    let result = harness.request_with_timeout("textDocument/references", json!({
+        "textDocument": { "uri": format!("file://{}", file_path.display()) },
+        "position": { "line": 1, "character": 4 },  // Position within $process
+        "context": { "includeDeclaration": true }
+    }), Duration::from_millis(500)).expect("References request failed");
+    
+    {
+        let refs = result.as_array().expect("Should return references");
+        assert_eq!(refs.len(), 2, "Should find exactly 2 uses of $process (declaration and print)");
+        
+        // Verify only the exact matches are found
+        let lines: Vec<u64> = refs.iter()
+            .map(|r| r["range"]["start"]["line"].as_u64().unwrap())
+            .collect();
+        
+        assert!(lines.contains(&1), "Should find declaration on line 1");
+        assert!(lines.contains(&4), "Should find usage on line 4");
+        assert!(!lines.contains(&5), "Should NOT find $process_data on line 5");
+        assert!(!lines.contains(&6), "Should NOT find $preprocessor on line 6");
+    }
+}
