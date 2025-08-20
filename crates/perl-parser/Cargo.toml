@@ -42,7 +42,7 @@ name = "perl-dap"
 path = "src/bin/perl-dap.rs"
 
 [features]
-default = []
+default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 cli = []
 incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features

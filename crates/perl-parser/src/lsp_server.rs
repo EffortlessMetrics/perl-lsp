@@ -60,7 +60,7 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
-    /// Workspace-wide index for cross-file features (enabled via PERL_LSP_WORKSPACE=1)
+    /// Workspace-wide index for cross-file features
     #[cfg(feature = "workspace")]
     pub(crate) workspace_index: Option<Arc<WorkspaceIndex>>,
     /// AST cache for performance
@@ -165,13 +165,9 @@ pub struct JsonRpcError {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
-        // Check if workspace indexing is enabled
+        // Initialize workspace indexing (always enabled when workspace feature is on)
         #[cfg(feature = "workspace")]
-        let workspace_index = if std::env::var("PERL_LSP_WORKSPACE").is_ok() {
-            Some(Arc::new(WorkspaceIndex::new()))
-        } else {
-            None
-        };
+        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -191,13 +187,9 @@ impl LspServer {
 
     /// Create a new LSP server with custom output (for testing)
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
-        // Check if workspace indexing is enabled
+        // Initialize workspace indexing (always enabled when workspace feature is on)
         #[cfg(feature = "workspace")]
-        let workspace_index = if std::env::var("PERL_LSP_WORKSPACE").is_ok() {
-            Some(Arc::new(WorkspaceIndex::new()))
-        } else {
-            None
-        };
+        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -1640,10 +1632,55 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
-                if let Some(_ast) = &doc.ast {
+                if let Some(ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
-                    // For now, just show the token at position
+                    // Use SemanticAnalyzer for type information
+                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                    let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
+                    
+                    // Try to get symbol information from semantic analyzer
+                    if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
+                        // Get symbol kind as string
+                        let kind_str = match symbol_info.kind {
+                            crate::symbol::SymbolKind::ScalarVariable => "Scalar Variable",
+                            crate::symbol::SymbolKind::ArrayVariable => "Array Variable",
+                            crate::symbol::SymbolKind::HashVariable => "Hash Variable",
+                            crate::symbol::SymbolKind::Subroutine => "Subroutine",
+                            crate::symbol::SymbolKind::Package => "Package",
+                            crate::symbol::SymbolKind::Constant => "Constant",
+                            crate::symbol::SymbolKind::Label => "Label",
+                            crate::symbol::SymbolKind::Format => "Format",
+                        };
+                        
+                        // Add sigil if applicable
+                        let sigil = symbol_info.kind.sigil().unwrap_or("");
+                        let full_name = format!("{}{}", sigil, symbol_info.name);
+                        
+                        // Add declaration type if available
+                        let decl_info = symbol_info.declaration.as_ref()
+                            .map(|d| format!("\n**Declaration**: `{}`", d))
+                            .unwrap_or_default();
+                        
+                        // Add documentation if available
+                        let doc_info = symbol_info.documentation.as_ref()
+                            .map(|d| format!("\n\n{}", d))
+                            .unwrap_or_default();
+                        
+                        return Ok(Some(json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": format!("**{}**\n\n`{}`{}{}", 
+                                    kind_str,
+                                    full_name,
+                                    decl_info,
+                                    doc_info
+                                ),
+                            },
+                        })));
+                    }
+
+                    // Fall back to simple token display
                     let hover_text = self.get_token_at_position(&doc.content, offset);
 
                     if !hover_text.is_empty() {
