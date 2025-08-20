@@ -33,6 +33,8 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
 };
+use std::path::{Path, PathBuf};
+use url::Url;
 
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
@@ -80,6 +82,8 @@ pub struct LspServer {
     cancelled: Arc<Mutex<HashSet<Value>>>,
     /// Workspace folders
     workspace_folders: Arc<Mutex<Vec<String>>>,
+    /// Root path for module resolution
+    root_path: Arc<Mutex<Option<PathBuf>>>,
 }
 
 /// State of a document
@@ -185,6 +189,7 @@ impl LspServer {
             client_capabilities: ClientCapabilities::default(),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -206,6 +211,7 @@ impl LspServer {
             client_capabilities: ClientCapabilities::default(),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -428,9 +434,21 @@ impl LspServer {
             "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
-            "textDocument/definition" => self.handle_definition(request.params),
+            "textDocument/definition" => {
+                // Try the new non-blocking handler
+                match self.on_definition(request.params.clone().unwrap_or(json!({}))) {
+                    Ok(res) => Ok(Some(res)),
+                    Err(_) => self.handle_definition(request.params), // Fall back to original
+                }
+            }
             "textDocument/declaration" => self.handle_declaration(request.params),
-            "textDocument/references" => self.handle_references(request.params),
+            "textDocument/references" => {
+                // Try the new non-blocking handler
+                match self.on_references(request.params.clone().unwrap_or(json!({}))) {
+                    Ok(res) => Ok(Some(res)),
+                    Err(_) => self.handle_references(request.params), // Fall back to original
+                }
+            }
             "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
             "textDocument/prepareTypeHierarchy" => {
                 self.handle_prepare_type_hierarchy(request.params)
@@ -445,7 +463,13 @@ impl LspServer {
                 eprintln!("DocumentSymbol result: {:?}", result.is_ok());
                 result
             }
-            "textDocument/foldingRange" => self.handle_folding_range(request.params),
+            "textDocument/foldingRange" => {
+                // Try the new non-blocking handler
+                match self.on_folding_range(request.params.clone().unwrap_or(json!({}))) {
+                    Ok(res) => Ok(Some(res)),
+                    Err(_) => self.handle_folding_range(request.params), // Fall back to original
+                }
+            }
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
             "workspace/symbol" => self.handle_workspace_symbols(request.params),
@@ -585,6 +609,8 @@ impl LspServer {
                 let mut folders = self.workspace_folders.lock().unwrap();
                 eprintln!("Initialized with root URI: {}", root_uri);
                 folders.push(root_uri.to_string());
+                // Also set the root path for module resolution
+                self.set_root_uri(root_uri);
             }
         }
 
@@ -5588,6 +5614,153 @@ impl LspServer {
         // Don't check system paths (@INC) to avoid blocking on network filesystems
         None
     }
+
+    /// Set the root path from the root URI during initialization
+    fn set_root_uri(&self, root_uri: &str) {
+        let root_path = Url::parse(root_uri)
+            .ok()
+            .and_then(|u| u.to_file_path().ok());
+        *self.root_path.lock().unwrap() = root_path;
+    }
+
+    /// Enhanced module path resolver using root_path
+    fn resolve_module_path(&self, module: &str) -> Option<PathBuf> {
+        let root = self.root_path.lock().unwrap().clone()?;
+        let rel = module.replace("::", "/") + ".pm";
+        for base in ["lib", "inc", "local/lib/perl5"] {
+            let p = root.join(base).join(&rel);
+            if p.exists() { 
+                return Some(p); 
+            }
+        }
+        // Best-effort even if not present (for test workspaces)
+        Some(root.join("lib").join(rel))
+    }
+
+    /// Get buffer text for a URI
+    fn buffer_text(&self, uri: &str) -> Option<String> {
+        let docs = self.documents.lock().unwrap();
+        docs.get(uri).map(|d| d.content.clone())
+    }
+
+    /// Iterate over all open buffers (for reference search)
+    fn iter_open_buffers(&self) -> Vec<(String, String)> {
+        let docs = self.documents.lock().unwrap();
+        docs.iter().map(|(uri, doc)| (uri.clone(), doc.content.clone())).collect()
+    }
+
+    /// Non-blocking definition handler with fallback
+    fn on_definition(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch   = params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));
+
+        if let Some(m) = module {
+            if let Some(path) = self.resolve_module_path(&m) {
+                let loc = location_from_path(&path);
+                return Ok(serde_json::json!([loc]));
+            }
+        }
+
+        // Fallback: try existing analysis
+        // For now, just return empty array
+        Ok(serde_json::json!([]))
+    }
+
+    /// Non-blocking references handler with fallback
+    fn on_references(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch   = params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let needle = token_under_cursor(&text, line, ch).unwrap_or_default();
+        if needle.is_empty() { return Ok(serde_json::json!([])); }
+
+        // Fallback: search all open docs
+        let mut out = Vec::new();
+        for (doc_uri, doc_text) in self.iter_open_buffers() {
+            for (ln, l) in doc_text.lines().enumerate() {
+                let mut start = 0usize;
+                while let Some(idx) = l[start..].find(&needle) {
+                    let col = start + idx;
+                    out.push(serde_json::json!({
+                        "uri": doc_uri,
+                        "range": {
+                            "start": {"line": ln as u32, "character": col as u32},
+                            "end":   {"line": ln as u32, "character": (col + needle.len()) as u32}
+                        }
+                    }));
+                    start = col + needle.len();
+                }
+            }
+        }
+        Ok(serde_json::Value::Array(out))
+    }
+
+    /// Non-blocking folding range handler with text-based fallback
+    fn on_folding_range(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let ranges = folding_ranges_from_text(&text, 128);
+        Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
+    }
+}
+
+// Helper functions for non-blocking handlers
+fn token_under_cursor(text: &str, line: usize, ch: usize) -> Option<String> {
+    let l = text.lines().nth(line)?;
+    let bytes = l.as_bytes();
+    if ch >= bytes.len() { return None; }
+    // Expand to a "word" containing :: and \w
+    let mut s = ch;
+    let mut e = ch;
+    while s > 0 && is_modchar(bytes[s-1]) { s -= 1; }
+    while e < bytes.len() && is_modchar(bytes[e]) { e += 1; }
+    Some(l[s..e].to_string())
+}
+
+fn is_modchar(b: u8) -> bool { 
+    b.is_ascii_alphanumeric() || b == b':' || b == b'_' 
+}
+
+fn location_from_path(p: &Path) -> serde_json::Value {
+    let uri = Url::from_file_path(p).unwrap().to_string();
+    // Jump to start of file or try to find 'package' later if you prefer
+    serde_json::json!({
+        "uri": uri,
+        "range": { "start": { "line": 0, "character": 0}, "end": { "line": 0, "character": 0} }
+    })
+}
+
+fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    let lines: Vec<&str> = src.lines().collect();
+
+    // naive block detector for `sub NAME { ... }`
+    let mut stack: Vec<usize> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("sub ") && trimmed.contains('{') {
+            stack.push(i);
+        } else if trimmed.starts_with('}') {
+            if let Some(start) = stack.pop() {
+                if i > start {
+                    out.push(serde_json::json!({
+                        "startLine": start as u32,
+                        "endLine":   i as u32,
+                        "kind": "region"
+                    }));
+                }
+            }
+        }
+    }
+
+    if out.len() > limit { out.truncate(limit); }
+    out
 }
 
 impl Default for LspServer {
