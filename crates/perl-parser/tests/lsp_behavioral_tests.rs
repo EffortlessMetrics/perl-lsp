@@ -2,8 +2,11 @@
 /// These tests verify actual functionality, not just response shapes
 /// They ensure the wired infrastructure produces real results
 
-use perl_parser::{LspServer, JsonRpcRequest};
 use serde_json::{json, Value};
+
+// Import the proper test harness
+mod support;
+use support::lsp_harness::LspHarness;
 
 mod test_fixtures {
     pub const MAIN_FILE: &str = r#"#!/usr/bin/env perl
@@ -49,71 +52,29 @@ sub process {
 "#;
 }
 
-/// Helper to send a request and get response
-fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> Option<Value> {
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
-        method: method.to_string(),
-        params,
-    };
-    
-    server.handle_request(request).and_then(|response| response.result)
-}
-
-/// Helper to send a notification
-fn send_notification(server: &mut LspServer, method: &str, params: Option<Value>) {
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".to_string(),
-        id: None,
-        method: method.to_string(),
-        params,
-    };
-    
-    let _ = server.handle_request(request);
-}
-
-fn create_test_server() -> LspServer {
-    let mut server = LspServer::new();
+/// Create and initialize a test server with the fixture files
+fn create_test_server() -> LspHarness {
+    let mut harness = LspHarness::new();
     
     // Initialize the server
-    send_request(&mut server, "initialize", Some(json!({
-        "rootUri": "file:///workspace",
-        "capabilities": {
-            "textDocument": {
-                "definition": {"dynamicRegistration": false},
-                "references": {"dynamicRegistration": false},
-                "completion": {"dynamicRegistration": false}
-            },
-            "workspace": {
-                "symbol": {"dynamicRegistration": false}
-            }
-        }
-    })));
-    
-    send_notification(&mut server, "initialized", Some(json!({})));
+    harness.initialize_default().expect("Failed to initialize");
     
     // Open main file
-    send_notification(&mut server, "textDocument/didOpen", Some(json!({
-        "textDocument": {
-            "uri": "file:///workspace/script.pl",
-            "languageId": "perl",
-            "version": 1,
-            "text": test_fixtures::MAIN_FILE
-        }
-    })));
+    harness.open_document(
+        "file:///workspace/script.pl",
+        test_fixtures::MAIN_FILE
+    ).expect("Failed to open main file");
     
-    // Open module file
-    send_notification(&mut server, "textDocument/didOpen", Some(json!({
-        "textDocument": {
-            "uri": "file:///workspace/lib/My/Module.pm",
-            "languageId": "perl",
-            "version": 1,
-            "text": test_fixtures::MODULE_FILE
-        }
-    })));
+    // Open module file  
+    harness.open_document(
+        "file:///workspace/lib/My/Module.pm",
+        test_fixtures::MODULE_FILE
+    ).expect("Failed to open module file");
     
-    server
+    // Give server a moment to process the files
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    
+    harness
 }
 
 #[test]

@@ -15,7 +15,7 @@ This project provides **three Perl parser implementations** and a **full-feature
 
 1. **v1: C-based tree-sitter parser** - Original implementation (~95% coverage)
 2. **v2: Pest-based Pure Rust parser** - PEG grammar approach (~99.995% coverage)
-3. **v3: Native Rust lexer+parser** ⭐ - Hand-written for maximum performance (~100% coverage)
+3. **v3: Native Rust lexer+parser** ⭐ - Ground-up rewrite for maximum performance (~100% coverage)
 4. **LSP Server** ⚠️ - Partial IDE support (~35% functional, ~70% infrastructure exists)
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
