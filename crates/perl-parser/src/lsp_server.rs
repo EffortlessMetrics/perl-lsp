@@ -10,7 +10,6 @@ use crate::{
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
-    type_inference::TypeInferenceEngine,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
@@ -21,6 +20,7 @@ use crate::{
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
     test_runner::{TestKind, TestRunner},
     type_hierarchy::TypeHierarchyProvider,
+    type_inference::TypeInferenceEngine,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -1245,8 +1245,9 @@ impl LspServer {
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
                     let provider = CompletionProvider::new(ast);
-                    let mut base_completions = provider.get_completions_with_path(&doc.content, offset, Some(uri));
-                    
+                    let mut base_completions =
+                        provider.get_completions_with_path(&doc.content, offset, Some(uri));
+
                     // Enhance completions with type information
                     let mut type_engine = TypeInferenceEngine::new();
                     if let Ok(inferred_type) = type_engine.infer(ast) {
@@ -1258,7 +1259,7 @@ impl LspServer {
                             }
                         }
                     }
-                    
+
                     base_completions
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
