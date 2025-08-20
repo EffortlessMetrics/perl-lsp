@@ -4,7 +4,7 @@
 
 ---
 
-## 🎉 Current State (v0.8.2 - February 2025)
+## 🎉 Current State (v0.8.3-rc.1 - February 2025)
 
 We've built the most comprehensive Perl parsing solution available, **exceeding our Q1-Q2 2025 goals**:
 
@@ -14,7 +14,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 | **Performance** | ~12-68µs | ~200-450µs | **~1-150µs** | <50ms response |
 | **Perl Coverage** | ~95% | ~99.995% | **~100%** | Full support |
 | **Edge Cases** | Limited | 95% | **141/141** | All handled |
-| **Features** | Basic | Advanced | **Complete** | **30+ IDE features** |
+| **Features** | Basic | Advanced | **Complete** | **35+ IDE features** |
 
 ---
 
@@ -26,10 +26,10 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 - **v3**: Native lexer+parser with 100% coverage ⭐ **RECOMMENDED**
 - **LSP**: Full Language Server Protocol implementation 🚀
 
-### Key Accomplishments (v0.8.2)
+### Key Accomplishments (v0.8.3-rc.1)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **Enterprise LSP implementation** (30+ professional IDE features)
+- ✅ **Enterprise LSP implementation** (35+ professional IDE features)
   - ✅ Real-time diagnostics with auto-fix
   - ✅ Intelligent code completion (variables, functions, modules)
   - ✅ Multi-file go to definition
@@ -52,6 +52,11 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - ✅ Selection ranges for smart expansion (v0.8.2)
   - ✅ On-type formatting with indentation (v0.8.2)
   - ✅ File watching for external changes (v0.8.2)
+  - ✅ **Perl::Critic integration** (v0.8.3-rc.1)
+  - ✅ Enhanced fallback handlers with UTF-16 support (v0.8.3-rc.1)
+  - ✅ Word boundary detection for references (v0.8.3-rc.1)
+  - ✅ Deterministic test infrastructure (v0.8.3-rc.1)
+  - ✅ Multi-message LSP protocol handling (v0.8.3-rc.1)
 - ✅ **Performance optimizations**
   - ✅ AST caching with LRU eviction
   - ✅ Symbol indexing with trie structure
@@ -138,9 +143,10 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - [x] Built-in function signatures
   - [x] Type-based completions
 - [x] **Code Quality Tools** ✅ **COMPLETED**
-  - [x] Perl::Critic integration
-  - [x] Perltidy integration
-  - [x] Quick fixes for violations
+  - [x] Perl::Critic integration with built-in analyzer
+  - [x] External perlcritic tool support with fallback
+  - [x] Perltidy integration for formatting
+  - [x] Quick fixes for violations (add strict/warnings)
   - [x] Import optimization across workspace
   - [x] Dead code detection
 - [x] **TDD Workflow Support** ✅ **COMPLETED**
@@ -286,8 +292,9 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - Efficient memory usage with caching
 - ✅ **Quality Excellence**
   - 141/141 edge cases passing (100%)
-  - 30+ IDE features implemented
+  - 35+ IDE features implemented
   - 530+ tests passing (100% pass rate)
+  - 11/11 behavioral tests passing
   - Zero known critical bugs
 - ✅ **Technical Milestones**
   - 61% reduction in code warnings
@@ -358,9 +365,10 @@ cargo install --path crates/perl-parser --bin perl-lsp
 - **v0.7.5** - February 2025 - Release automation, CI/CD, enhanced type inference
 - **v0.8.0** - February 2025 - Production-hardened position helpers
 - **v0.8.2** - February 2025 - Document links, selection ranges, on-type formatting
+- **v0.8.3-rc.1** - February 2025 - Perl::Critic integration, enhanced fallbacks, UTF-16 support
 
 ### Upcoming
-- **v0.8.3** - March 2025 - Workspace scanning by default, method completion
+- **v0.8.3** - March 2025 - Full release with workspace scanning, method completion
 - **v0.9.0** - June 2025 - AI integration, advanced analysis
 - **v0.10.0** - September 2025 - Perl 7 support
 - **v1.0.0** - January 2026 - Industry standard platform
@@ -379,4 +387,4 @@ cargo install --path crates/perl-parser --bin perl-lsp
 
 *The future of Perl tooling is here. Join us in building it!*
 
-*Last Updated: 2025-02-09*
+*Last Updated: 2025-02-20*
