@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use std::fs;
-use std::path::Path;
 use url::Url;
 
 /// Temporary workspace for testing with real files
@@ -221,6 +220,36 @@ impl LspHarness {
             drop(notifications);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+    
+    /// Poll workspace/symbol until query appears (optionally at want_uri)
+    pub fn wait_for_symbol(
+        &mut self,
+        query: &str,
+        want_uri: Option<&str>,
+        budget: Duration,
+    ) -> Result<(), String> {
+        let start = Instant::now();
+        while start.elapsed() < budget {
+            let res = self.request_with_timeout(
+                "workspace/symbol",
+                serde_json::json!({ "query": query }),
+                Duration::from_millis(250),
+            );
+            if let Ok(v) = res {
+                if let Some(arr) = v.as_array() {
+                    let ok = arr.iter().any(|s| {
+                        let uri = s.pointer("/location/uri").and_then(|u| u.as_str());
+                        want_uri.map_or(true, |expect| uri == Some(expect))
+                    });
+                    if ok { 
+                        return Ok(()); 
+                    }
+                }
+            }
+            std::thread::sleep(Duration::from_millis(40));
+        }
+        Err(format!("symbol '{}' not ready within {:?}", query, budget))
     }
 
     /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
