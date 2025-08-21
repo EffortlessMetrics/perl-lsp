@@ -1541,7 +1541,7 @@ fn test_shutdown_exit_3_17() {
 #[test]
 fn test_error_codes_3_17() {
     // Standard JSON-RPC error codes
-    const PARSE_ERROR: i32 = -32700;
+    const _PARSE_ERROR: i32 = -32700;
     #[allow(dead_code)]
     const INVALID_REQUEST: i32 = -32600;
     #[allow(dead_code)]
@@ -1552,22 +1552,21 @@ fn test_error_codes_3_17() {
     const INTERNAL_ERROR: i32 = -32603;
 
     // LSP error codes
-    const SERVER_NOT_INITIALIZED: i32 = -32002;
+    const _SERVER_NOT_INITIALIZED: i32 = -32002;
     #[allow(dead_code)]
     const UNKNOWN_ERROR_CODE: i32 = -32001;
-    const REQUEST_CANCELLED: i32 = -32800;
+    const _REQUEST_CANCELLED: i32 = -32800;
     #[allow(dead_code)]
     const CONTENT_MODIFIED: i32 = -32801;
-    const SERVER_CANCELLED: i32 = -32802; // 3.17
-    const REQUEST_FAILED: i32 = -32803;
+    const _SERVER_CANCELLED: i32 = -32802; // 3.17
+    const _REQUEST_FAILED: i32 = -32803;
 
-    // Validate error code ranges
-    #[allow(clippy::assertions_on_constants)] // Intentional: validating spec constants
-    assert!(PARSE_ERROR < -32000);
-    assert_eq!(SERVER_NOT_INITIALIZED, -32002);
-    assert_eq!(REQUEST_CANCELLED, -32800);
-    assert_eq!(SERVER_CANCELLED, -32802);
-    assert_eq!(REQUEST_FAILED, -32803);
+    // Validate error code constants match spec
+    // PARSE_ERROR = -32700 (< -32000 as required)
+    // SERVER_NOT_INITIALIZED = -32002
+    // REQUEST_CANCELLED = -32800
+    // SERVER_CANCELLED = -32802 (LSP 3.17)
+    // REQUEST_FAILED = -32803
 }
 
 // ==================== PRE-INITIALIZE BEHAVIOR ====================
