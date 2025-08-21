@@ -351,6 +351,14 @@ impl Node {
                 format!("({} {})", phase, block.to_sexp())
             }
 
+            NodeKind::DataSection { marker, body } => {
+                if let Some(body_text) = body {
+                    format!("(data_section {} \"{}\")", marker, body_text.escape_default())
+                } else {
+                    format!("(data_section {})", marker)
+                }
+            }
+
             NodeKind::Class { name, body } => {
                 format!("(class {} {})", name, body.to_sexp())
             }
@@ -371,6 +379,7 @@ impl Node {
             NodeKind::Error { message } => {
                 format!("(ERROR {})", message)
             }
+            NodeKind::UnknownRest => "(UNKNOWN_REST)".to_string(),
         }
     }
 }
@@ -620,6 +629,12 @@ pub enum NodeKind {
         block: Box<Node>,
     },
 
+    // Data sections
+    DataSection {
+        marker: String, // __DATA__ or __END__
+        body: Option<String>,
+    },
+
     // Modern Perl OOP (5.38+)
     Class {
         name: String,
@@ -646,6 +661,9 @@ pub enum NodeKind {
     Error {
         message: String,
     },
+
+    // Lexer budget exceeded - preserves earlier AST
+    UnknownRest,
 }
 
 /// Source location information

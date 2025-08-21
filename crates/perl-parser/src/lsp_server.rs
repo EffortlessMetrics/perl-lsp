@@ -26,6 +26,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -105,6 +106,11 @@ pub(crate) struct DocumentState {
     pub(crate) line_starts: LineStartsCache,
     /// Generation counter for latest-wins race condition prevention
     pub(crate) generation: Arc<AtomicU32>,
+}
+
+/// Normalize legacy package separator ' to ::
+fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
+    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
 }
 
 /// Server configuration
@@ -782,8 +788,9 @@ impl LspServer {
                 eprintln!("Using cached AST for {}", uri);
                 (Some((*cached_ast).clone()), vec![])
             } else {
-                // Parse the document
-                let mut parser = Parser::new(text);
+                // Parse the document up to __DATA__ or __END__ marker
+                let code_text = crate::util::code_slice(text);
+                let mut parser = Parser::new(code_text);
                 match parser.parse() {
                     Ok(ast) => {
                         let arc_ast = Arc::new(ast);
@@ -910,8 +917,9 @@ impl LspServer {
                     eprintln!("Using cached AST for {}", uri);
                     (Some((*cached_ast).clone()), vec![])
                 } else {
-                    // Parse the document
-                    let mut parser = Parser::new(&text);
+                    // Parse the document up to __DATA__ or __END__ marker
+                    let code_text = crate::util::code_slice(&text);
+                    let mut parser = Parser::new(code_text);
                     match parser.parse() {
                         Ok(ast) => {
                             let arc_ast = Arc::new(ast);
@@ -3288,13 +3296,48 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = documents.get(uri) {
+                let mut lsp_ranges = Vec::new();
+
+                // Add text-based data section folding
+                if let Some(marker_offset) = crate::util::find_data_marker_byte_lexed(&doc.content)
+                {
+                    let marker_line = self.offset_to_line(&doc.content, marker_offset);
+                    let total_lines = doc.content.lines().count();
+
+                    // Add fold for data section body if it exists
+                    if marker_line + 1 < total_lines {
+                        lsp_ranges.push(json!({
+                            "startLine": marker_line + 1,
+                            "endLine": total_lines - 1,
+                            "kind": "comment"
+                        }));
+                    }
+                }
+
+                // Add heredoc folding ranges from lexer
+                let heredoc_ranges =
+                    crate::folding::FoldingRangeExtractor::extract_heredoc_ranges(&doc.content);
+                for range in heredoc_ranges {
+                    // Use saturating_sub to ensure we're inside the body
+                    let (start_line, _) = self.offset_to_pos16(doc, range.start_offset);
+                    let (end_line, _) =
+                        self.offset_to_pos16(doc, range.end_offset.saturating_sub(1));
+
+                    if start_line <= end_line {
+                        lsp_ranges.push(json!({
+                            "startLine": start_line,
+                            "endLine": end_line,
+                            "kind": "region"
+                        }));
+                    }
+                }
+
                 if let Some(ref ast) = doc.ast {
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
 
                     // Convert to LSP JSON format with proper line offsets
-                    let mut lsp_ranges = Vec::new();
                     for range in ranges {
                         // Calculate actual line numbers from document content
                         let start_line = self.offset_to_line(&doc.content, range.start_offset);
@@ -4048,7 +4091,7 @@ impl LspServer {
                             },
                         },
                     },
-                    container_name: sym.container_name,
+                    container_name: sym.container_name.map(|s| norm_pkg(&s).into_owned()),
                 });
             }
         }
@@ -4192,7 +4235,7 @@ impl LspServer {
                                 },
                             },
                         },
-                        container_name: container.map(|s| s.to_string()),
+                        container_name: container.map(|s| norm_pkg(s).into_owned()),
                     });
 
                     // Recurse into body with this subroutine as container
@@ -4227,7 +4270,7 @@ impl LspServer {
                             },
                         },
                     },
-                    container_name: container.map(|s| s.to_string()),
+                    container_name: container.map(|s| norm_pkg(s).into_owned()),
                 });
 
                 // Recurse into block with this package as container
@@ -5006,7 +5049,8 @@ impl LspServer {
                         eprintln!("External perlcritic failed: {}, using built-in analyzer", e);
                         // Fall back to built-in analyzer
                         let builtin = BuiltInAnalyzer::new();
-                        let mut parser = Parser::new(&doc.content);
+                        let code_text = crate::util::code_slice(&doc.content);
+                        let mut parser = Parser::new(code_text);
                         if let Ok(ast) = parser.parse() {
                             builtin.analyze(&ast, &doc.content)
                         } else {
@@ -5024,7 +5068,8 @@ impl LspServer {
                 // Use built-in analyzer
                 eprintln!("Using built-in Perl::Critic analyzer");
                 let builtin = BuiltInAnalyzer::new();
-                let mut parser = Parser::new(&doc.content);
+                let code_text = crate::util::code_slice(&doc.content);
+                let mut parser = Parser::new(code_text);
                 if let Ok(ast) = parser.parse() {
                     builtin.analyze(&ast, &doc.content)
                 } else {

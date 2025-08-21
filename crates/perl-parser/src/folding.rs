@@ -4,6 +4,7 @@
 //! allowing editors to collapse/expand code sections.
 
 use crate::ast::{Node, NodeKind, SourceLocation};
+use perl_lexer::{PerlLexer, TokenType};
 
 /// Extracts folding ranges from a Perl AST
 pub struct FoldingRangeExtractor {
@@ -41,6 +42,29 @@ impl FoldingRangeExtractor {
         self.ranges.clear();
         self.visit_node(ast);
         self.ranges.clone()
+    }
+
+    /// Extract heredoc folding ranges from source text using the lexer
+    pub fn extract_heredoc_ranges(text: &str) -> Vec<FoldingRange> {
+        let mut ranges = Vec::new();
+        let mut lexer = PerlLexer::new(text);
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::HeredocBody(_)) {
+                ranges.push(FoldingRange {
+                    start_offset: token.start,
+                    end_offset: token.end,
+                    kind: Some(FoldingRangeKind::Region),
+                });
+            }
+
+            // Stop at EOF
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+        }
+
+        ranges
     }
 
     /// Visit a node and extract folding ranges
@@ -221,6 +245,13 @@ impl FoldingRangeExtractor {
                 // Visit the initializer if present
                 if let Some(init) = initializer {
                     self.visit_node(init);
+                }
+            }
+
+            NodeKind::DataSection { marker: _, body } => {
+                // Fold the data section body as a comment
+                if body.is_some() {
+                    self.add_range_from_node(node, Some(FoldingRangeKind::Comment));
                 }
             }
 

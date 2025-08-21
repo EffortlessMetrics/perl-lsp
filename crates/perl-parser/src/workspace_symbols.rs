@@ -8,7 +8,13 @@ use crate::{
     symbol::{SymbolExtractor, SymbolKind},
 };
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
+
+/// Normalize legacy package separator ' to ::
+fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
+    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
+}
 
 /// LSP WorkspaceSymbol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,7 +119,7 @@ impl WorkspaceSymbolsProvider {
                             end: Position { line: 0, character: 0 },
                         },
                     },
-                    container_name: symbol.container.clone(),
+                    container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
                 });
             }
         }
@@ -280,7 +286,7 @@ impl WorkspaceSymbolsProvider {
                     end: Position { line: end_line as u32, character: end_col as u32 },
                 },
             },
-            container_name: symbol.container.clone(),
+            container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
         }
     }
 }

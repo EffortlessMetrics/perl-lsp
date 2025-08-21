@@ -95,6 +95,16 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while !self.tokens.is_eof() {
+            // Check for UnknownRest token (lexer budget exceeded)
+            if matches!(self.peek_kind(), Some(TokenKind::UnknownRest)) {
+                let t = self.consume_token()?;
+                statements.push(Node::new(
+                    NodeKind::UnknownRest,
+                    SourceLocation { start: t.start, end: t.end },
+                ));
+                break; // Stop parsing but preserve earlier nodes
+            }
+
             statements.push(self.parse_statement()?);
         }
 
@@ -166,6 +176,9 @@ impl<'a> Parser<'a> {
             | TokenKind::Check
             | TokenKind::Init
             | TokenKind::Unitcheck => self.parse_phase_block(),
+
+            // Data sections
+            TokenKind::DataMarker => self.parse_data_section(),
 
             // Return statement
             TokenKind::Return => self.parse_return(),
@@ -1597,6 +1610,28 @@ impl<'a> Parser<'a> {
             NodeKind::PhaseBlock { phase, block: Box::new(block) },
             SourceLocation { start, end },
         ))
+    }
+
+    /// Parse data section (__DATA__ or __END__)
+    fn parse_data_section(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+
+        // Consume the data marker token
+        let marker_token = self.consume_token()?;
+        let marker = marker_token.text.clone();
+
+        // Check if there's a data body token
+        let body = if self.peek_kind() == Some(TokenKind::DataBody) {
+            let body_token = self.consume_token()?;
+            Some(body_token.text.clone())
+        } else {
+            None
+        };
+
+        let end = self.previous_position();
+
+        // Create a data section node
+        Ok(Node::new(NodeKind::DataSection { marker, body }, SourceLocation { start, end }))
     }
 
     /// Parse no statement (similar to use but disables pragmas/modules)

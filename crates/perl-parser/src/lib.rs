@@ -95,6 +95,7 @@ pub mod incremental;
 pub mod incremental_document;
 #[cfg(feature = "incremental")]
 pub mod incremental_edit;
+pub mod util;
 // pub mod refactoring; // TODO: Fix compilation errors
 pub mod call_hierarchy_provider;
 pub mod code_lens_provider;

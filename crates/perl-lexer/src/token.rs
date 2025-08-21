@@ -66,6 +66,16 @@ pub enum TokenType {
     /// POD documentation block
     Pod,
 
+    // Data sections
+    /// Data section marker: __DATA__ or __END__
+    DataMarker(Arc<str>),
+    /// Data section body content
+    DataBody(Arc<str>),
+
+    // Error recovery
+    /// Unknown rest of input (used when budget exceeded)
+    UnknownRest,
+
     // Identifiers and literals
     /// Identifier or variable name
     Identifier(Arc<str>),
