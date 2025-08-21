@@ -44,6 +44,19 @@ pub use token::{StringPart, Token, TokenType};
 
 use unicode::{is_perl_identifier_continue, is_perl_identifier_start};
 
+/// Specification for a pending heredoc
+#[derive(Clone)]
+struct HeredocSpec {
+    label: Arc<str>,
+    body_start: usize,  // byte offset where the body begins
+    allow_indent: bool, // true if we saw <<~ (Perl 5.26 indented heredocs)
+}
+
+// Budget limits to prevent hangs
+const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex
+const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc
+const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
+
 /// Configuration for the lexer
 #[derive(Debug, Clone)]
 pub struct LexerConfig {
@@ -78,6 +91,14 @@ pub struct PerlLexer<'a> {
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
+    /// Track if we just skipped a newline (for __DATA__/__END__ detection)
+    after_newline: bool,
+    /// Queue of pending heredocs waiting for their bodies
+    pending_heredocs: Vec<HeredocSpec>,
+    /// Track the byte offset of the current line's start
+    line_start_offset: usize,
+    /// If true, emit HeredocBody tokens; otherwise just consume them.
+    emit_heredoc_body_tokens: bool,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -98,7 +119,18 @@ impl<'a> PerlLexer<'a> {
             in_prototype: false,
             prototype_depth: 0,
             current_pos: Position::start(),
+            after_newline: true, // Start of file counts as after newline
+            pending_heredocs: Vec::new(),
+            line_start_offset: 0,
+            emit_heredoc_body_tokens: false,
         }
+    }
+
+    /// Create a new lexer that emits HeredocBody tokens (for LSP folding)
+    pub fn with_body_tokens(input: &'a str) -> Self {
+        let mut lexer = Self::new(input);
+        lexer.emit_heredoc_body_tokens = true;
+        lexer
     }
 
     /// Set the lexer mode (for resetting state at statement boundaries)
@@ -108,63 +140,234 @@ impl<'a> PerlLexer<'a> {
 
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Option<Token> {
-        // Handle format body parsing if we're in that mode
-        if matches!(self.mode, LexerMode::InFormatBody) {
-            return self.parse_format_body();
-        }
+        // Loop to avoid recursion when processing heredocs
+        loop {
+            // Handle format body parsing if we're in that mode
+            if matches!(self.mode, LexerMode::InFormatBody) {
+                return self.parse_format_body();
+            }
 
-        self.skip_whitespace_and_comments()?;
+            // Handle data section parsing if we're in that mode
+            if matches!(self.mode, LexerMode::InDataSection) {
+                return self.parse_data_body();
+            }
 
-        if self.position >= self.input.len() {
+            // Check if we're inside a heredoc body BEFORE skipping whitespace
+            let mut found_terminator = false;
+            if !self.pending_heredocs.is_empty() {
+                // Clone what we need to avoid holding a borrow
+                let (body_start, label, allow_indent) =
+                    if let Some(spec) = self.pending_heredocs.first() {
+                        if spec.body_start > 0 && self.position >= spec.body_start {
+                            (spec.body_start, spec.label.clone(), spec.allow_indent)
+                        } else {
+                            // Not in a heredoc body yet
+                            (0, Arc::from(""), false)
+                        }
+                    } else {
+                        (0, Arc::from(""), false)
+                    };
+
+                if body_start > 0 {
+                    // We're inside a heredoc body - scan for the terminator
+
+                    // Scan line by line looking for the terminator
+                    while self.position < self.input.len() {
+                        // Budget cap for huge bodies
+                        if self.position - body_start > MAX_HEREDOC_BYTES {
+                            return Some(Token {
+                                token_type: TokenType::UnknownRest,
+                                text: Arc::from(&self.input[body_start..]),
+                                start: body_start,
+                                end: self.input.len(),
+                            });
+                        }
+
+                        // Skip to start of next line if not at line start
+                        // Exception: if we're at body_start exactly, we're at the heredoc body start
+                        if !self.after_newline && self.position != body_start {
+                            while self.position < self.input.len()
+                                && self.input_bytes[self.position] != b'\n'
+                            {
+                                self.advance();
+                            }
+                            if self.position < self.input.len() {
+                                self.advance(); // skip the newline
+                                self.after_newline = true;
+                                self.line_start_offset = self.position;
+                            }
+                            continue;
+                        }
+
+                        // We're at line start - check if this line is the terminator
+                        let line_start = self.position;
+                        let mut line_end = self.position;
+                        while line_end < self.input.len() && self.input_bytes[line_end] != b'\n' {
+                            line_end += 1;
+                        }
+
+                        let line = &self.input[line_start..line_end];
+                        // Strip trailing spaces/tabs (Perl allows them)
+                        let trimmed_end = line.trim_end_matches([' ', '\t']);
+
+                        // Check if this line is the terminator
+                        let is_terminator = if allow_indent {
+                            // Allow any leading spaces/tabs before the label
+                            let mut p = 0;
+                            while p < trimmed_end.len() {
+                                let b = trimmed_end.as_bytes()[p];
+                                if b == b' ' || b == b'\t' {
+                                    p += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            trimmed_end[p..] == *label
+                        } else {
+                            // Must start at column 0 (no leading whitespace)
+                            // The terminator is just the label (already trimmed trailing whitespace)
+                            trimmed_end == &*label
+                        };
+
+                        if is_terminator {
+                            // Found the terminator!
+                            self.pending_heredocs.remove(0);
+                            found_terminator = true;
+
+                            // Consume past the terminator line
+                            self.position = line_end;
+                            if self.position < self.input.len()
+                                && self.input_bytes[self.position] == b'\n'
+                            {
+                                self.advance();
+                                self.after_newline = true;
+                                self.line_start_offset = self.position;
+
+                                // Set body_start for the next pending heredoc (if any)
+                                if let Some(next) = self.pending_heredocs.first_mut() {
+                                    if next.body_start == 0 {
+                                        next.body_start = self.position;
+                                    }
+                                }
+                            }
+
+                            // Only emit HeredocBody if requested (for folding)
+                            if self.emit_heredoc_body_tokens {
+                                return Some(Token {
+                                    token_type: TokenType::HeredocBody(Arc::from("")),
+                                    text: Arc::from(""),
+                                    start: body_start,
+                                    end: line_start,
+                                });
+                            }
+                            // Otherwise, continue the outer loop to get the next real token (avoiding recursion)
+                            break; // Break inner while loop, continue outer loop
+                        }
+
+                        // Not the terminator, continue to next line
+                        self.position = line_end;
+                        if self.position < self.input.len()
+                            && self.input_bytes[self.position] == b'\n'
+                        {
+                            self.advance();
+                            self.after_newline = true;
+                            self.line_start_offset = self.position;
+                        }
+                    }
+
+                    // If we didn't find a terminator, we reached EOF - emit error token
+                    if !found_terminator {
+                        return Some(Token {
+                            token_type: TokenType::UnknownRest,
+                            text: Arc::from(&self.input[body_start..]),
+                            start: body_start,
+                            end: self.input.len(),
+                        });
+                    }
+                }
+
+                // If we found a terminator, continue outer loop to get next token
+                if found_terminator {
+                    continue; // Continue outer loop to get next token
+                }
+            }
+
+            self.skip_whitespace_and_comments()?;
+
+            // Check again if we're now in a heredoc body (might have been set during skip_whitespace)
+            if !self.pending_heredocs.is_empty() {
+                if let Some(spec) = self.pending_heredocs.first() {
+                    if spec.body_start > 0 && self.position >= spec.body_start {
+                        continue; // Go back to top of loop to process heredoc
+                    }
+                }
+            }
+
+            if self.position >= self.input.len() {
+                return Some(Token {
+                    token_type: TokenType::EOF,
+                    text: Arc::from(""),
+                    start: self.position,
+                    end: self.position,
+                });
+            }
+
+            let start = self.position;
+
+            // Check for special tokens first
+            if let Some(token) = self.try_heredoc() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_string() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_variable() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_number() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_identifier_or_keyword() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_operator() {
+                return Some(token);
+            }
+
+            if let Some(token) = self.try_delimiter() {
+                return Some(token);
+            }
+
+            // If nothing else matches, return an error token
+            let ch = self.current_char()?;
+            self.advance();
+
             return Some(Token {
-                token_type: TokenType::EOF,
+                token_type: TokenType::Error(Arc::from(format!("Unexpected character: {}", ch))),
+                text: Arc::from(ch.to_string()),
+                start,
+                end: self.position,
+            });
+        } // End of loop
+    }
+
+    /// Check budget and return UnknownRest token if exceeded
+    fn budget_guard(&mut self, start: usize, depth: usize) -> Option<Token> {
+        if (self.position - start) > MAX_REGEX_BYTES || depth > MAX_DELIM_NEST {
+            self.position = self.input.len();
+            return Some(Token {
+                token_type: TokenType::UnknownRest,
                 text: Arc::from(""),
-                start: self.position,
+                start,
                 end: self.position,
             });
         }
-
-        let start = self.position;
-
-        // Check for special tokens first
-        if let Some(token) = self.try_heredoc() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_string() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_variable() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_number() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_identifier_or_keyword() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_operator() {
-            return Some(token);
-        }
-
-        if let Some(token) = self.try_delimiter() {
-            return Some(token);
-        }
-
-        // If nothing else matches, return an error token
-        let ch = self.current_char()?;
-        self.advance();
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from(format!("Unexpected character: {}", ch))),
-            text: Arc::from(ch.to_string()),
-            start,
-            end: self.position,
-        })
+        None
     }
 
     /// Peek at the next token without consuming it
@@ -173,6 +376,7 @@ impl<'a> PerlLexer<'a> {
         let saved_mode = self.mode;
         let saved_prototype = self.in_prototype;
         let saved_depth = self.prototype_depth;
+        let saved_after_newline = self.after_newline;
 
         let token = self.next_token();
 
@@ -180,6 +384,7 @@ impl<'a> PerlLexer<'a> {
         self.mode = saved_mode;
         self.in_prototype = saved_prototype;
         self.prototype_depth = saved_depth;
+        self.after_newline = saved_after_newline;
 
         token
     }
@@ -204,6 +409,9 @@ impl<'a> PerlLexer<'a> {
         self.delimiter_stack.clear();
         self.in_prototype = false;
         self.prototype_depth = 0;
+        self.after_newline = true;
+        self.pending_heredocs.clear();
+        self.line_start_offset = 0;
     }
 
     /// Switch lexer to format body parsing mode
@@ -279,13 +487,28 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn skip_whitespace_and_comments(&mut self) -> Option<()> {
+        // Don't reset after_newline if we're at the start of a line
+        if self.position > 0 && self.position != self.line_start_offset {
+            self.after_newline = false;
+        }
+
         while self.position < self.input_bytes.len() {
             let byte = self.input_bytes[self.position];
             match byte {
                 b' ' | b'\t' | b'\r' => self.position += 1,
                 b'\n' => {
                     self.advance();
-                    // Newlines can affect parsing context
+                    // Mark that we just skipped a newline
+                    self.after_newline = true;
+                    self.line_start_offset = self.position;
+
+                    // Set body_start for the FIRST pending heredoc that needs it (FIFO)
+                    for spec in &mut self.pending_heredocs {
+                        if spec.body_start == 0 {
+                            spec.body_start = self.position;
+                            break; // Only set for the first unresolved heredoc
+                        }
+                    }
                 }
                 b'#' => {
                     // In ExpectDelimiter mode, '#' is a delimiter, not a comment
@@ -329,7 +552,7 @@ impl<'a> PerlLexer<'a> {
         self.position += 2; // Skip <<
 
         // Check for indented heredoc (~)
-        let _indented = if self.current_char() == Some('~') {
+        let allow_indent = if self.current_char() == Some('~') {
             self.advance();
             true
         } else {
@@ -347,7 +570,7 @@ impl<'a> PerlLexer<'a> {
 
         // Parse delimiter
         let delimiter_start = self.position;
-        let _delimiter = if self.position < self.input.len() {
+        let delimiter = if self.position < self.input.len() {
             match self.current_char() {
                 Some('"') => {
                     // Double-quoted delimiter
@@ -355,7 +578,6 @@ impl<'a> PerlLexer<'a> {
                     let delim_start = self.position;
                     while self.position < self.input.len() {
                         if self.current_char() == Some('"') {
-                            let _delim = self.input[delim_start..self.position].to_string();
                             self.advance();
                             break;
                         }
@@ -369,7 +591,6 @@ impl<'a> PerlLexer<'a> {
                     let delim_start = self.position;
                     while self.position < self.input.len() {
                         if self.current_char() == Some('\'') {
-                            let _delim = self.input[delim_start..self.position].to_string();
                             self.advance();
                             break;
                         }
@@ -400,12 +621,18 @@ impl<'a> PerlLexer<'a> {
 
         // For now, return a placeholder token
         // The actual heredoc body would be parsed later when we encounter it
-        let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
 
+        // Queue the heredoc spec with its label
+        self.pending_heredocs.push(HeredocSpec {
+            label: Arc::from(delimiter.as_str()),
+            body_start: 0, // Will be set when we see the newline after this line
+            allow_indent,
+        });
+
         Some(Token {
-            token_type: TokenType::HeredocStart,
-            text: Arc::from(text),
+            token_type: TokenType::StringLiteral,
+            text: Arc::from(""),
             start,
             end: self.position,
         })
@@ -826,6 +1053,56 @@ impl<'a> PerlLexer<'a> {
 
             let text = &self.input[start..self.position];
 
+            // Check for __DATA__ and __END__ markers
+            // Only recognize these in code channel, not inside data/format sections or heredocs
+            let in_code_channel =
+                !matches!(self.mode, LexerMode::InDataSection | LexerMode::InFormatBody)
+                    && self.pending_heredocs.is_empty();
+
+            if in_code_channel && (text == "__DATA__" || text == "__END__") {
+                // These must be at the beginning of a line
+                // Use the after_newline flag to determine if we're at line start
+                if self.after_newline {
+                    // Check if rest of line is only whitespace
+                    let mut p = self.position;
+                    let mut only_whitespace = true;
+                    while p < self.input.len() && self.input_bytes[p] != b'\n' {
+                        match self.input_bytes[p] {
+                            b' ' | b'\t' => p += 1,
+                            _ => {
+                                only_whitespace = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Only treat as data marker if line has no trailing junk
+                    if only_whitespace {
+                        // Consume the rest of the line (the marker line)
+                        while self.position < self.input.len()
+                            && self.input_bytes[self.position] != b'\n'
+                        {
+                            self.advance();
+                        }
+                        if self.position < self.input.len()
+                            && self.input_bytes[self.position] == b'\n'
+                        {
+                            self.advance();
+                        }
+
+                        // Switch to data section mode
+                        self.mode = LexerMode::InDataSection;
+
+                        return Some(Token {
+                            token_type: TokenType::DataMarker(Arc::from(text)),
+                            text: Arc::from(text),
+                            start,
+                            end: self.position,
+                        });
+                    }
+                }
+            }
+
             // Check for substitution/transliteration operators
             if matches!(text, "s" | "tr" | "y") {
                 if let Some(next) = self.current_char() {
@@ -893,6 +1170,35 @@ impl<'a> PerlLexer<'a> {
         } else {
             None
         }
+    }
+
+    /// Parse data section body - consumes everything to EOF
+    fn parse_data_body(&mut self) -> Option<Token> {
+        if self.position >= self.input.len() {
+            // Already at EOF
+            self.mode = LexerMode::ExpectTerm;
+            return Some(Token {
+                token_type: TokenType::EOF,
+                text: Arc::from(""),
+                start: self.position,
+                end: self.position,
+            });
+        }
+
+        let start = self.position;
+        // Consume everything to EOF
+        let body = &self.input[self.position..];
+        self.position = self.input.len();
+
+        // Reset mode for next parse (though we're at EOF)
+        self.mode = LexerMode::ExpectTerm;
+
+        Some(Token {
+            token_type: TokenType::DataBody(Arc::from(body)),
+            text: Arc::from(body),
+            start,
+            end: self.position,
+        })
     }
 
     /// Parse format body - consumes until a line with just a dot
@@ -1361,6 +1667,11 @@ impl<'a> PerlLexer<'a> {
         };
 
         while let Some(ch) = self.current_char() {
+            // Check budget
+            if let Some(token) = self.budget_guard(start, depth) {
+                return Some(token);
+            }
+
             match ch {
                 '\\' => {
                     self.advance();
@@ -1469,6 +1780,11 @@ impl<'a> PerlLexer<'a> {
         };
 
         while let Some(ch) = self.current_char() {
+            // Check budget
+            if let Some(token) = self.budget_guard(start, depth) {
+                return Some(token);
+            }
+
             match ch {
                 '\\' => {
                     self.advance();
@@ -1564,6 +1880,11 @@ impl<'a> PerlLexer<'a> {
         self.advance(); // Skip opening /
 
         while let Some(ch) = self.current_char() {
+            // Check budget
+            if let Some(token) = self.budget_guard(start, 0) {
+                return Some(token);
+            }
+
             match ch {
                 '/' => {
                     self.advance();

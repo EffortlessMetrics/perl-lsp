@@ -136,6 +136,9 @@ pub enum TokenKind {
     HeredocStart,
     HeredocBody,
     FormatBody,
+    DataMarker,
+    DataBody,
+    UnknownRest,
 
     // Identifiers and variables
     Identifier,
@@ -397,6 +400,9 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::HeredocStart => TokenKind::HeredocStart,
             LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
             LexerTokenType::FormatBody(_) => TokenKind::FormatBody,
+            LexerTokenType::DataMarker(_) => TokenKind::DataMarker,
+            LexerTokenType::DataBody(_) => TokenKind::DataBody,
+            LexerTokenType::UnknownRest => TokenKind::UnknownRest,
 
             // Identifiers
             LexerTokenType::Identifier(text) => {

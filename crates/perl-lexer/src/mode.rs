@@ -12,6 +12,8 @@ pub enum LexerMode {
     ExpectDelimiter,
     /// Inside a format declaration body - consume until single dot on a line
     InFormatBody,
+    /// Inside a data section (__DATA__ or __END__) - consume everything to EOF
+    InDataSection,
 }
 
 impl LexerMode {
