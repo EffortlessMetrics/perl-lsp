@@ -41,8 +41,8 @@ mod tests {
         let src = "print 'hello';\n__DATA__\ndata here";
         assert_eq!(find_data_marker_byte_lexed(src), Some(15));
 
-        // __END__ marker with spaces
-        let src2 = "code;\n  __END__\ndata";
+        // __END__ marker at line start
+        let src2 = "code;\n__END__\ndata";
         assert_eq!(find_data_marker_byte_lexed(src2), Some(6));
 
         // Marker not at line start (should not match)

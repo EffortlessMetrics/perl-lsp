@@ -54,7 +54,7 @@ struct HeredocSpec {
 
 // Budget limits to prevent hangs on pathological input
 // When these limits are exceeded, the lexer gracefully truncates the token
-// as UnknownRest, preserving all previously parsed symbols and allowing 
+// as UnknownRest, preserving all previously parsed symbols and allowing
 // continued analysis of the remainder. LSP clients may emit a soft diagnostic
 // about truncation but won't crash or hang.
 const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns

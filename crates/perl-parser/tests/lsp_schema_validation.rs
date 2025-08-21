@@ -351,10 +351,10 @@ fn validate_server_capabilities(caps: &Value) -> Result<(), String> {
 #[test]
 fn test_completion_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "my $var = 1;\n$v");
+    harness.open_document(uri, "my $var = 1;\n$v").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -491,10 +491,10 @@ fn validate_completion_item(item: &Value) -> Result<(), String> {
 #[test]
 fn test_document_symbol_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "sub test { my $x = 1; }");
+    harness.open_document(uri, "sub test { my $x = 1; }").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -586,10 +586,10 @@ fn validate_document_symbol(sym: &Value) -> Result<(), String> {
 #[test]
 fn test_hover_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "print 'hello'");
+    harness.open_document(uri, "print 'hello'").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -633,9 +633,9 @@ fn test_hover_response_schema() {
 #[test]
 fn test_workspace_symbol_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
-    harness.open_document("file:///test.pl", "sub test { }");
+    harness.open_document("file:///test.pl", "sub test { }").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -703,10 +703,10 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
 #[test]
 fn test_code_action_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "open(FH, 'file.txt');");
+    harness.open_document(uri, "open(FH, 'file.txt');").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -959,10 +959,10 @@ fn validate_text_edit(edit: &Value) -> Result<(), String> {
 #[test]
 fn test_publish_diagnostics_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "use strict;\n$undefined = 1;");
+    harness.open_document(uri, "use strict;\n$undefined = 1;").expect("failed to open document");
 
     // Server should publish diagnostics
     // In real test, we'd capture notifications
@@ -1072,10 +1072,10 @@ fn test_error_response_schema() {
 #[test]
 fn test_signature_help_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "print(");
+    harness.open_document(uri, "print(").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1146,10 +1146,12 @@ fn test_signature_help_response_schema() {
 #[test]
 fn test_semantic_tokens_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "package Foo;\nsub bar { my $x = 1; }");
+    harness
+        .open_document(uri, "package Foo;\nsub bar { my $x = 1; }")
+        .expect("failed to open document");
 
     // This might not be implemented, so we just validate the schema IF it returns
     let response = harness.request_raw(json!({
@@ -1189,10 +1191,10 @@ fn test_semantic_tokens_response_schema() {
 #[test]
 fn test_inlay_hint_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "substr($str, 0, 5)");
+    harness.open_document(uri, "substr($str, 0, 5)").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1252,10 +1254,10 @@ fn test_inlay_hint_response_schema() {
 #[test]
 fn test_diagnostic_pull_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "$undefined");
+    harness.open_document(uri, "$undefined").expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1315,10 +1317,12 @@ fn test_diagnostic_pull_response_schema() {
 #[test]
 fn test_type_hierarchy_response_schema() {
     let mut harness = TestHarness::new();
-    harness.initialize_default();
+    harness.initialize_default().expect("failed to init LSP harness");
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "package Base;\npackage Derived;\nuse base 'Base';");
+    harness
+        .open_document(uri, "package Base;\npackage Derived;\nuse base 'Base';")
+        .expect("failed to open document");
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
