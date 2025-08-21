@@ -159,6 +159,42 @@ impl<'a> PerlLexer<'a> {
         true
     }
 
+    /// Consume a newline sequence (CRLF or LF) and update state
+    #[inline]
+    fn consume_newline(&mut self) {
+        if self.position >= self.input.len() {
+            return;
+        }
+        match self.input_bytes[self.position] {
+            b'\r' => {
+                self.position += 1;
+                if self.position < self.input.len() && self.input_bytes[self.position] == b'\n' {
+                    self.position += 1;
+                }
+            }
+            b'\n' => self.advance(),
+            _ => return, // not at a newline
+        }
+        self.after_newline = true;
+        self.line_start_offset = self.position;
+    }
+
+    /// Find the end of the current line, returning both raw end and visible end (without trailing CR)
+    #[inline]
+    fn find_line_end(bytes: &[u8], start: usize) -> (usize, usize) {
+        let mut end = start;
+        while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
+            end += 1;
+        }
+        // Visible end strips trailing \r if followed by \n
+        let visible_end = if end > start && end > 0 && bytes[end.saturating_sub(1)] == b'\r' {
+            end - 1
+        } else {
+            end
+        };
+        (end, visible_end)
+    }
+
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Option<Token> {
         // Normalize file start (BOM) once
@@ -218,43 +254,13 @@ impl<'a> PerlLexer<'a> {
                             {
                                 self.advance();
                             }
-                            if self.position < self.input.len() {
-                                // Handle CRLF
-                                if self.input_bytes[self.position] == b'\r' {
-                                    self.position += 1;
-                                    if self.position < self.input.len()
-                                        && self.input_bytes[self.position] == b'\n'
-                                    {
-                                        self.position += 1;
-                                    }
-                                } else if self.input_bytes[self.position] == b'\n' {
-                                    self.advance();
-                                }
-                                self.after_newline = true;
-                                self.line_start_offset = self.position;
-                            }
+                            self.consume_newline();
                             continue;
                         }
 
                         // We're at line start - check if this line is the terminator
                         let line_start = self.position;
-                        let mut line_end = self.position;
-                        while line_end < self.input.len()
-                            && self.input_bytes[line_end] != b'\n'
-                            && self.input_bytes[line_end] != b'\r'
-                        {
-                            line_end += 1;
-                        }
-
-                        // Handle CRLF: strip trailing \r if present
-                        let line_visible_end = if line_end > line_start
-                            && self.input_bytes[line_end.saturating_sub(1)] == b'\r'
-                        {
-                            line_end - 1
-                        } else {
-                            line_end
-                        };
-
+                        let (line_end, line_visible_end) = Self::find_line_end(self.input_bytes, self.position);
                         let line = &self.input[line_start..line_visible_end];
                         // Strip trailing spaces/tabs (Perl allows them)
                         let trimmed_end = line.trim_end_matches([' ', '\t']);
@@ -285,26 +291,12 @@ impl<'a> PerlLexer<'a> {
 
                             // Consume past the terminator line
                             self.position = line_end;
-                            if self.position < self.input.len() {
-                                // Handle CRLF
-                                if self.input_bytes[self.position] == b'\r' {
-                                    self.position += 1;
-                                    if self.position < self.input.len()
-                                        && self.input_bytes[self.position] == b'\n'
-                                    {
-                                        self.position += 1;
-                                    }
-                                } else if self.input_bytes[self.position] == b'\n' {
-                                    self.advance();
-                                }
-                                self.after_newline = true;
-                                self.line_start_offset = self.position;
+                            self.consume_newline();
 
-                                // Set body_start for the next pending heredoc (if any)
-                                if let Some(next) = self.pending_heredocs.first_mut() {
-                                    if next.body_start == 0 {
-                                        next.body_start = self.position;
-                                    }
+                            // Set body_start for the next pending heredoc (if any)
+                            if let Some(next) = self.pending_heredocs.first_mut() {
+                                if next.body_start == 0 {
+                                    next.body_start = self.position;
                                 }
                             }
 
@@ -323,21 +315,7 @@ impl<'a> PerlLexer<'a> {
 
                         // Not the terminator, continue to next line
                         self.position = line_end;
-                        if self.position < self.input.len() {
-                            // Handle CRLF
-                            if self.input_bytes[self.position] == b'\r' {
-                                self.position += 1;
-                                if self.position < self.input.len()
-                                    && self.input_bytes[self.position] == b'\n'
-                                {
-                                    self.position += 1;
-                                }
-                            } else if self.input_bytes[self.position] == b'\n' {
-                                self.advance();
-                            }
-                            self.after_newline = true;
-                            self.line_start_offset = self.position;
-                        }
+                        self.consume_newline();
                     }
 
                     // If we didn't find a terminator, we reached EOF - emit error token
@@ -561,30 +539,8 @@ impl<'a> PerlLexer<'a> {
             let byte = self.input_bytes[self.position];
             match byte {
                 b' ' | b'\t' => self.position += 1,
-                b'\r' => {
-                    // Handle CRLF: consume both; lone CR: treat as newline
-                    self.position += 1;
-                    if self.position < self.input_bytes.len()
-                        && self.input_bytes[self.position] == b'\n'
-                    {
-                        self.position += 1;
-                    }
-                    self.after_newline = true;
-                    self.line_start_offset = self.position;
-
-                    // Set body_start for the FIRST pending heredoc that needs it (FIFO)
-                    for spec in &mut self.pending_heredocs {
-                        if spec.body_start == 0 {
-                            spec.body_start = self.position;
-                            break; // Only set for the first unresolved heredoc
-                        }
-                    }
-                }
-                b'\n' => {
-                    self.advance();
-                    // Mark that we just skipped a newline
-                    self.after_newline = true;
-                    self.line_start_offset = self.position;
+                b'\r' | b'\n' => {
+                    self.consume_newline();
 
                     // Set body_start for the FIRST pending heredoc that needs it (FIFO)
                     for spec in &mut self.pending_heredocs {
