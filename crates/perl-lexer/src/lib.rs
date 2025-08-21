@@ -52,9 +52,13 @@ struct HeredocSpec {
     allow_indent: bool, // true if we saw <<~ (Perl 5.26 indented heredocs)
 }
 
-// Budget limits to prevent hangs
-const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex
-const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc
+// Budget limits to prevent hangs on pathological input
+// When these limits are exceeded, the lexer gracefully truncates the token
+// as UnknownRest, preserving all previously parsed symbols and allowing 
+// continued analysis of the remainder. LSP clients may emit a soft diagnostic
+// about truncation but won't crash or hang.
+const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns
+const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
 
 /// Configuration for the lexer
@@ -236,7 +240,7 @@ impl<'a> PerlLexer<'a> {
                     // Scan line by line looking for the terminator
                     while self.position < self.input.len() {
                         // Budget cap for huge bodies
-                        if self.position - body_start > MAX_HEREDOC_BYTES {
+                        if self.position.saturating_sub(body_start) > MAX_HEREDOC_BYTES {
                             return Some(Token {
                                 token_type: TokenType::UnknownRest,
                                 text: Arc::from(&self.input[body_start..]),
