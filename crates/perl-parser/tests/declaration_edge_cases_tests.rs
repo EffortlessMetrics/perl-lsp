@@ -4,7 +4,7 @@ mod declaration_edge_cases_tests {
     use perl_parser::declaration::DeclarationProvider;
     use std::sync::Arc;
 
-    fn parse_and_get_provider(code: &str) -> DeclarationProvider {
+    fn parse_and_get_provider(code: &str) -> DeclarationProvider<'_> {
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
         let ast_arc = Arc::new(ast);

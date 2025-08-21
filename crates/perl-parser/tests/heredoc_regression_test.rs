@@ -158,7 +158,6 @@ say 1;"#;
 }
 
 #[test]
-#[ignore = "Backslashed heredoc labels not yet supported"]
 fn test_backslashed_label_no_interpolation() {
     let input = r#"my $x = <<\END;
 $var should not interpolate
@@ -191,7 +190,6 @@ say 1;"#;
 }
 
 #[test]
-#[ignore = "CRLF line ending support needs lexer enhancement"]
 fn test_crlf_line_endings() {
     let input = "my $x = <<END;\r\nhello\r\nEND\r\nsay 1;\r\n";
 
@@ -272,7 +270,6 @@ say 1;"#;
 }
 
 #[test]
-#[ignore = "BOM (Byte Order Mark) support needs lexer enhancement"]
 fn test_bom_at_file_start() {
     // UTF-8 BOM: EF BB BF
     let input = "\u{FEFF}my $x = <<END;\nhello\nEND\nsay 1;";
