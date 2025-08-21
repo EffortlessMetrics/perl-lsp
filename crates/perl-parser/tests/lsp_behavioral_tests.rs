@@ -205,7 +205,7 @@ fn test_extract_variable_returns_edits() {
 
         // Find extract variable action
         let extract_action =
-            actions.iter().find(|a| a["title"].as_str().map_or(false, |t| t.contains("Extract")));
+            actions.iter().find(|a| a["title"].as_str().is_some_and(|t| t.contains("Extract")));
 
         if let Some(action) = extract_action {
             // Verify it has actual edits
@@ -271,10 +271,10 @@ sub calculate {
         if let Some(violations) = result["violations"].as_array() {
             let has_strict_violation = violations
                 .iter()
-                .any(|v| v["policy"].as_str().map_or(false, |p| p.contains("RequireUseStrict")));
+                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseStrict")));
             let has_warnings_violation = violations
                 .iter()
-                .any(|v| v["policy"].as_str().map_or(false, |p| p.contains("RequireUseWarnings")));
+                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseWarnings")));
 
             assert!(has_strict_violation, "Should detect missing 'use strict'");
             assert!(has_warnings_violation, "Should detect missing 'use warnings'");
@@ -303,7 +303,7 @@ sub calculate {
 
         // Look for strict/warnings quickfixes
         let has_strict_fix =
-            actions.iter().any(|a| a["title"].as_str().map_or(false, |t| t.contains("strict")));
+            actions.iter().any(|a| a["title"].as_str().is_some_and(|t| t.contains("strict")));
 
         assert!(has_strict_fix, "Should have quickfix for adding strict/warnings");
     }
@@ -334,7 +334,7 @@ fn test_test_generation_actions_present() {
         // Find test generation action
         let test_action = actions
             .iter()
-            .find(|a| a["title"].as_str().map_or(false, |t| t.contains("Generate test")));
+            .find(|a| a["title"].as_str().is_some_and(|t| t.contains("Generate test")));
 
         assert!(test_action.is_some(), "Should have test generation action");
 

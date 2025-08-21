@@ -151,7 +151,7 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
     // Optional fields with validation
     if let Some(severity) = diag.get("severity") {
         let sev = severity.as_u64().ok_or("severity must be number")?;
-        if sev < 1 || sev > 4 {
+        if !(1..=4).contains(&sev) {
             return Err("severity must be 1-4".into());
         }
     }
@@ -173,7 +173,7 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
         let tag_arr = tags.as_array().ok_or("tags must be array")?;
         for tag in tag_arr {
             let t = tag.as_u64().ok_or("tag must be number")?;
-            if t < 1 || t > 2 {
+            if !(1..=2).contains(&t) {
                 return Err("tag must be 1 (Unnecessary) or 2 (Deprecated)".into());
             }
         }
@@ -448,7 +448,7 @@ fn validate_completion_item(item: &Value) -> Result<(), String> {
     // Optional fields with validation
     if let Some(kind) = item.get("kind") {
         let k = kind.as_u64().ok_or("kind must be number")?;
-        if k < 1 || k > 25 {
+        if !(1..=25).contains(&k) {
             return Err("kind must be 1-25".into());
         }
     }
@@ -528,7 +528,7 @@ fn validate_symbol_information(sym: &Value) -> Result<(), String> {
         .as_u64()
         .ok_or("kind must be number")?;
 
-    if kind < 1 || kind > 26 {
+    if !(1..=26).contains(&kind) {
         return Err("kind must be 1-26".into());
     }
 
@@ -561,7 +561,7 @@ fn validate_document_symbol(sym: &Value) -> Result<(), String> {
         .as_u64()
         .ok_or("kind must be number")?;
 
-    if kind < 1 || kind > 26 {
+    if !(1..=26).contains(&kind) {
         return Err("kind must be 1-26".into());
     }
 
@@ -671,7 +671,7 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
         .as_u64()
         .ok_or("kind must be number")?;
 
-    if kind < 1 || kind > 26 {
+    if !(1..=26).contains(&kind) {
         return Err("kind must be 1-26".into());
     }
 
@@ -1064,7 +1064,7 @@ fn test_error_response_schema() {
     .collect();
 
     // Custom error codes are also allowed (non-reserved range)
-    if code < -32099 || code > -32000 {
+    if !(-32099..=-32000).contains(&code) {
         assert!(valid_codes.contains(&code) || code >= 0, "Invalid error code: {}", code);
     }
 }
@@ -1351,7 +1351,7 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
         .as_u64()
         .ok_or("kind must be number")?;
 
-    if kind < 1 || kind > 26 {
+    if !(1..=26).contains(&kind) {
         return Err("kind must be 1-26".into());
     }
 

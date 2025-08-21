@@ -260,7 +260,8 @@ impl<'a> PerlLexer<'a> {
 
                         // We're at line start - check if this line is the terminator
                         let line_start = self.position;
-                        let (line_end, line_visible_end) = Self::find_line_end(self.input_bytes, self.position);
+                        let (line_end, line_visible_end) =
+                            Self::find_line_end(self.input_bytes, self.position);
                         let line = &self.input[line_start..line_visible_end];
                         // Strip trailing spaces/tabs (Perl allows them)
                         let trimmed_end = line.trim_end_matches([' ', '\t']);
