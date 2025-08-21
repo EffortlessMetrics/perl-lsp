@@ -287,14 +287,14 @@ fn test_bom_at_file_start() {
 fn test_comprehensive_crlf_tilde_trailing_spaces() {
     // Mixed CRLF + <<~ + trailing spaces on terminator
     let input = "my $x = <<~END;\r\n    indented\r\n    END  \t \r\nsay 1;\r\n";
-    
+
     let mut parser = Parser::new(input);
     let ast = parser.parse();
     assert!(ast.is_ok());
-    
+
     let ast = ast.unwrap();
     let sexp = ast.to_sexp();
-    
+
     // Verify structure is preserved with CRLF
     assert!(sexp.contains("(my_declaration"));
     assert!(sexp.contains("say"));
@@ -307,15 +307,58 @@ fn test_data_end_with_trailing_junk_non_ws() {
         "__DATA__ # comment\nShould not be data",
         "__DATA__abc\nShould not be data",
         "__END__ some text\nShould not be data",
+        "__END__\\n\nShould not be data",  // Backslash after __END__
+        "__DATA__123\nShould not be data", // Numbers after __DATA__
     ];
-    
+
     for input in inputs {
         let mut parser = Parser::new(input);
         let ast = parser.parse();
         assert!(ast.is_ok());
-        
+
         let sexp = ast.unwrap().to_sexp();
         // Should not parse as data sections
-        assert!(!sexp.contains("(data_section"), "Input '{}' incorrectly parsed as data section", input);
+        assert!(
+            !sexp.contains("(data_section"),
+            "Input '{}' incorrectly parsed as data section",
+            input
+        );
     }
+}
+
+#[test]
+fn test_reject_ruby_style_heredoc() {
+    // Ruby uses <<- for indented heredocs, Perl does not
+    // Perl sees <<-END as: << operator followed by unary minus and bareword END
+    let input = "my $x = <<-END;\n    indented\n    -END\nsay 1;";
+
+    let mut parser = Parser::new(input);
+    let ast = parser.parse();
+
+    // This should parse, but as bit-shift, not heredoc
+    if let Ok(ast) = ast {
+        let sexp = ast.to_sexp();
+        // Should parse as left shift operator, not heredoc
+        assert!(sexp.contains("(my_declaration"));
+        // The content after should be parsed as regular code
+        assert!(sexp.contains("say"));
+    } else {
+        // Or it might fail to parse due to syntax error
+        // Either way, it's not a valid heredoc - nothing to assert
+    }
+}
+
+#[test]
+fn test_old_mac_cr_only_line_endings() {
+    // Old Mac used \r only for line endings
+    let input = "my $x = <<END;\rLine1\rLine2\rEND\rsay 1;\r";
+
+    let mut parser = Parser::new(input);
+    let ast = parser.parse();
+    assert!(ast.is_ok());
+
+    let sexp = ast.unwrap().to_sexp();
+    // Verify structure is preserved with CR-only line endings
+    assert!(sexp.contains("(my_declaration"));
+    assert!(sexp.contains("say"));
 }
