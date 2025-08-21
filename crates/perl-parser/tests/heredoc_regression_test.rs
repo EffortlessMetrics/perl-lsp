@@ -362,3 +362,32 @@ fn test_old_mac_cr_only_line_endings() {
     assert!(sexp.contains("(my_declaration"));
     assert!(sexp.contains("say"));
 }
+
+#[test]
+fn test_tilde_heredoc_allows_blank_lines() {
+    // Perl allows empty lines in <<~ heredocs
+    let input = "my $x = <<~END;\n    line1\n    \n    line3\n    END\nsay 1;\n";
+    
+    let mut parser = Parser::new(input);
+    let ast = parser.parse();
+    assert!(ast.is_ok());
+    
+    let sexp = ast.unwrap().to_sexp();
+    // Blank lines are allowed in indented heredocs
+    assert!(sexp.contains("(my_declaration"));
+    assert!(sexp.contains("say"));
+}
+
+#[test]
+fn test_end_with_trailing_junk_is_ignored() {
+    // __END__ with non-whitespace trailing text should not be treated as data section
+    let input = "__END__ trailing\nstill code\n";
+    
+    let mut parser = Parser::new(input);
+    let ast = parser.parse();
+    assert!(ast.is_ok());
+    
+    let sexp = ast.unwrap().to_sexp();
+    // Should not parse as data section
+    assert!(!sexp.contains("(data_section"), "__END__ with trailing junk should not be data section");
+}
