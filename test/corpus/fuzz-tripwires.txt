@@ -1,6 +1,11 @@
 ==================
 qw with regex code and re eval
 ==================
+# @id: fuzz_tripwires.001
+# @tags: indirect qw regex regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 use re 'eval';
 my @words = qw(foo bar baz);
@@ -20,6 +25,11 @@ my @items = qw/one two three/;
 ==================
 Pack inside sprintf with heredoc literal
 ==================
+# @id: fuzz_tripwires.002
+# @tags: indirect qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 my $s = sprintf "%v02X", pack("H*", "DEAD");
 my $x = <<'EOF';
@@ -37,6 +47,11 @@ my $y = sprintf "%vd", pack("U*", 0x41, 0x42);
 ==================
 Indirect with CORE restore and file test chain
 ==================
+# @id: fuzz_tripwires.003
+# @tags: file-test indirect qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 new Point 1, 2;
 *CORE::GLOBAL::open = sub { die "blocked" };
@@ -56,6 +71,11 @@ print FH "test";
 ==================
 Mixed statement modifiers with do while
 ==================
+# @id: fuzz_tripwires.004
+# @tags: indirect qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 do { $x++ } while $x < 3;
 print $x if $x > 0;
@@ -78,6 +98,11 @@ do { last if $done; $i++ } until $i > 10;
 ==================
 Complex delimiter mixing
 ==================
+# @id: fuzz_tripwires.005
+# @tags: indirect qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 m!pattern!;
 s{old}{new}g;
@@ -103,6 +128,11 @@ qw[word list];
 ==================
 Nested constructs with precedence
 ==================
+# @id: fuzz_tripwires.006
+# @tags: indirect qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 my $x = do { local $/ = undef; <$fh> } // "default";
 my @y = map { do { $_ * 2 } if $_ > 0 } @nums;
@@ -134,6 +164,11 @@ my $z = eval { do { die } } || $fallback;
 ==================
 Unicode and special encoding edge cases
 ==================
+# @id: fuzz_tripwires.007
+# @tags: indirect punctuation-var qw regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 my $♥ = "love";
 my $π = 3.14159;
@@ -155,6 +190,11 @@ open my $fh, "<:raw:encoding(UTF-8):crlf", $file;
 ==================
 Regex branch reset and advanced patterns
 ==================
+# @id: fuzz_tripwires.008
+# @tags: indirect qw regex regex-code tripwire
+# @perl: 5.8+
+# @flags: lexer-sensitive tripwire
+
 
 /^(?|(a)|(b))\1$/;
 /(*PRUNE)(*SKIP)(*FAIL)/;

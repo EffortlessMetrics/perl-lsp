@@ -1,6 +1,10 @@
 ==================
 Augmented assignment operators
 ==================
+# @id: operators_augassign.001
+# @tags: augmented-assignment operator
+# @perl: 5.8+
+
 
 $x += 5;
 $x -= 3;
@@ -32,6 +36,10 @@ $x >>= 1;
 ==================
 String augmented assignment
 ==================
+# @id: operators_augassign.002
+# @tags: augmented-assignment operator string
+# @perl: 5.8+
+
 
 $str .= "append";
 $str x= 3;
@@ -49,6 +57,10 @@ $str !~ /pattern/;
 ==================
 Logical augmented assignment
 ==================
+# @id: operators_augassign.003
+# @tags: augmented-assignment operator
+# @perl: 5.8+
+
 
 $x ||= "default";
 $x &&= validate();
@@ -64,6 +76,10 @@ $x //= "defined-or-default";
 ==================
 Yada yada operator
 ==================
+# @id: operators_augassign.004
+# @tags: augmented-assignment operator
+# @perl: 5.8+
+
 
 sub todo { ... }
 sub stub() { ... }
@@ -83,6 +99,10 @@ if ($condition) {
 ==================
 Assignment to special forms
 ==================
+# @id: operators_augassign.005
+# @tags: augmented-assignment operator punctuation-var
+# @perl: 5.8+
+
 
 substr($str, 0, 5) = "HELLO";
 vec($bits, 3, 8) = 255;
@@ -102,6 +122,10 @@ $array[5] ||= [];
 ==================
 Chained assignments
 ==================
+# @id: operators_augassign.006
+# @tags: augmented-assignment operator
+# @perl: 5.8+
+
 
 $a = $b = $c = 0;
 ($x, $y, $z) = (1, 2, 3);
@@ -119,6 +143,10 @@ $a = $b = $c = 0;
 ==================
 Local and my with assignment
 ==================
+# @id: operators_augassign.007
+# @tags: augmented-assignment operator
+# @perl: 5.8+
+
 
 local $/ = undef;
 local $\ = "\n";

@@ -1,6 +1,10 @@
 ==================
 System and exec
 ==================
+# @id: sysproc_and_net.001
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 system("ls -la");
 system("ls", "-la");
@@ -26,6 +30,10 @@ exec { $program } @args;
 ==================
 Fork and wait
 ==================
+# @id: sysproc_and_net.002
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 my $pid = fork();
 die "fork failed: $!" unless defined $pid;
@@ -56,6 +64,10 @@ kill 9, @pids;
 ==================
 Pipe operations
 ==================
+# @id: sysproc_and_net.003
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 pipe(READER, WRITER);
 open(my $fh, "|-", "sort") or die $!;
@@ -84,6 +96,10 @@ close($pipe);
 ==================
 Network name lookups
 ==================
+# @id: sysproc_and_net.004
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 gethostbyname("localhost");
 gethostbyaddr($addr, AF_INET);
@@ -109,6 +125,10 @@ inet_ntoa($packed_addr);
 ==================
 Socket operations
 ==================
+# @id: sysproc_and_net.005
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 use Socket;
 socket(SOCK, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
@@ -134,6 +154,10 @@ socketpair(CHILD, PARENT, AF_UNIX, SOCK_STREAM, PF_UNSPEC);
 ==================
 Signal handling
 ==================
+# @id: sysproc_and_net.006
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 $SIG{INT} = 'IGNORE';
 $SIG{TERM} = \&cleanup;
@@ -159,6 +183,10 @@ kill 'USR1', $$;
 ==================
 Syscall
 ==================
+# @id: sysproc_and_net.007
+# @tags: exec fork pipe socket system
+# @perl: 5.8+
+
 
 require 'syscall.ph';
 syscall(&SYS_write, fileno(STDOUT), $buf, length $buf);

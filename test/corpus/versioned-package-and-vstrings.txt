@@ -1,0 +1,49 @@
+==================
+package NAME VERSION forms
+==================
+# @id: pkg.version.001
+# @tags: package version vstring
+# @perl: 5.12+
+package My::Module 1.234;
+package Another::Pkg v1.2.3;
+package Local::Lib 1.23_45;
+our $VERSION = '1.234';
+
+==================
+v-string literals
+==================
+# @id: vstring.literals.001
+# @tags: vstring version
+# @perl: 5.8+
+my $v = v1.2.3;
+my $ip = v127.0.0.1;
+my $chr = v65.66.67;
+print v9786;  # ☺
+use 5.010;
+require v5.10.0;
+
+==================
+VERSION method and comparison
+==================
+# @id: version.comparison.001
+# @tags: version VERSION method
+# @perl: 5.10+
+use version;
+my $v1 = version->new('1.2.3');
+my $v2 = version->declare('v1.2.3');
+if ($v1 > $v2) { }
+My::Module->VERSION('1.0');
+UNIVERSAL::VERSION($obj, '2.0');
+
+==================
+Version in use and class
+==================
+# @id: version.use.001
+# @tags: version use require class
+# @perl: 5.38+
+use Module::Name 1.23 qw(func);
+require Module::Name 1.23;
+use parent 'Base::Class' => 1.00;
+class My::Class 1.0 {
+    field $version = __PACKAGE__->VERSION;
+}

@@ -191,7 +191,7 @@ my $num_and = 5 &. 3;
 ==================
 Regex character class set operations
 ==================
-# @id: regex.sets.001  
+# @id: split.regex.001  
 # @tags: regex character-class sets intersection union
 # @perl: 5.18+
 
@@ -211,7 +211,7 @@ Regex character class set operations
 ==================
 Regex branch reset
 ==================
-# @id: regex.branchreset.001  
+# @id: split.branchreset.001  
 # @tags: regex branch-reset capture-groups
 # @perl: 5.10+
 
@@ -229,7 +229,7 @@ Regex branch reset
 ==================
 PerlIO layer stacks
 ==================
-# @id: perlio.layers.001  
+# @id: split.layer.001  
 # @tags: open perlio layers encoding utf8 crlf
 # @perl: 5.8+
 

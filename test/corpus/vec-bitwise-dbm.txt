@@ -1,6 +1,10 @@
 ==================
 Vec operations
 ==================
+# @id: vec_bitwise_dbm.001
+# @tags: bitwise dbm tie vec
+# @perl: 5.8+
+
 
 vec($bits, 0, 8) = 255;
 vec($bits, 1, 8) = 128;
@@ -31,6 +35,10 @@ for (my $i = 0; $i < 8; $i++) {
 ==================
 Bitwise operators
 ==================
+# @id: vec_bitwise_dbm.002
+# @tags: bitwise dbm tie vec
+# @perl: 5.8+
+
 
 my $and = $a & $b;
 my $or = $a | $b;
@@ -58,6 +66,10 @@ $flags ^= 0x40;
 ==================
 String bitwise operators
 ==================
+# @id: vec_bitwise_dbm.003
+# @tags: bitwise dbm string tie vec
+# @perl: 5.8+
+
 
 my $str_and = "abc" & "xyz";
 my $str_or = "abc" | "xyz";
@@ -81,6 +93,10 @@ my $str_and2 = $s &. $t;
 ==================
 DBM operations
 ==================
+# @id: vec_bitwise_dbm.004
+# @tags: bitwise dbm tie vec
+# @perl: 5.8+
+
 
 dbmopen(%db, "mydb", 0644) or die "Can't open database: $!";
 $db{key} = "value";
@@ -106,6 +122,10 @@ dbmclose(%db);
 ==================
 Select and file operations
 ==================
+# @id: vec_bitwise_dbm.005
+# @tags: bitwise dbm file-test tie vec
+# @perl: 5.8+
+
 
 select((select(FH), $| = 1)[0]);
 select(STDOUT);
@@ -131,6 +151,10 @@ ioctl(FH, TIOCGWINSZ, $winsize);
 ==================
 Sysread and syswrite
 ==================
+# @id: vec_bitwise_dbm.006
+# @tags: bitwise dbm tie vec
+# @perl: 5.8+
+
 
 sysread(FH, $buffer, 1024);
 sysread(FH, $buffer, 1024, $offset);
@@ -152,6 +176,10 @@ sysseek(FH, 0, SEEK_SET);
 ==================
 Pack bits
 ==================
+# @id: vec_bitwise_dbm.007
+# @tags: bitwise dbm tie vec
+# @perl: 5.8+
+
 
 my $packed = pack("b*", "10101010");
 my $bits = unpack("b*", $packed);
