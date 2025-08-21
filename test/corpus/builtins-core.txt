@@ -1,0 +1,167 @@
+==================
+Math builtins
+==================
+
+atan2($y, $x);
+cos $r;
+sin $r;
+exp $x;
+log $x;
+sqrt 9;
+abs -3;
+rand 10;
+srand 42;
+int 3.14;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (variable) (variable))))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (unary_expression (number))))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (number))))
+
+==================
+String builtins
+==================
+
+substr($s, 1, 3);
+substr($s, 2, 2) = "XX";
+index($s, "x");
+rindex $s, "x";
+sprintf "%04d", 7;
+chr 65;
+ord "A";
+crypt($pw, $salt);
+quotemeta $s;
+length $str;
+lc $str;
+uc $str;
+lcfirst $str;
+ucfirst $str;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (variable) (number) (number))))
+  (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable) (number) (number))) (string)))
+  (expression_statement (call_expression (identifier) (argument_list (variable) (string))))
+  (expression_statement (call_expression (identifier) (variable) (string)))
+  (expression_statement (call_expression (identifier) (string) (number)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (call_expression (identifier) (argument_list (variable) (variable))))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable))))
+
+==================
+List and array builtins
+==================
+
+splice @a, 2, 1, "X";
+unshift @a, 1, 2, 3;
+shift @a;
+push @a, @b;
+pop @a;
+reverse @list;
+sort @array;
+sort { $a <=> $b } @nums;
+grep { $_ > 5 } @nums;
+map { $_ * 2 } @nums;
+join ",", @items;
+split /,/, $str;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (variable) (number) (number) (string)))
+  (expression_statement (call_expression (identifier) (variable) (number) (number) (number)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (block (binary_expression (variable) (variable))) (variable)))
+  (expression_statement (call_expression (identifier) (block (binary_expression (variable) (number))) (variable)))
+  (expression_statement (call_expression (identifier) (block (binary_expression (variable) (number))) (variable)))
+  (expression_statement (call_expression (identifier) (string) (variable)))
+  (expression_statement (call_expression (identifier) (regex) (variable))))
+
+==================
+Hash builtins
+==================
+
+keys %hash;
+values %hash;
+each %hash;
+exists $hash{key};
+delete $hash{key};
+scalar %hash;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (hash_element)))
+  (expression_statement (call_expression (identifier) (hash_element)))
+  (expression_statement (call_expression (identifier) (variable))))
+
+==================
+File test operators
+==================
+
+-r $file && -w _ && -f _;
+-e $path or -d $path;
+-s $file;
+-z $file;
+-M $file;
+-A _ && -C _;
+-t STDIN;
+-T $file && -B $file;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (binary_expression (file_test (variable)) (file_test)) (file_test)))
+  (expression_statement (binary_expression (file_test (variable)) (file_test (variable))))
+  (expression_statement (file_test (variable)))
+  (expression_statement (file_test (variable)))
+  (expression_statement (file_test (variable)))
+  (expression_statement (binary_expression (file_test) (file_test)))
+  (expression_statement (file_test (identifier)))
+  (expression_statement (binary_expression (file_test (variable)) (file_test (variable)))))
+
+==================
+Type checking builtins
+==================
+
+ref $var;
+defined $var;
+undef $var;
+blessed $obj;
+reftype $ref;
+scalar @array;
+wantarray();
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (variable)))
+  (expression_statement (call_expression (identifier) (argument_list))))
