@@ -1,0 +1,208 @@
+==================
+Basic pack templates
+==================
+
+my $buf = pack('C', 255);
+my $buf = pack('S', 65535);
+my $buf = pack('L', 4294967295);
+my $buf = pack('N', 0xdeadbeef);
+my $buf = pack('V', 0xcafebabe);
+my $buf = pack('Q', 18446744073709551615);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Pack with counts and repeaters
+==================
+
+my $buf = pack('C*', @bytes);
+my $buf = pack('N3', $a, $b, $c);
+my $buf = pack('a10', "hello");
+my $buf = pack('A20', "padded");
+my $buf = pack('Z*', "null-terminated");
+my $buf = pack('(LS)*', @pairs);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Complex pack templates
+==================
+
+my $buf = pack('C/a* N n H*', "hello", 0xfeedbeef, 42, "DEADBEEF");
+my $buf = pack('n/a* N/A*', $str1, $str2);
+my $buf = pack('w*', @ber_integers);
+my $buf = pack('N N (w/a*)*', $magic, $version, @strings);
+my $buf = pack('l! a*', $native_long, $data);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Unpack templates
+==================
+
+my ($byte) = unpack('C', $buf);
+my @bytes = unpack('C*', $buf);
+my ($str, $big, $small, $hex) = unpack('C/a* N n H*', $buf);
+my @vals = unpack('(@2 C x!2 n*)', $data);
+my ($len, $str) = unpack('n a*', $packet);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Binary and hex templates
+==================
+
+my $binary = pack('B8', '01010101');
+my $binary = pack('b8', '10101010');
+my $hex = pack('H*', 'deadbeef');
+my $hex = pack('h*', 'efbeadde');
+my ($bits) = unpack('B*', $byte);
+my ($hex) = unpack('H*', $data);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Float and double templates
+==================
+
+my $buf = pack('f', 3.14159);
+my $buf = pack('d', 2.718281828);
+my $buf = pack('F', $native_float);
+my $buf = pack('D', $native_double);
+my ($float) = unpack('f>', $big_endian_data);
+my ($double) = unpack('d<', $little_endian_data);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Positioning and padding
+==================
+
+my $buf = pack('a10 x5 a10', $first, $second);
+my $buf = pack('N @8 N', $header, $data);
+my $buf = pack('a* X3 a3', $full, $suffix);
+my @vals = unpack('@4 N @12 S', $buf);
+my $buf = pack('x20 C x[80] N', $byte, $tail);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Network order templates
+==================
+
+my $buf = pack('n', $port);
+my $buf = pack('N', $ipaddr);
+my $buf = pack('nn', $src_port, $dst_port);
+my ($port) = unpack('n', $data);
+my ($ip) = unpack('N', $data);
+my $packed_ip = pack('C4', split /\./, $ip_string);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+String templates with counts
+==================
+
+my $buf = pack('a20', $fixed_length);
+my $buf = pack('A*', $space_padded);
+my $buf = pack('Z50', $null_terminated);
+my $buf = pack('a[20]', $exact_length);
+my ($str) = unpack('Z*', $buf);
+my ($fixed) = unpack('a20', $buf);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Advanced pack unpack usage
+==================
+
+my $netstring = pack('N/a*', $string);
+my ($string) = unpack('N/a*', $netstring);
+
+my $struct = pack('(N/a*)*', @strings);
+my @strings = unpack('(N/a*)*', $struct);
+
+my $tlv = pack('C C/a*', $type, $value);
+my ($type, $value) = unpack('C C/a*', $tlv);
+
+my $complex = pack('N (S/a* L)*', $count, @items);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))

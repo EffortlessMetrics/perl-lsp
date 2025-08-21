@@ -1,0 +1,304 @@
+==================
+Core try catch
+==================
+
+use feature 'try';
+
+try {
+    dangerous_operation();
+}
+catch ($e) {
+    warn "Error: $e";
+}
+
+try {
+    may_fail();
+} catch ($err) {
+    handle_error($err);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (try_catch_statement))
+
+==================
+Try catch finally
+==================
+
+use feature 'try';
+
+try {
+    risky_operation();
+}
+catch ($e) {
+    log_error($e);
+}
+finally {
+    cleanup();
+}
+
+try {
+    open_resource();
+    process();
+} catch ($error) {
+    rollback();
+} finally {
+    close_resource();
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (try_catch_statement))
+
+==================
+Nested try catch
+==================
+
+use feature 'try';
+
+try {
+    try {
+        inner_operation();
+    }
+    catch ($inner) {
+        warn "Inner: $inner";
+        die "Escalated: $inner";
+    }
+}
+catch ($outer) {
+    die "Outer: $outer";
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement))
+
+==================
+Try catch with return
+==================
+
+use feature 'try';
+
+sub safe_divide {
+    my ($a, $b) = @_;
+    
+    try {
+        return $a / $b;
+    }
+    catch ($e) {
+        warn "Division failed: $e";
+        return undef;
+    }
+}
+
+my $result = try {
+    compute();
+} catch ($e) {
+    return $default;
+};
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (statement))
+
+==================
+Defer blocks
+==================
+
+use feature 'defer';
+
+sub process {
+    open my $fh, '<', $file or die $!;
+    
+    defer {
+        close $fh;
+        print "File closed\n";
+    }
+    
+    defer { cleanup() }
+    
+    while (<$fh>) {
+        defer { print "Line processed\n" }
+        process_line($_);
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration))
+
+==================
+Multiple defer blocks
+==================
+
+use feature 'defer';
+
+{
+    defer { print "Third\n" }
+    defer { print "Second\n" }
+    defer { print "First\n" }
+    
+    print "Body\n";
+}
+
+sub with_defer {
+    my $resource = acquire();
+    defer { release($resource) }
+    
+    my $lock = get_lock();
+    defer { unlock($lock) }
+    
+    process($resource);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (block)
+  (subroutine_declaration))
+
+==================
+Defer in try catch
+==================
+
+use feature qw(try defer);
+
+try {
+    my $handle = open_resource();
+    defer { close_resource($handle) }
+    
+    process($handle);
+}
+catch ($e) {
+    # defer still runs
+    log_error($e);
+}
+
+sub safe_operation {
+    defer { cleanup() }
+    
+    try {
+        risky_step();
+    }
+    catch ($e) {
+        recover($e);
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (subroutine_declaration))
+
+==================
+Try without catch
+==================
+
+use feature 'try';
+
+try {
+    operation();
+}
+
+try {
+    another_operation();
+} finally {
+    always_cleanup();
+}
+
+eval {
+    # Traditional eval for comparison
+    old_style();
+};
+
+---
+
+(source_file
+  (use_statement)
+  (try_statement)
+  (try_finally_statement)
+  (eval_block))
+
+==================
+Catch with patterns
+==================
+
+use feature 'try';
+
+try {
+    complex_operation();
+}
+catch ($e) {
+    if ($e =~ /timeout/) {
+        retry();
+    } elsif ($e =~ /network/) {
+        fallback();
+    } else {
+        die $e;
+    }
+}
+
+try {
+    api_call();
+} catch ($error) {
+    given ($error) {
+        when (/404/) { return not_found() }
+        when (/500/) { return server_error() }
+        default { die $error }
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (try_catch_statement))
+
+==================
+Try catch finally defer combo
+==================
+
+use feature qw(try defer);
+
+sub complex {
+    my $resource = acquire();
+    defer { release($resource) }
+    
+    try {
+        my $transaction = begin_transaction();
+        defer { $transaction->finalize() }
+        
+        process($resource, $transaction);
+        $transaction->commit();
+    }
+    catch ($e) {
+        $transaction->rollback();
+        die $e;
+    }
+    finally {
+        log_completion();
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration))
