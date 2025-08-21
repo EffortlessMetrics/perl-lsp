@@ -133,13 +133,39 @@ impl<'a> PerlLexer<'a> {
         lexer
     }
 
+    /// Normalize file start by skipping BOM if present
+    fn normalize_file_start(&mut self) {
+        // Skip UTF-8 BOM (EF BB BF) if at file start
+        if self.position == 0 && self.input_bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+            self.position = 3;
+            self.line_start_offset = 3;
+        }
+    }
+
     /// Set the lexer mode (for resetting state at statement boundaries)
     pub fn set_mode(&mut self, mode: LexerMode) {
         self.mode = mode;
     }
 
+    /// Helper to check if remaining bytes on a line are only spaces/tabs
+    #[inline]
+    fn trailing_ws_only(bytes: &[u8], mut p: usize) -> bool {
+        while p < bytes.len() && bytes[p] != b'\n' && bytes[p] != b'\r' {
+            match bytes[p] {
+                b' ' | b'\t' => p += 1,
+                _ => return false,
+            }
+        }
+        true
+    }
+
     /// Get the next token from the input
     pub fn next_token(&mut self) -> Option<Token> {
+        // Normalize file start (BOM) once
+        if self.position == 0 {
+            self.normalize_file_start();
+        }
+
         // Loop to avoid recursion when processing heredocs
         loop {
             // Handle format body parsing if we're in that mode
@@ -188,11 +214,22 @@ impl<'a> PerlLexer<'a> {
                         if !self.after_newline && self.position != body_start {
                             while self.position < self.input.len()
                                 && self.input_bytes[self.position] != b'\n'
+                                && self.input_bytes[self.position] != b'\r'
                             {
                                 self.advance();
                             }
                             if self.position < self.input.len() {
-                                self.advance(); // skip the newline
+                                // Handle CRLF
+                                if self.input_bytes[self.position] == b'\r' {
+                                    self.position += 1;
+                                    if self.position < self.input.len()
+                                        && self.input_bytes[self.position] == b'\n'
+                                    {
+                                        self.position += 1;
+                                    }
+                                } else if self.input_bytes[self.position] == b'\n' {
+                                    self.advance();
+                                }
                                 self.after_newline = true;
                                 self.line_start_offset = self.position;
                             }
@@ -202,11 +239,23 @@ impl<'a> PerlLexer<'a> {
                         // We're at line start - check if this line is the terminator
                         let line_start = self.position;
                         let mut line_end = self.position;
-                        while line_end < self.input.len() && self.input_bytes[line_end] != b'\n' {
+                        while line_end < self.input.len()
+                            && self.input_bytes[line_end] != b'\n'
+                            && self.input_bytes[line_end] != b'\r'
+                        {
                             line_end += 1;
                         }
 
-                        let line = &self.input[line_start..line_end];
+                        // Handle CRLF: strip trailing \r if present
+                        let line_visible_end = if line_end > line_start
+                            && self.input_bytes[line_end.saturating_sub(1)] == b'\r'
+                        {
+                            line_end - 1
+                        } else {
+                            line_end
+                        };
+
+                        let line = &self.input[line_start..line_visible_end];
                         // Strip trailing spaces/tabs (Perl allows them)
                         let trimmed_end = line.trim_end_matches([' ', '\t']);
 
@@ -236,10 +285,18 @@ impl<'a> PerlLexer<'a> {
 
                             // Consume past the terminator line
                             self.position = line_end;
-                            if self.position < self.input.len()
-                                && self.input_bytes[self.position] == b'\n'
-                            {
-                                self.advance();
+                            if self.position < self.input.len() {
+                                // Handle CRLF
+                                if self.input_bytes[self.position] == b'\r' {
+                                    self.position += 1;
+                                    if self.position < self.input.len()
+                                        && self.input_bytes[self.position] == b'\n'
+                                    {
+                                        self.position += 1;
+                                    }
+                                } else if self.input_bytes[self.position] == b'\n' {
+                                    self.advance();
+                                }
                                 self.after_newline = true;
                                 self.line_start_offset = self.position;
 
@@ -266,10 +323,18 @@ impl<'a> PerlLexer<'a> {
 
                         // Not the terminator, continue to next line
                         self.position = line_end;
-                        if self.position < self.input.len()
-                            && self.input_bytes[self.position] == b'\n'
-                        {
-                            self.advance();
+                        if self.position < self.input.len() {
+                            // Handle CRLF
+                            if self.input_bytes[self.position] == b'\r' {
+                                self.position += 1;
+                                if self.position < self.input.len()
+                                    && self.input_bytes[self.position] == b'\n'
+                                {
+                                    self.position += 1;
+                                }
+                            } else if self.input_bytes[self.position] == b'\n' {
+                                self.advance();
+                            }
                             self.after_newline = true;
                             self.line_start_offset = self.position;
                         }
@@ -495,7 +560,26 @@ impl<'a> PerlLexer<'a> {
         while self.position < self.input_bytes.len() {
             let byte = self.input_bytes[self.position];
             match byte {
-                b' ' | b'\t' | b'\r' => self.position += 1,
+                b' ' | b'\t' => self.position += 1,
+                b'\r' => {
+                    // Handle CRLF: consume both; lone CR: treat as newline
+                    self.position += 1;
+                    if self.position < self.input_bytes.len()
+                        && self.input_bytes[self.position] == b'\n'
+                    {
+                        self.position += 1;
+                    }
+                    self.after_newline = true;
+                    self.line_start_offset = self.position;
+
+                    // Set body_start for the FIRST pending heredoc that needs it (FIFO)
+                    for spec in &mut self.pending_heredocs {
+                        if spec.body_start == 0 {
+                            spec.body_start = self.position;
+                            break; // Only set for the first unresolved heredoc
+                        }
+                    }
+                }
                 b'\n' => {
                     self.advance();
                     // Mark that we just skipped a newline
@@ -568,11 +652,19 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
+        // Optional backslash disables interpolation, treat like single-quoted label
+        let _backslashed = if self.current_char() == Some('\\') {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
         // Parse delimiter
         let delimiter_start = self.position;
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
-                Some('"') => {
+                Some('"') if !_backslashed => {
                     // Double-quoted delimiter
                     self.advance();
                     let delim_start = self.position;
@@ -585,7 +677,7 @@ impl<'a> PerlLexer<'a> {
                     }
                     self.input[delim_start..self.position - 1].to_string()
                 }
-                Some('\'') => {
+                Some('\'') if !_backslashed => {
                     // Single-quoted delimiter
                     self.advance();
                     let delim_start = self.position;
@@ -1064,20 +1156,8 @@ impl<'a> PerlLexer<'a> {
                 // Use the after_newline flag to determine if we're at line start
                 if self.after_newline {
                     // Check if rest of line is only whitespace
-                    let mut p = self.position;
-                    let mut only_whitespace = true;
-                    while p < self.input.len() && self.input_bytes[p] != b'\n' {
-                        match self.input_bytes[p] {
-                            b' ' | b'\t' => p += 1,
-                            _ => {
-                                only_whitespace = false;
-                                break;
-                            }
-                        }
-                    }
-
                     // Only treat as data marker if line has no trailing junk
-                    if only_whitespace {
+                    if Self::trailing_ws_only(self.input_bytes, self.position) {
                         // Consume the rest of the line (the marker line)
                         while self.position < self.input.len()
                             && self.input_bytes[self.position] != b'\n'
