@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2025-08-21
+
+### Added
+- **Robust Heredoc Support** - Production-ready heredoc handling with all edge cases
+  - FIFO multi-heredoc body ordering (matches Perl behavior exactly)
+  - Indented heredocs (`<<~LABEL`) for Perl 5.26+ compatibility
+  - Non-interpolating heredocs (`<<\LABEL`) with backslashed labels
+  - BOM (UTF-8 byte order mark) handling at file start
+  - CRLF line endings support throughout heredoc processing
+  - Old Mac CR-only line endings (`\r` without `\n`) support
+  - Unified helper functions for consistent CRLF/newline handling
+  - Budget guards with graceful truncation (256KB max for heredoc bodies)
+  - 22 comprehensive regression tests covering all edge cases
+
+### Fixed
+- **Code Quality Improvements**
+  - Fixed all clippy warnings (manual range contains, unnecessary unwrap)
+  - Fixed all tautological test assertions in LSP tests
+  - Handle all Result types properly with expect() in test harness
+  - Removed constant assertions that are always true
+  - Consolidated CRLF handling with helper functions (~30 lines reduction)
+
+### Changed
+- **Heredoc Parser**
+  - Stricter `__DATA__`/`__END__` parsing (requires line start, whitespace-only lines)
+  - Improved error messages for heredoc edge cases
+  - Added saturating arithmetic for budget guards to prevent underflow
+
 ## [0.8.2] - 2025-08-12
 
 ### Added
