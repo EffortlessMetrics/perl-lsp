@@ -1,0 +1,156 @@
+==================
+do BLOCK form
+==================
+# @id: do.block.001  
+# @tags: do block expression
+# @perl: 5.8+
+
+my $x = do { 
+    my $temp = calculate(); 
+    $temp * 2 
+};
+
+my $result = do {
+    if ($condition) { "yes" }
+    elsif ($other) { "maybe" }
+    else { "no" }
+};
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (do_block (block
+    (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list))))
+    (expression_statement (binary_expression (variable) (number)))))))
+  (expression_statement (my_declaration (variable) (do_block (block
+    (if_statement (parenthesized_expression (variable)) (block (expression_statement (string)))
+      (elsif_clause (parenthesized_expression (variable)) (block (expression_statement (string))))
+      (else_clause (block (expression_statement (string))))))))))
+
+==================
+do FILE form
+==================
+# @id: do.file.001  
+# @tags: do file require eval
+# @perl: 5.8+
+
+my $config = do "config.pl";
+do "/etc/app.conf" or die "Can't load config: $!";
+my $result = do $filename;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string))))
+  (expression_statement (binary_expression (call_expression (identifier) (string)) (call_expression (identifier) (string))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (variable)))))
+
+==================
+do SUBROUTINE form
+==================
+# @id: do.sub.001  
+# @tags: do subroutine call deprecated
+# @perl: 5.8+
+# @flags: deprecated
+
+sub helper { return 42 }
+my $value = do helper();
+do cleanup;
+
+---
+
+(source_file
+  (subroutine_declaration (identifier) (block (return_statement (number))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (call_expression (identifier) (argument_list)))))
+  (expression_statement (call_expression (identifier) (identifier))))
+
+==================
+do in statement modifiers
+==================
+# @id: do.modifiers.001  
+# @tags: do block statement-modifiers
+# @perl: 5.8+
+
+do { print "once\n" } if $condition;
+do { $x++ } while $x < 10;
+do { process() } until $done;
+do { $y *= 2 } for 1..3;
+
+---
+
+(source_file
+  (expression_statement (statement_modifier (do_block (block (expression_statement (call_expression (identifier) (string))))) (variable)))
+  (do_while_statement (block (expression_statement (postfix_expression (variable)))) (binary_expression (variable) (number)))
+  (do_until_statement (block (expression_statement (call_expression (identifier) (argument_list)))) (variable))
+  (expression_statement (statement_modifier (do_block (block (expression_statement (assignment_expression (variable) (number))))) (range (number) (number)))))
+
+==================
+Nested do blocks
+==================
+# @id: do.nested.001  
+# @tags: do block nested
+# @perl: 5.8+
+
+my $val = do {
+    my $inner = do {
+        my $x = 5;
+        $x * 2
+    };
+    $inner + 10
+};
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (do_block (block
+    (expression_statement (my_declaration (variable) (do_block (block
+      (expression_statement (my_declaration (variable) (number)))
+      (expression_statement (binary_expression (variable) (number)))))))
+    (expression_statement (binary_expression (variable) (number))))))))
+
+==================
+do with error handling
+==================
+# @id: do.error.001  
+# @tags: do file eval error-handling
+# @perl: 5.8+
+
+my $config = do {
+    local $@;
+    my $result = do "config.pl";
+    die "Can't compile: $@" if $@;
+    die "Can't read: $!" unless defined $result;
+    die "Can't run" unless $result;
+    $result;
+};
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (do_block (block
+    (expression_statement (local_declaration (special_variable)))
+    (expression_statement (my_declaration (variable) (call_expression (identifier) (string))))
+    (expression_statement (statement_modifier (call_expression (identifier) (string)) (special_variable)))
+    (expression_statement (statement_modifier (call_expression (identifier) (string)) (call_expression (identifier) (variable))))
+    (expression_statement (statement_modifier (call_expression (identifier) (string)) (variable)))
+    (expression_statement (variable)))))))
+
+==================
+do vs eval comparison
+==================
+# @id: do.vs.eval.001  
+# @tags: do eval comparison
+# @perl: 5.8+
+
+my $do_result = do { $x / $y };
+my $eval_result = eval { $x / $y };
+my $file_result = do "file.pl";
+my $eval_string = eval "use Module";
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (do_block (block (expression_statement (binary_expression (variable) (variable)))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (block (expression_statement (binary_expression (variable) (variable)))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string)))))

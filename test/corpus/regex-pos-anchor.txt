@@ -1,0 +1,140 @@
+==================
+pos and G anchor basics
+==================
+# @id: regex.pos.001  
+# @tags: regex anchor pos \G stateful
+# @perl: 5.8+
+
+pos($str) = 0;
+while ($str =~ /\G\w+/g) {
+    push @tokens, $&;
+    pos($str) = pos($str) + 1 if $str =~ /\G\s+/gc;
+}
+
+---
+
+(source_file
+  (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable))) (number)))
+  (while_statement (parenthesized_expression (binary_expression (variable) (regex))) (block
+    (expression_statement (call_expression (identifier) (variable) (special_variable)))
+    (expression_statement (statement_modifier 
+      (assignment_expression (call_expression (identifier) (argument_list (variable))) 
+        (binary_expression (call_expression (identifier) (argument_list (variable))) (number)))
+      (binary_expression (variable) (regex)))))))
+
+==================
+G with gc continuous matching
+==================
+# @id: regex.pos.gc.001  
+# @tags: regex anchor \G gc continuous
+# @perl: 5.8+
+
+while ($csv =~ /\G([^,]*),?/gc) {
+    push @columns, $1;
+}
+$str =~ /\G(\d+)/gc or die "Expected number at " . pos($str);
+
+---
+
+(source_file
+  (while_statement (parenthesized_expression (binary_expression (variable) (regex))) (block
+    (expression_statement (call_expression (identifier) (variable) (special_variable)))))
+  (expression_statement (binary_expression 
+    (binary_expression (variable) (regex))
+    (call_expression (identifier) (binary_expression (string) (call_expression (identifier) (argument_list (variable))))))))
+
+==================
+pos reset and preservation
+==================
+# @id: regex.pos.reset.001  
+# @tags: regex pos reset undef
+# @perl: 5.8+
+
+pos($str) = undef;
+my $saved_pos = pos($str);
+$str =~ /pattern/g;
+pos($str) = $saved_pos;
+
+---
+
+(source_file
+  (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable))) (undef)))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (variable)))))
+  (expression_statement (binary_expression (variable) (regex)))
+  (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable))) (variable))))
+
+==================
+Lexer tokenization with G
+==================
+# @id: regex.pos.lexer.001  
+# @tags: regex \G lexer tokenizer parser
+# @perl: 5.8+
+# @flags: lexer-sensitive
+
+while (length($input)) {
+    if ($input =~ /\G\s+/gc) {
+        # skip whitespace
+    } elsif ($input =~ /\G(\d+)/gc) {
+        push @tokens, ['NUMBER', $1];
+    } elsif ($input =~ /\G(\w+)/gc) {
+        push @tokens, ['IDENT', $1];
+    } elsif ($input =~ /\G(.)/gc) {
+        push @tokens, ['CHAR', $1];
+    } else {
+        die "Unexpected character at position " . pos($input);
+    }
+}
+
+---
+
+(source_file
+  (while_statement (parenthesized_expression (call_expression (identifier) (argument_list (variable)))) (block
+    (if_statement (parenthesized_expression (binary_expression (variable) (regex))) (block
+      (comment))
+      (elsif_clause (parenthesized_expression (binary_expression (variable) (regex))) (block
+        (expression_statement (call_expression (identifier) (variable) (array_ref (string) (special_variable))))))
+      (elsif_clause (parenthesized_expression (binary_expression (variable) (regex))) (block
+        (expression_statement (call_expression (identifier) (variable) (array_ref (string) (special_variable))))))
+      (elsif_clause (parenthesized_expression (binary_expression (variable) (regex))) (block
+        (expression_statement (call_expression (identifier) (variable) (array_ref (string) (special_variable))))))
+      (else_clause (block
+        (expression_statement (call_expression (identifier) (binary_expression (string) (call_expression (identifier) (argument_list (variable))))))))))))
+
+==================
+Failed G match handling
+==================
+# @id: regex.pos.fail.001  
+# @tags: regex \G pos failure reset
+# @perl: 5.8+
+
+if ($str =~ /\Gpattern/gc) {
+    process($&);
+} else {
+    pos($str) = undef;
+}
+
+---
+
+(source_file
+  (if_statement (parenthesized_expression (binary_expression (variable) (regex))) (block
+    (expression_statement (call_expression (identifier) (argument_list (special_variable)))))
+    (else_clause (block
+      (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable))) (undef)))))))
+
+==================
+pos in substitution context
+==================
+# @id: regex.pos.subst.001  
+# @tags: regex pos substitution \G
+# @perl: 5.8+
+
+$str =~ s/\G\s+//;
+pos($str) = 10;
+$str =~ s/\G(.{5})/[$1]/;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (assignment_expression (call_expression (identifier) (argument_list (variable))) (number)))
+  (expression_statement (binary_expression (variable) (substitution))))
