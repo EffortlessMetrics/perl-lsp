@@ -1,0 +1,240 @@
+==================
+Basic tie operations
+==================
+
+tie %hash, 'Tie::StdHash';
+tie @array, 'Tie::Array', @options;
+tie $scalar, 'Tie::Scalar';
+tied %hash;
+untie %hash;
+
+---
+
+(source_file
+  (statement (tie_expression))
+  (statement (tie_expression))
+  (statement (tie_expression))
+  (statement (tied_expression))
+  (statement (untie_expression)))
+
+==================
+Tie with package methods
+==================
+
+package Tie::Example;
+
+sub TIESCALAR {
+    my $class = shift;
+    my $value = shift || 0;
+    bless \$value, $class;
+}
+
+sub FETCH {
+    my $self = shift;
+    return $$self;
+}
+
+sub STORE {
+    my $self = shift;
+    my $value = shift;
+    $$self = $value;
+}
+
+sub DESTROY {
+    my $self = shift;
+    # cleanup
+}
+
+---
+
+(source_file
+  (package_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Tie hash interface
+==================
+
+sub TIEHASH {
+    my $class = shift;
+    bless {}, $class;
+}
+
+sub FETCH {
+    my ($self, $key) = @_;
+    return $self->{$key};
+}
+
+sub STORE {
+    my ($self, $key, $value) = @_;
+    $self->{$key} = $value;
+}
+
+sub EXISTS {
+    my ($self, $key) = @_;
+    exists $self->{$key};
+}
+
+sub DELETE {
+    my ($self, $key) = @_;
+    delete $self->{$key};
+}
+
+sub FIRSTKEY {
+    my $self = shift;
+    my $a = keys %$self;
+    each %$self;
+}
+
+sub NEXTKEY {
+    my ($self, $lastkey) = @_;
+    each %$self;
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Tie array interface
+==================
+
+sub TIEARRAY {
+    my $class = shift;
+    bless [], $class;
+}
+
+sub FETCHSIZE {
+    scalar @{$_[0]};
+}
+
+sub STORESIZE {
+    $#{$_[0]} = $_[1] - 1;
+}
+
+sub PUSH {
+    my $self = shift;
+    push @$self, @_;
+}
+
+sub POP {
+    pop @{$_[0]};
+}
+
+sub SHIFT {
+    shift @{$_[0]};
+}
+
+sub UNSHIFT {
+    my $self = shift;
+    unshift @$self, @_;
+}
+
+sub SPLICE {
+    my $self = shift;
+    my $offset = shift || 0;
+    my $length = shift;
+    splice @$self, $offset, $length, @_;
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Tie handle interface
+==================
+
+sub TIEHANDLE {
+    my $class = shift;
+    my $fh = shift;
+    bless \$fh, $class;
+}
+
+sub PRINT {
+    my $self = shift;
+    print {$$self} @_;
+}
+
+sub PRINTF {
+    my $self = shift;
+    my $fmt = shift;
+    printf {$$self} $fmt, @_;
+}
+
+sub READLINE {
+    my $self = shift;
+    readline $$self;
+}
+
+sub GETC {
+    my $self = shift;
+    getc $$self;
+}
+
+sub EOF {
+    my $self = shift;
+    eof $$self;
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Complex tie usage
+==================
+
+tie my %cache, 'Tie::Cache', {
+    MaxCount => 100,
+    MaxSize  => 50 * 1024 * 1024,
+};
+
+tie local $/, 'Tie::Scalar', \$custom_rs;
+
+{
+    tie my @array, 'Tie::File', $filename or die "Can't tie: $!";
+    $array[13] = "New line 14\n";
+    untie @array;
+}
+
+my $obj = tie %hash, 'DB_File', $filename, O_RDWR|O_CREAT, 0666, $DB_HASH;
+$obj->put("key", "value");
+$obj->get("key", $value);
+
+---
+
+(source_file
+  (statement (tie_expression))
+  (statement (tie_expression))
+  (block
+    (statement (tie_expression))
+    (statement (assignment))
+    (statement (untie_expression)))
+  (statement (assignment))
+  (statement (method_call))
+  (statement (method_call)))

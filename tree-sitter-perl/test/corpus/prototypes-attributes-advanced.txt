@@ -1,0 +1,378 @@
+==================
+Complex prototypes
+==================
+
+sub mygrep(&@) {
+    my $code = shift;
+    grep { $code->() } @_;
+}
+
+sub mymap(&@) {
+    my $code = shift;
+    map { $code->() } @_;
+}
+
+sub mysort(&@) {
+    my $code = shift;
+    sort { $code->() } @_;
+}
+
+sub first(&@) {
+    my $code = shift;
+    for (@_) {
+        return $_ if $code->();
+    }
+    return;
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Underscore prototype
+==================
+
+sub test_underscore(_) {
+    my $val = shift;
+    print "Got: $val\n";
+}
+
+sub test_multiple_underscore(_ _ _) {
+    my ($a, $b, $c) = @_;
+    return $a + $b + $c;
+}
+
+sub test_underscore_optional(_; _) {
+    my ($required, $optional) = @_;
+    return $optional // $required;
+}
+
+test_underscore;  # Uses $_
+test_underscore $var;
+test_underscore $_;
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Advanced prototype combinations
+==================
+
+sub complex_proto($@) {
+    my $first = shift;
+    my @rest = @_;
+}
+
+sub optional_proto($;$) {
+    my ($required, $optional) = @_;
+}
+
+sub slurpy_hash($%) {
+    my $scalar = shift;
+    my %hash = @_;
+}
+
+sub reference_proto(\@\%\$) {
+    my ($aref, $href, $sref) = @_;
+}
+
+sub glob_proto(*) {
+    my $glob = shift;
+}
+
+sub code_proto(&;$) {
+    my ($code, $arg) = @_;
+    $code->($arg);
+}
+
+sub special_proto(_;@) {
+    my ($first, @rest) = @_;
+}
+
+sub combo_proto(\[$@%&*];@) {
+    my ($ref, @args) = @_;
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Attributes basic
+==================
+
+sub locked :locked {
+    # Thread-safe subroutine
+}
+
+sub memoized :Memoize {
+    # Cached results
+}
+
+sub deprecated :Deprecated {
+    warn "This method is deprecated";
+}
+
+my $shared :shared;
+my @shared_array :shared;
+my %shared_hash :shared;
+
+our $global :unique;
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Multi-line and complex attributes
+==================
+
+sub complex_method
+    :Cached(expiry => 300)
+    :Logged(level => 'debug')
+    :Deprecated(since => '2.0', removed => '3.0')
+{
+    # Method implementation
+}
+
+sub multi_attr :
+    ATTR1
+    ATTR2(
+        key1 => 'value1',
+        key2 => 'value2'
+    )
+    ATTR3
+{
+    # Implementation
+}
+
+my $var :
+    Persistent(
+        file => '/tmp/cache',
+        format => 'json'
+    )
+    :Validated(
+        type => 'Int',
+        range => [0, 100]
+    );
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement))
+
+==================
+Method attributes
+==================
+
+package MyClass;
+
+sub new :Constructor {
+    my $class = shift;
+    bless {}, $class;
+}
+
+sub get_value :Accessor :Public {
+    my $self = shift;
+    return $self->{value};
+}
+
+sub set_value :Mutator :Public :Validated {
+    my ($self, $value) = @_;
+    $self->{value} = $value;
+}
+
+sub _internal :Private {
+    # Private method
+}
+
+sub calculate :Memoized :Profiled {
+    # Expensive calculation
+}
+
+---
+
+(source_file
+  (package_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Lvalue attributes
+==================
+
+sub temperature :lvalue {
+    my $self = shift;
+    $self->{temp};
+}
+
+sub accessor :lvalue :method {
+    my $self = shift;
+    $self->{data};
+}
+
+my $val :lvalue = create_lvalue();
+
+$obj->temperature = 100;
+$obj->accessor = "new value";
+
+sub counter :lvalue {
+    state $count = 0;
+    $count;
+}
+
+counter() = 42;
+counter()++;
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement)
+  (statement)
+  (statement)
+  (subroutine_declaration)
+  (statement)
+  (statement))
+
+==================
+Custom attribute handlers
+==================
+
+use Attribute::Handlers;
+
+sub Memoize :ATTR(CODE) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Install memoization wrapper
+}
+
+sub Validate :ATTR(SCALAR,ARRAY,HASH) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Install validation
+}
+
+sub Logged :ATTR(CODE,BEGIN) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Wrap with logging
+}
+
+sub UNIVERSAL::Debug :ATTR {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    print "Debug: $package, phase: $phase\n";
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Field attributes
+==================
+
+package Person;
+use fields qw(name age email);
+
+sub new {
+    my $class = shift;
+    my $self = fields::new($class);
+    return $self;
+}
+
+package Employee;
+use base 'Person';
+use fields qw(employee_id department);
+
+my Employee $emp = Employee->new();
+$emp->{name} = "John";
+$emp->{employee_id} = "E123";
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Thread attributes
+==================
+
+use threads;
+use threads::shared;
+
+my $shared_var :shared;
+my @shared_array :shared;
+my %shared_hash :shared;
+
+sub thread_safe :locked :method {
+    my $self = shift;
+    # Automatically locked
+}
+
+sub unique_sub :unique {
+    # Unique per thread
+}
+
+my $var :shared = 42;
+lock($var);
+$var++;
+unlock($var);
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement)
+  (statement)
+  (statement)
+  (statement))

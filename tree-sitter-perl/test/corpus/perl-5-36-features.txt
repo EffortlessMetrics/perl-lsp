@@ -1,0 +1,373 @@
+==================
+Class declaration
+==================
+
+use feature 'class';
+use v5.36;
+
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    
+    method move($dx, $dy) {
+        $x += $dx;
+        $y += $dy;
+    }
+    
+    method describe() {
+        return "Point at ($x, $y)";
+    }
+}
+
+class Point3D :isa(Point) {
+    field $z :param = 0;
+    
+    ADJUST {
+        $z //= 0;
+    }
+    
+    method move($dx, $dy, $dz = 0) {
+        $self->SUPER::move($dx, $dy);
+        $z += $dz;
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (class_declaration
+    (field_declaration)
+    (field_declaration)
+    (method_declaration)
+    (method_declaration))
+  (class_declaration
+    (field_declaration)
+    (adjust_block)
+    (method_declaration)))
+
+==================
+Defer statement
+==================
+
+use feature 'defer';
+
+sub process_file {
+    my $filename = shift;
+    open my $fh, '<', $filename or die $!;
+    
+    defer {
+        close $fh;
+        print "File closed\n";
+    }
+    
+    defer { unlink $tempfile if $tempfile }
+    
+    while (<$fh>) {
+        process_line($_);
+        defer { print "Line processed\n" }
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration
+    (defer_statement)
+    (defer_statement)
+    (while_statement
+      (defer_statement))))
+
+==================
+Try catch finally
+==================
+
+use feature 'try';
+
+try {
+    dangerous_operation();
+}
+catch ($e) {
+    warn "Error: $e";
+    recover();
+}
+finally {
+    cleanup();
+}
+
+try {
+    $result = may_fail();
+} catch ($e) {
+    $result = default_value();
+}
+
+my $val = try { 
+    compute() 
+} catch ($e) { 
+    0 
+};
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (try_catch_statement)
+  (statement (assignment)))
+
+==================
+Builtin functions
+==================
+
+use builtin qw(true false is_bool weaken unweaken blessed refaddr reftype);
+
+my $yes = true;
+my $no = false;
+
+if (is_bool($value)) {
+    print "It's a boolean\n";
+}
+
+weaken($ref);
+unweaken($ref);
+
+my $addr = refaddr($ref);
+my $type = reftype($ref);
+my $class = blessed($ref);
+
+use builtin 'trim';
+my $clean = trim($string);
+
+use builtin 'ceil', 'floor';
+my $up = ceil(3.14);
+my $down = floor(3.14);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (if_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (use_statement)
+  (statement)
+  (use_statement)
+  (statement)
+  (statement))
+
+==================
+Signatures with types
+==================
+
+use feature 'signatures';
+
+sub typed_params(Str $name, Int $age, ArrayRef $data) {
+    return {
+        name => $name,
+        age => $age,
+        data => $data,
+    };
+}
+
+sub optional_typed(Str $required, Maybe[Int] $optional = undef) {
+    # ...
+}
+
+sub slurpy_typed(Str $first, @rest) {
+    # ...
+}
+
+method set_value(Num $val :optional) {
+    $self->{value} = $val // 0;
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (method_declaration))
+
+==================
+Field declarations with attributes
+==================
+
+class User {
+    field $id :param :reader;
+    field $name :param :reader :writer;
+    field $email :param :reader :writer(set_email);
+    field $password :writer(set_password);
+    field $created = time();
+    field @roles :param = ();
+    field %metadata;
+    
+    ADJUST {
+        $password //= generate_password();
+        push @roles, 'user' unless @roles;
+    }
+    
+    method add_role($role) {
+        push @roles, $role unless grep { $_ eq $role } @roles;
+    }
+}
+
+---
+
+(source_file
+  (class_declaration
+    (field_declaration)
+    (field_declaration)
+    (field_declaration)
+    (field_declaration)
+    (field_declaration)
+    (field_declaration)
+    (field_declaration)
+    (adjust_block)
+    (method_declaration)))
+
+==================
+Multi-phase blocks
+==================
+
+class Complex {
+    field $data;
+    
+    ADJUST {
+        $data = {};
+    }
+    
+    ADJUST {
+        $data->{initialized} = 1;
+    }
+    
+    method BUILD {
+        # Constructor logic
+    }
+    
+    method DEMOLISH {
+        # Destructor logic
+    }
+}
+
+ADJUST {
+    # Package-level ADJUST
+}
+
+---
+
+(source_file
+  (class_declaration
+    (field_declaration)
+    (adjust_block)
+    (adjust_block)
+    (method_declaration)
+    (method_declaration))
+  (adjust_block))
+
+==================
+Modern match operator
+==================
+
+use feature 'switch';
+
+given ($value) {
+    when (undef) { say "undefined" }
+    when (true) { say "true value" }
+    when (false) { say "false value" }
+    when (/^\d+$/) { say "number: $_" }
+    when ([1..10]) { say "in range" }
+    when (\@array) { say "in array" }
+    when (\%hash) { say "in hash" }
+    when (\&code) { say "matches code" }
+    default { say "something else" }
+}
+
+my $result = $value ~~ $pattern;
+my $match = $value ~~ [1, 2, 3];
+my $in_hash = $key ~~ %hash;
+
+---
+
+(source_file
+  (use_statement)
+  (given_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Roles and composition
+==================
+
+role Printable {
+    method print() { ... }
+    method format() { "default" }
+}
+
+role Comparable {
+    method compare($other) { ... }
+}
+
+class Document :does(Printable) :does(Comparable) {
+    field $content :param;
+    
+    method print() {
+        print $content;
+    }
+    
+    method compare($other) {
+        $content cmp $other->content;
+    }
+}
+
+---
+
+(source_file
+  (role_declaration)
+  (role_declaration)
+  (class_declaration))
+
+==================
+Async await syntax
+==================
+
+use Future::AsyncAwait;
+
+async sub fetch_data {
+    my $url = shift;
+    my $response = await fetch($url);
+    my $data = await $response->json;
+    return $data;
+}
+
+async method process {
+    try {
+        my $result = await $self->compute;
+        await $self->save($result);
+    }
+    catch ($e) {
+        await $self->log_error($e);
+    }
+}
+
+my $future = async sub {
+    await sleep(1);
+    return 42;
+}->();
+
+---
+
+(source_file
+  (use_statement)
+  (async_subroutine)
+  (async_method)
+  (statement))

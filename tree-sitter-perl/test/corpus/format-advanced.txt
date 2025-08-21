@@ -1,0 +1,290 @@
+==================
+Format with continuations
+==================
+
+format STDOUT =
+Name: @<<<<<<<<<<< Age: @### Score: @##.##
+$name, $age, $score
+Address: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$address
+~~       ^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$address
+.
+
+format REPORT =
+@|||||||||||||||||||||||||||||||||||||||||
+$title
+@<<<<<<<<<< @|||||||||| @>>>>>>>>>>
+$left, $center, $right
+~~^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$text
+.
+
+---
+
+(source_file
+  (format_declaration)
+  (format_declaration))
+
+==================
+Dynamic format names
+==================
+
+format =
+Dynamic format
+.
+
+my $format_name = "MYFORMAT";
+format MYFORMAT =
+@<<<<<<<<<< @>>>>>>>>>>
+$field1, $field2
+.
+
+eval "format ${format_name}_TOP =
+Header line
+.
+";
+
+select((select(REPORT), $~ = "MYFORMAT")[0]);
+
+---
+
+(source_file
+  (format_declaration)
+  (statement)
+  (format_declaration)
+  (eval_statement)
+  (statement))
+
+==================
+Complex format expressions
+==================
+
+format COMPLEX =
+@<<<<<<<<< @####.## @>>>>>>>>
+$name, calculate_value($x, $y), format_date($date)
+@*
+join(", ", @items)
+^||||||||||||||||||||||||||||||||||||||||
+substr($long_text, 0, 40)
+~~^||||||||||||||||||||||||||||||||||||||
+$long_text
+.
+
+format DATA =
+@>>> @<<< @||| @### @###.##
+$a || "N/A", $b // "-", $c eq "" ? "empty" : $c, $d + 0, $e * 100
+.
+
+---
+
+(source_file
+  (format_declaration)
+  (format_declaration))
+
+==================
+Top of page formats
+==================
+
+format REPORT_TOP =
+                    Page @###
+                         $%
+========================================
+   Name            Age    Score
+========================================
+.
+
+format REPORT =
+@<<<<<<<<<<<<<< @### @###.##
+$name, $age, $score
+.
+
+$^ = "REPORT_TOP";
+$~ = "REPORT";
+
+---
+
+(source_file
+  (format_declaration)
+  (format_declaration)
+  (statement)
+  (statement))
+
+==================
+Numeric format fields
+==================
+
+format NUMBERS =
+Integer:     @#####
+$integer
+Decimal:     @###.##
+$decimal
+Scientific:  @##.###^^^^
+$scientific
+Percent:     @##.#%
+$percent * 100
+Binary:      @########
+sprintf("%b", $binary)
+Hex:         @>>>>>>>>
+sprintf("0x%X", $hex)
+.
+
+---
+
+(source_file
+  (format_declaration))
+
+==================
+Format with special variables
+==================
+
+format SPECIAL =
+Page: @### of @###  Lines: @####
+$%, $max_pages, $.
+File: @<<<<<<<<<<<<<<<<<<<<<<< PID: @#####
+$ARGV, $$
+User: @<<<<<<<<<< Time: @<<<<<<<<<<<<<<<<<
+$ENV{USER}, scalar(localtime)
+.
+
+format_lines_per_page STDOUT, 50;
+format_top_name STDOUT, "STDOUT_TOP";
+format_line_break_characters STDOUT, "-\n";
+
+---
+
+(source_file
+  (format_declaration)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Format with filehandles
+==================
+
+format FILE_FORMAT =
+@<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$_
+.
+
+open my $fh, '>', 'output.txt';
+my $old = select($fh);
+$~ = "FILE_FORMAT";
+
+write;
+
+select($old);
+close $fh;
+
+format_name $fh, "FILE_FORMAT";
+format_top_name $fh, "FILE_TOP";
+
+---
+
+(source_file
+  (format_declaration)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Multiline format fields
+==================
+
+format MULTILINE =
+Description:
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+~~^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+Notes:
+@*
+$notes
+Comments:
+^*
+join("\n", @comments)
+.
+
+---
+
+(source_file
+  (format_declaration))
+
+==================
+Format with picture lines
+==================
+
+format PICTURE =
++----------+----------+----------+
+| @<<<<<<< | @<<<<<<< | @<<<<<<< |
+  $col1,     $col2,     $col3
++----------+----------+----------+
+| @||||||| | @####### | @>>>>>>> |
+  $data1,    $data2,    $data3
++----------+----------+----------+
+.
+
+format BOXES =
++==================+
+| @|||||||||||||||| |
+  $title
++==================+
+| @<<<<<<<<<<<<<< |
+  $content
++------------------+
+.
+
+---
+
+(source_file
+  (format_declaration)
+  (format_declaration))
+
+==================
+Format write and formline
+==================
+
+local $~ = "MYFORMAT";
+write;
+
+write FILEHANDLE;
+
+formline <<'END', @values;
+@<<<< @>>>> @||||
+END
+
+my $picture = '@<<<< @>>>>';
+formline $picture, $left, $right;
+my $result = $^A;
+$^A = "";
+
+swrite(<<'END', $name, $value);
+Name: @<<<<<<<<< Value: @>>>>
+END
+
+sub swrite {
+    my $format = shift;
+    $^A = "";
+    formline($format, @_);
+    return $^A;
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (subroutine_declaration))

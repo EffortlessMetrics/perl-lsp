@@ -1,0 +1,357 @@
+==================
+XS function declarations
+==================
+
+MODULE = MyModule  PACKAGE = MyModule
+
+void
+hello()
+    CODE:
+        printf("Hello from XS!\n");
+
+SV *
+add(x, y)
+    int x
+    int y
+    CODE:
+        RETVAL = newSViv(x + y);
+    OUTPUT:
+        RETVAL
+
+char *
+reverse(str)
+    char *str
+    PREINIT:
+        int len;
+        char *result;
+    CODE:
+        len = strlen(str);
+        New(0, result, len + 1, char);
+        for (int i = 0; i < len; i++) {
+            result[i] = str[len - 1 - i];
+        }
+        result[len] = '\0';
+        RETVAL = result;
+    OUTPUT:
+        RETVAL
+    CLEANUP:
+        Safefree(result);
+
+---
+
+(source_file
+  (xs_module_declaration)
+  (xs_function)
+  (xs_function)
+  (xs_function))
+
+==================
+XS with typemaps
+==================
+
+MODULE = Example  PACKAGE = Example
+
+TYPEMAP: <<EOF
+MyClass *    T_PTROBJ
+EOF
+
+MyClass *
+new(class)
+    char *class
+    CODE:
+        RETVAL = new MyClass();
+    OUTPUT:
+        RETVAL
+
+void
+DESTROY(self)
+    MyClass *self
+    CODE:
+        delete self;
+
+int
+method(self, arg)
+    MyClass *self
+    int arg
+    CODE:
+        RETVAL = self->method(arg);
+    OUTPUT:
+        RETVAL
+
+---
+
+(source_file
+  (xs_module_declaration)
+  (xs_typemap)
+  (xs_function)
+  (xs_function)
+  (xs_function))
+
+==================
+XS macros and stack manipulation
+==================
+
+void
+process_list(...)
+    PREINIT:
+        I32 i;
+    PPCODE:
+        for (i = 0; i < items; i++) {
+            SV *elem = ST(i);
+            /* Process elem */
+            XPUSHs(sv_2mortal(newSViv(i)));
+        }
+
+void
+return_multiple()
+    PPCODE:
+        EXTEND(SP, 3);
+        PUSHs(sv_2mortal(newSVpv("first", 0)));
+        PUSHs(sv_2mortal(newSViv(42)));
+        PUSHs(sv_2mortal(newSVnv(3.14)));
+
+SV *
+fetch_global()
+    CODE:
+        dSP;
+        dXSTARG;
+        RETVAL = get_sv("main::global", GV_ADD);
+    OUTPUT:
+        RETVAL
+
+---
+
+(source_file
+  (xs_function)
+  (xs_function)
+  (xs_function))
+
+==================
+Inline::C basic
+==================
+
+use Inline C => <<'END_C';
+#include <math.h>
+
+double calc_distance(double x1, double y1, double x2, double y2) {
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    return sqrt(dx * dx + dy * dy);
+}
+
+int factorial(int n) {
+    if (n <= 1) return 1;
+    return n * factorial(n - 1);
+}
+END_C
+
+use Inline C => 'DATA';
+
+__DATA__
+__C__
+void greet(char *name) {
+    printf("Hello, %s!\n", name);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (data_section))
+
+==================
+Inline::C with Perl API
+==================
+
+use Inline C => <<'END_C';
+SV* process_array(AV* array) {
+    int len = av_len(array) + 1;
+    HV* result = newHV();
+    
+    for (int i = 0; i < len; i++) {
+        SV** elem = av_fetch(array, i, 0);
+        if (elem && SvIOK(*elem)) {
+            int val = SvIV(*elem);
+            char key[20];
+            sprintf(key, "item_%d", i);
+            hv_store(result, key, strlen(key), newSViv(val * 2), 0);
+        }
+    }
+    
+    return newRV_noinc((SV*)result);
+}
+
+void modify_hash(HV* hash) {
+    hv_store(hash, "modified", 8, newSVpv("yes", 0), 0);
+    
+    SV** value = hv_fetch(hash, "count", 5, 0);
+    if (value && SvIOK(*value)) {
+        sv_setiv(*value, SvIV(*value) + 1);
+    }
+}
+END_C
+
+---
+
+(source_file
+  (use_statement))
+
+==================
+XS BOOT section
+==================
+
+MODULE = MyModule  PACKAGE = MyModule
+
+BOOT:
+    /* Initialization code */
+    HV *stash = gv_stashpv("MyModule", TRUE);
+    newCONSTSUB(stash, "VERSION", newSVpv("1.0", 0));
+    newCONSTSUB(stash, "PI", newSVnv(3.14159));
+    
+    /* Register magic */
+    sv_magic(get_sv("MyModule::magic", TRUE), NULL, PERL_MAGIC_ext, NULL, 0);
+
+PROTOTYPES: DISABLE
+
+void
+init()
+    CODE:
+        /* Module initialization */
+
+---
+
+(source_file
+  (xs_module_declaration)
+  (xs_boot_section)
+  (xs_prototypes)
+  (xs_function))
+
+==================
+Inline::CPP
+==================
+
+use Inline CPP => <<'END_CPP';
+class Calculator {
+private:
+    double result;
+    
+public:
+    Calculator() : result(0) {}
+    
+    void add(double x) { result += x; }
+    void subtract(double x) { result -= x; }
+    void multiply(double x) { result *= x; }
+    void divide(double x) { 
+        if (x != 0) result /= x; 
+    }
+    
+    double get_result() { return result; }
+    void reset() { result = 0; }
+};
+END_CPP
+
+---
+
+(source_file
+  (use_statement))
+
+==================
+XS with threads
+==================
+
+MODULE = ThreadSafe  PACKAGE = ThreadSafe
+
+PROTOTYPES: ENABLE
+
+void
+thread_safe_inc()
+    CODE:
+        dMY_CXT;
+        MUTEX_LOCK(&MY_CXT.mutex);
+        MY_CXT.counter++;
+        MUTEX_UNLOCK(&MY_CXT.mutex);
+
+int
+get_thread_id()
+    CODE:
+        RETVAL = MY_POOL.thread_id;
+    OUTPUT:
+        RETVAL
+
+---
+
+(source_file
+  (xs_module_declaration)
+  (xs_prototypes)
+  (xs_function)
+  (xs_function))
+
+==================
+XS constants and enums
+==================
+
+MODULE = Constants  PACKAGE = Constants
+
+INCLUDE: const-xs.inc
+
+int
+constant(name)
+    char *name
+    CODE:
+        errno = 0;
+        switch (*name) {
+        case 'A':
+            if (strEQ(name, "ANSWER")) {
+                RETVAL = 42;
+                break;
+            }
+        case 'P':
+            if (strEQ(name, "PI")) {
+                RETVAL = 3.14159;
+                break;
+            }
+        default:
+            errno = EINVAL;
+            RETVAL = 0;
+        }
+    OUTPUT:
+        RETVAL
+
+---
+
+(source_file
+  (xs_module_declaration)
+  (xs_include)
+  (xs_function))
+
+==================
+PDL inline
+==================
+
+use PDL;
+use Inline Pdlpp => <<'END_PDLPP';
+
+pp_def('distance',
+    Pars => 'x1(); y1(); x2(); y2(); [o]dist()',
+    Code => '$dist() = sqrt(($x2() - $x1()) * ($x2() - $x1()) + 
+                            ($y2() - $y1()) * ($y2() - $y1()));'
+);
+
+pp_def('matrix_mult',
+    Pars => 'a(m,n); b(n,p); [o]c(m,p)',
+    Code => 'loop(m,p) %{
+        $c() = 0;
+        loop(n) %{
+            $c() += $a(n => n) * $b(p => p, n => n);
+        %}
+    %}'
+);
+
+END_PDLPP
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement))

@@ -1,0 +1,351 @@
+==================
+Three-argument open variants
+==================
+
+open my $fh, '<', $filename or die $!;
+open my $fh, '>', $filename or die $!;
+open my $fh, '>>', $filename or die $!;
+open my $fh, '+<', $filename or die $!;
+open my $fh, '+>', $filename or die $!;
+
+open my $fh, '<', \$string_ref;
+open my $fh, '>', \$output;
+open my $fh, '>>', \$append;
+
+open my $pipe, '|-', 'command', @args;
+open my $pipe, '-|', 'command', @args;
+
+open my $fh, '<:raw', $binary_file;
+open my $fh, '>:utf8', $text_file;
+open my $fh, '<:encoding(UTF-16)', $unicode_file;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Socket operations
+==================
+
+use IO::Socket;
+
+socket(my $socket, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+bind($socket, sockaddr_in($port, INADDR_ANY));
+listen($socket, SOMAXCONN);
+accept(my $client, $socket);
+
+setsockopt($socket, SOL_SOCKET, SO_REUSEADDR, 1);
+getsockopt($socket, SOL_SOCKET, SO_ERROR);
+
+connect($socket, $remote_addr);
+shutdown($socket, 2);
+
+send($socket, $data, 0);
+recv($socket, $buffer, 1024, 0);
+
+socketpair(my $parent, my $child, AF_UNIX, SOCK_STREAM, PF_UNSPEC);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+System I/O operations
+==================
+
+sysopen(my $fh, $filename, O_RDWR | O_CREAT, 0644);
+sysread($fh, $buffer, 4096);
+syswrite($fh, $data, length($data));
+sysseek($fh, 0, SEEK_SET);
+
+syscall(&SYS_write, fileno(STDOUT), $message, length($message));
+
+truncate($fh, 1024);
+truncate($filename, 0);
+
+fcntl($fh, F_SETFL, O_NONBLOCK);
+ioctl($fh, TIOCGWINSZ, $winsize);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+File locking
+==================
+
+use Fcntl qw(:flock);
+
+flock($fh, LOCK_EX) or die "Cannot lock: $!";
+flock($fh, LOCK_SH) or die "Cannot lock: $!";
+flock($fh, LOCK_UN);
+flock($fh, LOCK_NB | LOCK_EX) or die "File is locked";
+
+open my $lock, '>', "$file.lock" or die $!;
+flock($lock, LOCK_EX | LOCK_NB) or die "Already running";
+
+{
+    open my $fh, '+<', $file or die $!;
+    flock($fh, LOCK_EX) or die $!;
+    # File automatically unlocked when $fh goes out of scope
+}
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (block))
+
+==================
+Directory operations
+==================
+
+opendir(my $dh, $directory) or die $!;
+my @files = readdir($dh);
+closedir($dh);
+
+rewinddir($dh);
+seekdir($dh, $position);
+my $pos = telldir($dh);
+
+while (my $entry = readdir($dh)) {
+    next if $entry =~ /^\./;
+    print "$entry\n";
+}
+
+mkdir($dirname, 0755) or die $!;
+rmdir($dirname) or die $!;
+
+chdir($directory) or die $!;
+my $cwd = getcwd();
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (while_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+File test operators combinations
+==================
+
+if (-e $file && -r _ && -w _ && !-d _) {
+    print "Readable and writable file\n";
+}
+
+if (-f $file && -s _) {
+    print "Non-empty file\n";
+}
+
+if (-d $dir && -x _) {
+    print "Executable directory\n";
+}
+
+my $age = -M $file;
+my $accessed = -A _;
+my $changed = -C _;
+
+if (-T $file) {
+    print "Text file\n";
+} elsif (-B _) {
+    print "Binary file\n";
+}
+
+---
+
+(source_file
+  (if_statement)
+  (if_statement)
+  (if_statement)
+  (statement)
+  (statement)
+  (statement)
+  (if_statement))
+
+==================
+Select and file handles
+==================
+
+select((select($fh), $| = 1)[0]);
+
+my $oldfh = select($newfh);
+$| = 1;
+select($oldfh);
+
+vec($rin, fileno(STDIN), 1) = 1;
+vec($rin, fileno($socket), 1) = 1;
+select($rout = $rin, undef, undef, $timeout);
+
+use IO::Select;
+my $sel = IO::Select->new();
+$sel->add($fh1, $fh2, $fh3);
+my @ready = $sel->can_read($timeout);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Pipe operations
+==================
+
+pipe(my $reader, my $writer);
+
+open(my $pipe, "|-", "command") or die $!;
+print $pipe "data\n";
+close($pipe);
+
+open(my $output, "-|", "ls", "-la") or die $!;
+while (<$output>) {
+    print;
+}
+close($output);
+
+my $pid = open(my $fh, "-|");
+if (!defined $pid) {
+    die "Cannot fork: $!";
+} elsif ($pid == 0) {
+    exec("command", @args);
+} else {
+    while (<$fh>) {
+        process($_);
+    }
+    close($fh);
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (while_statement)
+  (statement)
+  (statement)
+  (if_statement))
+
+==================
+Memory mapped files
+==================
+
+use File::Map qw(map_file);
+
+map_file my $map, $filename, '<';
+$map =~ s/foo/bar/g;
+
+use Sys::Mmap;
+mmap(my $mmap, 0, PROT_READ|PROT_WRITE, MAP_SHARED, $fh);
+substr($mmap, 0, 4) = "TEST";
+munmap($mmap);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Advanced file operations
+==================
+
+link($oldfile, $newfile) or die $!;
+symlink($target, $link) or die $!;
+readlink($link);
+
+unlink(@files) or die $!;
+rename($old, $new) or die $!;
+
+chmod(0644, @files);
+chown($uid, $gid, @files);
+utime($atime, $mtime, @files);
+
+stat($file);
+my @info = stat(_);
+my ($dev, $ino, $mode, $nlink) = stat($file);
+
+lstat($symlink);
+my @linkinfo = lstat(_);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))

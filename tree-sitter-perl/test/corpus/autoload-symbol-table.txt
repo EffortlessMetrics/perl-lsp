@@ -1,0 +1,262 @@
+==================
+AUTOLOAD subroutine
+==================
+
+sub AUTOLOAD {
+    my $self = shift;
+    my $method = $AUTOLOAD;
+    $method =~ s/.*:://;
+    
+    if ($method eq 'foo') {
+        return $self->_foo(@_);
+    }
+    
+    die "Undefined method: $method";
+}
+
+---
+
+(source_file
+  (subroutine_declaration
+    (block
+      (statement)
+      (statement)
+      (statement)
+      (if_statement)
+      (statement))))
+
+==================
+Symbol table manipulation
+==================
+
+*foo = *bar;
+*foo = \&bar;
+*foo = \$bar;
+*foo = \@bar;
+*foo = \%bar;
+*{"main::baz"} = \&quux;
+*{$package . "::func"} = sub { print "Dynamic" };
+
+---
+
+(source_file
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (statement (glob_assignment)))
+
+==================
+Symbol table deletion
+==================
+
+delete $main::{foo};
+delete $::{bar};
+delete ${^GLOBAL_PHASE};
+undef &foo;
+undef *foo;
+
+---
+
+(source_file
+  (statement (delete_expression))
+  (statement (delete_expression))
+  (statement (delete_expression))
+  (statement (undef_expression))
+  (statement (undef_expression)))
+
+==================
+Dynamic symbol creation
+==================
+
+*{$name} = sub { 
+    print "Dynamic function: $name\n";
+};
+
+*{$pkg . '::VERSION'} = \$version;
+
+for my $method (qw(get set clear)) {
+    *{$method} = sub {
+        my $self = shift;
+        $self->{"_$method"}(@_);
+    };
+}
+
+${$package . '::VAR'} = 42;
+@{$package . '::ARRAY'} = (1, 2, 3);
+%{$package . '::HASH'} = (key => 'value');
+
+---
+
+(source_file
+  (statement (glob_assignment))
+  (statement (glob_assignment))
+  (for_statement
+    (statement (glob_assignment)))
+  (statement (assignment))
+  (statement (assignment))
+  (statement (assignment)))
+
+==================
+Symbol inspection
+==================
+
+if (defined &foo) {
+    print "foo is defined\n";
+}
+
+if (exists &{$package . '::bar'}) {
+    print "bar exists in $package\n";
+}
+
+my @symbols = keys %main::;
+my @subs = grep { defined &{"main::$_"} } keys %main::;
+
+can($obj, 'method');
+$obj->can('method');
+UNIVERSAL::can($obj, 'method');
+
+---
+
+(source_file
+  (if_statement)
+  (if_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Import/export manipulation
+==================
+
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    
+    for my $func (@_) {
+        *{$caller . '::' . $func} = \&{$func};
+    }
+}
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    (my $method = $AUTOLOAD) =~ s/.*:://;
+    
+    no strict 'refs';
+    *{$AUTOLOAD} = sub { 
+        print "Autoloaded: $method\n";
+        goto &{"real_$method"} if defined &{"real_$method"};
+    };
+    goto &{$AUTOLOAD};
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Glob slots access
+==================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{NAME};
+*foo{PACKAGE};
+
+my $code = *foo{CODE};
+my $name = *foo{NAME};
+my $pkg = *foo{PACKAGE};
+
+---
+
+(source_file
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (glob_slot))
+  (statement (assignment))
+  (statement (assignment))
+  (statement (assignment)))
+
+==================
+Method generation
+==================
+
+BEGIN {
+    for my $attr (qw(name age email)) {
+        my $method = $attr;
+        no strict 'refs';
+        *{$method} = sub {
+            my $self = shift;
+            $self->{$method} = shift if @_;
+            return $self->{$method};
+        };
+        
+        *{"get_$method"} = sub {
+            my $self = shift;
+            return $self->{$method};
+        };
+        
+        *{"set_$method"} = sub {
+            my $self = shift;
+            $self->{$method} = shift;
+        };
+    }
+}
+
+---
+
+(source_file
+  (begin_block))
+
+==================
+Namespace manipulation
+==================
+
+package Foo;
+
+sub new { bless {}, shift }
+
+package Bar;
+use parent -norequire, 'Foo';
+
+*new = \&Foo::new;
+*DESTROY = sub { };
+
+{
+    no warnings 'redefine';
+    *Foo::method = sub { 'overridden' };
+}
+
+local *CORE::GLOBAL::die = sub {
+    my $msg = shift;
+    Carp::confess($msg);
+};
+
+---
+
+(source_file
+  (package_declaration)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (statement)
+  (statement)
+  (block)
+  (statement))
