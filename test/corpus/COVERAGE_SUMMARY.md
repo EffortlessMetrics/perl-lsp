@@ -1,0 +1,272 @@
+# Tree-sitter Perl Corpus Coverage Summary
+
+**Total files:** 26
+**Total test cases:** 171
+
+## Test cases by file
+
+- `builtins-core.txt`: 6 tests
+- `cli-env-pod.txt`: 7 tests
+- `debugger-b-backend.txt`: 8 tests
+- `declared-refs-and-aliasing.txt`: 3 tests
+- `do-forms.txt`: 7 tests
+- `error-recovery.txt`: 13 tests
+- `feature-bundles-experimental.txt`: 12 tests
+- `fuzz-tripwires.txt`: 8 tests
+- `integer-and-bitwise-pragmas.txt`: 4 tests
+- `labels-and-control.txt`: 6 tests
+- `operators-augassign.txt`: 7 tests
+- `perlio-layers.txt`: 3 tests
+- `pseudo-constants.txt`: 6 tests
+- `range-and-flipflop.txt`: 7 tests
+- `regex-pos-anchor.txt`: 6 tests
+- `regex-sets-and-branchreset.txt`: 4 tests
+- `special-vars-magic.txt`: 7 tests
+- `split-join-misc.txt`: 13 tests
+- `sysproc-and-net.txt`: 7 tests
+- `sysproc-open-variants.txt`: 4 tests
+- `time-and-caller.txt`: 7 tests
+- `tr-and-substitution-flags.txt`: 7 tests
+- `unicode-bytes-pragma.txt`: 4 tests
+- `unicode-charnames.txt`: 4 tests
+- `vec-bitwise-dbm.txt`: 7 tests
+- `versioned-package-and-vstrings.txt`: 4 tests
+
+## Test cases by tag
+
+- **regex**: 23
+- **error**: 14
+- **experimental**: 14
+- **recovery**: 13
+- **bitwise**: 11
+- **eval**: 11
+- **pipe**: 10
+- **exec**: 9
+- **fork**: 9
+- **indirect**: 9
+- **system**: 9
+- **B**: 8
+- **Devel**: 8
+- **debugger**: 8
+- **operator**: 8
+- **qw**: 8
+- **regex-code**: 8
+- **string**: 8
+- **tripwire**: 8
+- **argv**: 7
+- **augmented-assignment**: 7
+- **caller**: 7
+- **dbm**: 7
+- **do**: 7
+- **documentation**: 7
+- **env**: 7
+- **magic**: 7
+- **pod**: 7
+- **pragma**: 7
+- **range**: 7
+- **socket**: 7
+- **special-var**: 7
+- **tie**: 7
+- **time**: 7
+- **vec**: 7
+- **wantarray**: 7
+- **builtin**: 6
+- **constants**: 6
+- **flow**: 6
+- **function**: 6
+- **list**: 6
+- **open**: 6
+- **punctuation-var**: 6
+- **unicode**: 6
+- **version**: 6
+- **\G**: 5
+- **flipflop**: 5
+- **labels**: 5
+- **block**: 4
+- **bytes**: 4
+- **encoding**: 4
+- **feature**: 4
+- **file-test**: 4
+- **layers**: 4
+- **perlio**: 4
+- **pos**: 4
+- **signatures**: 4
+- **split**: 4
+- **substitution**: 4
+- **tr**: 4
+- **transliteration**: 4
+- **arithmetic**: 3
+- **branch-reset**: 3
+- **charnames**: 3
+- **declared_refs**: 3
+- **flags**: 3
+- **gmtime**: 3
+- **hash**: 3
+- **integer**: 3
+- **last**: 3
+- **localtime**: 3
+- **package**: 3
+- **refaliasing**: 3
+- **sets**: 3
+- **subroutine**: 3
+- **utf8**: 3
+- **vstring**: 3
+- **anchor**: 2
+- **argv0**: 2
+- **array**: 2
+- **blocks**: 2
+- **character-class**: 2
+- **child**: 2
+- **class**: 2
+- **comment**: 2
+- **continue**: 2
+- **crlf**: 2
+- **dereference**: 2
+- **file**: 2
+- **intersection**: 2
+- **method**: 2
+- **nested**: 2
+- **next**: 2
+- **precedence**: 2
+- **references**: 2
+- **require**: 2
+- **reset**: 2
+- **state**: 2
+- **strings**: 2
+- **union**: 2
+- **DATA**: 1
+- **E-suffix**: 1
+- **Encode**: 1
+- **PerlIO**: 1
+- **VERSION**: 1
+- **^H**: 1
+- **__DATA__**: 1
+- **__DIR__**: 1
+- **__END__**: 1
+- **__FILE__**: 1
+- **__LINE__**: 1
+- **__PACKAGE__**: 1
+- **__SUB__**: 1
+- **alias**: 1
+- **bare-blocks**: 1
+- **boolean**: 1
+- **brackets**: 1
+- **bundle**: 1
+- **call**: 1
+- **capture**: 1
+- **capture-groups**: 1
+- **captures**: 1
+- **catch**: 1
+- **cleanup**: 1
+- **code**: 1
+- **combinations**: 1
+- **combined**: 1
+- **comparison**: 1
+- **compile-time**: 1
+- **complement**: 1
+- **complex-conditions**: 1
+- **conditionals**: 1
+- **context**: 1
+- **continuous**: 1
+- **control-flow**: 1
+- **current_sub**: 1
+- **custom**: 1
+- **decode**: 1
+- **defer**: 1
+- **delete**: 1
+- **delimiters**: 1
+- **deprecated**: 1
+- **dup**: 1
+- **e**: 1
+- **ee**: 1
+- **ellipsis**: 1
+- **error-handling**: 1
+- **exclusive**: 1
+- **expression**: 1
+- **failure**: 1
+- **fd**: 1
+- **field**: 1
+- **filehandle**: 1
+- **finally**: 1
+- **gc**: 1
+- **goto**: 1
+- **heredoc**: 1
+- **hints**: 1
+- **indirect-object**: 1
+- **interpolation**: 1
+- **ipc**: 1
+- **join**: 1
+- **length**: 1
+- **lexer**: 1
+- **lexical_subs**: 1
+- **limit**: 1
+- **modifiers**: 1
+- **multiple**: 1
+- **my**: 1
+- **named-capture**: 1
+- **negative**: 1
+- **non-destructive**: 1
+- **numeric**: 1
+- **operations**: 1
+- **parentheses**: 1
+- **parser**: 1
+- **postderef**: 1
+- **properties**: 1
+- **quote-operators**: 1
+- **r**: 1
+- **ranges**: 1
+- **raw**: 1
+- **recursion**: 1
+- **redo**: 1
+- **reference**: 1
+- **say**: 1
+- **scalar**: 1
+- **scalar-context**: 1
+- **semicolon**: 1
+- **shift**: 1
+- **short**: 1
+- **socketpair**: 1
+- **special**: 1
+- **special-cases**: 1
+- **squeeze**: 1
+- **stateful**: 1
+- **statement**: 1
+- **statement-modifiers**: 1
+- **string-bitops**: 1
+- **subtraction**: 1
+- **syntax**: 1
+- **terminal**: 1
+- **tokenizer**: 1
+- **truncation**: 1
+- **try**: 1
+- **undef**: 1
+- **use**: 1
+- **via**: 1
+- **warnings**: 1
+- **whitespace**: 1
+- **y**: 1
+
+## Test cases by flag
+
+- **ambiguous**: 1
+- **deprecated**: 1
+- **error-node-expected**: 14
+- **experimental**: 15
+- **lexer-sensitive**: 14
+- **precedence**: 2
+- **tripwire**: 8
+
+## Test cases by Perl version requirement
+
+- **5.10+**: 7
+- **5.12+**: 3
+- **5.14+**: 2
+- **5.16+**: 1
+- **5.18+**: 4
+- **5.20+**: 3
+- **5.22+**: 4
+- **5.26+**: 4
+- **5.34+**: 1
+- **5.36+**: 2
+- **5.38+**: 2
+- **5.8+**: 125

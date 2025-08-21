@@ -1,6 +1,10 @@
 ==================
 Command line arguments
 ==================
+# @id: cli_env_pod.001
+# @tags: argv documentation env pod
+# @perl: 5.8+
+
 
 BEGIN { @ARGV = qw(--verbose file.txt --count=5) }
 shift @ARGV;
@@ -22,6 +26,10 @@ $ARGV;
 ==================
 Getopt::Long usage
 ==================
+# @id: cli_env_pod.002
+# @tags: argv documentation env pod
+# @perl: 5.8+
+
 
 use Getopt::Long qw(GetOptions);
 GetOptions(
@@ -50,6 +58,10 @@ GetOptions(\my %opts, 'debug', 'file=s@', 'define=s%');
 ==================
 Environment variables
 ==================
+# @id: cli_env_pod.003
+# @tags: argv documentation env pod
+# @perl: 5.8+
+
 
 $ENV{PATH} = "/usr/local/bin:/usr/bin";
 $ENV{HOME};
@@ -71,6 +83,10 @@ keys %ENV;
 ==================
 INC manipulation
 ==================
+# @id: cli_env_pod.004
+# @tags: argv documentation env pod
+# @perl: 5.8+
+
 
 @INC;
 unshift @INC, "./lib";
@@ -92,6 +108,10 @@ BEGIN { @INC = ("/only/path", @INC) }
 ==================
 Basic POD documentation
 ==================
+# @id: cli_env_pod.005
+# @tags: argv comment documentation env pod
+# @perl: 5.8+
+
 
 =pod
 
@@ -136,6 +156,10 @@ Your Name
 ==================
 Inline POD
 ==================
+# @id: cli_env_pod.006
+# @tags: argv comment documentation env pod
+# @perl: 5.8+
+
 
 print "before pod";
 
@@ -166,6 +190,10 @@ print "after pod";
 ==================
 Script name and DATA
 ==================
+# @id: cli_env_pod.007
+# @tags: argv documentation env pod
+# @perl: 5.8+
+
 
 $0;
 $0 = "newname";

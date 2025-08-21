@@ -1,6 +1,10 @@
 ==================
 Math builtins
 ==================
+# @id: builtins_core.001
+# @tags: arithmetic builtin function
+# @perl: 5.8+
+
 
 atan2($y, $x);
 cos $r;
@@ -30,6 +34,10 @@ int 3.14;
 ==================
 String builtins
 ==================
+# @id: builtins_core.002
+# @tags: builtin function string
+# @perl: 5.8+
+
 
 substr($s, 1, 3);
 substr($s, 2, 2) = "XX";
@@ -67,6 +75,10 @@ ucfirst $str;
 ==================
 List and array builtins
 ==================
+# @id: builtins_core.003
+# @tags: builtin function list
+# @perl: 5.8+
+
 
 splice @a, 2, 1, "X";
 unshift @a, 1, 2, 3;
@@ -100,6 +112,10 @@ split /,/, $str;
 ==================
 Hash builtins
 ==================
+# @id: builtins_core.004
+# @tags: builtin function hash
+# @perl: 5.8+
+
 
 keys %hash;
 values %hash;
@@ -121,6 +137,10 @@ scalar %hash;
 ==================
 File test operators
 ==================
+# @id: builtins_core.005
+# @tags: builtin file-test function
+# @perl: 5.8+
+
 
 -r $file && -w _ && -f _;
 -e $path or -d $path;
@@ -146,6 +166,10 @@ File test operators
 ==================
 Type checking builtins
 ==================
+# @id: builtins_core.006
+# @tags: builtin function
+# @perl: 5.8+
+
 
 ref $var;
 defined $var;

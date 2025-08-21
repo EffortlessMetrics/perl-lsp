@@ -1,0 +1,52 @@
+==================
+use integer pragma
+==================
+# @id: integer.pragma.001
+# @tags: integer pragma arithmetic truncation
+# @perl: 5.8+
+use integer;
+my $n = 3/2;  # 1, not 1.5
+my $m = -3/2; # -1, not -1.5
+my $p = 2**32;
+no integer;
+my $f = 3/2;  # 1.5
+
+==================
+use feature bitwise
+==================
+# @id: bitwise.feature.001
+# @tags: bitwise feature string-bitops
+# @perl: 5.22+
+use feature 'bitwise';
+my $t = "foo" & "bar";
+my $u = "abc" | "xyz";
+my $v = "test" ^ "mask";
+my $w = ~"bits";
+no feature 'bitwise';
+
+==================
+Numeric vs string bitwise
+==================
+# @id: bitwise.numeric.001
+# @tags: bitwise numeric string
+# @perl: 5.22+
+use feature 'bitwise';
+# Numeric bitwise (always numeric context)
+my $a = 5 &. 3;
+my $b = 8 |. 2;
+my $c = 15 ^. 7;
+my $d = ~. 0;
+
+==================
+Integer with bit operations
+==================
+# @id: integer.bitops.001
+# @tags: integer bitwise shift
+# @perl: 5.8+
+use integer;
+my $left = 1 << 10;
+my $right = 1024 >> 2;
+my $and = 255 & 15;
+my $or = 8 | 4;
+my $xor = 12 ^ 5;
+my $not = ~0;

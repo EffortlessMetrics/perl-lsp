@@ -1,0 +1,44 @@
+==================
+system with program hash argv0
+==================
+# @id: system.hash.001
+# @tags: system exec argv0 indirect
+# @perl: 5.8+
+system { '/bin/echo' } 'echo', 'ok';
+system { $prog } $prog, @args;
+exec { '/bin/sh' } 'sh', '-c', $cmd;
+
+==================
+open to child with pipe
+==================
+# @id: open.child.002
+# @tags: open pipe child fork
+# @perl: 5.8+
+open my $in,  "-|", "ls", "-l";
+open my $out, "|-", "wc", "-l";
+open my $both, "|-", "-";
+open HANDLE, "-|", @cmd;
+open WRITER, "|-", $filter, @args;
+
+==================
+open with dup and special
+==================
+# @id: open.dup.001
+# @tags: open dup fd special
+# @perl: 5.8+
+open my $dup, '<&', $fh;
+open my $fd, '<&=', 3;
+open my $save, '>&', \*STDOUT;
+open my $null, '>', '/dev/null';
+open my $err, '>&', \*STDERR;
+
+==================
+pipe and socketpair
+==================
+# @id: pipe.socketpair.001
+# @tags: pipe socketpair ipc
+# @perl: 5.8+
+pipe(READER, WRITER);
+socketpair(SOCK1, SOCK2, AF_UNIX, SOCK_STREAM, PF_UNSPEC);
+pipe my $read, my $write;
+socketpair my $child, my $parent, AF_UNIX, SOCK_STREAM, 0;

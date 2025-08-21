@@ -1,6 +1,10 @@
 ==================
 Core magic scalars
 ==================
+# @id: special_vars_magic.001
+# @tags: magic punctuation-var special-var
+# @perl: 5.8+
+
 
 $[;
 $.;
@@ -52,6 +56,10 @@ $%;
 ==================
 Perl 6 style special vars
 ==================
+# @id: special_vars_magic.002
+# @tags: magic punctuation-var special-var
+# @perl: 5.8+
+
 
 ${^ENCODING};
 ${^GLOBAL_PHASE};
@@ -81,6 +89,10 @@ ${^UTF8LOCALE};
 ==================
 Regex position arrays and hashes
 ==================
+# @id: special_vars_magic.003
+# @tags: hash list magic regex special-var
+# @perl: 5.8+
+
 
 @-;
 @+;
@@ -110,6 +122,11 @@ $-{name};
 ==================
 Error and process variables
 ==================
+# @id: special_vars_magic.004
+# @tags: error magic special-var
+# @perl: 5.8+
+# @flags: error-node-expected
+
 
 $!;
 $@;
@@ -137,6 +154,10 @@ $0;
 ==================
 Regex match variables
 ==================
+# @id: special_vars_magic.005
+# @tags: magic regex special-var
+# @perl: 5.8+
+
 
 $&;
 $`;
@@ -162,6 +183,10 @@ $^R;
 ==================
 Special arrays and hashes
 ==================
+# @id: special_vars_magic.006
+# @tags: hash list magic punctuation-var special-var
+# @perl: 5.8+
+
 
 @ARGV;
 @_;
@@ -189,6 +214,10 @@ Special arrays and hashes
 ==================
 Special filehandles
 ==================
+# @id: special_vars_magic.007
+# @tags: file-test magic punctuation-var special-var
+# @perl: 5.8+
+
 
 STDIN;
 STDOUT;

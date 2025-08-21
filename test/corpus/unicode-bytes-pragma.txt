@@ -1,0 +1,51 @@
+==================
+bytes pragma
+==================
+# @id: bytes.pragma.001
+# @tags: bytes pragma unicode length
+# @perl: 5.8+
+use bytes;
+my $utf8 = "café";
+my $byte_len = length $utf8;  # byte count, not char count
+my $byte_substr = substr $utf8, 0, 2;
+no bytes;
+my $char_len = length $utf8;  # character count
+
+==================
+bytes with operations
+==================
+# @id: bytes.operations.001
+# @tags: bytes pragma operations
+# @perl: 5.8+
+use bytes;
+my $s = "Σ" . "π";  # byte concatenation
+my $cmp = "α" lt "β";  # byte comparison
+my $uc = uc("ñ");  # may not work as expected
+no bytes;
+
+==================
+utf8 pragma interaction
+==================
+# @id: utf8.bytes.001
+# @tags: utf8 bytes pragma encoding
+# @perl: 5.8+
+use utf8;
+my $str = "こんにちは";
+use bytes;
+my $byte_count = length $str;
+no bytes;
+my $char_count = length $str;
+my $is_utf8 = utf8::is_utf8($str);
+
+==================
+Encode module with bytes
+==================
+# @id: encode.bytes.001
+# @tags: Encode bytes utf8 decode
+# @perl: 5.8+
+use Encode qw(encode decode);
+my $octets = encode('UTF-8', "Möße");
+use bytes;
+my $byte_len = length $octets;
+no bytes;
+my $decoded = decode('UTF-8', $octets);

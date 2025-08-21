@@ -1,0 +1,48 @@
+==================
+charnames pragma
+==================
+# @id: unicode.charnames.001
+# @tags: unicode charnames pragma
+# @perl: 5.8+
+use charnames ':full';
+my $arrow = "\N{RIGHTWARDS ARROW}";
+my $smile = "\N{WHITE SMILING FACE}";
+print "\N{GREEK CAPITAL LETTER SIGMA}";
+
+==================
+Custom charnames
+==================
+# @id: unicode.charnames.002
+# @tags: unicode charnames custom
+# @perl: 5.8+
+use charnames ':alias' => {
+    'APPLE' => 0x1F34E,
+    'FIRE' => 0x1F525
+};
+my $apple = "\N{APPLE}";
+my $fire = "\N{FIRE}";
+
+==================
+charnames with :short
+==================
+# @id: unicode.charnames.003
+# @tags: unicode charnames short
+# @perl: 5.8+
+use charnames ':short';
+my $ae = "\N{ae}";
+my $oe = "\N{oe}";
+use charnames qw(:full :short latin greek);
+my $sigma = "\N{Sigma}";
+
+==================
+Unicode properties in regex
+==================
+# @id: unicode.properties.001
+# @tags: unicode regex properties
+# @perl: 5.8+
+/\p{Letter}/;
+/\P{Number}/;
+/\p{Script=Greek}/;
+/\p{Block=CJK}/;
+/\p{Uppercase}/;
+/\p{XPosixAlpha}/;

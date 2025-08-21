@@ -62,7 +62,7 @@ next if 1...10;
 ==================
 Flip flop with E suffix
 ==================
-# @id: range.flipflop.E.001  
+# @id: range.flipflop.e.001  
 # @tags: range flipflop E-suffix terminal
 # @perl: 5.8+
 

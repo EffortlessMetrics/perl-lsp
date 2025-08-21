@@ -1,6 +1,10 @@
 ==================
 Time functions
 ==================
+# @id: time_and_caller.001
+# @tags: caller eval gmtime localtime time wantarray
+# @perl: 5.8+
+
 
 time();
 time;
@@ -32,6 +36,10 @@ alarm 0;
 ==================
 Localtime components
 ==================
+# @id: time_and_caller.002
+# @tags: caller eval gmtime localtime time wantarray
+# @perl: 5.8+
+
 
 my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 my @time = localtime;
@@ -52,6 +60,10 @@ my $formatted = scalar localtime(time);
 ==================
 Caller function
 ==================
+# @id: time_and_caller.003
+# @tags: caller eval time wantarray
+# @perl: 5.8+
+
 
 caller();
 caller(0);
@@ -75,6 +87,10 @@ my $subname = (caller(1))[3];
 ==================
 Wantarray context
 ==================
+# @id: time_and_caller.004
+# @tags: caller eval list time wantarray
+# @perl: 5.8+
+
 
 sub context_aware {
     return unless defined wantarray;
@@ -106,6 +122,10 @@ if (wantarray) {
 ==================
 Eval and die context
 ==================
+# @id: time_and_caller.005
+# @tags: caller eval time wantarray
+# @perl: 5.8+
+
 
 eval { dangerous_code() };
 if ($@) {
@@ -135,6 +155,10 @@ __DIE__ = sub { print STDERR "Fatal: $_[0]"; exit 1 };
 ==================
 Stack traces
 ==================
+# @id: time_and_caller.006
+# @tags: caller eval time wantarray
+# @perl: 5.8+
+
 
 use Carp;
 carp "Warning with stack trace";
@@ -158,6 +182,10 @@ my $trace = longmess("Debug info");
 ==================
 High resolution time
 ==================
+# @id: time_and_caller.007
+# @tags: caller eval gmtime localtime time wantarray
+# @perl: 5.8+
+
 
 use Time::HiRes qw(time sleep usleep gettimeofday tv_interval);
 my $t0 = [gettimeofday];
