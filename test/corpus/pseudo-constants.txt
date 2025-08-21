@@ -1,0 +1,146 @@
+==================
+File line package constants
+==================
+# @id: pseudo.constants.001  
+# @tags: constants __FILE__ __LINE__ __PACKAGE__
+# @perl: 5.8+
+
+my $file = __FILE__;
+my $line = __LINE__;
+my $package = __PACKAGE__;
+warn "Error at $file line $line in package $package";
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (special_literal)))
+  (expression_statement (my_declaration (variable) (special_literal)))
+  (expression_statement (my_declaration (variable) (special_literal)))
+  (expression_statement (call_expression (identifier) (string))))
+
+==================
+DIR constant
+==================
+# @id: pseudo.dir.001  
+# @tags: constants __DIR__
+# @perl: 5.26+
+
+use feature 'current_sub';
+my $dir = __DIR__;
+chdir __DIR__;
+use lib __DIR__ . "/lib";
+
+---
+
+(source_file
+  (use_statement (identifier) (string))
+  (expression_statement (my_declaration (variable) (special_literal)))
+  (expression_statement (call_expression (identifier) (special_literal)))
+  (use_statement (identifier) (binary_expression (special_literal) (string))))
+
+==================
+SUB constant
+==================
+# @id: pseudo.sub.001  
+# @tags: constants __SUB__ current_sub recursion
+# @perl: 5.16+
+
+use feature 'current_sub';
+sub factorial {
+    my $n = shift;
+    return 1 if $n <= 1;
+    return $n * __SUB__->($n - 1);
+}
+
+my $code = sub {
+    my $self = __SUB__;
+    return $self;
+};
+
+---
+
+(source_file
+  (use_statement (identifier) (string))
+  (subroutine_declaration (identifier) (block
+    (expression_statement (my_declaration (variable) (call_expression (identifier))))
+    (return_statement (statement_modifier (number) (binary_expression (variable) (number))))
+    (return_statement (binary_expression (variable) (call_expression (special_literal) (argument_list (binary_expression (variable) (number))))))))
+  (expression_statement (my_declaration (variable) (anonymous_subroutine (block
+    (expression_statement (my_declaration (variable) (special_literal)))
+    (return_statement (variable)))))))
+
+==================
+Constants in string interpolation
+==================
+# @id: pseudo.interpolation.001  
+# @tags: constants interpolation strings
+# @perl: 5.8+
+
+print "Running from " . __FILE__ . " at line " . __LINE__ . "\n";
+die "Error in " . __PACKAGE__ . " at " . __FILE__ . ":" . __LINE__;
+my $location = sprintf("%s:%d", __FILE__, __LINE__);
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (binary_expression 
+    (binary_expression 
+      (binary_expression 
+        (binary_expression (string) (special_literal))
+        (string))
+      (special_literal))
+    (string))))
+  (expression_statement (call_expression (identifier) (binary_expression 
+    (binary_expression 
+      (binary_expression 
+        (binary_expression (string) (special_literal))
+        (string))
+      (special_literal))
+    (binary_expression (string) (special_literal)))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (string) (special_literal) (special_literal))))))
+
+==================
+Constants in conditionals
+==================
+# @id: pseudo.conditionals.001  
+# @tags: constants conditionals
+# @perl: 5.8+
+
+if (__PACKAGE__ eq 'main') {
+    print "In main package\n";
+}
+
+die "Not in lib" unless __FILE__ =~ /\.pm$/;
+
+---
+
+(source_file
+  (if_statement (parenthesized_expression (binary_expression (special_literal) (string))) (block
+    (expression_statement (call_expression (identifier) (string)))))
+  (expression_statement (statement_modifier (call_expression (identifier) (string)) 
+    (binary_expression (special_literal) (regex)))))
+
+==================
+DATA and END tokens
+==================
+# @id: pseudo.data.001  
+# @tags: constants __DATA__ __END__ DATA filehandle
+# @perl: 5.8+
+
+while (<DATA>) {
+    print;
+}
+
+__DATA__
+line 1
+line 2
+__END__
+
+---
+
+(source_file
+  (while_statement (parenthesized_expression (readline (identifier))) (block
+    (expression_statement (call_expression (identifier)))))
+  (data_marker)
+  (data_section)
+  (end_marker))

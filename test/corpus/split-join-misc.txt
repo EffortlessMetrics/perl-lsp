@@ -1,0 +1,269 @@
+==================
+Split basics
+==================
+# @id: split.basic.001  
+# @tags: split regex string
+# @perl: 5.8+
+
+my @words = split / /, $text;
+my @fields = split /,/, $csv;
+my @chars = split //, $string;
+my @lines = split /\n/, $multiline;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable)))))
+
+==================
+Split with captures
+==================
+# @id: split.captures.001  
+# @tags: split regex captures parentheses
+# @perl: 5.8+
+
+my @parts = split /(\W+)/, $text;
+my @tokens = split /(,)/, $csv;
+my @segments = split /(?=\n)/, $data;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable)))))
+
+==================
+Split with limit
+==================
+# @id: split.limit.001  
+# @tags: split limit negative
+# @perl: 5.8+
+
+my @first_two = split / /, $text, 2;
+my @all = split /,/, $csv, -1;
+my @max_ten = split /\s+/, $data, 10;
+split /,/, $line, 0;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable) (number))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable) (number))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (variable) (number))))
+  (expression_statement (call_expression (identifier) (regex) (variable) (number))))
+
+==================
+Split special cases
+==================
+# @id: split.special.001  
+# @tags: split special-cases whitespace string
+# @perl: 5.8+
+
+my @words = split;
+my @tokens = split ' ', $text;
+my @pieces = split /\s+/, $_;
+my @list = split /PATTERN/;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex) (special_variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (regex)))))
+
+==================
+Join operations
+==================
+# @id: join.basic.001  
+# @tags: join string array
+# @perl: 5.8+
+
+my $csv = join ",", @fields;
+my $path = join "/", @dirs;
+my $text = join "", @chars;
+my $line = join " ", map { uc } @words;
+print join($/, @lines);
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string) (variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (string) (call_expression (identifier) (block (expression_statement (call_expression (identifier)))) (variable)))))
+  (expression_statement (call_expression (identifier) (call_expression (identifier) (argument_list (special_variable) (variable))))))
+
+==================
+System with indirect object
+==================
+# @id: system.indirect.001  
+# @tags: system exec indirect-object argv0
+# @perl: 5.8+
+
+system { '/bin/echo' } 'echo', 'Hello', 'World';
+exec { $prog } $prog, @args;
+system { $commands{$cmd} } $cmd, @options;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (block (string)) (string) (string) (string)))
+  (expression_statement (call_expression (identifier) (block (variable)) (variable) (variable)))
+  (expression_statement (call_expression (identifier) (block (hash_element (variable) (variable))) (variable) (variable))))
+
+==================
+Open to child processes
+==================
+# @id: open.child.001  
+# @tags: open pipe child fork
+# @perl: 5.8+
+
+open my $in, "-|", "ls", "-la";
+open my $out, "|-", "wc", "-l";
+open my $cmd, "-|", $program, @args;
+open READER, "-|" or exec "command";
+open WRITER, "|-" or exec "filter";
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (string) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (string) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (variable) (variable))))
+  (expression_statement (binary_expression (call_expression (identifier) (identifier) (string)) (call_expression (identifier) (string))))
+  (expression_statement (binary_expression (call_expression (identifier) (identifier) (string)) (call_expression (identifier) (string)))))
+
+==================
+Versioned packages and vstrings
+==================
+# @id: package.version.001  
+# @tags: package version vstring
+# @perl: 5.12+
+
+package Foo 1.23;
+package Bar v1.2.3;
+package Baz 1.23 { }
+our $VERSION = v5.10.1;
+use version; our $VERSION = version->declare("v1.2.3");
+require v5.10;
+
+---
+
+(source_file
+  (package_statement (module_name) (version))
+  (package_statement (module_name) (version))
+  (package_statement (module_name) (version) (block))
+  (expression_statement (our_declaration (variable) (version)))
+  (use_statement (identifier))
+  (expression_statement (our_declaration (variable) (method_call (identifier) (identifier) (argument_list (string)))))
+  (expression_statement (call_expression (identifier) (version))))
+
+==================
+Integer and bitwise pragmas
+==================
+# @id: pragma.integer.bitwise.001  
+# @tags: integer bitwise pragma arithmetic
+# @perl: 5.8+
+
+use integer;
+my $result = 10 / 3;
+no integer;
+
+use feature 'bitwise';
+my $str_and = "abc" &. "xyz";
+my $num_and = 5 &. 3;
+
+---
+
+(source_file
+  (use_statement (identifier))
+  (expression_statement (my_declaration (variable) (binary_expression (number) (number))))
+  (no_statement (identifier))
+  (use_statement (identifier) (string))
+  (expression_statement (my_declaration (variable) (binary_expression (string) (string))))
+  (expression_statement (my_declaration (variable) (binary_expression (number) (number)))))
+
+==================
+Regex character class set operations
+==================
+# @id: regex.sets.001  
+# @tags: regex character-class sets intersection union
+# @perl: 5.18+
+
+/(?[ [a-z] & [^aeiou] ])/;
+/(?[ [a-z] | [0-9] ])/;
+/(?[ [a-z] - [aeiou] ])/;
+/(?[ ( [a-z] & [^aeiou] ) | [0-9] ])/;
+
+---
+
+(source_file
+  (expression_statement (regex))
+  (expression_statement (regex))
+  (expression_statement (regex))
+  (expression_statement (regex)))
+
+==================
+Regex branch reset
+==================
+# @id: regex.branchreset.001  
+# @tags: regex branch-reset capture-groups
+# @perl: 5.10+
+
+/^(?|(a)|(b))\1$/;
+/(?|(x)(y)|(p)(q))\1\2/;
+/(?|(?<name>a)|(?<name>b))/;
+
+---
+
+(source_file
+  (expression_statement (regex))
+  (expression_statement (regex))
+  (expression_statement (regex)))
+
+==================
+PerlIO layer stacks
+==================
+# @id: perlio.layers.001  
+# @tags: open perlio layers encoding utf8 crlf
+# @perl: 5.8+
+
+open my $fh, '<:raw:encoding(UTF-8):crlf', $file;
+open my $out, '>:utf8:unix', $output;
+binmode STDOUT, ':encoding(UTF-8):crlf';
+open my $gz, '<:gzip:utf8', 'file.gz';
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (variable))))
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (variable))))
+  (expression_statement (call_expression (identifier) (identifier) (string)))
+  (expression_statement (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (string)))))
+
+==================
+Hints hash and compile time
+==================
+# @id: hints.hash.001  
+# @tags: hints ^H compile-time pragma
+# @perl: 5.10+
+# @flags: lexer-sensitive
+
+BEGIN { 
+    $^H{mymodule} = 1;
+    $^H{feature_say} = 1;
+}
+my $hints = \%^H;
+
+---
+
+(source_file
+  (begin_block (block
+    (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (number)))
+    (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (number)))))
+  (expression_statement (my_declaration (variable) (reference (special_variable)))))

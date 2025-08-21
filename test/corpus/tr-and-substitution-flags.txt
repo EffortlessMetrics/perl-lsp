@@ -1,0 +1,137 @@
+==================
+tr basics
+==================
+# @id: tr.basic.001  
+# @tags: tr transliteration strings  
+# @perl: 5.8+
+
+"xyz" =~ tr/xyz/abc/;
+$count = $str =~ tr/a-z/A-Z/;
+$str =~ tr/0-9/_/;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (string) (transliteration)))
+  (expression_statement (assignment_expression (variable) (binary_expression (variable) (transliteration))))
+  (expression_statement (binary_expression (variable) (transliteration))))
+
+==================
+tr ranges and modifiers
+==================
+# @id: tr.ranges.001  
+# @tags: tr transliteration ranges complement squeeze delete
+# @perl: 5.8+
+
+$cnt = $s =~ tr/a-zA-Z/_/cs;
+$str =~ tr/ //d;
+$text =~ tr/a-zA-Z0-9//cd;
+$squashed =~ tr/ / /s;
+
+---
+
+(source_file
+  (expression_statement (assignment_expression (variable) (binary_expression (variable) (transliteration))))
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration))))
+
+==================
+y alias and unicode
+==================
+# @id: y.alias.001  
+# @tags: tr transliteration y alias unicode
+# @perl: 5.8+
+
+"bananas" =~ y/aeiou//d;
+$str =~ y/\x00-\x1f//d;
+$text =~ y/\N{U+0000}-\N{U+001F}//d;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (string) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration))))
+
+==================
+s with r flag non-destructive
+==================
+# @id: s.flags.r.001  
+# @tags: regex substitution flags r non-destructive
+# @perl: 5.14+
+# @flags: lexer-sensitive
+
+my $copy = $original =~ s/foo/bar/r;
+my $doubled = $text =~ s/(.)/$1$1/gr;
+my $result = $input =~ s/\s+/_/gr;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (binary_expression (variable) (substitution))))
+  (expression_statement (my_declaration (variable) (binary_expression (variable) (substitution))))
+  (expression_statement (my_declaration (variable) (binary_expression (variable) (substitution)))))
+
+==================
+s with e and ee eval flags
+==================
+# @id: s.flags.eval.001  
+# @tags: regex substitution flags e ee eval code
+# @perl: 5.8+
+# @flags: lexer-sensitive
+
+$str =~ s/(\d+)/$1 + 1/ge;
+$text =~ s/(\w+)/uc($1)/ge;
+$code =~ s/(\w+)/"[" . uc($1) . "]"/gee;
+$data =~ s/\$(\w+)/$ENV{$1}/ge;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution))))
+
+==================
+s with all modifier combinations
+==================
+# @id: s.flags.combo.001  
+# @tags: regex substitution flags modifiers combinations
+# @perl: 5.14+
+
+$str =~ s/foo/bar/gi;
+$text =~ s/^/> /gm;
+$html =~ s/<.*?>//gs;
+$code =~ s/\s+/ /gx;
+$copy = $orig =~ s/old/new/gir;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (binary_expression (variable) (substitution)))
+  (expression_statement (assignment_expression (variable) (binary_expression (variable) (substitution)))))
+
+==================
+tr with custom delimiters
+==================
+# @id: tr.delimiters.001  
+# @tags: tr transliteration delimiters
+# @perl: 5.8+
+
+$str =~ tr!a-z!A-Z!;
+$text =~ tr{a-z}{A-Z};
+$data =~ tr[0-9][*];
+$content =~ tr<space>< >;
+
+---
+
+(source_file
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration)))
+  (expression_statement (binary_expression (variable) (transliteration))))

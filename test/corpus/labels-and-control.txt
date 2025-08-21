@@ -1,0 +1,192 @@
+==================
+Labeled loops with next last redo
+==================
+# @id: control.labels.001  
+# @tags: flow labels next last redo continue
+# @perl: 5.8+
+
+OUTER: for my $i (0..3) {
+    INNER: for my $j (0..3) {
+        next OUTER if $i == 1 && $j == 2;
+        redo INNER if $j == 0;
+        last INNER if $j > 2;
+        print "$i,$j\n";
+    }
+} continue {
+    push @seen, $i;
+}
+
+---
+
+(source_file
+  (labeled_statement (label) (for_statement 
+    (my_declaration (variable))
+    (parenthesized_expression (range (number) (number)))
+    (block
+      (labeled_statement (label) (for_statement 
+        (my_declaration (variable))
+        (parenthesized_expression (range (number) (number)))
+        (block
+          (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+            (binary_expression (binary_expression (variable) (number)) (binary_expression (variable) (number)))))
+          (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+            (binary_expression (variable) (number))))
+          (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+            (binary_expression (variable) (number))))
+          (expression_statement (call_expression (identifier) (string)))))))
+    (continue_block (block
+      (expression_statement (call_expression (identifier) (variable) (variable))))))))
+
+==================
+Labeled blocks
+==================
+# @id: control.labels.blocks.001  
+# @tags: flow labels blocks last
+# @perl: 5.8+
+
+BLOCK: {
+    last BLOCK if $done;
+    redo BLOCK if retry();
+    process();
+}
+
+LINE: while (<>) {
+    next LINE if /^#/;
+    last LINE if /^__END__$/;
+    print;
+}
+
+---
+
+(source_file
+  (labeled_statement (label) (block
+    (expression_statement (statement_modifier (call_expression (identifier) (identifier)) (variable)))
+    (expression_statement (statement_modifier (call_expression (identifier) (identifier)) (call_expression (identifier) (argument_list))))
+    (expression_statement (call_expression (identifier) (argument_list)))))
+  (labeled_statement (label) (while_statement (parenthesized_expression (readline)) (block
+    (expression_statement (statement_modifier (call_expression (identifier) (identifier)) (regex)))
+    (expression_statement (statement_modifier (call_expression (identifier) (identifier)) (regex)))
+    (expression_statement (call_expression (identifier)))))))
+
+==================
+Continue blocks
+==================
+# @id: control.continue.001  
+# @tags: flow continue blocks
+# @perl: 5.8+
+
+while ($i < 10) {
+    $i++;
+} continue {
+    print "Iteration $i\n";
+}
+
+for (;;) {
+    last if $done;
+} continue {
+    cleanup();
+}
+
+---
+
+(source_file
+  (while_statement (parenthesized_expression (binary_expression (variable) (number))) (block
+    (expression_statement (postfix_expression (variable))))
+    (continue_block (block
+      (expression_statement (call_expression (identifier) (string))))))
+  (for_statement (parenthesized_expression) (block
+    (expression_statement (statement_modifier (call_expression (identifier)) (variable))))
+    (continue_block (block
+      (expression_statement (call_expression (identifier) (argument_list)))))))
+
+==================
+Bare blocks with labels
+==================
+# @id: control.labels.bare.001  
+# @tags: flow labels bare-blocks
+# @perl: 5.8+
+
+{
+    redo if $retry--;
+    print "Done\n";
+}
+
+RETRY: {
+    my $attempts = 3;
+    redo RETRY if $attempts-- && !try_operation();
+}
+
+---
+
+(source_file
+  (block
+    (expression_statement (statement_modifier (call_expression (identifier)) (postfix_expression (variable))))
+    (expression_statement (call_expression (identifier) (string))))
+  (labeled_statement (label) (block
+    (expression_statement (my_declaration (variable) (number)))
+    (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+      (binary_expression (postfix_expression (variable)) (unary_expression (call_expression (identifier) (argument_list)))))))))
+
+==================
+Nested loop control
+==================
+# @id: control.labels.nested.001  
+# @tags: flow labels nested next last
+# @perl: 5.8+
+
+OUTER: foreach my $x (@list) {
+    MIDDLE: foreach my $y (@list) {
+        INNER: foreach my $z (@list) {
+            next OUTER if $x == $y;
+            next MIDDLE if $y == $z;
+            last INNER if $x == $z;
+            process($x, $y, $z);
+        }
+    }
+}
+
+---
+
+(source_file
+  (labeled_statement (label) (foreach_statement 
+    (my_declaration (variable))
+    (parenthesized_expression (variable))
+    (block
+      (labeled_statement (label) (foreach_statement 
+        (my_declaration (variable))
+        (parenthesized_expression (variable))
+        (block
+          (labeled_statement (label) (foreach_statement 
+            (my_declaration (variable))
+            (parenthesized_expression (variable))
+            (block
+              (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+                (binary_expression (variable) (variable))))
+              (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+                (binary_expression (variable) (variable))))
+              (expression_statement (statement_modifier (call_expression (identifier) (identifier)) 
+                (binary_expression (variable) (variable))))
+              (expression_statement (call_expression (identifier) (argument_list (variable) (variable) (variable))))))))))))))
+
+==================
+Goto with labels
+==================
+# @id: control.goto.001  
+# @tags: flow goto labels
+# @perl: 5.8+
+
+goto LABEL;
+print "skipped\n";
+LABEL: print "arrived\n";
+
+goto &subroutine;
+goto EXPR;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (identifier)))
+  (expression_statement (call_expression (identifier) (string)))
+  (labeled_statement (label) (expression_statement (call_expression (identifier) (string))))
+  (expression_statement (call_expression (identifier) (reference (identifier))))
+  (expression_statement (call_expression (identifier) (identifier))))
