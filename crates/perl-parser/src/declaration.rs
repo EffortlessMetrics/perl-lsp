@@ -512,63 +512,65 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     /// Iterate over all qw windows in the string
-    #[allow(clippy::many_single_char_names)]
+    /// Handles both paired delimiters ((), [], {}, <>) and symmetric delimiters (|, !, #, etc.)
     fn for_each_qw_window<F>(&self, s: &str, mut f: F) -> bool
     where
         F: FnMut(usize, usize) -> bool,
     {
+        let b = s.as_bytes();
         let mut i = 0;
-        while let Some(pos) = s[i..].find("qw") {
-            let q = i + pos;
+        while i + 1 < b.len() {
+            // find literal "qw"
+            if b[i] == b'q' && b[i + 1] == b'w' {
+                let mut j = i + 2;
 
-            // Check word boundary before qw
-            let left_ok = q == 0 || !Self::is_ident_ascii(s.as_bytes()[q.saturating_sub(1)]);
-            if !left_ok {
-                i = q + 2;
-                continue;
-            }
+                // allow whitespace between qw and delimiter
+                while j < b.len() && (b[j] as char).is_ascii_whitespace() {
+                    j += 1;
+                }
+                if j >= b.len() {
+                    break;
+                }
 
-            // Check word boundary after qw (ensure it's not qwerty)
-            let right_idx = q + 2;
-            if right_idx < s.len() && Self::is_ident_ascii(s.as_bytes()[right_idx]) {
-                i = q + 2;
-                continue;
-            }
+                let open = b[j] as char;
 
-            let mut j = q + 2;
-            let bytes = s.as_bytes();
-            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                j += 1;
-            }
-            if j >= bytes.len() {
-                return false;
-            }
-
-            let open = bytes[j] as char;
-            let (open_delim, close_delim) = match open {
-                '(' => ('(', ')'),
-                '[' => ('[', ']'),
-                '{' => ('{', '}'),
-                '<' => ('<', '>'),
-                _ if !open.is_alphanumeric() && !open.is_whitespace() => (open, open),
-                _ => {
-                    i = j + 1;
+                // "qwerty" guard: next non-ws must be a NON-word delimiter
+                // (i.e., not [A-Za-z0-9_])
+                if open.is_ascii_alphanumeric() || open == '_' {
+                    i += 1;
                     continue;
                 }
-            };
 
-            if let Some(start_rel) = s[j..].find(open_delim) {
-                let start = j + start_rel + 1;
-                if let Some(end_rel) = s[start..].find(close_delim) {
-                    let end = start + end_rel;
-                    if f(start, end) {
+                // choose closing delimiter
+                let close = match open {
+                    '(' => ')',
+                    '[' => ']',
+                    '{' => '}',
+                    '<' => '>',
+                    _ => open, // symmetric delimiter (|, !, #, /, ~, ...)
+                };
+
+                // advance past opener and collect until closer
+                j += 1;
+                let start = j;
+                while j < b.len() && (b[j] as char) != close {
+                    j += 1;
+                }
+                if j <= b.len() {
+                    // Found the closing delimiter
+                    if f(start, j) {
                         return true;
                     }
-                    i = end + 1;
+                    // continue scanning after the closer
+                    i = j + 1;
                     continue;
+                } else {
+                    // unclosed; stop scanning
+                    break;
                 }
             }
-            i = j + 1;
+
+            i += 1;
         }
         false
     }
