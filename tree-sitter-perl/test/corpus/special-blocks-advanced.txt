@@ -1,0 +1,359 @@
+==================
+UNITCHECK blocks
+==================
+
+UNITCHECK {
+    print "Unit check 1\n";
+}
+
+BEGIN {
+    print "Begin\n";
+}
+
+UNITCHECK {
+    print "Unit check 2\n";
+}
+
+sub foo {
+    UNITCHECK {
+        print "Unit check in sub\n";
+    }
+}
+
+---
+
+(source_file
+  (unitcheck_block)
+  (begin_block)
+  (unitcheck_block)
+  (subroutine_declaration
+    (unitcheck_block)))
+
+==================
+CHECK blocks
+==================
+
+CHECK {
+    print "Check block 1\n";
+}
+
+BEGIN {
+    print "Begin\n";
+}
+
+CHECK {
+    print "Check block 2\n";
+}
+
+package Foo;
+CHECK {
+    print "Check in package\n";
+}
+
+---
+
+(source_file
+  (check_block)
+  (begin_block)
+  (check_block)
+  (package_declaration)
+  (check_block))
+
+==================
+INIT blocks
+==================
+
+INIT {
+    print "Init block 1\n";
+}
+
+BEGIN {
+    require Module;
+}
+
+INIT {
+    print "Init block 2\n";
+    initialize_globals();
+}
+
+END {
+    cleanup();
+}
+
+INIT {
+    $| = 1;
+}
+
+---
+
+(source_file
+  (init_block)
+  (begin_block)
+  (init_block)
+  (end_block)
+  (init_block))
+
+==================
+Block execution order
+==================
+
+print "Main code 1\n";
+
+BEGIN { print "BEGIN 1\n" }
+UNITCHECK { print "UNITCHECK 1\n" }
+CHECK { print "CHECK 1\n" }
+INIT { print "INIT 1\n" }
+END { print "END 1\n" }
+
+print "Main code 2\n";
+
+BEGIN { print "BEGIN 2\n" }
+UNITCHECK { print "UNITCHECK 2\n" }
+CHECK { print "CHECK 2\n" }
+INIT { print "INIT 2\n" }
+END { print "END 2\n" }
+
+print "Main code 3\n";
+
+---
+
+(source_file
+  (statement)
+  (begin_block)
+  (unitcheck_block)
+  (check_block)
+  (init_block)
+  (end_block)
+  (statement)
+  (begin_block)
+  (unitcheck_block)
+  (check_block)
+  (init_block)
+  (end_block)
+  (statement))
+
+==================
+Nested special blocks
+==================
+
+BEGIN {
+    print "Outer BEGIN\n";
+    
+    BEGIN {
+        print "Inner BEGIN\n";
+    }
+    
+    eval q{
+        BEGIN { print "Eval BEGIN\n" }
+        INIT { print "Eval INIT\n" }
+    };
+}
+
+CHECK {
+    eval {
+        CHECK { print "Should not print\n" }
+    };
+}
+
+---
+
+(source_file
+  (begin_block)
+  (check_block))
+
+==================
+Special blocks in modules
+==================
+
+package MyModule;
+
+BEGIN {
+    our $VERSION = '1.0';
+    require Exporter;
+    our @ISA = qw(Exporter);
+    our @EXPORT = qw(func1 func2);
+}
+
+UNITCHECK {
+    # Verify compilation
+    die "Module requirements not met" unless check_requirements();
+}
+
+CHECK {
+    # Finalize compilation
+    seal_namespace();
+}
+
+INIT {
+    # Runtime initialization
+    connect_to_database();
+}
+
+END {
+    # Cleanup
+    disconnect_database();
+}
+
+---
+
+(source_file
+  (package_declaration)
+  (begin_block)
+  (unitcheck_block)
+  (check_block)
+  (init_block)
+  (end_block))
+
+==================
+Special blocks with require/use
+==================
+
+BEGIN {
+    require Config;
+    import Config;
+}
+
+use lib BEGIN { 
+    $ENV{HOME} . '/perl5/lib' 
+};
+
+BEGIN {
+    unshift @INC, sub {
+        my ($self, $file) = @_;
+        # Custom module loader
+    };
+}
+
+UNITCHECK {
+    # Runs after each compilation unit
+    validate_dependencies();
+}
+
+CHECK {
+    # Runs after all compilation
+    optimize_code();
+}
+
+---
+
+(source_file
+  (begin_block)
+  (use_statement)
+  (begin_block)
+  (unitcheck_block)
+  (check_block))
+
+==================
+DEMOLISH in Moo/Moose
+==================
+
+package MyClass;
+use Moo;
+
+sub BUILD {
+    my ($self, $args) = @_;
+    $self->initialize($args);
+}
+
+sub DEMOLISH {
+    my $self = shift;
+    $self->cleanup();
+    warn "Object destroyed";
+}
+
+package MyMooseClass;
+use Moose;
+
+sub BUILD {
+    my $self = shift;
+    $self->setup();
+}
+
+sub DEMOLISH {
+    my $self = shift;
+    $self->teardown();
+}
+
+__PACKAGE__->meta->make_immutable;
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (statement))
+
+==================
+Special blocks in eval
+==================
+
+eval {
+    BEGIN { print "eval BEGIN\n" }
+    print "eval body\n";
+    END { print "eval END\n" }
+};
+
+eval "
+    BEGIN { print 'string eval BEGIN' }
+    CHECK { print 'string eval CHECK' }
+    INIT { print 'string eval INIT' }
+    END { print 'string eval END' }
+";
+
+do {
+    BEGIN { print "do BEGIN\n" }
+    print "do body\n";
+};
+
+require BEGIN { 
+    determine_module() 
+};
+
+---
+
+(source_file
+  (eval_block)
+  (eval_statement)
+  (do_block)
+  (require_statement))
+
+==================
+Phase-related variables
+==================
+
+BEGIN {
+    print "Compile phase: ${^GLOBAL_PHASE}\n";
+}
+
+INIT {
+    print "Init phase: ${^GLOBAL_PHASE}\n";
+}
+
+print "Runtime phase: ${^GLOBAL_PHASE}\n";
+
+END {
+    print "End phase: ${^GLOBAL_PHASE}\n";
+}
+
+if (${^GLOBAL_PHASE} eq 'START') {
+    setup_early();
+} elsif (${^GLOBAL_PHASE} eq 'RUN') {
+    normal_operation();
+} elsif (${^GLOBAL_PHASE} eq 'END') {
+    final_cleanup();
+}
+
+---
+
+(source_file
+  (begin_block)
+  (init_block)
+  (statement)
+  (end_block)
+  (if_statement))

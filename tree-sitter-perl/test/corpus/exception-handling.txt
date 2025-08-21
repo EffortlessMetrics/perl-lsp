@@ -1,0 +1,401 @@
+==================
+Try::Tiny patterns
+==================
+
+use Try::Tiny;
+
+try {
+    dangerous_operation();
+}
+catch {
+    warn "Error: $_";
+}
+finally {
+    cleanup();
+};
+
+my $result = try {
+    compute();
+}
+catch {
+    return default_value();
+};
+
+try {
+    may_fail();
+} catch {
+    my $error = $_;
+    if ($error =~ /timeout/) {
+        retry();
+    } else {
+        die $error;
+    }
+} finally {
+    close_resources();
+};
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (statement)
+  (try_catch_statement))
+
+==================
+Native eval error handling
+==================
+
+eval {
+    risky_operation();
+    1;
+} or do {
+    my $error = $@;
+    log_error($error);
+    die $error;
+};
+
+my $result = eval { 
+    parse_json($input) 
+};
+if ($@) {
+    handle_parse_error($@);
+}
+
+eval {
+    local $SIG{__DIE__} = sub {
+        my $msg = shift;
+        die "Wrapped: $msg";
+    };
+    dangerous();
+};
+my $error = $@;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (if_statement)
+  (eval_block)
+  (statement))
+
+==================
+Die with objects
+==================
+
+package MyException;
+use overload '""' => sub { $_[0]->{message} };
+
+sub new {
+    my ($class, $message, $code) = @_;
+    bless { message => $message, code => $code }, $class;
+}
+
+package main;
+
+eval {
+    die MyException->new("Custom error", 42);
+};
+if ($@) {
+    if (ref $@ && $@->isa('MyException')) {
+        print "Caught MyException: ", $@->{message}, "\n";
+        print "Error code: ", $@->{code}, "\n";
+    } else {
+        die $@;
+    }
+}
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (package_declaration)
+  (eval_block)
+  (if_statement))
+
+==================
+Exception::Class usage
+==================
+
+use Exception::Class (
+    'MyException',
+    'AnotherException' => { isa => 'MyException' },
+    'YetAnotherException' => {
+        isa => 'AnotherException',
+        description => 'Something went wrong',
+        fields => [qw(code details)],
+    },
+);
+
+eval {
+    YetAnotherException->throw(
+        error => 'Failed operation',
+        code => 500,
+        details => 'Connection timeout',
+    );
+};
+
+if (my $e = Exception::Class->caught('YetAnotherException')) {
+    print $e->error, "\n";
+    print $e->code, "\n";
+    print $e->details, "\n";
+    print $e->trace->as_string, "\n";
+}
+
+---
+
+(source_file
+  (use_statement)
+  (eval_block)
+  (if_statement))
+
+==================
+Eval forms
+==================
+
+# String eval
+eval "use Module";
+eval "require $module";
+eval "$code";
+
+# Block eval
+eval { use Module };
+eval { require Module };
+eval { $code->() };
+
+# Do block error handling
+do {
+    eval { risky() };
+    if ($@) {
+        handle_error($@);
+    }
+};
+
+# Nested eval
+eval {
+    eval {
+        very_risky();
+    };
+    if ($@) {
+        eval { recover() };
+        die $@ if $@;
+    }
+};
+
+---
+
+(source_file
+  (comment)
+  (eval_statement)
+  (eval_statement)
+  (eval_statement)
+  (comment)
+  (eval_block)
+  (eval_block)
+  (eval_block)
+  (comment)
+  (do_block)
+  (comment)
+  (eval_block))
+
+==================
+Carp error reporting
+==================
+
+use Carp;
+
+sub function {
+    my $arg = shift or croak "Argument required";
+    
+    carp "Deprecated usage" if $old_style;
+    
+    confess "Internal error" unless $valid_state;
+    
+    cluck "Warning: unusual condition" if $DEBUG;
+}
+
+use Carp qw(longmess shortmess);
+
+$SIG{__DIE__} = sub {
+    die longmess($_[0]);
+};
+
+$SIG{__WARN__} = sub {
+    warn shortmess($_[0]);
+};
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (use_statement)
+  (statement)
+  (statement))
+
+==================
+Error propagation
+==================
+
+sub outer {
+    eval {
+        inner();
+    };
+    if ($@) {
+        die "outer: $@";
+    }
+}
+
+sub inner {
+    eval {
+        deeper();
+    };
+    if ($@) {
+        die "inner: $@";
+    }
+}
+
+sub deeper {
+    die "Original error";
+}
+
+eval {
+    outer();
+};
+print "Final error: $@" if $@;
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (eval_block)
+  (statement))
+
+==================
+Custom error handling
+==================
+
+{
+    package Error::Handler;
+    
+    sub new {
+        my $class = shift;
+        bless { errors => [] }, $class;
+    }
+    
+    sub add_error {
+        my ($self, $error) = @_;
+        push @{$self->{errors}}, $error;
+    }
+    
+    sub has_errors {
+        my $self = shift;
+        return @{$self->{errors}} > 0;
+    }
+    
+    sub clear {
+        my $self = shift;
+        $self->{errors} = [];
+    }
+}
+
+my $handler = Error::Handler->new;
+
+eval { operation1() };
+$handler->add_error($@) if $@;
+
+eval { operation2() };
+$handler->add_error($@) if $@;
+
+if ($handler->has_errors) {
+    handle_all_errors($handler);
+}
+
+---
+
+(source_file
+  (block)
+  (statement)
+  (eval_block)
+  (statement)
+  (eval_block)
+  (statement)
+  (if_statement))
+
+==================
+Try::Catch alternative
+==================
+
+use Try::Catch;
+
+try {
+    something();
+}
+catch (MyException $e) {
+    handle_my_exception($e);
+}
+catch (OtherException $e where { $_->code == 404 }) {
+    handle_not_found($e);
+}
+catch ($e) {
+    handle_generic($e);
+}
+
+use TryCatch;
+
+try {
+    code();
+}
+catch (Error::Type $e) {
+    handle($e);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (use_statement)
+  (try_catch_statement))
+
+==================
+Scope::Guard for cleanup
+==================
+
+use Scope::Guard;
+
+{
+    my $guard = Scope::Guard->new(sub {
+        cleanup();
+    });
+    
+    risky_operation();
+    
+    # cleanup() called automatically when $guard goes out of scope
+}
+
+sub with_transaction {
+    my $dbh = shift;
+    $dbh->begin_work;
+    
+    my $guard = Scope::Guard->new(sub {
+        $dbh->rollback;
+    });
+    
+    do_database_operations($dbh);
+    
+    $dbh->commit;
+    $guard->dismiss;  # Don't rollback if we got here
+}
+
+---
+
+(source_file
+  (use_statement)
+  (block)
+  (subroutine_declaration))

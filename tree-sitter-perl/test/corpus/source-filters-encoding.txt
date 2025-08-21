@@ -1,0 +1,268 @@
+==================
+Source filters
+==================
+
+use Filter::Simple;
+
+FILTER {
+    s/BANG\s+BANG/die 'BANG' if \$BANG/g;
+};
+
+use Filter::Util::Call;
+
+sub import {
+    my ($type) = @_;
+    my ($ref) = [];
+    filter_add(bless $ref);
+}
+
+sub filter {
+    my ($self) = @_;
+    my ($status);
+    
+    s/BANG/die/g if ($status = filter_read()) > 0;
+    return $status;
+}
+
+---
+
+(source_file
+  (use_statement)
+  (filter_block)
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Encoding pragmas
+==================
+
+use encoding 'utf8';
+use encoding 'iso-8859-1';
+use encoding 'cp1252', Filter => 1;
+
+no encoding;
+
+use utf8;
+no utf8;
+
+use bytes;
+no bytes;
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (no_statement)
+  (use_statement)
+  (no_statement)
+  (use_statement)
+  (no_statement))
+
+==================
+Encoding directives
+==================
+
+# -*- coding: utf-8 -*-
+
+#!/usr/bin/perl
+# vim: set fileencoding=utf-8:
+
+=encoding utf8
+
+=encoding iso-8859-1
+
+=cut
+
+__ENCODING__
+
+---
+
+(source_file
+  (comment)
+  (shebang)
+  (comment)
+  (pod_section)
+  (encoding_token))
+
+==================
+Source code with encoding
+==================
+
+use encoding 'utf8';
+
+my $café = "coffee shop";
+my $π = 3.14159;
+my $Σ = sum(@values);
+my $日本語 = "Japanese";
+
+sub café_menu {
+    return qw(café latte cappuccino);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (subroutine_declaration))
+
+==================
+Filter::Util::Call usage
+==================
+
+package MyFilter;
+use Filter::Util::Call;
+
+sub import {
+    my ($class, @args) = @_;
+    filter_add(
+        sub {
+            my $status = filter_read();
+            if ($status > 0) {
+                s/OLD/NEW/g;
+                s/\bDEBUG\b/if (DEBUG)/g;
+            }
+            return $status;
+        }
+    );
+}
+
+1;
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (statement))
+
+==================
+Acme::Bleach style filter
+==================
+
+use Acme::Bleach;
+
+                                        
+
+
+                                
+
+---
+
+(source_file
+  (use_statement)
+  (whitespace_code))
+
+==================
+Switch filter
+==================
+
+use Switch;
+
+switch ($value) {
+    case 1 { print "one" }
+    case "a" { print "a" }
+    case [1..10,42] { print "in list" }
+    case /\d+/ { print "number" }
+    case (\@array) { print "in array" }
+    case (\%hash) { print "in hash" }
+    else { print "default" }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (switch_statement))
+
+==================
+Smart::Comments filter
+==================
+
+use Smart::Comments;
+
+### Calculating value...
+my $value = complex_calculation();
+
+### $value
+
+### Progress: 0...10
+for my $i (0..10) {
+    ### Progress: $i
+    process($i);
+}
+
+#### DUMP: $data_structure
+
+---
+
+(source_file
+  (use_statement)
+  (smart_comment)
+  (statement)
+  (smart_comment)
+  (smart_comment)
+  (for_statement))
+
+==================
+Inline::Files filter
+==================
+
+use Inline::Files;
+
+my @data = <DATA>;
+my @more = <MORE>;
+
+while (<STDIN>) {
+    print;
+}
+
+__DATA__
+First data section
+More data
+
+__MORE__
+Second virtual file
+Additional content
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (while_statement)
+  (data_section)
+  (data_section))
+
+==================
+Encoding layers on handles
+==================
+
+open my $fh, '<:encoding(UTF-8)', $file;
+open my $out, '>:raw:bytes', $output;
+open my $log, '>>:utf8', $logfile;
+
+binmode STDOUT, ':encoding(cp1252)';
+binmode STDERR, ':utf8';
+
+use open ':std', ':encoding(UTF-8)';
+use open IN => ':crlf', OUT => ':bytes';
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (use_statement)
+  (use_statement))

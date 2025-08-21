@@ -1,0 +1,306 @@
+==================
+Basic symbolic references
+==================
+
+no strict 'refs';
+
+$$name = 42;
+@$name = (1, 2, 3);
+%$name = (key => 'value');
+&$name();
+*$name = \&sub;
+
+${"main::var"} = 100;
+@{"Foo::array"} = qw(a b c);
+%{"Bar::hash"} = (x => 1);
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Complex symbolic references
+==================
+
+no strict 'refs';
+
+${$package . '::VERSION'} = '1.0';
+@{$class . '::ISA'} = qw(Parent);
+%{$module . '::EXPORT_TAGS'} = (all => \@all);
+
+&{$object . '::method'}(@args);
+*{$pkg . '::' . $func} = \&implementation;
+
+push @{$namespace . '::array'}, $value;
+$hashref = \%{$package . '::hash'};
+
+my $var_name = 'foo';
+$$var_name = 'bar';
+print ${$var_name};
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Method calls via symbolic refs
+==================
+
+no strict 'refs';
+
+my $method = 'print';
+$object->$method("Hello");
+
+my $class = 'My::Class';
+$class->new();
+
+my $sub = 'handler';
+$self->$sub(@_);
+
+${"${class}::$method"}->($self, @args);
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Symbolic refs with local
+==================
+
+no strict 'refs';
+
+local ${"Foo::bar"} = 42;
+local @{"main::array"} = (1, 2, 3);
+local %{"Package::hash"};
+
+{
+    local ${$var} = 'temporary';
+    do_something();
+}
+
+local *{$filehandle} = \*STDOUT;
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (statement)
+  (block)
+  (statement))
+
+==================
+Building symbol tables
+==================
+
+no strict 'refs';
+
+for my $color (qw(red green blue)) {
+    *{$color} = sub { "<$color>@_</$color>" };
+}
+
+for my $op (qw(add subtract multiply divide)) {
+    *{"calc_$op"} = sub {
+        my ($a, $b) = @_;
+        return $operations{$op}->($a, $b);
+    };
+}
+
+while (my ($name, $value) = each %constants) {
+    *{$name} = sub () { $value };
+}
+
+---
+
+(source_file
+  (no_statement)
+  (for_statement)
+  (for_statement)
+  (while_statement))
+
+==================
+Accessing symbol table directly
+==================
+
+no strict 'refs';
+
+my @symbols = keys %{'main::'};
+my @packages = grep { /::$/ } keys %{'main::'};
+
+for my $symbol (keys %{'MyPackage::'}) {
+    print "$symbol\n" if defined &{"MyPackage::$symbol"};
+}
+
+if (exists ${'Foo::'}{bar}) {
+    print "Foo::bar exists\n";
+}
+
+*{'NewPackage::'} = *{'OldPackage::'};
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (for_statement)
+  (if_statement)
+  (statement))
+
+==================
+Symbolic refs for data structures
+==================
+
+no strict 'refs';
+
+push @{$data->{arrayref}}, $item;
+$value = pop @{$struct->{$key}};
+
+keys %{$href->{nested}};
+values %{$complex->{data}{structure}};
+
+${$ref->{scalar}} = 42;
+@{$ref->{array}} = (1, 2, 3);
+%{$ref->{hash}} = (a => 1);
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Glob references vs symbolic refs
+==================
+
+no strict 'refs';
+
+# Symbolic reference
+*{"Foo::bar"} = sub { 42 };
+
+# Glob reference
+my $glob = \*Foo::bar;
+*{$glob} = sub { 42 };
+
+# Mixed
+my $name = "Foo::bar";
+my $globref = \*{$name};
+${*{$globref}} = 42;
+
+---
+
+(source_file
+  (no_statement)
+  (comment)
+  (statement)
+  (comment)
+  (statement)
+  (statement)
+  (comment)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Strict refs violations
+==================
+
+use strict;
+
+eval {
+    no strict 'refs';
+    $$var = 42;  # OK here
+};
+
+{
+    no strict 'refs';
+    &{$subname}();  # OK in this block
+}
+
+# Would die under strict
+eval '$$var = 42';
+eval 'push @$arrayname, 1';
+
+---
+
+(source_file
+  (use_statement)
+  (eval_block)
+  (block)
+  (comment)
+  (eval_statement)
+  (eval_statement))
+
+==================
+Hard references vs symbolic
+==================
+
+no strict 'refs';
+
+# Hard reference
+my $hard_ref = \$scalar;
+$$hard_ref = 42;
+
+# Symbolic reference
+my $sym_ref = 'scalar';
+$$sym_ref = 42;
+
+# Check if hard reference
+if (ref $hard_ref) {
+    print "Hard reference to " . ref($hard_ref) . "\n";
+}
+
+# Symbolic ref doesn't return ref type
+if (!ref $sym_ref) {
+    print "Symbolic reference: $sym_ref\n";
+}
+
+---
+
+(source_file
+  (no_statement)
+  (comment)
+  (statement)
+  (statement)
+  (comment)
+  (statement)
+  (statement)
+  (comment)
+  (if_statement)
+  (comment)
+  (if_statement))

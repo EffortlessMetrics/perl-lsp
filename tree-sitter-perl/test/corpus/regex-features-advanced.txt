@@ -1,0 +1,312 @@
+==================
+Embedded code in regex
+==================
+
+/(?{ $count++ })/;
+
+/^(.*)(?{ $matches = $1 })$/;
+
+/(.)(?{ push @chars, $1 })/g;
+
+/(?{ print "Starting match\n" })(\w+)(?{ print "Matched: $1\n" })/;
+
+s/(\d+)(?{ $sum += $1 })/X/g;
+
+/(?(?{ $condition })yes|no)/;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (substitution))
+  (statement (regex)))
+
+==================
+Recursive patterns
+==================
+
+/\((?:[^()]|(?R))*\)/;
+
+/\{(?:[^{}]|(?R))*\}/;
+
+/(foo(?1)?bar)/;
+
+/(?<nested>\((?:[^()]|(?&nested))*\))/;
+
+/^((?:[^()]|\((?1)\))*)\z/;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Named capture groups
+==================
+
+/(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/;
+
+if (/(?<first>\w+)\s+(?<last>\w+)/) {
+    print "$+{first} $+{last}\n";
+}
+
+/(?'name'\w+)/;
+
+/(?<word>\w+)\s+\k<word>/;
+
+/(?<tag><(?<tagname>\w+)>.*?<\/\k<tagname>>)/;
+
+while (/(?<item>\w+)/g) {
+    print "Item: $+{item}\n";
+}
+
+---
+
+(source_file
+  (statement (regex))
+  (if_statement)
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (while_statement))
+
+==================
+Conditional patterns
+==================
+
+/(foo)?(?(1)bar|baz)/;
+
+/(?(?=\d)\d{3}-\d{4}|\w+)/;
+
+/(?(?<=@)\w+\.\w+|[^@]+)/;
+
+/(")?(?(1)[^"]*"|[^,]*)/;
+
+/(?<open>\()?\w+(?(open)\)|)/;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Backtracking control verbs
+==================
+
+/\w+(*ACCEPT)/;
+
+/foo(*FAIL)|bar/;
+
+/a+(*COMMIT)b/;
+
+/(*PRUNE)abc|def/;
+
+/foo(*SKIP)bar|baz/;
+
+/(*MARK:A)foo(*SKIP:A)bar/;
+
+/(*THEN)abc|def/;
+
+/(*:name)pattern/;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Lookaround assertions advanced
+==================
+
+/foo(?=bar)(?!baz)/;
+
+/(?<=foo)(?<!bar)\w+/;
+
+/(?<=\d{3})(?=\d{3})/;
+
+/\b(?!\d)\w+\b/;
+
+/(?<=^|\s)#\w+(?=\s|$)/;
+
+s/(?<=\w)(?=\w)/_/g;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (substitution)))
+
+==================
+Branch reset groups
+==================
+
+/(?|foo(\d+)|bar(\w+)|baz(\S+))/;
+
+/(?|(a)(b)|(c)(d))/;
+
+if (/(?|<(\w+)>|\[(\w+)\]|\{(\w+)\})/) {
+    print "Tag: $1\n";
+}
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (if_statement))
+
+==================
+Possessive quantifiers
+==================
+
+/\d++/;
+/\w*+/;
+/\s?+/;
+/\w{3,5}+/;
+
+/"[^"]++"|(')[^']++'/;
+
+/(?>\d+)\./;
+
+/(?>atomic|group)/;
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Extended regex features
+==================
+
+use re 'eval';
+/(?{ $code })/;
+
+use re 'debug';
+/complex.*pattern/;
+
+use re '/x';
+/
+    \d{3}    # Area code
+    -        # Separator
+    \d{4}    # Number
+/;
+
+qr/
+    (?<proto>https?)://
+    (?<host>[^/]+)
+    (?<path>/.*)?
+/x;
+
+---
+
+(source_file
+  (use_statement)
+  (statement (regex))
+  (use_statement)
+  (statement (regex))
+  (use_statement)
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Unicode regex properties
+==================
+
+/\p{Letter}/;
+/\p{Number}/;
+/\p{Mark}/;
+/\p{Punctuation}/;
+/\p{Symbol}/;
+
+/\p{Latin}/;
+/\p{Greek}/;
+/\p{Han}/;
+
+/\p{Uppercase}/;
+/\p{Lowercase}/;
+/\p{Titlecase}/;
+
+/\P{ASCII}/;
+/\p{ASCII_Hex_Digit}/;
+
+/\p{Script=Latin}/;
+/\p{Block=Latin_1_Supplement}/;
+
+/\X/;  # Extended grapheme cluster
+/\N/;  # Non-newline
+
+---
+
+(source_file
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex))
+  (statement (regex)))
+
+==================
+Keep and substitution
+==================
+
+s/(\w+)\s+(\w+)/$2, $1/;
+
+s/(\w+)\K\s+/_/g;
+
+s/\G\s/X/g;
+
+s/(?<=\w)\K(?=\w)/_/g;
+
+/\w+\K\d+/;
+
+/prefix\K.*(?=suffix)/;
+
+---
+
+(source_file
+  (statement (substitution))
+  (statement (substitution))
+  (statement (substitution))
+  (statement (substitution))
+  (statement (regex))
+  (statement (regex)))

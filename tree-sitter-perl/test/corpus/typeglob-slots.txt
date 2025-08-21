@@ -1,0 +1,329 @@
+==================
+Basic typeglob slot access
+==================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{NAME};
+*foo{PACKAGE};
+
+my $scalar_ref = *foo{SCALAR};
+my $array_ref = *foo{ARRAY};
+my $hash_ref = *foo{HASH};
+my $code_ref = *foo{CODE};
+my $io_ref = *foo{IO};
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Typeglob slot assignment
+==================
+
+*foo{SCALAR} = \$scalar;
+*foo{ARRAY} = \@array;
+*foo{HASH} = \%hash;
+*foo{CODE} = \&subroutine;
+*foo{IO} = \*FILEHANDLE;
+
+${*foo{SCALAR}} = 42;
+@{*foo{ARRAY}} = (1, 2, 3);
+%{*foo{HASH}} = (key => 'value');
+
+*bar = *foo{HASH};
+*baz = *foo{CODE};
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Checking slot existence
+==================
+
+if (defined *foo{CODE}) {
+    print "foo is a subroutine\n";
+}
+
+if (defined *foo{ARRAY}) {
+    print "foo has an array slot\n";
+}
+
+if (*foo{IO}) {
+    print "foo is a filehandle\n";
+}
+
+unless (*foo{HASH}) {
+    *foo{HASH} = {};
+}
+
+for my $slot (qw(SCALAR ARRAY HASH CODE)) {
+    print "$slot exists\n" if *foo{$slot};
+}
+
+---
+
+(source_file
+  (if_statement)
+  (if_statement)
+  (if_statement)
+  (unless_statement)
+  (for_statement))
+
+==================
+NAME and PACKAGE slots
+==================
+
+my $name = *foo{NAME};
+my $package = *foo{PACKAGE};
+
+print "Name: ", *STDOUT{NAME}, "\n";
+print "Package: ", *STDOUT{PACKAGE}, "\n";
+
+*Some::Package::function{NAME};
+*Some::Package::function{PACKAGE};
+
+for my $glob (values %main::) {
+    next unless *{$glob}{CODE};
+    print *{$glob}{NAME}, " is a function\n";
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (for_statement))
+
+==================
+IO slot operations
+==================
+
+open my $fh, '>', 'file.txt';
+*MYFILE = *{$fh}{IO};
+
+my $io = *STDIN{IO};
+my $stderr_io = *STDERR{IO};
+
+*OLDOUT = *STDOUT{IO};
+*STDOUT = *STDERR;
+*STDOUT = *OLDOUT;
+
+if (*$handle{IO}) {
+    print $handle "Data\n";
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (if_statement))
+
+==================
+Selective glob copying
+==================
+
+# Copy only the subroutine
+*new_sub = *old_sub{CODE};
+
+# Copy only the array
+*new_array = *old_array{ARRAY};
+
+# Copy multiple slots
+*new{CODE} = *old{CODE};
+*new{SCALAR} = *old{SCALAR};
+
+# Full glob copy
+*complete = *source;
+
+# Partial glob copy
+local *temp = *original;
+*temp{SCALAR} = \$different_scalar;
+
+---
+
+(source_file
+  (comment)
+  (statement)
+  (comment)
+  (statement)
+  (comment)
+  (statement)
+  (statement)
+  (comment)
+  (statement)
+  (comment)
+  (statement)
+  (statement))
+
+==================
+Glob slots in symbol table
+==================
+
+for my $entry (keys %main::) {
+    my $glob = $main::{$entry};
+    
+    print "$entry:\n";
+    print "  SCALAR\n" if *{$glob}{SCALAR};
+    print "  ARRAY\n" if *{$glob}{ARRAY};
+    print "  HASH\n" if *{$glob}{HASH};
+    print "  CODE\n" if *{$glob}{CODE};
+    print "  IO\n" if *{$glob}{IO};
+}
+
+# Check what slots a glob has
+sub inspect_glob {
+    my $glob = shift;
+    my %slots;
+    
+    $slots{SCALAR} = 1 if defined *{$glob}{SCALAR};
+    $slots{ARRAY} = 1 if defined *{$glob}{ARRAY};
+    $slots{HASH} = 1 if defined *{$glob}{HASH};
+    $slots{CODE} = 1 if defined *{$glob}{CODE};
+    $slots{IO} = 1 if defined *{$glob}{IO};
+    
+    return \%slots;
+}
+
+---
+
+(source_file
+  (for_statement)
+  (comment)
+  (subroutine_declaration))
+
+==================
+FORMAT slot access
+==================
+
+format MYFORMAT =
+@<<<<<<<<< @>>>>>>>>
+$left, $right
+.
+
+if (*MYFORMAT{FORMAT}) {
+    print "MYFORMAT has a format\n";
+}
+
+*NEWFORMAT{FORMAT} = *MYFORMAT{FORMAT};
+
+local *FH = *STDOUT;
+*FH{FORMAT} = *MYFORMAT{FORMAT};
+
+---
+
+(source_file
+  (format_declaration)
+  (if_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Advanced glob slot manipulation
+==================
+
+# Create anonymous glob
+my $glob = \*{"Foo::bar"};
+*{$glob}{CODE} = sub { print "Hello\n" };
+*{$glob}{SCALAR} = \42;
+
+# Swap glob slots
+(*foo{CODE}, *bar{CODE}) = (*bar{CODE}, *foo{CODE});
+
+# Clear specific slot
+*foo{ARRAY} = undef;
+delete *foo{HASH};
+
+# Clone glob with modifications
+{
+    local *clone = *original;
+    *clone{SCALAR} = \$new_value;
+    *clone{CODE} = \&new_sub;
+    # Use clone here
+}
+
+---
+
+(source_file
+  (comment)
+  (statement)
+  (statement)
+  (statement)
+  (comment)
+  (statement)
+  (comment)
+  (statement)
+  (statement)
+  (comment)
+  (block))
+
+==================
+Glob slots with references
+==================
+
+my $glob_ref = \*foo;
+
+${*{$glob_ref}{SCALAR}} = 42;
+@{*{$glob_ref}{ARRAY}} = (1, 2, 3);
+%{*{$glob_ref}{HASH}} = (a => 1, b => 2);
+
+&{*{$glob_ref}{CODE}}(@args);
+
+print {*{$glob_ref}{IO}} "Output\n";
+
+if (ref $glob_ref eq 'GLOB') {
+    my $name = *{$glob_ref}{NAME};
+    my $package = *{$glob_ref}{PACKAGE};
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (if_statement))

@@ -1,0 +1,325 @@
+==================
+Basic signal handlers
+==================
+
+$SIG{INT} = sub { 
+    print "Interrupted!\n";
+    exit 1;
+};
+
+$SIG{TERM} = \&cleanup;
+
+$SIG{HUP} = 'IGNORE';
+$SIG{PIPE} = 'DEFAULT';
+
+$SIG{ALRM} = sub { die "Timeout\n" };
+alarm 10;
+
+$SIG{CHLD} = 'IGNORE';
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+DIE and WARN handlers
+==================
+
+$SIG{__DIE__} = sub {
+    my $msg = shift;
+    print STDERR "Fatal: $msg";
+    print STDERR Carp::longmess();
+    exit 255;
+};
+
+$SIG{__WARN__} = sub {
+    my $msg = shift;
+    return if $msg =~ /Use of uninitialized/;
+    print STDERR "Warning: $msg";
+    print STDERR Carp::shortmess();
+};
+
+local $SIG{__DIE__} = sub {
+    my $error = shift;
+    log_error($error);
+    die $error;
+};
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Safe signal handling
+==================
+
+use POSIX qw(:signal_h);
+
+my $sigset = POSIX::SigSet->new;
+$sigset->addset(SIGINT);
+$sigset->addset(SIGTERM);
+
+sigprocmask(SIG_BLOCK, $sigset);
+# Critical section
+sigprocmask(SIG_UNBLOCK, $sigset);
+
+my $action = POSIX::SigAction->new(
+    sub { print "Signal received\n" },
+    $sigset,
+    SA_RESTART
+);
+
+sigaction(SIGINT, $action);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+SIGCHLD handling
+==================
+
+$SIG{CHLD} = sub {
+    while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
+        print "Child $pid exited with status $?\n";
+        delete $children{$pid};
+    }
+};
+
+use POSIX ":sys_wait_h";
+
+$SIG{CHLD} = sub {
+    my $pid;
+    do {
+        $pid = waitpid(-1, WNOHANG);
+        if (WIFEXITED($?)) {
+            my $exit_code = WEXITSTATUS($?);
+            print "Child $pid exited with code $exit_code\n";
+        } elsif (WIFSIGNALED($?)) {
+            my $signal = WTERMSIG($?);
+            print "Child $pid killed by signal $signal\n";
+        }
+    } while $pid > 0;
+};
+
+---
+
+(source_file
+  (statement)
+  (use_statement)
+  (statement))
+
+==================
+Signal sets and masks
+==================
+
+use POSIX qw(:signal_h);
+
+my $oldset = POSIX::SigSet->new;
+my $newset = POSIX::SigSet->new;
+
+$newset->fillset();
+$newset->delset(SIGALRM);
+
+sigprocmask(SIG_SETMASK, $newset, $oldset);
+
+if ($newset->ismember(SIGINT)) {
+    print "SIGINT is in the set\n";
+}
+
+sigsuspend($newset);
+sigpending($oldset);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (if_statement)
+  (statement)
+  (statement))
+
+==================
+Alarm and timeout
+==================
+
+eval {
+    local $SIG{ALRM} = sub { die "timeout\n" };
+    alarm 5;
+    # Long running operation
+    my $result = slow_operation();
+    alarm 0;
+    return $result;
+};
+alarm 0;
+if ($@ && $@ eq "timeout\n") {
+    handle_timeout();
+}
+
+use Time::HiRes qw(alarm);
+alarm 2.5;  # 2.5 seconds
+
+$SIG{ALRM} = sub {
+    die "Timed out after $timeout seconds\n";
+};
+
+---
+
+(source_file
+  (eval_block)
+  (statement)
+  (if_statement)
+  (use_statement)
+  (statement)
+  (statement))
+
+==================
+Signal in fork
+==================
+
+my $pid = fork();
+if (!defined $pid) {
+    die "Cannot fork: $!";
+} elsif ($pid == 0) {
+    # Child process
+    $SIG{INT} = 'DEFAULT';
+    $SIG{TERM} = sub { 
+        cleanup_child();
+        exit 0;
+    };
+    exec(@command) or die "exec failed: $!";
+} else {
+    # Parent process
+    $SIG{INT} = sub {
+        kill 'TERM', $pid;
+        waitpid($pid, 0);
+        exit 1;
+    };
+    waitpid($pid, 0);
+}
+
+---
+
+(source_file
+  (statement)
+  (if_statement))
+
+==================
+Signal handling in loops
+==================
+
+my $continue = 1;
+$SIG{INT} = sub { $continue = 0 };
+$SIG{TERM} = sub { $continue = 0 };
+
+while ($continue) {
+    do_work();
+    
+    if ($got_sighup) {
+        reload_config();
+        $got_sighup = 0;
+    }
+}
+
+$SIG{HUP} = sub { $got_sighup = 1 };
+
+for (my $i = 0; $continue && $i < 100; $i++) {
+    process($i);
+}
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (while_statement)
+  (statement)
+  (for_statement))
+
+==================
+Deferred signals
+==================
+
+use sigtrap qw(die normal-signals);
+
+use sigtrap 'handler' => \&my_handler, 'normal-signals';
+
+use sigtrap qw(
+    die     untrapped
+    handler my_handler INT QUIT
+    stack-trace any SEGV BUS
+);
+
+BEGIN {
+    use Config;
+    if ($Config{d_sigaction}) {
+        print "Safe signals are available\n";
+    }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (begin_block))
+
+==================
+IPC signals
+==================
+
+use IPC::Signal qw(sig_num sig_name);
+
+my $signum = sig_num('HUP');
+my $signame = sig_name(1);
+
+kill 'USR1', $pid;
+kill USR1 => $pid;
+kill -USR1 => $pgrp;
+kill 0, $pid;  # Check if process exists
+
+my $count = kill 0, @pids;
+
+if (kill 0, $pid) {
+    print "Process $pid is alive\n";
+}
+
+raise(SIGTERM);
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (if_statement)
+  (statement))
