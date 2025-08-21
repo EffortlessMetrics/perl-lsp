@@ -1451,52 +1451,197 @@ impl<'a> Parser<'a> {
         // Parse optional import list
         let mut args = Vec::new();
 
-        // Handle hash syntax for pragmas like: use constant { FOO => 42, BAR => 43 }
-        if self.peek_kind() == Some(TokenKind::LeftBrace) {
-            // Just consume the entire hash expression as args
-            let mut depth = 0;
-            while !self.tokens.is_eof() {
-                match self.peek_kind() {
-                    Some(TokenKind::LeftBrace) => {
-                        depth += 1;
-                        args.push(self.consume_token()?.text.clone());
+        // Loop to handle multiple argument groups separated by commas
+        // e.g., qw(FOO) => 1, qw(BAR BAZ) => 2
+        loop {
+            // Special case: ALWAYS check for qw FIRST before any other parsing
+            // Check if next token is "qw" - this is critical to handle before bare args
+            let is_qw = self.tokens.peek().map(|t| t.text == "qw").unwrap_or(false);
+            if is_qw {
+                self.consume_token()?; // consume 'qw'
+
+                // Try to parse qw words, but if it fails (e.g., unknown delimiter),
+                // fall back to simple token consumption
+                let list = match self.parse_qw_words() {
+                    Ok(words) => words,
+                    Err(_) => {
+                        // Fallback: just consume tokens until semicolon
+                        let mut words = Vec::new();
+                        while !Self::is_statement_terminator(self.peek_kind())
+                            && !self.tokens.is_eof()
+                        {
+                            if let Ok(tok) = self.tokens.next() {
+                                if matches!(tok.kind, TokenKind::Identifier | TokenKind::Number) {
+                                    words.push(tok.text.clone());
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        words
                     }
-                    Some(TokenKind::RightBrace) => {
+                };
+                // Format as "qw(FOO BAR BAZ)" so DeclarationProvider can recognize it
+                // We use parentheses regardless of original delimiter for consistency
+                let qw_str = format!("qw({})", list.join(" "));
+                args.push(qw_str);
+                // optional: qw(...) => <value>
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.consume_token()?; // =>
+                    if let Some(TokenKind::String | TokenKind::Number | TokenKind::Identifier) =
+                        self.peek_kind()
+                    {
                         args.push(self.consume_token()?.text.clone());
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
+                    } else {
+                        // best-effort: slurp tokens until ',' or ';'
+                        while !Self::is_statement_terminator(self.peek_kind())
+                            && self.peek_kind() != Some(TokenKind::Comma)
+                        {
+                            args.push(self.consume_token()?.text.clone());
                         }
                     }
-                    _ => {
-                        args.push(self.consume_token()?.text.clone());
+                }
+                // Check if there's a comma and more args
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // consume ','
+                    continue; // Loop to parse next argument group
+                } else {
+                    // No more args, we're done
+                    break;
+                }
+            } else {
+                // Not qw, break out to handle other argument types
+                break;
+            }
+        }
+
+        // Handle unary plus forcing hash syntax: use constant +{ FOO => 42 }
+        if self.peek_kind() == Some(TokenKind::Plus) {
+            let plus = self.consume_token()?;
+            args.push(plus.text.clone());
+            // Next should be a hash
+            if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                // Consume the hash expression
+                let mut depth = 0;
+                while !self.tokens.is_eof() {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.clone());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.clone());
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {
+                            args.push(self.consume_token()?.text.clone());
+                        }
                     }
                 }
             }
         }
+        // Handle hash syntax for pragmas like: use constant { FOO => 42, BAR => 43 }
+        else if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            loop {
+                // consume one { ... } block (track depth)
+                let mut depth = 0;
+                self.consume_token()?; // '{'
+                depth += 1;
+                args.push("{".into());
+                while !self.tokens.is_eof() && depth > 0 {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.clone());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.clone());
+                            depth -= 1;
+                        }
+                        _ => {
+                            args.push(self.consume_token()?.text.clone());
+                        }
+                    }
+                }
+                // optional: => "ignored"
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.consume_token()?; // =>
+                    if let Some(TokenKind::String | TokenKind::Number | TokenKind::Identifier) =
+                        self.peek_kind()
+                    {
+                        args.push(self.consume_token()?.text.clone());
+                    } else {
+                        while !Self::is_statement_terminator(self.peek_kind())
+                            && self.peek_kind() != Some(TokenKind::Comma)
+                        {
+                            args.push(self.consume_token()?.text.clone());
+                        }
+                    }
+                }
+                // another block after comma?
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // ','
+                    if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                        continue; // loop for the next { ... }
+                    }
+                }
+                break;
+            }
+        }
         // Handle bare arguments (no parentheses)
-        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier))
+        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus))
             && !Self::is_statement_terminator(self.peek_kind())
         {
             // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
+            // Also handle -strict flag and comma forms
             loop {
+                // Check for qw BEFORE the match to avoid it being consumed as a generic identifier
+                if let Ok(tok) = self.tokens.peek() {
+                    if tok.text == "qw" {
+                        self.consume_token()?; // consume 'qw'
+                        let list = self.parse_qw_words()?;
+                        // Format as "qw(FOO BAR BAZ)" so DeclarationProvider can recognize it
+                        // We use parentheses regardless of original delimiter for consistency
+                        let qw_str = format!("qw({})", list.join(" "));
+                        args.push(qw_str);
+                        // optional: qw(...) => <value>
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.consume_token()?; // =>
+                            if let Some(
+                                TokenKind::String | TokenKind::Number | TokenKind::Identifier,
+                            ) = self.peek_kind()
+                            {
+                                args.push(self.consume_token()?.text.clone());
+                            } else {
+                                // best-effort: slurp tokens until ',' or ';'
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                {
+                                    args.push(self.consume_token()?.text.clone());
+                                }
+                            }
+                        }
+                        continue; // Don't fall through to the match below
+                    }
+                }
+
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
                         args.push(self.consume_token()?.text.clone());
                     }
-                    Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
-                        // Handle qw()
-                        self.consume_token()?; // consume qw
-                        if self.peek_kind() == Some(TokenKind::LeftParen) {
-                            self.consume_token()?; // consume (
-                            while self.peek_kind() != Some(TokenKind::RightParen)
-                                && !self.tokens.is_eof()
-                            {
-                                if let Some(TokenKind::Identifier) = self.peek_kind() {
-                                    args.push(self.consume_token()?.text.clone());
-                                }
-                            }
-                            self.expect(TokenKind::RightParen)?;
+                    Some(TokenKind::Minus) => {
+                        // Handle -strict and other flags
+                        let minus = self.consume_token()?;
+                        if self.peek_kind() == Some(TokenKind::Identifier) {
+                            let flag = self.consume_token()?;
+                            // Combine minus and identifier as a single flag
+                            args.push(format!("-{}", flag.text));
+                        } else {
+                            // Just a minus sign (shouldn't happen in use statements)
+                            args.push(minus.text.clone());
                         }
                     }
                     Some(TokenKind::Identifier) => {
@@ -1504,25 +1649,40 @@ impl<'a> Parser<'a> {
                         let ident = self.consume_token()?;
                         args.push(ident.text.clone());
 
-                        // If we see a fat arrow after an identifier, parse the value
-                        if self.peek_kind() == Some(TokenKind::FatArrow) {
-                            self.consume_token()?; // consume =>
-                            // Parse the value as a simple expression
-                            match self.peek_kind() {
-                                Some(TokenKind::Number | TokenKind::String) => {
-                                    args.push(self.consume_token()?.text.clone());
-                                }
-                                Some(TokenKind::Identifier) => {
-                                    args.push(self.consume_token()?.text.clone());
-                                }
-                                _ => {
-                                    // For more complex expressions, just consume tokens until semicolon
-                                    while !Self::is_statement_terminator(self.peek_kind()) {
+                        // Check for comma or fat arrow
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?; // consume comma
+                                // Continue to parse next argument
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?; // consume =>
+                                // Parse the value as a simple expression
+                                match self.peek_kind() {
+                                    Some(TokenKind::Number | TokenKind::String) => {
                                         args.push(self.consume_token()?.text.clone());
+                                    }
+                                    Some(TokenKind::Identifier) => {
+                                        args.push(self.consume_token()?.text.clone());
+                                    }
+                                    _ => {
+                                        // For more complex expressions, just consume tokens until semicolon
+                                        while !Self::is_statement_terminator(self.peek_kind())
+                                            && self.peek_kind() != Some(TokenKind::Comma)
+                                        {
+                                            args.push(self.consume_token()?.text.clone());
+                                        }
                                     }
                                 }
                             }
+                            _ => {
+                                // No separator, just continue
+                            }
                         }
+                    }
+                    Some(TokenKind::Comma) => {
+                        // Skip standalone commas (already handled after identifiers)
+                        self.consume_token()?;
                     }
                     _ => break,
                 }
@@ -1664,24 +1824,39 @@ impl<'a> Parser<'a> {
         {
             // Parse bare arguments like: no warnings 'void'
             loop {
-                match self.peek_kind() {
-                    Some(TokenKind::String) => {
-                        args.push(self.consume_token()?.text.clone());
-                    }
-                    Some(TokenKind::Identifier) if self.tokens.peek()?.text == "qw" => {
-                        // Handle qw()
-                        self.consume_token()?; // consume qw
-                        if self.peek_kind() == Some(TokenKind::LeftParen) {
-                            self.consume_token()?; // consume (
-                            while self.peek_kind() != Some(TokenKind::RightParen)
-                                && !self.tokens.is_eof()
+                // Check for qw BEFORE the match to avoid it being consumed as a generic identifier
+                if let Ok(tok) = self.tokens.peek() {
+                    if tok.text == "qw" {
+                        self.consume_token()?; // consume 'qw'
+                        let list = self.parse_qw_words()?;
+                        // Format as "qw(FOO BAR BAZ)" so DeclarationProvider can recognize it
+                        // We use parentheses regardless of original delimiter for consistency
+                        let qw_str = format!("qw({})", list.join(" "));
+                        args.push(qw_str);
+                        // optional: qw(...) => <value>
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.consume_token()?; // =>
+                            if let Some(
+                                TokenKind::String | TokenKind::Number | TokenKind::Identifier,
+                            ) = self.peek_kind()
                             {
-                                if let Some(TokenKind::Identifier) = self.peek_kind() {
+                                args.push(self.consume_token()?.text.clone());
+                            } else {
+                                // best-effort: slurp tokens until ',' or ';'
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                {
                                     args.push(self.consume_token()?.text.clone());
                                 }
                             }
-                            self.expect(TokenKind::RightParen)?;
                         }
+                        continue; // Don't fall through to the match below
+                    }
+                }
+
+                match self.peek_kind() {
+                    Some(TokenKind::String) => {
+                        args.push(self.consume_token()?.text.clone());
                     }
                     Some(TokenKind::Identifier) => {
                         args.push(self.consume_token()?.text.clone());
@@ -2826,11 +3001,48 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end },
                     ));
                 }
-                TokenKind::Plus
-                | TokenKind::Not
-                | TokenKind::Backslash
-                | TokenKind::BitwiseNot
-                | TokenKind::Star => {
+                TokenKind::Plus => {
+                    let op_token = self.tokens.next()?;
+                    let start = op_token.start;
+
+                    // Special case: +{ ... } forces a hash constructor (not a block)
+                    if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                        // Parse as hash literal
+                        let hash = self.parse_hash_or_block()?;
+                        let end = hash.location.end;
+
+                        // Wrap the hash in a unary plus to preserve the explicit disambiguation
+                        return Ok(Node::new(
+                            NodeKind::Unary { op: op_token.text.clone(), operand: Box::new(hash) },
+                            SourceLocation { start, end },
+                        ));
+                    }
+
+                    // Check if we're at EOF or a terminator (for standalone operators)
+                    if self.tokens.is_eof() || self.is_at_statement_end() {
+                        // Create a placeholder for standalone operator
+                        let end = op_token.end;
+                        return Ok(Node::new(
+                            NodeKind::Unary {
+                                op: op_token.text.clone(),
+                                operand: Box::new(Node::new(
+                                    NodeKind::Undef,
+                                    SourceLocation { start: end, end },
+                                )),
+                            },
+                            SourceLocation { start, end },
+                        ));
+                    }
+
+                    let operand = self.parse_unary()?;
+                    let end = operand.location.end;
+
+                    return Ok(Node::new(
+                        NodeKind::Unary { op: op_token.text.clone(), operand: Box::new(operand) },
+                        SourceLocation { start, end },
+                    ));
+                }
+                TokenKind::Not | TokenKind::Backslash | TokenKind::BitwiseNot | TokenKind::Star => {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
 
@@ -4157,14 +4369,155 @@ impl<'a> Parser<'a> {
         Ok(token)
     }
 
+    /// Get closing delimiter for a given opening delimiter
+    #[inline]
+    fn closing_delim_for(open_txt: &str) -> Option<String> {
+        // prefer textual comparison so we don't need to enumerate TokenKind variants
+        match open_txt {
+            "(" => Some(")".to_string()),
+            "[" => Some("]".to_string()),
+            "{" => Some("}".to_string()),
+            "<" => Some(">".to_string()),
+            // symmetric delimiters (| ! # ~ / etc.) close with themselves
+            s if s.len() == 1 => Some(open_txt.to_string()),
+            _ => None,
+        }
+    }
+
+    /// After having consumed the `qw` identifier, parse `qw<delim>...<close>`
+    fn parse_qw_words(&mut self) -> ParseResult<Vec<String>> {
+        // Grab the opening delimiter as a single *token* (whatever it is).
+        // This could be (, [, {, <, or any single character like |, !, #, etc.
+        let open = self.tokens.next()?; // e.g., '(', '{', '|', '#', '!'
+        let open_txt = open.text.as_str();
+
+        // Special case for # - it causes lexer issues as it starts comments
+        // When we see qw#, we need to consume carefully
+        if open_txt == "#" {
+            let mut words = Vec::<String>::new();
+
+            // The lexer will treat the closing # as starting a comment,
+            // so we won't see it as a token. We need to consume words
+            // until we hit something that indicates the qw list is done.
+            // We'll stop when we see a keyword that starts a new statement.
+            while !self.tokens.is_eof() {
+                let peek = self.tokens.peek()?;
+
+                // Stop if we see a keyword that starts a new statement
+                if matches!(
+                    peek.kind,
+                    TokenKind::Use
+                        | TokenKind::My
+                        | TokenKind::Our
+                        | TokenKind::Sub
+                        | TokenKind::Package
+                        | TokenKind::If
+                        | TokenKind::While
+                        | TokenKind::For
+                        | TokenKind::Return
+                ) {
+                    break;
+                }
+
+                // Also stop on semicolon (though we likely won't see it after #)
+                if matches!(peek.kind, TokenKind::Semicolon) {
+                    break;
+                }
+
+                match peek.kind {
+                    TokenKind::Identifier | TokenKind::Number => {
+                        // Check if this is a keyword that likely isn't part of the qw list
+                        if matches!(peek.text.as_str(), "use" | "constant" | "my" | "our" | "sub") {
+                            // Don't consume it, just stop here
+                            break;
+                        }
+                        let t = self.tokens.next()?;
+                        words.push(t.text.clone());
+                    }
+                    _ => {
+                        // Skip other tokens
+                        self.tokens.next()?;
+                    }
+                }
+            }
+            return Ok(words);
+        }
+
+        let close_txt = if let Some(ct) = Self::closing_delim_for(open_txt) {
+            ct
+        } else {
+            // If we can't determine closing delimiter, use the same as opening for symmetric
+            open_txt.to_string()
+        };
+
+        let mut words = Vec::<String>::new();
+
+        // naive word split: treat IDENT/STRING/NUMBER as word atoms; anything else
+        // (including newlines and whitespace that your lexer doesn't surface) just
+        // acts as a separator or gets skipped.
+        while !self.tokens.is_eof() {
+            let peek = self.tokens.peek()?;
+            if peek.text == close_txt.as_str() {
+                self.tokens.next()?; // consume closer
+                break;
+            }
+
+            match self.peek_kind() {
+                Some(TokenKind::Identifier) | Some(TokenKind::Number) => {
+                    let t = self.tokens.next()?;
+                    words.push(t.text.clone());
+                }
+                Some(TokenKind::String) => {
+                    let t = self.tokens.next()?;
+                    // normalize quotes → word (qw() is non-interpolating as list of words)
+                    let w = t.text.trim_matches(|c| c == '"' || c == '\'').to_string();
+                    if !w.is_empty() {
+                        words.push(w);
+                    }
+                }
+                // Skip whitespace, newlines, and any other tokens
+                _ => {
+                    self.tokens.next()?;
+                }
+            }
+        }
+        Ok(words)
+    }
+
     /// Parse qw() word list
     fn parse_qw_list(&mut self) -> ParseResult<Vec<Node>> {
-        self.expect(TokenKind::LeftParen)?; // consume (
+        // Handle different delimiters for qw
+        let delimiter_token = self.tokens.peek()?.clone();
+        let close_delim = match delimiter_token.kind {
+            TokenKind::LeftParen => {
+                self.consume_token()?;
+                TokenKind::RightParen
+            }
+            TokenKind::LeftBracket => {
+                self.consume_token()?;
+                TokenKind::RightBracket
+            }
+            TokenKind::LeftBrace => {
+                self.consume_token()?;
+                TokenKind::RightBrace
+            }
+            TokenKind::Less => {
+                self.consume_token()?;
+                TokenKind::Greater
+            }
+            // For other delimiters like |, !, #, ~, etc.
+            _ => {
+                // Try to consume whatever delimiter is there
+                // For now, default to parentheses if we don't recognize it
+                self.expect(TokenKind::LeftParen)?;
+                TokenKind::RightParen
+            }
+        };
 
         let mut words = Vec::new();
 
-        // Parse space-separated words until )
-        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+        // Parse space-separated words until closing delimiter
+        while self.peek_kind() != Some(close_delim) && !self.tokens.is_eof() {
             if let Some(TokenKind::Identifier) = self.peek_kind() {
                 let token = self.tokens.next()?;
                 words.push(Node::new(
@@ -4174,13 +4527,23 @@ impl<'a> Parser<'a> {
                     },
                     SourceLocation { start: token.start, end: token.end },
                 ));
+            } else if self.peek_kind() == Some(TokenKind::String) {
+                // Also allow string tokens in qw lists
+                let token = self.tokens.next()?;
+                words.push(Node::new(
+                    NodeKind::String {
+                        value: format!("'{}'", token.text.trim_matches(|c| c == '"' || c == '\'')),
+                        interpolated: false,
+                    },
+                    SourceLocation { start: token.start, end: token.end },
+                ));
             } else {
-                let pos = self.current_position();
-                return Err(ParseError::syntax("Expected word in qw() list", pos));
+                // Skip other tokens (might be separators or special chars)
+                self.tokens.next()?;
             }
         }
 
-        self.expect(TokenKind::RightParen)?;
+        self.expect(close_delim)?;
         Ok(words)
     }
 
