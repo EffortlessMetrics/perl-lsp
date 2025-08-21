@@ -39,9 +39,20 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           
+      - name: Validate corpus metadata
+        run: |
+          cargo run -p perl-corpus -- --corpus test/corpus lint
+          cargo run -p perl-corpus -- --corpus test/corpus index
+          
       - name: Run tests
         shell: bash
         run: ./.github/run_all_tests.sh
+        
+      - name: Run property tests (fast)
+        env:
+          PROPTEST_CASES: 64
+        run: |
+          cargo test -p perl-parser prop_ -- --nocapture
         
       - name: Check test discovery
         shell: bash

@@ -1,11 +1,11 @@
 pub mod meta;
 pub mod index;
 pub mod lint;
-pub mod gen;
+pub mod r#gen;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use regex::Regex;
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, path::Path};
 use meta::Section;
 use std::collections::HashMap;
 
@@ -124,14 +124,14 @@ pub fn parse_dir(dir: &Path) -> Result<Vec<Section>> {
 }
 
 /// Find sections by tag
-pub fn find_by_tag(sections: &[Section], tag: &str) -> Vec<&Section> {
+pub fn find_by_tag<'a>(sections: &'a [Section], tag: &str) -> Vec<&'a Section> {
     sections.iter()
         .filter(|s| s.has_tag(tag))
         .collect()
 }
 
 /// Find sections by flag
-pub fn find_by_flag(sections: &[Section], flag: &str) -> Vec<&Section> {
+pub fn find_by_flag<'a>(sections: &'a [Section], flag: &str) -> Vec<&'a Section> {
     sections.iter()
         .filter(|s| s.has_flag(flag))
         .collect()

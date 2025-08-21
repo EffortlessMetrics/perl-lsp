@@ -64,6 +64,8 @@ pretty_assertions = "1.4.1"
 regex = "1.11.1"
 serial_test = "3.0"
 tempfile = "3.8"
+proptest = "1"
+perl-corpus = { path = "../perl-corpus" }
 
 [[bench]]
 name = "parser_benchmark"
