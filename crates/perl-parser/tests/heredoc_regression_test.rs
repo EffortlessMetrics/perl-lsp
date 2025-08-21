@@ -282,3 +282,40 @@ fn test_bom_at_file_start() {
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
 }
+
+#[test]
+fn test_comprehensive_crlf_tilde_trailing_spaces() {
+    // Mixed CRLF + <<~ + trailing spaces on terminator
+    let input = "my $x = <<~END;\r\n    indented\r\n    END  \t \r\nsay 1;\r\n";
+    
+    let mut parser = Parser::new(input);
+    let ast = parser.parse();
+    assert!(ast.is_ok());
+    
+    let ast = ast.unwrap();
+    let sexp = ast.to_sexp();
+    
+    // Verify structure is preserved with CRLF
+    assert!(sexp.contains("(my_declaration"));
+    assert!(sexp.contains("say"));
+}
+
+#[test]
+fn test_data_end_with_trailing_junk_non_ws() {
+    // __DATA__ and __END__ should reject lines with non-whitespace trailing junk
+    let inputs = vec![
+        "__DATA__ # comment\nShould not be data",
+        "__DATA__abc\nShould not be data",
+        "__END__ some text\nShould not be data",
+    ];
+    
+    for input in inputs {
+        let mut parser = Parser::new(input);
+        let ast = parser.parse();
+        assert!(ast.is_ok());
+        
+        let sexp = ast.unwrap().to_sexp();
+        // Should not parse as data sections
+        assert!(!sexp.contains("(data_section"), "Input '{}' incorrectly parsed as data section", input);
+    }
+}
