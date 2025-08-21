@@ -1,0 +1,212 @@
+==================
+Core magic scalars
+==================
+
+$[;
+$.;
+$/;
+$\;
+$";
+$;;
+$^A;
+$^D;
+$^F;
+$^I;
+$^L;
+$^P;
+$^T;
+$^W;
+$^X;
+$|;
+$~;
+$^;
+$=;
+$-;
+$%;
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable)))
+
+==================
+Perl 6 style special vars
+==================
+
+${^ENCODING};
+${^GLOBAL_PHASE};
+${^MATCH};
+${^PREMATCH};
+${^POSTMATCH};
+${^CAPTURE};
+${^SAFE_LOCALES};
+${^UNICODE};
+${^UTF8CACHE};
+${^UTF8LOCALE};
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable)))
+
+==================
+Regex position arrays and hashes
+==================
+
+@-;
+@+;
+%+;
+%-;
+$#-;
+$#-[0];
+$-[0];
+$+[1];
+$+{name};
+$-{name};
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (array_element (special_variable) (number)))
+  (expression_statement (array_element (special_variable) (number)))
+  (expression_statement (array_element (special_variable) (number)))
+  (expression_statement (hash_element (special_variable) (identifier)))
+  (expression_statement (hash_element (special_variable) (identifier))))
+
+==================
+Error and process variables
+==================
+
+$!;
+$@;
+$?;
+$$;
+$<;
+$>;
+$(;
+$);
+$0;
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable)))
+
+==================
+Regex match variables
+==================
+
+$&;
+$`;
+$';
+$1;
+$2;
+$+;
+$^N;
+$^R;
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable)))
+
+==================
+Special arrays and hashes
+==================
+
+@ARGV;
+@_;
+@INC;
+@ISA;
+@EXPORT;
+@EXPORT_OK;
+%ENV;
+%SIG;
+%INC;
+
+---
+
+(source_file
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (variable))
+  (expression_statement (variable))
+  (expression_statement (variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable))
+  (expression_statement (special_variable)))
+
+==================
+Special filehandles
+==================
+
+STDIN;
+STDOUT;
+STDERR;
+ARGV;
+ARGVOUT;
+DATA;
+__END__
+__DATA__
+
+---
+
+(source_file
+  (expression_statement (identifier))
+  (expression_statement (identifier))
+  (expression_statement (identifier))
+  (expression_statement (identifier))
+  (expression_statement (identifier))
+  (expression_statement (identifier))
+  (end_marker)
+  (data_marker))

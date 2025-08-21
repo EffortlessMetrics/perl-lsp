@@ -1,0 +1,176 @@
+==================
+System and exec
+==================
+
+system("ls -la");
+system("ls", "-la");
+system(@cmd);
+system($cmd) == 0 or die "Command failed: $?";
+exec("/bin/sh", "-c", $script);
+exec($program, @args);
+exec { $program } @args;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (string))))
+  (expression_statement (call_expression (identifier) (argument_list (string) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (variable))))
+  (expression_statement (binary_expression 
+    (binary_expression (call_expression (identifier) (argument_list (variable))) (number))
+    (call_expression (identifier) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (string) (string) (variable))))
+  (expression_statement (call_expression (identifier) (argument_list (variable) (variable))))
+  (expression_statement (call_expression (identifier) (block (variable)) (variable))))
+
+==================
+Fork and wait
+==================
+
+my $pid = fork();
+die "fork failed: $!" unless defined $pid;
+if ($pid == 0) {
+    exit 0;
+}
+waitpid($pid, 0);
+wait();
+my $status = $?;
+kill 'TERM', $pid;
+kill 9, @pids;
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list))))
+  (expression_statement (statement_modifier 
+    (call_expression (identifier) (string))
+    (call_expression (identifier) (variable))))
+  (if_statement (parenthesized_expression (binary_expression (variable) (number))) (block
+    (expression_statement (call_expression (identifier) (number)))))
+  (expression_statement (call_expression (identifier) (argument_list (variable) (number))))
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (my_declaration (variable) (special_variable)))
+  (expression_statement (call_expression (identifier) (string) (variable)))
+  (expression_statement (call_expression (identifier) (number) (variable))))
+
+==================
+Pipe operations
+==================
+
+pipe(READER, WRITER);
+open(my $fh, "|-", "sort") or die $!;
+open(my $in, "-|", "ls", "-la") or die $!;
+my $pid = open(my $pipe, "|-");
+if (!$pid) {
+    exec("command");
+}
+close($pipe);
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (identifier))))
+  (expression_statement (binary_expression 
+    (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (string)))
+    (call_expression (identifier) (special_variable))))
+  (expression_statement (binary_expression 
+    (call_expression (identifier) (argument_list (my_declaration (variable)) (string) (string) (string)))
+    (call_expression (identifier) (special_variable))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (my_declaration (variable)) (string)))))
+  (if_statement (parenthesized_expression (unary_expression (variable))) (block
+    (expression_statement (call_expression (identifier) (argument_list (string))))))
+  (expression_statement (call_expression (identifier) (argument_list (variable)))))
+
+==================
+Network name lookups
+==================
+
+gethostbyname("localhost");
+gethostbyaddr($addr, AF_INET);
+getservbyname("http", "tcp");
+getservbyport(80, "tcp");
+getprotobyname("tcp");
+getprotobynumber(6);
+inet_aton("127.0.0.1");
+inet_ntoa($packed_addr);
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list (string))))
+  (expression_statement (call_expression (identifier) (argument_list (variable) (identifier))))
+  (expression_statement (call_expression (identifier) (argument_list (string) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (number) (string))))
+  (expression_statement (call_expression (identifier) (argument_list (string))))
+  (expression_statement (call_expression (identifier) (argument_list (number))))
+  (expression_statement (call_expression (identifier) (argument_list (string))))
+  (expression_statement (call_expression (identifier) (argument_list (variable)))))
+
+==================
+Socket operations
+==================
+
+use Socket;
+socket(SOCK, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+bind(SOCK, sockaddr_in($port, INADDR_ANY));
+listen(SOCK, SOMAXCONN);
+accept(CLIENT, SOCK);
+connect(SOCK, $paddr);
+shutdown(SOCK, 2);
+socketpair(CHILD, PARENT, AF_UNIX, SOCK_STREAM, PF_UNSPEC);
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (identifier) (identifier) (call_expression (identifier) (argument_list (string))))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (call_expression (identifier) (argument_list (variable) (identifier))))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (identifier))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (identifier))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (variable))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (number))))
+  (expression_statement (call_expression (identifier) (argument_list (identifier) (identifier) (identifier) (identifier) (identifier)))))
+
+==================
+Signal handling
+==================
+
+$SIG{INT} = 'IGNORE';
+$SIG{TERM} = \&cleanup;
+$SIG{HUP} = sub { reload_config() };
+$SIG{CHLD} = 'DEFAULT';
+local $SIG{ALRM} = sub { die "timeout\n" };
+alarm(10);
+kill 'USR1', $$;
+%SIG;
+
+---
+
+(source_file
+  (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (string)))
+  (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (reference (identifier))))
+  (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (anonymous_subroutine (block (expression_statement (call_expression (identifier) (argument_list)))))))
+  (expression_statement (assignment_expression (hash_element (special_variable) (identifier)) (string)))
+  (expression_statement (local_declaration (hash_element (special_variable) (identifier)) (anonymous_subroutine (block (expression_statement (call_expression (identifier) (string)))))))
+  (expression_statement (call_expression (identifier) (argument_list (number))))
+  (expression_statement (call_expression (identifier) (string) (special_variable)))
+  (expression_statement (special_variable)))
+
+==================
+Syscall
+==================
+
+require 'syscall.ph';
+syscall(&SYS_write, fileno(STDOUT), $buf, length $buf);
+my $ret = syscall(&SYS_getpid);
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (call_expression (identifier) (argument_list 
+    (reference (identifier))
+    (call_expression (identifier) (argument_list (identifier)))
+    (variable)
+    (call_expression (identifier) (variable)))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (reference (identifier)))))))

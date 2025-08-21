@@ -1,0 +1,177 @@
+==================
+Time functions
+==================
+
+time();
+time;
+localtime();
+localtime(time);
+gmtime();
+gmtime($timestamp);
+times();
+sleep 5;
+sleep 2.5;
+alarm 30;
+alarm 0;
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier)))
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier) (argument_list (call_expression (identifier)))))
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier) (argument_list (variable))))
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (number)))
+  (expression_statement (call_expression (identifier) (number))))
+
+==================
+Localtime components
+==================
+
+my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+my @time = localtime;
+scalar localtime;
+my $formatted = scalar localtime(time);
+
+---
+
+(source_file
+  (expression_statement (my_declaration (list 
+    (variable) (variable) (variable) (variable) (variable) 
+    (variable) (variable) (variable) (variable))
+    (call_expression (identifier) (argument_list (call_expression (identifier))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier))))
+  (expression_statement (call_expression (identifier) (call_expression (identifier))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (call_expression (identifier) (argument_list (call_expression (identifier))))))))
+
+==================
+Caller function
+==================
+
+caller();
+caller(0);
+caller(1);
+my @caller = caller;
+my ($package, $filename, $line) = caller;
+my ($package, $filename, $line, $subroutine) = caller(1);
+my $subname = (caller(1))[3];
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier) (argument_list (number))))
+  (expression_statement (call_expression (identifier) (argument_list (number))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier))))
+  (expression_statement (my_declaration (list (variable) (variable) (variable)) (call_expression (identifier))))
+  (expression_statement (my_declaration (list (variable) (variable) (variable) (variable)) (call_expression (identifier) (argument_list (number)))))
+  (expression_statement (my_declaration (variable) (array_element (parenthesized_expression (call_expression (identifier) (argument_list (number)))) (number)))))
+
+==================
+Wantarray context
+==================
+
+sub context_aware {
+    return unless defined wantarray;
+    return wantarray ? (1, 2, 3) : 1;
+}
+
+wantarray();
+defined wantarray;
+!wantarray;
+if (wantarray) {
+    return @array;
+}
+
+---
+
+(source_file
+  (subroutine_declaration (identifier) (block
+    (return_statement (statement_modifier (call_expression (identifier) (call_expression (identifier)))))
+    (return_statement (ternary_expression 
+      (call_expression (identifier))
+      (list (number) (number) (number))
+      (number)))))
+  (expression_statement (call_expression (identifier) (argument_list)))
+  (expression_statement (call_expression (identifier) (call_expression (identifier))))
+  (expression_statement (unary_expression (call_expression (identifier))))
+  (if_statement (parenthesized_expression (call_expression (identifier))) (block
+    (return_statement (variable)))))
+
+==================
+Eval and die context
+==================
+
+eval { dangerous_code() };
+if ($@) {
+    warn "Error: $@";
+}
+eval "use Module";
+die "Fatal error" if $error;
+warn "Warning message\n";
+__WARN__ = sub { print STDERR "Warning: $_[0]" };
+__DIE__ = sub { print STDERR "Fatal: $_[0]"; exit 1 };
+
+---
+
+(source_file
+  (expression_statement (call_expression (identifier) (block (call_expression (identifier) (argument_list)))))
+  (if_statement (parenthesized_expression (special_variable)) (block
+    (expression_statement (call_expression (identifier) (string)))))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (statement_modifier (call_expression (identifier) (string)) (variable)))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (assignment_expression (special_variable) (anonymous_subroutine (block 
+    (expression_statement (call_expression (identifier) (identifier) (array_element (special_variable) (number))))))))
+  (expression_statement (assignment_expression (special_variable) (anonymous_subroutine (block 
+    (expression_statement (call_expression (identifier) (identifier) (array_element (special_variable) (number))))
+    (expression_statement (call_expression (identifier) (number))))))))
+
+==================
+Stack traces
+==================
+
+use Carp;
+carp "Warning with stack trace";
+croak "Error with stack trace";
+confess "Fatal with full stack trace";
+cluck "Warning with full stack trace";
+use Carp qw(longmess shortmess);
+my $trace = longmess("Debug info");
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (call_expression (identifier) (string)))
+  (expression_statement (call_expression (identifier) (string)))
+  (use_statement (module_name) (qw_list))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (string))))))
+
+==================
+High resolution time
+==================
+
+use Time::HiRes qw(time sleep usleep gettimeofday tv_interval);
+my $t0 = [gettimeofday];
+usleep(500_000);
+my $elapsed = tv_interval($t0);
+my $hires_time = Time::HiRes::time();
+Time::HiRes::sleep(0.25);
+
+---
+
+(source_file
+  (use_statement (module_name) (qw_list))
+  (expression_statement (my_declaration (variable) (array_ref (call_expression (identifier)))))
+  (expression_statement (call_expression (identifier) (argument_list (number))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (variable)))))
+  (expression_statement (my_declaration (variable) (call_expression (qualified_identifier) (argument_list))))
+  (expression_statement (call_expression (qualified_identifier) (argument_list (number)))))

@@ -1,0 +1,187 @@
+==================
+Debugger hooks
+==================
+
+$DB::single = 1;
+$DB::single = 2;
+$DB::trace = 1;
+$DB::signal = 1;
+package DB;
+sub DB {
+    my ($package, $filename, $line) = caller;
+}
+sub sub {
+    &$DB::sub;
+}
+
+---
+
+(source_file
+  (expression_statement (assignment_expression (qualified_variable) (number)))
+  (expression_statement (assignment_expression (qualified_variable) (number)))
+  (expression_statement (assignment_expression (qualified_variable) (number)))
+  (expression_statement (assignment_expression (qualified_variable) (number)))
+  (package_statement (module_name))
+  (subroutine_declaration (identifier) (block
+    (expression_statement (my_declaration (list (variable) (variable) (variable)) (call_expression (identifier))))))
+  (subroutine_declaration (identifier) (block
+    (expression_statement (call_expression (qualified_variable))))))
+
+==================
+Debugger commands
+==================
+
+@DB::args;
+%DB::sub;
+@DB::dbline;
+%DB::dbline;
+$DB::package;
+$DB::filename;
+$DB::subname;
+$DB::lineno;
+
+---
+
+(source_file
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable))
+  (expression_statement (qualified_variable)))
+
+==================
+B backend basics
+==================
+
+use B;
+use B::Deparse;
+use B::Concise;
+use B::Terse;
+use B::Xref;
+my $deparse = B::Deparse->new();
+my $code = $deparse->coderef2text(\&myfunction);
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (expression_statement (my_declaration (variable) (method_call (module_name) (identifier) (argument_list))))
+  (expression_statement (my_declaration (variable) (method_call (variable) (identifier) (argument_list (reference (identifier)))))))
+
+==================
+B object operations
+==================
+
+use B qw(svref_2object);
+my $sv = svref_2object(\$scalar);
+my $av = svref_2object(\@array);
+my $hv = svref_2object(\%hash);
+my $cv = svref_2object(\&code);
+$sv->FLAGS;
+$sv->REFCNT;
+$cv->STASH;
+
+---
+
+(source_file
+  (use_statement (module_name) (qw_list))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (reference (variable))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (reference (variable))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (reference (variable))))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (reference (identifier))))))
+  (expression_statement (method_call (variable) (identifier)))
+  (expression_statement (method_call (variable) (identifier)))
+  (expression_statement (method_call (variable) (identifier))))
+
+==================
+B Deparse options
+==================
+
+my $deparser = B::Deparse->new("-p", "-q");
+$deparser->ambient_pragmas(
+    strict => 'all',
+    warnings => 'all',
+);
+my $text = $deparser->coderef2text(sub { print "Hello" });
+print $deparser->deparse_sub(\&main::myfunction);
+
+---
+
+(source_file
+  (expression_statement (my_declaration (variable) (method_call (module_name) (identifier) (argument_list (string) (string)))))
+  (expression_statement (method_call (variable) (identifier) (argument_list
+    (pair (identifier) (string))
+    (pair (identifier) (string)))))
+  (expression_statement (my_declaration (variable) (method_call (variable) (identifier) (argument_list 
+    (anonymous_subroutine (block (expression_statement (call_expression (identifier) (string)))))))))
+  (expression_statement (call_expression (identifier) (method_call (variable) (identifier) (argument_list (reference (qualified_identifier)))))))
+
+==================
+B bytecode operations
+==================
+
+use B::Bytecode;
+use B::Assembler;
+use B::Disassembler;
+my $bc = B::Bytecode->new();
+$bc->output_file("program.plc");
+$bc->compile_prog();
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (use_statement (module_name))
+  (expression_statement (my_declaration (variable) (method_call (module_name) (identifier) (argument_list))))
+  (expression_statement (method_call (variable) (identifier) (argument_list (string))))
+  (expression_statement (method_call (variable) (identifier) (argument_list))))
+
+==================
+Devel modules
+==================
+
+use Devel::Peek;
+Dump($var);
+DumpArray(@array);
+use Devel::Size qw(size total_size);
+my $size = size($ref);
+my $total = total_size($ref);
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (expression_statement (call_expression (identifier) (argument_list (variable))))
+  (expression_statement (call_expression (identifier) (argument_list (variable))))
+  (use_statement (module_name) (qw_list))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (variable)))))
+  (expression_statement (my_declaration (variable) (call_expression (identifier) (argument_list (variable))))))
+
+==================
+Attribute handlers
+==================
+
+use Attribute::Handlers;
+sub UNIVERSAL::Traced : ATTR(CODE) {
+    my ($package, $symbol, $referent, $attr, $data) = @_;
+}
+sub mymethod : Traced {
+    # method code
+}
+
+---
+
+(source_file
+  (use_statement (module_name))
+  (subroutine_declaration (qualified_identifier) (attribute (identifier) (argument_list (identifier))) (block
+    (expression_statement (my_declaration (list (variable) (variable) (variable) (variable) (variable)) (special_variable)))))
+  (subroutine_declaration (identifier) (attribute (identifier)) (block
+    (comment))))
