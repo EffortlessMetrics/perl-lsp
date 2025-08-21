@@ -1,0 +1,284 @@
+==================
+Basic overload
+==================
+
+package MyNumber;
+use overload
+    '+' => sub { $_[0]->{val} + $_[1] },
+    '-' => sub { $_[0]->{val} - $_[1] },
+    '*' => sub { $_[0]->{val} * $_[1] },
+    '/' => sub { $_[0]->{val} / $_[1] },
+    '""' => sub { $_[0]->{val} },
+    '0+' => sub { $_[0]->{val} },
+    fallback => 1;
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement))
+
+==================
+Overload with method names
+==================
+
+package MyClass;
+use overload
+    '+' => 'add',
+    '-' => 'subtract',
+    '*' => \&multiply,
+    '/' => \&divide,
+    '""' => 'stringify',
+    'bool' => 'to_bool',
+    '~~' => 'match',
+    fallback => 0;
+
+sub add { ... }
+sub subtract { ... }
+sub multiply { ... }
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Comparison overloads
+==================
+
+package Comparable;
+use overload
+    '<' => sub { $_[0]{val} < $_[1] },
+    '<=' => sub { $_[0]{val} <= $_[1] },
+    '>' => sub { $_[0]{val} > $_[1] },
+    '>=' => sub { $_[0]{val} >= $_[1] },
+    '==' => sub { $_[0]{val} == $_[1] },
+    '!=' => sub { $_[0]{val} != $_[1] },
+    '<=>' => sub { $_[0]{val} <=> $_[1] },
+    'cmp' => sub { $_[0]{str} cmp $_[1] },
+    fallback => 1;
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement))
+
+==================
+Assignment overloads
+==================
+
+package Container;
+use overload
+    '=' => sub { $_[0]->clone },
+    '+=' => sub { $_[0]{val} += $_[1]; $_[0] },
+    '-=' => sub { $_[0]{val} -= $_[1]; $_[0] },
+    '*=' => sub { $_[0]{val} *= $_[1]; $_[0] },
+    '/=' => sub { $_[0]{val} /= $_[1]; $_[0] },
+    '%=' => sub { $_[0]{val} %= $_[1]; $_[0] },
+    '**=' => sub { $_[0]{val} **= $_[1]; $_[0] },
+    '<<=' => sub { $_[0]{val} <<= $_[1]; $_[0] },
+    '>>=' => sub { $_[0]{val} >>= $_[1]; $_[0] },
+    'x=' => sub { $_[0]{val} x= $_[1]; $_[0] },
+    '.=' => sub { $_[0]{val} .= $_[1]; $_[0] };
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement))
+
+==================
+Dereference overloads
+==================
+
+package SmartRef;
+use overload
+    '@{}' => sub { $_[0]{array} },
+    '%{}' => sub { $_[0]{hash} },
+    '&{}' => sub { $_[0]{code} },
+    '*{}' => sub { $_[0]{glob} },
+    '${}' => sub { \$_[0]{scalar} },
+    '~~' => sub { $_[0]->smart_match($_[1]) },
+    nomethod => sub { die "Invalid operation" };
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement))
+
+==================
+MRO C3
+==================
+
+package Parent;
+package Child;
+use mro 'c3';
+use parent 'Parent';
+
+package GrandChild;
+use mro 'c3';
+use parent 'Child';
+
+my @isa = mro::get_linear_isa('GrandChild');
+my @methods = mro::get_isarev('Parent');
+
+mro::set_mro('MyClass', 'c3');
+my $mro_type = mro::get_mro('MyClass');
+
+---
+
+(source_file
+  (package_declaration)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+MRO method resolution
+==================
+
+package Base;
+sub method { 'Base' }
+
+package Left;
+use parent 'Base';
+sub method { 'Left' }
+
+package Right;
+use parent 'Base';
+sub method { 'Right' }
+
+package Diamond;
+use mro 'c3';
+use parent qw(Left Right);
+
+package main;
+Diamond->method();
+mro::method_changed_in('Diamond');
+
+---
+
+(source_file
+  (package_declaration)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (package_declaration)
+  (statement)
+  (statement))
+
+==================
+Next method
+==================
+
+package Parent;
+sub foo { 'Parent::foo' }
+
+package Child;
+use mro 'c3';
+use parent 'Parent';
+
+sub foo {
+    my $self = shift;
+    my $parent = $self->next::method();
+    return "Child::foo calling $parent";
+}
+
+sub bar {
+    my $self = shift;
+    return $self->maybe::next::method() || 'no parent bar';
+}
+
+---
+
+(source_file
+  (package_declaration)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration))
+
+==================
+Overload constants
+==================
+
+use overload;
+
+my $obj = shift;
+my $str = overload::StrVal($obj);
+my $num = overload::Overloaded($obj);
+my $method = overload::Method($obj, '+');
+
+package MyClass;
+use overload
+    '""' => sub { overload::StrVal($_[0]) . '[stringified]' },
+    '0+' => sub { overload::NumVal($_[0]) },
+    fallback => 1;
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (package_declaration)
+  (use_statement))
+
+==================
+Complex overload scenarios
+==================
+
+package Matrix;
+use overload
+    '+' => sub {
+        my ($m1, $m2, $swap) = @_;
+        # Matrix addition
+    },
+    '*' => sub {
+        my ($m1, $m2, $swap) = @_;
+        if (!ref $m2) {
+            # Scalar multiplication
+        } else {
+            # Matrix multiplication
+        }
+    },
+    '**' => sub {
+        my ($m, $n, $swap) = @_;
+        # Matrix power
+    },
+    'neg' => sub {
+        # Negation
+    },
+    '""' => 'to_string',
+    'abs' => 'determinant',
+    fallback => 0;
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement))

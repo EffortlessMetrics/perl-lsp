@@ -1,0 +1,286 @@
+==================
+Require forms
+==================
+
+require 5.038;
+require v5.38.0;
+require Module;
+require Module::Name;
+require "Module/Name.pm";
+require 'file.pl';
+require $module;
+
+BEGIN { require Module }
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (begin_block))
+
+==================
+Do file forms
+==================
+
+do 'config.pl';
+do "lib/setup.pl";
+do $filename;
+do { 
+    my $file = find_config();
+    $file;
+};
+
+my $result = do 'script.pl';
+my $config = do 'config.pl' or die "Cannot load config: $!";
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Use if conditional loading
+==================
+
+use if $^O eq 'MSWin32', 'Win32::Process';
+use if $] >= 5.010, 'feature', qw(say state);
+use if $ENV{DEBUG}, 'Data::Dumper';
+use if WANT_WARNINGS, warnings => 'all';
+
+no if $production, 'warnings', 'experimental';
+
+use if $] < 5.036, 'experimental', qw(signatures);
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (no_statement)
+  (use_statement))
+
+==================
+Eval require patterns
+==================
+
+eval { require Optional::Module };
+if (!$@) {
+    Optional::Module->import();
+}
+
+eval "require $module_name";
+die $@ if $@;
+
+my $loaded = eval { require Some::Module; 1 };
+
+eval {
+    require Module;
+    Module->import(qw(func1 func2));
+    1;
+} or do {
+    my $error = $@;
+    warn "Module not available: $error";
+};
+
+---
+
+(source_file
+  (eval_block)
+  (if_statement)
+  (eval_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Module runtime loading
+==================
+
+for my $module (@modules) {
+    eval "require $module";
+    if ($@) {
+        warn "Cannot load $module: $@";
+        next;
+    }
+    $module->import();
+}
+
+my $class = "My::$type";
+eval "require $class";
+my $obj = $class->new() unless $@;
+
+sub load_plugin {
+    my $plugin = shift;
+    my $module = "Plugin::$plugin";
+    eval "require $module";
+    die "Cannot load plugin $plugin: $@" if $@;
+    return $module->new();
+}
+
+---
+
+(source_file
+  (for_statement)
+  (statement)
+  (statement)
+  (subroutine_declaration))
+
+==================
+Use lib and INC manipulation
+==================
+
+use lib '/path/to/lib';
+use lib "$ENV{HOME}/perl5/lib";
+use lib qw(/path1 /path2 /path3);
+
+no lib '/unwanted/path';
+
+BEGIN {
+    unshift @INC, '/my/lib';
+    push @INC, sub {
+        my ($self, $file) = @_;
+        # Custom loader
+        return undef;
+    };
+}
+
+use local::lib;
+use local::lib '~/perl5';
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (no_statement)
+  (begin_block)
+  (use_statement)
+  (use_statement))
+
+==================
+FindBin and relative paths
+==================
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::RealBin/../lib";
+
+use FindBin qw($Bin $Script $RealBin $RealScript);
+use lib "$Bin/lib";
+
+BEGIN {
+    require FindBin;
+    FindBin->import;
+    require lib;
+    lib->import("$FindBin::Bin/../lib");
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (begin_block))
+
+==================
+Module::Load patterns
+==================
+
+use Module::Load;
+
+load 'Data::Dumper';
+load 'Module::Name', qw(func1 func2);
+
+autoload 'My::Module';
+
+load_remote 'http://example.com/Module.pm';
+
+use Module::Load::Conditional qw(check_install);
+
+my $rv = check_install(module => 'Some::Module');
+if ($rv) {
+    load 'Some::Module';
+}
+
+---
+
+(source_file
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (use_statement)
+  (statement)
+  (if_statement))
+
+==================
+Parent and base loading
+==================
+
+use parent 'Parent::Class';
+use parent qw(Parent1 Parent2);
+use parent -norequire, 'Parent::Class';
+
+use base 'Base::Class';
+use base qw(Base1 Base2);
+
+push @ISA, 'Runtime::Parent';
+unshift @ISA, 'Priority::Parent';
+
+@ISA = qw(Parent1 Parent2);
+our @ISA = ('Single::Parent');
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Autouse and autoload
+==================
+
+use autouse 'Carp' => qw(carp croak);
+use autouse 'Data::Dumper' => qw(Dumper);
+
+sub AUTOLOAD {
+    my $method = $AUTOLOAD;
+    $method =~ s/.*:://;
+    
+    eval "require Module::$method";
+    die $@ if $@;
+    
+    goto &{"Module::${method}::handler"};
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (subroutine_declaration))

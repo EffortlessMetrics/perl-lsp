@@ -1,0 +1,280 @@
+==================
+Indirect object syntax
+==================
+
+new Point 1, 2;
+new Point(1, 2);
+new Point;
+
+print FH "line\n";
+print STDERR "error\n";
+printf FH "%s\n", $data;
+
+close FH;
+open FH, $file;
+
+method Object @args;
+invoke Package 'arg';
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+No indirect pragma
+==================
+
+no indirect;
+new Point;  # Still parses, runtime error
+
+no indirect 'fatal';
+new Widget;  # Still parses, dies at runtime
+
+use indirect;
+new Object;  # Allowed again
+
+---
+
+(source_file
+  (no_statement)
+  (statement)
+  (no_statement)
+  (statement)
+  (use_statement)
+  (statement))
+
+==================
+CORE namespace overrides
+==================
+
+*CORE::GLOBAL::open = sub { die "blocked" };
+*CORE::GLOBAL::die = \&my_die;
+*CORE::GLOBAL::exit = sub { print "intercepted exit\n" };
+
+CORE::open(my $fh, "<", $file);
+CORE::print("using core print\n");
+CORE::die("using core die\n");
+
+&CORE::open($fh, $file);
+&CORE::close($fh);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Package VERSION syntax
+==================
+
+package My::Module 1.23;
+package My::Module v1.2.3;
+package My::Module 1.23 { }
+package My::Module v1.2.3 { }
+
+our $VERSION = '1.23';
+our $VERSION = 1.23;
+our $VERSION = v1.2.3;
+our $VERSION = qv('1.2.3');
+
+---
+
+(source_file
+  (package_declaration)
+  (package_declaration)
+  (package_declaration)
+  (package_declaration)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+__SUB__ token
+==================
+
+sub factorial {
+    my $n = shift;
+    return 1 if $n <= 1;
+    return $n * __SUB__->($n - 1);
+}
+
+my $code = sub {
+    my $self = __SUB__;
+    return $self;
+};
+
+sub wrapper {
+    my $orig = __SUB__;
+    return sub { $orig->(@_) };
+}
+
+---
+
+(source_file
+  (subroutine_declaration)
+  (statement)
+  (subroutine_declaration))
+
+==================
+Sort with custom comparators
+==================
+
+my @sorted = sort @list;
+my @sorted = sort { $a cmp $b } @list;
+my @sorted = sort { $a <=> $b } @list;
+my @sorted = sort { $b cmp $a } @list;
+
+my @complex = sort {
+    $a->{priority} <=> $b->{priority}
+        ||
+    $a->{name} cmp $b->{name}
+} @items;
+
+my @sorted = sort mysort @list;
+my @sorted = sort Package::compare @list;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Sort pragmas
+==================
+
+use sort 'stable';
+use sort 'defaults';
+use sort '_quicksort';
+use sort '_mergesort';
+
+no sort 'stable';
+
+use sort 'stable', '_mergesort';
+
+{
+    use sort 'stable';
+    my @sorted = sort { $a <=> $b } @nums;
+}
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (no_statement)
+  (use_statement)
+  (block))
+
+==================
+CORE with prototypes
+==================
+
+CORE::push(@array, $item);
+CORE::pop(@array);
+CORE::shift(@array);
+CORE::unshift(@array, @items);
+
+CORE::substr($string, 0, 5);
+CORE::index($string, "pattern");
+CORE::sprintf("%d", $number);
+
+CORE::ref($var);
+CORE::defined($var);
+CORE::undef($var);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Version comparisons
+==================
+
+use 5.036;
+use v5.36.0;
+require 5.010;
+require v5.10.0;
+
+if ($] >= 5.036) {
+    use feature 'signatures';
+}
+
+if ($^V ge v5.36.0) {
+    say "Modern Perl";
+}
+
+BEGIN { require 5.008 }
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (require_statement)
+  (require_statement)
+  (if_statement)
+  (if_statement)
+  (begin_block))
+
+==================
+UNIVERSAL methods
+==================
+
+UNIVERSAL::isa($obj, 'Class');
+UNIVERSAL::can($obj, 'method');
+UNIVERSAL::DOES($obj, 'Role');
+UNIVERSAL::VERSION($obj);
+
+$obj->UNIVERSAL::isa('Class');
+$obj->UNIVERSAL::can('method');
+$obj->UNIVERSAL::DOES('Role');
+
+*UNIVERSAL::new_method = sub { };
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))

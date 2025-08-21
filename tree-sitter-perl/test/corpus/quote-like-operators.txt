@@ -1,0 +1,292 @@
+==================
+Quote operators with symmetric delimiters
+==================
+
+q|literal string|;
+q!literal with exclamation!;
+q#literal with hash#;
+q~literal with tilde~;
+q/literal with slash/;
+
+qq|interpolated $var|;
+qq!interpolated with $exclamation!;
+qq#interpolated with $hash#;
+qq~interpolated with $tilde~;
+qq/interpolated with $slash/;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Quote operators with paired delimiters
+==================
+
+q(literal parentheses);
+q[literal brackets];
+q{literal braces};
+q<literal angles>;
+
+qq(interpolated $var parentheses);
+qq[interpolated $var brackets];
+qq{interpolated $var braces};
+qq<interpolated $var angles>;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Regex quote operators
+==================
+
+qr|pattern|;
+qr!pattern!i;
+qr#pattern#gms;
+qr~pattern~x;
+qr/pattern/o;
+
+qr{a(?|b|c)}i;
+qr(complex(pattern))x;
+qr[character[class]]s;
+qr<lookahead(?=pattern)>m;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Command execution operators
+==================
+
+qx/echo hello/;
+qx{ printf "ok\n" };
+qx| uname -a |;
+qx! date +%s !;
+qx# whoami #;
+
+`echo backticks`;
+`ls -la`;
+qx(complex command with $interpolation);
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Quote operators with whitespace
+==================
+
+q   |spaced literal|;
+qq  !spaced interpolation $x!;
+qr  {spaced regex}x;
+qx  (spaced command);
+
+q
+|multiline
+literal|;
+
+qq
+{multiline
+interpolated $var};
+
+qr
+/multiline
+regex/x;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Quote word operators extended
+==================
+
+qw|foo bar baz|;
+qw!one two three!;
+qw#alpha beta gamma#;
+qw~first second third~;
+qw/word1 word2 word3/;
+
+qw(
+  multiline
+  word
+  list
+);
+
+qw{
+  hash style
+  word list
+};
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Translation operators
+==================
+
+tr/a-z/A-Z/;
+tr|0-9|X|;
+tr!aeiou!*!;
+tr#\n\r\t# #;
+tr~a-zA-Z~n-za-mN-ZA-M~;
+
+y/a-z/A-Z/;
+y|0-9|X|d;
+y!aeiou!*!c;
+y#\n\r\t# #s;
+
+$count = tr/0-9//;
+$squeezed =~ tr/ //s;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Substitution with alternate delimiters
+==================
+
+s|foo|bar|;
+s!old!new!g;
+s#pattern#replacement#i;
+s~regex~subst~gx;
+s/find/replace/ee;
+
+s{complex}{replacement}gx;
+s(pattern)(replacement)g;
+s[bracket][replace]i;
+s<angle><replace>x;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Match with alternate delimiters
+==================
+
+m|pattern|;
+m!pattern!i;
+m#pattern#g;
+m~pattern~x;
+m/pattern/o;
+
+m{complex}i;
+m(pattern)g;
+m[bracket]s;
+m<angle>x;
+
+/pattern/;
+/pattern/gims;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Heredoc in command execution
+==================
+
+my $out = qx<<SHELL;
+echo "hello"
+date
+SHELL
+
+my $result = qx<<'CMD';
+find . -name "*.pl"
+CMD
+
+my $data = qx<<`BACKTICK`;
+ls -la
+pwd
+BACKTICK
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement))
