@@ -50,7 +50,7 @@ RELEASE_WAIT_SECS="${RELEASE_WAIT_SECS:-900}" # 15m default
 NO_WAIT=0
 PROP_FAST="${PROP_FAST:-64}"
 PROP_DEEP="${PROP_DEEP:-256}"
-MAIN_BRANCH="${MAIN_BRANCH:-master}"
+MAIN_BRANCH="${MAIN_BRANCH:-main}"
 
 log()  { printf "\033[1;34m[release]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$*"; }
@@ -110,7 +110,8 @@ PLAIN_VERSION="${VERSION#v}" # strip 'v' for Cargo.toml
 # ----------- Preflight
 need git; need cargo; need jq; need gh
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not a git repo"
-git diff --quiet || die "Working tree not clean"
+gh auth status >/dev/null 2>&1 || die "GitHub CLI not authenticated (run: gh auth login)"
+[[ -z "$(git status --porcelain)" ]] || die "Working tree not clean (staged/unstaged/untracked files)"
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
 if [[ "$current_branch" != "$MAIN_BRANCH" ]]; then
@@ -123,7 +124,7 @@ log "Releasing $OWNER/$REPO $VERSION (plain: $PLAIN_VERSION)"
 # ----------- 1) version bump
 bump_version() {
   log "Bumping versions to $PLAIN_VERSION"
-  mapfile -t tomls < <(git ls-files | grep -E 'Cargo\.toml')
+  mapfile -t tomls < <(git ls-files | grep -E 'Cargo\.toml$')
   for f in "${tomls[@]}"; do
     # Only touch lines that *start* with 'version =', allowing leading spaces.
     sed_inplace -E 's/^([[:space:]]*version[[:space:]]*=[[:space:]]*)".*/\1"'"$PLAIN_VERSION"'"/' "$f"
@@ -211,7 +212,11 @@ download_and_checksums() {
 emit_brew_formula() {
   [[ -z "${BREW_TAP}" ]] && { warn "No --brew-tap provided; skipping Brew output"; return; }
   log "Homebrew formula (copy/paste to your tap; fill SHA placeholders):"
-  cat <<'RUBY' | sed "s/__OWNER__/$OWNER/g; s/__REPO__/$REPO/g; s/__VER__/$VERSION/g"
+  cat <<'RUBY' | \
+    sed -e "s|__OWNER__|$OWNER|g" \
+        -e "s|__REPO__|$REPO|g" \
+        -e "s|__VER__|$VERSION|g" \
+        -e "s|__PREFIX__|$ARTIFACT_PREFIX|g"
 class PerlLsp < Formula
   desc "Perl language server with 100% edge case coverage"
   homepage "https://github.com/__OWNER__/__REPO__"
@@ -220,22 +225,22 @@ class PerlLsp < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/'"$ARTIFACT_PREFIX"'-__VER__-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/__PREFIX__-__VER__-aarch64-apple-darwin.tar.gz"
       sha256 "<SHA256_MAC_ARM64>"
     end
     on_intel do
-      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/'"$ARTIFACT_PREFIX"'-__VER__-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/__PREFIX__-__VER__-x86_64-apple-darwin.tar.gz"
       sha256 "<SHA256_MAC_X64>"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/'"$ARTIFACT_PREFIX"'-__VER__-aarch64-unknown-linux-musl.tar.gz"
+      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/__PREFIX__-__VER__-aarch64-unknown-linux-musl.tar.gz"
       sha256 "<SHA256_LINUX_ARM64>"
     end
     on_intel do
-      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/'"$ARTIFACT_PREFIX"'-__VER__-x86_64-unknown-linux-musl.tar.gz"
+      url "https://github.com/__OWNER__/__REPO__/releases/download/__VER__/__PREFIX__-__VER__-x86_64-unknown-linux-musl.tar.gz"
       sha256 "<SHA256_LINUX_X64>"
     end
   end
