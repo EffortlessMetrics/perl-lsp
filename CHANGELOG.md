@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Lexer: Arithmetic underflows** - Fixed delimiter/substitution/brace depth counters using `saturating_sub()`
+- **Lexer: Heredoc tokenization** - `<<...` now produces `TokenType::HeredocStart` (was `StringLiteral`)
+- **Lexer: Sigil+brace handling** - `${`, `@{`, `%{` split into sigil and brace tokens when content is empty/invalid
+- **Tests: Property test robustness** - Neighbor-aware whitespace insertion replaces fragile skip lists
+
+### Added
+- **Tests: Shared utilities** - Whitespace manipulation functions in `prop_test_utils.rs` for reuse
+- **Tests: Lexer termination property** - Ensures lexer never panics or loops (256 cases)
+- **Tests: Whitespace idempotence** - Verifies `respace_preserving` is idempotent
+- **Tests: Parser integration** - Tests for new token types (heredoc starts, split sigil+brace)
+- **CI: Property test workflow** - GitHub Actions for standard and extended property testing
+
 ## [0.8.3] - 2025-08-21
 
 ### Added

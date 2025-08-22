@@ -429,7 +429,7 @@ impl<'a> PerlLexer<'a> {
 
     /// Check budget and return UnknownRest token if exceeded
     fn budget_guard(&mut self, start: usize, depth: usize) -> Option<Token> {
-        if (self.position - start) > MAX_REGEX_BYTES || depth > MAX_DELIM_NEST {
+        if self.position.saturating_sub(start) > MAX_REGEX_BYTES || depth > MAX_DELIM_NEST {
             self.position = self.input.len();
             return Some(Token {
                 token_type: TokenType::UnknownRest,
@@ -707,8 +707,8 @@ impl<'a> PerlLexer<'a> {
         });
 
         Some(Token {
-            token_type: TokenType::StringLiteral,
-            text: Arc::from(""),
+            token_type: TokenType::HeredocStart,
+            text: Arc::from(&self.input[start..self.position]),
             start,
             end: self.position,
         })
@@ -1001,13 +1001,14 @@ impl<'a> PerlLexer<'a> {
                         // Check if this is a dereference like ${$ref} or @{$ref} or @{[...]}
                         // If the next char is a sigil or other expression starter, we should stop here and let the parser handle it
                         // EXCEPT for globs - *{$glob} should be parsed as one token
+                        // Also check for empty braces or EOF - in these cases we should split the tokens
                         if sigil != '*'
-                            && matches!(
+                            && (matches!(
                                 self.current_char(),
-                                Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r')
-                            )
+                                Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r' | '}')
+                            ) || self.current_char().is_none())
                         {
-                            // This is a dereference, backtrack
+                            // This is a dereference or empty/invalid brace, backtrack
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
@@ -1022,12 +1023,12 @@ impl<'a> PerlLexer<'a> {
 
                         // For glob access, we need to consume everything inside braces
                         if sigil == '*' {
-                            let mut brace_depth = 1;
+                            let mut brace_depth: usize = 1;
                             while let Some(ch) = self.current_char() {
                                 if ch == '{' {
                                     brace_depth += 1;
                                 } else if ch == '}' {
-                                    brace_depth -= 1;
+                                    brace_depth = brace_depth.saturating_sub(1);
                                     if brace_depth == 0 {
                                         self.advance(); // consume final }
                                         break;
@@ -1862,7 +1863,7 @@ impl<'a> PerlLexer<'a> {
                 _ if ch == closing => {
                     self.advance();
                     if is_paired {
-                        depth -= 1;
+                        depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;
                         }
@@ -1907,7 +1908,7 @@ impl<'a> PerlLexer<'a> {
                 _ if ch == closing => {
                     self.advance();
                     if is_paired {
-                        depth -= 1;
+                        depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;
                         }
@@ -1975,7 +1976,7 @@ impl<'a> PerlLexer<'a> {
                 _ if ch == closing => {
                     self.advance();
                     if is_paired {
-                        depth -= 1;
+                        depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;
                         }
@@ -2020,7 +2021,7 @@ impl<'a> PerlLexer<'a> {
                 _ if ch == closing => {
                     self.advance();
                     if is_paired {
-                        depth -= 1;
+                        depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;
                         }

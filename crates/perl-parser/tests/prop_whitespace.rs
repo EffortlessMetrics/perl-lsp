@@ -3,9 +3,8 @@
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use perl_parser::Parser;
-use perl_lexer::{PerlLexer, TokenType};
 
-// Pull in the shared helpers
+// Pull in the shared helpers (includes CoreTok, TokenType, and whitespace functions)
 include!("prop_test_utils.rs");
 
 const REGRESS_DIR: &str = concat!(
@@ -13,55 +12,12 @@ const REGRESS_DIR: &str = concat!(
     "/tests/_proptest-regressions/prop_whitespace"
 );
 
-// Re-lex and keep only "semantic" tokens
-fn lex_core_tokens(src: &str) -> Vec<(TokenType, String)> {
-    let mut lx = PerlLexer::new(src);
-    let mut out = Vec::new();
-    let mut count = 0;
-    while let Some(t) = lx.next_token() {
-        // Prevent infinite loops
-        count += 1;
-        if count > 10000 {
-            break;
-        }
-        match t.token_type {
-            TokenType::Whitespace | TokenType::Newline | TokenType::Comment(_) | TokenType::EOF => {}
-            // Skip big bodies that carry their own newlines:
-            TokenType::HeredocBody(_) | TokenType::FormatBody(_) => {}
-            _ => out.push((t.token_type.clone(), t.text.to_string())),
-        }
-    }
-    out
-}
-
-// Check if the boundary between two tokens is breakable (safe to insert whitespace)
-fn is_breakable_boundary(left: &(TokenType, String), right: &(TokenType, String)) -> bool {
-    // Join the two tokens and re-lex
-    let joined = format!("{}{}", left.1, right.1);
-    let re = lex_core_tokens(&joined);
-    
-    // The boundary is breakable if we get exactly the same two tokens back
-    re.len() == 2
-        && re[0].0 == left.0 && re[0].1 == left.1
-        && re[1].0 == right.0 && re[1].1 == right.1
-}
-
-// Join original tokens with injected whitespace only at breakable boundaries
-fn respace_by_tokens_boundary_aware(original: &str, ws: &str) -> String {
-    let toks = lex_core_tokens(original);
-    if toks.is_empty() { 
-        return original.to_string(); 
-    }
-    
-    let mut out = String::new();
-    for i in 0..toks.len() {
-        if i > 0 && is_breakable_boundary(&toks[i-1], &toks[i]) {
-            out.push_str(ws);
-        }
-        out.push_str(&toks[i].1);
-    }
-    out
-}
+// The whitespace manipulation functions are now in prop_test_utils.rs:
+// - CoreTok struct
+// - lex_core_spans()
+// - pair_breakable()
+// - insertion_safe()
+// - respace_preserving()
 
 proptest! {
     #![proptest_config(ProptestConfig {
@@ -76,32 +32,25 @@ proptest! {
         ws in "[ \t\n]{0,3}" // Can now safely allow 0 whitespace
     ) {
         // Original non-space/comment tokens
-        let base = lex_core_tokens(&src);
-
-        // Skip heredoc/format cases to avoid complications
-        prop_assume!(!base.iter().any(|(k,_)| matches!(
-            k, TokenType::HeredocStart | TokenType::FormatBody(_)
-        )));
+        let base = lex_core_spans(&src);
         
-        // Skip if there are adjacent tokens that would merge when whitespace is removed
-        // This happens when tokens are only separated by whitespace but would form a single
-        // token if joined (like "a" + "_" becoming "a_")
-        if base.len() >= 2 {
-            for i in 0..base.len()-1 {
-                if !is_breakable_boundary(&base[i], &base[i+1]) {
-                    // This pair would merge if whitespace is removed, skip this test case
-                    return Ok(());
-                }
-            }
-        }
+        // Skip heredoc/format cases to avoid complications  
+        // Heredocs are inherently stateful and don't fit our token-based model
+        prop_assume!(!base.iter().any(|t| matches!(
+            t.kind, TokenType::HeredocStart | TokenType::HeredocBody(_) | TokenType::FormatBody(_)
+        )));
 
-        // Insert whitespace only at breakable boundaries
-        let sprinkled = respace_by_tokens_boundary_aware(&src, &ws);
-        let again = lex_core_tokens(&sprinkled);
+        // Insert whitespace only at safe boundaries, preserving required boundaries
+        let sprinkled = respace_preserving(&src, &ws);
+        let again = lex_core_spans(&sprinkled);
+        
+        // Compare normalized pairs (kind, text) only
+        let base_pairs: Vec<_> = base.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
+        let again_pairs: Vec<_> = again.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
 
-        prop_assert_eq!(&base, &again,
-            "tokenization changed:\nSRC:      {}\nSPRINKLED: {}\nbase:  {:?}\nagain: {:?}",
-            src, sprinkled, base, again);
+        prop_assert_eq!(&base_pairs, &again_pairs,
+            "tokenization changed:\nSRC: {}\nSPRINKLED: {}\nbase: {:?}\nagain: {:?}",
+            src, sprinkled, base_pairs, again_pairs);
     }
 
     #[test]
@@ -123,8 +72,8 @@ proptest! {
             let ast1 = parser1.parse();
             prop_assume!(ast1.is_ok());
             
-            // Insert whitespace only at breakable boundaries
-            let transformed = respace_by_tokens_boundary_aware(original, &ws);
+            // Insert whitespace only at safe boundaries, preserving required boundaries
+            let transformed = respace_preserving(original, &ws);
             
             // Parse transformed
             let mut parser2 = Parser::new(&transformed);
@@ -163,11 +112,15 @@ proptest! {
         ];
         
         for original in glue_samples {
-            let core_before = lex_core_tokens(original);
-            let transformed = respace_by_tokens_boundary_aware(original, &ws);
-            let core_after = lex_core_tokens(&transformed);
+            let core_before = lex_core_spans(original);
+            let transformed = respace_preserving(original, &ws);
+            let core_after = lex_core_spans(&transformed);
             
-            prop_assert_eq!(core_before, core_after,
+            // Compare normalized pairs (kind, text) only
+            let before_pairs: Vec<_> = core_before.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
+            let after_pairs: Vec<_> = core_after.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
+            
+            prop_assert_eq!(&before_pairs, &after_pairs,
                 "Glue tokens changed:\nOriginal: {}\nTransformed: {}",
                 original, transformed);
         }
