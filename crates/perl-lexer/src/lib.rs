@@ -35,6 +35,7 @@ pub mod mode;
 pub mod position;
 pub mod token;
 mod unicode;
+mod quote_handler;
 
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
 pub use error::{LexerError, Result};
@@ -103,6 +104,10 @@ pub struct PerlLexer<'a> {
     line_start_offset: usize,
     /// If true, emit HeredocBody tokens; otherwise just consume them.
     emit_heredoc_body_tokens: bool,
+    /// Current quote operator being parsed
+    current_quote_op: Option<quote_handler::QuoteOperatorInfo>,
+    /// Track if EOF has been emitted to prevent infinite loops
+    eof_emitted: bool,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -127,6 +132,8 @@ impl<'a> PerlLexer<'a> {
             pending_heredocs: Vec::new(),
             line_start_offset: 0,
             emit_heredoc_body_tokens: false,
+            current_quote_op: None,
+            eof_emitted: false,
         }
     }
 
@@ -352,6 +359,10 @@ impl<'a> PerlLexer<'a> {
             }
 
             if self.position >= self.input.len() {
+                if self.eof_emitted {
+                    return None; // Stop the stream
+                }
+                self.eof_emitted = true;
                 return Some(Token {
                     token_type: TokenType::EOF,
                     text: Arc::from(""),
@@ -381,6 +392,18 @@ impl<'a> PerlLexer<'a> {
 
             if let Some(token) = self.try_identifier_or_keyword() {
                 return Some(token);
+            }
+
+            // If we're expecting a delimiter for a quote operator, only try delimiter
+            if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
+                if let Some(token) = self.try_delimiter() {
+                    return Some(token);
+                }
+                // Do NOT fall through to try_operator / try_punct / etc.
+                // Clear state first so we don't spin
+                self.mode = LexerMode::ExpectOperator;
+                self.current_quote_op = None;
+                continue;
             }
 
             if let Some(token) = self.try_operator() {
@@ -859,9 +882,14 @@ impl<'a> PerlLexer<'a> {
 
                 // Special case: After ->, sigils followed by { or [ should be tokenized separately
                 // This is for postfix dereference like ->@*, ->%{}, ->@[]
-                if self.position >= 3
-                    && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)]
-                        == "->"
+                // We need to be careful with Unicode - check if we have enough bytes and valid char boundaries
+                let check_arrow = self.position >= 3 
+                    && self.position.saturating_sub(1) <= self.input.len()
+                    && self.input.is_char_boundary(self.position.saturating_sub(3))
+                    && self.input.is_char_boundary(self.position.saturating_sub(1));
+                    
+                if check_arrow 
+                    && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)] == "->"
                     && matches!(self.current_char(), Some('{' | '[' | '*'))
                 {
                     // Just return the sigil
@@ -1091,6 +1119,25 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// Return next non-space char without consuming.
+    fn peek_nonspace(&self) -> Option<char> {
+        let mut i = self.position;
+        while i < self.input.len() {
+            let c = self.input[i..].chars().next().unwrap();
+            if c.is_whitespace() {
+                i += c.len_utf8();
+                continue;
+            }
+            return Some(c);
+        }
+        None
+    }
+
+    /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
+    fn is_quote_delim(c: char) -> bool {
+        !c.is_ascii_alphanumeric() // punctuation is OK
+    }
+
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
         let start = self.position;
         let ch = self.current_char()?;
@@ -1191,8 +1238,69 @@ impl<'a> PerlLexer<'a> {
                         self.in_prototype = true;
                     }
                     // Quote operators expect a delimiter next
-                    "q" | "qq" | "qw" | "qr" | "qx" | "m" => {
-                        self.mode = LexerMode::ExpectDelimiter;
+                    "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" | "tr" | "y" => {
+                        if let Some(next) = self.peek_nonspace() {
+                            if Self::is_quote_delim(next) {
+                                self.mode = LexerMode::ExpectDelimiter;
+                                self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
+                                    operator: text.to_string(),
+                                    delimiter: '\0',  // Will be set when we see the delimiter
+                                    start_pos: start,
+                                });
+                                
+                                // Don't return a keyword token - continue to parse the delimiter
+                                // Skip any whitespace between operator and delimiter
+                                while let Some(ch) = self.current_char() {
+                                    if ch.is_whitespace() {
+                                        self.advance();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                
+                                // Get the delimiter
+                                if let Some(delim) = self.current_char() {
+                                    if !delim.is_alphanumeric() {
+                                        self.advance();
+                                        if let Some(ref mut info) = self.current_quote_op {
+                                            info.delimiter = delim;
+                                        }
+                                        // Parse the quote operator content and return the complete token
+                                        return self.parse_quote_operator(delim);
+                                    }
+                                }
+                            } else {
+                                // Not a quote operator here → treat as IDENTIFIER
+                                self.current_quote_op = None;
+                                self.mode = LexerMode::ExpectOperator;
+                                return Some(Token {
+                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    start,
+                                    end: self.position,
+                                    text: Arc::from(text),
+                                });
+                            }
+                        } else {
+                            // End-of-input after the word → also treat as IDENTIFIER
+                            self.current_quote_op = None;
+                            self.mode = LexerMode::ExpectOperator;
+                            return Some(Token {
+                                token_type: TokenType::Identifier(Arc::from(text)),
+                                start,
+                                end: self.position,
+                                text: Arc::from(text),
+                            });
+                        }
+                        // If we get here but haven't returned, something went wrong
+                        // Fall through to treat as identifier
+                        self.current_quote_op = None;
+                        self.mode = LexerMode::ExpectOperator;
+                        return Some(Token {
+                            token_type: TokenType::Identifier(Arc::from(text)),
+                            start,
+                            end: self.position,
+                            text: Arc::from(text),
+                        });
                     }
                     // Format declarations need special handling
                     "format" => {
@@ -1314,6 +1422,11 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn try_operator(&mut self) -> Option<Token> {
+        // Skip operator parsing if we're expecting a delimiter for a quote operator
+        if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
+            return None;
+        }
+        
         let start = self.position;
         let ch = self.current_char()?;
 
@@ -1445,8 +1558,30 @@ impl<'a> PerlLexer<'a> {
         let start = self.position;
         let ch = self.current_char()?;
 
+        // If we're expecting a delimiter for a quote operator, handle it specially
+        if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
+            // Accept any non-alphanumeric character as a delimiter
+            if !ch.is_alphanumeric() && !ch.is_whitespace() {
+                self.advance();
+                if let Some(ref mut info) = self.current_quote_op {
+                    info.delimiter = ch;
+                }
+                // Now parse the quote operator content
+                return self.parse_quote_operator(ch);
+            }
+        }
+
         match ch {
             '(' => {
+                // Check if this is a quote operator delimiter
+                if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
+                    self.advance();
+                    if let Some(ref mut info) = self.current_quote_op {
+                        info.delimiter = ch;
+                    }
+                    return self.parse_quote_operator(ch);
+                }
+                
                 self.advance();
                 if self.in_prototype {
                     self.prototype_depth += 1;
@@ -1917,6 +2052,163 @@ impl<'a> PerlLexer<'a> {
         })
     }
 
+    /// Read content between delimiters
+    fn read_delimited_body(&mut self, delim: char) -> String {
+        let paired = quote_handler::paired_close(delim);
+        let close = paired.unwrap_or(delim);
+        let mut body = String::new();
+        let mut depth = if paired.is_some() { 1i32 } else { 0 };
+
+        while let Some(ch) = self.current_char() {
+            if ch == '\\' {
+                body.push(ch);
+                self.advance();
+                if let Some(next) = self.current_char() {
+                    body.push(next);
+                    self.advance();
+                }
+                continue;
+            }
+
+            if paired.is_some() && ch == delim {
+                body.push(ch);
+                self.advance();
+                depth += 1;
+                continue;
+            }
+
+            if ch == close {
+                if paired.is_some() {
+                    depth -= 1;
+                    if depth == 0 {
+                        self.advance();
+                        break;
+                    }
+                    body.push(ch);
+                    self.advance();
+                } else {
+                    self.advance();
+                    break;
+                }
+                continue;
+            }
+
+            body.push(ch);
+            self.advance();
+        }
+
+        body
+    }
+
+    /// Parse a quote operator after we've seen the delimiter
+    fn parse_quote_operator(&mut self, delimiter: char) -> Option<Token> {
+        let info = self.current_quote_op.as_ref()?;
+        let start = info.start_pos;
+        let operator = info.operator.clone();
+
+        // Parse based on operator type
+        match operator.as_str() {
+            "s" => {
+                // Substitution: two bodies
+                let _pattern = self.read_delimited_body(delimiter);
+                
+                // For paired delimiters, skip whitespace between bodies
+                if quote_handler::paired_close(delimiter).is_some() {
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_whitespace() {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    // Expect same delimiter for replacement
+                    if self.current_char() == Some(delimiter) {
+                        self.advance();
+                    }
+                }
+                
+                let _replacement = self.read_delimited_body(delimiter);
+                
+                // Parse modifiers
+                self.parse_regex_modifiers(&quote_handler::S_SPEC);
+            }
+            "tr" | "y" => {
+                // Transliteration: two bodies
+                let _from = self.read_delimited_body(delimiter);
+                
+                // For paired delimiters, skip whitespace between bodies
+                if quote_handler::paired_close(delimiter).is_some() {
+                    while let Some(ch) = self.current_char() {
+                        if ch.is_whitespace() {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    // Expect same delimiter for replacement
+                    if self.current_char() == Some(delimiter) {
+                        self.advance();
+                    }
+                }
+                
+                let _to = self.read_delimited_body(delimiter);
+                
+                // Parse modifiers
+                self.parse_regex_modifiers(&quote_handler::TR_SPEC);
+            }
+            "qr" => {
+                let _pattern = self.read_delimited_body(delimiter);
+                self.parse_regex_modifiers(&quote_handler::QR_SPEC);
+            }
+            "m" => {
+                let _pattern = self.read_delimited_body(delimiter);
+                self.parse_regex_modifiers(&quote_handler::M_SPEC);
+            }
+            _ => {
+                // q, qq, qw, qx - no modifiers
+                let _body = self.read_delimited_body(delimiter);
+            }
+        }
+
+        let text = &self.input[start..self.position];
+        let token_type = quote_handler::get_quote_token_type(&operator);
+        
+        self.mode = LexerMode::ExpectOperator;
+        self.current_quote_op = None;
+        
+        Some(Token {
+            token_type,
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
+    }
+
+    /// Parse regex modifiers according to the given spec
+    fn parse_regex_modifiers(&mut self, spec: &quote_handler::ModSpec) {
+        let start = self.position;
+        
+        // Consume all alphabetic characters
+        while let Some(ch) = self.current_char() {
+            if ch.is_ascii_alphabetic() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        
+        // Check if this is a valid modifier sequence
+        let tail = &self.input[start..self.position];
+        if !tail.is_empty() {
+            if let Some((_run, _charset)) = quote_handler::split_tail_for_spec(tail, spec) {
+                // Valid modifiers, keep position
+            } else {
+                // Invalid modifiers, roll back
+                self.position = start;
+            }
+        }
+    }
+
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening /
 
@@ -2026,7 +2318,7 @@ const KEYWORDS: &[&str] = &[
 fn is_keyword(word: &str) -> bool {
     // Fast length check first
     match word.len() {
-        1 => matches!(word, "q" | "m"),
+        1 => matches!(word, "q" | "m" | "s" | "y"),
         2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
         3 => matches!(
             word,

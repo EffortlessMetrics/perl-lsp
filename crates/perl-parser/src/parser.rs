@@ -6,6 +6,7 @@
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
     error::{ParseError, ParseResult},
+    quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
 
@@ -2667,6 +2668,28 @@ impl<'a> Parser<'a> {
 
         while let Some(kind) = self.peek_kind() {
             match kind {
+                // Handle word comparison operators (eq, ne, lt, le, gt, ge, cmp)
+                TokenKind::Identifier => {
+                    // Check if this is a word comparison operator
+                    let next_text = self.tokens.peek()?.text.as_ref();
+                    if matches!(next_text, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp") {
+                        let op_token = self.tokens.next()?;
+                        let right = self.parse_relational()?;
+                        let start = expr.location.start;
+                        let end = right.location.end;
+
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: op_token.text.clone(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end },
+                        );
+                    } else {
+                        break;
+                    }
+                }
                 TokenKind::Equal
                 | TokenKind::NotEqual
                 | TokenKind::Match
@@ -2724,7 +2747,7 @@ impl<'a> Parser<'a> {
                                 || pattern.starts_with("s[")
                             {
                                 // Parse as substitution
-                                let parts = parse_substitution_parts(pattern);
+                                let parts = quote_parser::extract_substitution_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Substitution {
                                         expr: Box::new(expr),
@@ -2742,7 +2765,7 @@ impl<'a> Parser<'a> {
                                 || pattern.starts_with("y[")
                             {
                                 // Parse as transliteration
-                                let parts = parse_transliteration_parts(pattern);
+                                let parts = quote_parser::extract_transliteration_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Transliteration {
                                         expr: Box::new(expr),
@@ -2754,7 +2777,7 @@ impl<'a> Parser<'a> {
                                 );
                             } else {
                                 // Regular match - extract modifiers
-                                let (pattern_with_delims, modifiers) = extract_regex_parts(pattern);
+                                let (pattern_with_delims, modifiers) = quote_parser::extract_regex_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Match {
                                         expr: Box::new(expr),
@@ -3905,16 +3928,44 @@ impl<'a> Parser<'a> {
 
             TokenKind::Regex => {
                 let token = self.tokens.next()?;
-                let (pattern, modifiers) = extract_regex_parts(&token.text);
+                let (pattern, modifiers) = quote_parser::extract_regex_parts(&token.text);
                 Ok(Node::new(
                     NodeKind::Regex { pattern, modifiers },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+            
+            TokenKind::QuoteSingle | TokenKind::QuoteDouble => {
+                let token = self.tokens.next()?;
+                // Quote operators produce strings
+                let interpolated = matches!(token.kind, TokenKind::QuoteDouble);
+                Ok(Node::new(
+                    NodeKind::String { value: token.text.clone(), interpolated },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+            
+            TokenKind::QuoteWords => {
+                let token = self.tokens.next()?;
+                // qw produces a list of strings - for now just treat as a string
+                Ok(Node::new(
+                    NodeKind::String { value: token.text.clone(), interpolated: false },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+            
+            TokenKind::QuoteCommand => {
+                let token = self.tokens.next()?;
+                // qx/backticks - for now treat as a string
+                Ok(Node::new(
+                    NodeKind::String { value: token.text.clone(), interpolated: true },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
 
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
-                let (pattern, replacement, modifiers) = parse_substitution_parts(&token.text);
+                let (pattern, replacement, modifiers) = quote_parser::extract_substitution_parts(&token.text);
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
@@ -3933,7 +3984,7 @@ impl<'a> Parser<'a> {
 
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
-                let (search, replace, modifiers) = parse_transliteration_parts(&token.text);
+                let (search, replace, modifiers) = quote_parser::extract_transliteration_parts(&token.text);
 
                 // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
@@ -4837,99 +4888,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Parse substitution parts from a string like "s/pattern/replacement/flags"
-fn parse_substitution_parts(s: &str) -> (String, String, String) {
-    // Skip 's' and first delimiter
-    let mut chars = s.chars();
-    chars.next(); // skip 's'
-    let delimiter = chars.next().unwrap_or('/');
-
-    let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-    let closing = match delimiter {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        '<' => '>',
-        _ => delimiter,
-    };
-
-    let mut pattern = String::new();
-    let mut replacement = String::new();
-    let mut modifiers = String::new();
-    let mut in_escape = false;
-    let mut phase = 0; // 0 = pattern, 1 = replacement, 2 = modifiers
-    let mut depth = if is_paired { 1 } else { 0 };
-
-    for ch in chars {
-        if phase == 2 {
-            modifiers.push(ch);
-            continue;
-        }
-
-        if in_escape {
-            if phase == 0 {
-                pattern.push('\\');
-                pattern.push(ch);
-            } else {
-                replacement.push('\\');
-                replacement.push(ch);
-            }
-            in_escape = false;
-            continue;
-        }
-
-        if ch == '\\' {
-            in_escape = true;
-            continue;
-        }
-
-        if is_paired {
-            if ch == delimiter {
-                depth += 1;
-                if phase == 0 {
-                    pattern.push(ch);
-                } else {
-                    replacement.push(ch);
-                }
-            } else if ch == closing {
-                depth -= 1;
-                if depth == 0 {
-                    if phase == 0 {
-                        phase = 1;
-                        // Skip whitespace and expect opening delimiter for replacement
-                        continue;
-                    } else {
-                        phase = 2;
-                        continue;
-                    }
-                } else if phase == 0 {
-                    pattern.push(ch);
-                } else {
-                    replacement.push(ch);
-                }
-            } else if phase == 1 && depth == 0 && ch == delimiter {
-                // Start of replacement part in paired delimiters
-                depth = 1;
-            } else if phase == 1 && depth == 0 && ch.is_whitespace() {
-                // Skip whitespace between paired delimiters
-                continue;
-            } else if phase == 0 {
-                pattern.push(ch);
-            } else if phase == 1 && depth > 0 {
-                replacement.push(ch);
-            }
-        } else if ch == delimiter {
-            phase += 1;
-        } else if phase == 0 {
-            pattern.push(ch);
-        } else if phase == 1 {
-            replacement.push(ch);
-        }
-    }
-
-    (pattern, replacement, modifiers)
-}
-
 /// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF"
 fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
     let mut chars = s.chars();
@@ -4963,154 +4921,6 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
     (delimiter, interpolated, indented)
 }
 
-/// Extract pattern and modifiers from a regex string like "/pattern/modifiers"
-fn extract_regex_parts(s: &str) -> (String, String) {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.is_empty() {
-        return (s.to_string(), String::new());
-    }
-
-    // Get the delimiter
-    let delimiter = chars[0];
-    let closing = match delimiter {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        '<' => '>',
-        _ => delimiter,
-    };
-
-    // Find the closing delimiter
-    let mut i = 1;
-    let mut escaped = false;
-    let mut depth = 1;
-    let is_paired = delimiter != closing;
-
-    while i < chars.len() {
-        if !escaped {
-            if chars[i] == delimiter && is_paired {
-                depth += 1;
-            } else if chars[i] == closing {
-                if is_paired {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-        escaped = !escaped && chars[i] == '\\';
-        i += 1;
-    }
-
-    if i < chars.len() {
-        let pattern = chars[0..=i].iter().collect();
-        let modifiers = chars[i + 1..].iter().collect();
-        (pattern, modifiers)
-    } else {
-        (s.to_string(), String::new())
-    }
-}
-
-/// Parse transliteration parts from a string like "tr/search/replace/flags"
-fn parse_transliteration_parts(s: &str) -> (String, String, String) {
-    // Skip 'tr' or 'y' and first delimiter
-    let mut chars = s.chars();
-    if s.starts_with("tr") {
-        chars.next(); // skip 't'
-        chars.next(); // skip 'r'
-    } else {
-        chars.next(); // skip 'y'
-    }
-    let delimiter = chars.next().unwrap_or('/');
-
-    let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-    let closing = match delimiter {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        '<' => '>',
-        _ => delimiter,
-    };
-
-    let mut search = String::new();
-    let mut replace = String::new();
-    let mut modifiers = String::new();
-    let mut in_escape = false;
-    let mut phase = 0; // 0 = search, 1 = replace, 2 = modifiers
-    let mut depth = if is_paired { 1 } else { 0 };
-
-    for ch in chars {
-        if phase == 2 {
-            modifiers.push(ch);
-            continue;
-        }
-
-        if in_escape {
-            if phase == 0 {
-                search.push('\\');
-                search.push(ch);
-            } else {
-                replace.push('\\');
-                replace.push(ch);
-            }
-            in_escape = false;
-            continue;
-        }
-
-        if ch == '\\' {
-            in_escape = true;
-            continue;
-        }
-
-        if is_paired {
-            if ch == delimiter {
-                depth += 1;
-                if phase == 0 {
-                    search.push(ch);
-                } else {
-                    replace.push(ch);
-                }
-            } else if ch == closing {
-                depth -= 1;
-                if depth == 0 {
-                    if phase == 0 {
-                        phase = 1;
-                        // Skip whitespace and expect opening delimiter for replacement
-                        continue;
-                    } else {
-                        phase = 2;
-                        continue;
-                    }
-                } else if phase == 0 {
-                    search.push(ch);
-                } else {
-                    replace.push(ch);
-                }
-            } else if phase == 1 && depth == 0 && ch == delimiter {
-                // Start of replace part in paired delimiters
-                depth = 1;
-            } else if phase == 1 && depth == 0 && ch.is_whitespace() {
-                // Skip whitespace between paired delimiters
-                continue;
-            } else if phase == 0 {
-                search.push(ch);
-            } else if phase == 1 && depth > 0 {
-                replace.push(ch);
-            }
-        } else if ch == delimiter {
-            phase += 1;
-        } else if phase == 0 {
-            search.push(ch);
-        } else if phase == 1 {
-            replace.push(ch);
-        }
-    }
-
-    (search, replace, modifiers)
-}
 
 #[cfg(test)]
 mod tests {

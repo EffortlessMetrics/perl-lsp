@@ -124,6 +124,7 @@ pub mod lsp_server;
 pub mod lsp_utils;
 pub mod parser;
 pub mod parser_context;
+pub mod quote_parser;
 pub mod perl_critic;
 pub mod perltidy;
 pub mod position;

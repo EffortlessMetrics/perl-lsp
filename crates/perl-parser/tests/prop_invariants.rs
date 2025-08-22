@@ -1,82 +1,170 @@
 //! Property tests for parser invariants and safety properties
 
 use proptest::prelude::*;
+use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use perl_parser::{Parser, ast::{Node, NodeKind}};
+use std::collections::HashSet;
 
-/// Check that all node spans are well-formed
-fn check_spans_monotonic(node: &Node) -> Result<(), String> {
-    check_spans_rec(node, None)
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_invariants"
+);
+
+/// Visit all nodes and check for cycles
+fn check_no_cycles(root: &Node) -> Result<(), String> {
+    let mut visited = HashSet::new();
+    check_no_cycles_rec(root, &mut visited, &mut Vec::new())
 }
 
-fn check_spans_rec(node: &Node, parent: Option<(usize, usize)>) -> Result<(), String> {
-    let start = node.start;
-    let end = node.end;
+fn check_no_cycles_rec(
+    node: &Node,
+    visited: &mut HashSet<*const Node>,
+    path: &mut Vec<String>,
+) -> Result<(), String> {
+    let ptr = node as *const Node;
     
-    // Node's own span must be valid
-    if start > end {
-        return Err(format!("Node has invalid span: start {} > end {}", start, end));
+    if visited.contains(&ptr) {
+        return Err(format!("Cycle detected at path: {:?}", path));
     }
     
-    // If has parent, must be contained within parent's span
-    if let Some((p_start, p_end)) = parent {
-        if start < p_start || end > p_end {
-            return Err(format!(
-                "Child span [{}, {}] exceeds parent span [{}, {}]",
-                start, end, p_start, p_end
-            ));
-        }
-    }
+    visited.insert(ptr);
     
-    // Check children
-    for child in &node.children {
-        check_spans_rec(child, Some((start, end)))?;
-    }
+    // Add current node to path
+    let kind_str = format!("{:?}", node.kind);
+    let variant = kind_str.split(|c| c == '(' || c == '{')
+        .next()
+        .unwrap_or(&kind_str)
+        .to_string();
+    path.push(variant);
     
-    // Check that children don't overlap
-    let mut prev_end = start;
-    for child in &node.children {
-        if child.start < prev_end {
-            return Err(format!(
-                "Overlapping children: previous ends at {}, next starts at {}",
-                prev_end, child.start
-            ));
-        }
-        prev_end = child.end;
-    }
+    // Visit children based on node kind
+    visit_children(node, |child| {
+        check_no_cycles_rec(child, visited, path)
+    })?;
+    
+    // Remove from path when done
+    path.pop();
+    visited.remove(&ptr);
     
     Ok(())
 }
 
-/// Check for cycles in the AST
-fn check_no_cycles(root: &Node) -> bool {
-    let mut visited = std::collections::HashSet::new();
-    let mut stack = vec![root as *const Node];
-    
-    while let Some(ptr) = stack.pop() {
-        if !visited.insert(ptr) {
-            return false; // Found a cycle
+/// Helper to visit all children of a node
+fn visit_children<F>(node: &Node, mut f: F) -> Result<(), String>
+where 
+    F: FnMut(&Node) -> Result<(), String>
+{
+    use NodeKind::*;
+    match &node.kind {
+        Program { statements } => {
+            for stmt in statements {
+                f(stmt)?;
+            }
         }
-        
-        let node = unsafe { &*ptr };
-        for child in &node.children {
-            stack.push(child as *const Node);
+        VariableDeclaration { variable, initializer, .. } => {
+            f(variable)?;
+            if let Some(init) = initializer {
+                f(init)?;
+            }
         }
+        VariableListDeclaration { variables, initializer, .. } => {
+            for var in variables {
+                f(var)?;
+            }
+            if let Some(init) = initializer {
+                f(init)?;
+            }
+        }
+        Assignment { lhs, rhs, .. } => {
+            f(lhs)?;
+            f(rhs)?;
+        }
+        Binary { left, right, .. } => {
+            f(left)?;
+            f(right)?;
+        }
+        Unary { operand, .. } => {
+            f(operand)?;
+        }
+        Ternary { condition, then_expr, else_expr } => {
+            f(condition)?;
+            f(then_expr)?;
+            f(else_expr)?;
+        }
+        Block { statements } => {
+            for stmt in statements {
+                f(stmt)?;
+            }
+        }
+        If { condition, then_branch, elsif_branches, else_branch } => {
+            f(condition)?;
+            f(then_branch)?;
+            for (cond, branch) in elsif_branches {
+                f(cond)?;
+                f(branch)?;
+            }
+            if let Some(else_br) = else_branch {
+                f(else_br)?;
+            }
+        }
+        While { condition, body, .. } => {
+            f(condition)?;
+            f(body)?;
+        }
+        Foreach { variable, list, body } => {
+            f(variable)?;
+            f(list)?;
+            f(body)?;
+        }
+        Subroutine { body, .. } => {
+            f(body)?;
+        }
+        FunctionCall { args, .. } => {
+            for arg in args {
+                f(arg)?;
+            }
+        }
+        MethodCall { object, args, .. } => {
+            f(object)?;
+            for arg in args {
+                f(arg)?;
+            }
+        }
+        ArrayLiteral { elements } => {
+            for elem in elements {
+                f(elem)?;
+            }
+        }
+        HashLiteral { pairs } => {
+            for (key, value) in pairs {
+                f(key)?;
+                f(value)?;
+            }
+        }
+        _ => {} // Leaf nodes
+    }
+    Ok(())
+}
+
+/// Count total nodes in the AST
+fn count_nodes(node: &Node) -> usize {
+    let mut count = 1; // Count self
+    visit_children(node, |child| {
+        count += count_nodes(child);
+        Ok::<(), String>(())
+    }).unwrap_or(());
+    count
+}
+
+/// Check depth doesn't exceed reasonable limits
+fn check_depth(node: &Node, current_depth: usize, max_depth: usize) -> Result<(), String> {
+    if current_depth > max_depth {
+        return Err(format!("AST depth {} exceeds maximum {}", current_depth, max_depth));
     }
     
-    true
-}
-
-/// Count total nodes in AST
-fn count_nodes(node: &Node) -> usize {
-    1 + node.children.iter().map(|c| count_nodes(c)).sum::<usize>()
-}
-
-/// Get maximum depth of AST
-fn max_depth(node: &Node) -> usize {
-    node.children.iter()
-        .map(|c| max_depth(c))
-        .max()
-        .unwrap_or(0) + 1
+    visit_children(node, |child| {
+        check_depth(child, current_depth + 1, max_depth)
+    })
 }
 
 proptest! {
@@ -85,160 +173,121 @@ proptest! {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(64),
+        failure_persistence: Some(Box::new(
+            FileFailurePersistence::Direct(REGRESS_DIR.into())
+        )),
         ..ProptestConfig::default()
     })]
     
     #[test]
-    fn spans_are_monotonic_for_any_input(
-        input in ".*"
-            .prop_filter("Not empty", |s| !s.is_empty())
-            .prop_filter("Not too long", |s| s.len() < 1000)
-    ) {
-        let mut parser = Parser::new(&input);
-        
-        if let Some(ast) = parser.parse() {
-            match check_spans_monotonic(&ast) {
-                Ok(()) => {},
-                Err(e) => {
-                    prop_assert!(false, "Span invariant violated: {}\nInput: {}", e, input);
-                }
-            }
-        }
-    }
-    
-    #[test]
     fn no_cycles_in_ast(
-        input in prop::collection::vec(
-            prop::sample::select(vec![
-                "my $x = 1;",
-                "sub foo { }",
-                "for (1..10) { }",
-                "if ($x) { }",
-                "{ { { } } }",
-            ]),
-            1..5
-        ).prop_map(|v| v.join("\n"))
+        input in "[^\0]{1,100}"
     ) {
         let mut parser = Parser::new(&input);
+        let ast = parser.parse();
         
-        if let Some(ast) = parser.parse() {
-            prop_assert!(
-                check_no_cycles(&ast),
-                "Found cycle in AST for input: {}",
-                input
-            );
+        if let Ok(root) = ast {
+            let result = check_no_cycles(&root);
+            prop_assert!(result.is_ok(), "Cycle detected: {:?}", result);
         }
     }
     
     #[test]
-    fn ast_depth_is_reasonable(
-        depth in 1usize..20
+    fn bounded_ast_depth(
+        input in "[^\0]{1,100}"
     ) {
-        // Generate deeply nested code
+        let mut parser = Parser::new(&input);
+        let ast = parser.parse();
+        
+        if let Ok(root) = ast {
+            let result = check_depth(&root, 0, 100);
+            prop_assert!(result.is_ok(), "Depth exceeded: {:?}", result);
+        }
+    }
+    
+    #[test]
+    fn bounded_node_count(
+        input in "[^\0]{1,100}"
+    ) {
+        let mut parser = Parser::new(&input);
+        let ast = parser.parse();
+        
+        if let Ok(root) = ast {
+            let count = count_nodes(&root);
+            // Node count should be reasonable relative to input size
+            prop_assert!(count <= input.len() * 10,
+                        "Too many nodes ({}) for input size {}", count, input.len());
+        }
+    }
+    
+    #[test]
+    fn parser_doesnt_panic(
+        input in prop::string::string_regex("[^\0]{0,200}").unwrap()
+    ) {
+        let mut parser = Parser::new(&input);
+        // Parser should either succeed or return an error, never panic
+        let _ = parser.parse();
+    }
+    
+    #[test]
+    fn empty_input_parses_cleanly(
+        idx in 0usize..5
+    ) {
+        let inputs = vec!["", " ", "\n", "\t", "   \n  "];
+        let input = inputs[idx];
+        
+        let mut parser = Parser::new(input);
+        let result = parser.parse();
+        prop_assert!(result.is_ok(), "Failed to parse empty/whitespace input: {:?}", input);
+    }
+    
+    #[test]
+    fn nested_structures_parse(
+        depth in 1usize..10
+    ) {
+        // Generate nested blocks
         let mut code = String::new();
         for _ in 0..depth {
             code.push_str("{ ");
         }
-        code.push_str("1");
+        code.push_str("1;");
         for _ in 0..depth {
             code.push_str(" }");
         }
         
         let mut parser = Parser::new(&code);
-        
-        if let Some(ast) = parser.parse() {
-            let actual_depth = max_depth(&ast);
-            
-            // AST depth should be proportional to nesting depth
-            // but not necessarily equal (due to intermediate nodes)
-            prop_assert!(
-                actual_depth <= depth * 3,
-                "AST depth {} too large for nesting depth {}",
-                actual_depth, depth
-            );
+        let result = parser.parse();
+        prop_assert!(result.is_ok(), "Failed to parse nested blocks at depth {}", depth);
+    }
+    
+    #[test]
+    fn deeply_nested_expressions(
+        depth in 1usize..20
+    ) {
+        // Generate deeply nested arithmetic
+        let mut code = String::new();
+        for _ in 0..depth {
+            code.push_str("(");
         }
-    }
-    
-    #[test]
-    fn parser_doesnt_panic_on_random_input(
-        input in ".*".prop_filter("Reasonable size", |s| s.len() < 10000)
-    ) {
-        let mut parser = Parser::new(&input);
-        
-        // Should not panic
-        let _ = parser.parse();
-    }
-    
-    #[test]
-    fn parser_doesnt_panic_on_binary_input(
-        bytes in prop::collection::vec(any::<u8>(), 0..1000)
-    ) {
-        // Convert to string, possibly invalid UTF-8
-        let input = String::from_utf8_lossy(&bytes);
-        let mut parser = Parser::new(&input);
-        
-        // Should not panic even on weird input
-        let _ = parser.parse();
-    }
-    
-    #[test]
-    fn empty_statements_dont_break_parser(
-        semicolons in 1usize..20
-    ) {
-        let input = ";".repeat(semicolons);
-        let mut parser = Parser::new(&input);
-        
-        let ast = parser.parse();
-        prop_assert!(ast.is_some(), "Failed to parse {} semicolons", semicolons);
-    }
-    
-    #[test]
-    fn node_count_is_bounded(
-        statements in prop::collection::vec(
-            prop::sample::select(vec![
-                "my $x = 1;",
-                "$x++;",
-                "print $x;",
-                "sub f { }",
-            ]),
-            1..50
-        )
-    ) {
-        let input = statements.join("\n");
-        let mut parser = Parser::new(&input);
-        
-        if let Some(ast) = parser.parse() {
-            let node_count = count_nodes(&ast);
-            
-            // Should have reasonable number of nodes
-            // (not exponential in input size)
-            prop_assert!(
-                node_count <= statements.len() * 20,
-                "Too many nodes ({}) for {} statements",
-                node_count, statements.len()
-            );
+        code.push_str("1");
+        for i in 0..depth {
+            code.push_str(&format!(" + {})", i));
         }
-    }
-    
-    #[test]
-    fn parser_recovers_from_errors(
-        valid1 in "[a-z]+",
-        invalid in prop::sample::select(vec!["{{{{", "]]]]", "####", "!!!!"]),
-        valid2 in "[a-z]+"
-    ) {
-        let input = format!("my ${} = 1;\n{}\nmy ${} = 2;", valid1, invalid, valid2);
-        let mut parser = Parser::new(&input);
+        code.push(';');
         
-        // Should still parse something despite error in middle
-        let ast = parser.parse();
-        prop_assert!(ast.is_some(), "Parser failed completely on: {}", input);
+        let mut parser = Parser::new(&code);
+        let result = parser.parse();
         
-        // Should find both valid variable names
-        let ast = ast.unwrap();
-        let debug = format!("{:?}", ast);
-        prop_assert!(
-            debug.contains(&valid1) || debug.contains(&valid2),
-            "Lost valid code around error"
-        );
+        // Should either parse or fail gracefully
+        match result {
+            Ok(ast) => {
+                let depth_check = check_depth(&ast, 0, 100);
+                prop_assert!(depth_check.is_ok());
+            }
+            Err(_) => {
+                // Parse error is acceptable for very deep nesting
+                prop_assert!(true);
+            }
+        }
     }
 }

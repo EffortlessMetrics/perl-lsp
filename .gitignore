@@ -19,3 +19,6 @@ log.html
 *.tar.gz
 *.zip
 *.vsix
+
+# Property test regression files
+**/tests/_proptest-regressions/
