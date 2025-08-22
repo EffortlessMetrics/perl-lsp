@@ -1,6 +1,6 @@
 mod support;
 
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
 #[test]
 #[serial_test::serial]
 fn test_goto_definition_across_files() {
@@ -89,7 +89,7 @@ fn test_goto_definition_across_files() {
     }
 }
 
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
 #[test]
 #[serial_test::serial]
 fn test_find_references_across_files() {
@@ -202,7 +202,7 @@ fn test_find_references_across_files() {
     }
 }
 
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
 #[test]
 #[serial_test::serial]
 fn test_workspace_symbol_completion() {
