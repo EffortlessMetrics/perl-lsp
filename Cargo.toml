@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/perl-lexer",
     "crates/perl-parser",
+    "crates/perl-corpus",
+    "crates/perl-parser-pest",
     "crates/tree-sitter-perl-rs",
     "crates/tree-sitter-perl-c",
     "crates/parser-benchmarks",
@@ -19,6 +21,12 @@ perl-parser = { path = "crates/perl-parser" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.25.8"
+
+[patch.crates-io]
+perl-lexer = { path = "crates/perl-lexer" }
+perl-parser = { path = "crates/perl-parser" }
+perl-parser-pest = { path = "crates/perl-parser-pest" }
+perl-corpus = { path = "crates/perl-corpus" }
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]
