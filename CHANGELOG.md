@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tests: Parser integration** - Tests for new token types (heredoc starts, split sigil+brace)
 - **CI: Property test workflow** - GitHub Actions for standard and extended property testing
 
-## [0.8.3] - 2025-08-21
+## [v0.8.3] - 2025-08-21
 
 ### Added
 - **Robust Heredoc Support** - Production-ready heredoc handling with all edge cases
