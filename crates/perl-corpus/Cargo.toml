@@ -5,6 +5,12 @@ version = "0.8.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
+readme = "README.md"
+repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-corpus"
+homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+keywords = ["perl", "corpus", "proptest", "testing"]
+categories = ["development-tools", "testing"]
 include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [lib]
@@ -31,3 +37,6 @@ rand = "0.8"
 
 [dev-dependencies]
 proptest = "1"
+
+[package.metadata.docs.rs]
+all-features = false
