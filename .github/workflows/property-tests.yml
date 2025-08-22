@@ -1,0 +1,87 @@
+name: Property Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run nightly at 3 AM UTC
+    - cron: '0 3 * * *'
+
+jobs:
+  property-tests-standard:
+    name: Property Tests (Standard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Run standard property tests
+        run: |
+          echo "Running property tests with default case count..."
+          cargo test -p perl-lexer --test prop_lexer_termination
+          cargo test -p perl-parser --test prop_invariants
+          cargo test -p perl-parser --test prop_qw
+          cargo test -p perl-parser --test prop_quote_like
+          cargo test -p perl-parser --test prop_whitespace
+          cargo test -p perl-parser --test prop_whitespace_idempotence
+          cargo test -p perl-parser --test prop_deletion
+
+  property-tests-extended:
+    name: Property Tests (Extended - 256 cases)
+    runs-on: ubuntu-latest
+    # Only run extended tests on main branch or nightly
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Run extended property tests
+        env:
+          PROPTEST_CASES: 256
+        run: |
+          echo "Running property tests with PROPTEST_CASES=256..."
+          cargo test -p perl-lexer --test prop_lexer_termination -- --nocapture
+          cargo test -p perl-parser --test prop_invariants -- --nocapture
+          cargo test -p perl-parser --test prop_qw -- --nocapture
+          cargo test -p perl-parser --test prop_quote_like -- --nocapture
+          cargo test -p perl-parser --test prop_whitespace -- --nocapture
+          cargo test -p perl-parser --test prop_whitespace_idempotence -- --nocapture
+          cargo test -p perl-parser --test prop_deletion -- --nocapture
+
+  lexer-contract-tests:
+    name: Lexer Contract Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Run lexer contract tests
+        run: |
+          cargo test -p perl-lexer --test lexer_contract_tests
+
+  parser-integration-tests:
+    name: Parser Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Run parser token integration tests
+        run: |
+          cargo test -p perl-parser --test parser_token_integration_tests

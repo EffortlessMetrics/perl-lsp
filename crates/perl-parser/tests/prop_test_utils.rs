@@ -322,3 +322,153 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
         _ => {}
     }
 }
+
+/* ------------------ Neighbor-aware whitespace insertion ------------------ */
+
+/// # Neighbor-Aware Whitespace Insertion
+/// 
+/// This module provides utilities for inserting whitespace into Perl code
+/// while preserving lexical correctness. The key insight is that whitespace
+/// can only be safely inserted between certain token pairs.
+/// 
+/// ## Algorithm Overview
+/// 
+/// 1. **Token-Pair Analysis**: We examine each adjacent pair of tokens to determine
+///    if they would merge if whitespace between them was removed. Examples:
+///    - `0` and `.` would merge into `0.` (float literal)
+///    - `print` and `FOO` would merge into `printFOO` (single identifier)
+///    - `$x` and `++` remain separate (variable and operator)
+/// 
+/// 2. **3-Token Window**: For insertion decisions, we check a window of 3 tokens
+///    (prev, current, next) to understand the local context. This catches cases like:
+///    - `0.a` where we can't insert space after `.` (would break the float)
+///    - `print FOO` where we must preserve the space (would become identifier)
+/// 
+/// 3. **Conservative Approach**: When in doubt, we don't insert. This ensures
+///    the tests remain deterministic and don't introduce parse errors.
+/// 
+/// ## Key Functions
+/// 
+/// - `pair_breakable()`: Tests if two tokens would merge without whitespace
+/// - `insertion_safe()`: Checks if whitespace can be inserted at a position
+/// - `respace_preserving()`: Reinserts whitespace while preserving lexical structure
+
+use perl_lexer::{PerlLexer, TokenType};
+
+/// A core token with its text and position info
+#[derive(Debug, Clone)]
+pub struct CoreTok {
+    pub kind: TokenType,
+    pub text: String,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Re-lex and keep only "semantic" tokens with their spans
+pub fn lex_core_spans(src: &str) -> Vec<CoreTok> {
+    let mut lx = PerlLexer::new(src);
+    let mut out = Vec::new();
+    let mut steps = 0usize;
+    
+    while let Some(t) = lx.next_token() {
+        steps += 1;
+        if steps > 100_000 { break; } // fuzz safety valve
+        match t.token_type {
+            TokenType::Whitespace
+            | TokenType::Newline
+            | TokenType::Comment(_)
+            | TokenType::EOF
+            | TokenType::HeredocBody(_)
+            | TokenType::FormatBody(_) => {}
+            _ => out.push(CoreTok {
+                kind: t.token_type.clone(),
+                text: t.text.to_string(),
+                start: t.start,
+                end: t.end,
+            }),
+        }
+    }
+    out
+}
+
+/// Pairwise: would putting nothing between left+right still yield those two tokens?
+pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
+    let joined = format!("{}{}", left.text, right.text);
+    let re = lex_core_spans(&joined);
+    re.len() == 2
+        && re[0].kind == left.kind && re[0].text == left.text
+        && re[1].kind == right.kind && re[1].text == right.text
+}
+
+/// Neighbor-aware: would inserting `ws` between toks[i] and toks[i+1]
+/// change the tokenization in the *local 3-token window*?
+pub fn insertion_safe(original: &str, toks: &[CoreTok], i: usize, ws: &str) -> bool {
+    debug_assert!(i + 1 < toks.len());
+    
+    if !pair_breakable(&toks[i], &toks[i + 1]) {
+        return false;
+    }
+    
+    // Build a local window [start..end) spanning the neighbor on the left and right if they exist.
+    let start = if i > 0 { toks[i - 1].start } else { toks[i].start };
+    let end = if i + 2 < toks.len() { toks[i + 2].end } else { toks[i + 1].end };
+    
+    let window_orig = &original[start..end];
+    
+    // Rebuild that same window but with `ws` inserted at the target boundary.
+    let mut window_with = String::new();
+    window_with.push_str(&original[start..toks[i].end]);      // up to boundary
+    window_with.push_str(ws);                                 // inserted ws
+    window_with.push_str(&original[toks[i + 1].start..end]);  // rest
+    
+    let orig_pairs: Vec<_> = lex_core_spans(window_orig)
+        .into_iter().map(|t| (t.kind, t.text)).collect();
+    let with_pairs: Vec<_> = lex_core_spans(&window_with)
+        .into_iter().map(|t| (t.kind, t.text)).collect();
+    
+    orig_pairs == with_pairs
+}
+
+/// Insert `ws` only where `insertion_safe` says it won't change tokenization.
+/// Preserve any original boundary text verbatim elsewhere.
+pub fn respace_preserving(original: &str, ws: &str) -> String {
+    let toks = lex_core_spans(original);
+    if toks.is_empty() { 
+        return original.to_string();
+    }
+    
+    let mut out = String::new();
+    
+    // Text before first token
+    out.push_str(&original[..toks[0].start]);
+    
+    // For each token boundary
+    for i in 0..toks.len() {
+        let t = &toks[i];
+        out.push_str(&t.text);
+        
+        if i + 1 < toks.len() {
+            let right = &toks[i + 1];
+            
+            // Preserve original boundary text
+            let boundary = &original[t.end..right.start];
+            
+            if boundary.is_empty() {
+                // No boundary in source: only add whitespace if safe
+                if insertion_safe(original, &toks, i, ws) {
+                    out.push_str(ws);
+                }
+            } else {
+                // Keep the original boundary (spacing/comments)
+                out.push_str(boundary);
+            }
+        }
+    }
+    
+    // Text after last token
+    if let Some(last) = toks.last() {
+        out.push_str(&original[last.end..]);
+    }
+    
+    out
+}
