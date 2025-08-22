@@ -1,5 +1,6 @@
 [package]
 name = "perl-corpus"
+rust-version = "1.89"
 version = "0.8.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
