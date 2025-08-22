@@ -5,6 +5,7 @@ version = "0.8.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [lib]
 name = "perl_corpus"

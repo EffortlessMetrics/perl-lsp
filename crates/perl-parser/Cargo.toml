@@ -12,6 +12,7 @@ readme = "../../README.md"
 documentation = "https://docs.rs/perl-parser"
 keywords = ["perl", "parser", "lsp", "language-server", "ast"]
 categories = ["parsing", "development-tools", "text-editors"]
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
 perl-lexer = { version = "0.8.3" }

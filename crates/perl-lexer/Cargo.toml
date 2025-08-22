@@ -12,6 +12,7 @@ readme = "../../README.md"
 documentation = "https://docs.rs/perl-lexer"
 keywords = ["perl", "lexer", "tokenizer", "parser", "syntax"]
 categories = ["parsing", "text-processing"]
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
 # Core dependencies
