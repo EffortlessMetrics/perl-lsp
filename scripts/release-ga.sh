@@ -189,6 +189,8 @@ wait_for_release() {
 
 # ----------- 5) download & compute checksums
 download_and_checksums() {
+  [[ $DRY_RUN -eq 1 ]] && { warn "Skipping download (dry-run mode)"; return; }
+  
   log "Downloading release assets"
   TMP="target/release-$VERSION"
   mkdir -p "$TMP"
