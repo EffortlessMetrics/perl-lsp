@@ -1,12 +1,20 @@
+#[allow(unused_imports)] // Used by macros
 use proptest::prelude::*;
 use std::collections::HashSet;
 
 /// All delimiter pairs we'll consider for q/qq/qr/m/s/tr/y.
 pub const DELIMS: &[(char, char)] = &[
     // Paired
-    ('(', ')'), ('[', ']'), ('{', '}'), ('<', '>'),
+    ('(', ')'),
+    ('[', ']'),
+    ('{', '}'),
+    ('<', '>'),
     // Symmetric
-    ('|', '|'), ('/', '/'), ('!', '!'), ('#', '#'), ('~', '~'),
+    ('|', '|'),
+    ('/', '/'),
+    ('!', '!'),
+    ('#', '#'),
+    ('~', '~'),
 ];
 
 /// Strategy choosing a delimiter pair uniformly.
@@ -20,7 +28,8 @@ fn regex_atom() -> impl Strategy<Value = String> {
         // literals
         "[A-Za-z]{1,4}".prop_map(|s| s.to_string()),
         // common escapes and classes
-        prop::sample::select(vec![r"\w", r"\d", r"\s", r"\W", r"\D", r"\S", r"."]).prop_map(|s| s.to_string()),
+        prop::sample::select(vec![r"\w", r"\d", r"\s", r"\W", r"\D", r"\S", r"."])
+            .prop_map(|s| s.to_string()),
         // anchors
         prop::sample::select(vec![r"^", r"$"]).prop_map(|s| s.to_string()),
         // tiny char classes
@@ -64,7 +73,9 @@ pub fn closing_safe(s: &str) -> bool {
 pub fn closing_safe_payload<S: Into<String>>(s: S) -> String {
     let mut s = s.into();
     let tail = s.chars().rev().take_while(|&c| c == '\\').count();
-    if tail % 2 == 1 { s.push('\\'); }
+    if tail % 2 == 1 {
+        s.push('\\');
+    }
     s
 }
 
@@ -108,8 +119,10 @@ fn canon_order_mods(run: &str, charset: Option<&str>) -> String {
     // canonical order for "run" flags:
     // i m s x p n g c e r o (we'll only use those that make sense for the op)
     let mut out = String::new();
-    for c in ['i','m','s','x','p','n','g','c','e','r','o'] {
-        if run.contains(c) { out.push(c); }
+    for c in ['i', 'm', 's', 'x', 'p', 'n', 'g', 'c', 'e', 'r', 'o'] {
+        if run.contains(c) {
+            out.push(c);
+        }
     }
     if let Some(cs) = charset {
         out.push_str(cs);
@@ -124,55 +137,61 @@ fn charset_flag() -> impl Strategy<Value = Option<&'static str>> {
 
 /// `qr//` modifiers: a subset of `i m s x p n` plus one charset.
 pub fn qr_modifiers() -> impl Strategy<Value = String> {
-    (prop::collection::vec(prop::sample::select(vec!['i','m','s','x','p','n']), 0..=4),
-     charset_flag()).prop_map(|(v, cs)| {
-        let run = dedup_preserve_order(&v.into_iter().collect::<String>());
-        canon_order_mods(&run, cs)
-    })
+    (
+        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        charset_flag(),
+    )
+        .prop_map(|(v, cs)| {
+            let run = dedup_preserve_order(&v.into_iter().collect::<String>());
+            canon_order_mods(&run, cs)
+        })
 }
 
 /// `m//` modifiers: `i m s x p n` + optional `g`/`c` + one charset.
 pub fn m_modifiers() -> impl Strategy<Value = String> {
     (
-        prop::collection::vec(prop::sample::select(vec!['i','m','s','x','p','n']), 0..=4),
-        prop::collection::vec(prop::sample::select(vec!['g','c']), 0..=2),
-        charset_flag()
-    ).prop_map(|(mut a, b, cs)| {
-        a.extend(b);
-        let run = dedup_preserve_order(&a.into_iter().collect::<String>());
-        canon_order_mods(&run, cs)
-    })
+        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        prop::collection::vec(prop::sample::select(vec!['g', 'c']), 0..=2),
+        charset_flag(),
+    )
+        .prop_map(|(mut a, b, cs)| {
+            a.extend(b);
+            let run = dedup_preserve_order(&a.into_iter().collect::<String>());
+            canon_order_mods(&run, cs)
+        })
 }
 
 /// `s///` modifiers: `i m s x p n` + optional `e`/`r` + one charset.
 pub fn s_modifiers() -> impl Strategy<Value = String> {
     (
-        prop::collection::vec(prop::sample::select(vec!['i','m','s','x','p','n']), 0..=4),
-        prop::collection::vec(prop::sample::select(vec!['e','r']), 0..=2),
-        charset_flag()
-    ).prop_map(|(mut a, b, cs)| {
-        a.extend(b);
-        let run = dedup_preserve_order(&a.into_iter().collect::<String>());
-        canon_order_mods(&run, cs)
-    })
+        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        prop::collection::vec(prop::sample::select(vec!['e', 'r']), 0..=2),
+        charset_flag(),
+    )
+        .prop_map(|(mut a, b, cs)| {
+            a.extend(b);
+            let run = dedup_preserve_order(&a.into_iter().collect::<String>());
+            canon_order_mods(&run, cs)
+        })
 }
 
 /// `tr///`/`y///` modifiers: subset of `c d s r`.
 pub fn tr_modifiers() -> impl Strategy<Value = String> {
-    prop::collection::vec(prop::sample::select(vec!['c','d','s','r']), 0..=3)
+    prop::collection::vec(prop::sample::select(vec!['c', 'd', 's', 'r']), 0..=3)
         .prop_map(|v| dedup_preserve_order(&v.into_iter().collect::<String>()))
 }
 
 /// Optional: choose a delimiter pair that **avoids** all chars in `texts`.
 /// (Use when you want to eliminate `prop_assume!` collisions entirely.)
 #[allow(dead_code)]
-pub fn delims_avoiding(texts: Vec<String>) -> impl Strategy<Value = (char,char)> {
+pub fn delims_avoiding(texts: Vec<String>) -> impl Strategy<Value = (char, char)> {
     prop::collection::vec(Just(0u8), 0..1).prop_flat_map(move |_| {
         let forbid: HashSet<char> = texts.iter().flat_map(|t| t.chars()).collect();
-        let choices: Vec<(char,char)> =
-            DELIMS.iter().copied()
-                  .filter(|(o,c)| !forbid.contains(o) && !forbid.contains(c))
-                  .collect();
+        let choices: Vec<(char, char)> = DELIMS
+            .iter()
+            .copied()
+            .filter(|(o, c)| !forbid.contains(o) && !forbid.contains(c))
+            .collect();
         prop::sample::select(choices)
     })
 }
@@ -190,12 +209,14 @@ pub fn extract_ast_shape(root: &Node) -> Vec<String> {
 }
 
 /// Shorter alias used in some tests.
-pub fn shape(root: &Node) -> Vec<String> { extract_ast_shape(root) }
+pub fn shape(root: &Node) -> Vec<String> {
+    extract_ast_shape(root)
+}
 
 fn push_variant_name(n: &Node, out: &mut Vec<String>) {
     // Variant name from Debug up to '(' or '{'
     let s = format!("{:?}", n.kind);
-    let name = s.split(|c| c == '(' || c == '{').next().unwrap_or(&s).to_string();
+    let name = s.split(['(', '{']).next().unwrap_or(&s).to_string();
     out.push(name);
 }
 
@@ -205,17 +226,25 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
 
     match &node.kind {
         Program { statements } => {
-            for s in statements { extract_shape_rec(s, out); }
+            for s in statements {
+                extract_shape_rec(s, out);
+            }
         }
 
         VariableDeclaration { variable, initializer, .. } => {
             extract_shape_rec(variable, out);
-            if let Some(init) = initializer { extract_shape_rec(init, out); }
+            if let Some(init) = initializer {
+                extract_shape_rec(init, out);
+            }
         }
 
         VariableListDeclaration { variables, initializer, .. } => {
-            for v in variables { extract_shape_rec(v, out); }
-            if let Some(init) = initializer { extract_shape_rec(init, out); }
+            for v in variables {
+                extract_shape_rec(v, out);
+            }
+            if let Some(init) = initializer {
+                extract_shape_rec(init, out);
+            }
         }
 
         Assignment { lhs, rhs, .. } => {
@@ -239,7 +268,9 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
         }
 
         Block { statements } => {
-            for s in statements { extract_shape_rec(s, out); }
+            for s in statements {
+                extract_shape_rec(s, out);
+            }
         }
 
         If { condition, then_branch, elsif_branches, else_branch } => {
@@ -249,13 +280,17 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(cond, out);
                 extract_shape_rec(br, out);
             }
-            if let Some(else_br) = else_branch { extract_shape_rec(else_br, out); }
+            if let Some(else_br) = else_branch {
+                extract_shape_rec(else_br, out);
+            }
         }
 
         While { condition, body, continue_block, .. } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(body, out);
-            if let Some(cont) = continue_block { extract_shape_rec(cont, out); }
+            if let Some(cont) = continue_block {
+                extract_shape_rec(cont, out);
+            }
         }
 
         Foreach { variable, list, body } => {
@@ -265,11 +300,19 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
         }
 
         For { init, condition, update, body, continue_block } => {
-            if let Some(i) = init { extract_shape_rec(i, out); }
-            if let Some(c) = condition { extract_shape_rec(c, out); }
-            if let Some(u) = update { extract_shape_rec(u, out); }
+            if let Some(i) = init {
+                extract_shape_rec(i, out);
+            }
+            if let Some(c) = condition {
+                extract_shape_rec(c, out);
+            }
+            if let Some(u) = update {
+                extract_shape_rec(u, out);
+            }
             extract_shape_rec(body, out);
-            if let Some(cont) = continue_block { extract_shape_rec(cont, out); }
+            if let Some(cont) = continue_block {
+                extract_shape_rec(cont, out);
+            }
         }
 
         Subroutine { body, .. } => {
@@ -277,30 +320,35 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
         }
 
         FunctionCall { args, .. } => {
-            for a in args { extract_shape_rec(a, out); }
+            for a in args {
+                extract_shape_rec(a, out);
+            }
         }
 
         MethodCall { object, args, .. } => {
             extract_shape_rec(object, out);
-            for a in args { extract_shape_rec(a, out); }
+            for a in args {
+                extract_shape_rec(a, out);
+            }
         }
 
         ArrayLiteral { elements } => {
-            for e in elements { extract_shape_rec(e, out); }
+            for e in elements {
+                extract_shape_rec(e, out);
+            }
         }
 
         HashLiteral { pairs } => {
-            for (k,v) in pairs {
+            for (k, v) in pairs {
                 extract_shape_rec(k, out);
                 extract_shape_rec(v, out);
             }
         }
 
-        Return { value } => {
-            if let Some(val) = value {
-                extract_shape_rec(val, out);
-            }
+        Return { value: Some(val) } => {
+            extract_shape_rec(val, out);
         }
+        Return { value: None } => {}
 
         // Regex/quote‑like variants we only need to give a stable footprint for:
         Match { expr, .. } => {
@@ -326,33 +374,32 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
 /* ------------------ Neighbor-aware whitespace insertion ------------------ */
 
 /// # Neighbor-Aware Whitespace Insertion
-/// 
+///
 /// This module provides utilities for inserting whitespace into Perl code
 /// while preserving lexical correctness. The key insight is that whitespace
 /// can only be safely inserted between certain token pairs.
-/// 
+///
 /// ## Algorithm Overview
-/// 
+///
 /// 1. **Token-Pair Analysis**: We examine each adjacent pair of tokens to determine
 ///    if they would merge if whitespace between them was removed. Examples:
 ///    - `0` and `.` would merge into `0.` (float literal)
 ///    - `print` and `FOO` would merge into `printFOO` (single identifier)
 ///    - `$x` and `++` remain separate (variable and operator)
-/// 
+///
 /// 2. **3-Token Window**: For insertion decisions, we check a window of 3 tokens
 ///    (prev, current, next) to understand the local context. This catches cases like:
 ///    - `0.a` where we can't insert space after `.` (would break the float)
 ///    - `print FOO` where we must preserve the space (would become identifier)
-/// 
+///
 /// 3. **Conservative Approach**: When in doubt, we don't insert. This ensures
 ///    the tests remain deterministic and don't introduce parse errors.
-/// 
+///
 /// ## Key Functions
-/// 
+///
 /// - `pair_breakable()`: Tests if two tokens would merge without whitespace
 /// - `insertion_safe()`: Checks if whitespace can be inserted at a position
 /// - `respace_preserving()`: Reinserts whitespace while preserving lexical structure
-
 use perl_lexer::{PerlLexer, TokenType};
 
 /// A core token with its text and position info
@@ -369,10 +416,12 @@ pub fn lex_core_spans(src: &str) -> Vec<CoreTok> {
     let mut lx = PerlLexer::new(src);
     let mut out = Vec::new();
     let mut steps = 0usize;
-    
+
     while let Some(t) = lx.next_token() {
         steps += 1;
-        if steps > 100_000 { break; } // fuzz safety valve
+        if steps > 100_000 {
+            break;
+        } // fuzz safety valve
         match t.token_type {
             TokenType::Whitespace
             | TokenType::Newline
@@ -396,36 +445,38 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     let joined = format!("{}{}", left.text, right.text);
     let re = lex_core_spans(&joined);
     re.len() == 2
-        && re[0].kind == left.kind && re[0].text == left.text
-        && re[1].kind == right.kind && re[1].text == right.text
+        && re[0].kind == left.kind
+        && re[0].text == left.text
+        && re[1].kind == right.kind
+        && re[1].text == right.text
 }
 
 /// Neighbor-aware: would inserting `ws` between toks[i] and toks[i+1]
 /// change the tokenization in the *local 3-token window*?
 pub fn insertion_safe(original: &str, toks: &[CoreTok], i: usize, ws: &str) -> bool {
     debug_assert!(i + 1 < toks.len());
-    
+
     if !pair_breakable(&toks[i], &toks[i + 1]) {
         return false;
     }
-    
+
     // Build a local window [start..end) spanning the neighbor on the left and right if they exist.
     let start = if i > 0 { toks[i - 1].start } else { toks[i].start };
     let end = if i + 2 < toks.len() { toks[i + 2].end } else { toks[i + 1].end };
-    
+
     let window_orig = &original[start..end];
-    
+
     // Rebuild that same window but with `ws` inserted at the target boundary.
     let mut window_with = String::new();
-    window_with.push_str(&original[start..toks[i].end]);      // up to boundary
-    window_with.push_str(ws);                                 // inserted ws
-    window_with.push_str(&original[toks[i + 1].start..end]);  // rest
-    
-    let orig_pairs: Vec<_> = lex_core_spans(window_orig)
-        .into_iter().map(|t| (t.kind, t.text)).collect();
-    let with_pairs: Vec<_> = lex_core_spans(&window_with)
-        .into_iter().map(|t| (t.kind, t.text)).collect();
-    
+    window_with.push_str(&original[start..toks[i].end]); // up to boundary
+    window_with.push_str(ws); // inserted ws
+    window_with.push_str(&original[toks[i + 1].start..end]); // rest
+
+    let orig_pairs: Vec<_> =
+        lex_core_spans(window_orig).into_iter().map(|t| (t.kind, t.text)).collect();
+    let with_pairs: Vec<_> =
+        lex_core_spans(&window_with).into_iter().map(|t| (t.kind, t.text)).collect();
+
     orig_pairs == with_pairs
 }
 
@@ -433,26 +484,26 @@ pub fn insertion_safe(original: &str, toks: &[CoreTok], i: usize, ws: &str) -> b
 /// Preserve any original boundary text verbatim elsewhere.
 pub fn respace_preserving(original: &str, ws: &str) -> String {
     let toks = lex_core_spans(original);
-    if toks.is_empty() { 
+    if toks.is_empty() {
         return original.to_string();
     }
-    
+
     let mut out = String::new();
-    
+
     // Text before first token
     out.push_str(&original[..toks[0].start]);
-    
+
     // For each token boundary
     for i in 0..toks.len() {
         let t = &toks[i];
         out.push_str(&t.text);
-        
+
         if i + 1 < toks.len() {
             let right = &toks[i + 1];
-            
+
             // Preserve original boundary text
             let boundary = &original[t.end..right.start];
-            
+
             if boundary.is_empty() {
                 // No boundary in source: only add whitespace if safe
                 if insertion_safe(original, &toks, i, ws) {
@@ -464,11 +515,11 @@ pub fn respace_preserving(original: &str, ws: &str) -> String {
             }
         }
     }
-    
+
     // Text after last token
     if let Some(last) = toks.last() {
         out.push_str(&original[last.end..]);
     }
-    
+
     out
 }

@@ -2,116 +2,107 @@
 ///
 /// This module provides consistent parsing for quote-like operators,
 /// properly extracting patterns, bodies, and modifiers.
-
+///
 /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
 pub fn extract_regex_parts(text: &str) -> (String, String) {
     // Handle different prefixes
-    let content = if text.starts_with("qr") {
-        &text[2..]
-    } else if text.starts_with('m') && text.len() > 1 && !text.chars().nth(1).unwrap().is_alphabetic() {
+    let content = if let Some(stripped) = text.strip_prefix("qr") {
+        stripped
+    } else if text.starts_with('m')
+        && text.len() > 1
+        && !text.chars().nth(1).unwrap().is_alphabetic()
+    {
         &text[1..]
     } else {
         text
     };
-    
+
     if content.is_empty() {
         return (String::new(), String::new());
     }
-    
+
     // Get delimiter
     let delimiter = content.chars().next().unwrap();
     let closing = get_closing_delimiter(delimiter);
-    
+
     // Extract body and modifiers
     let (body, modifiers) = extract_delimited_content(content, delimiter, closing);
-    
+
     // Include delimiters in the pattern string for compatibility
     let pattern = format!("{}{}{}", delimiter, body, closing);
-    
+
     (pattern, modifiers.to_string())
 }
 
 /// Extract pattern, replacement, and modifiers from a substitution token
 pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // Skip 's' prefix
-    let content = if text.starts_with('s') {
-        &text[1..]
-    } else {
-        text
-    };
-    
+    let content = text.strip_prefix('s').unwrap_or(text);
+
     if content.is_empty() {
         return (String::new(), String::new(), String::new());
     }
-    
+
     let delimiter = content.chars().next().unwrap();
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
-    
+
     // Parse first body (pattern)
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
-    
+
     // For paired delimiters, skip whitespace and expect new delimiter
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) {
-            &trimmed[delimiter.len_utf8()..]
-        } else {
-            rest1
-        }
+        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
     } else {
         rest1
     };
-    
+
     // Parse second body (replacement)
     let (replacement, modifiers_str) = extract_delimited_content(rest2, delimiter, closing);
-    
+
     // Extract only alphabetic modifiers
     let modifiers = extract_modifiers(modifiers_str);
-    
+
     (pattern, replacement, modifiers)
 }
 
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Skip 'tr' or 'y' prefix
-    let content = if text.starts_with("tr") {
-        &text[2..]
-    } else if text.starts_with('y') {
-        &text[1..]
+    let content = if let Some(stripped) = text.strip_prefix("tr") {
+        stripped
+    } else if let Some(stripped) = text.strip_prefix('y') {
+        stripped
     } else {
         text
     };
-    
+
     if content.is_empty() {
         return (String::new(), String::new(), String::new());
     }
-    
+
     let delimiter = content.chars().next().unwrap();
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
-    
+
     // Parse first body (search)
     let (search, rest1) = extract_delimited_content(content, delimiter, closing);
-    
+
     // For paired delimiters, skip whitespace and expect new delimiter
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) {
-            &trimmed[delimiter.len_utf8()..]
-        } else {
-            rest1
-        }
+        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
     } else {
         rest1
     };
-    
+
     // Parse second body (replace)
     let (replace, modifiers_str) = extract_delimited_content(rest2, delimiter, closing);
-    
+
     // Extract only alphabetic modifiers
     let modifiers = extract_modifiers(modifiers_str);
-    
+
     (search, replace, modifiers)
 }
 
@@ -130,7 +121,7 @@ fn get_closing_delimiter(open: char) -> char {
 fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &str) {
     let mut chars = text.char_indices();
     let is_paired = open != close;
-    
+
     // Skip opening delimiter
     if let Some((_, c)) = chars.next() {
         if c != open {
@@ -139,19 +130,19 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
     } else {
         return (String::new(), "");
     }
-    
+
     let mut body = String::new();
     let mut depth = if is_paired { 1 } else { 0 };
     let mut escaped = false;
     let mut end_pos = text.len();
-    
+
     for (i, ch) in chars {
         if escaped {
             body.push(ch);
             escaped = false;
             continue;
         }
-        
+
         match ch {
             '\\' => {
                 body.push(ch);
@@ -177,13 +168,11 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
             _ => body.push(ch),
         }
     }
-    
+
     (body, &text[end_pos..])
 }
 
 /// Extract only alphabetic characters as modifiers
 fn extract_modifiers(text: &str) -> String {
-    text.chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect()
+    text.chars().take_while(|c| c.is_ascii_alphabetic()).collect()
 }

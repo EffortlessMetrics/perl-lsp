@@ -14,7 +14,8 @@ pub fn q_like_payload() -> impl Strategy<Value = String> {
         "tab\\\\there",
         // Mixed
         "The \\$var is @{[ 1+1 ]} ok",
-    ].prop_map(|s| s.to_string())
+    ]
+    .prop_map(|s| s.to_string())
 }
 
 /// Delimiter pairs for quote-like operators
@@ -36,7 +37,9 @@ pub fn quote_delim() -> impl Strategy<Value = (char, char)> {
 }
 
 /// Generate equivalent q/qq/qr/qx forms with different delimiters
-pub fn q_like_metamorphic(payload: impl Strategy<Value = String>) -> impl Strategy<Value = (String, String)> {
+pub fn q_like_metamorphic(
+    payload: impl Strategy<Value = String>,
+) -> impl Strategy<Value = (String, String)> {
     (payload, prop::sample::select(vec!["q", "qq", "qr", "qx"])).prop_map(|(body, op)| {
         // Generate two equivalent forms with different delimiters
         let form1 = format!("{}|{}|", op, body);
@@ -47,13 +50,8 @@ pub fn q_like_metamorphic(payload: impl Strategy<Value = String>) -> impl Strate
 
 /// Generate a single quote-like expression
 pub fn quote_like_single() -> impl Strategy<Value = String> {
-    (
-        prop::sample::select(vec!["q", "qq", "qr", "qx", "qw"]),
-        q_like_payload(),
-        quote_delim(),
-    ).prop_map(|(op, payload, (open, close))| {
-        format!("{}{}{}{}", op, open, payload, close)
-    })
+    (prop::sample::select(vec!["q", "qq", "qr", "qx", "qw"]), q_like_payload(), quote_delim())
+        .prop_map(|(op, payload, (open, close))| format!("{}{}{}{}", op, open, payload, close))
 }
 
 /// Generate quote-like with modifiers (for qr and s///)
@@ -61,11 +59,15 @@ pub fn regex_with_modifiers() -> impl Strategy<Value = String> {
     (
         q_like_payload(),
         quote_delim(),
-        prop::collection::hash_set(prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e', 'o']), 0..4),
-    ).prop_map(|(pattern, (open, close), modifiers)| {
-        let mods: String = modifiers.into_iter().collect();
-        format!("qr{}{}{}{}", open, pattern, close, mods)
-    })
+        prop::collection::hash_set(
+            prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e', 'o']),
+            0..4,
+        ),
+    )
+        .prop_map(|(pattern, (open, close), modifiers)| {
+            let mods: String = modifiers.into_iter().collect();
+            format!("qr{}{}{}{}", open, pattern, close, mods)
+        })
 }
 
 /// Generate substitution operator
@@ -75,16 +77,17 @@ pub fn substitution() -> impl Strategy<Value = String> {
         q_like_payload(),
         quote_delim(),
         prop::collection::hash_set(prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e']), 0..4),
-    ).prop_map(|(pattern, replacement, (open, close), modifiers)| {
-        let mods: String = modifiers.into_iter().collect();
-        if open == close {
-            // Symmetric delimiter
-            format!("s{}{}{}{}{}{}", open, pattern, open, replacement, open, mods)
-        } else {
-            // Paired delimiters - special syntax
-            format!("s{}{}{}{}{}{}", open, pattern, close, open, replacement, close)
-        }
-    })
+    )
+        .prop_map(|(pattern, replacement, (open, close), modifiers)| {
+            let mods: String = modifiers.into_iter().collect();
+            if open == close {
+                // Symmetric delimiter
+                format!("s{}{}{}{}{}{}", open, pattern, open, replacement, open, mods)
+            } else {
+                // Paired delimiters - special syntax
+                format!("s{}{}{}{}{}{}", open, pattern, close, open, replacement, close)
+            }
+        })
 }
 
 /// Generate transliteration operator
@@ -94,28 +97,29 @@ pub fn transliteration() -> impl Strategy<Value = String> {
         "[A-Z]{1,5}",
         quote_delim(),
         prop::collection::hash_set(prop::sample::select(vec!['c', 'd', 's', 'r']), 0..2),
-    ).prop_map(|(from, to, (open, close), modifiers)| {
-        let mods: String = modifiers.into_iter().collect();
-        if open == close {
-            format!("tr{}{}{}{}{}{}", open, from, open, to, open, mods)
-        } else {
-            format!("tr{}{}{}{}{}{}", open, from, close, open, to, close)
-        }
-    })
+    )
+        .prop_map(|(from, to, (open, close), modifiers)| {
+            let mods: String = modifiers.into_iter().collect();
+            if open == close {
+                format!("tr{}{}{}{}{}{}", open, from, open, to, open, mods)
+            } else {
+                format!("tr{}{}{}{}{}{}", open, from, close, open, to, close)
+            }
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     proptest! {
         #[test]
         fn quote_like_always_has_delimiters(expr in quote_like_single()) {
-            assert!(expr.starts_with('q') || expr.starts_with("qq") || 
-                    expr.starts_with("qr") || expr.starts_with("qx") || 
+            assert!(expr.starts_with('q') || expr.starts_with("qq") ||
+                    expr.starts_with("qr") || expr.starts_with("qx") ||
                     expr.starts_with("qw"));
         }
-        
+
         #[test]
         fn metamorphic_forms_are_equivalent((a, b) in q_like_metamorphic(q_like_payload())) {
             // Both should start with the same operator
@@ -123,7 +127,7 @@ mod tests {
             let op_b = b.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap();
             assert_eq!(op_a, op_b);
         }
-        
+
         #[test]
         fn substitution_has_three_parts(s in substitution()) {
             assert!(s.starts_with("s"));

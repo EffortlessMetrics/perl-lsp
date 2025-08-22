@@ -124,13 +124,13 @@ pub mod lsp_server;
 pub mod lsp_utils;
 pub mod parser;
 pub mod parser_context;
-pub mod quote_parser;
 pub mod perl_critic;
 pub mod perltidy;
 pub mod position;
 pub mod position_mapper;
 #[doc(hidden)]
 pub mod positions;
+pub mod quote_parser;
 pub mod recovery_parser;
 pub mod rename;
 pub mod semantic;

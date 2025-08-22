@@ -13,7 +13,8 @@ pub fn heredoc_id() -> impl Strategy<Value = String> {
         "JSON",
         "SHELL",
         "DATA",
-    ].prop_map(|s| s.to_string())
+    ]
+    .prop_map(|s| s.to_string())
 }
 
 /// Generate heredoc content
@@ -26,8 +27,9 @@ pub fn heredoc_content() -> impl Strategy<Value = Vec<String>> {
             "$var interpolation",
             "@array interpolation",
             "Plain text with spaces",
-        ].prop_map(|s| s.to_string()),
-        1..5
+        ]
+        .prop_map(|s| s.to_string()),
+        1..5,
     )
 }
 
@@ -77,55 +79,50 @@ pub fn indented_heredoc() -> impl Strategy<Value = String> {
 
 /// Generate backtick heredoc (command execution)
 pub fn backtick_heredoc() -> impl Strategy<Value = String> {
-    (heredoc_id(), prop::collection::vec(
-        prop::sample::select(vec![
-            "echo 'hello'",
-            "ls -la",
-            "date",
-            "pwd",
-            "whoami",
-        ]),
-        1..3
-    )).prop_map(|(id, commands)| {
-        let mut result = format!("my $out = <<`{}`;\n", id);
-        for cmd in commands {
-            result.push_str(cmd);
+    (
+        heredoc_id(),
+        prop::collection::vec(
+            prop::sample::select(vec!["echo 'hello'", "ls -la", "date", "pwd", "whoami"]),
+            1..3,
+        ),
+    )
+        .prop_map(|(id, commands)| {
+            let mut result = format!("my $out = <<`{}`;\n", id);
+            for cmd in commands {
+                result.push_str(cmd);
+                result.push('\n');
+            }
+            result.push_str(&id);
             result.push('\n');
-        }
-        result.push_str(&id);
-        result.push('\n');
-        result
-    })
+            result
+        })
 }
 
 /// Generate multiple heredocs in sequence
 pub fn multiple_heredocs() -> impl Strategy<Value = String> {
-    (
-        heredoc_id(),
-        heredoc_id(),
-        heredoc_content(),
-        heredoc_content(),
-    ).prop_map(|(id1, id2, lines1, lines2)| {
-        let mut result = format!("print <<{}, <<{};\n", id1, id2);
-        
-        // First heredoc body
-        for line in lines1 {
-            result.push_str(&line);
+    (heredoc_id(), heredoc_id(), heredoc_content(), heredoc_content()).prop_map(
+        |(id1, id2, lines1, lines2)| {
+            let mut result = format!("print <<{}, <<{};\n", id1, id2);
+
+            // First heredoc body
+            for line in lines1 {
+                result.push_str(&line);
+                result.push('\n');
+            }
+            result.push_str(&id1);
             result.push('\n');
-        }
-        result.push_str(&id1);
-        result.push('\n');
-        
-        // Second heredoc body
-        for line in lines2 {
-            result.push_str(&line);
+
+            // Second heredoc body
+            for line in lines2 {
+                result.push_str(&line);
+                result.push('\n');
+            }
+            result.push_str(&id2);
             result.push('\n');
-        }
-        result.push_str(&id2);
-        result.push('\n');
-        
-        result
-    })
+
+            result
+        },
+    )
 }
 
 /// Generate heredoc in various contexts
@@ -133,40 +130,34 @@ pub fn heredoc_in_context() -> impl Strategy<Value = String> {
     (
         heredoc_id(),
         heredoc_content(),
-        prop::sample::select(vec![
-            "print ",
-            "my $x = ",
-            "push @arr, ",
-            "return ",
-            "die ",
-            "warn ",
-        ])
-    ).prop_map(|(id, lines, prefix)| {
-        let mut result = format!("{}<<{};\n", prefix, id);
-        for line in lines {
-            result.push_str(&line);
-            result.push('\n');
-        }
-        result.push_str(&id);
-        if prefix.starts_with("my") {
-            result.push_str(";\n");
-        } else {
-            result.push('\n');
-        }
-        result
-    })
+        prop::sample::select(vec!["print ", "my $x = ", "push @arr, ", "return ", "die ", "warn "]),
+    )
+        .prop_map(|(id, lines, prefix)| {
+            let mut result = format!("{}<<{};\n", prefix, id);
+            for line in lines {
+                result.push_str(&line);
+                result.push('\n');
+            }
+            result.push_str(&id);
+            if prefix.starts_with("my") {
+                result.push_str(";\n");
+            } else {
+                result.push('\n');
+            }
+            result
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     proptest! {
         #[test]
         fn heredoc_has_matching_delimiters(doc in basic_heredoc()) {
             let lines: Vec<&str> = doc.lines().collect();
             assert!(lines.len() >= 3); // At least introducer, content, terminator
-            
+
             // Extract identifier from first line
             if let Some(start) = doc.find("<<") {
                 let id_start = start + 2;
@@ -178,12 +169,12 @@ mod tests {
                 }
             }
         }
-        
+
         #[test]
         fn indented_heredoc_uses_tilde(doc in indented_heredoc()) {
             assert!(doc.contains("<<~"));
         }
-        
+
         #[test]
         fn quoted_heredoc_has_quotes(doc in quoted_heredoc()) {
             assert!(doc.contains("<<'") && doc.contains("'"));

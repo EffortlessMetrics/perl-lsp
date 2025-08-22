@@ -2777,7 +2777,8 @@ impl<'a> Parser<'a> {
                                 );
                             } else {
                                 // Regular match - extract modifiers
-                                let (pattern_with_delims, modifiers) = quote_parser::extract_regex_parts(pattern);
+                                let (pattern_with_delims, modifiers) =
+                                    quote_parser::extract_regex_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Match {
                                         expr: Box::new(expr),
@@ -3934,7 +3935,7 @@ impl<'a> Parser<'a> {
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
-            
+
             TokenKind::QuoteSingle | TokenKind::QuoteDouble => {
                 let token = self.tokens.next()?;
                 // Quote operators produce strings
@@ -3944,7 +3945,7 @@ impl<'a> Parser<'a> {
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
-            
+
             TokenKind::QuoteWords => {
                 let token = self.tokens.next()?;
                 // qw produces a list of strings - for now just treat as a string
@@ -3953,7 +3954,7 @@ impl<'a> Parser<'a> {
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
-            
+
             TokenKind::QuoteCommand => {
                 let token = self.tokens.next()?;
                 // qx/backticks - for now treat as a string
@@ -3965,7 +3966,8 @@ impl<'a> Parser<'a> {
 
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
-                let (pattern, replacement, modifiers) = quote_parser::extract_substitution_parts(&token.text);
+                let (pattern, replacement, modifiers) =
+                    quote_parser::extract_substitution_parts(&token.text);
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
@@ -3984,7 +3986,8 @@ impl<'a> Parser<'a> {
 
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
-                let (search, replace, modifiers) = quote_parser::extract_transliteration_parts(&token.text);
+                let (search, replace, modifiers) =
+                    quote_parser::extract_transliteration_parts(&token.text);
 
                 // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
@@ -4920,7 +4923,6 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
 
     (delimiter, interpolated, indented)
 }
-
 
 #[cfg(test)]
 mod tests {

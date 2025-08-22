@@ -1,20 +1,17 @@
 //! Property-based tests for `qw/.../` expressions
 
+use perl_parser::Parser;
 use proptest::{
-    collection,
-    prop_oneof, proptest, prop_assert, prop_assume,
-    strategy::{Strategy, Just},
+    collection, prop_assume, prop_oneof, proptest,
+    strategy::{Just, Strategy},
     test_runner::{Config as ProptestConfig, FileFailurePersistence},
 };
-use perl_parser::Parser;
 
 // Pull in the shared helpers (delims, extract_ast_shape, etc.)
 include!("prop_test_utils.rs");
 
-const REGRESS_DIR: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/tests/_proptest-regressions/prop_qw"
-);
+const REGRESS_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_qw");
 
 // Small helper to make word payloads
 fn word() -> impl Strategy<Value = String> {
@@ -37,7 +34,7 @@ fn delim_strategy() -> impl Strategy<Value = (char, char)> {
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: std::env::var("PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(64),
-        failure_persistence: Some(Box::new(FileFailurePersistence::Direct(REGRESS_DIR.into()))),
+        failure_persistence: Some(Box::new(FileFailurePersistence::Direct(REGRESS_DIR))),
         .. ProptestConfig::default()
     })]
 

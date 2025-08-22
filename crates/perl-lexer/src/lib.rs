@@ -33,9 +33,9 @@ pub mod checkpoint;
 pub mod error;
 pub mod mode;
 pub mod position;
+mod quote_handler;
 pub mod token;
 mod unicode;
-mod quote_handler;
 
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
 pub use error::{LexerError, Result};
@@ -883,13 +883,14 @@ impl<'a> PerlLexer<'a> {
                 // Special case: After ->, sigils followed by { or [ should be tokenized separately
                 // This is for postfix dereference like ->@*, ->%{}, ->@[]
                 // We need to be careful with Unicode - check if we have enough bytes and valid char boundaries
-                let check_arrow = self.position >= 3 
+                let check_arrow = self.position >= 3
                     && self.position.saturating_sub(1) <= self.input.len()
                     && self.input.is_char_boundary(self.position.saturating_sub(3))
                     && self.input.is_char_boundary(self.position.saturating_sub(1));
-                    
-                if check_arrow 
-                    && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)] == "->"
+
+                if check_arrow
+                    && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)]
+                        == "->"
                     && matches!(self.current_char(), Some('{' | '[' | '*'))
                 {
                     // Just return the sigil
@@ -1005,7 +1006,18 @@ impl<'a> PerlLexer<'a> {
                         if sigil != '*'
                             && (matches!(
                                 self.current_char(),
-                                Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r' | '}')
+                                Some(
+                                    '$' | '@'
+                                        | '%'
+                                        | '*'
+                                        | '&'
+                                        | '['
+                                        | ' '
+                                        | '\t'
+                                        | '\n'
+                                        | '\r'
+                                        | '}'
+                                )
                             ) || self.current_char().is_none())
                         {
                             // This is a dereference or empty/invalid brace, backtrack
@@ -1245,10 +1257,10 @@ impl<'a> PerlLexer<'a> {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
                                     operator: text.to_string(),
-                                    delimiter: '\0',  // Will be set when we see the delimiter
+                                    delimiter: '\0', // Will be set when we see the delimiter
                                     start_pos: start,
                                 });
-                                
+
                                 // Don't return a keyword token - continue to parse the delimiter
                                 // Skip any whitespace between operator and delimiter
                                 while let Some(ch) = self.current_char() {
@@ -1258,7 +1270,7 @@ impl<'a> PerlLexer<'a> {
                                         break;
                                     }
                                 }
-                                
+
                                 // Get the delimiter
                                 if let Some(delim) = self.current_char() {
                                     if !delim.is_alphanumeric() {
@@ -1427,7 +1439,7 @@ impl<'a> PerlLexer<'a> {
         if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
             return None;
         }
-        
+
         let start = self.position;
         let ch = self.current_char()?;
 
@@ -1575,14 +1587,16 @@ impl<'a> PerlLexer<'a> {
         match ch {
             '(' => {
                 // Check if this is a quote operator delimiter
-                if matches!(self.mode, LexerMode::ExpectDelimiter) && self.current_quote_op.is_some() {
+                if matches!(self.mode, LexerMode::ExpectDelimiter)
+                    && self.current_quote_op.is_some()
+                {
                     self.advance();
                     if let Some(ref mut info) = self.current_quote_op {
                         info.delimiter = ch;
                     }
                     return self.parse_quote_operator(ch);
                 }
-                
+
                 self.advance();
                 if self.in_prototype {
                     self.prototype_depth += 1;
@@ -2112,7 +2126,7 @@ impl<'a> PerlLexer<'a> {
             "s" => {
                 // Substitution: two bodies
                 let _pattern = self.read_delimited_body(delimiter);
-                
+
                 // For paired delimiters, skip whitespace between bodies
                 if quote_handler::paired_close(delimiter).is_some() {
                     while let Some(ch) = self.current_char() {
@@ -2127,16 +2141,16 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
-                
+
                 let _replacement = self.read_delimited_body(delimiter);
-                
+
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::S_SPEC);
             }
             "tr" | "y" => {
                 // Transliteration: two bodies
                 let _from = self.read_delimited_body(delimiter);
-                
+
                 // For paired delimiters, skip whitespace between bodies
                 if quote_handler::paired_close(delimiter).is_some() {
                     while let Some(ch) = self.current_char() {
@@ -2151,9 +2165,9 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
-                
+
                 let _to = self.read_delimited_body(delimiter);
-                
+
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::TR_SPEC);
             }
@@ -2173,22 +2187,17 @@ impl<'a> PerlLexer<'a> {
 
         let text = &self.input[start..self.position];
         let token_type = quote_handler::get_quote_token_type(&operator);
-        
+
         self.mode = LexerMode::ExpectOperator;
         self.current_quote_op = None;
-        
-        Some(Token {
-            token_type,
-            text: Arc::from(text),
-            start,
-            end: self.position,
-        })
+
+        Some(Token { token_type, text: Arc::from(text), start, end: self.position })
     }
 
     /// Parse regex modifiers according to the given spec
     fn parse_regex_modifiers(&mut self, spec: &quote_handler::ModSpec) {
         let start = self.position;
-        
+
         // Consume all alphabetic characters
         while let Some(ch) = self.current_char() {
             if ch.is_ascii_alphabetic() {
@@ -2197,7 +2206,7 @@ impl<'a> PerlLexer<'a> {
                 break;
             }
         }
-        
+
         // Check if this is a valid modifier sequence
         let tail = &self.input[start..self.position];
         if !tail.is_empty() {
