@@ -1,6 +1,6 @@
 [package]
 name = "perl-corpus"
-version = "0.1.0"
+version = "0.8.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
