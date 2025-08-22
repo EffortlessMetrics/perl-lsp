@@ -8,7 +8,7 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
     let mut in_string = false;
     let mut in_regex = false;
     let mut escape_next = false;
-    
+
     for (i, ch) in src.chars().enumerate() {
         // Track string/regex context to avoid breaking syntax
         if !escape_next {
@@ -23,9 +23,9 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
         } else {
             escape_next = false;
         }
-        
+
         result.push(ch);
-        
+
         // Don't insert whitespace inside strings or regexes
         if !in_string && !in_regex {
             // Randomly insert whitespace or comments
@@ -41,7 +41,7 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
             }
         }
     }
-    
+
     result
 }
 
@@ -67,7 +67,8 @@ pub fn comment_pattern() -> impl Strategy<Value = String> {
         "# NOTE: [a-z ]{0,10}\n",
         "#\n",
         "## [a-z ]{0,15}\n",
-    ].prop_map(|s| s.to_string())
+    ]
+    .prop_map(|s| s.to_string())
 }
 
 /// Generate seed for whitespace metamorphic transformation
@@ -77,33 +78,31 @@ pub fn whitespace_seed() -> impl Strategy<Value = u64> {
 
 /// Generate whitespace-heavy but valid Perl
 pub fn whitespace_stress_test() -> impl Strategy<Value = String> {
-    (
-        whitespace_pattern(),
-        whitespace_pattern(),
-        comment_pattern(),
-    ).prop_map(|(ws1, ws2, comment)| {
-        format!(
-            "use{}strict;\n{}{}my{}$x{}={}1{}+{}2;\n{}print{}$x;{}",
-            ws1, comment, ws2, ws1, ws2, ws1, ws2, ws1, comment, ws1, comment
-        )
-    })
+    (whitespace_pattern(), whitespace_pattern(), comment_pattern()).prop_map(
+        |(ws1, ws2, comment)| {
+            format!(
+                "use{}strict;\n{}{}my{}$x{}={}1{}+{}2;\n{}print{}$x;{}",
+                ws1, comment, ws2, ws1, ws2, ws1, ws2, ws1, comment, ws1, comment
+            )
+        },
+    )
 }
 
 /// Insert comments at statement boundaries
 pub fn insert_statement_comments(src: &str) -> String {
     let mut result = String::new();
-    
+
     for line in src.lines() {
         result.push_str(line);
-        
+
         // Add comment after statements
         if line.trim_end().ends_with(';') {
             result.push_str("  # auto-comment");
         }
-        
+
         result.push('\n');
     }
-    
+
     result
 }
 
@@ -119,30 +118,26 @@ pub fn commented_code() -> impl Strategy<Value = String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn whitespace_preserves_tokens() {
         let original = "my $x = 1 + 2;";
         let transformed = sprinkle_whitespace(original, 42);
-        
+
         // Extract non-whitespace tokens
         let orig_tokens: Vec<&str> = original.split_whitespace().collect();
         let trans_tokens: Vec<&str> = transformed
             .lines()
             .flat_map(|line| {
                 // Remove comments
-                let line = if let Some(pos) = line.find('#') {
-                    &line[..pos]
-                } else {
-                    line
-                };
+                let line = if let Some(pos) = line.find('#') { &line[..pos] } else { line };
                 line.split_whitespace()
             })
             .collect();
-        
+
         assert_eq!(orig_tokens, trans_tokens);
     }
-    
+
     proptest! {
         #[test]
         fn comments_dont_break_statements(code in commented_code()) {
@@ -150,7 +145,7 @@ mod tests {
             assert!(code.contains('#'));
             assert!(code.lines().any(|line| !line.trim().starts_with('#')));
         }
-        
+
         #[test]
         fn whitespace_stress_is_valid(code in whitespace_stress_test()) {
             // Should still have key tokens

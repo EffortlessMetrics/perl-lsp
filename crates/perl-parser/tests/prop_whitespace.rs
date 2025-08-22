@@ -1,16 +1,14 @@
 //! Metamorphic property tests for whitespace and comment insertion
 
+use perl_parser::Parser;
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
-use perl_parser::Parser;
 
 // Pull in the shared helpers (includes CoreTok, TokenType, and whitespace functions)
 include!("prop_test_utils.rs");
 
-const REGRESS_DIR: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/tests/_proptest-regressions/prop_whitespace"
-);
+const REGRESS_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_whitespace");
 
 // The whitespace manipulation functions are now in prop_test_utils.rs:
 // - CoreTok struct
@@ -22,7 +20,7 @@ const REGRESS_DIR: &str = concat!(
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: std::env::var("PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(64),
-        failure_persistence: Some(Box::new(FileFailurePersistence::Direct(REGRESS_DIR.into()))),
+        failure_persistence: Some(Box::new(FileFailurePersistence::Direct(REGRESS_DIR))),
         .. ProptestConfig::default()
     })]
 
@@ -33,8 +31,8 @@ proptest! {
     ) {
         // Original non-space/comment tokens
         let base = lex_core_spans(&src);
-        
-        // Skip heredoc/format cases to avoid complications  
+
+        // Skip heredoc/format cases to avoid complications
         // Heredocs are inherently stateful and don't fit our token-based model
         prop_assume!(!base.iter().any(|t| matches!(
             t.kind, TokenType::HeredocStart | TokenType::HeredocBody(_) | TokenType::FormatBody(_)
@@ -43,7 +41,7 @@ proptest! {
         // Insert whitespace only at safe boundaries, preserving required boundaries
         let sprinkled = respace_preserving(&src, &ws);
         let again = lex_core_spans(&sprinkled);
-        
+
         // Compare normalized pairs (kind, text) only
         let base_pairs: Vec<_> = base.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
         let again_pairs: Vec<_> = again.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
@@ -65,28 +63,28 @@ proptest! {
             "$x + $y * $z",
             "print 'hello', 'world';",
         ];
-        
+
         for original in originals {
             // Parse original
             let mut parser1 = Parser::new(original);
             let ast1 = parser1.parse();
             prop_assume!(ast1.is_ok());
-            
+
             // Insert whitespace only at safe boundaries, preserving required boundaries
             let transformed = respace_preserving(original, &ws);
-            
+
             // Parse transformed
             let mut parser2 = Parser::new(&transformed);
             let ast2 = parser2.parse();
-            
-            prop_assert!(ast2.is_ok(), 
+
+            prop_assert!(ast2.is_ok(),
                 "Failed to parse after whitespace insertion:\nOriginal: {}\nTransformed: {}",
                 original, transformed);
-            
+
             // Compare shapes
             let shape1 = extract_ast_shape(&ast1.unwrap());
             let shape2 = extract_ast_shape(&ast2.unwrap());
-            
+
             prop_assert_eq!(shape1, shape2,
                 "Different AST shape after whitespace insertion.\nOriginal: {}\nTransformed: {}",
                 original, transformed);
@@ -110,16 +108,16 @@ proptest! {
             "$x && $y",
             "$x || $y",
         ];
-        
+
         for original in glue_samples {
             let core_before = lex_core_spans(original);
             let transformed = respace_preserving(original, &ws);
             let core_after = lex_core_spans(&transformed);
-            
+
             // Compare normalized pairs (kind, text) only
             let before_pairs: Vec<_> = core_before.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
             let after_pairs: Vec<_> = core_after.iter().map(|t| (t.kind.clone(), t.text.clone())).collect();
-            
+
             prop_assert_eq!(&before_pairs, &after_pairs,
                 "Glue tokens changed:\nOriginal: {}\nTransformed: {}",
                 original, transformed);

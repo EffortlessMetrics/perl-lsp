@@ -7,13 +7,16 @@ fn lexer_emits_eof_once() {
     let t1 = lx.next_token().unwrap();
     assert!(matches!(t1.token_type, TokenType::EOF), "First token should be EOF");
     assert!(lx.next_token().is_none(), "After EOF, should return None");
-    
+
     // Whitespace only (lexer skips whitespace so should go directly to EOF)
     let mut lx = PerlLexer::new("   ");
     let t1 = lx.next_token().unwrap();
-    assert!(matches!(t1.token_type, TokenType::EOF), "First token should be EOF (whitespace skipped)");
+    assert!(
+        matches!(t1.token_type, TokenType::EOF),
+        "First token should be EOF (whitespace skipped)"
+    );
     assert!(lx.next_token().is_none(), "After EOF, should return None");
-    
+
     // With actual token
     let mut lx = PerlLexer::new("print");
     let t1 = lx.next_token().unwrap();
@@ -63,11 +66,11 @@ fn quote_ops_with_delimiters_tokenize_correctly() {
         ("tr/a-z/A-Z/", "Transliteration"),
         ("y/a-z/A-Z/", "Transliteration"),
     ];
-    
+
     for (input, expected_type_name) in tests {
         let mut lx = PerlLexer::new(input);
         let t = lx.next_token().unwrap();
-        
+
         // Basic type check
         let actual_type_name = match &t.token_type {
             TokenType::QuoteSingle => "QuoteSingle",
@@ -79,7 +82,7 @@ fn quote_ops_with_delimiters_tokenize_correctly() {
             TokenType::Transliteration => "Transliteration",
             _ => "Other",
         };
-        
+
         assert_eq!(
             actual_type_name, expected_type_name,
             "Input '{input}' produced wrong token type: {:?}",
@@ -91,12 +94,12 @@ fn quote_ops_with_delimiters_tokenize_correctly() {
 #[test]
 fn heredoc_start_is_not_stringliteral() {
     let mut lx = PerlLexer::new("print <<'A';\nA\n");
-    
+
     // First token should be 'print'
     let t1 = lx.next_token().unwrap();
     assert!(matches!(t1.token_type, TokenType::Keyword(_)));
     assert_eq!(t1.text.as_ref(), "print");
-    
+
     // Next should be HeredocStart, not StringLiteral (whitespace is consumed automatically)
     let t2 = lx.next_token().unwrap();
     assert!(
@@ -127,20 +130,23 @@ fn sigil_brace_is_not_identifier() {
         let mut lx = PerlLexer::new(s);
         let a = lx.next_token().unwrap();
         let b = lx.next_token().unwrap();
-        
+
         // First token should be the sigil
         let sigil_char = s.chars().next().unwrap();
         assert!(
-            matches!(a.token_type, TokenType::Identifier(ref id) if id.as_ref() == &sigil_char.to_string()),
+            matches!(a.token_type, TokenType::Identifier(ref id) if id.as_ref() == sigil_char.to_string()),
             "First token of '{}' should be sigil '{}', got {:?}",
-            s, sigil_char, a.token_type
+            s,
+            sigil_char,
+            a.token_type
         );
-        
+
         // Second token should be LeftBrace
         assert!(
             matches!(b.token_type, TokenType::LeftBrace),
             "Second token of '{}' should be LeftBrace, got {:?}",
-            s, b.token_type
+            s,
+            b.token_type
         );
     }
 }
@@ -163,7 +169,7 @@ fn sigil_brace_with_trailing_junk_never_panics() {
     for s in ["${", "${ ", "${\n", "${}", "${ x", "${\t}"] {
         let mut lx = PerlLexer::new(s);
         let mut count = 0;
-        
+
         // Should tokenize without panic and terminate
         while lx.next_token().is_some() {
             count += 1;
@@ -180,7 +186,7 @@ fn malformed_substitution_never_panics() {
     for s in ["}s{}", "}}s{{}}", "s{", "s}", "s{{}}", "}}{s{}}{{"] {
         let mut lx = PerlLexer::new(s);
         let mut count = 0;
-        
+
         while lx.next_token().is_some() {
             count += 1;
             assert!(count < 100, "Possible infinite loop in '{}'", s);

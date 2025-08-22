@@ -134,7 +134,7 @@ fn bench_tree_sitter_perl_rs(c: &mut Criterion) {
 }
 
 // Benchmark tree-sitter-perl C implementation
-#[cfg(feature = "tree-sitter-perl-c")]
+// tree-sitter-perl-c is always available
 fn bench_tree_sitter_perl_c(c: &mut Criterion) {
     use tree_sitter_perl_c::{create_parser, language};
 
@@ -193,7 +193,7 @@ fn bench_comparison(c: &mut Criterion) {
         });
 
         // tree-sitter-perl C
-        #[cfg(feature = "tree-sitter-perl-c")]
+        // tree-sitter-perl-c is always available
         group.bench_with_input(BenchmarkId::new("tree-sitter-perl-c", name), code, |b, code| {
             b.iter(|| {
                 use tree_sitter_perl_c::create_parser;
@@ -207,7 +207,7 @@ fn bench_comparison(c: &mut Criterion) {
 }
 
 // Create different groups based on features
-#[cfg(all(feature = "tree-sitter-perl-rs", feature = "tree-sitter-perl-c"))]
+#[cfg(feature = "tree-sitter-perl-rs")]
 criterion_group!(
     benches,
     bench_perl_parser,
@@ -216,13 +216,13 @@ criterion_group!(
     bench_comparison
 );
 
-#[cfg(all(feature = "tree-sitter-perl-rs", not(feature = "tree-sitter-perl-c")))]
+// This case should not happen
 criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_rs, bench_comparison);
 
-#[cfg(all(not(feature = "tree-sitter-perl-rs"), feature = "tree-sitter-perl-c"))]
+#[cfg(not(feature = "tree-sitter-perl-rs"))]
 criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_c, bench_comparison);
 
-#[cfg(all(not(feature = "tree-sitter-perl-rs"), not(feature = "tree-sitter-perl-c")))]
+// This case should not happen either
 criterion_group!(benches, bench_perl_parser, bench_comparison);
 
 criterion_main!(benches);

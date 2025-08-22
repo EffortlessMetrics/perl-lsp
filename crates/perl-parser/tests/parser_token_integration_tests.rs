@@ -6,7 +6,7 @@ fn parses_heredoc_start_token() {
     let src = "print <<'EOF';\nHello World\nEOF\n";
     let mut parser = Parser::new(src);
     let result = parser.parse();
-    
+
     // Should parse without panicking or entering infinite loop
     assert!(result.is_ok(), "Failed to parse heredoc: {:?}", result);
 }
@@ -46,20 +46,15 @@ fn parses_empty_sigil_brace() {
         let mut parser = Parser::new(&src);
         let result = parser.parse();
         // Parser should handle this gracefully even if semantically invalid
-        assert!(result.is_ok() || result.is_err(), 
-                "Parser should not panic on {}", expr);
+        assert!(result.is_ok() || result.is_err(), "Parser should not panic on {}", expr);
     }
 }
 
 #[test]
 fn parses_sigil_brace_with_whitespace() {
     // Test sigil+brace with whitespace/newline after brace
-    let cases = [
-        "${ }",
-        "@{\n}",
-        "%{  \n  }",
-    ];
-    
+    let cases = ["${ }", "@{\n}", "%{  \n  }"];
+
     for expr in cases {
         let src = format!("print {};", expr);
         let mut parser = Parser::new(&src);
