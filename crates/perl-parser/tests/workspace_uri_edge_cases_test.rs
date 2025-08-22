@@ -1,6 +1,6 @@
 mod support;
 
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
 #[cfg(test)]
 mod tests {
     use crate::support::env_guard::EnvGuard;
