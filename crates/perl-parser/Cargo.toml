@@ -23,6 +23,7 @@ regex = "1.11.1"
 lsp-types = "0.97.0"
 url = "2.5"
 rustc-hash = "2.1.0"
+md5 = "0.7"
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }

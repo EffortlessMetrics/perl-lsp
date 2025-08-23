@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.4
+# LSP Actual Status - v0.8.5
 
 ## LSP GA Contract
 
@@ -10,9 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 60% of LSP features now work** (up from 35% in v0.8.2). This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 65% of LSP features now work** (up from 60% in v0.8.4). This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~60%)
+## ✅ Actually Working Features (~65%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -112,9 +112,28 @@ These features have been tested and provide real, useful functionality:
 - Triggers: `{`, `}`, `;`, `\n` - only adjusts indentation; no reflow or semantic edits
 - **Status**: ~70% functional
 
+### 18. **Type Hierarchy** (NEW in v0.8.5)
+- Navigate class inheritance hierarchies
+- Find supertypes (parent classes via @ISA, use parent/base)
+- Find subtypes (derived classes)
+- **Status**: Fully functional
+
+### 19. **Pull Diagnostics** (NEW in v0.8.5)
+- Client-initiated diagnostics requests
+- Document-level diagnostics (textDocument/diagnostic)
+- Workspace-wide diagnostics (workspace/diagnostic)
+- Result ID caching for efficiency
+- **Status**: Fully functional
+
+### 20. **Workspace Symbol Resolve** (NEW in v0.8.5)
+- Enhanced symbol details on demand
+- Accurate ranges after initial search
+- Container information
+- **Status**: Fully functional
+
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
-### ✅ Advertised in v0.8.4 (Working Features)
+### ✅ Advertised in v0.8.5 (Working Features)
 - `textDocumentSync` - File synchronization
 - `completionProvider` - Basic completions
 - `hoverProvider` - Hover information
@@ -134,8 +153,11 @@ These features have been tested and provide real, useful functionality:
 - `documentLinkProvider` - Document links (NEW)
 - `selectionRangeProvider` - Selection ranges (NEW)
 - `documentOnTypeFormattingProvider` - On-type formatting (NEW)
+- `typeHierarchyProvider` - Type hierarchy (NEW in v0.8.5)
+- `diagnosticProvider` - Pull diagnostics (NEW in v0.8.5)
+- `workspaceSymbolProvider.resolveProvider` - Symbol resolve (NEW in v0.8.5)
 
-### ❌ NOT Advertised in v0.8.4 (Not Implemented)
+### ❌ NOT Advertised in v0.8.5 (Not Implemented)
 
 #### Code Lens
 - **Status:** Partial (not advertised).

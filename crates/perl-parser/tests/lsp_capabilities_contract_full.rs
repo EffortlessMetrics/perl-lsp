@@ -27,7 +27,8 @@ fn full_capabilities_match_contract() {
     assert_eq!(caps["foldingRangeProvider"], json!(true));
 
     // Full set now that features are implemented & tested
-    assert_eq!(caps["workspaceSymbolProvider"], json!(true));
+    assert!(caps["workspaceSymbolProvider"].is_object(), "workspaceSymbolProvider should be object");
+    assert_eq!(caps["workspaceSymbolProvider"]["resolveProvider"], json!(true));
     assert_eq!(caps["renameProvider"], json!(true));
     assert!(caps["codeActionProvider"].is_object());
 
@@ -47,8 +48,16 @@ fn full_capabilities_match_contract() {
     let ot = &caps["documentOnTypeFormattingProvider"];
     assert!(ot.is_object());
     
+    // Type hierarchy is now advertised (v0.8.5)
+    assert_eq!(caps["typeHierarchyProvider"], json!(true), "typeHierarchyProvider must be advertised");
+    
+    // Pull diagnostics is now advertised (v0.8.5)
+    assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider must be advertised");
+    let diag = &caps["diagnosticProvider"];
+    assert_eq!(diag["interFileDependencies"], json!(false));
+    assert_eq!(diag["workspaceDiagnostics"], json!(true));
+    
     // Must NOT be advertised until fully supported
     assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
-    assert!(caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must NOT be advertised");
     assert!(caps["executeCommandProvider"].is_null(), "executeCommandProvider must NOT be advertised");
 }
