@@ -38,4 +38,9 @@ fn locked_capabilities_are_conservative() {
     ] {
         assert!(caps.get(k).is_none(), "locked mode should not advertise {}", k);
     }
+    
+    // Also ensure these are never advertised (not implemented)
+    assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
+    assert!(caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must NOT be advertised");
+    assert!(caps["executeCommandProvider"].is_null(), "executeCommandProvider must NOT be advertised");
 }

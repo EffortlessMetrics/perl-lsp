@@ -136,10 +136,18 @@ These features have been tested and provide real, useful functionality:
 - `documentOnTypeFormattingProvider` - On-type formatting (NEW)
 
 ### ❌ NOT Advertised in v0.8.4 (Not Implemented)
-- `codeLensProvider` - Code lens (partial implementation exists)
-- `typeHierarchyProvider` - Type hierarchy (not implemented)
-- `callHierarchyProvider` - Call hierarchy (partial implementation exists)
-- `executeCommandProvider` - Execute commands (not wired)
+
+#### Code Lens
+- **Status:** Partial (not advertised).
+- **Notes:** Early provider exists (run/debug links scaffolding), but no stable contract and no cross-feature integration. Not surfaced until stable & tested.
+
+#### Call/Type Hierarchy
+- **Status:** Partial/Not implemented (not advertised).
+- **Notes:** Some internal scaffolding for type/call graphs exists but not connected to the LSP layer. Will surface after end-to-end correctness and tests.
+
+#### Execute Command
+- **Status:** Not wired (not advertised).
+- **Notes:** `workspace/executeCommand` is intentionally not exposed; commands that do exist are handled via normal request/response paths. Clients should not rely on `executeCommand` until explicitly surfaced with tests.
 
 ## ⚠️ Partially Implemented (Not Advertised)
 
