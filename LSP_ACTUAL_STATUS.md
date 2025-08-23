@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.3 GA
+# LSP Actual Status - v0.8.4
 
 ## LSP GA Contract
 
@@ -69,49 +69,52 @@ These features have been tested and provide real, useful functionality:
 - Works even when AST parsing fails (text-based fallback)
 - **Status**: Fully functional
 
-### 10. **Workspace Symbols** (NEW in v0.8.3)
+### 10. **Workspace Symbols** (NEW in v0.8.4)
 - Search for symbols across all open files
 - Works with workspace index
 - **Status**: Fully functional
 
-### 11. **Rename Symbol** (NEW in v0.8.3)
+### 11. **Rename Symbol** (NEW in v0.8.4)
 - Rename variables and functions
 - Cross-file rename for package variables (`our`)
-- **Status**: ~85% functional (lexical vars single-file only)
+- Lexical (`my`) rename is currently per-file with scope fences
+- **Status**: ~85% functional
 
-### 12. **Code Actions** (NEW in v0.8.3)
+### 12. **Code Actions** (NEW in v0.8.4)
 - Add missing `use strict` and `use warnings`
 - Quick fixes for common issues
+- Run perltidy (when available)
 - **Status**: ~70% functional
 
-### 13. **Semantic Tokens** (NEW in v0.8.3)
+### 13. **Semantic Tokens** (NEW in v0.8.4)
 - Enhanced syntax highlighting
 - Proper categorization of keywords, operators, strings, etc.
 - **Status**: ~80% functional
 
-### 14. **Inlay Hints** (NEW in v0.8.3)
+### 14. **Inlay Hints** (NEW in v0.8.4)
 - Parameter names for built-in functions
 - Type hints for literals
 - **Status**: ~75% functional
 
-### 15. **Document Links** (NEW in v0.8.3)
+### 15. **Document Links** (NEW in v0.8.4)
 - Links from `use` and `require` statements
 - Navigate to local modules or MetaCPAN
 - **Status**: ~80% functional
 
-### 16. **Selection Ranges** (NEW in v0.8.3)
+### 16. **Selection Ranges** (NEW in v0.8.4)
 - Smart expand/contract selection
 - Hierarchical selection based on AST
 - **Status**: Fully functional
 
-### 17. **On-Type Formatting** (NEW in v0.8.3)
+### 17. **On-Type Formatting** (NEW in v0.8.4)
 - Auto-indent after `{`
 - Auto-dedent on `}`
+- Triggers: `{`, `}`, `;`, `\n` - only adjusts indentation; no reflow or semantic edits
 - **Status**: ~70% functional
 
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
-### ✅ Advertised in v0.8.3 GA (Working Features)
+### ✅ Advertised in v0.8.4 (Working Features)
 - `textDocumentSync` - File synchronization
 - `completionProvider` - Basic completions
 - `hoverProvider` - Hover information
@@ -132,7 +135,7 @@ These features have been tested and provide real, useful functionality:
 - `selectionRangeProvider` - Selection ranges (NEW)
 - `documentOnTypeFormattingProvider` - On-type formatting (NEW)
 
-### ❌ NOT Advertised in v0.8.3 GA (Not Implemented)
+### ❌ NOT Advertised in v0.8.4 (Not Implemented)
 - `codeLensProvider` - Code lens (partial implementation exists)
 - `typeHierarchyProvider` - Type hierarchy (not implemented)
 - `callHierarchyProvider` - Call hierarchy (partial implementation exists)

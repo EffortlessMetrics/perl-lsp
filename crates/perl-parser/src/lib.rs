@@ -1,18 +1,24 @@
-//! # perl-parser v3 — Native Perl parser
+//! # perl-parser v3 — native Perl parser + LSP
 //!
-//! **Tree-sitter compatible kinds/fields/points**, stable byte↔UTF-16 converters, `to_sexp()` for tests.  
-//! See [`docs/STABILITY.md`](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/main/docs/STABILITY.md) for API guarantees.
+//! - **Tree-sitter compatible** kinds/fields/points.
+//! - Parser: ~100% edge cases; fast UTF-16 mapping.
+//! - LSP: contract-driven capability surface; ~60% functional in v0.8.4.
 //!
-//! This crate provides a clean, efficient parser that consumes tokens from
-//! the perl-lexer crate and produces a well-structured Abstract Syntax Tree (AST).
+//! ## Quick use (library)
+//! ```rust
+//! use perl_parser::Parser;
+//! let mut p = Parser::new();
+//! let ast = p.parse(r#"sub hello { print "hi\n"; }"#).unwrap();
+//! println!("{}", ast.to_sexp());
+//! ```
 //!
-//! ## Tree-sitter Compatibility
+//! ## LSP server
+//! ```bash
+//! cargo install perl-parser --bin perl-lsp
+//! perl-lsp --stdio
+//! ```
 //!
-//! Node kinds, field names, and byte/point semantics match the Tree-sitter Perl grammar:
-//! - 0-based byte offsets and line/column positions  
-//! - UTF-16 column positions for LSP compatibility
-//! - S-expression output via `to_sexp()` method
-//!
+//! **Capability policy:** see `docs/LSP_CAPABILITY_POLICY.md`.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)] // prevent stray pub items from escaping

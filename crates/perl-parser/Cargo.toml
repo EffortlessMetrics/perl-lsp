@@ -69,6 +69,7 @@ serial_test = "3.0"
 tempfile = "3.8"
 proptest = "1"
 perl-corpus = { version = "0.8.3" }
+which = "6"
 
 [[bench]]
 name = "parser_benchmark"
