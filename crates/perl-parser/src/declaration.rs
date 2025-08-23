@@ -6,6 +6,7 @@
 #![allow(unsafe_code)]
 
 use crate::ast::{Node, NodeKind};
+use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -803,5 +804,77 @@ impl<'a> DeclarationProvider<'a> {
 
     pub fn get_node_text(&self, node: &Node) -> String {
         self.content[node.location.start..node.location.end].to_string()
+    }
+}
+
+/// Extract a symbol key from the AST node at the given cursor position
+pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
+    // For now, find the node at offset manually by walking the tree
+    let node = find_node_at_offset(ast, offset)?;
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => {
+            // Variable already has sigil separated
+            let sigil_char = sigil.chars().next();
+            Some(SymbolKey {
+                pkg: current_pkg.into(),
+                name: name.clone().into(),
+                sigil: sigil_char,
+                kind: SymKind::Var,
+            })
+        }
+        NodeKind::FunctionCall { name, .. } => {
+            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
+                (&name[..idx], &name[idx + 2..])
+            } else {
+                (current_pkg, name.as_str())
+            };
+            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+        }
+        NodeKind::Subroutine { name: Some(name), .. } => {
+            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
+                (&name[..idx], &name[idx + 2..])
+            } else {
+                (current_pkg, name.as_str())
+            };
+            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+        }
+        _ => None,
+    }
+}
+
+fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
+    if offset < node.location.start || offset > node.location.end {
+        return None;
+    }
+
+    // Check children first for more specific match
+    let children = get_node_children(node);
+    for child in children {
+        if let Some(found) = find_node_at_offset(child, offset) {
+            return Some(found);
+        }
+    }
+
+    // If no child contains the offset, return this node
+    Some(node)
+}
+
+fn get_node_children(node: &Node) -> Vec<&Node> {
+    match &node.kind {
+        NodeKind::Program { statements } => statements.iter().collect(),
+        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            let mut children = vec![variable.as_ref()];
+            if let Some(init) = initializer {
+                children.push(init.as_ref());
+            }
+            children
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
+        NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
+        NodeKind::FunctionCall { args, .. } => args.iter().collect(),
+        NodeKind::Subroutine { body, .. } => {
+            vec![body.as_ref()]
+        }
+        _ => vec![],
     }
 }

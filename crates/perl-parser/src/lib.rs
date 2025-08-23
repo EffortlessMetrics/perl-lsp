@@ -142,6 +142,7 @@ pub mod position_mapper;
 pub mod positions;
 pub mod quote_parser;
 pub mod recovery_parser;
+pub mod references;
 pub mod rename;
 pub mod semantic;
 pub mod semantic_tokens_provider;

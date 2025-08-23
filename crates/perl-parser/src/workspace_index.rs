@@ -12,6 +12,36 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use url::Url;
 
+/// Symbol kinds for cross-file indexing
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum SymKind {
+    Var,  // $ @ %
+    Sub,  // sub foo
+    Pack, // package Foo
+}
+
+/// A normalized symbol key for cross-file lookups
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct SymbolKey {
+    pub pkg: Arc<str>,
+    pub name: Arc<str>,      // bare name without sigil
+    pub sigil: Option<char>, // $, @, %
+    pub kind: SymKind,
+}
+
+/// Normalize a Perl variable name, extracting sigil and base name
+/// "$foo" -> (Some('$'), "foo")
+/// "foo" -> (None, "foo")
+pub fn normalize_var(name: &str) -> (Option<char>, &str) {
+    let mut chars = name.chars();
+    if let Some(first) = chars.next() {
+        if matches!(first, '$' | '@' | '%') {
+            return (Some(first), chars.as_str());
+        }
+    }
+    (None, name)
+}
+
 /// Helper functions for safe URI <-> filesystem path conversion
 ///
 /// These functions handle proper percent-encoding/decoding and work correctly
@@ -500,6 +530,20 @@ impl WorkspaceIndex {
         }
 
         members
+    }
+
+    /// Find the definition location for a symbol key
+    pub fn find_def(&self, key: &SymbolKey) -> Option<Location> {
+        // For now, use the qualified name approach
+        let qualified_name = format!("{}::{}", key.pkg, key.name);
+        self.find_definition(&qualified_name)
+    }
+
+    /// Find all reference locations for a symbol key
+    pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+        // For now, use the qualified name approach
+        let qualified_name = format!("{}::{}", key.pkg, key.name);
+        self.find_references(&qualified_name)
     }
 }
 
