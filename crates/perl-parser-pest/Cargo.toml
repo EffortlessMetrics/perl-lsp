@@ -6,7 +6,7 @@ edition = "2024"
 description = "Pest-based Perl parser (v2, experimental/legacy); use `perl-parser` (v3) for production"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl"
-keywords = ["perl", "parser", "pest", "syntax"]
+keywords = ["perl", "parser", "pest", "legacy", "v2"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
@@ -47,6 +47,10 @@ while_let_on_iterator = "warn"
 len_zero = "warn"
 only_used_in_recursion = "warn"
 ptr_arg = "warn"
+
+[package.metadata.docs.rs]
+all-features = false
+# This is the v2 Pest experiment - use perl-parser (v3) for production
 
 [features]
 default = ["pure-rust"]
