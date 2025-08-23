@@ -1,8 +1,12 @@
 # LSP Actual Status - v0.8.3 GA
 
+## LSP GA Contract
+
+**As of v0.8.3 GA, the LSP server only advertises capabilities that are fully functional.** Features that are partially implemented or stubs are no longer advertised and will return "method not supported" errors. This ensures editors don't attempt to use non-functional features.
+
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes an LSP server with extensive infrastructure, **only about 35% of advertised features actually work**. This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **only about 35% of possible LSP features actually work**. This document provides an honest assessment of what you can actually expect to work.
 
 ## ✅ Actually Working Features (~35%)
 
@@ -61,9 +65,38 @@ These features have been tested and provide real, useful functionality:
 - Works even when AST parsing fails (text-based fallback)
 - **Status**: Fully functional
 
+## 📋 GA Contract: What's Advertised vs Not Advertised
+
+### ✅ Advertised in v0.8.3 GA (Working Features)
+- `textDocumentSync` - File synchronization
+- `completionProvider` - Basic completions
+- `hoverProvider` - Hover information
+- `definitionProvider` - Go to definition
+- `declarationProvider` - Go to declaration
+- `referencesProvider` - Find references
+- `documentHighlightProvider` - Highlight occurrences
+- `signatureHelpProvider` - Signature help
+- `documentSymbolProvider` - Document symbols
+- `foldingRangeProvider` - Folding ranges
+- `documentFormattingProvider` - Formatting (if perltidy available)
+
+### ❌ NOT Advertised in v0.8.3 GA (Partial/Stub Features)
+- `renameProvider` - Rename refactoring (stub)
+- `codeActionProvider` - Code actions (partial)
+- `workspaceSymbolProvider` - Workspace symbols (not wired)
+- `codeLensProvider` - Code lens (partial)
+- `semanticTokensProvider` - Semantic tokens (partial)
+- `inlayHintProvider` - Inlay hints (partial)
+- `typeHierarchyProvider` - Type hierarchy (not implemented)
+- `callHierarchyProvider` - Call hierarchy (partial)
+- `documentLinkProvider` - Document links (stub)
+- `selectionRangeProvider` - Selection ranges (stub)
+- `documentOnTypeFormattingProvider` - On-type formatting (unreliable)
+- `executeCommandProvider` - Execute commands (not wired)
+
 ## ⚠️ Partially Working Features (~30%)
 
-These features have some implementation but significant limitations:
+These features have some implementation but significant limitations and are NOT advertised:
 
 ### 1. **Rename Symbol**
 - Works for single file only

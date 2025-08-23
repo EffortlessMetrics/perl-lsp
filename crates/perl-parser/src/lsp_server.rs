@@ -437,7 +437,6 @@ impl LspServer {
             },
             "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
             "textDocument/completion" => self.handle_completion(request.params),
-            "textDocument/codeAction" => self.handle_code_action(request.params),
             "textDocument/hover" => self.handle_hover(request.params),
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
             "textDocument/definition" => {
@@ -476,7 +475,27 @@ impl LspServer {
             "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
-            "textDocument/rename" => self.handle_rename(request.params),
+            // GA contract: not supported in v0.8.3
+            "textDocument/rename"
+            | "textDocument/codeAction"
+            | "textDocument/codeLens"
+            | "codeLens/resolve"
+            | "textDocument/inlayHint"
+            | "textDocument/semanticTokens/full"
+            | "textDocument/semanticTokens/range"
+            | "textDocument/typeDefinition"
+            | "textDocument/implementation"
+            | "textDocument/documentLink"
+            | "textDocument/selectionRange"
+            | "textDocument/onTypeFormatting"
+            | "workspace/symbol"
+            | "workspace/executeCommand" => {
+                Err(JsonRpcError {
+                    code: ERR_METHOD_NOT_FOUND,
+                    message: format!("Method '{}' not supported in v0.8.3 GA", request.method),
+                    data: None,
+                })
+            }
             "textDocument/documentSymbol" => {
                 eprintln!("Processing documentSymbol request");
                 let result = self.handle_document_symbol(request.params);
@@ -499,23 +518,11 @@ impl LspServer {
             }
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
-            "workspace/symbol" => self.handle_workspace_symbols(request.params),
-            "textDocument/codeLens" => self.handle_code_lens(request.params),
-            "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
-            "textDocument/semanticTokens/full" => self.handle_semantic_tokens_full(request.params),
-            "textDocument/semanticTokens/range" => {
-                self.handle_semantic_tokens_range(request.params)
-            }
             "textDocument/prepareCallHierarchy" => {
                 self.handle_prepare_call_hierarchy(request.params)
             }
             "callHierarchy/incomingCalls" => self.handle_incoming_calls(request.params),
             "callHierarchy/outgoingCalls" => self.handle_outgoing_calls(request.params),
-            "textDocument/inlayHint" => self.handle_inlay_hint(request.params),
-            "textDocument/documentLink" => self.handle_document_link(request.params),
-            "textDocument/selectionRange" => self.handle_selection_range(request.params),
-            "textDocument/onTypeFormatting" => self.handle_on_type_formatting(request.params),
-            "workspace/executeCommand" => self.handle_execute_command(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery(request.params),
             "workspace/configuration" => self.handle_configuration(request.params),
             "workspace/didChangeWatchedFiles" => {
@@ -689,73 +696,50 @@ impl LspServer {
                 1 // Full document sync
             };
 
+        // GA Contract: Only advertise features that are proven to work (single-file)
         let mut capabilities = json!({
             "positionEncoding": "utf-16",
             "textDocumentSync": {
                 "openClose": true,
                 "change": sync_kind, // Dynamic based on incremental feature
                 "willSave": true,
-                "willSaveWaitUntil": false, // Only enable when formatter is available
+                "willSaveWaitUntil": false,
                 "save": {
-                    "includeText": true // Include text for robust save handling
+                    "includeText": true
                 }
             },
+            // Completions: variables/keywords/builtins (no package members/imports)
             "completionProvider": {
                 "triggerCharacters": ["$", "@", "%", "->"],
                 "allCommitCharacters": [";", " ", ")", "]", "}"]
             },
+            // Single-file navigation that is known-good
             "hoverProvider": true,
             "definitionProvider": true,
             "declarationProvider": true,
             "referencesProvider": true,
             "documentHighlightProvider": true,
-            "typeHierarchyProvider": true,
             "signatureHelpProvider": {
                 "triggerCharacters": ["(", ","]
             },
-            "renameProvider": true,
             "documentSymbolProvider": true,
             "foldingRangeProvider": true,
-            "codeActionProvider": true,
-            "workspaceSymbolProvider": true,
-            "codeLensProvider": {
-                "resolveProvider": true
-            },
-            "semanticTokensProvider": {
-                "legend": {
-                    "tokenTypes": ["namespace", "class", "function", "method", "variable", "parameter", "property", "keyword", "comment", "string", "number", "regexp", "operator", "macro"],
-                    "tokenModifiers": ["declaration", "definition", "reference", "modification", "static", "defaultLibrary", "async", "readonly", "deprecated"]
-                },
-                "full": true,
-                "range": true
-            },
-            "callHierarchyProvider": true,
-            "inlayHintProvider": {
-                "resolveProvider": false
-            },
-            "documentLinkProvider": {
-                "resolveProvider": false
-            },
-            "selectionRangeProvider": true,
-            "documentOnTypeFormattingProvider": {
-                "firstTriggerCharacter": "}",
-                "moreTriggerCharacter": ["{", ";", ")", "\n"]
-            },
-            "executeCommandProvider": {
-                "commands": [
-                    "perl.runTest",
-                    "perl.runTestFile",
-                    "perl.runTests",
-                    "perl.runFile",
-                    "perl.runTestSub",
-                    "perl.debugFile",
-                    "perl.debugTests",
-                    "perl.runCritic"
-                ]
-            },
-            "experimental": {
-                "testProvider": true
-            },
+            // Diagnostics are automatic via didOpen/didChange
+            
+            // The following are NOT advertised in v0.8.3 GA:
+            // - renameProvider (stub returns empty)
+            // - codeActionProvider (partial/stubs)
+            // - workspaceSymbolProvider (cross-file not wired)
+            // - codeLensProvider (partial)
+            // - semanticTokensProvider (partial)
+            // - inlayHintProvider (partial)
+            // - typeHierarchyProvider (not implemented)
+            // - callHierarchyProvider (partial)
+            // - documentLinkProvider (stub)
+            // - selectionRangeProvider (stub)
+            // - documentOnTypeFormattingProvider (not reliable)
+            // - executeCommandProvider (not wired)
+            
             "positionEncoding": "utf-16"
         });
 

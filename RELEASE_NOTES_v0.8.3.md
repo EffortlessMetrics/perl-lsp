@@ -19,6 +19,16 @@ All four crates are now available on crates.io:
 | [perl-corpus](https://crates.io/crates/perl-corpus) | 0.8.3 | Test corpus & validation | ✅ Production |
 | [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.8.3 | Legacy Pest parser | ⚠️ Legacy |
 
+## 🔒 LSP Contract Lock
+
+### Critical Change: LSP Capability Advertisement
+- **Only advertises working features** - partial/stub features no longer advertised
+- **Returns "method not supported"** for unimplemented features instead of empty results
+- **Contract enforced by tests** - prevents accidental capability drift
+- **Cleaner editor integration** - editors won't attempt to use non-functional features
+
+This ensures a predictable, honest contract between the LSP server and editors.
+
 ## 🎯 Parser Improvements
 
 ### Hash Literal Parsing
