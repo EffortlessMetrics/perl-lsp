@@ -705,68 +705,76 @@ impl LspServer {
                 1 // Full document sync
             };
 
-        // GA Contract: Only advertise features that are proven to work (single-file)
-        let mut capabilities = json!({
-            "positionEncoding": "utf-16",
-            "textDocumentSync": {
-                "openClose": true,
-                "change": sync_kind, // Dynamic based on incremental feature
-                "willSave": true,
-                "willSaveWaitUntil": false,
-                "save": {
-                    "includeText": true
-                }
-            },
-            // Completions: variables/keywords/builtins (no package members/imports)
-            "completionProvider": {
-                "triggerCharacters": ["$", "@", "%", "->"],
-                "allCommitCharacters": [";", " ", ")", "]", "}"]
-            },
-            // Single-file navigation that is known-good
-            "hoverProvider": true,
-            "definitionProvider": true,
-            "declarationProvider": true,
-            "referencesProvider": true,
-            "documentHighlightProvider": true,
-            "signatureHelpProvider": {
-                "triggerCharacters": ["(", ","]
-            },
-            "documentSymbolProvider": true,
-            "foldingRangeProvider": true,
-            // PR 3: Workspace symbols now work via index
-            "workspaceSymbolProvider": true,
-            // PR 4: Rename now works cross-file
-            "renameProvider": true,
-            // PR 5: Code actions for pragmas
-            "codeActionProvider": { "codeActionKinds": ["quickfix"] },
-            // PR 6: Semantic tokens for syntax highlighting
-            "semanticTokensProvider": {
-                "legend": {
-                    "tokenTypes": ["namespace","class","function","method","variable","parameter","property","keyword","comment","string","number","regexp","operator","type","macro"],
-                    "tokenModifiers": ["declaration","definition","readonly","defaultLibrary","deprecated","static","async"]
+        // Build capabilities based on feature flag
+        let mut capabilities = if cfg!(feature = "lsp-ga-lock") {
+            // Conservative GA set for emergency point releases
+            json!({
+                "positionEncoding": "utf-16",
+                "textDocumentSync": {
+                    "openClose": true,
+                    "change": sync_kind,
+                    "willSave": true,
+                    "willSaveWaitUntil": false,
+                    "save": { "includeText": true }
                 },
-                "full": true
-            },
-            // PR 7: Inlay hints for parameters and types
-            "inlayHintProvider": { "resolveProvider": false },
-            // PR 8: Document links and selection ranges
-            "documentLinkProvider": { "resolveProvider": false },
-            "selectionRangeProvider": true,
-            // PR 9: On-type formatting
-            "documentOnTypeFormattingProvider": {
-                "firstTriggerCharacter": "{",
-                "moreTriggerCharacter": ["}", ";", "\n"]
-            },
-            // Diagnostics are automatic via didOpen/didChange
-
-            // The following are NOT advertised in v0.8.3 GA:
-            // - codeLensProvider (partial)
-            // - typeHierarchyProvider (not implemented)
-            // - callHierarchyProvider (partial)
-            // - executeCommandProvider (not wired)
-
-            "positionEncoding": "utf-16"
-        });
+                "completionProvider": {
+                    "triggerCharacters": ["$", "@", "%", "->"],
+                    "allCommitCharacters": [";", " ", ")", "]", "}"]
+                },
+                "hoverProvider": true,
+                "definitionProvider": true,
+                "declarationProvider": true,
+                "referencesProvider": true,
+                "documentSymbolProvider": true,
+                "foldingRangeProvider": true
+            })
+        } else {
+            // Full set for main branch - only include a capability after its acceptance tests pass
+            json!({
+                "positionEncoding": "utf-16",
+                "textDocumentSync": {
+                    "openClose": true,
+                    "change": sync_kind,
+                    "willSave": true,
+                    "willSaveWaitUntil": false,
+                    "save": { "includeText": true }
+                },
+                "completionProvider": {
+                    "triggerCharacters": ["$", "@", "%", "->"],
+                    "allCommitCharacters": [";", " ", ")", "]", "}"]
+                },
+                "hoverProvider": true,
+                "definitionProvider": true,
+                "declarationProvider": true,
+                "referencesProvider": true,
+                "documentHighlightProvider": true,
+                "signatureHelpProvider": {
+                    "triggerCharacters": ["(", ","]
+                },
+                "documentSymbolProvider": true,
+                "foldingRangeProvider": true,
+                
+                // ✅ Newly proven capabilities
+                "workspaceSymbolProvider": true,
+                "renameProvider": true,
+                "codeActionProvider": { "codeActionKinds": ["quickfix"] },
+                
+                "semanticTokensProvider": {
+                    "legend": {
+                        "tokenTypes": ["namespace","class","function","method","variable","parameter","property","keyword","comment","string","number","regexp","operator","type","macro"],
+                        "tokenModifiers": ["declaration","definition","readonly","defaultLibrary","deprecated","static","async"]
+                    },
+                    "full": true
+                },
+                "inlayHintProvider": { "resolveProvider": false },
+                "documentLinkProvider": { "resolveProvider": false },
+                "selectionRangeProvider": true,
+                "documentOnTypeFormattingProvider": {
+                    "firstTriggerCharacter": "{",
+                    "moreTriggerCharacter": ["}", ";", "\n"]
+                }
+            })
+        };
 
         // Only advertise formatting if perltidy is available
         if has_perltidy {

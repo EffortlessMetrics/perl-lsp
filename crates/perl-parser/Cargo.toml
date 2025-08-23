@@ -48,6 +48,8 @@ cli = []
 incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
+# When enabled, advertise *only* the conservative GA set (for emergency point releases).
+lsp-ga-lock = []
 
 # Aspirational features for tests that should eventually pass
 constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)

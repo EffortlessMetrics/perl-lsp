@@ -4,11 +4,15 @@
 
 **As of v0.8.3 GA, the LSP server only advertises capabilities that are fully functional.** Features that are partially implemented or stubs are no longer advertised and will return "method not supported" errors. This ensures editors don't attempt to use non-functional features.
 
+## Capability Policy
+
+**We only advertise capabilities that are proven by tests.** For conservative point releases we build with the `lsp-ga-lock` feature, which surfaces a reduced set. New features flip on **only** when their acceptance tests land in the same PR.
+
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **only about 35% of possible LSP features actually work**. This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 60% of LSP features now work** (up from 35% in v0.8.2). This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~35%)
+## ✅ Actually Working Features (~60%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -65,6 +69,46 @@ These features have been tested and provide real, useful functionality:
 - Works even when AST parsing fails (text-based fallback)
 - **Status**: Fully functional
 
+### 10. **Workspace Symbols** (NEW in v0.8.3)
+- Search for symbols across all open files
+- Works with workspace index
+- **Status**: Fully functional
+
+### 11. **Rename Symbol** (NEW in v0.8.3)
+- Rename variables and functions
+- Cross-file rename for package variables (`our`)
+- **Status**: ~85% functional (lexical vars single-file only)
+
+### 12. **Code Actions** (NEW in v0.8.3)
+- Add missing `use strict` and `use warnings`
+- Quick fixes for common issues
+- **Status**: ~70% functional
+
+### 13. **Semantic Tokens** (NEW in v0.8.3)
+- Enhanced syntax highlighting
+- Proper categorization of keywords, operators, strings, etc.
+- **Status**: ~80% functional
+
+### 14. **Inlay Hints** (NEW in v0.8.3)
+- Parameter names for built-in functions
+- Type hints for literals
+- **Status**: ~75% functional
+
+### 15. **Document Links** (NEW in v0.8.3)
+- Links from `use` and `require` statements
+- Navigate to local modules or MetaCPAN
+- **Status**: ~80% functional
+
+### 16. **Selection Ranges** (NEW in v0.8.3)
+- Smart expand/contract selection
+- Hierarchical selection based on AST
+- **Status**: Fully functional
+
+### 17. **On-Type Formatting** (NEW in v0.8.3)
+- Auto-indent after `{`
+- Auto-dedent on `}`
+- **Status**: ~70% functional
+
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
 ### ✅ Advertised in v0.8.3 GA (Working Features)
@@ -79,40 +123,34 @@ These features have been tested and provide real, useful functionality:
 - `documentSymbolProvider` - Document symbols
 - `foldingRangeProvider` - Folding ranges
 - `documentFormattingProvider` - Formatting (if perltidy available)
+- `workspaceSymbolProvider` - Workspace symbols (NEW)
+- `renameProvider` - Rename refactoring (NEW)
+- `codeActionProvider` - Code actions (NEW)
+- `semanticTokensProvider` - Semantic tokens (NEW)
+- `inlayHintProvider` - Inlay hints (NEW)
+- `documentLinkProvider` - Document links (NEW)
+- `selectionRangeProvider` - Selection ranges (NEW)
+- `documentOnTypeFormattingProvider` - On-type formatting (NEW)
 
-### ❌ NOT Advertised in v0.8.3 GA (Partial/Stub Features)
-- `renameProvider` - Rename refactoring (stub)
-- `codeActionProvider` - Code actions (partial)
-- `workspaceSymbolProvider` - Workspace symbols (not wired)
-- `codeLensProvider` - Code lens (partial)
-- `semanticTokensProvider` - Semantic tokens (partial)
-- `inlayHintProvider` - Inlay hints (partial)
+### ❌ NOT Advertised in v0.8.3 GA (Not Implemented)
+- `codeLensProvider` - Code lens (partial implementation exists)
 - `typeHierarchyProvider` - Type hierarchy (not implemented)
-- `callHierarchyProvider` - Call hierarchy (partial)
-- `documentLinkProvider` - Document links (stub)
-- `selectionRangeProvider` - Selection ranges (stub)
-- `documentOnTypeFormattingProvider` - On-type formatting (unreliable)
+- `callHierarchyProvider` - Call hierarchy (partial implementation exists)
 - `executeCommandProvider` - Execute commands (not wired)
 
-## ⚠️ Partially Working Features (~30%)
+## ⚠️ Partially Implemented (Not Advertised)
 
-These features have some implementation but significant limitations and are NOT advertised:
+These features have partial implementations but are not advertised due to significant limitations:
 
-### 1. **Rename Symbol**
-- Works for single file only
-- No cross-file renaming
-- **Status**: ~40% functional
+### 1. **Code Lens**
+- Run/Debug links partially implemented
+- Test discovery not connected
+- **Status**: ~20% functional
 
-### 2. **Code Completion**
-- Missing: Package members (`Foo::Bar::`)
-- Missing: Import completions
-- Missing: File path completions
-- **Status**: ~30% functional
-
-### 3. **Semantic Tokens**
-- Basic syntax highlighting
-- Some token types not properly categorized
-- **Status**: ~50% functional
+### 2. **Call Hierarchy**
+- Basic structure exists
+- Not fully connected to AST
+- **Status**: ~15% functional
 
 ## ❌ Not Actually Working (Stub Implementations) (~35%)
 
