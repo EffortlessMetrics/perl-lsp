@@ -42,6 +42,8 @@ use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
+const ERR_INVALID_REQUEST: i32 = -32600;
+const ERR_INVALID_PARAMS: i32 = -32602;
 const ERR_REQUEST_CANCELLED: i32 = -32800;
 const ERR_CONTENT_MODIFIED: i32 = -32801;
 
@@ -482,17 +484,22 @@ impl LspServer {
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
             "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
+            // PR 6: Semantic tokens
+            "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
+            // PR 7: Inlay hints
+            "textDocument/inlayHint" => self.handle_inlay_hints(request.params),
+            // PR 8: Document links
+            "textDocument/documentLink" => self.handle_document_links(request.params),
+            // PR 8: Selection ranges
+            "textDocument/selectionRange" => self.handle_selection_range(request.params),
+            // PR 9: On-type formatting
+            "textDocument/onTypeFormatting" => self.handle_on_type_formatting(request.params),
             // GA contract: these methods remain unsupported in v0.8.3
             "textDocument/codeLens"
             | "codeLens/resolve"
-            | "textDocument/inlayHint"
-            | "textDocument/semanticTokens/full"
             | "textDocument/semanticTokens/range"
             | "textDocument/typeDefinition"
             | "textDocument/implementation"
-            | "textDocument/documentLink"
-            | "textDocument/selectionRange"
-            | "textDocument/onTypeFormatting"
             | "workspace/executeCommand" => Err(JsonRpcError {
                 code: ERR_METHOD_NOT_FOUND,
                 message: format!("Method '{}' not supported in v0.8.3 GA", request.method),
@@ -732,17 +739,30 @@ impl LspServer {
             "renameProvider": true,
             // PR 5: Code actions for pragmas
             "codeActionProvider": { "codeActionKinds": ["quickfix"] },
+            // PR 6: Semantic tokens for syntax highlighting
+            "semanticTokensProvider": {
+                "legend": {
+                    "tokenTypes": ["namespace","class","function","method","variable","parameter","property","keyword","comment","string","number","regexp","operator","type","macro"],
+                    "tokenModifiers": ["declaration","definition","readonly","defaultLibrary","deprecated","static","async"]
+                },
+                "full": true
+            },
+            // PR 7: Inlay hints for parameters and types
+            "inlayHintProvider": { "resolveProvider": false },
+            // PR 8: Document links and selection ranges
+            "documentLinkProvider": { "resolveProvider": false },
+            "selectionRangeProvider": true,
+            // PR 9: On-type formatting
+            "documentOnTypeFormattingProvider": {
+                "firstTriggerCharacter": "{",
+                "moreTriggerCharacter": ["}", ";", "\n"]
+            },
             // Diagnostics are automatic via didOpen/didChange
 
             // The following are NOT advertised in v0.8.3 GA:
             // - codeLensProvider (partial)
-            // - semanticTokensProvider (partial)
-            // - inlayHintProvider (partial)
             // - typeHierarchyProvider (not implemented)
             // - callHierarchyProvider (partial)
-            // - documentLinkProvider (stub)
-            // - selectionRangeProvider (stub)
-            // - documentOnTypeFormattingProvider (not reliable)
             // - executeCommandProvider (not wired)
 
             "positionEncoding": "utf-16"
@@ -3303,6 +3323,161 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
+    /// Handle textDocument/semanticTokens/full request  
+    fn handle_semantic_tokens(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let documents = self.documents.lock().unwrap();
+            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            if let Some(ref ast) = doc.ast {
+                let data = crate::semantic_tokens::collect_semantic_tokens(
+                    ast, 
+                    &doc.content, 
+                    &|off| self.offset_to_pos16(doc, off)
+                );
+                return Ok(Some(json!({ "data": data.into_iter().flatten().collect::<Vec<_>>() })));
+            }
+        }
+        Ok(Some(json!({ "data": [] })))
+    }
+
+    /// Handle textDocument/inlayHint request
+    fn handle_inlay_hints(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let documents = self.documents.lock().unwrap();
+            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            if let Some(ref ast) = doc.ast {
+                let mut hints = Vec::new();
+                hints.extend(crate::inlay_hints::parameter_hints(ast, &|off| self.offset_to_pos16(doc, off)));
+                hints.extend(crate::inlay_hints::trivial_type_hints(ast, &|off| self.offset_to_pos16(doc, off)));
+                return Ok(Some(json!(hints)));
+            }
+        }
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/documentLink request
+    fn handle_document_links(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let documents = self.documents.lock().unwrap();
+            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            
+            // Get workspace roots from initialization params
+            let roots = self.workspace_roots();
+            let links = crate::document_links::compute_links(uri, &doc.content, &roots);
+            Ok(Some(json!(links)))
+        } else {
+            Ok(Some(json!([])))
+        }
+    }
+
+    /// Handle textDocument/selectionRange request
+    fn handle_selection_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let positions = p["positions"].as_array().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing positions array".into(),
+                data: None,
+            })?;
+            
+            let documents = self.documents.lock().unwrap();
+            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            
+            let mut out = Vec::new();
+            if let Some(ref ast) = doc.ast {
+                // Build parent map if not cached
+                let parent_map = crate::selection_range::build_parent_map(ast);
+                
+                for pos in positions {
+                    let line = pos["line"].as_u64().unwrap_or(0) as u32;
+                    let col = pos["character"].as_u64().unwrap_or(0) as u32;
+                    let off = self.pos16_to_offset(doc, line, col);
+                    let chain = crate::selection_range::selection_chain(
+                        ast, 
+                        &parent_map,
+                        off, 
+                        &|o| self.offset_to_pos16(doc, o)
+                    );
+                    out.push(chain);
+                }
+            }
+            Ok(Some(json!(out)))
+        } else {
+            Ok(Some(json!([])))
+        }
+    }
+
+    /// Handle textDocument/onTypeFormatting request
+    fn handle_on_type_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let ch = p["ch"].as_str()
+                .and_then(|s| s.chars().next())
+                .unwrap_or('\n');
+            let pos = &p["position"];
+            let line = pos["line"].as_u64().unwrap_or(0) as u32;
+            let col = pos["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+                code: ERR_INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            
+            if let Some(edits) = crate::on_type_formatting::compute_on_type_edit(&doc.content, line, col, ch) {
+                return Ok(Some(json!(edits)));
+            }
+        }
+        Ok(Some(json!([])))
+    }
+
+    /// Get workspace roots from initialization
+    fn workspace_roots(&self) -> Vec<url::Url> {
+        // In a real implementation, store these from initialize params
+        // For now, return empty vec
+        vec![]
+    }
+
     /// Handle textDocument/documentSymbol request
     fn handle_document_symbol(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -5797,36 +5972,16 @@ impl LspServer {
     }
 
     /// Handle selectionRange request
+    // Removed duplicate - see new implementation above
+    /*
     fn handle_selection_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let positions = params["positions"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|pos| {
-                            let line = pos["line"].as_u64()? as u32;
-                            let character = pos["character"].as_u64()? as u32;
-                            Some(lsp_types::Position::new(line, character))
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-
-            let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
-                let ranges = crate::lsp_selection_range::selection_ranges(&doc.content, &positions);
-                Ok(Some(serde_json::to_value(ranges).unwrap_or(Value::Null)))
-            } else {
-                Ok(Some(Value::Null))
-            }
-        } else {
-            Ok(Some(Value::Null))
-        }
+        // Old stub implementation - replaced with new one above
     }
+    */
 
-    /// Handle onTypeFormatting request
-    fn handle_on_type_formatting(
+    /// Handle onTypeFormatting request - OLD STUB (replaced above)
+    #[allow(dead_code)]
+    fn handle_on_type_formatting_old(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {

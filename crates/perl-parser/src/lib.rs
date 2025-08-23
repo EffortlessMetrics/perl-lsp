@@ -161,6 +161,11 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
+pub mod semantic_tokens;
+pub mod inlay_hints;
+pub mod document_links;
+pub mod selection_range;
+pub mod on_type_formatting;
 // pub mod test_generator;  // TODO: Fix compilation
 // pub mod tdd_workflow;    // TODO: Fix compilation
 pub mod debug_adapter;
@@ -223,6 +228,11 @@ pub use type_inference::{
     TypeInferenceEngine, TypeLocation,
 };
 pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
+pub use semantic_tokens::{EncodedToken, TokensLegend, collect_semantic_tokens, legend as semantic_legend};
+pub use inlay_hints::{parameter_hints, trivial_type_hints};
+pub use document_links::compute_links;
+pub use selection_range::{selection_chain, build_parent_map};
+pub use on_type_formatting::compute_on_type_edit;
 
 #[cfg(test)]
 mod tests {
