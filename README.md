@@ -87,6 +87,16 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
+## 📦 Which Crate Should I Use?
+
+| Crate | Use Case | Published | Description |
+|-------|----------|-----------|-------------|
+| **`perl-parser`** | **Production v3** (native), Tree-sitter compatible | ✅ crates.io | Recommended for all new projects |
+| `perl-parser-pest` | v2 Pest experiment (compatibility/migration) | ✅ crates.io | Legacy, for comparison only |
+| `tree-sitter-perl` | Internal validation harness | ❌ (publish = false) | Do not use |
+
+---
+
 ## 🚀 Quick Start
 
 ### Install the LSP Server (Recommended)

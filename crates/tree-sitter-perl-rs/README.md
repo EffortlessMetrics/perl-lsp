@@ -1,53 +1,41 @@
-# Tree-sitter Perl - Pure Rust Implementation
+# tree-sitter-perl-rs
 
-A high-performance, pure Rust implementation of a Perl parser with tree-sitter compatibility.
+> ⚠️ **This crate is a Tree-sitter validation harness (benches/examples) for internal use.**  
+> **It is not published to crates.io.**  
+> For the v2 Pest-based library crate, see **[`perl-parser-pest`](https://crates.io/crates/perl-parser-pest)**.  
+> For the production parser, use **[`perl-parser` (v3)](https://crates.io/crates/perl-parser)**.
 
-## Features
+## Purpose
 
-### Core Parser
-- **99.995% Perl 5 syntax coverage** - Handles virtually all real-world Perl code
-- **Pure Rust implementation** - No C dependencies, cross-platform compatible
-- **Tree-sitter compatible** - Outputs standard S-expressions for tool integration
-- **Excellent performance** - 5-134x faster than alternatives
+This crate serves as an internal validation and benchmarking harness for comparing:
+- v1: C-based Tree-sitter parser
+- v2: Pest-based parser (`perl-parser-pest`)
+- v3: Native lexer+parser (`perl-parser`)
 
-### Enhanced Features
-- **Advanced Heredoc Support** - All variants including backtick, escaped, indented
-- **Special Section Handling** - DATA/END sections and POD documentation
-- **Streaming Parser** - Memory-efficient parsing of large files
-- **Error Recovery** - Robust parsing with malformed input
-- **S-Expression Formatter** - Position tracking and multiple output modes
+## Usage (Internal Development Only)
 
-## Quick Start
+```bash
+# Run benchmarks
+cargo run --bin ts_benchmark_parsers --features pure-rust
 
-```rust
-use tree_sitter_perl::EnhancedFullParser;
+# Test parsers
+cargo run --bin ts_test_parsers --features pure-rust
 
-fn main() {
-    let perl_code = r#"
-sub hello {
-    my $name = shift;
-    print "Hello, $name!\n";
-}
-
-hello("World");
-"#;
-
-    let mut parser = EnhancedFullParser::new();
-    match parser.parse(perl_code) {
-        Ok(ast) => println!("Parse successful: {:?}", ast),
-        Err(e) => eprintln!("Parse error: {:?}", e),
-    }
-}
+# Parse a file
+cargo run --bin ts-parse-rust --features pure-rust -- file.pl
 ```
 
-## Installation
+## Do Not Use in Production
 
-Add to your `Cargo.toml`:
+This crate:
+- Contains duplicate code for testing purposes
+- Is not maintained for external use
+- Will not be published to crates.io
+- May change or be removed without notice
 
-```toml
-[dependencies]
-tree-sitter-perl = { version = "0.1", features = ["pure-rust"] }
-```
+For production use, choose:
+- **`perl-parser`** - Recommended v3 native parser
+- **`perl-parser-pest`** - v2 Pest-based parser (legacy/migration)
 
 ## Usage Examples
 
