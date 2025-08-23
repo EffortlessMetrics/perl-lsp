@@ -5150,7 +5150,11 @@ mod tests {
         let ast = result.unwrap();
         // Statement context: block with hash inside
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(block (hash"), "Statement context should have block containing hash, got: {}", sexp);
+        assert!(
+            sexp.contains("(block (hash"),
+            "Statement context should have block containing hash, got: {}",
+            sexp
+        );
 
         // Expression context: direct hash literal in assignment
         let mut parser = Parser::new("my $x = { key => 'value' }");
@@ -5169,6 +5173,10 @@ mod tests {
         let ast = result.unwrap();
         // Parentheses with fat arrow should create hash
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(hash") || sexp.contains("(array"), "Should have hash or array, got: {}", sexp);
+        assert!(
+            sexp.contains("(hash") || sexp.contains("(array"),
+            "Should have hash or array, got: {}",
+            sexp
+        );
     }
 }

@@ -22,7 +22,7 @@ fn lexer_terminates_on_backtick_heredoc_with_cr() {
     }
 
     // If we got here, the lexer terminated properly
-    assert!(true);
+    // Test passed - lexer terminated without infinite loop
 }
 
 #[test]
