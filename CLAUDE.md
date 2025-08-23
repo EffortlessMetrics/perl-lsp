@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Latest Release**: v0.8.3 GA - See [RELEASE_NOTES_v0.8.3.md](RELEASE_NOTES_v0.8.3.md)  
+**API Stability**: See [docs/STABILITY.md](docs/STABILITY.md) for guarantees
+
 ## Project Overview
 
 This repository contains **three Perl parser implementations** and a **full Language Server Protocol (LSP) implementation**:

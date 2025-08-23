@@ -4,8 +4,8 @@
 [![Tests](.github/badges/tests.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
 [![Coverage](.github/badges/coverage.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
 [![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
-[![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl)](https://crates.io/crates/tree-sitter-perl)
-[![Documentation](https://docs.rs/tree-sitter-perl/badge.svg)](https://docs.rs/tree-sitter-perl)
+[![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
+[![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -22,15 +22,18 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.3-rc.1
+## 📦 Latest Release: v0.8.3 GA
 
-### v0.8.3-rc.1 - Honest Assessment of LSP Implementation
-- ⚠️ **Reality Check**: Only ~35% of advertised LSP features actually work
-- 📊 **Parser Complete**: v3 parser has ~100% Perl coverage and ~70% LSP infrastructure
-- 🔌 **Wiring Needed**: Most "missing" features exist but aren't connected to LSP
-- ✅ **Working Features**: Diagnostics, basic completion/hover, single-file navigation
-- ❌ **Stub Features**: Workspace refactoring, import optimization return empty results
-- 📝 **Documentation**: Added LSP_ACTUAL_STATUS.md with complete transparency
+### v0.8.3 - General Availability Release 🎉
+- ✅ **Hash Literals Fixed**: `{ key => value }` now correctly produces HashLiteral nodes
+- ✅ **Parenthesized Expressions**: `($a or $b)` with word operators parse correctly
+- ✅ **qw() Arrays**: Proper ArrayLiteral nodes with word elements for all delimiters
+- ✅ **LSP Go-to-Definition**: Uses DeclarationProvider for accurate function location
+- ✅ **Inlay Hints**: Enhanced provider recognizes HashLiteral nodes in blocks
+- 📊 **100% Edge Cases**: All 141 comprehensive edge case tests passing
+- 🚀 **Production Ready**: See [STABILITY.md](docs/STABILITY.md) for API guarantees
+
+See [RELEASE_NOTES_v0.8.3.md](RELEASE_NOTES_v0.8.3.md) for complete details.
 
 ### Previous: v0.8.0 - Production-Hardened Position Helpers
 - ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking
