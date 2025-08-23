@@ -171,7 +171,7 @@ mod tests {
 
     proptest! {
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn heredoc_has_matching_delimiters(doc in basic_heredoc()) {
             let lines: Vec<&str> = doc.lines().collect();
             assert!(lines.len() >= 3); // At least introducer, content, terminator
@@ -189,13 +189,13 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn indented_heredoc_uses_tilde(doc in indented_heredoc()) {
             assert!(doc.contains("<<~"));
         }
 
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn quoted_heredoc_has_quotes(doc in quoted_heredoc()) {
             assert!(doc.contains("<<'") && doc.contains("'"));
         }

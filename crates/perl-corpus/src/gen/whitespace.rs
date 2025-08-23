@@ -139,7 +139,7 @@ mod tests {
 
     proptest! {
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn comments_dont_break_statements(code in commented_code()) {
             // Just check it has both code and comments
             assert!(code.contains('#'));
