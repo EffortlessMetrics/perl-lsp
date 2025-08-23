@@ -24,6 +24,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
 };
+use md5;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::borrow::Cow;
@@ -477,10 +478,13 @@ impl LspServer {
             }
             "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
+            "textDocument/diagnostic" => self.handle_document_diagnostic(request.params),
+            "workspace/diagnostic" => self.handle_workspace_diagnostic(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             // GA contract: not supported in v0.8.3
             // PR 3: Wire workspace/symbol to use the index
             "workspace/symbol" => self.handle_workspace_symbols_v2(request.params),
+            "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
             "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
@@ -755,7 +759,9 @@ impl LspServer {
                 "foldingRangeProvider": true,
 
                 // ✅ Newly proven capabilities
-                "workspaceSymbolProvider": true,
+                "workspaceSymbolProvider": {
+                    "resolveProvider": true
+                },
                 "renameProvider": true,
                 "codeActionProvider": { "codeActionKinds": ["quickfix"] },
 
@@ -772,6 +778,11 @@ impl LspServer {
                 "documentOnTypeFormattingProvider": {
                     "firstTriggerCharacter": "{",
                     "moreTriggerCharacter": ["}", ";", "\n"]
+                },
+                "typeHierarchyProvider": true,
+                "diagnosticProvider": {
+                    "interFileDependencies": false,
+                    "workspaceDiagnostics": true
                 }
             })
         };
@@ -6076,6 +6087,310 @@ impl LspServer {
         }
 
         eprintln!("Sent file watcher registration request (async)");
+    }
+
+    /// Handle textDocument/diagnostic request (LSP 3.17 pull diagnostics)
+    fn handle_document_diagnostic(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                // Get diagnostics from the existing provider
+                if let Some(ast) = &doc.ast {
+                    let provider = DiagnosticsProvider::new(ast, doc.content.clone());
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                    
+                    // Generate a result ID based on content
+                    let result_id = format!("{:x}", md5::compute(&doc.content));
+                    
+                    // If the result ID matches the previous one, return unchanged
+                    if let Some(prev_id) = previous_result_id {
+                        if prev_id == result_id {
+                            return Ok(Some(json!({
+                                "kind": "unchanged",
+                                "resultId": prev_id
+                            })));
+                        }
+                    }
+                    
+                    // Convert to LSP diagnostics
+                    let lsp_diagnostics: Vec<Value> = diagnostics
+                        .into_iter()
+                        .map(|d| {
+                            let start_pos = doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                            let end_pos = doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                            json!({
+                                "range": {
+                                    "start": {
+                                        "line": start_pos.0,
+                                        "character": start_pos.1,
+                                    },
+                                    "end": {
+                                        "line": end_pos.0,
+                                        "character": end_pos.1,
+                                    },
+                                },
+                                "severity": match d.severity {
+                                    InternalDiagnosticSeverity::Error => 1,
+                                    InternalDiagnosticSeverity::Warning => 2,
+                                    InternalDiagnosticSeverity::Information => 3,
+                                    InternalDiagnosticSeverity::Hint => 4,
+                                },
+                                "source": "perl-lsp",
+                                "message": d.message,
+                            })
+                        })
+                        .collect();
+                    
+                    return Ok(Some(json!({
+                        "kind": "full",
+                        "resultId": result_id,
+                        "items": lsp_diagnostics
+                    })));
+                }
+            }
+        }
+        
+        // Return empty diagnostics if document not found
+        Ok(Some(json!({
+            "kind": "full",
+            "items": []
+        })))
+    }
+
+    /// Handle workspace/diagnostic request (LSP 3.17 pull diagnostics)
+    fn handle_workspace_diagnostic(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let previous_result_ids = if let Some(params) = &params {
+            if let Some(ids) = params["previousResultIds"].as_array() {
+                ids.iter()
+                    .filter_map(|item| {
+                        let uri = item["uri"].as_str()?;
+                        let id = item["value"].as_str()?;
+                        Some((uri.to_string(), id.to_string()))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+        
+        let mut items = Vec::new();
+        let documents = self.documents.lock().unwrap();
+        
+        for (uri_str, doc) in documents.iter() {
+            // Check if we have a previous result ID for this document
+            let prev_id = previous_result_ids
+                .iter()
+                .find(|(u, _)| u == uri_str)
+                .map(|(_, id)| id.clone());
+            
+            if let Some(ast) = &doc.ast {
+                let provider = DiagnosticsProvider::new(ast, doc.content.clone());
+                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                
+                // Generate result ID
+                let result_id = format!("{:x}", md5::compute(&doc.content));
+                
+                // Check if unchanged
+                let report = if let Some(prev) = prev_id {
+                    if prev == result_id {
+                        json!({
+                            "uri": uri_str,
+                            "version": doc._version,
+                            "kind": "unchanged",
+                            "resultId": prev
+                        })
+                    } else {
+                        // Convert diagnostics
+                        let lsp_diagnostics: Vec<Value> = diagnostics
+                            .into_iter()
+                            .map(|d| {
+                                let start_pos = doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                                let end_pos = doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                                json!({
+                                    "range": {
+                                        "start": {
+                                            "line": start_pos.0,
+                                            "character": start_pos.1,
+                                        },
+                                        "end": {
+                                            "line": end_pos.0,
+                                            "character": end_pos.1,
+                                        },
+                                    },
+                                    "severity": match d.severity {
+                                        InternalDiagnosticSeverity::Error => 1,
+                                        InternalDiagnosticSeverity::Warning => 2,
+                                        InternalDiagnosticSeverity::Information => 3,
+                                        InternalDiagnosticSeverity::Hint => 4,
+                                    },
+                                    "source": "perl-lsp",
+                                    "message": d.message,
+                                })
+                            })
+                            .collect();
+                        
+                        json!({
+                            "uri": uri_str,
+                            "version": doc._version,
+                            "kind": "full",
+                            "resultId": result_id,
+                            "items": lsp_diagnostics
+                        })
+                    }
+                } else {
+                    // No previous result, return full
+                    let lsp_diagnostics: Vec<Value> = diagnostics
+                        .into_iter()
+                        .map(|d| {
+                            let start_pos = doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                            let end_pos = doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                            json!({
+                                "range": {
+                                    "start": {
+                                        "line": start_pos.0,
+                                        "character": start_pos.1,
+                                    },
+                                    "end": {
+                                        "line": end_pos.0,
+                                        "character": end_pos.1,
+                                    },
+                                },
+                                "severity": match d.severity {
+                                    InternalDiagnosticSeverity::Error => 1,
+                                    InternalDiagnosticSeverity::Warning => 2,
+                                    InternalDiagnosticSeverity::Information => 3,
+                                    InternalDiagnosticSeverity::Hint => 4,
+                                },
+                                "source": "perl-lsp",
+                                "message": d.message,
+                            })
+                        })
+                        .collect();
+                    
+                    json!({
+                        "uri": uri_str,
+                        "version": doc._version,
+                        "kind": "full",
+                        "resultId": result_id,
+                        "items": lsp_diagnostics
+                    })
+                };
+                
+                items.push(report);
+            }
+        }
+        
+        Ok(Some(json!({ "items": items })))
+    }
+
+    /// Handle workspace/symbol/resolve request (LSP 3.17)
+    fn handle_workspace_symbol_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            // Extract the symbol to resolve
+            let symbol = params.as_object().ok_or_else(|| JsonRpcError {
+                code: -32602,
+                message: "Invalid params".to_string(),
+                data: None,
+            })?;
+            
+            // Get the URI and name from the symbol
+            let uri = symbol.get("location")
+                .and_then(|l| l.get("uri"))
+                .and_then(|u| u.as_str())
+                .unwrap_or("");
+            
+            let name = symbol.get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("");
+            
+            // Look up the symbol in our index to get more details
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = documents.get(uri) {
+                if let Some(ast) = &doc.ast {
+                    // Find the symbol in the AST to get more accurate information
+                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let symbol_table = extractor.extract(ast);
+                    
+                    // Find matching symbol
+                    for symbols in symbol_table.symbols.values() {
+                        for sym in symbols {
+                            if sym.name == name {
+                                // Return enhanced symbol with detail and accurate range
+                                let start_pos = doc.line_starts.offset_to_position(&doc.content, sym.location.start);
+                                let end_pos = doc.line_starts.offset_to_position(&doc.content, sym.location.end);
+                                
+                                let mut resolved = symbol.clone();
+                                
+                                // Add detail based on symbol kind
+                                let detail = match sym.kind {
+                                    crate::symbol::SymbolKind::Subroutine => format!("sub {}", name),
+                                    crate::symbol::SymbolKind::ScalarVariable => format!("${}", name),
+                                    crate::symbol::SymbolKind::ArrayVariable => format!("@{}", name),
+                                    crate::symbol::SymbolKind::HashVariable => format!("%{}", name),
+                                    crate::symbol::SymbolKind::Package => format!("package {}", name),
+                                    crate::symbol::SymbolKind::Constant => format!("constant {}", name),
+                                    _ => name.to_string(),
+                                };
+                                resolved["detail"] = json!(detail);
+                                
+                                // Update location with accurate range
+                                resolved["location"]["range"] = json!({
+                                    "start": {
+                                        "line": start_pos.0,
+                                        "character": start_pos.1,
+                                    },
+                                    "end": {
+                                        "line": end_pos.0,
+                                        "character": end_pos.1,
+                                    }
+                                });
+                                
+                                // Add scope information if available
+                                if let Some(scope) = symbol_table.scopes.get(&sym.scope_id) {
+                                    if scope.parent.is_some() {
+                                        // Find parent scope's package name
+                                        for parent_symbols in symbol_table.symbols.values() {
+                                            for parent_sym in parent_symbols {
+                                                if parent_sym.scope_id == scope.parent.unwrap_or(0) 
+                                                    && parent_sym.kind == crate::symbol::SymbolKind::Package {
+                                                    resolved["containerName"] = json!(parent_sym.name);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                return Ok(Some(json!(resolved)));
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Return the original symbol if we couldn't enhance it
+            Ok(Some(json!(symbol)))
+        } else {
+            Err(JsonRpcError {
+                code: -32602,
+                message: "Missing params".to_string(),
+                data: None,
+            })
+        }
     }
 }
 
