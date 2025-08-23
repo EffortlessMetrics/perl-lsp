@@ -480,10 +480,10 @@ impl LspServer {
             // PR 3: Wire workspace/symbol to use the index
             "workspace/symbol" => self.handle_workspace_symbols_v2(request.params),
 
+            "textDocument/rename" => self.handle_rename_workspace(request.params),
+            "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
             // GA contract: these methods remain unsupported in v0.8.3
-            "textDocument/rename"
-            | "textDocument/codeAction"
-            | "textDocument/codeLens"
+            "textDocument/codeLens"
             | "codeLens/resolve"
             | "textDocument/inlayHint"
             | "textDocument/semanticTokens/full"
@@ -728,11 +728,13 @@ impl LspServer {
             "foldingRangeProvider": true,
             // PR 3: Workspace symbols now work via index
             "workspaceSymbolProvider": true,
+            // PR 4: Rename now works cross-file
+            "renameProvider": true,
+            // PR 5: Code actions for pragmas
+            "codeActionProvider": { "codeActionKinds": ["quickfix"] },
             // Diagnostics are automatic via didOpen/didChange
 
             // The following are NOT advertised in v0.8.3 GA:
-            // - renameProvider (stub returns empty)
-            // - codeActionProvider (partial/stubs)
             // - codeLensProvider (partial)
             // - semanticTokensProvider (partial)
             // - inlayHintProvider (partial)
@@ -2639,18 +2641,7 @@ impl LspServer {
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Use symbol_at_cursor to get the symbol key
-                        // Try to extract current package from the file path
-                        let current_package = if uri.contains("/Utils.pm") {
-                            "Utils"
-                        } else if uri.contains("/Foo.pm") {
-                            "Foo"
-                        } else if uri.contains("/Math.pm") {
-                            "Math"
-                        } else if uri.contains("/String.pm") {
-                            "String"
-                        } else {
-                            "main"
-                        };
+                        let current_package = crate::declaration::current_package_at(ast, offset);
                         if let Some(symbol_key) =
                             crate::declaration::symbol_at_cursor(ast, offset, current_package)
                         {
@@ -2746,18 +2737,7 @@ impl LspServer {
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Use symbol_at_cursor to get the symbol key
-                        // Try to extract current package from the file path
-                        let current_package = if uri.contains("/Utils.pm") {
-                            "Utils"
-                        } else if uri.contains("/Foo.pm") {
-                            "Foo"
-                        } else if uri.contains("/Math.pm") {
-                            "Math"
-                        } else if uri.contains("/String.pm") {
-                            "String"
-                        } else {
-                            "main"
-                        };
+                        let current_package = crate::declaration::current_package_at(ast, offset);
                         if let Some(symbol_key) =
                             crate::declaration::symbol_at_cursor(ast, offset, current_package)
                         {
@@ -3236,6 +3216,91 @@ impl LspServer {
         Ok(Some(json!({
             "changes": {}
         })))
+    }
+
+    /// Handle textDocument/rename request with workspace support
+    fn handle_rename_workspace(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            if let (Some(uri), Some(line), Some(ch), Some(new_name)) = (
+                p.get("textDocument").and_then(|t| t.get("uri")).and_then(|s| s.as_str()),
+                p.get("position").and_then(|p| p.get("line")).and_then(|n| n.as_u64()),
+                p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
+                p.get("newName").and_then(|s| s.as_str()),
+            ) {
+                let documents = self.documents.lock().unwrap();
+                if let Some(doc) = documents.get(uri) {
+                    if let Some(ref ast) = doc.ast {
+                        let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                        let current_pkg = crate::declaration::current_package_at(ast, offset);
+                        if let Some(key) =
+                            crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                        {
+                            #[cfg(feature = "workspace")]
+                            if let Some(ref idx) = self.workspace_index {
+                                let edits =
+                                    crate::workspace_rename::build_rename_edit(idx, &key, new_name);
+                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                                return Ok(Some(ws_edit));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Return empty edit if we can't resolve
+        Ok(Some(json!({"changes": {}})))
+    }
+
+    /// Handle textDocument/codeAction request for pragmas
+    fn handle_code_actions_pragmas(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            if let Some(uri) = p["textDocument"]["uri"].as_str() {
+                let documents = self.documents.lock().unwrap();
+                if let Some(doc) = documents.get(uri) {
+                    let mut actions =
+                        crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.content);
+
+                    // Fill in edits with proper ranges
+                    for a in &mut actions {
+                        let data_info = (
+                            a.get("data")
+                                .and_then(|d| d.get("uri"))
+                                .and_then(|s| s.as_str())
+                                .map(|s| s.to_string()),
+                            a.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
+                            a.get("data")
+                                .and_then(|d| d.get("text"))
+                                .and_then(|s| s.as_str())
+                                .map(|s| s.to_string()),
+                        );
+
+                        if let (Some(u), Some(off), Some(txt)) = data_info {
+                            let (line, col) = self.offset_to_pos16(doc, off as usize);
+                            if let Some(obj) = a.as_object_mut() {
+                                obj.insert("edit".into(), json!({
+                                    "changes": {
+                                        u: [{
+                                            "range": { "start": {"line": line, "character": col},
+                                                       "end":   {"line": line, "character": col} },
+                                            "newText": txt
+                                        }]
+                                    }
+                                }));
+                                obj.remove("data");
+                            }
+                        }
+                    }
+                    return Ok(Some(json!(actions)));
+                }
+            }
+        }
+        Ok(Some(json!([])))
     }
 
     /// Handle textDocument/documentSymbol request
