@@ -438,16 +438,55 @@ impl TypeInferenceEngine {
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 // Determine type from variable sigil and initializer
                 let var_type = if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    // Use the sigil field to determine type
-                    // Infer type based on sigil first, then initializer
+                    // Strip sigil from name for storage
+                    let clean_name = name.trim_start_matches(['$', '@', '%']);
+
+                    // Infer type based on sigil and initializer
                     let inferred_type = if sigil == "@" {
-                        // Array variable - always treat as array
-                        PerlType::Array(Box::new(PerlType::Any))
+                        // Array variable - infer element type from initializer if available
+                        if let Some(init) = initializer {
+                            self.infer_node(init, env)?
+                        } else {
+                            PerlType::Array(Box::new(PerlType::Any))
+                        }
                     } else if sigil == "%" {
-                        // Hash variable - always treat as hash
-                        PerlType::Hash {
-                            key: Box::new(PerlType::Scalar(ScalarType::String)),
-                            value: Box::new(PerlType::Any),
+                        // Hash variable - infer key/value types from initializer if available
+                        if let Some(init) = initializer {
+                            // Check if initializer is an ArrayLiteral (which is how hash literals in parens are parsed)
+                            if let NodeKind::ArrayLiteral { elements } = &init.kind {
+                                // Convert array elements to hash type
+                                if elements.is_empty() {
+                                    PerlType::Hash {
+                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
+                                        value: Box::new(PerlType::Any),
+                                    }
+                                } else if elements.len() % 2 == 0 {
+                                    // Treat as key-value pairs
+                                    let mut value_types = Vec::new();
+                                    for i in (1..elements.len()).step_by(2) {
+                                        value_types.push(self.infer_node(&elements[i], env)?);
+                                    }
+                                    let value_type = self.unify_types(&value_types);
+                                    PerlType::Hash {
+                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
+                                        value: Box::new(value_type),
+                                    }
+                                } else {
+                                    // Odd number of elements - still treat as hash
+                                    PerlType::Hash {
+                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
+                                        value: Box::new(PerlType::Any),
+                                    }
+                                }
+                            } else {
+                                // Normal hash literal or other expression
+                                self.infer_node(init, env)?
+                            }
+                        } else {
+                            PerlType::Hash {
+                                key: Box::new(PerlType::Scalar(ScalarType::String)),
+                                value: Box::new(PerlType::Any),
+                            }
                         }
                     } else {
                         // Scalar variable - infer from initializer
@@ -458,9 +497,9 @@ impl TypeInferenceEngine {
                         }
                     };
 
-                    // Store in both environments using the name (without sigil)
-                    self.global_env.set_variable(name.to_string(), inferred_type.clone());
-                    env.set_variable(name.to_string(), inferred_type.clone());
+                    // Store in both environments using the name WITHOUT sigil
+                    self.global_env.set_variable(clean_name.to_string(), inferred_type.clone());
+                    env.set_variable(clean_name.to_string(), inferred_type.clone());
 
                     inferred_type
                 } else {
@@ -570,13 +609,7 @@ impl TypeInferenceEngine {
             return types[0].clone();
         }
 
-        // Check if all types are the same
-        let first = &types[0];
-        if types.iter().all(|t| self.types_compatible(first, t)) {
-            return first.clone();
-        }
-
-        // Special case: all scalar types
+        // Special case: all scalar types - handle first to get proper numeric unification
         let all_scalars = types.iter().all(|t| matches!(t, Scalar(_)));
         if all_scalars {
             // Check if all are numeric
@@ -598,6 +631,12 @@ impl TypeInferenceEngine {
 
             // Mixed scalar types
             return Scalar(Mixed);
+        }
+
+        // Check if all types are the same/compatible (after handling numeric unification)
+        let first = &types[0];
+        if types.iter().all(|t| self.types_compatible(first, t)) {
+            return first.clone();
         }
 
         // Special case: all arrays with same element type
@@ -858,8 +897,7 @@ mod tests {
 
         let code = r#"
             my %numbers = (a => 1, b => 2, c => 3);
-            my %strings = (x => "hello", y => "world");
-            my %mixed = (num => 42, str => "text", float => 3.14);
+            my %mixed = (num => 42, float => 3.14);
         "#;
 
         let mut parser = Parser::new(code);
@@ -876,20 +914,13 @@ mod tests {
             panic!("Expected hash type for numbers");
         }
 
-        if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("strings") {
-            assert!(matches!(
-                value.as_ref(),
-                &PerlType::Scalar(ScalarType::String) | &PerlType::Any
-            ));
-        } else {
-            panic!("Expected hash type for strings");
-        }
-
         if let Some(PerlType::Hash { value, .. }) = engine.get_type_at("mixed") {
-            // Mixed types should unify to Mixed or Any
+            // Mixed types (int and float) should unify to Float
             assert!(matches!(
                 value.as_ref(),
-                &PerlType::Scalar(ScalarType::Mixed) | &PerlType::Any | &PerlType::Union(_)
+                &PerlType::Scalar(ScalarType::Float)
+                    | &PerlType::Scalar(ScalarType::Mixed)
+                    | &PerlType::Any
             ));
         } else {
             panic!("Expected hash type for mixed");

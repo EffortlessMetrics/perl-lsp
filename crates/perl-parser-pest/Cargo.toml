@@ -78,17 +78,17 @@ path = "src/bin/test_stacker.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "benchmark_parsers"
+name = "benchmark_parsers_pest"
 path = "src/bin/benchmark_parsers.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "test_parsers"
+name = "test_parsers_pest"
 path = "src/bin/test_parsers.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "parse-rust"
+name = "parse-rust-pest"
 path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust"]
 

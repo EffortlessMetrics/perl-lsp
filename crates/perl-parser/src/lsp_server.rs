@@ -2608,7 +2608,47 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
-                    // Try workspace index first for cross-file definitions
+                    // Try DeclarationProvider first (it handles function calls properly)
+                    let provider = crate::declaration::DeclarationProvider::new(
+                        Arc::clone(ast),
+                        doc.content.clone(),
+                        uri.to_string(),
+                    )
+                    .with_parent_map(&doc.parent_map)
+                    .with_doc_version(doc._version);
+
+                    if let Some(location_links) = provider.find_declaration(offset, doc._version) {
+                        // Convert to Location format for definition
+                        let result: Vec<Value> = location_links
+                            .iter()
+                            .map(|link| {
+                                let (sel_start_line, sel_start_char) =
+                                    self.offset_to_pos16(doc, link.target_selection_range.0);
+                                let (sel_end_line, sel_end_char) =
+                                    self.offset_to_pos16(doc, link.target_selection_range.1);
+
+                                json!({
+                                    "uri": link.target_uri,
+                                    "range": {
+                                        "start": {
+                                            "line": sel_start_line,
+                                            "character": sel_start_char,
+                                        },
+                                        "end": {
+                                            "line": sel_end_line,
+                                            "character": sel_end_char,
+                                        },
+                                    },
+                                })
+                            })
+                            .collect();
+
+                        if !result.is_empty() {
+                            return Ok(Some(json!(result)));
+                        }
+                    }
+
+                    // Try workspace index for cross-file definitions
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
                         // Get the symbol at the current position

@@ -1593,7 +1593,7 @@ impl<'a> Parser<'a> {
             }
         }
         // Handle bare arguments (no parentheses)
-        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus))
+        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus | TokenKind::QuoteWords))
             && !Self::is_statement_terminator(self.peek_kind())
         {
             // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
@@ -1632,6 +1632,34 @@ impl<'a> Parser<'a> {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
                         args.push(self.consume_token()?.text.clone());
+                    }
+                    Some(TokenKind::QuoteWords) => {
+                        // Handle qw(...) in use statements
+                        // Format it as "qw(FOO BAR)" for consistency with DeclarationProvider
+                        let qw_token = self.consume_token()?;
+                        let text: &str = qw_token.text.as_ref();
+                        if let Some(content) = text.strip_prefix("qw").and_then(|s| {
+                            // Extract content between delimiters
+                            if s.starts_with('(') && s.ends_with(')') {
+                                Some(&s[1..s.len() - 1])
+                            } else if s.starts_with('[') && s.ends_with(']') {
+                                Some(&s[1..s.len() - 1])
+                            } else if s.starts_with('{') && s.ends_with('}') {
+                                Some(&s[1..s.len() - 1])
+                            } else if s.starts_with('<') && s.ends_with('>') {
+                                Some(&s[1..s.len() - 1])
+                            } else {
+                                None
+                            }
+                        }) {
+                            // Reformat as "qw(FOO BAR)" for consistency
+                            let words: Vec<&str> = content.split_whitespace().collect();
+                            let qw_str = format!("qw({})", words.join(" "));
+                            args.push(qw_str);
+                        } else {
+                            // Fallback: just add the whole token as string
+                            args.push(qw_token.text.to_string());
+                        }
                     }
                     Some(TokenKind::Minus) => {
                         // Handle -strict and other flags
@@ -2309,9 +2337,11 @@ impl<'a> Parser<'a> {
             || self.peek_kind() == Some(TokenKind::FatArrow)
         {
             let mut expressions = vec![expr];
+            let mut saw_fat_comma = false;
 
             // Handle initial fat arrow
             if self.peek_kind() == Some(TokenKind::FatArrow) {
+                saw_fat_comma = true;
                 self.tokens.next()?; // consume =>
                 expressions.push(self.parse_assignment()?);
             }
@@ -2336,6 +2366,7 @@ impl<'a> Parser<'a> {
 
                 // Check for fat arrow after element
                 if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    saw_fat_comma = true;
                     self.tokens.next()?; // consume =>
                     expressions.push(elem);
 
@@ -2352,14 +2383,10 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Return as array literal for now
+            // Convert to hash literal if we saw fat comma and have even number of elements
             let start = expressions[0].location.start;
             let end = expressions.last().unwrap().location.end;
-
-            expr = Node::new(
-                NodeKind::ArrayLiteral { elements: expressions },
-                SourceLocation { start, end },
-            );
+            expr = Self::build_list_or_hash(expressions, saw_fat_comma, start, end);
         }
 
         // Now handle word operators (or, xor, and, not) which have the lowest precedence
@@ -3948,11 +3975,50 @@ impl<'a> Parser<'a> {
 
             TokenKind::QuoteWords => {
                 let token = self.tokens.next()?;
-                // qw produces a list of strings - for now just treat as a string
-                Ok(Node::new(
-                    NodeKind::String { value: token.text.clone(), interpolated: false },
-                    SourceLocation { start: token.start, end: token.end },
-                ))
+                let start = token.start;
+                let text = token.text.as_str();
+
+                // Parse qw(...) to extract words
+                if let Some(content) = text.strip_prefix("qw") {
+                    // Find the delimiter and extract content
+                    let (content_str, _delimiter) = if let Some(rest) = content.strip_prefix('(') {
+                        (rest.strip_suffix(')').unwrap_or(rest), '(')
+                    } else if let Some(rest) = content.strip_prefix('[') {
+                        (rest.strip_suffix(']').unwrap_or(rest), '[')
+                    } else if let Some(rest) = content.strip_prefix('{') {
+                        (rest.strip_suffix('}').unwrap_or(rest), '{')
+                    } else if let Some(rest) = content.strip_prefix('<') {
+                        (rest.strip_suffix('>').unwrap_or(rest), '<')
+                    } else {
+                        // Other delimiter - find matching pair
+                        let delim = content.chars().next().unwrap_or(' ');
+                        let inner = &content[delim.len_utf8()..];
+                        let trimmed = inner.trim_end_matches(delim);
+                        (trimmed, delim)
+                    };
+
+                    // Split into words
+                    let words: Vec<Node> = content_str
+                        .split_whitespace()
+                        .map(|word| {
+                            Node::new(
+                                NodeKind::String { value: word.to_string(), interpolated: false },
+                                SourceLocation { start, end: token.end },
+                            )
+                        })
+                        .collect();
+
+                    Ok(Node::new(
+                        NodeKind::ArrayLiteral { elements: words },
+                        SourceLocation { start, end: token.end },
+                    ))
+                } else {
+                    // Fallback - shouldn't happen with proper lexer
+                    Ok(Node::new(
+                        NodeKind::String { value: token.text.clone(), interpolated: false },
+                        SourceLocation { start, end: token.end },
+                    ))
+                }
             }
 
             TokenKind::QuoteCommand => {
@@ -4150,19 +4216,46 @@ impl<'a> Parser<'a> {
                     ));
                 }
 
-                // Parse comma-separated list
-                let first = self.parse_expression()?;
+                // Check if we might have a simple parenthesized expression
+                // If there's no comma or fat arrow after the first element, parse the full expression
+                // to handle operators like 'or', 'and' etc.
+                let first = if self.peek_kind() == Some(TokenKind::RightParen) {
+                    // Simple case - just one element
+                    self.parse_assignment()?
+                } else {
+                    // Peek ahead to see if this is a list or a complex expression
+                    let expr = self.parse_assignment()?;
+
+                    // Check what comes after
+                    match self.peek_kind() {
+                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
+                            // It's a list, continue with list parsing
+                            expr
+                        }
+                        Some(TokenKind::RightParen) => {
+                            // End of simple expression
+                            expr
+                        }
+                        _ => {
+                            // Could be an operator like 'or', 'and', etc.
+                            // We need to continue parsing the expression
+                            self.parse_word_or_expr(expr)?
+                        }
+                    }
+                };
 
                 if self.peek_kind() == Some(TokenKind::Comma)
                     || self.peek_kind() == Some(TokenKind::FatArrow)
                 {
                     // It's a list
                     let mut elements = vec![first];
+                    let mut saw_fat_comma = false;
 
                     // Handle fat arrow after first element
                     if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        saw_fat_comma = true;
                         self.tokens.next()?; // consume =>
-                        elements.push(self.parse_expression()?);
+                        elements.push(self.parse_assignment()?);
                     }
 
                     while self.peek_kind() == Some(TokenKind::Comma)
@@ -4176,14 +4269,15 @@ impl<'a> Parser<'a> {
                             break;
                         }
 
-                        let elem = self.parse_expression()?;
+                        let elem = self.parse_assignment()?;
 
                         // Check for fat arrow after element
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            saw_fat_comma = true;
                             self.consume_token()?; // consume =>
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
-                                elements.push(self.parse_expression()?);
+                                elements.push(self.parse_assignment()?);
                             }
                         } else {
                             elements.push(elem);
@@ -4193,10 +4287,8 @@ impl<'a> Parser<'a> {
                     self.expect(TokenKind::RightParen)?;
                     let end = self.previous_position();
 
-                    Ok(Node::new(
-                        NodeKind::ArrayLiteral { elements },
-                        SourceLocation { start, end },
-                    ))
+                    // Only convert to hash if we saw a fat comma
+                    Ok(Self::build_list_or_hash(elements, saw_fat_comma, start, end))
                 } else {
                     // It's a parenthesized expression
                     self.expect(TokenKind::RightParen)?;
@@ -4664,6 +4756,12 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            // If the expression is already a HashLiteral, return it directly
+            // This happens when parse_comma creates a HashLiteral from key => value pairs
+            if matches!(first_expr.kind, NodeKind::HashLiteral { .. }) {
+                return Ok(first_expr);
+            }
+
             // Otherwise it's a block with a single expression
             return Ok(Node::new(
                 NodeKind::Block { statements: vec![first_expr] },
@@ -4889,6 +4987,26 @@ impl<'a> Parser<'a> {
 
         Ok(prototype)
     }
+
+    /// Utility to build either a HashLiteral or ArrayLiteral based on whether
+    /// fat arrow (=>) was seen and we have an even number of elements
+    fn build_list_or_hash(
+        elements: Vec<Node>,
+        saw_fat_arrow: bool,
+        start: usize,
+        end: usize,
+    ) -> Node {
+        if saw_fat_arrow && elements.len() % 2 == 0 {
+            // Convert to HashLiteral
+            let mut pairs = Vec::with_capacity(elements.len() / 2);
+            for chunk in elements.chunks(2) {
+                pairs.push((chunk[0].clone(), chunk[1].clone()));
+            }
+            Node::new(NodeKind::HashLiteral { pairs }, SourceLocation { start, end })
+        } else {
+            Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end })
+        }
+    }
 }
 
 /// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF"
@@ -4987,5 +5105,70 @@ mod tests {
         assert!(result.is_ok());
         let ast = result.unwrap();
         println!("Empty list AST: {}", ast.to_sexp());
+    }
+
+    #[test]
+    fn test_qw_delimiters() {
+        // Test qw with parentheses
+        let mut parser = Parser::new("qw(one two three)");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(program (array (string "one") (string "two") (string "three")))"#
+        );
+
+        // Test qw with brackets
+        let mut parser = Parser::new("qw[foo bar]");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.to_sexp(), r#"(program (array (string "foo") (string "bar")))"#);
+
+        // Test qw with non-paired delimiters
+        let mut parser = Parser::new("qw/alpha beta/");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.to_sexp(), r#"(program (array (string "alpha") (string "beta")))"#);
+
+        // Test qw with exclamation marks
+        let mut parser = Parser::new("qw!hello world!");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.to_sexp(), r#"(program (array (string "hello") (string "world")))"#);
+    }
+
+    #[test]
+    fn test_block_vs_hash_context() {
+        // Statement context: block containing hash
+        let mut parser = Parser::new("{ key => 'value' }");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        // Statement context: block with hash inside
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("(block (hash"), "Statement context should have block containing hash, got: {}", sexp);
+
+        // Expression context: direct hash literal in assignment
+        let mut parser = Parser::new("my $x = { key => 'value' }");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        // In expression context, should have hash
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("(hash"), "Expression context should have hash, got: {}", sexp);
+        assert!(sexp.contains("my"), "Should have my declaration, got: {}", sexp);
+
+        // Hash reference with parentheses
+        let mut parser = Parser::new("$ref = ( a => 1, b => 2 )");
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        // Parentheses with fat arrow should create hash
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("(hash") || sexp.contains("(array"), "Should have hash or array, got: {}", sexp);
     }
 }

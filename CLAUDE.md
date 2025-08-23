@@ -28,6 +28,7 @@ This repository contains **three Perl parser implementations** and a **full Lang
 - Successfully handles m!pattern!, indirect object syntax, and more
 - Tree-sitter compatible S-expression output
 - **Production-ready** with 141/141 edge case tests passing
+- **v0.8.3**: Hash literal improvements, parenthesized expressions with word operators, qw() array parsing
 - **v0.7.5**: Enterprise release automation, enhanced type inference, CI/CD pipeline
 - **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
 
@@ -517,15 +518,24 @@ To extend the Pest grammar:
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED FOR PARSING** (v0.8.3-rc.1)
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED FOR PARSING** (v0.8.3)
 - **Parser Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Parser Status**: Production ready, feature complete
 - **LSP Status**: ⚠️ ~35% functional (many features are stubs)
+- **Recent improvements (v0.8.3)**:
+  - ✅ Fixed hash literal parsing - `{ key => value }` now correctly produces HashLiteral nodes
+  - ✅ Fixed parenthesized expressions with word operators - `($a or $b)` now parses correctly
+  - ✅ Fixed qw() parsing - now produces ArrayLiteral nodes with proper word elements
+  - ✅ Enhanced inlay hints provider to recognize HashLiteral nodes in blocks
+  - ✅ Improved parser disambiguation between hash literals and blocks
+  - ✅ Fixed LSP go-to-definition to use DeclarationProvider for accurate function location finding
+  - ✅ Refactored hash/array detection logic into shared utility for consistency
+  - ✅ Enhanced qw() parsing with support for all delimiter types (/, !, etc.)
 - **Working LSP features**:
   - ✅ Syntax checking and diagnostics
   - ✅ Basic code completion and hover
-  - ✅ Single-file navigation
+  - ✅ Single-file navigation (go-to-definition, find references)
   - ✅ Document formatting
 - **Non-functional LSP features**:
   - ❌ Workspace-wide operations (stubs return empty results)

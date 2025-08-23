@@ -258,6 +258,21 @@ impl InlayHintsProvider {
         match &expr.kind {
             NodeKind::ArrayLiteral { .. } => Some("ARRAY".to_string()),
             NodeKind::HashLiteral { .. } => Some("HASH".to_string()),
+            // Handle block that contains a hash literal (e.g., { key => "value" })
+            NodeKind::Block { statements } if statements.len() == 1 => {
+                // Check if the single statement is a hash-like expression
+                if let NodeKind::ArrayLiteral { elements } = &statements[0].kind {
+                    // Check if this looks like hash pairs (even number of elements)
+                    if elements.len() % 2 == 0 && !elements.is_empty() {
+                        return Some("HASH".to_string());
+                    }
+                }
+                // Otherwise, check if it's already a HashLiteral wrapped in a block
+                if let NodeKind::HashLiteral { .. } = &statements[0].kind {
+                    return Some("HASH".to_string());
+                }
+                self.infer_type(&statements[0])
+            }
             NodeKind::String { .. } => Some("string".to_string()),
             NodeKind::Number { .. } => Some("number".to_string()),
             NodeKind::Regex { .. } => Some("Regexp".to_string()),

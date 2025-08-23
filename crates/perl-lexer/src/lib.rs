@@ -231,10 +231,13 @@ impl<'a> PerlLexer<'a> {
                 // Clone what we need to avoid holding a borrow
                 let (body_start, label, allow_indent) =
                     if let Some(spec) = self.pending_heredocs.first() {
-                        if spec.body_start > 0 && self.position >= spec.body_start {
+                        if spec.body_start > 0
+                            && self.position >= spec.body_start
+                            && self.position < self.input.len()
+                        {
                             (spec.body_start, spec.label.clone(), spec.allow_indent)
                         } else {
-                            // Not in a heredoc body yet
+                            // Not in a heredoc body yet or at EOF
                             (0, Arc::from(""), false)
                         }
                     } else {
@@ -248,6 +251,9 @@ impl<'a> PerlLexer<'a> {
                     while self.position < self.input.len() {
                         // Budget cap for huge bodies
                         if self.position.saturating_sub(body_start) > MAX_HEREDOC_BYTES {
+                            // Remove the pending heredoc to avoid infinite loop
+                            self.pending_heredocs.remove(0);
+                            self.position = self.input.len();
                             return Some(Token {
                                 token_type: TokenType::UnknownRest,
                                 text: Arc::from(&self.input[body_start..]),
@@ -332,6 +338,9 @@ impl<'a> PerlLexer<'a> {
 
                     // If we didn't find a terminator, we reached EOF - emit error token
                     if !found_terminator {
+                        // Remove the pending heredoc to avoid infinite loop
+                        self.pending_heredocs.remove(0);
+                        self.position = self.input.len();
                         return Some(Token {
                             token_type: TokenType::UnknownRest,
                             text: Arc::from(&self.input[body_start..]),
@@ -352,10 +361,18 @@ impl<'a> PerlLexer<'a> {
             // Check again if we're now in a heredoc body (might have been set during skip_whitespace)
             if !self.pending_heredocs.is_empty() {
                 if let Some(spec) = self.pending_heredocs.first() {
-                    if spec.body_start > 0 && self.position >= spec.body_start {
+                    if spec.body_start > 0
+                        && self.position >= spec.body_start
+                        && self.position < self.input.len()
+                    {
                         continue; // Go back to top of loop to process heredoc
                     }
                 }
+            }
+
+            // If we reach EOF with pending heredocs, clear them and emit EOF
+            if self.position >= self.input.len() && !self.pending_heredocs.is_empty() {
+                self.pending_heredocs.clear();
             }
 
             if self.position >= self.input.len() {
@@ -1709,6 +1726,7 @@ impl<'a> PerlLexer<'a> {
         self.advance(); // Skip opening quote
         let mut parts = Vec::new();
         let mut current_literal = String::new();
+        let mut last_pos = self.position;
 
         while let Some(ch) = self.current_char() {
             match ch {
@@ -1768,14 +1786,30 @@ impl<'a> PerlLexer<'a> {
                     self.advance();
                 }
             }
+
+            // Safety check: ensure we're making progress
+            if self.position == last_pos {
+                break;
+            }
+            last_pos = self.position;
         }
 
-        // Unterminated string
-        None
+        // Unterminated string - return error token consuming rest of input
+        let end = self.input.len();
+        self.position = end;
+
+        Some(Token {
+            token_type: TokenType::Error(Arc::from("unterminated string")),
+            text: Arc::from(&self.input[start..end]),
+            start,
+            end,
+        })
     }
 
     fn parse_single_quoted_string(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening quote
+
+        let mut last_pos = self.position;
 
         while let Some(ch) = self.current_char() {
             match ch {
@@ -1799,14 +1833,30 @@ impl<'a> PerlLexer<'a> {
                 }
                 _ => self.advance(),
             }
+
+            // Safety check: ensure we're making progress
+            if self.position == last_pos {
+                break;
+            }
+            last_pos = self.position;
         }
 
-        // Unterminated string
-        None
+        // Unterminated string - return error token consuming rest of input
+        let end = self.input.len();
+        self.position = end;
+
+        Some(Token {
+            token_type: TokenType::Error(Arc::from("unterminated string")),
+            text: Arc::from(&self.input[start..end]),
+            start,
+            end,
+        })
     }
 
     fn parse_backtick_string(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening backtick
+
+        let mut last_pos = self.position;
 
         while let Some(ch) = self.current_char() {
             match ch {
@@ -1830,10 +1880,24 @@ impl<'a> PerlLexer<'a> {
                 }
                 _ => self.advance(),
             }
+
+            // Safety check: ensure we're making progress
+            if self.position == last_pos {
+                break;
+            }
+            last_pos = self.position;
         }
 
-        // Unterminated string
-        None
+        // Unterminated string - return error token consuming rest of input
+        let end = self.input.len();
+        self.position = end;
+
+        Some(Token {
+            token_type: TokenType::Error(Arc::from("unterminated string")),
+            text: Arc::from(&self.input[start..end]),
+            start,
+            end,
+        })
     }
 
     fn parse_q_string(&mut self, _start: usize) -> Option<Token> {
