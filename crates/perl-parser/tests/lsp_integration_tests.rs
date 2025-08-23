@@ -48,7 +48,8 @@ fn test_lsp_initialization() {
     );
     assert_eq!(capabilities["capabilities"]["hoverProvider"], true);
     assert_eq!(capabilities["capabilities"]["workspaceSymbolProvider"], true);
-    assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
+    // codeLensProvider is not advertised in v0.8.3 GA
+    // assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
 }
 
 #[test]

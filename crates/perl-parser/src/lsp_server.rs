@@ -753,12 +753,12 @@ impl LspServer {
                 },
                 "documentSymbolProvider": true,
                 "foldingRangeProvider": true,
-                
+
                 // ✅ Newly proven capabilities
                 "workspaceSymbolProvider": true,
                 "renameProvider": true,
                 "codeActionProvider": { "codeActionKinds": ["quickfix"] },
-                
+
                 "semanticTokensProvider": {
                     "legend": {
                         "tokenTypes": ["namespace","class","function","method","variable","parameter","property","keyword","comment","string","number","regexp","operator","type","macro"],
@@ -3346,11 +3346,10 @@ impl LspServer {
                 data: None,
             })?;
             if let Some(ref ast) = doc.ast {
-                let data = crate::semantic_tokens::collect_semantic_tokens(
-                    ast, 
-                    &doc.content, 
-                    &|off| self.offset_to_pos16(doc, off)
-                );
+                let data =
+                    crate::semantic_tokens::collect_semantic_tokens(ast, &doc.content, &|off| {
+                        self.offset_to_pos16(doc, off)
+                    });
                 return Ok(Some(json!({ "data": data.into_iter().flatten().collect::<Vec<_>>() })));
             }
         }
@@ -3373,8 +3372,12 @@ impl LspServer {
             })?;
             if let Some(ref ast) = doc.ast {
                 let mut hints = Vec::new();
-                hints.extend(crate::inlay_hints::parameter_hints(ast, &|off| self.offset_to_pos16(doc, off)));
-                hints.extend(crate::inlay_hints::trivial_type_hints(ast, &|off| self.offset_to_pos16(doc, off)));
+                hints.extend(crate::inlay_hints::parameter_hints(ast, &|off| {
+                    self.offset_to_pos16(doc, off)
+                }));
+                hints.extend(crate::inlay_hints::trivial_type_hints(ast, &|off| {
+                    self.offset_to_pos16(doc, off)
+                }));
                 return Ok(Some(json!(hints)));
             }
         }
@@ -3395,7 +3398,7 @@ impl LspServer {
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
-            
+
             // Get workspace roots from initialization params
             let roots = self.workspace_roots();
             let links = crate::document_links::compute_links(uri, &doc.content, &roots);
@@ -3418,29 +3421,27 @@ impl LspServer {
                 message: "Missing positions array".into(),
                 data: None,
             })?;
-            
+
             let documents = self.documents.lock().unwrap();
             let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
-            
+
             let mut out = Vec::new();
             if let Some(ref ast) = doc.ast {
                 // Build parent map if not cached
                 let parent_map = crate::selection_range::build_parent_map(ast);
-                
+
                 for pos in positions {
                     let line = pos["line"].as_u64().unwrap_or(0) as u32;
                     let col = pos["character"].as_u64().unwrap_or(0) as u32;
                     let off = self.pos16_to_offset(doc, line, col);
-                    let chain = crate::selection_range::selection_chain(
-                        ast, 
-                        &parent_map,
-                        off, 
-                        &|o| self.offset_to_pos16(doc, o)
-                    );
+                    let chain =
+                        crate::selection_range::selection_chain(ast, &parent_map, off, &|o| {
+                            self.offset_to_pos16(doc, o)
+                        });
                     out.push(chain);
                 }
             }
@@ -3451,28 +3452,31 @@ impl LspServer {
     }
 
     /// Handle textDocument/onTypeFormatting request
-    fn handle_on_type_formatting(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_on_type_formatting(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
-            let ch = p["ch"].as_str()
-                .and_then(|s| s.chars().next())
-                .unwrap_or('\n');
+            let ch = p["ch"].as_str().and_then(|s| s.chars().next()).unwrap_or('\n');
             let pos = &p["position"];
             let line = pos["line"].as_u64().unwrap_or(0) as u32;
             let col = pos["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
-            
-            if let Some(edits) = crate::on_type_formatting::compute_on_type_edit(&doc.content, line, col, ch) {
+
+            if let Some(edits) =
+                crate::on_type_formatting::compute_on_type_edit(&doc.content, line, col, ch)
+            {
                 return Ok(Some(json!(edits)));
             }
         }
@@ -5979,15 +5983,10 @@ impl LspServer {
         }
     }
 
-    /// Handle selectionRange request
-    // Removed duplicate - see new implementation above
-    /*
-    fn handle_selection_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        // Old stub implementation - replaced with new one above
-    }
-    */
+    // Handle selectionRange request - removed duplicate (see new implementation above)
+    // The old stub was commented out since the real implementation is above
 
-    /// Handle onTypeFormatting request - OLD STUB (replaced above)
+    // Handle onTypeFormatting request - OLD STUB (replaced above)
     #[allow(dead_code)]
     fn handle_on_type_formatting_old(
         &self,

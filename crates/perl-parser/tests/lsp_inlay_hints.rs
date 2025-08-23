@@ -1,22 +1,22 @@
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
-use perl_parser::lsp_server::{LspServer, JsonRpcRequest};
 
 #[test]
 fn inlay_hints_for_substr_and_types() {
     let mut srv = LspServer::new();
-    let init = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
-        method: "initialize".into(), 
-        params: Some(json!({"capabilities":{}})) 
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
 
     let uri = "file:///hints.pl";
     let text = r#"my $s = "abcd"; my $x = substr($s, 1, 2);"#;
-    let open = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
-        id: None, 
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
         method: "textDocument/didOpen".into(),
         params: Some(json!({
             "textDocument": {
@@ -25,40 +25,39 @@ fn inlay_hints_for_substr_and_types() {
                 "version": 1,
                 "text": text
             }
-        })) 
+        })),
     };
     srv.handle_request(open);
 
-    let req = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(2)),
         method: "textDocument/inlayHint".into(),
         params: Some(json!({
-            "textDocument": {"uri": uri}, 
+            "textDocument": {"uri": uri},
             "range": {
                 "start": {"line": 0, "character": 0},
                 "end": {"line": 10, "character": 0}
             }
-        })) 
+        })),
     };
     let res = srv.handle_request(req).unwrap();
     let result = res.result.unwrap();
     let hints = result.as_array().unwrap();
-    
+
     // Should have at least one hint
     assert!(!hints.is_empty(), "should have inlay hints");
-    
+
     // Check that hints have the expected structure
     for hint in hints {
         assert!(hint.get("position").is_some(), "hint should have position");
         assert!(hint.get("label").is_some(), "hint should have label");
     }
-    
+
     // Collect all labels
-    let labels: Vec<_> = hints.iter()
-        .filter_map(|h| h.get("label").and_then(|l| l.as_str()))
-        .collect();
-    
+    let labels: Vec<_> =
+        hints.iter().filter_map(|h| h.get("label").and_then(|l| l.as_str())).collect();
+
     // Should have parameter hints for substr
     let param_hints = ["str:", "offset:", "len:"];
     let has_substr_hints = param_hints.iter().any(|&h| labels.iter().any(|&l| l == h));

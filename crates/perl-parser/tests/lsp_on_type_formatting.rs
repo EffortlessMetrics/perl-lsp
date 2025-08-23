@@ -1,22 +1,22 @@
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
-use perl_parser::lsp_server::{LspServer, JsonRpcRequest};
 
 #[test]
 fn on_type_braces_indent() {
     let mut srv = LspServer::new();
-    let init = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
-        method: "initialize".into(), 
-        params: Some(json!({"capabilities":{}})) 
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
 
     let uri = "file:///fmt.pl";
     let text = "sub f {\n\n}\n";
-    let open = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
-        id: None, 
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
         method: "textDocument/didOpen".into(),
         params: Some(json!({
             "textDocument": {
@@ -25,13 +25,13 @@ fn on_type_braces_indent() {
                 "version": 1,
                 "text": text
             }
-        })) 
+        })),
     };
     srv.handle_request(open);
 
     // Simulate typing '{' at line 0 end
-    let req = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(2)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
@@ -39,11 +39,11 @@ fn on_type_braces_indent() {
             "position": {"line": 0, "character": 7},
             "ch": "{",
             "options": {"tabSize": 4, "insertSpaces": true}
-        })) 
+        })),
     };
     let res = srv.handle_request(req).unwrap();
     let edits = res.result.unwrap();
-    
+
     // Should return edits or null
     if !edits.is_null() {
         let edits_array = edits.as_array().unwrap();
@@ -58,19 +58,19 @@ fn on_type_braces_indent() {
 #[test]
 fn on_type_closing_brace_dedent() {
     let mut srv = LspServer::new();
-    let init = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
-        method: "initialize".into(), 
-        params: Some(json!({"capabilities":{}})) 
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
 
     let uri = "file:///dedent.pl";
     let text = "sub f {\n    my $x = 1;\n    }";
-    let open = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
-        id: None, 
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
         method: "textDocument/didOpen".into(),
         params: Some(json!({
             "textDocument": {
@@ -79,13 +79,13 @@ fn on_type_closing_brace_dedent() {
                 "version": 1,
                 "text": text
             }
-        })) 
+        })),
     };
     srv.handle_request(open);
 
     // Simulate typing '}' at line 2 position 5
-    let req = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(2)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
@@ -93,11 +93,11 @@ fn on_type_closing_brace_dedent() {
             "position": {"line": 2, "character": 5},
             "ch": "}",
             "options": {"tabSize": 4, "insertSpaces": true}
-        })) 
+        })),
     };
     let res = srv.handle_request(req).unwrap();
     let edits = res.result.unwrap();
-    
+
     // Should return edits for dedent or null if already properly formatted
     if !edits.is_null() {
         let edits_array = edits.as_array().unwrap();

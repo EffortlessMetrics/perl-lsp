@@ -1,10 +1,10 @@
 // crates/perl-parser/src/document_links.rs
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use url::Url;
 
 pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
-    
+
     for (i, line) in text.lines().enumerate() {
         // "use Foo::Bar;" — resolve Foo::Bar -> Foo/Bar.pm
         if let Some(rest) = line.trim().strip_prefix("use ") {
@@ -26,23 +26,23 @@ pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
                 }
             }
         }
-        
+
         // naive "require 'Foo/Bar.pm';" or require "Foo/Bar.pm";
         if let Some(idx) = line.find("require ") {
-            let rest = &line[idx+8..];
+            let rest = &line[idx + 8..];
             if let Some(start) = rest.find('"').or_else(|| rest.find('\'')) {
                 let quote_char = rest.chars().nth(start).unwrap();
                 let s = start + 1;
                 if let Some(end) = rest[s..].find(quote_char) {
-                    let req = &rest[s..s+end];
+                    let req = &rest[s..s + end];
                     // Try to resolve as file path
                     if let Some(target) = resolve_file(req, roots) {
                         let col_start = (idx + 8 + start + 1) as u32;
                         let col_end = (idx + 8 + start + 1 + end) as u32;
                         out.push(json!({
-                            "range": { 
+                            "range": {
                                 "start": {"line": i as u32, "character": col_start},
-                                "end":   {"line": i as u32, "character": col_end} 
+                                "end":   {"line": i as u32, "character": col_end}
                             },
                             "target": target
                         }));
@@ -55,25 +55,56 @@ pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
 }
 
 fn is_pragma(pkg: &str) -> bool {
-    matches!(pkg, "strict" | "warnings" | "utf8" | "bytes" | "integer" | 
-             "feature" | "constant" | "lib" | "vars" | "subs" | "overload" |
-             "parent" | "base" | "fields" | "if" | "attributes" | "autouse" |
-             "autodie" | "bigint" | "bignum" | "bigrat" | "blib" | "charnames" |
-             "diagnostics" | "encoding" | "filetest" | "locale" | "open" | 
-             "ops" | "re" | "sigtrap" | "sort" | "threads" | "vmsish")
+    matches!(
+        pkg,
+        "strict"
+            | "warnings"
+            | "utf8"
+            | "bytes"
+            | "integer"
+            | "feature"
+            | "constant"
+            | "lib"
+            | "vars"
+            | "subs"
+            | "overload"
+            | "parent"
+            | "base"
+            | "fields"
+            | "if"
+            | "attributes"
+            | "autouse"
+            | "autodie"
+            | "bigint"
+            | "bignum"
+            | "bigrat"
+            | "blib"
+            | "charnames"
+            | "diagnostics"
+            | "encoding"
+            | "filetest"
+            | "locale"
+            | "open"
+            | "ops"
+            | "re"
+            | "sigtrap"
+            | "sort"
+            | "threads"
+            | "vmsish"
+    )
 }
 
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     let rel = pkg.replace("::", "/") + ".pm";
     // Try each workspace root
-    for base in roots {
+    if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
-        if !p.ends_with('/') { 
-            p.push('/'); 
+        if !p.ends_with('/') {
+            p.push('/');
         }
-        // Check common Perl lib paths
-        for lib_dir in &["lib/", "blib/lib/", ""] {
+        // Check common Perl lib paths - return first match
+        if let Some(lib_dir) = ["lib/", "blib/lib/", ""].first() {
             let full_path = format!("{}{}{}", p, lib_dir, rel);
             u.set_path(&full_path);
             // In real implementation, check if file exists
@@ -85,12 +116,12 @@ fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
 }
 
 fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
-    // Try to resolve relative to workspace roots
-    for base in roots {
+    // Try to resolve relative to workspace roots - return first match
+    if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
-        if !p.ends_with('/') { 
-            p.push('/'); 
+        if !p.ends_with('/') {
+            p.push('/');
         }
         p.push_str(path);
         u.set_path(&p);
@@ -105,9 +136,9 @@ fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) 
         let start = idx as u32;
         let end = (idx + pkg.len()) as u32;
         Some(json!({
-            "range": { 
+            "range": {
                 "start": {"line": line, "character": start},
-                "end":   {"line": line, "character": end} 
+                "end":   {"line": line, "character": end}
             },
             "target": target,
             "tooltip": format!("Open {}", pkg)
