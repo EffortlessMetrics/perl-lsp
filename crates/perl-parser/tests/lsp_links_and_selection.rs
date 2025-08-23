@@ -1,22 +1,22 @@
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
-use perl_parser::lsp_server::{LspServer, JsonRpcRequest};
 
 #[test]
 fn document_links_and_selection() {
     let mut srv = LspServer::new();
-    let init = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
-        method: "initialize".into(), 
-        params: Some(json!({"capabilities":{}})) 
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
 
     let uri = "file:///proj/main.pl";
     let text = "use Foo::Bar;\nFoo::Bar::baz();\n";
-    let open = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
-        id: None, 
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
         method: "textDocument/didOpen".into(),
         params: Some(json!({
             "textDocument": {
@@ -25,37 +25,38 @@ fn document_links_and_selection() {
                 "version": 1,
                 "text": text
             }
-        })) 
+        })),
     };
     srv.handle_request(open);
 
     // Test document links
-    let links_req = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let links_req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(2)),
-        method: "textDocument/documentLink".into(), 
-        params: Some(json!({"textDocument": {"uri": uri}}))
+        method: "textDocument/documentLink".into(),
+        params: Some(json!({"textDocument": {"uri": uri}})),
     };
     let links_res = srv.handle_request(links_req).unwrap();
     let links = links_res.result.unwrap();
-    assert!(links.as_array().map(|a| !a.is_empty()).unwrap_or(false), 
-            "should have document links for use statement");
+    assert!(
+        links.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+        "should have document links for use statement"
+    );
 
     // Test selection ranges
-    let sel_req = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let sel_req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(3)),
         method: "textDocument/selectionRange".into(),
         params: Some(json!({
-            "textDocument": {"uri": uri}, 
+            "textDocument": {"uri": uri},
             "positions": [{"line": 1, "character": 5}]
-        }))
+        })),
     };
     let sel_res = srv.handle_request(sel_req).unwrap();
     let sel = sel_res.result.unwrap();
-    assert!(sel.as_array().map(|a| !a.is_empty()).unwrap_or(false), 
-            "should have selection ranges");
-    
+    assert!(sel.as_array().map(|a| !a.is_empty()).unwrap_or(false), "should have selection ranges");
+
     // Verify selection range structure
     if let Some(ranges) = sel.as_array() {
         for range in ranges {

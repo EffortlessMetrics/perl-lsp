@@ -113,6 +113,7 @@ pub mod code_lens_provider;
 pub mod dead_code_detector;
 pub mod declaration;
 pub mod document_highlight;
+pub mod document_links;
 pub mod document_store;
 pub mod folding;
 pub mod import_optimizer;
@@ -126,6 +127,7 @@ pub mod incremental_integration;
 pub mod incremental_simple;
 #[cfg(feature = "incremental")]
 pub mod incremental_v2;
+pub mod inlay_hints;
 pub mod inlay_hints_provider;
 pub mod line_index;
 pub mod lsp_document_link;
@@ -133,6 +135,7 @@ pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
 pub mod lsp_utils;
+pub mod on_type_formatting;
 pub mod parser;
 pub mod parser_context;
 pub mod perl_critic;
@@ -145,7 +148,9 @@ pub mod quote_parser;
 pub mod recovery_parser;
 pub mod references;
 pub mod rename;
+pub mod selection_range;
 pub mod semantic;
+pub mod semantic_tokens;
 pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
@@ -161,11 +166,6 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
-pub mod semantic_tokens;
-pub mod inlay_hints;
-pub mod document_links;
-pub mod selection_range;
-pub mod on_type_formatting;
 // pub mod test_generator;  // TODO: Fix compilation
 // pub mod tdd_workflow;    // TODO: Fix compilation
 pub mod debug_adapter;
@@ -213,11 +213,18 @@ pub use completion::{CompletionContext, CompletionItem, CompletionItemKind, Comp
 pub use diagnostics::{
     Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider, RelatedInformation,
 };
+pub use document_links::compute_links;
 pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
 pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+pub use inlay_hints::{parameter_hints, trivial_type_hints};
 pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
+pub use on_type_formatting::compute_on_type_edit;
 pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};
 pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
+pub use selection_range::{build_parent_map, selection_chain};
+pub use semantic_tokens::{
+    EncodedToken, TokensLegend, collect_semantic_tokens, legend as semantic_legend,
+};
 pub use semantic_tokens_provider::{
     SemanticToken as SemanticTokenV2, SemanticTokenModifier as SemanticTokenModifierV2,
     SemanticTokenType as SemanticTokenTypeV2, SemanticTokensProvider, encode_semantic_tokens,
@@ -228,11 +235,6 @@ pub use type_inference::{
     TypeInferenceEngine, TypeLocation,
 };
 pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
-pub use semantic_tokens::{EncodedToken, TokensLegend, collect_semantic_tokens, legend as semantic_legend};
-pub use inlay_hints::{parameter_hints, trivial_type_hints};
-pub use document_links::compute_links;
-pub use selection_range::{selection_chain, build_parent_map};
-pub use on_type_formatting::compute_on_type_edit;
 
 #[cfg(test)]
 mod tests {

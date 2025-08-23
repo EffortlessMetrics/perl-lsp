@@ -1,16 +1,16 @@
 // crates/perl-parser/src/inlay_hints.rs
-use serde_json::json;
-use serde_json::Value;
 use crate::ast::{Node, NodeKind};
+use serde_json::Value;
+use serde_json::json;
 
-pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize)->(u32,u32)) -> Vec<Value> {
+pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32)) -> Vec<Value> {
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         if let NodeKind::FunctionCall { name, args } = &node.kind {
             let labels: Option<&[&str]> = match name.as_str() {
-                "substr" => Some(&["str","offset","len"]),
-                "index"  => Some(&["str","substr","pos"]),
-                "rindex" => Some(&["str","substr","pos"]),
+                "substr" => Some(&["str", "offset", "len"]),
+                "index" => Some(&["str", "substr", "pos"]),
+                "rindex" => Some(&["str", "substr", "pos"]),
                 "sprintf" => Some(&["format", "args..."]),
                 "printf" => Some(&["format", "args..."]),
                 "join" => Some(&["sep", "list"]),
@@ -25,8 +25,10 @@ pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize)->(u32,u32)) -> Vec<
             };
             if let Some(sig) = labels {
                 for (i, arg) in args.iter().enumerate() {
-                    if i >= sig.len() { break; }
-                    let (l,c) = to_pos16(arg.location.start);
+                    if i >= sig.len() {
+                        break;
+                    }
+                    let (l, c) = to_pos16(arg.location.start);
                     out.push(json!({
                         "position": { "line": l, "character": c },
                         "label": format!("{}:", sig[i]),
@@ -42,7 +44,7 @@ pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize)->(u32,u32)) -> Vec<
     out
 }
 
-pub fn trivial_type_hints(ast: &Node, to_pos16: &impl Fn(usize)->(u32,u32)) -> Vec<Value> {
+pub fn trivial_type_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32)) -> Vec<Value> {
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         let type_hint = match &node.kind {
@@ -52,14 +54,14 @@ pub fn trivial_type_hints(ast: &Node, to_pos16: &impl Fn(usize)->(u32,u32)) -> V
             NodeKind::ArrayLiteral { .. } => Some("Array"),
             NodeKind::Regex { .. } => Some("Regex"),
             NodeKind::Subroutine { name: None, .. } => Some("CodeRef"),
-            _ => None
+            _ => None,
         };
-        
+
         if let Some(hint) = type_hint {
-            let (l,c) = to_pos16(node.location.end);
-            out.push(json!({ 
-                "position": {"line": l, "character": c}, 
-                "label": format!(": {}", hint), 
+            let (l, c) = to_pos16(node.location.end);
+            out.push(json!({
+                "position": {"line": l, "character": c},
+                "label": format!(": {}", hint),
                 "kind": 1, // type
                 "paddingLeft": true,
                 "paddingRight": false
@@ -77,12 +79,12 @@ where
     if !visitor(node) {
         return false;
     }
-    
+
     for child in crate::declaration::get_node_children(node) {
         if !walk_ast(child, visitor) {
             return false;
         }
     }
-    
+
     true
 }

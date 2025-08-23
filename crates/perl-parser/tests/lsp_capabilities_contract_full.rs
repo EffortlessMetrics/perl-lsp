@@ -1,16 +1,16 @@
 #![allow(clippy::collapsible_if)]
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
-use perl_parser::lsp_server::{LspServer, JsonRpcRequest};
 
 #[test]
 #[cfg(not(feature = "lsp-ga-lock"))]
 fn full_capabilities_match_contract() {
     let mut srv = LspServer::new();
-    let init = JsonRpcRequest { 
-        _jsonrpc: "2.0".into(), 
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
-        method: "initialize".into(), 
-        params: Some(json!({"capabilities":{}})) 
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
     };
     let res = srv.handle_request(init).unwrap();
     let result = res.result.unwrap();
