@@ -1,5 +1,7 @@
 # perl-parser
 
+> **Tree-sitter compatible**: node kinds, field names, and byte/point semantics (0-based; UTF-16 for LSP) match the Tree-sitter Perl grammar.
+
 A high-performance Perl parser with full Language Server Protocol support.
 
 ## Features

@@ -89,6 +89,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
+### TL;DR
+- Use **perl-parser** (v3) for everything new.
+- Use **perl-parser-pest** only to compare or migrate old code.
+- `tree-sitter-perl-rs` is our internal TS harness; not for public use.
+
 | Crate | Use Case | Published | Description |
 |-------|----------|-----------|-------------|
 | **`perl-parser`** | **Production v3** (native), Tree-sitter compatible | ✅ crates.io | Recommended for all new projects |
