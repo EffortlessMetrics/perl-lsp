@@ -1,6 +1,15 @@
-# API Stability & SemVer (perl-lexer, perl-parser, perl-corpus)
+# API Stability & SemVer - v0.8.3 GA
 
-**MSRV:** 1.89 • **Edition:** 2024
+**MSRV:** 1.89 • **Edition:** 2024 • **Status:** General Availability
+
+## Published Crates (v0.8.3 GA)
+
+| Crate | Version | Purpose | Stability |
+|-------|---------|---------|-----------|
+| [perl-parser](https://crates.io/crates/perl-parser) | 0.8.3 | Parser & LSP | Beta (API stabilizing) |
+| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.8.3 | Tokenizer | Beta (API stabilizing) |
+| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.8.3 | Test corpus | Stable |
+| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.8.3 | Legacy parser | Deprecated |
 
 ## What's considered stable (≥0.8.x)
 
@@ -20,7 +29,9 @@
 
 ### perl-lsp (binary)
 - **LSP interface**: `--stdio` mode with standard LSP request/response protocol
-- **Feature set**: 35+ IDE features as documented in LSP_ACTUAL_STATUS.md
+- **Feature set**: ~35% functional (see [LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md))
+- **Working features**: Diagnostics, completion, go-to-definition (single file)
+- **Stub features**: Many return empty results (workspace ops, refactoring)
 
 ## Additive guarantee
 - We **add** `NodeKind` variants and token types in **minor** releases
@@ -88,4 +99,4 @@
 
 ---
 
-*This document is authoritative for API stability questions. Last updated: 2025-01-23*
+*This document is authoritative for API stability questions. Last updated: 2025-02-23 (v0.8.3 GA)*

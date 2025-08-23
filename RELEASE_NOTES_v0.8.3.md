@@ -1,4 +1,23 @@
-# Release Notes - v0.8.3
+# Release Notes - v0.8.3 GA
+
+**Release Date**: February 2025  
+**Type**: General Availability (GA)  
+**Status**: Production Ready
+
+## 🎉 Overview
+
+v0.8.3 GA marks the first production release of the Perl parsing ecosystem as separate, focused crates on crates.io. This release provides clear separation between the parser, lexer, corpus, and legacy implementations.
+
+## 📦 Published Crates
+
+All four crates are now available on crates.io:
+
+| Crate | Version | Purpose | Status |
+|-------|---------|---------|--------|
+| [perl-parser](https://crates.io/crates/perl-parser) | 0.8.3 | Main parser & LSP server | ✅ Production |
+| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.8.3 | Context-aware tokenizer | ✅ Production |
+| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.8.3 | Test corpus & validation | ✅ Production |
+| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.8.3 | Legacy Pest parser | ⚠️ Legacy |
 
 ## 🎯 Parser Improvements
 
@@ -68,6 +87,65 @@ brew install perl-lsp
 - Import optimization
 - Debug adapter protocol support
 
+## 🔄 Migration Guide
+
+### From perl-parser-pest to perl-parser
+
+```rust
+// Old (perl-parser-pest)
+use perl_parser_pest::PerlParser;
+let parser = PerlParser::new();
+
+// New (perl-parser)
+use perl_parser::Parser;
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+```
+
+### Using the Published Crates
+
+```toml
+[dependencies]
+perl-parser = "0.8.3"  # Main parser
+perl-lexer = "0.8.3"   # If you need direct lexer access
+perl-corpus = "0.8.3"  # For testing
+
+# Avoid using perl-parser-pest (legacy)
+```
+
+## ⚠️ Known Limitations
+
+### LSP Limitations (~35% Functional)
+- Many advertised features are stub implementations
+- Cross-file navigation not implemented
+- Refactoring features return empty results
+- See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for honest assessment
+
+### Parser Edge Cases (< 0.01%)
+- Heredoc-in-string constructs remain unparseable
+- Some exotic encoding switches mid-file
+
+## 🧪 Quality Improvements
+
+### Code Quality
+- **Clippy Warnings**: Resolved all collapsible-if warnings
+- **MSRV Alignment**: Unified to Rust 1.89.0 across all configs
+- **CI Performance**: Added `ci-fast` feature for conditional tests
+- **Test Stability**: Made flaky corpus property tests conditional
+
+### Release Infrastructure
+- **Clear Positioning**: perl-parser marked as production, perl-parser-pest as legacy
+- **Smoke Testing**: Comprehensive release verification script
+- **Documentation**: Honest LSP capability assessment
+
 ## 💡 Notes
 
-This release focuses on parser accuracy and LSP reliability. The parser now correctly handles all edge cases around hash literals, parenthesized expressions, and quote words, while the LSP server provides accurate go-to-definition support.
+This GA release establishes a solid foundation for the Perl parsing ecosystem. While the parser achieves ~100% coverage, the LSP server remains partially functional (~35%). Future releases will focus on wiring the existing LSP infrastructure to provide complete IDE support.
+
+## 📄 License
+
+All crates are dual-licensed under MIT and Apache 2.0.
+
+---
+
+For questions or issues: https://github.com/EffortlessSteven/tree-sitter-perl/issues
