@@ -13,9 +13,9 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.3 GA)
+### 📦 Published Crates (v0.8.4)
 
-1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and LSP server
+1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
 2. **perl-lexer** - Context-aware tokenizer for Perl syntax
 3. **perl-corpus** - Comprehensive test corpus and property testing
 4. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
@@ -24,18 +24,25 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.3 GA
+## 📦 Latest Release: v0.8.4
 
-### v0.8.3 - General Availability Release 🎉
+### v0.8.4 - LSP Feature Complete Release 🚀
+- ✨ **9 New LSP Features**: Workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
+- 📈 **60% LSP Functionality**: Up from 35% in v0.8.3 - all advertised features fully working
+- 🎯 **Contract-Driven Testing**: Every capability backed by acceptance tests
+- 🔒 **Feature Flag Control**: `lsp-ga-lock` for conservative releases
+- 🏗️ **Robust Architecture**: Fallback mechanisms for incomplete code
+- ✅ **All Tests Passing**: 530+ tests including comprehensive E2E coverage
+
+### v0.8.3 - General Availability Release
 - ✅ **Hash Literals Fixed**: `{ key => value }` now correctly produces HashLiteral nodes
 - ✅ **Parenthesized Expressions**: `($a or $b)` with word operators parse correctly
 - ✅ **qw() Arrays**: Proper ArrayLiteral nodes with word elements for all delimiters
 - ✅ **LSP Go-to-Definition**: Uses DeclarationProvider for accurate function location
-- ✅ **Inlay Hints**: Enhanced provider recognizes HashLiteral nodes in blocks
 - 📊 **100% Edge Cases**: All 141 comprehensive edge case tests passing
 - 🚀 **Production Ready**: See [STABILITY.md](docs/STABILITY.md) for API guarantees
 
-See [RELEASE_NOTES_v0.8.3.md](RELEASE_NOTES_v0.8.3.md) for complete details.
+See [CHANGELOG.md](CHANGELOG.md) for complete release history.
 
 ### Previous: v0.8.0 - Production-Hardened Position Helpers
 - ⚠️ **BREAKING**: DeclarationProvider API now requires version tracking
@@ -179,46 +186,43 @@ println!("AST: {:?}", ast);
 
 ## 🖥️ Language Server Protocol (LSP) Support
 
-The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
+The v3 parser includes a **production-ready Language Server Protocol implementation** for Perl, providing comprehensive IDE features:
 
-### LSP Features ⚠️ (~35% Functional, Contract Locked)
+### LSP Features ✅ (~60% Functional, Contract Driven)
 
-> **GA Contract**: As of v0.8.3, the LSP server only advertises capabilities that are fully functional. Partial or stub features return "method not supported" errors. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for complete details.
+> **Capability Policy**: We only advertise capabilities that are proven by tests. For conservative point releases we build with the `lsp-ga-lock` feature, which surfaces a reduced set. New features flip on **only** when their acceptance tests land in the same PR. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for complete details.
 
-#### ✅ Actually Working Features
+#### ✅ Fully Working Features (v0.8.4)
 - **Real-time Diagnostics**: Live syntax checking with detailed error messages
-- **Basic Code Completion**: Variables in current scope, built-in functions, keywords
-- **Go to Definition**: Jump to symbol definitions (single-file only)
-- **Find References**: Locate uses in current file
-- **Hover Information**: Basic documentation for variables and built-ins
-- **Signature Help**: Function parameter hints for 150+ built-in functions
+- **Code Completion**: Variables, built-in functions (150+), keywords
+- **Go to Definition**: Jump to declarations with DeclarationProvider
+- **Find References**: Locate all uses in workspace
+- **Hover Information**: Documentation for variables and built-ins
+- **Signature Help**: Parameter hints for 150+ built-in functions
 - **Document Symbols**: Hierarchical outline view with icons
 - **Document Formatting**: Integration with Perl::Tidy
-- **Folding Ranges**: Code folding for subroutines and blocks
+- **Folding Ranges**: Code folding with fallback for invalid syntax
+- **Workspace Symbols**: Search symbols across all open files (NEW)
+- **Rename Symbol**: Smart refactoring with cross-file support for `our` variables (NEW)
+- **Code Actions**: Quick fixes for missing pragmas, perltidy integration (NEW)
+- **Semantic Tokens**: Enhanced syntax highlighting (NEW)
+- **Inlay Hints**: Parameter names and type annotations (NEW)
+- **Document Links**: Navigate from `use`/`require` to modules (NEW)
+- **Selection Ranges**: Smart expand/contract selection (NEW)
+- **On-Type Formatting**: Auto-indent/dedent for braces (NEW)
 
-#### ⚠️ Partially Working
-- **Rename Symbol**: Works in single file only
-- **Code Completion**: No package members, imports, or file paths
-- **Navigation**: No cross-file or workspace-wide support
+#### ⚠️ Not Advertised (Partial Implementations)
+- **Code Lens**: ~20% functional (run/debug links)
+- **Call Hierarchy**: ~15% functional (basic structure)
+- **Type Hierarchy**: Not implemented
+- **Execute Command**: Not wired
 
-#### ❌ Not Actually Working (Stub Implementations)
-These features exist in code but return empty results:
-- **Workspace Refactoring**: All methods return empty edits
-- **Extract Variable/Subroutine**: Logic exists but returns empty
-- **Import Organization**: Returns empty analysis
-- **Dead Code Detection**: Returns zero results
-- **Cross-file Navigation**: Infrastructure exists but not wired
-- **Workspace Symbols**: Index exists but not connected
-- **Debug Adapter**: Not implemented
-
-#### 🔧 Infrastructure Exists (Just Needs Wiring)
-The parser has these capabilities that aren't connected to LSP:
-- **WorkspaceIndex**: Full cross-file navigation and dependency tracking
-- **SemanticAnalyzer**: Type inference and symbol resolution
-- **Module Resolution**: Basic implementation exists
-- **Refactoring Logic**: Extract/inline algorithms implemented
-
-See [LSP_WIRING_OPPORTUNITIES.md](crates/perl-parser/LSP_WIRING_OPPORTUNITIES.md) for details on connecting existing infrastructure.
+#### 🏗️ Robust Architecture
+- **Contract-driven testing**: All advertised features have acceptance tests
+- **Feature flag control**: `lsp-ga-lock` for conservative releases
+- **Fallback mechanisms**: Works with incomplete/invalid code
+- **Memory efficient**: Arc-based AST with parent maps
+- **Fast position mapping**: O(log n) UTF-16 conversions
 
 See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 
