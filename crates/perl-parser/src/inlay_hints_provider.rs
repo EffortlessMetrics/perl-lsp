@@ -1,4 +1,6 @@
 use crate::ast::{Node, NodeKind};
+use crate::positions::{pos_in_range, Range, Position as LspPosition};
+use crate::builtin_signatures_phf::get_param_names;
 use serde_json::{Value, json};
 
 /// Inlay Hint types according to LSP spec
@@ -59,47 +61,54 @@ impl InlayHintsProvider {
     /// Extract inlay hints from the AST
     pub fn extract(&self, ast: &Node) -> Vec<InlayHint> {
         let mut hints = Vec::new();
-        self.visit_node(ast, &mut hints);
+        self.visit_node(ast, &mut hints, None);
+        hints
+    }
+    
+    /// Extract inlay hints from the AST within a specific range
+    pub fn extract_range(&self, ast: &Node, range: Range) -> Vec<InlayHint> {
+        let mut hints = Vec::new();
+        self.visit_node(ast, &mut hints, Some(range));
         hints
     }
 
     /// Visit a node and collect hints
-    fn visit_node(&self, node: &Node, hints: &mut Vec<InlayHint>) {
+    fn visit_node(&self, node: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         match &node.kind {
             NodeKind::Program { statements } => {
                 for stmt in statements {
-                    self.visit_node(stmt, hints);
+                    self.visit_node(stmt, hints, range);
                 }
             }
 
             NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.visit_node(stmt, hints);
+                    self.visit_node(stmt, hints, range);
                 }
             }
 
             // Function calls - show parameter hints
             NodeKind::FunctionCall { name, args } => {
                 if self.enabled_hints.parameter_hints {
-                    self.add_parameter_hints(name, args, node, hints);
+                    self.add_parameter_hints(name, args, node, hints, range);
                 }
 
                 // Visit arguments
                 for arg in args {
-                    self.visit_node(arg, hints);
+                    self.visit_node(arg, hints, range);
                 }
             }
 
             // Method calls - show parameter hints
             NodeKind::MethodCall { object, method, args } => {
                 if self.enabled_hints.parameter_hints {
-                    self.add_parameter_hints(method, args, node, hints);
+                    self.add_parameter_hints(method, args, node, hints, range);
                 }
 
                 // Visit object and arguments
-                self.visit_node(object, hints);
+                self.visit_node(object, hints, range);
                 for arg in args {
-                    self.visit_node(arg, hints);
+                    self.visit_node(arg, hints, range);
                 }
             }
 
@@ -107,29 +116,29 @@ impl InlayHintsProvider {
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if self.enabled_hints.type_hints {
                     if let Some(init) = initializer {
-                        self.add_type_hint(variable, init, hints);
+                        self.add_type_hint(variable, init, hints, range);
                     }
                 }
 
                 // Visit initializer
                 if let Some(init) = initializer {
-                    self.visit_node(init, hints);
+                    self.visit_node(init, hints, range);
                 }
             }
 
             // Chained method calls - show intermediate types
             NodeKind::Binary { op, left, right } if op == "->" => {
                 if self.enabled_hints.chained_hints {
-                    self.add_chain_hint(left, hints);
+                    self.add_chain_hint(left, hints, range);
                 }
 
-                self.visit_node(left, hints);
-                self.visit_node(right, hints);
+                self.visit_node(left, hints, range);
+                self.visit_node(right, hints, range);
             }
 
             // Visit other nodes recursively
             _ => {
-                self.visit_children(node, hints);
+                self.visit_children(node, hints, range);
             }
         }
     }
@@ -141,6 +150,7 @@ impl InlayHintsProvider {
         args: &[Node],
         _call_node: &Node,
         hints: &mut Vec<InlayHint>,
+        range: Option<Range>,
     ) {
         // Get parameter names for known functions
         let param_names = self.get_parameter_names(function_name);
@@ -157,6 +167,15 @@ impl InlayHintsProvider {
             }
 
             let position = self.get_node_start_position(arg);
+            
+            // Filter by range if specified
+            if let Some(filter_range) = range {
+                let lsp_pos = LspPosition::new(position.line, position.character);
+                if !pos_in_range(lsp_pos, filter_range) {
+                    continue;
+                }
+            }
+
             hints.push(InlayHint {
                 position,
                 label: format!("{}: ", param_name),
@@ -169,7 +188,7 @@ impl InlayHintsProvider {
     }
 
     /// Add type hint for variable declaration
-    fn add_type_hint(&self, variable: &Node, initializer: &Node, hints: &mut Vec<InlayHint>) {
+    fn add_type_hint(&self, variable: &Node, initializer: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         if let Some(type_info) = self.infer_type(initializer) {
             // Don't show if type is too long
             if type_info.len() > self.enabled_hints.max_length {
@@ -177,6 +196,15 @@ impl InlayHintsProvider {
             }
 
             let position = self.get_node_end_position(variable);
+            
+            // Filter by range if specified
+            if let Some(filter_range) = range {
+                let lsp_pos = LspPosition::new(position.line, position.character);
+                if !pos_in_range(lsp_pos, filter_range) {
+                    return;
+                }
+            }
+            
             hints.push(InlayHint {
                 position,
                 label: format!(": {}", type_info),
@@ -189,13 +217,22 @@ impl InlayHintsProvider {
     }
 
     /// Add hint for chained method calls
-    fn add_chain_hint(&self, expr: &Node, hints: &mut Vec<InlayHint>) {
+    fn add_chain_hint(&self, expr: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         if let Some(type_info) = self.infer_type(expr) {
             if type_info.len() > self.enabled_hints.max_length {
                 return;
             }
 
             let position = self.get_node_end_position(expr);
+            
+            // Filter by range if specified
+            if let Some(filter_range) = range {
+                let lsp_pos = LspPosition::new(position.line, position.character);
+                if !pos_in_range(lsp_pos, filter_range) {
+                    return;
+                }
+            }
+            
             hints.push(InlayHint {
                 position,
                 label: format!(" /* {} */", type_info),
@@ -209,8 +246,14 @@ impl InlayHintsProvider {
 
     /// Get parameter names for known functions
     fn get_parameter_names(&self, function_name: &str) -> Vec<String> {
+        // Use consolidated builtin signatures
+        if let Some(params) = get_param_names(function_name).get(0..) {
+            return params.iter().map(|s| s.to_string()).collect();
+        }
+        
+        // Custom functions would be handled here
         match function_name {
-            // Built-in functions
+            // Custom functions from symbol table
             "open" => vec!["filehandle".to_string(), "mode".to_string(), "filename".to_string()],
             "print" => vec!["filehandle".to_string(), "list".to_string()],
             "printf" => vec!["filehandle".to_string(), "format".to_string(), "list".to_string()],
@@ -298,54 +341,54 @@ impl InlayHintsProvider {
     }
 
     /// Visit children nodes
-    fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>) {
+    fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         match &node.kind {
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                self.visit_node(condition, hints);
-                self.visit_node(then_branch, hints);
+                self.visit_node(condition, hints, range);
+                self.visit_node(then_branch, hints, range);
                 for (cond, body) in elsif_branches {
-                    self.visit_node(cond, hints);
-                    self.visit_node(body, hints);
+                    self.visit_node(cond, hints, range);
+                    self.visit_node(body, hints, range);
                 }
                 if let Some(else_b) = else_branch {
-                    self.visit_node(else_b, hints);
+                    self.visit_node(else_b, hints, range);
                 }
             }
             NodeKind::While { condition, body, .. } => {
-                self.visit_node(condition, hints);
-                self.visit_node(body, hints);
+                self.visit_node(condition, hints, range);
+                self.visit_node(body, hints, range);
             }
             NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(i) = init {
-                    self.visit_node(i, hints);
+                    self.visit_node(i, hints, range);
                 }
                 if let Some(c) = condition {
-                    self.visit_node(c, hints);
+                    self.visit_node(c, hints, range);
                 }
                 if let Some(u) = update {
-                    self.visit_node(u, hints);
+                    self.visit_node(u, hints, range);
                 }
-                self.visit_node(body, hints);
+                self.visit_node(body, hints, range);
             }
             NodeKind::Foreach { variable, list, body } => {
-                self.visit_node(variable, hints);
-                self.visit_node(list, hints);
-                self.visit_node(body, hints);
+                self.visit_node(variable, hints, range);
+                self.visit_node(list, hints, range);
+                self.visit_node(body, hints, range);
             }
             NodeKind::Binary { left, right, .. } => {
-                self.visit_node(left, hints);
-                self.visit_node(right, hints);
+                self.visit_node(left, hints, range);
+                self.visit_node(right, hints, range);
             }
             NodeKind::Unary { operand, .. } => {
-                self.visit_node(operand, hints);
+                self.visit_node(operand, hints, range);
             }
             NodeKind::Assignment { lhs, rhs, .. } => {
-                self.visit_node(lhs, hints);
-                self.visit_node(rhs, hints);
+                self.visit_node(lhs, hints, range);
+                self.visit_node(rhs, hints, range);
             }
             NodeKind::Return { value } => {
                 if let Some(v) = value {
-                    self.visit_node(v, hints);
+                    self.visit_node(v, hints, range);
                 }
             }
             _ => {}

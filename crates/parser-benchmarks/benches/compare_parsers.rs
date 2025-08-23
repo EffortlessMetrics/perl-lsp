@@ -133,10 +133,26 @@ fn bench_tree_sitter_perl_rs(c: &mut Criterion) {
     group.finish();
 }
 
+// Stub for when tree-sitter-perl-rs feature is not enabled
+#[cfg(not(feature = "tree-sitter-perl-rs"))]
+fn bench_tree_sitter_perl_rs(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tree-sitter-perl-rs-stub");
+    group.measurement_time(Duration::from_secs(1));
+    
+    group.bench_function("stub", |b| {
+        b.iter(|| {
+            // Stub implementation
+            black_box(SIMPLE_CODE.len());
+        });
+    });
+    
+    group.finish();
+}
+
 // Benchmark tree-sitter-perl C implementation
 // tree-sitter-perl-c is always available
 fn bench_tree_sitter_perl_c(c: &mut Criterion) {
-    use tree_sitter_perl_c::{create_parser, language};
+    use tree_sitter_perl_c::create_parser;
 
     let mut group = c.benchmark_group("tree-sitter-perl-c");
     group.measurement_time(Duration::from_secs(10));
@@ -216,13 +232,7 @@ criterion_group!(
     bench_comparison
 );
 
-// This case should not happen
-criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_rs, bench_comparison);
-
 #[cfg(not(feature = "tree-sitter-perl-rs"))]
 criterion_group!(benches, bench_perl_parser, bench_tree_sitter_perl_c, bench_comparison);
-
-// This case should not happen either
-criterion_group!(benches, bench_perl_parser, bench_comparison);
 
 criterion_main!(benches);

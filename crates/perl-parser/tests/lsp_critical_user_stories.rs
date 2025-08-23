@@ -26,7 +26,7 @@ impl ExtendedTestContext {
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "documentSymbolProvider": true,
-                "workspaceSymbolProvider": true,
+                "workspaceSymbolProvider": {"resolveProvider": true},
                 "codeActionProvider": true,
                 "codeLensProvider": {"resolveProvider": true},
                 "documentFormattingProvider": true,

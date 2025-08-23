@@ -1,0 +1,258 @@
+//! Consolidated built-in function signatures for Perl using perfect hash
+//!
+//! This module provides a single source of truth for all Perl built-in function signatures
+//! Used by both InlayHints and SignatureHelp providers
+
+use phf::phf_map;
+
+/// Built-in function signatures as a perfect hash map
+/// Each entry maps function name to parameter names
+pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    // ===== I/O Functions =====
+    "print" => &["FILEHANDLE", "LIST"],
+    "printf" => &["FILEHANDLE", "FORMAT", "LIST"],
+    "say" => &["FILEHANDLE", "LIST"],
+    "open" => &["FILEHANDLE", "MODE", "FILENAME"],
+    "close" => &["FILEHANDLE"],
+    "read" => &["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
+    "sysread" => &["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
+    "write" => &["FILEHANDLE"],
+    "syswrite" => &["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
+    "binmode" => &["FILEHANDLE", "LAYER"],
+    "seek" => &["FILEHANDLE", "POSITION", "WHENCE"],
+    "tell" => &["FILEHANDLE"],
+    "truncate" => &["FILEHANDLE", "LENGTH"],
+    "eof" => &["FILEHANDLE"],
+    "fileno" => &["FILEHANDLE"],
+    "flock" => &["FILEHANDLE", "OPERATION"],
+    "getc" => &["FILEHANDLE"],
+    "readline" => &["FILEHANDLE"],
+    "select" => &["FILEHANDLE"],
+    "sysseek" => &["FILEHANDLE", "POSITION", "WHENCE"],
+    
+    // ===== String Functions =====
+    "chomp" => &["VARIABLE"],
+    "chop" => &["VARIABLE"],
+    "chr" => &["NUMBER"],
+    "crypt" => &["PLAINTEXT", "SALT"],
+    "fc" => &["EXPR"],
+    "index" => &["STR", "SUBSTR", "POSITION"],
+    "lc" => &["EXPR"],
+    "lcfirst" => &["EXPR"],
+    "length" => &["EXPR"],
+    "ord" => &["EXPR"],
+    "pack" => &["TEMPLATE", "LIST"],
+    "reverse" => &["LIST"],
+    "rindex" => &["STR", "SUBSTR", "POSITION"],
+    "sprintf" => &["FORMAT", "LIST"],
+    "substr" => &["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"],
+    "uc" => &["EXPR"],
+    "ucfirst" => &["EXPR"],
+    "unpack" => &["TEMPLATE", "EXPR"],
+    "quotemeta" => &["EXPR"],
+    
+    // ===== Array Functions =====
+    "push" => &["ARRAY", "LIST"],
+    "pop" => &["ARRAY"],
+    "shift" => &["ARRAY"],
+    "unshift" => &["ARRAY", "LIST"],
+    "splice" => &["ARRAY", "OFFSET", "LENGTH", "LIST"],
+    "grep" => &["BLOCK", "LIST"],
+    "map" => &["BLOCK", "LIST"],
+    "sort" => &["BLOCK", "LIST"],
+    "join" => &["EXPR", "LIST"],
+    "split" => &["PATTERN", "EXPR", "LIMIT"],
+    
+    // ===== Hash Functions =====
+    "each" => &["HASH"],
+    "keys" => &["HASH"],
+    "values" => &["HASH"],
+    "delete" => &["EXPR"],
+    "exists" => &["EXPR"],
+    
+    // ===== Math Functions =====
+    "abs" => &["VALUE"],
+    "atan2" => &["Y", "X"],
+    "cos" => &["EXPR"],
+    "exp" => &["EXPR"],
+    "hex" => &["EXPR"],
+    "int" => &["EXPR"],
+    "log" => &["EXPR"],
+    "oct" => &["EXPR"],
+    "rand" => &["EXPR"],
+    "sin" => &["EXPR"],
+    "sqrt" => &["EXPR"],
+    "srand" => &["EXPR"],
+    
+    // ===== File/Directory Functions =====
+    "chmod" => &["MODE", "LIST"],
+    "chown" => &["UID", "GID", "LIST"],
+    "link" => &["OLDFILE", "NEWFILE"],
+    "lstat" => &["FILEHANDLE"],
+    "mkdir" => &["FILENAME", "MODE"],
+    "opendir" => &["DIRHANDLE", "EXPR"],
+    "readdir" => &["DIRHANDLE"],
+    "readlink" => &["EXPR"],
+    "rename" => &["OLDNAME", "NEWNAME"],
+    "rmdir" => &["FILENAME"],
+    "stat" => &["FILEHANDLE"],
+    "symlink" => &["OLDFILE", "NEWFILE"],
+    "umask" => &["EXPR"],
+    "unlink" => &["LIST"],
+    "utime" => &["ATIME", "MTIME", "LIST"],
+    "closedir" => &["DIRHANDLE"],
+    "rewinddir" => &["DIRHANDLE"],
+    "seekdir" => &["DIRHANDLE", "POS"],
+    "telldir" => &["DIRHANDLE"],
+    
+    // ===== Process Functions =====
+    "alarm" => &["SECONDS"],
+    "exec" => &["PROGRAM", "LIST"],
+    "fork" => &[],
+    "getpgrp" => &["PID"],
+    "getppid" => &[],
+    "getpriority" => &["WHICH", "WHO"],
+    "kill" => &["SIGNAL", "LIST"],
+    "pipe" => &["READHANDLE", "WRITEHANDLE"],
+    "setpgrp" => &["PID", "PGRP"],
+    "setpriority" => &["WHICH", "WHO", "PRIORITY"],
+    "sleep" => &["EXPR"],
+    "system" => &["PROGRAM", "LIST"],
+    "times" => &[],
+    "wait" => &[],
+    "waitpid" => &["PID", "FLAGS"],
+    
+    // ===== Time Functions =====
+    "gmtime" => &["EXPR"],
+    "localtime" => &["EXPR"],
+    "time" => &[],
+    
+    // ===== Network Functions =====
+    "accept" => &["NEWSOCKET", "GENERICSOCKET"],
+    "bind" => &["SOCKET", "NAME"],
+    "connect" => &["SOCKET", "NAME"],
+    "getpeername" => &["SOCKET"],
+    "getsockname" => &["SOCKET"],
+    "getsockopt" => &["SOCKET", "LEVEL", "OPTNAME"],
+    "listen" => &["SOCKET", "QUEUESIZE"],
+    "recv" => &["SOCKET", "SCALAR", "LENGTH", "FLAGS"],
+    "send" => &["SOCKET", "MSG", "FLAGS", "TO"],
+    "setsockopt" => &["SOCKET", "LEVEL", "OPTNAME", "OPTVAL"],
+    "shutdown" => &["SOCKET", "HOW"],
+    "socket" => &["SOCKET", "DOMAIN", "TYPE", "PROTOCOL"],
+    "socketpair" => &["SOCKET1", "SOCKET2", "DOMAIN", "TYPE", "PROTOCOL"],
+    
+    // ===== System Info Functions =====
+    "gethostbyaddr" => &["ADDR", "ADDRTYPE"],
+    "gethostbyname" => &["NAME"],
+    "gethostent" => &[],
+    "getnetbyaddr" => &["ADDR", "ADDRTYPE"],
+    "getnetbyname" => &["NAME"],
+    "getnetent" => &[],
+    "getprotobyname" => &["NAME"],
+    "getprotobynumber" => &["NUMBER"],
+    "getprotoent" => &[],
+    "getservbyname" => &["NAME", "PROTO"],
+    "getservbyport" => &["PORT", "PROTO"],
+    "getservent" => &[],
+    "sethostent" => &["STAYOPEN"],
+    "setnetent" => &["STAYOPEN"],
+    "setprotoent" => &["STAYOPEN"],
+    "setservent" => &["STAYOPEN"],
+    "endhostent" => &[],
+    "endnetent" => &[],
+    "endprotoent" => &[],
+    "endservent" => &[],
+    
+    // ===== User/Group Functions =====
+    "getgrent" => &[],
+    "getgrgid" => &["GID"],
+    "getgrnam" => &["NAME"],
+    "getlogin" => &[],
+    "getpwent" => &[],
+    "getpwnam" => &["NAME"],
+    "getpwuid" => &["UID"],
+    "setgrent" => &[],
+    "setpwent" => &[],
+    "endgrent" => &[],
+    "endpwent" => &[],
+    
+    // ===== IPC Functions =====
+    "msgctl" => &["ID", "CMD", "ARG"],
+    "msgget" => &["KEY", "FLAGS"],
+    "msgrcv" => &["ID", "VAR", "SIZE", "TYPE", "FLAGS"],
+    "msgsnd" => &["ID", "MSG", "FLAGS"],
+    "semctl" => &["ID", "SEMNUM", "CMD", "ARG"],
+    "semget" => &["KEY", "NSEMS", "FLAGS"],
+    "semop" => &["ID", "OPSTRING"],
+    "shmctl" => &["ID", "CMD", "ARG"],
+    "shmget" => &["KEY", "SIZE", "FLAGS"],
+    "shmread" => &["ID", "VAR", "POS", "SIZE"],
+    "shmwrite" => &["ID", "STRING", "POS", "SIZE"],
+    
+    // ===== Database Functions =====
+    "dbmclose" => &["HASH"],
+    "dbmopen" => &["HASH", "DBNAME", "MODE"],
+    "tie" => &["VARIABLE", "CLASSNAME", "LIST"],
+    "tied" => &["VARIABLE"],
+    "untie" => &["VARIABLE"],
+    
+    // ===== Miscellaneous Functions =====
+    "bless" => &["REF", "CLASSNAME"],
+    "caller" => &["EXPR"],
+    "die" => &["LIST"],
+    "do" => &["BLOCK"],
+    "eval" => &["EXPR"],
+    "exit" => &["EXPR"],
+    "goto" => &["LABEL"],
+    "last" => &["LABEL"],
+    "next" => &["LABEL"],
+    "redo" => &["LABEL"],
+    "ref" => &["EXPR"],
+    "require" => &["VERSION"],
+    "return" => &["LIST"],
+    "scalar" => &["EXPR"],
+    "undef" => &["EXPR"],
+    "wantarray" => &[],
+    "warn" => &["LIST"],
+    "defined" => &["EXPR"],
+    "dump" => &["LABEL"],
+    "formline" => &["PICTURE", "LIST"],
+    "local" => &["EXPR"],
+    "my" => &["VARLIST"],
+    "our" => &["VARLIST"],
+    "state" => &["VARLIST"],
+    "reset" => &["EXPR"],
+    "use" => &["MODULE", "VERSION", "LIST"],
+    "vec" => &["EXPR", "OFFSET", "BITS"],
+    "lock" => &["THING"],
+    "prototype" => &["FUNCTION"],
+};
+
+/// Full signatures for documentation (used by signature help)
+pub static BUILTIN_FULL_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    "print" => &["print FILEHANDLE LIST", "print FILEHANDLE", "print LIST", "print"],
+    "printf" => &["printf FILEHANDLE FORMAT, LIST", "printf FORMAT, LIST"],
+    "say" => &["say FILEHANDLE LIST", "say FILEHANDLE", "say LIST", "say"],
+    "open" => &["open FILEHANDLE, MODE, FILENAME", "open FILEHANDLE, EXPR", "open FILEHANDLE"],
+    "close" => &["close FILEHANDLE", "close"],
+    "substr" => &["substr EXPR, OFFSET, LENGTH, REPLACEMENT", "substr EXPR, OFFSET, LENGTH", "substr EXPR, OFFSET"],
+    "splice" => &["splice ARRAY, OFFSET, LENGTH, LIST", "splice ARRAY, OFFSET, LENGTH", "splice ARRAY, OFFSET", "splice ARRAY"],
+    "split" => &["split PATTERN, EXPR, LIMIT", "split PATTERN, EXPR", "split PATTERN", "split"],
+    // Add more as needed for detailed signatures
+};
+
+/// Get parameter names for a builtin function
+pub fn get_param_names(function_name: &str) -> &'static [&'static str] {
+    BUILTIN_SIGS.get(function_name).copied().unwrap_or(&[])
+}
+
+/// Check if a function is a builtin
+pub fn is_builtin(function_name: &str) -> bool {
+    BUILTIN_SIGS.contains_key(function_name)
+}
+
+/// Get the number of builtins
+pub fn builtin_count() -> usize {
+    BUILTIN_SIGS.len()
+}

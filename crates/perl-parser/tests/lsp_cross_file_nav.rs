@@ -1,5 +1,5 @@
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::json;
 
 fn init_server() -> LspServer {
     let mut srv = LspServer::new();
@@ -36,7 +36,7 @@ fn open(server: &mut LspServer, uri: &str, text: &str) {
         })),
     };
 
-    let response = server.handle_request(request);
+    let _response = server.handle_request(request);
     // didOpen is a notification, so no response expected
 }
 

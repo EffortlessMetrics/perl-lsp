@@ -20,10 +20,12 @@ thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
 regex = "1.11.1"
+lazy_static = "1.5.0"
 lsp-types = "0.97.0"
 url = "2.5"
 rustc-hash = "2.1.0"
 md5 = "0.7"
+phf = { version = "0.11", features = ["macros"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }

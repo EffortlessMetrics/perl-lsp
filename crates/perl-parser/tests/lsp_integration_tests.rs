@@ -47,7 +47,14 @@ fn test_lsp_initialization() {
         json!(["$", "@", "%", "->"])
     );
     assert_eq!(capabilities["capabilities"]["hoverProvider"], true);
-    assert_eq!(capabilities["capabilities"]["workspaceSymbolProvider"], true);
+    // workspaceSymbolProvider can be either bool or object with resolveProvider
+    match &capabilities["capabilities"]["workspaceSymbolProvider"] {
+        serde_json::Value::Bool(true) => {}
+        serde_json::Value::Object(obj) => {
+            assert_eq!(obj["resolveProvider"], true);
+        }
+        other => panic!("unexpected workspaceSymbolProvider: {:?}", other),
+    }
     // codeLensProvider is not advertised in v0.8.3 GA
     // assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
 }
@@ -298,12 +305,18 @@ sub function2 { }
     let symbols = result.unwrap();
     let symbols_array = symbols.as_array().unwrap();
 
-    // Should find both Module1 and Module2
-    assert_eq!(symbols_array.len(), 2);
+    // Should find packages Module1 and Module2 plus their functions
+    // The search for "Module" matches both packages directly and functions via containerName
+    assert!(symbols_array.len() >= 2, "Should find at least 2 symbols");
 
-    let names: Vec<&str> = symbols_array.iter().map(|s| s["name"].as_str().unwrap()).collect();
-    assert!(names.contains(&"Module1"));
-    assert!(names.contains(&"Module2"));
+    let package_names: Vec<&str> = symbols_array
+        .iter()
+        .filter(|s| s["kind"] == 2) // Module kind
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(package_names.len(), 2, "Should find exactly 2 packages");
+    assert!(package_names.contains(&"Module1"));
+    assert!(package_names.contains(&"Module2"));
 }
 
 #[test]

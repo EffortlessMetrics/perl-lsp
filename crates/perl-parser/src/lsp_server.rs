@@ -225,6 +225,7 @@ impl LspServer {
         }
     }
 
+
     /// Send a notification to the client with proper framing
     fn notify(&self, method: &str, params: Value) -> io::Result<()> {
         let notification = json!({
@@ -358,6 +359,20 @@ impl LspServer {
         }
     }
 
+    /// Mark a request as cancelled
+    fn cancel_mark(&self, id: &Value) {
+        if let Ok(mut c) = self.cancelled.lock() {
+            c.insert(id.clone());
+        }
+    }
+
+    /// Clear a cancelled request
+    fn cancel_clear(&self, id: &Value) {
+        if let Ok(mut c) = self.cancelled.lock() {
+            c.remove(id);
+        }
+    }
+
     /// Check if a request has been cancelled
     fn is_cancelled(&self, id: &Value) -> bool {
         let mut set = self.cancelled.lock().unwrap();
@@ -476,6 +491,10 @@ impl LspServer {
             "textDocument/prepareTypeHierarchy" => {
                 self.handle_prepare_type_hierarchy(request.params)
             }
+            "typeHierarchy/prepare" => {
+                // Alias for deprecated/alternate method string
+                self.handle_prepare_type_hierarchy(request.params)
+            }
             "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/diagnostic" => self.handle_document_diagnostic(request.params),
@@ -498,11 +517,13 @@ impl LspServer {
             "textDocument/selectionRange" => self.handle_selection_range(request.params),
             // PR 9: On-type formatting
             "textDocument/onTypeFormatting" => self.handle_on_type_formatting(request.params),
+            // Code lens support
+            "textDocument/codeLens" => self.handle_code_lens(request.params),
+            "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
+            // Semantic tokens range
+            "textDocument/semanticTokens/range" => self.handle_semantic_tokens_range(request.params),
             // GA contract: these methods remain unsupported in v0.8.3
-            "textDocument/codeLens"
-            | "codeLens/resolve"
-            | "textDocument/semanticTokens/range"
-            | "textDocument/typeDefinition"
+            "textDocument/typeDefinition"
             | "textDocument/implementation"
             | "workspace/executeCommand" => Err(JsonRpcError {
                 code: ERR_METHOD_NOT_FOUND,
@@ -779,7 +800,8 @@ impl LspServer {
                     "firstTriggerCharacter": "{",
                     "moreTriggerCharacter": ["}", ";", "\n"]
                 },
-                "typeHierarchyProvider": true,
+                // Type hierarchy is not implemented - don't advertise
+                // "typeHierarchyProvider": true,
                 "diagnosticProvider": {
                     "interFileDependencies": false,
                     "workspaceDiagnostics": true
@@ -845,9 +867,10 @@ impl LspServer {
             // Build line starts cache for O(log n) position conversion
             let line_starts = LineStartsCache::new(text);
 
-            // Store document state
+            // Store document state with normalized URI
+            let normalized_uri = self.normalize_uri_key(uri);
             self.documents.lock().unwrap().insert(
-                uri.to_string(),
+                normalized_uri,
                 DocumentState {
                     content: text.to_string(),
                     _version: version,
@@ -909,7 +932,8 @@ impl LspServer {
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock().unwrap();
-                let mut doc_state = documents.get(uri).cloned().unwrap_or_else(|| DocumentState {
+                let normalized_uri = self.normalize_uri_key(uri);
+                let mut doc_state = documents.get(&normalized_uri).or_else(|| documents.get(uri)).cloned().unwrap_or_else(|| DocumentState {
                     content: String::new(),
                     _version: version,
                     ast: None,
@@ -986,7 +1010,7 @@ impl LspServer {
                 };
 
                 // Check if a newer change arrived while we were parsing
-                if let Some(existing_doc) = documents.get(uri) {
+                if let Some(existing_doc) = self.get_document(&documents, uri) {
                     if existing_doc.generation.load(Ordering::SeqCst) != next_gen
                         || existing_doc._version > target_version
                     {
@@ -1002,7 +1026,7 @@ impl LspServer {
                     }
                 }
 
-                documents.insert(uri.to_string(), doc_state);
+                documents.insert(normalized_uri.clone(), doc_state);
 
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
@@ -1185,7 +1209,7 @@ impl LspServer {
 
             // Re-run diagnostics on save to catch any changes
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.content.clone());
@@ -1261,7 +1285,7 @@ impl LspServer {
             eprintln!("Document will save wait until: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 // Return text edits to be applied before saving
                 // For example: format document, organize imports, etc.
 
@@ -1355,7 +1379,7 @@ impl LspServer {
             self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 
                 // Get completions, with fallback for missing AST
@@ -1527,7 +1551,7 @@ impl LspServer {
             let end_char = params["range"]["end"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ast) = &doc.ast {
                     let start_offset = self.pos16_to_offset(doc, start_line, start_char);
                     let end_offset = self.pos16_to_offset(doc, end_line, end_char);
@@ -1857,7 +1881,7 @@ impl LspServer {
             self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -1936,7 +1960,7 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 
                 // Find the function call context at this position
@@ -2445,7 +2469,7 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -2566,7 +2590,7 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 // First check if we're on a module name in use/require statement
                 let offset = self.pos16_to_offset(doc, line, character);
 
@@ -2768,7 +2792,7 @@ impl LspServer {
             };
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -2876,7 +2900,7 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -2931,10 +2955,11 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let offset = self.pos16_to_offset(doc, line, character);
+                
+                // Try AST-based approach first
                 if let Some(ref ast) = doc.ast {
-                    let offset = self.pos16_to_offset(doc, line, character);
-
                     // Create type hierarchy provider
                     let provider = TypeHierarchyProvider::new();
 
@@ -2979,10 +3004,78 @@ impl LspServer {
                         return Ok(Some(json!(lsp_items)));
                     }
                 }
+                
+                // Fallback to regex-based approach
+                let sub_regex = regex::Regex::new(r"\bsub\s+([a-zA-Z_]\w*)\b").unwrap();
+                let package_regex = regex::Regex::new(r"\bpackage\s+([a-zA-Z_][\w:]*)\b").unwrap();
+                
+                // Find all subs and packages with their positions
+                let mut exact_sub: Option<(String, usize, usize)> = None;
+                for cap in sub_regex.captures_iter(&doc.content) {
+                    if let (Some(m), Some(name)) = (cap.get(0), cap.get(1)) {
+                        if offset >= m.start() && offset <= m.end() {
+                            // Exact match - cursor is on this sub
+                            exact_sub = Some((name.as_str().to_string(), m.start(), m.end()));
+                            break;
+                        }
+                    }
+                }
+                
+                if let Some((name, start, end)) = exact_sub {
+                    let start_pos = doc.line_starts.offset_to_position(&doc.content, start);
+                    let end_pos = doc.line_starts.offset_to_position(&doc.content, end);
+                    return Ok(Some(json!([{
+                        "name": name,
+                        "kind": 12, // Function
+                        "uri": uri,
+                        "range": {
+                            "start": { "line": start_pos.0, "character": start_pos.1 },
+                            "end": { "line": end_pos.0, "character": end_pos.1 },
+                        },
+                        "selectionRange": {
+                            "start": { "line": start_pos.0, "character": start_pos.1 },
+                            "end": { "line": end_pos.0, "character": end_pos.1 },
+                        },
+                        "detail": "sub",
+                        "data": { "uri": uri, "name": name },
+                    }])));
+                }
+                
+                // Check packages
+                let mut exact_pkg: Option<(String, usize, usize)> = None;
+                for cap in package_regex.captures_iter(&doc.content) {
+                    if let (Some(m), Some(name)) = (cap.get(0), cap.get(1)) {
+                        if offset >= m.start() && offset <= m.end() {
+                            // Exact match - cursor is on this package
+                            exact_pkg = Some((name.as_str().to_string(), m.start(), m.end()));
+                            break;
+                        }
+                    }
+                }
+                
+                if let Some((name, start, end)) = exact_pkg {
+                    let start_pos = doc.line_starts.offset_to_position(&doc.content, start);
+                    let end_pos = doc.line_starts.offset_to_position(&doc.content, end);
+                    return Ok(Some(json!([{
+                        "name": name,
+                        "kind": 5, // Class
+                        "uri": uri,
+                        "range": {
+                            "start": { "line": start_pos.0, "character": start_pos.1 },
+                            "end": { "line": end_pos.0, "character": end_pos.1 },
+                        },
+                        "selectionRange": {
+                            "start": { "line": start_pos.0, "character": start_pos.1 },
+                            "end": { "line": end_pos.0, "character": end_pos.1 },
+                        },
+                        "detail": "package",
+                        "data": { "uri": uri, "name": name },
+                    }])));
+                }
             }
         }
 
-        Ok(None)
+        Ok(Some(json!([])))
     }
 
     /// Handle typeHierarchy/supertypes request
@@ -3155,7 +3248,7 @@ impl LspServer {
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -3213,7 +3306,7 @@ impl LspServer {
             }
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -3351,7 +3444,7 @@ impl LspServer {
                 data: None,
             })?;
             let documents = self.documents.lock().unwrap();
-            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
@@ -3375,8 +3468,20 @@ impl LspServer {
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
+
+            // Extract the range parameter (required by LSP spec)
+            let range = if let Some(range_val) = p.get("range") {
+                let start_line = range_val["start"]["line"].as_u64().unwrap_or(0) as u32;
+                let start_char = range_val["start"]["character"].as_u64().unwrap_or(0) as u32;
+                let end_line = range_val["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                let end_char = range_val["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                Some(crate::positions::Range::new(start_line, start_char, end_line, end_char))
+            } else {
+                None
+            };
+
             let documents = self.documents.lock().unwrap();
-            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
@@ -3385,10 +3490,10 @@ impl LspServer {
                 let mut hints = Vec::new();
                 hints.extend(crate::inlay_hints::parameter_hints(ast, &|off| {
                     self.offset_to_pos16(doc, off)
-                }));
+                }, range));
                 hints.extend(crate::inlay_hints::trivial_type_hints(ast, &|off| {
                     self.offset_to_pos16(doc, off)
-                }));
+                }, range));
                 return Ok(Some(json!(hints)));
             }
         }
@@ -3404,7 +3509,7 @@ impl LspServer {
                 data: None,
             })?;
             let documents = self.documents.lock().unwrap();
-            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
@@ -3434,7 +3539,7 @@ impl LspServer {
             })?;
 
             let documents = self.documents.lock().unwrap();
-            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
@@ -3479,7 +3584,7 @@ impl LspServer {
             let col = pos["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
-            let doc = documents.get(uri).ok_or_else(|| JsonRpcError {
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: ERR_INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
@@ -3507,7 +3612,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
                     let extractor = crate::symbol::SymbolExtractor::new();
@@ -3651,7 +3756,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let mut lsp_ranges = Vec::new();
 
                 // Add text-based data section folding
@@ -4068,6 +4173,44 @@ impl LspServer {
         // Uses the cached, CRLF/UTF-16 aware converter
         doc.line_starts.position_to_offset(&doc.content, line, ch)
     }
+    
+    /// Normalize URI key for consistent document lookup
+    fn normalize_uri_key(&self, raw: &str) -> String {
+        // Parse to Url to canonicalize, then stringify the way we store it.
+        // If parsing fails, return the raw key so we at least try the given string.
+        if let Ok(u) = url::Url::parse(raw) {
+            // On Windows, lower-case the drive letter to match how many editors send it.
+            #[cfg(windows)]
+            {
+                let s = u.as_str().to_string();
+                if let Some(rest) = s.strip_prefix("file:///") {
+                    if rest.len() > 1 && rest.as_bytes()[1] == b':' && rest.as_bytes()[0].is_ascii_alphabetic() {
+                        return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
+                    }
+                }
+                return s;
+            }
+            #[cfg(not(windows))]
+            return u.as_str().to_string();
+        }
+        raw.to_string()
+    }
+    
+    /// Get document by URI with normalization fallback
+    fn get_document<'a>(&self, documents: &'a std::sync::MutexGuard<'_, HashMap<String, DocumentState>>, uri: &str) -> Option<&'a DocumentState> {
+        let normalized = self.normalize_uri_key(uri);
+        documents.get(&normalized).or_else(|| documents.get(uri))
+    }
+    
+    /// Get mutable document by URI with normalization fallback
+    fn get_document_mut<'a>(&self, documents: &'a mut std::sync::MutexGuard<'_, HashMap<String, DocumentState>>, uri: &str) -> Option<&'a mut DocumentState> {
+        let normalized = self.normalize_uri_key(uri);
+        if documents.contains_key(&normalized) {
+            documents.get_mut(&normalized)
+        } else {
+            documents.get_mut(uri)
+        }
+    }
 
     /// Lexical completion fallback for when AST is unavailable
     fn lexical_complete(
@@ -4184,7 +4327,7 @@ impl LspServer {
     fn content_modified() -> JsonRpcError {
         JsonRpcError {
             code: ERR_CONTENT_MODIFIED,
-            message: "ContentModified".to_string(),
+            message: "Document changed before request executed".to_string(),
             data: None,
         }
     }
@@ -4193,7 +4336,7 @@ impl LspServer {
     fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), JsonRpcError> {
         if let Some(v) = req_version {
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if v < doc._version {
                     return Err(Self::content_modified());
                 }
@@ -4229,7 +4372,7 @@ impl LspServer {
             eprintln!("Formatting document: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.content, &options) {
                     Ok(edits) => {
@@ -4303,7 +4446,7 @@ impl LspServer {
             eprintln!("Formatting range in document: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_range(&doc.content, &range, &options) {
                     Ok(edits) => {
@@ -4511,7 +4654,7 @@ impl LspServer {
             eprintln!("Getting code lenses for: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = CodeLensProvider::new(doc.content.clone());
                     let mut lenses = provider.extract(ast);
@@ -4971,7 +5114,7 @@ impl LspServer {
             eprintln!("Getting semantic tokens for: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let mut provider = SemanticTokensProvider::new(doc.content.clone());
                     let tokens = provider.extract(ast);
@@ -5008,7 +5151,7 @@ impl LspServer {
             );
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let mut provider = SemanticTokensProvider::new(doc.content.clone());
                     let all_tokens = provider.extract(ast);
@@ -5049,7 +5192,7 @@ impl LspServer {
             eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
                     if let Some(items) = provider.prepare(ast, line, character) {
@@ -5072,7 +5215,7 @@ impl LspServer {
             eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
@@ -5098,7 +5241,7 @@ impl LspServer {
             eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
@@ -5158,6 +5301,225 @@ impl LspServer {
         Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail })
     }
 
+    /// Find matching closing parenthesis
+    fn find_matching_paren(&self, s: &str, open_at: usize) -> Option<usize> {
+        // s[open_at] must be '('; walk forwards tracking (), [], {} and quotes.
+        let mut i = open_at;
+        let mut depth_par = 0i32;
+        let mut _depth_brk = 0i32;
+        let mut _depth_brc = 0i32;
+        let mut in_s = false;
+        let mut in_d = false;
+        while i < s.len() {
+            let b = s.as_bytes()[i];
+            let prev_backslash = i > 0 && s.as_bytes()[i-1] == b'\\';
+            if in_s {
+                if b == b'\'' && !prev_backslash { in_s = false; }
+            } else if in_d {
+                if b == b'"' && !prev_backslash { in_d = false; }
+            } else {
+                match b {
+                    b'\'' => in_s = true,
+                    b'"'  => in_d = true,
+                    b'('  => depth_par += 1,
+                    b')'  => { depth_par -= 1; if depth_par == 0 { return Some(i); } }
+                    b'['  => _depth_brk += 1,
+                    b']'  => _depth_brk -= 1,
+                    b'{'  => _depth_brc += 1,
+                    b'}'  => _depth_brc -= 1,
+                    _ => {}
+                }
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Scan forward until end of statement (top-level `;`) honoring quotes/brackets.
+    fn slice_until_stmt_end(&self, src: &str, from: usize) -> usize {
+        let mut i = from;
+        let mut depth_par = 0i32;
+        let mut depth_brk = 0i32;
+        let mut depth_brc = 0i32;
+        let mut in_s = false;
+        let mut in_d = false;
+        while i < src.len() {
+            let b = src.as_bytes()[i];
+            let esc = i > 0 && src.as_bytes()[i - 1] == b'\\';
+            if in_s {
+                if b == b'\'' && !esc { in_s = false; }
+            } else if in_d {
+                if b == b'"' && !esc { in_d = false; }
+            } else {
+                match b {
+                    b'\'' => in_s = true,
+                    b'"' => in_d = true,
+                    b'(' => depth_par += 1,
+                    b')' => depth_par -= 1,
+                    b'[' => depth_brk += 1,
+                    b']' => depth_brk -= 1,
+                    b'{' => depth_brc += 1,
+                    b'}' => depth_brc -= 1,
+                    b';' if depth_par == 0 && depth_brk == 0 && depth_brc == 0 => return i,
+                    _ => {}
+                }
+            }
+            i += 1;
+        }
+        src.len()
+    }
+
+    /// Top-level argument starts for a comma-separated list without surrounding parens.
+    fn arg_starts_top_level(&self, src: &str) -> Vec<usize> {
+        let mut v = Vec::new();
+        let mut i = 0usize;
+        while i < src.len() && src.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+        if i < src.len() { v.push(i); }
+        let mut j = i;
+        let mut depth_par = 0i32;
+        let mut depth_brk = 0i32;
+        let mut depth_brc = 0i32;
+        let mut in_s = false;
+        let mut in_d = false;
+        while j < src.len() {
+            let b = src.as_bytes()[j];
+            let esc = j > 0 && src.as_bytes()[j - 1] == b'\\';
+            if in_s {
+                if b == b'\'' && !esc { in_s = false; }
+            } else if in_d {
+                if b == b'"' && !esc { in_d = false; }
+            } else {
+                match b {
+                    b'\'' => in_s = true,
+                    b'"' => in_d = true,
+                    b'(' => depth_par += 1,
+                    b')' => depth_par -= 1,
+                    b'[' => depth_brk += 1,
+                    b']' => depth_brk -= 1,
+                    b'{' => depth_brc += 1,
+                    b'}' => depth_brc -= 1,
+                    b',' if depth_par == 0 && depth_brk == 0 && depth_brc == 0 => {
+                        let mut k = j + 1;
+                        while k < src.len() && src.as_bytes()[k].is_ascii_whitespace() { k += 1; }
+                        if k < src.len() { v.push(k); }
+                    }
+                    _ => {}
+                }
+            }
+            j += 1;
+        }
+        v
+    }
+
+    /// Move the anchor inside an argument to the "interesting" token:
+    ///  - skip leading whitespace
+    ///  - for `my|our` args, jump to the first sigiled var (`$foo`/`@a`/`%h`)
+    ///  - for bareword filehandles (e.g., `FH`), jump to the bareword
+    fn anchor_arg_start(&self, body: &str, rel: usize) -> usize {
+        let s = &body[rel..];
+        let mut i = 0usize;
+        while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+        // my/our <sigiled-var>
+        if s[i..].starts_with("my ") || s[i..].starts_with("our ") {
+            let mut j = i + 3; // skip "my " / "our "
+            while j < s.len() && s.as_bytes()[j].is_ascii_whitespace() { j += 1; }
+            return rel + j;
+        }
+        // If next is sigiled variable, keep; else keep bareword start
+        rel + i
+    }
+
+    /// If argument starts at `my $fh`, retarget anchor to the `$fh` (or bareword FH).
+    fn smart_arg_anchor(&self, body: &str, rel: usize) -> usize {
+        let s = &body[rel..];
+        let mut i = 0usize;
+        while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+
+        // handle my/our
+        for kw in ["my ", "our "] {
+            if s[i..].starts_with(kw) {
+                i += kw.len();
+                while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+                break;
+            }
+        }
+
+        // valid anchors: sigils, barewords, deref braces and array/hash derefs
+        // $, @, %, &, { (for @{ ... }, %{ ... }), [ (rare, but safe), or A-Za-z_ bareword
+        let b = s.as_bytes().get(i).copied().unwrap_or(b' ');
+        if matches!(b, b'$'|b'@'|b'%'|b'&'|b'{'|b'[') || b.is_ascii_alphabetic() || b == b'_' {
+            return rel + i;
+        }
+        rel + i
+    }
+    
+    /// Find argument starts in function call body
+    fn arg_starts_in_call_body(&self, body: &str) -> Vec<usize> {
+        // Return byte offsets (within body) where each top-level argument starts.
+        let mut starts = Vec::new();
+        let mut i = 0usize;
+        let mut depth_par = 0i32;
+        let mut _depth_brk = 0i32;
+        let mut _depth_brc = 0i32;
+        let mut in_s = false;
+        let mut in_d = false;
+        let mut _at_token = false;
+        // First arg always starts at the first non-space
+        while i < body.len() && body.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+        if i < body.len() { starts.push(i); _at_token = true; }
+        let mut j = i;
+        while j < body.len() {
+            let b = body.as_bytes()[j];
+            let prev_backslash = j > 0 && body.as_bytes()[j-1] == b'\\';
+            if in_s {
+                if b == b'\'' && !prev_backslash { in_s = false; }
+            } else if in_d {
+                if b == b'"' && !prev_backslash { in_d = false; }
+            } else {
+                match b {
+                    b'\'' => in_s = true,
+                    b'"'  => in_d = true,
+                    b'('  => depth_par += 1,
+                    b')'  => depth_par -= 1,
+                    b'['  => _depth_brk += 1,
+                    b']'  => _depth_brk -= 1,
+                    b'{'  => _depth_brc += 1,
+                    b'}'  => _depth_brc -= 1,
+                    b',' if depth_par == 0 && _depth_brk == 0 && _depth_brc == 0 => {
+                        // next arg start = first non-space after comma
+                        let mut k = j + 1;
+                        while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() { k += 1; }
+                        if k < body.len() { starts.push(k); }
+                    }
+                    _ => {}
+                }
+            }
+            j += 1;
+        }
+        starts
+    }
+
+    /// Convert position to byte offset
+    fn pos_to_offset_bytes(&self, text: &str, line: u32, ch: u32) -> usize {
+        let mut byte = 0usize;
+        let mut cur = 0u32;
+        for l in text.split_inclusive('\n') {
+            if cur == line {
+                return byte + (ch as usize).min(l.len());
+            }
+            byte += l.len();
+            cur += 1;
+        }
+        text.len()
+    }
+
+    /// Slice text within range
+    fn slice_in_range<'a>(&self, text: &'a str, start: (u32, u32), end: (u32, u32)) -> (usize, usize, &'a str) {
+        let s = self.pos_to_offset_bytes(text, start.0, start.1);
+        let e = self.pos_to_offset_bytes(text, end.0, end.1);
+        (s, e, &text[s.min(text.len())..e.min(text.len())])
+    }
+
     /// Handle inlay hint request
     fn handle_inlay_hint(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -5167,7 +5529,9 @@ impl LspServer {
             eprintln!("Getting inlay hints for: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let mut hints = Vec::new();
+                
                 if let Some(ref ast) = doc.ast {
                     // Configure inlay hints based on server settings
                     let server_config = self.config.lock().unwrap();
@@ -5179,24 +5543,237 @@ impl LspServer {
                     };
 
                     let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
-                    let hints = provider.extract(ast);
+                    
+                    // Extract range if provided
+                    let lsp_range = if params.get("range").is_some() {
+                        let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                        let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                        let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        let end_char = range["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        Some(crate::positions::Range::new(start_line, start_char, end_line, end_char))
+                    } else {
+                        None
+                    };
+                    
+                    // Use the extract_range method if range is provided
+                    let ast_hints = if let Some(r) = lsp_range {
+                        provider.extract_range(ast, r)
+                    } else {
+                        provider.extract(ast)
+                    };
 
-                    // Filter hints to the requested range if needed
-                    let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
-                    let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
-
-                    let filtered_hints: Vec<_> = hints
-                        .into_iter()
-                        .filter(|hint| {
-                            hint.position.line >= start_line && hint.position.line <= end_line
-                        })
-                        .map(|hint| hint.to_json())
-                        .collect();
-
-                    eprintln!("Found {} inlay hints", filtered_hints.len());
-
-                    return Ok(Some(json!(filtered_hints)));
+                    for hint in ast_hints {
+                        hints.push(hint.to_json());
+                    }
                 }
+
+                // Named-arg fallback: foo(bar => $x, 'baz' => 2)
+                // Respect client-supplied range if present
+                let has_range = params.get("range").and_then(|r| r.as_object()).is_some();
+                let (_win_s, _win_e, window) = if has_range {
+                    let s_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                    let s_ch = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                    let e_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
+                    let e_ch = range["end"]["character"].as_u64().unwrap_or(0) as u32;
+                    self.slice_in_range(&doc.content, (s_line, s_ch), (e_line, e_ch))
+                } else {
+                    (0, doc.content.len(), doc.content.as_str())
+                };
+
+                // Add named argument hints for => pairs
+                use regex::Regex;
+                use std::collections::HashSet;
+                use crate::builtin_signatures_phf::{get_param_names, BUILTIN_SIGS};
+                lazy_static::lazy_static! {
+                    static ref RE_CALL: Regex = Regex::new(r"(?m)([A-Za-z_]\w*)\s*\(").unwrap();
+                    static ref RE_PAIR: Regex = Regex::new(
+                        r#"(?x)
+                        (?P<key>
+                            [A-Za-z_]\w*                # bareword
+                            | '([^'\\]|\\.)*'           # single-quoted
+                            | "([^"\\]|\\.)*"           # double-quoted
+                        )
+                        \s*=>\s*
+                        "#
+                    ).unwrap();
+                }
+
+                for m in RE_PAIR.find_iter(window) {
+                    if let Some(caps) = RE_PAIR.captures(m.as_str()) {
+                        let mut key = caps.name("key").map(|k| k.as_str()).unwrap_or("").to_string();
+                        
+                        // Strip quotes if present
+                        if (key.starts_with('"') && key.ends_with('"')) || 
+                           (key.starts_with('\'') && key.ends_with('\'')) {
+                            key = key[1..key.len().saturating_sub(1)].to_string();
+                        }
+
+                        // Calculate position for the hint (at the value start)
+                        let val_offset = m.end();
+                        let (l, c) = doc.line_starts.offset_to_position(&doc.content, val_offset);
+
+                        // Only add hint if within requested range
+                        let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                        let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                        let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        let end_char = range["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        
+                        let pos = crate::positions::Position::new(l, c);
+                        let range = crate::positions::Range::new(start_line, start_char, end_line, end_char);
+                        if crate::positions::pos_in_range(pos, range) {
+                            hints.push(json!({
+                                "position": { "line": l, "character": c },
+                                "label": format!("{}:", key),
+                                "kind": 2, // Parameter hint
+                            }));
+                        }
+                    }
+                }
+
+                // ---- Parameter hints for common built-ins with comma-separated args ----
+                // Dedup across AST/named-arg hints
+                let mut seen: HashSet<(u32,u32,String)> = HashSet::new();
+                for h in &hints {
+                    if let (Some(l), Some(c), Some(lbl)) = (
+                        h.get("position").and_then(|p| p.get("line")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                        h.get("position").and_then(|p| p.get("character")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                        h.get("label").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    ) {
+                        seen.insert((l,c,lbl));
+                    }
+                }
+
+                // Range window (reuse earlier computed range/window start)
+                let has_range_2 = params.get("range").and_then(|r| r.as_object()).is_some();
+                let (win_s, _win_e2, window2) = if has_range_2 {
+                    let s_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                    let s_ch   = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                    let e_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
+                    let e_ch   = range["end"]["character"].as_u64().unwrap_or(0) as u32;
+                    self.slice_in_range(&doc.content, (s_line, s_ch), (e_line, e_ch))
+                } else {
+                    (0, doc.content.len(), doc.content.as_str())
+                };
+                let _start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                let _end_line   = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+
+                for m in RE_CALL.find_iter(window2) {
+                    // function name
+                    let caps = RE_CALL.captures(&window2[m.start()..m.end()]).unwrap();
+                    let name = caps.get(1).unwrap().as_str();
+                    let sig = get_param_names(name);
+                    if sig.is_empty() { continue; }
+                    // find the matching ')' in the **whole window** after '('
+                    // compute open and close offsets relative to window
+                    let open_global = win_s + m.end() - 1; // m ends right after '(' due to regex; step back to '('
+                    let open_in_window = m.end() - 1;
+                    let close_in_window = match self.find_matching_paren(window2, open_in_window) { Some(p) => p, None => continue };
+                    let body = &window2[open_in_window + 1 .. close_in_window];
+                    let arg_starts = self.arg_starts_in_call_body(body);
+                    for (i, rel) in arg_starts.iter().enumerate() {
+                        if i >= sig.len() { break; }
+                        let local_anchor = self.smart_arg_anchor(body, *rel);
+                        let global_off = open_global + 1 + local_anchor;
+                        let (l, c) = doc.line_starts.offset_to_position(&doc.content, global_off);
+                        // Get range bounds for position checking
+                        let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                        let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                        let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        let end_char = range["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                        let pos = crate::positions::Position::new(l, c);
+                        let hint_range = crate::positions::Range::new(start_line, start_char, end_line, end_char);
+                        if !crate::positions::pos_in_range(pos, hint_range) { continue; }
+                        let label = format!("{}:", sig[i]);
+                        if seen.insert((l,c,label.clone())) {
+                            hints.push(json!({
+                                "position": { "line": l, "character": c },
+                                "label": label,
+                                "kind": 2, // Parameter
+                            }));
+                        }
+                    }
+                }
+
+                // Non-parenthesized built-ins: `push @arr, ...;`, `open FH, ...;`, `split /re/, s;`
+                for (name, sig) in BUILTIN_SIGS.entries() {
+                    let re = Regex::new(&format!(r#"(?m)\b{}\b(?!\s*\()"#, regex::escape(name))).unwrap();
+                    for m in re.find_iter(window2) {
+                        // body = from end of name to end-of-statement `;` (window-limited)
+                        let body_start = m.end();
+                        let stmt_end_in_win = self.slice_until_stmt_end(window2, body_start);
+                        let body = &window2[body_start..stmt_end_in_win];
+                        let arg_starts = self.arg_starts_top_level(body);
+                        for (i, rel) in arg_starts.iter().enumerate() {
+                            if i >= sig.len() { break; }
+                            // Re-anchor on the variable/filehandle token (skip `my`/`our`, whitespace)
+                            let local_anchor = self.smart_arg_anchor(body, *rel);
+                            let global_off = win_s + body_start + local_anchor;
+                            let (l, c) = doc.line_starts.offset_to_position(&doc.content, global_off);
+                            // Get range bounds for position checking
+                            let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                            let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                            let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                            let end_char = range["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                            let pos = crate::positions::Position::new(l, c);
+                            let hint_range = crate::positions::Range::new(start_line, start_char, end_line, end_char);
+                            if !crate::positions::pos_in_range(pos, hint_range) { continue; }
+                            let label = format!("{}:", sig[i]);
+                            if seen.insert((l, c, label.clone())) {
+                                hints.push(json!({
+                                    "position": { "line": l, "character": c },
+                                    "label": label,
+                                    "kind": 2, // Parameter
+                                }));
+                            }
+                        }
+                    }
+                }
+
+                // ---- Type hints (simple heuristics) ----
+                // Patterns:
+                //  my %hash;              -> "hash"
+                //  my @arr;               -> "array"
+                //  my $ref = {};          -> "HashRef"
+                //  my $ref = [];          -> "ArrayRef"
+                //  my $s   = "text";      -> "Str"
+                let type_patterns: &[(&str, &str, u8)] = &[
+                    // allow optional initializer: `my %h;` or `my %h = ();`
+                    (r"(?m)my\s+%([A-Za-z_]\w*)\b(?:\s*=\s*\(\s*\))?", "hash",    1),
+                    (r"(?m)my\s+@([A-Za-z_]\w*)\b(?:\s*=\s*\(\s*\))?", "array",   1),
+                    (r"(?m)my\s+\$([A-Za-z_]\w*)\s*=\s*\{",       "HashRef", 1),
+                    (r"(?m)my\s+\$([A-Za-z_]\w*)\s*=\s*\[",       "ArrayRef",1),
+                    (r#"(?m)my\s+\$([A-Za-z_]\w*)\s*=\s*"(?:[^"\\]|\\.)*""#, "Str",     1),
+                ];
+                for (pat, label_txt, kind_code) in type_patterns {
+                    let re = Regex::new(pat).unwrap();
+                    for m in re.find_iter(window2) {
+                        // Position hint at the variable's start (first capture)
+                        if let Some(caps) = re.captures(&window2[m.start()..m.end()]) {
+                            if let Some(var) = caps.get(1) {
+                                let var_global = win_s + m.start() + var.start();
+                                let (l, c) = doc.line_starts.offset_to_position(&doc.content, var_global);
+                                // Get range bounds for position checking
+                                let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                                let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
+                                let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                                let end_char = range["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                                let pos = crate::positions::Position::new(l, c);
+                                let hint_range = crate::positions::Range::new(start_line, start_char, end_line, end_char);
+                                if !crate::positions::pos_in_range(pos, hint_range) { continue; }
+                                let label = format!("{}", label_txt);
+                                if seen.insert((l, c, label.clone())) {
+                                    hints.push(json!({
+                                        "position": { "line": l, "character": c },
+                                        "label": label,
+                                        "kind": *kind_code, // 1 = Type
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return Ok(Some(json!(hints)));
             }
         }
 
@@ -5211,7 +5788,7 @@ impl LspServer {
             eprintln!("Discovering tests for: {}", uri);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let runner = TestRunner::new(doc.content.clone(), uri.to_string());
                     let tests = runner.discover_tests(ast);
@@ -5624,7 +6201,7 @@ impl LspServer {
                     // Also update our internal document store if it exists
                     #[cfg(feature = "workspace")]
                     if let Ok(mut documents) = self.documents.lock() {
-                        if let Some(doc) = documents.get_mut(&uri) {
+                        if let Some(doc) = self.get_document_mut(&mut documents, &uri) {
                             // Note: content variable is only available inside the cfg block above
                             // We'll need to re-read the file or restructure this
                             if let Some(path) = uri_to_fs_path(&uri) {
@@ -5852,7 +6429,7 @@ impl LspServer {
                         let Ok(mut documents) = self.documents.lock() else {
                             continue;
                         };
-                        if let Some(doc) = documents.get_mut(uri) {
+                        if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                             // Apply edits in reverse order to maintain positions
                             let mut sorted_edits = edits.clone();
                             sorted_edits.sort_by(|a, b| {
@@ -5976,7 +6553,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let uri_parsed = url::Url::parse(uri).map_err(|_| JsonRpcError {
                     code: -32602,
                     message: "Invalid URI".to_string(),
@@ -6012,7 +6589,7 @@ impl LspServer {
             let insert_spaces = params["options"]["insertSpaces"].as_bool().unwrap_or(true);
 
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 let uri_obj = uri
                     .parse::<lsp_types::Uri>()
                     .unwrap_or_else(|_| "file:///tmp".parse::<lsp_types::Uri>().unwrap());
@@ -6099,7 +6676,7 @@ impl LspServer {
             let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
             
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            if let Some(doc) = self.get_document(&documents, uri) {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.content.clone());
@@ -6317,9 +6894,15 @@ impl LspServer {
                 .and_then(|n| n.as_str())
                 .unwrap_or("");
             
+            // Normalize the URI for lookup
+            let uri_key = self.normalize_uri_key(uri);
+            
             // Look up the symbol in our index to get more details
             let documents = self.documents.lock().unwrap();
-            if let Some(doc) = documents.get(uri) {
+            let doc_opt = documents.get(&uri_key)
+                .or_else(|| documents.get(uri)); // try raw as a fallback
+            
+            if let Some(doc) = doc_opt {
                 if let Some(ast) = &doc.ast {
                     // Find the symbol in the AST to get more accurate information
                     let extractor = crate::symbol::SymbolExtractor::new();

@@ -226,6 +226,7 @@ fn test_create_test_from_template() {
 // ===================== Test Runner Integration =====================
 
 #[test]
+#[cfg_attr(not(feature = "lsp-advanced"), ignore = "Requires lsp-advanced feature")]
 fn test_run_single_test() {
     let mut ctx = AdvancedTestContext::new();
 
