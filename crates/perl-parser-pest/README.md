@@ -1,5 +1,8 @@
 # perl-parser-pest
 
+> **Note:** This is the **v2 Pest experiment** published for comparison/migration.  
+> For production use, we recommend **[`perl-parser` (v3)](https://crates.io/crates/perl-parser)**.
+
 Pest-based Perl parser (v2) with ~99.995% Perl 5 syntax coverage. Tree-sitter compatible output.
 
 ## Features
@@ -128,6 +131,74 @@ Benchmarks on typical Perl code:
 | perl-parser | 4.2 µs | 18 µs | 210 µs |
 | tree-sitter (C) | 12 µs | 68 µs | 650 µs |
 | PPI | 150 µs | 980 µs | 12 ms |
+
+## Migration to v3 (perl-parser)
+
+### Why Migrate?
+
+The v3 parser (`perl-parser`) offers:
+- **4-19x faster performance** than v2
+- **100% edge case coverage** (vs 99.995% in v2)
+- **Handles `m!pattern!`** and other arbitrary regex delimiters
+- **Proper indirect object syntax** support
+- **Active development** and bug fixes
+
+### Migration Steps
+
+1. **Update Cargo.toml**:
+```toml
+# Replace this:
+perl-parser-pest = "0.8.3"
+
+# With this:
+perl-parser = "0.8.3"
+```
+
+2. **Update imports**:
+```rust
+// Replace:
+use perl_parser_pest::{PureRustPerlParser, ParseError};
+
+// With:
+use perl_parser::{Parser, ParseError};
+```
+
+3. **API differences**:
+```rust
+// v2 (pest):
+let mut parser = PureRustPerlParser::new();
+let ast = parser.parse(code)?;
+let sexp = parser.to_sexp(&ast);
+
+// v3 (native):
+let mut parser = Parser::new();
+let node = parser.parse(code)?;
+let sexp = node.to_sexp();
+```
+
+### Key Differences
+
+| Feature | v2 (pest) | v3 (native) |
+|---------|-----------|-------------|
+| Main type | `PureRustPerlParser` | `Parser` |
+| Parse result | Custom AST | `Node` type |
+| S-expression | `parser.to_sexp(&ast)` | `node.to_sexp()` |
+| Node kinds | Same names | Tree-sitter compatible |
+| Performance | ~200-450 µs | ~1-150 µs |
+
+### Compatibility Mode
+
+If you need to compare both parsers:
+```toml
+[dependencies]
+perl-parser = { version = "0.8.3", features = ["pest-backend"] }
+```
+
+Then:
+```rust
+use perl_parser::Parser;  // v3
+use perl_parser::pest_backend::PureRustPerlParser;  // v2
+```
 
 ## Feature Coverage
 

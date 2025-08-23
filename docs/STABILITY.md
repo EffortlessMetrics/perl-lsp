@@ -1,6 +1,6 @@
 # API Stability & SemVer (perl-lexer, perl-parser, perl-corpus)
 
-**MSRV:** 1.75 • **Edition:** 2021
+**MSRV:** 1.89 • **Edition:** 2024
 
 ## What's considered stable (≥0.8.x)
 

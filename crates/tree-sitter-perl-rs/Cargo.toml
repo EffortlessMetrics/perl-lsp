@@ -3,7 +3,8 @@ name = "tree-sitter-perl"
 rust-version = "1.89"
 version = "0.8.3"
 edition = "2024"
-description = "Tree-sitter Perl grammar with Rust-native scanner"
+description = "Tree-sitter Perl validation harness (internal only)"
+publish = false
 license = "MIT"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl"
 keywords = ["tree-sitter", "perl", "parser", "grammar"]
@@ -78,17 +79,17 @@ path = "src/bin/test_stacker.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "benchmark_parsers"
+name = "ts_benchmark_parsers"
 path = "src/bin/benchmark_parsers.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "test_parsers"
+name = "ts_test_parsers"
 path = "src/bin/test_parsers.rs"
 required-features = ["pure-rust"]
 
 [[bin]]
-name = "parse-rust"
+name = "ts-parse-rust"
 path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust"]
 

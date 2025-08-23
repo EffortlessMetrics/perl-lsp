@@ -1,7 +1,17 @@
-//! A modern, modular Perl parser built on perl-lexer
+//! # perl-parser v3 — Native Perl parser
+//!
+//! **Tree-sitter compatible kinds/fields/points**, stable byte↔UTF-16 converters, `to_sexp()` for tests.  
+//! See [`docs/STABILITY.md`](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/main/docs/STABILITY.md) for API guarantees.
 //!
 //! This crate provides a clean, efficient parser that consumes tokens from
 //! the perl-lexer crate and produces a well-structured Abstract Syntax Tree (AST).
+//!
+//! ## Tree-sitter Compatibility
+//!
+//! Node kinds, field names, and byte/point semantics match the Tree-sitter Perl grammar:
+//! - 0-based byte offsets and line/column positions  
+//! - UTF-16 column positions for LSP compatibility
+//! - S-expression output via `to_sexp()` method
 //!
 
 #![deny(unsafe_code)]
