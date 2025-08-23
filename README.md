@@ -9,14 +9,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **High-Performance Perl Parsers with Full LSP Support - Three implementations with up to ~100% Perl 5 syntax coverage**
+> **Production-Ready Perl Parsing Ecosystem - Four specialized crates for parsing, corpus testing, and IDE support**
 
-This project provides **three Perl parser implementations** and a **full-featured Language Server**:
+This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-1. **v1: C-based tree-sitter parser** - Original implementation (~95% coverage)
-2. **v2: Pest-based Pure Rust parser** - PEG grammar approach (~99.995% coverage)
-3. **v3: Native Rust lexer+parser** ⭐ - Ground-up rewrite for maximum performance (~100% coverage)
-4. **LSP Server** ⚠️ - Partial IDE support (~35% functional, ~70% infrastructure exists)
+### 📦 Published Crates (v0.8.3 GA)
+
+1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and LSP server
+2. **perl-lexer** - Context-aware tokenizer for Perl syntax
+3. **perl-corpus** - Comprehensive test corpus and property testing
+4. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
 
@@ -89,16 +91,20 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
-### TL;DR
-- Use **perl-parser** (v3) for everything new.
-- Use **perl-parser-pest** only to compare or migrate old code.
-- `tree-sitter-perl-rs` is our internal TS harness; not for public use.
+### Production Crates (v0.8.3 GA)
 
-| Crate | Use Case | Published | Description |
-|-------|----------|-----------|-------------|
-| **`perl-parser`** | **Production v3** (native), Tree-sitter compatible | ✅ crates.io | Recommended for all new projects |
-| `perl-parser-pest` | v2 Pest experiment (compatibility/migration) | ✅ crates.io | Legacy, for comparison only |
-| `tree-sitter-perl` | Internal validation harness | ❌ (publish = false) | Do not use |
+| Crate | Purpose | When to Use |
+|-------|---------|-------------|
+| **[perl-parser](https://crates.io/crates/perl-parser)** ⭐ | Main parser & LSP | **Always use this** for parsing and IDE support |
+| **[perl-lexer](https://crates.io/crates/perl-lexer)** | Tokenization | Automatically used by perl-parser |
+| **[perl-corpus](https://crates.io/crates/perl-corpus)** | Test corpus | For testing parser implementations |
+| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Legacy parser | Migration/comparison only |
+
+### Quick Decision
+- **Need to parse Perl?** → Use `perl-parser`
+- **Need LSP/IDE support?** → Install `perl-lsp` binary from `perl-parser`
+- **Building a parser?** → Use `perl-corpus` for testing
+- **Have old Pest code?** → Migrate from `perl-parser-pest` to `perl-parser`
 
 ---
 
@@ -157,7 +163,7 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.7"
+perl-parser = "0.8"
 ```
 
 ```rust
@@ -175,9 +181,9 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features ⚠️ (~35% Functional, ~70% Infrastructure Built)
+### LSP Features ⚠️ (~35% Functional, ~65% Infrastructure Exists)
 
-> **Important**: While the parser has ~70% of LSP infrastructure built, only ~35% is wired to the LSP layer. See [LSP_ACTUAL_STATUS.md](crates/perl-parser/LSP_ACTUAL_STATUS.md) for complete details.
+> **Important**: Many LSP features are stub implementations that return empty results. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for honest assessment of what actually works.
 
 #### ✅ Actually Working Features
 - **Real-time Diagnostics**: Live syntax checking with detailed error messages
@@ -425,23 +431,25 @@ This distinction is important: Rust's `is_alphabetic()` correctly identifies mat
 ```
 tree-sitter-perl/
 ├── crates/
-│   ├── perl-lexer/               # v3: Context-aware tokenizer
+│   ├── perl-parser/             # Main parser & LSP server [crates.io]
+│   │   ├── src/
+│   │   │   ├── parser.rs        # Recursive descent parser
+│   │   │   ├── lsp_server.rs    # LSP implementation
+│   │   │   └── ast.rs           # AST definitions
+│   │   └── bin/
+│   │       └── perl-lsp.rs      # LSP server binary
+│   ├── perl-lexer/              # Context-aware tokenizer [crates.io]
 │   │   └── src/
 │   │       ├── lib.rs           # Lexer API
-│   │       ├── token.rs         # Token types
-│   │       └── mode.rs          # Lexer modes
-│   ├── perl-parser/             # v3: Recursive descent parser
-│   │   └── src/
-│   │       ├── lib.rs           # Parser API
-│   │       ├── parser.rs        # Main parser logic
-│   │       └── ast.rs           # AST definitions
-│   ├── tree-sitter-perl-rs/     # v2: Pest-based parser
+│   │       └── token.rs         # Token types
+│   ├── perl-corpus/             # Test corpus [crates.io]
 │   │   ├── src/
-│   │   │   ├── grammar.pest     # PEG grammar
-│   │   │   └── pure_rust_parser.rs
-│   │   └── benches/
-│   └── tree-sitter-perl-c/      # v1: C parser bindings
-├── tree-sitter-perl/            # Original C implementation
+│   │   │   └── lib.rs           # Corpus API
+│   │   └── tests/
+│   │       └── *.pl             # Test files
+│   └── perl-parser-pest/        # Legacy Pest parser [crates.io]
+│       └── src/
+│           └── grammar.pest     # PEG grammar
 ├── xtask/                       # Development automation
 └── docs/                        # Architecture docs
 ```
@@ -634,37 +642,39 @@ See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for complete details.
 ### As a Library
 
 ```rust
-use tree_sitter_perl::PureRustPerlParser;
-
-// Create parser instance
-let mut parser = PureRustPerlParser::new();
+use perl_parser::Parser;
 
 // Parse Perl code
-let source_code = r#"
+let source = r#"
     sub hello {
         my $name = shift;
         print "Hello, $name!\n";
     }
 "#;
 
-// Get tree-sitter compatible output
-let result = parser.parse(source_code)?;
-let sexp = parser.to_sexp(&result);
-println!("{}", sexp);
-// Output: (source_file (subroutine_declaration ...))
+// Create parser and parse
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+
+// Get tree-sitter compatible S-expression
+println!("AST: {:?}", ast);
+// Output: Program { statements: [SubroutineDeclaration { ... }] }
 ```
 
 ### Command Line Interface
 
 ```bash
-# Parse a file and output S-expression
-cargo run --features pure-rust --bin parse-rust -- script.pl
+# Install the LSP server (includes parser)
+cargo install perl-parser --bin perl-lsp
 
-# Parse with debug output
-cargo run --features pure-rust --bin parse-rust -- script.pl --debug
+# Parse a file (via LSP diagnostics)
+perl-lsp --check script.pl
 
-# Parse stdin
-echo 'print "Hello"' | cargo run --features pure-rust --bin parse-rust -- -
+# Run as Language Server
+perl-lsp --stdio
+
+# For parser-only usage, see examples/
+cargo run -p perl-parser --example parse_file script.pl
 ```
 
 ### Integration with Tree-sitter Tools
@@ -869,15 +879,19 @@ The benchmarking system provides:
 
 ```toml
 [dependencies]
-tree-sitter-perl = "0.1.0"
+perl-parser = "0.8.3"
+# Optional: for custom lexing
+perl-lexer = "0.8.3"
+# Optional: for testing
+perl-corpus = "0.8.3"
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/EffortlessSteven/tree-sitter-perl-rs.git
-cd tree-sitter-perl-rs
-cargo add --path crates/tree-sitter-perl-rs
+git clone https://github.com/EffortlessSteven/tree-sitter-perl.git
+cd tree-sitter-perl
+cargo add --path crates/perl-parser
 ```
 
 ---

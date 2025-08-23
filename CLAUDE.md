@@ -7,35 +7,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **three Perl parser implementations** and a **full Language Server Protocol (LSP) implementation**:
+This repository contains **four published crates** forming a complete Perl parsing ecosystem:
 
-### 1. **v1: C-based Tree-sitter Parser** (`/tree-sitter-perl/`, `/crates/tree-sitter-perl-c/`)
-- Original tree-sitter implementation in C
-- Good performance (~12-68 µs for typical files)
-- Limited Perl coverage (~95%)
-- Kept for benchmarking comparison
+### Published Crates (v0.8.3 GA)
 
-### 2. **v2: Pest-based Pure Rust Parser** (`/crates/tree-sitter-perl-rs/` with `pure-rust` feature)
-- PEG grammar implementation using Pest
-- **~99.995% Perl 5 syntax coverage**
-- Performance: ~200-450 µs for typical files (~180 µs/KB)
-- Full Unicode support including identifiers (café, π, Σ, etc.)
-- Struggles with context-sensitive features (m!pattern!, indirect object syntax)
-- Tree-sitter compatible S-expression output
-
-### 3. **v3: Native Lexer+Parser** (`/crates/perl-lexer/` + `/crates/perl-parser/`) ⭐ **RECOMMENDED**
-- Lexer with context-aware tokenization
-- Recursive descent parser with operator precedence
+#### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
+- Native recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
-- **4-19x faster than v1** (simple: ~1.1 µs, medium: ~50-150 µs)
-- Successfully handles m!pattern!, indirect object syntax, and more
-- Tree-sitter compatible S-expression output
-- **Production-ready** with 141/141 edge case tests passing
-- **v0.8.3**: Hash literal improvements, parenthesized expressions with word operators, qw() array parsing
-- **v0.7.5**: Enterprise release automation, enhanced type inference, CI/CD pipeline
-- **v0.7.4**: Zero compilation warnings, 100% test coverage with robust assertion infrastructure
+- **4-19x faster** than legacy implementations (1-150 µs parsing)
+- Tree-sitter compatible output
+- Includes LSP server binary (`perl-lsp`)
+- **v0.8.3 improvements**:
+  - Hash literal parsing fixed (`{ key => value }`)
+  - Parenthesized expressions with word operators
+  - qw() array parsing with all delimiters
+  - Enhanced go-to-definition using DeclarationProvider
 
-### 4. **LSP Server** (`/crates/perl-parser/src/lsp_server.rs`, binary: `perl-lsp`) ⚠️ **PARTIALLY FUNCTIONAL**
+#### 2. **perl-lexer** (`/crates/perl-lexer/`)
+- Context-aware tokenizer
+- Mode-based lexing (ExpectTerm, ExpectOperator)
+- Handles slash disambiguation at lexing phase
+- Zero dependencies
+- Used by perl-parser
+
+#### 3. **perl-corpus** (`/crates/perl-corpus/`)
+- Comprehensive test corpus
+- Property-based testing infrastructure
+- Edge case collection
+- Used for parser validation
+- Feature: `ci-fast` for conditional test execution
+
+#### 4. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
+- Pest-based parser (v2 implementation)
+- ~99.995% Perl 5 coverage
+- Marked as legacy - use perl-parser instead
+- Kept for migration/comparison
+
+### LSP Server (`perl-lsp` binary) ⚠️ **PARTIALLY FUNCTIONAL**
 - **~35% of advertised features actually work** (many are stubs returning empty results)
 - **Working Features**: 
   - ✅ Syntax checking and diagnostics
@@ -93,20 +101,21 @@ perl-lsp --stdio  # For editor integration
 perl-lsp --stdio --log  # With debug logging
 ```
 
-#### v2: Pest-based Parser
+#### Published Crates
 ```bash
-# Build the Pure Rust parser
-cargo xtask build --features pure-rust
+# Install from crates.io
+cargo install perl-parser --bin perl-lsp  # LSP server
+cargo add perl-parser                      # As library dependency
+cargo add perl-corpus --dev                # For testing
 
-# Build in release mode
-cargo xtask build --features pure-rust --release
-
-# Build from crate directory
-cd crates/tree-sitter-perl-rs
-cargo build --features pure-rust
+# Build from source
+cargo build -p perl-parser --release
+cargo build -p perl-lexer --release
+cargo build -p perl-corpus --release
+cargo build -p perl-parser-pest --release  # Legacy
 ```
 
-#### v3: Native Lexer+Parser (Recommended)
+#### Native Parser (Recommended)
 ```bash
 # Build the lexer and parser
 cargo build -p perl-lexer -p perl-parser
@@ -148,20 +157,7 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 
 ### Parser Commands
 
-#### v2: Pest-based Parser
-```bash
-# Parse a Perl file with Pure Rust parser
-cargo xtask parse-rust file.pl --sexp
-
-# Parse from stdin
-echo 'print "Hello"' | cargo run --features pure-rust --bin parse-rust -- -
-
-# Run directly from crate
-cd crates/tree-sitter-perl-rs
-cargo run --features pure-rust --bin parse-rust -- script.pl
-```
-
-#### v3: Native Lexer+Parser (Recommended)
+#### Native Parser (perl-parser)
 ```bash
 # Parse a Perl file (create a simple wrapper first)
 # The v3 parser is a library - use it programmatically or via examples:
@@ -348,38 +344,37 @@ These fallbacks ensure the LSP remains functional during active development when
 
 ## Architecture Overview
 
-### Project Structure
+### Crate Structure (v0.8.3 GA)
 
-#### v1: C-based Parser
-- **`/tree-sitter-perl/`**: Original tree-sitter grammar and C scanner
-- **`/crates/tree-sitter-perl-c/`**: Rust bindings for the C parser
+#### Production Crates
+- **`/crates/perl-parser/`**: Main parser and LSP server
+  - `src/parser.rs`: Recursive descent parser
+  - `src/lsp_server.rs`: LSP implementation
+  - `src/ast.rs`: AST definitions
+  - `bin/perl-lsp.rs`: LSP server binary
+  - Published as `perl-parser` on crates.io
 
-#### v2: Pest-based Parser
-- **`/crates/tree-sitter-perl-rs/`**: Pure Rust Perl parser implementation
-  - `src/pure_rust_parser.rs`: Main Pest-based parser
-  - `src/grammar.pest`: Complete Perl 5 PEG grammar
-  - `src/error/`: Error handling and diagnostics
-  - `src/unicode/`: Unicode identifier support
-  - `src/edge_case_handler.rs`: Heredoc edge case detection
-  - `src/phase_aware_parser.rs`: BEGIN/END block handling
-  - `src/tree_sitter_adapter.rs`: S-expression output formatting
-  - `src/enhanced_full_parser.rs`: Multi-phase parser with preprocessing
-  - `src/lib.rs`: Public API and exports
-
-#### v3: Native Lexer+Parser (Recommended)
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
-  - Mode-aware lexing (ExpectTerm, ExpectOperator, etc.)
-  - Handles slash disambiguation at lexing phase
-  - Zero dependencies
-- **`/crates/perl-parser/`**: Recursive descent parser
-  - Consumes tokens from perl-lexer
-  - Operator precedence parsing
-  - Tree-sitter compatible AST generation
+  - `src/lib.rs`: Lexer API
+  - `src/token.rs`: Token definitions
+  - `src/mode.rs`: Lexer modes
+  - Published as `perl-lexer` on crates.io
 
-#### Common Components
-- **`/xtask/`**: Development automation tools
-- **`/docs/`**: Architecture and design documentation
-- **`/benches/`**: Performance benchmarks for all parsers
+- **`/crates/perl-corpus/`**: Test corpus
+  - `src/lib.rs`: Corpus API
+  - `tests/`: Perl test files
+  - Published as `perl-corpus` on crates.io
+
+- **`/crates/perl-parser-pest/`**: Legacy Pest parser
+  - `src/grammar.pest`: PEG grammar
+  - `src/lib.rs`: Parser implementation
+  - Published as `perl-parser-pest` on crates.io (marked legacy)
+
+#### Internal/Unpublished
+- **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)
+- **`/crates/tree-sitter-perl-rs/`**: Internal test harness
+- **`/xtask/`**: Development automation
+- **`/docs/`**: Architecture documentation
 
 ### Key Components
 
@@ -419,23 +414,28 @@ These fallbacks ensure the LSP remains functional during active development when
 
 ## Development Guidelines
 
-### Choosing a Parser
-1. **For Production Use**: Use v3 (perl-lexer + perl-parser) - fastest and most complete
-2. **For Grammar Experimentation**: Use v2 (Pest-based) - easier to modify grammar
-3. **For Benchmarking**: Compare all three implementations
+### Choosing a Crate
+1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready
+2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate
+3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
+4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
 
 ### Development Locations
-- **v1 (C)**: `/tree-sitter-perl/` - legacy, no active development
-- **v2 (Pest)**: `/crates/tree-sitter-perl-rs/` - for PEG grammar improvements
-- **v3 (Native)**: `/crates/perl-lexer/` and `/crates/perl-parser/` - for performance and edge cases
+- **Parser & LSP**: `/crates/perl-parser/` - main development
+- **Lexer**: `/crates/perl-lexer/` - tokenization improvements
+- **Test Corpus**: `/crates/perl-corpus/` - test case additions
+- **Legacy**: `/crates/perl-parser-pest/` - maintenance only
 
 ### Testing
 ```bash
-# Test v2 (Pest)
-cargo test --features pure-rust
+# Test main parser
+cargo test -p perl-parser
 
-# Test v3 (Native)
-cargo test -p perl-lexer -p perl-parser
+# Test with corpus
+cargo test -p perl-corpus
+
+# Fast CI tests (skips slow property tests)
+cargo test --workspace --features ci-fast
 
 # Run all tests
 cargo test --all
