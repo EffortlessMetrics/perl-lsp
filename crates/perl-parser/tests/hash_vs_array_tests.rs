@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use perl_parser::{Parser, ast::NodeKind};
 
 #[test]

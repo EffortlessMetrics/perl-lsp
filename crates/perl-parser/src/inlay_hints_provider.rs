@@ -1,6 +1,6 @@
 use crate::ast::{Node, NodeKind};
-use crate::positions::{pos_in_range, Range, Position as LspPosition};
 use crate::builtin_signatures_phf::get_param_names;
+use crate::positions::{Position as LspPosition, Range, pos_in_range};
 use serde_json::{Value, json};
 
 /// Inlay Hint types according to LSP spec
@@ -64,7 +64,7 @@ impl InlayHintsProvider {
         self.visit_node(ast, &mut hints, None);
         hints
     }
-    
+
     /// Extract inlay hints from the AST within a specific range
     pub fn extract_range(&self, ast: &Node, range: Range) -> Vec<InlayHint> {
         let mut hints = Vec::new();
@@ -167,7 +167,7 @@ impl InlayHintsProvider {
             }
 
             let position = self.get_node_start_position(arg);
-            
+
             // Filter by range if specified
             if let Some(filter_range) = range {
                 let lsp_pos = LspPosition::new(position.line, position.character);
@@ -188,7 +188,13 @@ impl InlayHintsProvider {
     }
 
     /// Add type hint for variable declaration
-    fn add_type_hint(&self, variable: &Node, initializer: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
+    fn add_type_hint(
+        &self,
+        variable: &Node,
+        initializer: &Node,
+        hints: &mut Vec<InlayHint>,
+        range: Option<Range>,
+    ) {
         if let Some(type_info) = self.infer_type(initializer) {
             // Don't show if type is too long
             if type_info.len() > self.enabled_hints.max_length {
@@ -196,7 +202,7 @@ impl InlayHintsProvider {
             }
 
             let position = self.get_node_end_position(variable);
-            
+
             // Filter by range if specified
             if let Some(filter_range) = range {
                 let lsp_pos = LspPosition::new(position.line, position.character);
@@ -204,7 +210,7 @@ impl InlayHintsProvider {
                     return;
                 }
             }
-            
+
             hints.push(InlayHint {
                 position,
                 label: format!(": {}", type_info),
@@ -224,7 +230,7 @@ impl InlayHintsProvider {
             }
 
             let position = self.get_node_end_position(expr);
-            
+
             // Filter by range if specified
             if let Some(filter_range) = range {
                 let lsp_pos = LspPosition::new(position.line, position.character);
@@ -232,7 +238,7 @@ impl InlayHintsProvider {
                     return;
                 }
             }
-            
+
             hints.push(InlayHint {
                 position,
                 label: format!(" /* {} */", type_info),
@@ -250,7 +256,7 @@ impl InlayHintsProvider {
         if let Some(params) = get_param_names(function_name).get(0..) {
             return params.iter().map(|s| s.to_string()).collect();
         }
-        
+
         // Custom functions would be handled here
         match function_name {
             // Custom functions from symbol table
@@ -474,7 +480,7 @@ open(FH, "<", "file.txt");
             assert!(hints.len() >= 3); // At least 1 for each function call
 
             // Check first hint is for array parameter
-            assert_eq!(hints[0].label, "array: ");
+            assert_eq!(hints[0].label, "ARRAY: ");
             assert_eq!(hints[0].kind, InlayHintKind::Parameter);
         }
     }

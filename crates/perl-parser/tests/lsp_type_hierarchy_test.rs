@@ -5,7 +5,7 @@ use serde_json::json;
 #[test]
 fn test_type_hierarchy_prepare() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -63,11 +63,11 @@ sub new {
 
     let response = server.handle_request(request).unwrap();
     let result = response.result.as_ref().and_then(|r| r.as_array());
-    
+
     assert!(result.is_some(), "Should return type hierarchy items");
     let items = result.unwrap();
     assert!(!items.is_empty(), "Should have at least one item");
-    
+
     let item = &items[0];
     assert_eq!(item["name"], "Base");
     assert_eq!(item["kind"], 5); // Class
@@ -79,7 +79,7 @@ sub new {
 #[test]
 fn test_type_hierarchy_supertypes() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -155,16 +155,14 @@ package Parent2;
 
     let response = server.handle_request(supertypes_request).unwrap();
     let result = response.result.as_ref().and_then(|r| r.as_array());
-    
+
     assert!(result.is_some(), "Should return supertypes");
     let supertypes = result.unwrap();
-    
+
     // Should find Parent1 and Parent2
-    let names: Vec<String> = supertypes.iter()
-        .filter_map(|item| item["name"].as_str())
-        .map(|s| s.to_string())
-        .collect();
-    
+    let names: Vec<String> =
+        supertypes.iter().filter_map(|item| item["name"].as_str()).map(|s| s.to_string()).collect();
+
     assert!(names.contains(&"Parent1".to_string()), "Should find Parent1");
     assert!(names.contains(&"Parent2".to_string()), "Should find Parent2");
 }
@@ -172,7 +170,7 @@ package Parent2;
 #[test]
 fn test_type_hierarchy_subtypes() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -249,16 +247,14 @@ our @ISA = ('Base');
 
     let response = server.handle_request(subtypes_request).unwrap();
     let result = response.result.as_ref().and_then(|r| r.as_array());
-    
+
     assert!(result.is_some(), "Should return subtypes");
     let subtypes = result.unwrap();
-    
+
     // Should find Derived1 and Derived2
-    let names: Vec<String> = subtypes.iter()
-        .filter_map(|item| item["name"].as_str())
-        .map(|s| s.to_string())
-        .collect();
-    
+    let names: Vec<String> =
+        subtypes.iter().filter_map(|item| item["name"].as_str()).map(|s| s.to_string()).collect();
+
     assert!(names.contains(&"Derived1".to_string()), "Should find Derived1");
     assert!(names.contains(&"Derived2".to_string()), "Should find Derived2");
 }
@@ -266,7 +262,7 @@ our @ISA = ('Base');
 #[test]
 fn test_type_hierarchy_capability_advertised() {
     let mut server = LspServer::new();
-    
+
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -276,21 +272,25 @@ fn test_type_hierarchy_capability_advertised() {
             "capabilities": {}
         })),
     };
-    
+
     let response = server.handle_request(init_request).unwrap();
     let result = response.result.unwrap();
     let caps = &result["capabilities"];
-    
+
     // Type hierarchy should be advertised in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
-        assert_eq!(caps["typeHierarchyProvider"], json!(true), "typeHierarchyProvider should be advertised");
+        assert_eq!(
+            caps["typeHierarchyProvider"],
+            json!(true),
+            "typeHierarchyProvider should be advertised"
+        );
     }
 }
 
 #[test]
 fn test_type_hierarchy_with_namespace_packages() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -341,11 +341,11 @@ package Foo::Bar::Baz;
 
     let response = server.handle_request(request).unwrap();
     let result = response.result.as_ref().and_then(|r| r.as_array());
-    
+
     assert!(result.is_some(), "Should return type hierarchy items");
     let items = result.unwrap();
     assert!(!items.is_empty());
-    
+
     let item = &items[0];
     assert_eq!(item["name"], "Foo::Bar");
 }

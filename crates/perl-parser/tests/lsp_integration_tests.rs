@@ -1,5 +1,7 @@
 //! Comprehensive integration tests for LSP features
 
+#![allow(clippy::collapsible_if)]
+
 use perl_parser::{
     JsonRpcRequest, LspServer, Parser,
     code_lens_provider::{CodeLensProvider, get_shebang_lens},

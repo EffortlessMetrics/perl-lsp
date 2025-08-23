@@ -5,7 +5,7 @@ use serde_json::json;
 #[test]
 fn test_document_diagnostic() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -56,13 +56,13 @@ print $y;  # Undefined variable
 
     let response = server.handle_request(request).unwrap();
     let result = response.result.unwrap();
-    
+
     assert_eq!(result["kind"], "full");
     assert!(result["resultId"].is_string(), "Should have a result ID");
-    
+
     let items = result["items"].as_array().unwrap();
     assert!(!items.is_empty(), "Should have at least one diagnostic");
-    
+
     // Check first diagnostic structure
     let first = &items[0];
     assert!(first["range"].is_object());
@@ -74,7 +74,7 @@ print $y;  # Undefined variable
 #[test]
 fn test_document_diagnostic_unchanged() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -135,7 +135,7 @@ print "Hello, World!\n";
 
     let response2 = server.handle_request(request2).unwrap();
     let result2 = response2.result.unwrap();
-    
+
     assert_eq!(result2["kind"], "unchanged");
     assert_eq!(result2["resultId"], result_id);
 }
@@ -143,7 +143,7 @@ print "Hello, World!\n";
 #[test]
 fn test_workspace_diagnostic() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -210,10 +210,10 @@ print "OK\n";
 
     let response = server.handle_request(request).unwrap();
     let result = response.result.unwrap();
-    
+
     let items = result["items"].as_array().unwrap();
     assert_eq!(items.len(), 2, "Should have diagnostics for both documents");
-    
+
     // Check structure of workspace diagnostic reports
     for item in items {
         assert!(item["uri"].is_string());
@@ -228,7 +228,7 @@ print "OK\n";
 #[test]
 fn test_diagnostic_provider_capability() {
     let mut server = LspServer::new();
-    
+
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -238,11 +238,11 @@ fn test_diagnostic_provider_capability() {
             "capabilities": {}
         })),
     };
-    
+
     let response = server.handle_request(init_request).unwrap();
     let result = response.result.unwrap();
     let caps = &result["capabilities"];
-    
+
     // Diagnostic provider should be advertised in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
         assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider should be advertised");
@@ -255,7 +255,7 @@ fn test_diagnostic_provider_capability() {
 #[test]
 fn test_workspace_diagnostic_with_previous_ids() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -298,7 +298,7 @@ fn test_workspace_diagnostic_with_previous_ids() {
     let response1 = server.handle_request(request1).unwrap();
     let result1 = response1.result.unwrap();
     let items1 = result1["items"].as_array().unwrap();
-    
+
     // Get result IDs from first request
     let mut previous_ids = Vec::new();
     for item in items1 {
@@ -323,7 +323,7 @@ fn test_workspace_diagnostic_with_previous_ids() {
     let response2 = server.handle_request(request2).unwrap();
     let result2 = response2.result.unwrap();
     let items2 = result2["items"].as_array().unwrap();
-    
+
     // At least one should be unchanged
     let has_unchanged = items2.iter().any(|item| item["kind"] == "unchanged");
     assert!(has_unchanged, "Should have at least one unchanged result");

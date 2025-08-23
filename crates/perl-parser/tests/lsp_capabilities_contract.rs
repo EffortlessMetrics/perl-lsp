@@ -43,7 +43,11 @@ fn test_ga_capabilities_contract() {
     match &caps["workspaceSymbolProvider"] {
         serde_json::Value::Bool(true) => {}
         serde_json::Value::Object(obj) => {
-            assert_eq!(obj["resolveProvider"], json!(true), "workspaceSymbolProvider.resolveProvider must be true");
+            assert_eq!(
+                obj["resolveProvider"],
+                json!(true),
+                "workspaceSymbolProvider.resolveProvider must be true"
+            );
         }
         other => panic!("unexpected workspaceSymbolProvider: {:?}", other),
     }
@@ -58,11 +62,8 @@ fn test_ga_capabilities_contract() {
         !caps["semanticTokensProvider"].is_null(),
         "semanticTokensProvider must be advertised (v0.8.4)"
     );
-    assert!(
-        !caps["inlayHintProvider"].is_null(),
-        "inlayHintProvider must be advertised (v0.8.4)"
-    );
-    
+    assert!(!caps["inlayHintProvider"].is_null(), "inlayHintProvider must be advertised (v0.8.4)");
+
     // Assert what SHOULD NOT be advertised (partial implementations)
     assert!(
         caps["codeLensProvider"].is_null(),
@@ -81,7 +82,7 @@ fn test_ga_capabilities_contract() {
         !caps["documentOnTypeFormattingProvider"].is_null(),
         "documentOnTypeFormattingProvider must be advertised (v0.8.4)"
     );
-    
+
     // Features that should NOT be advertised
     assert!(
         caps["typeHierarchyProvider"].is_null(),
@@ -129,9 +130,9 @@ fn test_unsupported_methods_return_error() {
     // Test that truly unsupported methods return method_not_found error
     // Updated for v0.8.4 - only test methods that truly return method_not_found
     let unsupported_methods = [
-        "textDocument/typeDefinition",  // Not implemented
-        "textDocument/implementation",  // Not implemented  
-        "workspace/executeCommand",  // Not wired
+        "textDocument/typeDefinition", // Not implemented
+        "textDocument/implementation", // Not implemented
+        "workspace/executeCommand",    // Not wired
     ];
 
     for method in &unsupported_methods {

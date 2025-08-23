@@ -29,7 +29,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "readline" => &["FILEHANDLE"],
     "select" => &["FILEHANDLE"],
     "sysseek" => &["FILEHANDLE", "POSITION", "WHENCE"],
-    
+
     // ===== String Functions =====
     "chomp" => &["VARIABLE"],
     "chop" => &["VARIABLE"],
@@ -50,7 +50,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "ucfirst" => &["EXPR"],
     "unpack" => &["TEMPLATE", "EXPR"],
     "quotemeta" => &["EXPR"],
-    
+
     // ===== Array Functions =====
     "push" => &["ARRAY", "LIST"],
     "pop" => &["ARRAY"],
@@ -62,14 +62,14 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "sort" => &["BLOCK", "LIST"],
     "join" => &["EXPR", "LIST"],
     "split" => &["PATTERN", "EXPR", "LIMIT"],
-    
+
     // ===== Hash Functions =====
     "each" => &["HASH"],
     "keys" => &["HASH"],
     "values" => &["HASH"],
     "delete" => &["EXPR"],
     "exists" => &["EXPR"],
-    
+
     // ===== Math Functions =====
     "abs" => &["VALUE"],
     "atan2" => &["Y", "X"],
@@ -83,7 +83,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "sin" => &["EXPR"],
     "sqrt" => &["EXPR"],
     "srand" => &["EXPR"],
-    
+
     // ===== File/Directory Functions =====
     "chmod" => &["MODE", "LIST"],
     "chown" => &["UID", "GID", "LIST"],
@@ -104,7 +104,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "rewinddir" => &["DIRHANDLE"],
     "seekdir" => &["DIRHANDLE", "POS"],
     "telldir" => &["DIRHANDLE"],
-    
+
     // ===== Process Functions =====
     "alarm" => &["SECONDS"],
     "exec" => &["PROGRAM", "LIST"],
@@ -121,12 +121,12 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "times" => &[],
     "wait" => &[],
     "waitpid" => &["PID", "FLAGS"],
-    
+
     // ===== Time Functions =====
     "gmtime" => &["EXPR"],
     "localtime" => &["EXPR"],
     "time" => &[],
-    
+
     // ===== Network Functions =====
     "accept" => &["NEWSOCKET", "GENERICSOCKET"],
     "bind" => &["SOCKET", "NAME"],
@@ -141,7 +141,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "shutdown" => &["SOCKET", "HOW"],
     "socket" => &["SOCKET", "DOMAIN", "TYPE", "PROTOCOL"],
     "socketpair" => &["SOCKET1", "SOCKET2", "DOMAIN", "TYPE", "PROTOCOL"],
-    
+
     // ===== System Info Functions =====
     "gethostbyaddr" => &["ADDR", "ADDRTYPE"],
     "gethostbyname" => &["NAME"],
@@ -163,7 +163,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "endnetent" => &[],
     "endprotoent" => &[],
     "endservent" => &[],
-    
+
     // ===== User/Group Functions =====
     "getgrent" => &[],
     "getgrgid" => &["GID"],
@@ -176,7 +176,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "setpwent" => &[],
     "endgrent" => &[],
     "endpwent" => &[],
-    
+
     // ===== IPC Functions =====
     "msgctl" => &["ID", "CMD", "ARG"],
     "msgget" => &["KEY", "FLAGS"],
@@ -189,14 +189,14 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "shmget" => &["KEY", "SIZE", "FLAGS"],
     "shmread" => &["ID", "VAR", "POS", "SIZE"],
     "shmwrite" => &["ID", "STRING", "POS", "SIZE"],
-    
+
     // ===== Database Functions =====
     "dbmclose" => &["HASH"],
     "dbmopen" => &["HASH", "DBNAME", "MODE"],
     "tie" => &["VARIABLE", "CLASSNAME", "LIST"],
     "tied" => &["VARIABLE"],
     "untie" => &["VARIABLE"],
-    
+
     // ===== Miscellaneous Functions =====
     "bless" => &["REF", "CLASSNAME"],
     "caller" => &["EXPR"],

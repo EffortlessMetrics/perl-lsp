@@ -15,14 +15,14 @@ fn test_pragma_code_actions() {
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}
-        }))
+        })),
     };
     let _ = srv.handle_request(init_req);
 
     // Open a document without pragmas
     let uri = "file:///test.pl";
     let text = "sub foo{my$x=1;return$x}";
-    
+
     let open_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -34,7 +34,7 @@ fn test_pragma_code_actions() {
                 "version": 1,
                 "text": text
             }
-        }))
+        })),
     };
     let _ = srv.handle_request(open_req);
 
@@ -50,49 +50,48 @@ fn test_pragma_code_actions() {
                 "end": {"line": 0, "character": 0}
             },
             "context": {"diagnostics": []}
-        }))
+        })),
     };
-    
+
     let response = srv.handle_request(actions_req).unwrap();
-    
+
     let result = response.result.expect("Expected result");
     let actions = result.as_array().expect("Expected array of actions");
-    
+
     // Look for pragma actions
-    let has_strict_action = actions.iter().any(|a| {
-        a["title"].as_str() == Some("Add use strict;")
-    });
-    let has_warnings_action = actions.iter().any(|a| {
-        a["title"].as_str() == Some("Add use warnings;")
-    });
-    
+    let has_strict_action = actions.iter().any(|a| a["title"].as_str() == Some("Add use strict;"));
+    let has_warnings_action =
+        actions.iter().any(|a| a["title"].as_str() == Some("Add use warnings;"));
+
     assert!(has_strict_action, "Expected 'Add use strict;' action");
     assert!(has_warnings_action, "Expected 'Add use warnings;' action");
 }
 
 /// Test that formatting provider is advertised when perltidy is available
-#[test]  
+#[test]
 fn test_formatting_provider_capability() {
     let has_perltidy = which::which("perltidy").is_ok();
-    
+
     let mut srv = LspServer::new();
-    
+
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}
-        }))
+        })),
     };
-    
+
     let response = srv.handle_request(init_req).unwrap();
-    
+
     let result = response.result.expect("Expected result");
-    let has_formatting = result["capabilities"]["documentFormattingProvider"].as_bool()
-        .unwrap_or(false);
-    
+    let has_formatting =
+        result["capabilities"]["documentFormattingProvider"].as_bool().unwrap_or(false);
+
     // Formatting should only be advertised if perltidy is available
-    assert_eq!(has_formatting, has_perltidy, 
-        "documentFormattingProvider should match perltidy availability");
+    assert_eq!(
+        has_formatting, has_perltidy,
+        "documentFormattingProvider should match perltidy availability"
+    );
 }

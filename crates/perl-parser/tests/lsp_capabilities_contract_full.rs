@@ -1,4 +1,6 @@
 #![allow(clippy::collapsible_if)]
+#![allow(unused_imports)]
+
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
@@ -27,7 +29,10 @@ fn full_capabilities_match_contract() {
     assert_eq!(caps["foldingRangeProvider"], json!(true));
 
     // Full set now that features are implemented & tested
-    assert!(caps["workspaceSymbolProvider"].is_object(), "workspaceSymbolProvider should be object");
+    assert!(
+        caps["workspaceSymbolProvider"].is_object(),
+        "workspaceSymbolProvider should be object"
+    );
     assert_eq!(caps["workspaceSymbolProvider"]["resolveProvider"], json!(true));
     assert_eq!(caps["renameProvider"], json!(true));
     assert!(caps["codeActionProvider"].is_object());
@@ -47,17 +52,23 @@ fn full_capabilities_match_contract() {
     assert_eq!(caps["selectionRangeProvider"], json!(true));
     let ot = &caps["documentOnTypeFormattingProvider"];
     assert!(ot.is_object());
-    
+
     // Type hierarchy is NOT advertised in v0.8.4 (will be in v0.8.5)
-    assert!(caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must NOT be advertised in v0.8.4");
-    
+    assert!(
+        caps["typeHierarchyProvider"].is_null(),
+        "typeHierarchyProvider must NOT be advertised in v0.8.4"
+    );
+
     // Pull diagnostics is now advertised (v0.8.5)
     assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider must be advertised");
     let diag = &caps["diagnosticProvider"];
     assert_eq!(diag["interFileDependencies"], json!(false));
     assert_eq!(diag["workspaceDiagnostics"], json!(true));
-    
+
     // Must NOT be advertised until fully supported
     assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
-    assert!(caps["executeCommandProvider"].is_null(), "executeCommandProvider must NOT be advertised");
+    assert!(
+        caps["executeCommandProvider"].is_null(),
+        "executeCommandProvider must NOT be advertised"
+    );
 }

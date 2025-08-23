@@ -135,17 +135,18 @@ fn bench_tree_sitter_perl_rs(c: &mut Criterion) {
 
 // Stub for when tree-sitter-perl-rs feature is not enabled
 #[cfg(not(feature = "tree-sitter-perl-rs"))]
+#[allow(dead_code)]
 fn bench_tree_sitter_perl_rs(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree-sitter-perl-rs-stub");
     group.measurement_time(Duration::from_secs(1));
-    
+
     group.bench_function("stub", |b| {
         b.iter(|| {
             // Stub implementation
             black_box(SIMPLE_CODE.len());
         });
     });
-    
+
     group.finish();
 }
 

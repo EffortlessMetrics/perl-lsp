@@ -3,6 +3,8 @@
 //! These tests verify fundamental JSON-RPC and LSP protocol invariants
 //! that should always hold regardless of server state.
 
+#![allow(clippy::collapsible_if)]
+
 mod common;
 use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 use serde_json::json;

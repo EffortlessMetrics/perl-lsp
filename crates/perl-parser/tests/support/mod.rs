@@ -2,6 +2,8 @@
 //!
 //! Provides robust assertion helpers and utilities for testing LSP functionality
 
+#![allow(clippy::collapsible_if)]
+
 pub mod env_guard;
 pub mod lsp_client;
 pub mod lsp_harness;
