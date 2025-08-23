@@ -94,6 +94,9 @@ pub mod ast;
 pub use parser::Parser;
 pub mod ast_v2;
 pub mod builtin_signatures;
+pub mod builtin_signatures_phf;
+pub mod capabilities;
+pub mod lsp_errors;
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
@@ -123,6 +126,7 @@ pub mod document_links;
 pub mod document_store;
 pub mod folding;
 pub mod import_optimizer;
+pub mod index;
 #[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]

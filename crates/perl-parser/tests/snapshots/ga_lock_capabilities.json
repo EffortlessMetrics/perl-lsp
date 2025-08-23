@@ -1,0 +1,30 @@
+{
+  "completionProvider": {
+    "resolveProvider": false,
+    "triggerCharacters": [
+      "$",
+      "@",
+      "%",
+      ":",
+      ">"
+    ]
+  },
+  "definitionProvider": true,
+  "documentFormattingProvider": true,
+  "documentRangeFormattingProvider": true,
+  "documentSymbolProvider": true,
+  "foldingRangeProvider": true,
+  "hoverProvider": true,
+  "referencesProvider": true,
+  "signatureHelpProvider": {
+    "retriggerCharacters": [
+      ","
+    ],
+    "triggerCharacters": [
+      "(",
+      ","
+    ]
+  },
+  "textDocumentSync": 1,
+  "workspaceSymbolProvider": true
+}

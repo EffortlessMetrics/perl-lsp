@@ -120,6 +120,66 @@ fn utf16_position_to_byte_offset(s: &str, utf16_pos: usize) -> usize {
     byte_offset.min(s.len())
 }
 
+/// LSP Position
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position {
+    pub line: u32,
+    pub character: u32,
+}
+
+/// LSP Range [start inclusive, end exclusive] in (line, character) space
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Range {
+    pub start: Position,
+    pub end: Position,
+}
+
+impl Position {
+    pub fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
+impl Range {
+    pub fn new(start_line: u32, start_char: u32, end_line: u32, end_char: u32) -> Self {
+        Self {
+            start: Position::new(start_line, start_char),
+            end: Position::new(end_line, end_char),
+        }
+    }
+}
+
+/// Check if a position is within a range [start inclusive, end exclusive]
+pub fn pos_in_range(pos: Position, range: Range) -> bool {
+    // Position is before start of range
+    if pos.line < range.start.line {
+        return false;
+    }
+    if pos.line == range.start.line && pos.character < range.start.character {
+        return false;
+    }
+    
+    // Position is after end of range (end is exclusive)
+    if pos.line > range.end.line {
+        return false;
+    }
+    if pos.line == range.end.line && pos.character >= range.end.character {
+        return false;
+    }
+    
+    true
+}
+
+/// Compare two positions. Returns true if pos1 < pos2
+pub fn pos_before(pos1: Position, pos2: Position) -> bool {
+    pos1.line < pos2.line || (pos1.line == pos2.line && pos1.character < pos2.character)
+}
+
+/// Compare two positions. Returns true if pos1 <= pos2
+pub fn pos_before_or_equal(pos1: Position, pos2: Position) -> bool {
+    pos1.line < pos2.line || (pos1.line == pos2.line && pos1.character <= pos2.character)
+}
+
 /// Document state with cached line starts
 pub struct CachedDocumentState {
     pub text: String,
@@ -180,5 +240,70 @@ mod tests {
         assert_eq!(cache.position_to_offset(text, 0, 0), 0); // Before emoji
         assert_eq!(cache.position_to_offset(text, 0, 2), 4); // After emoji
         assert_eq!(cache.position_to_offset(text, 1, 0), 5); // Start of "test"
+    }
+
+    #[test]
+    fn test_pos_in_range() {
+        let range = Range::new(1, 0, 3, 0); // Lines 1-2 (line 3 excluded)
+        
+        // Before range
+        assert!(!pos_in_range(Position::new(0, 0), range));
+        assert!(!pos_in_range(Position::new(0, 10), range));
+        
+        // At start of range (inclusive)
+        assert!(pos_in_range(Position::new(1, 0), range));
+        
+        // Inside range
+        assert!(pos_in_range(Position::new(1, 5), range));
+        assert!(pos_in_range(Position::new(2, 0), range));
+        assert!(pos_in_range(Position::new(2, 10), range));
+        
+        // At end of range (exclusive)
+        assert!(!pos_in_range(Position::new(3, 0), range));
+        
+        // After range
+        assert!(!pos_in_range(Position::new(3, 5), range));
+        assert!(!pos_in_range(Position::new(4, 0), range));
+    }
+
+    #[test]
+    fn test_pos_in_range_same_line() {
+        let range = Range::new(2, 5, 2, 10); // Characters 5-9 on line 2
+        
+        // Before range on same line
+        assert!(!pos_in_range(Position::new(2, 0), range));
+        assert!(!pos_in_range(Position::new(2, 4), range));
+        
+        // At start of range (inclusive)
+        assert!(pos_in_range(Position::new(2, 5), range));
+        
+        // Inside range
+        assert!(pos_in_range(Position::new(2, 7), range));
+        assert!(pos_in_range(Position::new(2, 9), range));
+        
+        // At end of range (exclusive)
+        assert!(!pos_in_range(Position::new(2, 10), range));
+        
+        // After range on same line
+        assert!(!pos_in_range(Position::new(2, 15), range));
+    }
+
+    #[test]
+    fn test_pos_comparisons() {
+        let pos1 = Position::new(1, 5);
+        let pos2 = Position::new(2, 0);
+        let pos3 = Position::new(1, 10);
+        
+        // pos1 < pos2 (different lines)
+        assert!(pos_before(pos1, pos2));
+        assert!(!pos_before(pos2, pos1));
+        
+        // pos1 < pos3 (same line, different characters)
+        assert!(pos_before(pos1, pos3));
+        assert!(!pos_before(pos3, pos1));
+        
+        // Equal positions
+        assert!(!pos_before(pos1, pos1));
+        assert!(pos_before_or_equal(pos1, pos1));
     }
 }
