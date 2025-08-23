@@ -46,4 +46,9 @@ fn full_capabilities_match_contract() {
     assert_eq!(caps["selectionRangeProvider"], json!(true));
     let ot = &caps["documentOnTypeFormattingProvider"];
     assert!(ot.is_object());
+    
+    // Must NOT be advertised until fully supported
+    assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
+    assert!(caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must NOT be advertised");
+    assert!(caps["executeCommandProvider"].is_null(), "executeCommandProvider must NOT be advertised");
 }
