@@ -1,4 +1,7 @@
 //! Test how sub is being parsed
+
+#![allow(clippy::collapsible_if)]
+
 use perl_parser::{Parser, ast::NodeKind};
 
 fn main() {

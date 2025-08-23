@@ -158,7 +158,7 @@ pub fn pos_in_range(pos: Position, range: Range) -> bool {
     if pos.line == range.start.line && pos.character < range.start.character {
         return false;
     }
-    
+
     // Position is after end of range (end is exclusive)
     if pos.line > range.end.line {
         return false;
@@ -166,7 +166,7 @@ pub fn pos_in_range(pos: Position, range: Range) -> bool {
     if pos.line == range.end.line && pos.character >= range.end.character {
         return false;
     }
-    
+
     true
 }
 
@@ -245,22 +245,22 @@ mod tests {
     #[test]
     fn test_pos_in_range() {
         let range = Range::new(1, 0, 3, 0); // Lines 1-2 (line 3 excluded)
-        
+
         // Before range
         assert!(!pos_in_range(Position::new(0, 0), range));
         assert!(!pos_in_range(Position::new(0, 10), range));
-        
+
         // At start of range (inclusive)
         assert!(pos_in_range(Position::new(1, 0), range));
-        
+
         // Inside range
         assert!(pos_in_range(Position::new(1, 5), range));
         assert!(pos_in_range(Position::new(2, 0), range));
         assert!(pos_in_range(Position::new(2, 10), range));
-        
+
         // At end of range (exclusive)
         assert!(!pos_in_range(Position::new(3, 0), range));
-        
+
         // After range
         assert!(!pos_in_range(Position::new(3, 5), range));
         assert!(!pos_in_range(Position::new(4, 0), range));
@@ -269,21 +269,21 @@ mod tests {
     #[test]
     fn test_pos_in_range_same_line() {
         let range = Range::new(2, 5, 2, 10); // Characters 5-9 on line 2
-        
+
         // Before range on same line
         assert!(!pos_in_range(Position::new(2, 0), range));
         assert!(!pos_in_range(Position::new(2, 4), range));
-        
+
         // At start of range (inclusive)
         assert!(pos_in_range(Position::new(2, 5), range));
-        
+
         // Inside range
         assert!(pos_in_range(Position::new(2, 7), range));
         assert!(pos_in_range(Position::new(2, 9), range));
-        
+
         // At end of range (exclusive)
         assert!(!pos_in_range(Position::new(2, 10), range));
-        
+
         // After range on same line
         assert!(!pos_in_range(Position::new(2, 15), range));
     }
@@ -293,15 +293,15 @@ mod tests {
         let pos1 = Position::new(1, 5);
         let pos2 = Position::new(2, 0);
         let pos3 = Position::new(1, 10);
-        
+
         // pos1 < pos2 (different lines)
         assert!(pos_before(pos1, pos2));
         assert!(!pos_before(pos2, pos1));
-        
+
         // pos1 < pos3 (same line, different characters)
         assert!(pos_before(pos1, pos3));
         assert!(!pos_before(pos3, pos1));
-        
+
         // Equal positions
         assert!(!pos_before(pos1, pos1));
         assert!(pos_before_or_equal(pos1, pos1));

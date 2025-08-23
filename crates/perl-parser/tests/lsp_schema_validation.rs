@@ -3,6 +3,8 @@
 //! Validates that all LSP messages conform to the Language Server Protocol 3.17 specification
 //! using strict JSON schema validation.
 
+#![allow(clippy::collapsible_if)]
+
 use serde_json::{Value, json};
 use std::collections::HashSet;
 

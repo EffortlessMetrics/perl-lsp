@@ -3,8 +3,8 @@
 //! This module provides efficient indexing of symbols across all files in a workspace,
 //! enabling fast cross-file navigation, references, and refactoring.
 
-use std::collections::{HashMap, HashSet};
 use crate::symbol::{SymbolKind, SymbolTable};
+use std::collections::{HashMap, HashSet};
 
 /// A symbol definition in the workspace
 #[derive(Clone, Debug)]
@@ -45,14 +45,14 @@ impl WorkspaceIndex {
         let mut names_in_file = HashSet::new();
 
         // Add all symbols from the symbol table
-        for (_scope, symbols) in &symtab.symbols {
+        for symbols in symtab.symbols.values() {
             for symbol in symbols {
                 let name = symbol.name.clone();
                 names_in_file.insert(name.clone());
 
                 let def = SymbolDef {
                     name: symbol.name.clone(),
-                    kind: symbol.kind.clone(),
+                    kind: symbol.kind,
                     uri: uri.to_string(),
                     start: symbol.location.start,
                     end: symbol.location.end,
@@ -122,16 +122,16 @@ impl WorkspaceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::symbol::Symbol;
     use crate::SourceLocation;
+    use crate::symbol::Symbol;
 
     #[test]
     fn test_workspace_index() {
         let mut index = WorkspaceIndex::new();
-        
+
         // Create a mock symbol table
         let mut symtab = SymbolTable::new();
-        
+
         // Add a symbol to the symbol table
         let symbol = Symbol {
             name: "test_func".to_string(),
@@ -143,10 +143,8 @@ mod tests {
             documentation: None,
             attributes: Vec::new(),
         };
-        
-        symtab.symbols.entry("test_func".to_string())
-            .or_insert_with(Vec::new)
-            .push(symbol);
+
+        symtab.symbols.entry("test_func".to_string()).or_default().push(symbol);
 
         // Add document to index
         index.update_from_document("file:///test.pl", "", &symtab);

@@ -4,7 +4,11 @@ use crate::positions::{Position, Range, pos_in_range};
 use serde_json::Value;
 use serde_json::json;
 
-pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32), range: Option<Range>) -> Vec<Value> {
+pub fn parameter_hints(
+    ast: &Node,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+    range: Option<Range>,
+) -> Vec<Value> {
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         if let NodeKind::FunctionCall { name, args } = &node.kind {
@@ -33,14 +37,14 @@ pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32), rang
                     }
                     let (l, c) = to_pos16(arg.location.start);
                     let hint_pos = Position::new(l, c);
-                    
+
                     // Filter by range if specified
                     if let Some(filter_range) = range {
                         if !pos_in_range(hint_pos, filter_range) {
                             continue;
                         }
                     }
-                    
+
                     out.push(json!({
                         "position": { "line": l, "character": c },
                         "label": format!("{}:", sig[i]),
@@ -56,7 +60,11 @@ pub fn parameter_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32), rang
     out
 }
 
-pub fn trivial_type_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32), range: Option<Range>) -> Vec<Value> {
+pub fn trivial_type_hints(
+    ast: &Node,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+    range: Option<Range>,
+) -> Vec<Value> {
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         let type_hint = match &node.kind {
@@ -72,14 +80,14 @@ pub fn trivial_type_hints(ast: &Node, to_pos16: &impl Fn(usize) -> (u32, u32), r
         if let Some(hint) = type_hint {
             let (l, c) = to_pos16(node.location.end);
             let hint_pos = Position::new(l, c);
-            
+
             // Filter by range if specified
             if let Some(filter_range) = range {
                 if !pos_in_range(hint_pos, filter_range) {
                     return true;
                 }
             }
-            
+
             out.push(json!({
                 "position": {"line": l, "character": c},
                 "label": format!(": {}", hint),

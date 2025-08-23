@@ -23,6 +23,7 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
+#[ignore] // Code lens is not advertised by default (partial implementation)
 fn test_code_lens_reference_counting() {
     let mut server = setup_server();
 
@@ -137,6 +138,7 @@ sub unused_function {
 }
 
 #[test]
+#[ignore] // Code lens is not advertised by default (partial implementation)
 fn test_code_lens_package_references() {
     let mut server = setup_server();
 

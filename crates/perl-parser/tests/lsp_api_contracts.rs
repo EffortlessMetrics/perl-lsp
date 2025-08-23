@@ -3,6 +3,8 @@
 //! These tests ensure our LSP implementation maintains stable API contracts
 //! and properly validates all inputs/outputs according to the LSP specification.
 
+#![allow(clippy::collapsible_if)]
+
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};

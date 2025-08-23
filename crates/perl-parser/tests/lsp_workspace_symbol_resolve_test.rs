@@ -5,7 +5,7 @@ use serde_json::json;
 #[test]
 fn test_workspace_symbol_resolve() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -69,12 +69,15 @@ our $VERSION = '1.0';
 
     let response = server.handle_request(request).unwrap();
     let resolved = response.result.unwrap();
-    
+
     // Check that the symbol was enhanced
     assert_eq!(resolved["name"], "hello");
     assert!(resolved["detail"].is_string(), "Should have detail field");
-    assert!(resolved["detail"].as_str().unwrap().contains("sub"), "Detail should indicate it's a subroutine");
-    
+    assert!(
+        resolved["detail"].as_str().unwrap().contains("sub"),
+        "Detail should indicate it's a subroutine"
+    );
+
     // Location should still be present
     assert!(resolved["location"].is_object());
     assert!(resolved["location"]["uri"].is_string());
@@ -84,7 +87,7 @@ our $VERSION = '1.0';
 #[test]
 fn test_workspace_symbol_resolve_with_container() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -150,22 +153,22 @@ sub another_method {
 
     let response = server.handle_request(request).unwrap();
     let resolved = response.result.unwrap();
-    
+
     // Check enhanced fields
     assert_eq!(resolved["name"], "method_in_package");
     assert!(resolved["detail"].is_string());
-    
+
     // Should potentially have container information
     // (depending on implementation details)
     if resolved["containerName"].is_string() {
-        assert!(resolved["containerName"].as_str().unwrap().len() > 0);
+        assert!(!resolved["containerName"].as_str().unwrap().is_empty());
     }
 }
 
 #[test]
 fn test_workspace_symbol_resolve_capability() {
     let mut server = LspServer::new();
-    
+
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -175,11 +178,11 @@ fn test_workspace_symbol_resolve_capability() {
             "capabilities": {}
         })),
     };
-    
+
     let response = server.handle_request(init_request).unwrap();
     let result = response.result.unwrap();
     let caps = &result["capabilities"];
-    
+
     // Workspace symbol provider should advertise resolve support in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
         let ws_provider = &caps["workspaceSymbolProvider"];
@@ -191,7 +194,7 @@ fn test_workspace_symbol_resolve_capability() {
 #[test]
 fn test_workspace_symbol_resolve_unknown_symbol() {
     let mut server = LspServer::new();
-    
+
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -226,7 +229,7 @@ fn test_workspace_symbol_resolve_unknown_symbol() {
 
     let response = server.handle_request(request).unwrap();
     let resolved = response.result.unwrap();
-    
+
     // Should return the original symbol unchanged
     assert_eq!(resolved["name"], "unknown_function");
     assert_eq!(resolved["kind"], 12);

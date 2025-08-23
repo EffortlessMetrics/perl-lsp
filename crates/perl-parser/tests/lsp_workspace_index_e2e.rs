@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use perl_parser::workspace_index::WorkspaceIndex;
 use serde_json::json;

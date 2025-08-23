@@ -2,6 +2,8 @@
 //!
 //! Tests window notifications, progress reporting, and work done progress per LSP 3.17 spec.
 
+#![allow(clippy::collapsible_if)]
+
 mod support;
 
 use serde_json::{Value, json};

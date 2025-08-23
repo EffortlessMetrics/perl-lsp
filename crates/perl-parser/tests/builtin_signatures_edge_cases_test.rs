@@ -1,6 +1,8 @@
 //! Edge case tests for built-in function signatures
 //! Tests special cases, error conditions, and unusual usage patterns
 
+#![allow(clippy::collapsible_if)]
+
 use perl_parser::{Parser, SignatureHelpProvider};
 
 #[test]

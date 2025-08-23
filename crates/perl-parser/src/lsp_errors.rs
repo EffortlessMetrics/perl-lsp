@@ -2,7 +2,8 @@
 //!
 //! Provides consistent error responses for the LSP server
 
-use serde_json::{json, Value};
+use crate::lsp_server::JsonRpcError;
+use serde_json::{Value, json};
 
 /// LSP error codes (from the spec)
 pub mod error_codes {
@@ -21,11 +22,21 @@ pub mod error_codes {
 }
 
 /// Create a method not found error
-pub fn method_not_found(method: &str) -> Value {
-    json!({
-        "code": error_codes::METHOD_NOT_FOUND,
-        "message": format!("Method '{}' not found or not supported", method)
-    })
+pub fn method_not_found(method: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: error_codes::METHOD_NOT_FOUND,
+        message: format!("Method '{}' not found or not supported", method),
+        data: None,
+    }
+}
+
+/// Create a method not found error for unadvertised features
+pub fn method_not_advertised() -> JsonRpcError {
+    JsonRpcError {
+        code: error_codes::METHOD_NOT_FOUND,
+        message: "Method not advertised in server capabilities".to_string(),
+        data: None,
+    }
 }
 
 /// Create a server cancelled error
@@ -103,18 +114,18 @@ impl AdvertisedFeatures {
             pull_diagnostics: false,
         }
     }
-    
+
     /// Check if a method should be refused
     pub fn should_refuse(&self, method: &str) -> bool {
         match method {
             "textDocument/codeLens" => !self.code_lens,
-            "textDocument/prepareCallHierarchy" |
-            "callHierarchy/incomingCalls" |
-            "callHierarchy/outgoingCalls" => !self.call_hierarchy,
-            "textDocument/prepareTypeHierarchy" |
-            "typeHierarchy/supertypes" |
-            "typeHierarchy/subtypes" => !self.type_hierarchy,
-            _ => false,  // Allow by default for core features
+            "textDocument/prepareCallHierarchy"
+            | "callHierarchy/incomingCalls"
+            | "callHierarchy/outgoingCalls" => !self.call_hierarchy,
+            "textDocument/prepareTypeHierarchy"
+            | "typeHierarchy/supertypes"
+            | "typeHierarchy/subtypes" => !self.type_hierarchy,
+            _ => false, // Allow by default for core features
         }
     }
 }

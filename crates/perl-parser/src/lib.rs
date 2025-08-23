@@ -96,13 +96,13 @@ pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod builtin_signatures_phf;
 pub mod capabilities;
-pub mod lsp_errors;
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
 pub mod code_actions_provider;
 pub mod completion;
 pub mod diagnostics;
+pub mod diagnostics_catalog;
 pub mod edit;
 pub mod error;
 pub mod error_classifier;
@@ -115,6 +115,7 @@ pub mod incremental;
 pub mod incremental_document;
 #[cfg(feature = "incremental")]
 pub mod incremental_edit;
+pub mod lsp_errors;
 pub mod util;
 // pub mod refactoring; // TODO: Fix compilation errors
 pub mod call_hierarchy_provider;
@@ -126,7 +127,6 @@ pub mod document_links;
 pub mod document_store;
 pub mod folding;
 pub mod import_optimizer;
-pub mod index;
 #[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]
@@ -137,6 +137,7 @@ pub mod incremental_integration;
 pub mod incremental_simple;
 #[cfg(feature = "incremental")]
 pub mod incremental_v2;
+pub mod index;
 pub mod inlay_hints;
 pub mod inlay_hints_provider;
 pub mod line_index;

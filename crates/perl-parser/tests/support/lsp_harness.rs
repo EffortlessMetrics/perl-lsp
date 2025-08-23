@@ -3,6 +3,7 @@
 //! Provides a test harness that communicates with the LSP server using real JSON-RPC protocol.
 
 #![allow(dead_code)]
+#![allow(clippy::collapsible_if)]
 
 use perl_parser::lsp_server::LspServer;
 use serde_json::{Value, json};
