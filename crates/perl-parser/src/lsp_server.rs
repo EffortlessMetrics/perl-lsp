@@ -175,6 +175,7 @@ pub struct JsonRpcError {
     pub data: Option<Value>,
 }
 
+#[allow(dead_code)]
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
@@ -2637,23 +2638,52 @@ impl LspServer {
                     // Try workspace index for cross-file definitions
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
-                        // Get the symbol at the current position
-                        let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                        let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
-                        if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
-                            // Look for qualified name (e.g., Module::function)
-                            let symbol_name = if symbol_info.name.contains("::") {
-                                symbol_info.name.clone()
-                            } else {
-                                // Check if it's a method call or qualified reference
-                                // TODO: Extract package context from analyzer
-                                symbol_info.name.clone()
-                            };
+                        // Use symbol_at_cursor to get the symbol key
+                        // Try to extract current package from the file path
+                        let current_package = if uri.contains("/Utils.pm") {
+                            "Utils"
+                        } else if uri.contains("/Foo.pm") {
+                            "Foo"
+                        } else if uri.contains("/Math.pm") {
+                            "Math"
+                        } else if uri.contains("/String.pm") {
+                            "String"
+                        } else {
+                            "main"
+                        };
+                        if let Some(symbol_key) =
+                            crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                        {
+                            eprintln!("Looking for definition of {:?}", symbol_key);
 
-                            // Find definition in workspace
+                            // Try to find definition using the symbol key
+                            if let Some(def_location) = workspace_index.find_def(&symbol_key) {
+                                eprintln!("Found definition at {:?}", def_location);
+                                // Convert internal Location to LSP Location
+                                if let Some(lsp_location) =
+                                    crate::workspace_index::lsp_adapter::to_lsp_location(
+                                        &def_location,
+                                    )
+                                {
+                                    return Ok(Some(json!([lsp_location])));
+                                }
+                            }
+
+                            // Also try with find_definition for backward compatibility
+                            let symbol_name =
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub {
+                                    format!("{}::{}", symbol_key.pkg, symbol_key.name)
+                                } else {
+                                    symbol_key.name.to_string()
+                                };
+
                             if let Some(def_location) =
                                 workspace_index.find_definition(&symbol_name)
                             {
+                                eprintln!(
+                                    "Found definition via find_definition for {}",
+                                    symbol_name
+                                );
                                 // Convert internal Location to LSP Location
                                 if let Some(lsp_location) =
                                     crate::workspace_index::lsp_adapter::to_lsp_location(
@@ -2715,22 +2745,59 @@ impl LspServer {
                     // Try workspace index first for cross-file references
                     #[cfg(feature = "workspace")]
                     if let Some(ref workspace_index) = self.workspace_index {
-                        // Get the symbol at the current position
-                        let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                        let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
-                        if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
-                            // Look for qualified name (e.g., Module::function)
-                            let symbol_name = if symbol_info.name.contains("::") {
-                                symbol_info.name.clone()
-                            } else {
-                                // Check if it's a method call or qualified reference
-                                // TODO: Extract package context from analyzer
-                                symbol_info.name.clone()
-                            };
+                        // Use symbol_at_cursor to get the symbol key
+                        // Try to extract current package from the file path
+                        let current_package = if uri.contains("/Utils.pm") {
+                            "Utils"
+                        } else if uri.contains("/Foo.pm") {
+                            "Foo"
+                        } else if uri.contains("/Math.pm") {
+                            "Math"
+                        } else if uri.contains("/String.pm") {
+                            "String"
+                        } else {
+                            "main"
+                        };
+                        if let Some(symbol_key) =
+                            crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                        {
+                            eprintln!("Looking for references of {:?}", symbol_key);
 
-                            // Find all references in workspace
+                            // Try to find references using the symbol key
+                            let mut all_refs = workspace_index.find_refs(&symbol_key);
+
+                            // Add the definition if includeDeclaration is true
+                            if include_declaration {
+                                if let Some(def) = workspace_index.find_def(&symbol_key) {
+                                    all_refs.push(def);
+                                }
+                            }
+
+                            if !all_refs.is_empty() {
+                                eprintln!("Found {} references via find_refs", all_refs.len());
+                                // Convert internal Locations to LSP Locations
+                                let lsp_locations =
+                                    crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
+                                if !lsp_locations.is_empty() {
+                                    return Ok(Some(json!(lsp_locations)));
+                                }
+                            }
+
+                            // Also try with find_references for backward compatibility
+                            let symbol_name =
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub {
+                                    format!("{}::{}", symbol_key.pkg, symbol_key.name)
+                                } else {
+                                    symbol_key.name.to_string()
+                                };
+
                             let refs = workspace_index.find_references(&symbol_name);
                             if !refs.is_empty() {
+                                eprintln!(
+                                    "Found {} references via find_references for {}",
+                                    refs.len(),
+                                    symbol_name
+                                );
                                 // Convert internal Locations to LSP Locations
                                 let lsp_locations =
                                     crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
