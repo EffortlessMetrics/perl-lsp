@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fallback Mechanisms** - Graceful handling of incomplete/invalid code
 - **530+ Tests** - Comprehensive E2E coverage for all LSP features
 
+See detailed notes: [CHANGELOG_v0.8.4.md](CHANGELOG_v0.8.4.md)
+
 ### Fixed
 - **LSP Server** - Removed duplicate method definitions
 - **Declaration Module** - Fixed private function visibility

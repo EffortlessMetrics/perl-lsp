@@ -188,34 +188,65 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **production-ready Language Server Protocol implementation** for Perl, providing comprehensive IDE features:
 
-### LSP Features ✅ (~60% Functional, Contract Driven)
+### LSP Capabilities (Contract-Driven)
 
-> **Capability Policy**: We only advertise capabilities that are proven by tests. For conservative point releases we build with the `lsp-ga-lock` feature, which surfaces a reduced set. New features flip on **only** when their acceptance tests land in the same PR. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for complete details.
+| Capability                          | Status | Notes                                      |
+|-------------------------------------|:------:|--------------------------------------------|
+| Diagnostics                         |   ✅   | Real-time; robust fallback on bad code     |
+| Completion                          |   ✅   | Variables, 150+ built-ins, keywords        |
+| Hover                               |   ✅   | Variables + built-ins                       |
+| Signature Help                      |   ✅   | 150+ built-ins                              |
+| Go to Definition                    |   ✅   | Workspace-aware via index                   |
+| Find References                     |   ✅   | Workspace-aware via index                   |
+| Document Symbols                    |   ✅   | Outline with hierarchy                      |
+| Folding Ranges                      |   ✅   | AST + text fallback                         |
+| **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
+| **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
+| **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
+| **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
+| **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
+| **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
+| **Selection Ranges**                |   ✅   | NEW – parent-chain expansion                |
+| **On-Type Formatting**              |   ✅   | NEW – `{`, `}`, `;`, `\n` predictable       |
+| Code Lens                           |   ⚠️   | Partial; not advertised                     |
+| Call/Type Hierarchy                 |   ⚠️/❌ | Partial / not implemented                   |
+| Execute Command                     |   ❌   | Not wired                                   |
 
-#### ✅ Fully Working Features (v0.8.4)
-- **Real-time Diagnostics**: Live syntax checking with detailed error messages
-- **Code Completion**: Variables, built-in functions (150+), keywords
-- **Go to Definition**: Jump to declarations with DeclarationProvider
-- **Find References**: Locate all uses in workspace
-- **Hover Information**: Documentation for variables and built-ins
-- **Signature Help**: Parameter hints for 150+ built-in functions
-- **Document Symbols**: Hierarchical outline view with icons
-- **Document Formatting**: Integration with Perl::Tidy
-- **Folding Ranges**: Code folding with fallback for invalid syntax
-- **Workspace Symbols**: Search symbols across all open files (NEW)
-- **Rename Symbol**: Smart refactoring with cross-file support for `our` variables (NEW)
-- **Code Actions**: Quick fixes for missing pragmas, perltidy integration (NEW)
-- **Semantic Tokens**: Enhanced syntax highlighting (NEW)
-- **Inlay Hints**: Parameter names and type annotations (NEW)
-- **Document Links**: Navigate from `use`/`require` to modules (NEW)
-- **Selection Ranges**: Smart expand/contract selection (NEW)
-- **On-Type Formatting**: Auto-indent/dedent for braces (NEW)
+> **Capability policy:** We only advertise features proven by tests. For conservative point releases, build with `--features lsp-ga-lock` to surface a reduced set. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) and [docs/LSP_CAPABILITY_POLICY.md](docs/LSP_CAPABILITY_POLICY.md).
 
-#### ⚠️ Not Advertised (Partial Implementations)
-- **Code Lens**: ~20% functional (run/debug links)
-- **Call Hierarchy**: ~15% functional (basic structure)
-- **Type Hierarchy**: Not implemented
-- **Execute Command**: Not wired
+#### Install & Run
+
+```bash
+# LSP server
+cargo install perl-parser --bin perl-lsp --locked
+
+# run in your editor
+perl-lsp --stdio
+```
+
+#### Example: Rename Across Files
+
+```jsonc
+// textDocument/rename
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "textDocument/rename",
+  "params": {
+    "textDocument": {"uri":"file:///lib/Utils.pm"},
+    "position": {"line": 4, "character": 5},
+    "newName": "transform_data"
+  }
+}
+```
+
+Returns an LSP `WorkspaceEdit` with edits in both definition and call sites.
+
+#### Perltidy Integration
+
+- `documentFormattingProvider` is **advertised only when** `perltidy` is found
+- Quick-fix **"Run perltidy"** appears in `textDocument/codeAction` when available
+- Both return a proper `WorkspaceEdit` (no external file writes)
 
 #### 🏗️ Robust Architecture
 - **Contract-driven testing**: All advertised features have acceptance tests
