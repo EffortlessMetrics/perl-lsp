@@ -38,5 +38,10 @@ rand = "0.8"
 [dev-dependencies]
 proptest = "1"
 
+[features]
+default = []
+# Enable fast CI mode that skips slow/flaky property tests
+ci-fast = []
+
 [package.metadata.docs.rs]
 all-features = false

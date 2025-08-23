@@ -125,7 +125,7 @@ mod tests {
 
     proptest! {
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn quote_like_always_has_delimiters(expr in quote_like_single()) {
             assert!(expr.starts_with('q') || expr.starts_with("qq") ||
                     expr.starts_with("qr") || expr.starts_with("qx") ||
@@ -133,7 +133,7 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn metamorphic_forms_are_equivalent((a, b) in q_like_metamorphic(q_like_payload())) {
             // Both should start with the same operator
             let op_a = a.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap();
@@ -142,7 +142,7 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "proptest regex issue - not critical for release"]
+        #[cfg(not(feature = "ci-fast"))]
         fn substitution_has_three_parts(s in substitution()) {
             assert!(s.starts_with("s"));
             // Count delimiter occurrences
