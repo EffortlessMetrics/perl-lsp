@@ -842,6 +842,27 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 }
 
+/// Extract the current package at the given offset
+pub fn current_package_at(ast: &Node, offset: usize) -> &str {
+    // Find the nearest package declaration before the offset
+    fn scan<'a>(node: &'a Node, offset: usize, last: &mut Option<&'a str>) {
+        if let NodeKind::Package { name, .. } = &node.kind {
+            if node.location.start <= offset {
+                *last = Some(name.as_str());
+            }
+        }
+        for child in get_node_children(node) {
+            if child.location.start <= offset {
+                scan(child, offset, last);
+            }
+        }
+    }
+
+    let mut last_pkg: Option<&str> = None;
+    scan(ast, offset, &mut last_pkg);
+    last_pkg.unwrap_or("main")
+}
+
 fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
     if offset < node.location.start || offset > node.location.end {
         return None;

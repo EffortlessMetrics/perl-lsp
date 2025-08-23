@@ -90,6 +90,7 @@ pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod code_actions;
 pub mod code_actions_enhanced;
+pub mod code_actions_pragmas;
 pub mod code_actions_provider;
 pub mod completion;
 pub mod diagnostics;
@@ -158,6 +159,7 @@ pub mod type_hierarchy;
 pub mod type_inference;
 pub mod workspace_index;
 pub mod workspace_refactor;
+pub mod workspace_rename;
 pub mod workspace_symbols;
 // pub mod test_generator;  // TODO: Fix compilation
 // pub mod tdd_workflow;    // TODO: Fix compilation
