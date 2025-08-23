@@ -476,6 +476,10 @@ impl LspServer {
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             // GA contract: not supported in v0.8.3
+            // PR 3: Wire workspace/symbol to use the index
+            "workspace/symbol" => self.handle_workspace_symbols_v2(request.params),
+
+            // GA contract: these methods remain unsupported in v0.8.3
             "textDocument/rename"
             | "textDocument/codeAction"
             | "textDocument/codeLens"
@@ -488,14 +492,11 @@ impl LspServer {
             | "textDocument/documentLink"
             | "textDocument/selectionRange"
             | "textDocument/onTypeFormatting"
-            | "workspace/symbol"
-            | "workspace/executeCommand" => {
-                Err(JsonRpcError {
-                    code: ERR_METHOD_NOT_FOUND,
-                    message: format!("Method '{}' not supported in v0.8.3 GA", request.method),
-                    data: None,
-                })
-            }
+            | "workspace/executeCommand" => Err(JsonRpcError {
+                code: ERR_METHOD_NOT_FOUND,
+                message: format!("Method '{}' not supported in v0.8.3 GA", request.method),
+                data: None,
+            }),
             "textDocument/documentSymbol" => {
                 eprintln!("Processing documentSymbol request");
                 let result = self.handle_document_symbol(request.params);
@@ -724,12 +725,13 @@ impl LspServer {
             },
             "documentSymbolProvider": true,
             "foldingRangeProvider": true,
+            // PR 3: Workspace symbols now work via index
+            "workspaceSymbolProvider": true,
             // Diagnostics are automatic via didOpen/didChange
-            
+
             // The following are NOT advertised in v0.8.3 GA:
             // - renameProvider (stub returns empty)
             // - codeActionProvider (partial/stubs)
-            // - workspaceSymbolProvider (cross-file not wired)
             // - codeLensProvider (partial)
             // - semanticTokensProvider (partial)
             // - inlayHintProvider (partial)
@@ -739,7 +741,7 @@ impl LspServer {
             // - selectionRangeProvider (stub)
             // - documentOnTypeFormattingProvider (not reliable)
             // - executeCommandProvider (not wired)
-            
+
             "positionEncoding": "utf-16"
         });
 
@@ -4011,7 +4013,50 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
-    /// Handle workspace/symbol request
+    /// Handle workspace/symbol request v2 - uses workspace index
+    fn handle_workspace_symbols_v2(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let query =
+            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+
+        eprintln!("Workspace symbol search v2: '{}'", query);
+
+        // Use workspace index if available
+        if let Some(ref workspace_index) = self.workspace_index {
+            let symbols = workspace_index.search_symbols(query);
+
+            // Convert to LSP format
+            let lsp_symbols: Vec<LspWorkspaceSymbol> =
+                symbols.iter().map(|sym| sym.into()).collect();
+
+            eprintln!("Found {} symbols from index", lsp_symbols.len());
+            return Ok(Some(json!(lsp_symbols)));
+        }
+
+        // Fallback to document-based search
+        let mut all_symbols = Vec::new();
+        let documents = self.documents.lock().unwrap();
+
+        for (uri, doc) in documents.iter() {
+            if let Some(ref ast) = doc.ast {
+                let doc_symbols = self.extract_document_symbols(ast, &doc.content, uri);
+                let query_lower = query.to_lowercase();
+
+                for sym in doc_symbols {
+                    if sym.name.to_lowercase().contains(&query_lower) {
+                        all_symbols.push(sym);
+                    }
+                }
+            }
+        }
+
+        eprintln!("Found {} symbols from documents", all_symbols.len());
+        Ok(Some(json!(all_symbols)))
+    }
+
+    /// Handle workspace/symbol request (legacy implementation)
     fn handle_workspace_symbols(
         &self,
         params: Option<Value>,
