@@ -181,9 +181,9 @@ println!("AST: {:?}", ast);
 
 The v3 parser includes a **full-featured Language Server Protocol implementation** for Perl, providing professional IDE features:
 
-### LSP Features ⚠️ (~35% Functional, ~65% Infrastructure Exists)
+### LSP Features ⚠️ (~35% Functional, Contract Locked)
 
-> **Important**: Many LSP features are stub implementations that return empty results. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for honest assessment of what actually works.
+> **GA Contract**: As of v0.8.3, the LSP server only advertises capabilities that are fully functional. Partial or stub features return "method not supported" errors. See [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) for complete details.
 
 #### ✅ Actually Working Features
 - **Real-time Diagnostics**: Live syntax checking with detailed error messages
