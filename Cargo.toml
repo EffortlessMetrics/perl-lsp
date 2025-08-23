@@ -49,3 +49,7 @@ codegen-units = 1
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+# Workspace lints - relax collapsible_if for v0.8.3 release
+[workspace.lints.clippy]
+collapsible_if = "allow"

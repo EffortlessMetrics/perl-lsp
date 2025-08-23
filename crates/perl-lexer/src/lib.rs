@@ -312,10 +312,10 @@ impl<'a> PerlLexer<'a> {
                             self.consume_newline();
 
                             // Set body_start for the next pending heredoc (if any)
-                            if let Some(next) = self.pending_heredocs.first_mut() {
-                                if next.body_start == 0 {
-                                    next.body_start = self.position;
-                                }
+                            if let Some(next) = self.pending_heredocs.first_mut()
+                                && next.body_start == 0
+                            {
+                                next.body_start = self.position;
                             }
 
                             // Only emit HeredocBody if requested (for folding)
@@ -359,15 +359,13 @@ impl<'a> PerlLexer<'a> {
             self.skip_whitespace_and_comments()?;
 
             // Check again if we're now in a heredoc body (might have been set during skip_whitespace)
-            if !self.pending_heredocs.is_empty() {
-                if let Some(spec) = self.pending_heredocs.first() {
-                    if spec.body_start > 0
-                        && self.position >= spec.body_start
-                        && self.position < self.input.len()
-                    {
-                        continue; // Go back to top of loop to process heredoc
-                    }
-                }
+            if !self.pending_heredocs.is_empty()
+                && let Some(spec) = self.pending_heredocs.first()
+                && spec.body_start > 0
+                && self.position >= spec.body_start
+                && self.position < self.input.len()
+            {
+                continue; // Go back to top of loop to process heredoc
             }
 
             // If we reach EOF with pending heredocs, clear them and emit EOF
@@ -612,13 +610,12 @@ impl<'a> PerlLexer<'a> {
                 }
                 _ => {
                     // For non-ASCII whitespace, use char check
-                    if byte >= 128 {
-                        if let Some(ch) = self.current_char() {
-                            if ch.is_whitespace() {
-                                self.advance();
-                                continue;
-                            }
-                        }
+                    if byte >= 128
+                        && let Some(ch) = self.current_char()
+                        && ch.is_whitespace()
+                    {
+                        self.advance();
+                        continue;
                     }
                     break;
                 }
@@ -1222,6 +1219,7 @@ impl<'a> PerlLexer<'a> {
             }
 
             // Check for substitution/transliteration operators
+            #[allow(clippy::collapsible_if)]
             if matches!(text, "s" | "tr" | "y") {
                 if let Some(next) = self.current_char() {
                     // Check if followed by a delimiter
@@ -1289,6 +1287,7 @@ impl<'a> PerlLexer<'a> {
                                 }
 
                                 // Get the delimiter
+                                #[allow(clippy::collapsible_if)]
                                 if let Some(delim) = self.current_char() {
                                     if !delim.is_alphanumeric() {
                                         self.advance();
@@ -1512,6 +1511,7 @@ impl<'a> PerlLexer<'a> {
                 }
                 self.advance();
                 // Check for compound operators
+                #[allow(clippy::collapsible_if)]
                 if let Some(next) = self.current_char() {
                     if is_compound_operator(ch, next) {
                         self.advance();
@@ -1544,6 +1544,7 @@ impl<'a> PerlLexer<'a> {
             | '\\' => {
                 self.advance();
                 // Check for compound operators
+                #[allow(clippy::collapsible_if)]
                 if let Some(next) = self.current_char() {
                     if is_compound_operator(ch, next) {
                         self.advance();
