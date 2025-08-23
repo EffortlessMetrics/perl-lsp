@@ -863,7 +863,7 @@ pub fn current_package_at(ast: &Node, offset: usize) -> &str {
     last_pkg.unwrap_or("main")
 }
 
-fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
+pub fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
     if offset < node.location.start || offset > node.location.end {
         return None;
     }
@@ -880,7 +880,7 @@ fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
     Some(node)
 }
 
-fn get_node_children(node: &Node) -> Vec<&Node> {
+pub fn get_node_children(node: &Node) -> Vec<&Node> {
     match &node.kind {
         NodeKind::Program { statements } => statements.iter().collect(),
         NodeKind::VariableDeclaration { variable, initializer, .. } => {
