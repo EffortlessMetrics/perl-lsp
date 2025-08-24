@@ -7,7 +7,7 @@ mod common;
 use common::*;
 
 /// Test that cancel request is handled (may or may not cancel in time)
-/// 
+///
 /// This test is intentionally flexible about the outcome since cancellation
 /// is inherently racy. The important thing is that the server doesn't crash
 /// and returns either a valid result or a cancellation error.
@@ -72,10 +72,7 @@ fn test_cancel_request_handling() {
             let code = error["code"].as_i64().unwrap_or(0);
             // -32802 = server cancelled (new), -32800 = request cancelled (old)
             // Both are acceptable
-            assert!(
-                code == -32802 || code == -32800 || code != 0,
-                "Should have an error code"
-            );
+            assert!(code == -32802 || code == -32800 || code != 0, "Should have an error code");
         } else {
             // Request completed before cancellation took effect - that's okay too
             assert!(resp.get("result").is_some(), "Should have result if not cancelled");
