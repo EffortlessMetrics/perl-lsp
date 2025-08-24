@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.8.3"
+version = "0.8.5"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]
@@ -15,7 +15,7 @@ categories = ["parsing", "development-tools", "text-editors"]
 include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
-perl-lexer = { version = "0.8.3" }
+perl-lexer = { version = "0.8.5" }
 thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
@@ -71,7 +71,7 @@ regex = "1.11.1"
 serial_test = "3.0"
 tempfile = "3.8"
 proptest = "1"
-perl-corpus = { version = "0.8.3" }
+perl-corpus = { version = "0.8.5" }
 which = "6"
 
 [[bench]]
