@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v0.8.5] - 2025-08-23
+## [v0.8.5] - 2025-08-24
 
 ### Added
 - **Stable Diagnostic Codes** - All diagnostics now have stable codes (PL001-PL499, PC001-PC999) with optional documentation URLs
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Capabilities Snapshot Testing** - Prevents unintentional capability drift with JSON snapshot tests
 - **Typed Capabilities System** - Server capabilities are now generated from typed `BuildFlags` for consistency
 - **Consolidated Builtin Signatures** - Single source of truth using perfect hash function (phf) for O(1) lookups
+- **Test-Specific Slow Operation** - Added `$/test/slowOperation` endpoint for reliable cancellation testing
 
 ### Improved
 - **Inlay Hints**
@@ -26,17 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Handler Gating** - Partially implemented features return method-not-found when not advertised
 - **Position Handling** - Unified range checking via `pos_in_range()` and `pos_before()` utilities
 - **Error Handling** - Consistent error responses via `lsp_errors` module
+- **Cancellation Handling** - Eliminated race conditions in cancellation tests with predictable slow operation
 
 ### Fixed
 - **Pull Diagnostics** - No double-flow when client supports pull diagnostics
-- **Code Quality** - Fixed clippy warnings (clone-on-copy, explicit-counter-loop, useless-format)
+- **Code Quality** - Fixed clippy warnings (clone-on-copy, explicit-counter-loop, useless-format, collapsible-if, manual-contains)
 - **Test Infrastructure** - Fixed tautological test assertions in unit tests
+- **Cancellation Tests** - All 3 cancellation tests now pass reliably without race conditions
+- **Error Codes** - Standardized cancellation error code to -32802 across all handlers
 
 ### Infrastructure
 - **Performance** - Builtin signatures use perfect hash for zero-allocation lookups
 - **Architecture** - Cleaner separation with consolidated modules and single sources of truth
 - **Safety** - Capability management with snapshot tests prevents regression
 - **Logging** - Added diagnostic flow logging for debugging client interactions
+- **Test Reliability** - Cancellation tests now use deterministic slow operation instead of racing
 
 ## [v0.8.4] - 2025-02-24
 
