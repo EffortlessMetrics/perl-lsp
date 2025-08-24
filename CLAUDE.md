@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Latest Release**: v0.8.3 GA - See [RELEASE_NOTES_v0.8.3.md](RELEASE_NOTES_v0.8.3.md)  
+**Latest Release**: v0.8.5 GA - See [RELEASE_NOTES_v0.8.5.md](RELEASE_NOTES_v0.8.5.md)  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md) for guarantees
 
 ## Project Overview
 
 This repository contains **four published crates** forming a complete Perl parsing ecosystem:
 
-### Published Crates (v0.8.3 GA)
+### Published Crates (v0.8.5 GA)
 
 #### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
 - Native recursive descent parser with operator precedence
@@ -17,6 +17,12 @@ This repository contains **four published crates** forming a complete Perl parsi
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
 - Tree-sitter compatible output
 - Includes LSP server binary (`perl-lsp`)
+- **v0.8.5 improvements**:
+  - Typed ServerCapabilities for LSP 3.18 compliance
+  - Pull Diagnostics support (workspace/diagnostic)
+  - Stable error codes (-32802 for cancellation)
+  - Enhanced inlay hints with type anchors
+  - Improved cancellation handling with test endpoint
 - **v0.8.3 improvements**:
   - Hash literal parsing fixed (`{ key => value }`)
   - Parenthesized expressions with word operators
@@ -44,8 +50,8 @@ This repository contains **four published crates** forming a complete Perl parsi
 - Kept for migration/comparison
 
 ### LSP Server (`perl-lsp` binary) ✅ **PRODUCTION READY**
-- **~60% of LSP features actually work** (all advertised capabilities are fully functional)
-- **Fully Working Features (v0.8.4)**: 
+- **~65% of LSP features actually work** (all advertised capabilities are fully functional)
+- **Fully Working Features (v0.8.5)**: 
   - ✅ Syntax checking and diagnostics with fallback
   - ✅ Code completion (variables, 150+ built-ins, keywords)
   - ✅ Hover information with documentation
@@ -62,11 +68,12 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Document links** - module navigation (NEW)
   - ✅ **Selection ranges** - smart selection (NEW)
   - ✅ **On-type formatting** - auto-indent (NEW)
+  - ✅ **Pull diagnostics** - LSP 3.17 support (v0.8.5)
+  - ✅ **Type hierarchy** - class/role relationships (v0.8.5)
 - **Partial Implementations** (not advertised):
   - ⚠️ Code lens (~20% functional)
   - ⚠️ Call hierarchy (~15% functional)
 - **Not Implemented**:
-  - ❌ Type hierarchy
   - ❌ Execute command
   - ❌ Debug adapter
 - **Test Coverage**: 530+ tests with acceptance tests for all features
