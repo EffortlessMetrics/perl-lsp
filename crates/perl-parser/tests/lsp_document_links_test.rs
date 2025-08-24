@@ -33,6 +33,7 @@ fn test_url_handling() {
 
     // Test relative path resolution
     let base = Url::parse("file:///workspace/src/main.pl").unwrap();
+    #[allow(clippy::collapsible_if)]
     if let Ok(path) = base.to_file_path() {
         if let Some(parent) = path.parent() {
             let resolved = parent.join("lib/module.pm");

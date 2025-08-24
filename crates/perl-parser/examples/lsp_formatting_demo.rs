@@ -3,6 +3,7 @@
 use perl_parser::LspServer;
 use serde_json::json;
 
+#[allow(clippy::collapsible_if)]
 fn main() {
     println!("=== LSP Formatting Demo ===\n");
 

@@ -36,6 +36,7 @@ fn read_lsp_response(reader: &mut impl BufRead) -> Option<Value> {
     }
 
     // Read content
+    #[allow(clippy::collapsible_if)]
     if let Some(content_length) = headers.get("Content-Length") {
         if let Ok(length) = content_length.parse::<usize>() {
             let mut content = vec![0u8; length];

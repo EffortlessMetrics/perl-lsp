@@ -60,6 +60,6 @@ fn inlay_hints_for_substr_and_types() {
 
     // Should have parameter hints for substr
     let param_hints = ["str:", "offset:", "len:"];
-    let has_substr_hints = param_hints.iter().any(|&h| labels.iter().any(|&l| l == h));
+    let has_substr_hints = param_hints.iter().any(|&h| labels.contains(&h));
     assert!(has_substr_hints, "should have substr parameter hints, found: {:?}", labels);
 }
