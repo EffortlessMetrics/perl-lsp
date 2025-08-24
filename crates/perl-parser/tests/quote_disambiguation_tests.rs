@@ -1,6 +1,7 @@
 use perl_parser::{Parser, ast::NodeKind};
 
 #[test]
+#[allow(clippy::collapsible_if)]
 fn test_qwerty_not_quote_operator() {
     let code = r#"
 # This comment has qwerty in it
@@ -49,6 +50,7 @@ my $x = FOO;
 }
 
 #[test]
+#[allow(clippy::collapsible_if)]
 fn test_real_qw_operator() {
     let code = "my @list = qw(foo bar baz);";
     let mut parser = Parser::new(code);
@@ -68,6 +70,7 @@ fn test_real_qw_operator() {
 }
 
 #[test]
+#[allow(clippy::collapsible_if)]
 fn test_identifier_starting_with_q() {
     let code = r#"
 my $query = "SELECT * FROM users";

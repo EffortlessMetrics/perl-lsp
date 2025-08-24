@@ -45,8 +45,41 @@ use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
 const ERR_INVALID_REQUEST: i32 = -32600;
 const ERR_INVALID_PARAMS: i32 = -32602;
-const ERR_REQUEST_CANCELLED: i32 = -32800;
-const ERR_CONTENT_MODIFIED: i32 = -32801;
+// LSP 3.17 standard error codes:
+// -32802 ServerCancelled (preferred for server-side cancellations)
+// -32801 ContentModified (document changed; redo request)
+// -32800 RequestCancelled (client-side; rarely distinguishable; we use -32802)
+const ERR_SERVER_CANCELLED: i32 = -32802; // Server cancelled the request (LSP 3.17)
+const ERR_CONTENT_MODIFIED: i32 = -32801; // Content modified, operation obsolete
+#[allow(dead_code)]
+const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled (kept for reference)
+
+/// Helper to create a cancelled response
+fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: Some(id.clone()),
+        result: None,
+        error: Some(JsonRpcError {
+            code: ERR_SERVER_CANCELLED,
+            message: "Request cancelled".into(),
+            data: None,
+        }),
+    }
+}
+
+/// Macro for early cancellation check in dispatcher arms
+macro_rules! early_cancel_or {
+    ($self:ident, $id:expr, $handler:expr) => {{
+        if let Some(ref _rid) = $id {
+            if $self.is_cancelled(_rid) {
+                $self.cancel_clear(_rid);
+                return Some(cancelled_response(_rid));
+            }
+        }
+        $handler
+    }};
+}
 
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
@@ -387,8 +420,7 @@ impl LspServer {
 
     /// Check if a request has been cancelled
     fn is_cancelled(&self, id: &Value) -> bool {
-        let mut set = self.cancelled.lock().unwrap();
-        set.take(id).is_some()
+        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
     }
 
     /// Handle a JSON-RPC request
@@ -397,10 +429,8 @@ impl LspServer {
 
         // Handle $/cancelRequest notification
         if request.method == "$/cancelRequest" {
-            if let Some(params) = request.params {
-                if let Some(cancel_id) = params.get("id").cloned() {
-                    self.cancelled.lock().unwrap().insert(cancel_id);
-                }
+            if let Some(idv) = request.params.as_ref().and_then(|p| p.get("id")).cloned() {
+                self.cancel_mark(&idv);
             }
             return None; // Notifications don't get responses
         }
@@ -485,7 +515,7 @@ impl LspServer {
                 }
             }
             "textDocument/declaration" => self.handle_declaration(request.params),
-            "textDocument/references" => {
+            "textDocument/references" => early_cancel_or!(self, id, {
                 // Use test fallback in test mode, production handler otherwise
                 let use_fallback = std::env::var("LSP_TEST_FALLBACKS").is_ok();
                 if use_fallback {
@@ -498,7 +528,7 @@ impl LspServer {
                     self.handle_references(request.params)
                         .or_else(|_| self.on_references(json!({})).map(Some))
                 }
-            }
+            }),
             "textDocument/documentHighlight" => self.handle_document_highlight(request.params),
             "textDocument/prepareTypeHierarchy" => {
                 self.handle_prepare_type_hierarchy(request.params)
@@ -510,11 +540,15 @@ impl LspServer {
             "typeHierarchy/supertypes" => self.handle_type_hierarchy_supertypes(request.params),
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/diagnostic" => self.handle_document_diagnostic(request.params),
-            "workspace/diagnostic" => self.handle_workspace_diagnostic(request.params),
+            "workspace/diagnostic" => {
+                early_cancel_or!(self, id, self.handle_workspace_diagnostic(request.params))
+            }
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             // GA contract: not supported in v0.8.3
             // PR 3: Wire workspace/symbol to use the index
-            "workspace/symbol" => self.handle_workspace_symbols_v2(request.params),
+            "workspace/symbol" => {
+                early_cancel_or!(self, id, self.handle_workspace_symbols_v2(request.params))
+            }
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
@@ -522,7 +556,9 @@ impl LspServer {
             // PR 6: Semantic tokens
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
             // PR 7: Inlay hints
-            "textDocument/inlayHint" => self.handle_inlay_hints(request.params),
+            "textDocument/inlayHint" => {
+                early_cancel_or!(self, id, self.handle_inlay_hints(request.params))
+            }
             // PR 8: Document links
             "textDocument/documentLink" => self.handle_document_links(request.params),
             // PR 8: Selection ranges
@@ -4563,9 +4599,18 @@ impl LspServer {
         if let Some(ref workspace_index) = self.workspace_index {
             let symbols = workspace_index.search_symbols(query);
 
-            // Convert to LSP format
-            let lsp_symbols: Vec<LspWorkspaceSymbol> =
-                symbols.iter().map(|sym| sym.into()).collect();
+            // Convert to LSP format with yielding
+            let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                .iter()
+                .enumerate()
+                .map(|(i, sym)| {
+                    // Cooperative yield every 64 symbols
+                    if i & 0x3f == 0 {
+                        std::thread::yield_now();
+                    }
+                    sym.into()
+                })
+                .collect();
 
             eprintln!("Found {} symbols from index", lsp_symbols.len());
             return Ok(Some(json!(lsp_symbols)));
@@ -4573,9 +4618,19 @@ impl LspServer {
 
         // Fallback to document-based search
         let mut all_symbols = Vec::new();
-        let documents = self.documents.lock().unwrap();
 
-        for (uri, doc) in documents.iter() {
+        // Collect document snapshots without holding lock
+        let docs_snapshot: Vec<(String, DocumentState)> = {
+            let documents = self.documents.lock().unwrap();
+            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+
+        for (i, (uri, doc)) in docs_snapshot.iter().enumerate() {
+            // Cooperative yield every 8 documents
+            if i & 0x7 == 0 {
+                std::thread::yield_now();
+            }
+
             if let Some(ref ast) = doc.ast {
                 let doc_symbols = self.extract_document_symbols(ast, &doc.content, uri);
                 let query_lower = query.to_lowercase();
@@ -6875,7 +6930,12 @@ impl LspServer {
                     // Convert to LSP diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics
                         .into_iter()
-                        .map(|d| {
+                        .enumerate()
+                        .map(|(j, d)| {
+                            // Cooperative yield every 32 items
+                            if j & 0x1f == 0 {
+                                std::thread::yield_now();
+                            }
                             let start_pos =
                                 doc.line_starts.offset_to_position(&doc.content, d.range.0);
                             let end_pos =
@@ -6941,9 +7001,19 @@ impl LspServer {
         };
 
         let mut items = Vec::new();
-        let documents = self.documents.lock().unwrap();
 
-        for (uri_str, doc) in documents.iter() {
+        // Collect document snapshots without holding lock
+        let docs_snapshot: Vec<(String, DocumentState)> = {
+            let documents = self.documents.lock().unwrap();
+            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+
+        for (i, (uri_str, doc)) in docs_snapshot.iter().enumerate() {
+            // Cooperative yield every 8 documents
+            if i & 0x7 == 0 {
+                std::thread::yield_now();
+            }
+
             // Check if we have a previous result ID for this document
             let prev_id =
                 previous_result_ids.iter().find(|(u, _)| u == uri_str).map(|(_, id)| id.clone());
@@ -6968,7 +7038,12 @@ impl LspServer {
                         // Convert diagnostics
                         let lsp_diagnostics: Vec<Value> = diagnostics
                             .into_iter()
-                            .map(|d| {
+                            .enumerate()
+                            .map(|(j, d)| {
+                                // Cooperative yield every 32 items
+                                if j & 0x1f == 0 {
+                                    std::thread::yield_now();
+                                }
                                 let start_pos =
                                     doc.line_starts.offset_to_position(&doc.content, d.range.0);
                                 let end_pos =
@@ -7008,7 +7083,12 @@ impl LspServer {
                     // No previous result, return full
                     let lsp_diagnostics: Vec<Value> = diagnostics
                         .into_iter()
-                        .map(|d| {
+                        .enumerate()
+                        .map(|(j, d)| {
+                            // Cooperative yield every 32 items
+                            if j & 0x1f == 0 {
+                                std::thread::yield_now();
+                            }
                             let start_pos =
                                 doc.line_starts.offset_to_position(&doc.content, d.range.0);
                             let end_pos =

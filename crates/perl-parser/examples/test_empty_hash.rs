@@ -1,5 +1,6 @@
 use perl_parser::{Parser, ast::NodeKind};
 
+#[allow(clippy::collapsible_if)]
 fn main() {
     let code = "{}";
     println!("Testing: {}", code);

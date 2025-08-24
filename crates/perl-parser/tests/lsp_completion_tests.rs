@@ -730,6 +730,7 @@ fn test_snippet_completion() {
     let sub_item = sub_item.unwrap();
 
     // Check it has a snippet with placeholders
+    #[allow(clippy::collapsible_if)]
     if let Some(insert_text) = sub_item.get("insertText") {
         if let Some(text) = insert_text.as_str() {
             assert!(

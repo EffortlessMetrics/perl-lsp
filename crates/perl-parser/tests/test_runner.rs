@@ -3,6 +3,8 @@
 //! This module provides comprehensive test execution and coverage analysis
 //! for all LSP features, ensuring complete end-to-end testing.
 
+#![allow(clippy::collapsible_if)]
+
 use colored::*;
 use std::collections::HashMap;
 use std::time::Instant;

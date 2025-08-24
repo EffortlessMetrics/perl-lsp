@@ -18,6 +18,7 @@ pub mod error_codes {
     pub const UNKNOWN_ERROR_CODE: i32 = -32001;
     pub const REQUEST_CANCELLED: i32 = -32800;
     pub const CONTENT_MODIFIED: i32 = -32801;
+    pub const SERVER_CANCELLED: i32 = -32802; // LSP 3.17: server-side cancellation
     pub const REQUEST_FAILED: i32 = -32803;
 }
 
@@ -39,12 +40,9 @@ pub fn method_not_advertised() -> JsonRpcError {
     }
 }
 
-/// Create a server cancelled error
-pub fn server_cancelled(message: &str) -> Value {
-    json!({
-        "code": error_codes::REQUEST_CANCELLED,
-        "message": message
-    })
+/// Create a server cancelled error (-32802 for server-side cancellation)
+pub fn server_cancelled(message: &str) -> JsonRpcError {
+    JsonRpcError { code: error_codes::SERVER_CANCELLED, message: message.to_string(), data: None }
 }
 
 /// Create an invalid params error
