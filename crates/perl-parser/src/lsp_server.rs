@@ -621,6 +621,28 @@ impl LspServer {
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
             "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
+            // Test-specific slow operation for cancellation testing
+            // This is available in all builds but only used by tests
+            "$/test/slowOperation" => {
+                // Check for cancellation periodically during the slow operation
+                // Total time: 20 * 50ms = 1 second
+                for i in 0..20 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    if let Some(ref id) = id {
+                        if self.is_cancelled(id) {
+                            eprintln!("Operation cancelled at iteration {}", i);
+                            return Some(JsonRpcResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: Some(id.clone()),
+                                result: None,
+                                error: Some(Self::request_cancelled()),
+                            });
+                        }
+                    }
+                }
+                eprintln!("Slow operation completed without cancellation");
+                Ok(Some(json!({"status": "completed", "iterations": 20})))
+            }
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 Err(JsonRpcError {
