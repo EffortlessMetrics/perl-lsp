@@ -6,52 +6,89 @@ use std::time::Duration;
 mod common;
 use common::*;
 
-/// Test that cancel request is handled (may or may not cancel in time)
+/// Test that cancel request is handled properly
 ///
-/// This test is intentionally flexible about the outcome since cancellation
-/// is inherently racy. The important thing is that the server doesn't crash
-/// and returns either a valid result or a cancellation error.
+/// This test sends a request and immediately cancels it to verify
+/// the server handles cancellation correctly. For builds with the test
+/// endpoint, it uses a slow operation; otherwise it uses hover which
+/// may or may not be cancelled in time.
 #[test]
 fn test_cancel_request_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Open a document
-    let uri = "file:///test.pl";
-    send_notification(
-        &mut server,
-        json!({
-            "jsonrpc": "2.0",
-            "method": "textDocument/didOpen",
-            "params": {
-                "textDocument": {
-                    "uri": uri,
-                    "languageId": "perl",
-                    "version": 1,
-                    "text": "my $x = 42;\n"
-                }
-            }
-        }),
-    );
-
-    // Send a request and immediately cancel it
-    let request_id = 9999;
-
-    // Send the request (but don't wait for response yet)
+    // First, test if the slow operation endpoint exists
+    let test_id = 8888;
     send_request_no_wait(
         &mut server,
         json!({
             "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "textDocument/hover",
-            "params": {
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 5 }
-            }
+            "id": test_id,
+            "method": "$/test/slowOperation",
+            "params": {}
         }),
     );
 
-    // Immediately send cancellation
+    let test_response =
+        read_response_matching_i64(&mut server, test_id, Duration::from_millis(600));
+    let has_test_endpoint = test_response.is_some_and(|resp| {
+        resp.get("error").is_none_or(|e| {
+            e["code"].as_i64() != Some(-32601) // -32601 = Method not found
+        })
+    });
+
+    // Now run the actual cancellation test
+    let request_id = 9999;
+
+    if has_test_endpoint {
+        // Use the slow operation for reliable cancellation
+        send_request_no_wait(
+            &mut server,
+            json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "$/test/slowOperation",
+                "params": {}
+            }),
+        );
+
+        // Wait a tiny bit to ensure the request starts processing
+        // then cancel it while it's still running (takes 1 second total)
+        std::thread::sleep(Duration::from_millis(50));
+    } else {
+        // Fall back to hover which may or may not be cancelled in time
+        let uri = "file:///test.pl";
+        send_notification(
+            &mut server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": "perl",
+                        "version": 1,
+                        "text": "my $x = 42;\n"
+                    }
+                }
+            }),
+        );
+
+        send_request_no_wait(
+            &mut server,
+            json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "textDocument/hover",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 0, "character": 5 }
+                }
+            }),
+        );
+    }
+
+    // Send cancellation
     send_notification(
         &mut server,
         json!({
@@ -63,22 +100,27 @@ fn test_cancel_request_handling() {
         }),
     );
 
-    // Try to read the response - it may or may not be cancelled depending on timing
+    // Read the response
     let response = read_response_matching_i64(&mut server, request_id, Duration::from_secs(2));
 
     if let Some(resp) = response {
-        // We got a response - check if it's cancelled or completed
         if let Some(error) = resp.get("error") {
             let code = error["code"].as_i64().unwrap_or(0);
-            // -32802 = server cancelled (new), -32800 = request cancelled (old)
-            // Both are acceptable
-            assert!(code == -32802 || code == -32800 || code != 0, "Should have an error code");
+            // -32802 = our server's cancellation code
+            // Accept it as cancelled
+            assert_eq!(code, -32802, "Should have cancellation error code -32802");
         } else {
-            // Request completed before cancellation took effect - that's okay too
-            assert!(resp.get("result").is_some(), "Should have result if not cancelled");
+            // Request completed before cancellation - that's OK for hover
+            // but not for the slow operation
+            if has_test_endpoint {
+                panic!("Slow operation should have been cancelled, but got result: {:?}", resp);
+            }
+            // For hover, completing is acceptable since it's fast
         }
+    } else if has_test_endpoint {
+        panic!("Expected a response for slow operation");
     }
-    // If no response, that's also fine - the request was cancelled before processing
+    // No response for hover is acceptable (cancelled before processing)
 }
 
 /// Test that $/cancelRequest itself doesn't produce a response
@@ -193,7 +235,7 @@ fn test_cancel_multiple_requests() {
                 // This one might be cancelled (or might complete if fast enough)
                 if let Some(error) = resp.get("error") {
                     let code = error["code"].as_i64().unwrap_or(0);
-                    assert_eq!(code, -32800, "Cancelled request should have -32800 code");
+                    assert_eq!(code, -32802, "Cancelled request should have -32802 code");
                 }
             } else {
                 // Other requests should complete normally
