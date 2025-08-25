@@ -70,11 +70,11 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **On-type formatting** - auto-indent (NEW)
   - ✅ **Pull diagnostics** - LSP 3.17 support (v0.8.5)
   - ✅ **Type hierarchy** - class/role relationships (v0.8.5)
+  - ✅ **Execute command** - Perl::Critic, perltidy, refactorings (v0.8.5)
 - **Partial Implementations** (not advertised):
   - ⚠️ Code lens (~20% functional)
   - ⚠️ Call hierarchy (~15% functional)
 - **Not Implemented**:
-  - ❌ Execute command
   - ❌ Debug adapter
 - **Test Coverage**: 530+ tests with acceptance tests for all features
 - **Performance**: <50ms for all operations

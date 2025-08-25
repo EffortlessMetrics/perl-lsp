@@ -310,6 +310,24 @@ enum Commands {
         #[arg(long)]
         token: Option<String>,
     },
+
+    /// Manage feature catalog and LSP compliance
+    Features {
+        #[command(subcommand)]
+        command: FeaturesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum FeaturesCommand {
+    /// Sync documentation from features.toml
+    SyncDocs,
+    
+    /// Verify features match capabilities
+    Verify,
+    
+    /// Generate compliance report
+    Report,
 }
 
 fn main() -> Result<()> {
@@ -376,5 +394,10 @@ fn main() -> Result<()> {
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
+        Commands::Features { command } => match command {
+            FeaturesCommand::SyncDocs => features::sync_docs(),
+            FeaturesCommand::Verify => features::verify(),
+            FeaturesCommand::Report => features::report(),
+        }
     }
 }
