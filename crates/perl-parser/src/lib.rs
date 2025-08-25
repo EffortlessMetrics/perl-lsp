@@ -110,6 +110,7 @@ pub mod error_recovery;
 pub mod execute_command;
 pub mod features;
 pub mod formatting;
+pub mod implementation_provider;
 #[cfg(feature = "incremental")]
 pub mod incremental;
 #[cfg(feature = "incremental")]
@@ -140,6 +141,7 @@ pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod index;
 pub mod inlay_hints;
+pub mod inline_completions;
 pub mod inlay_hints_provider;
 pub mod line_index;
 pub mod linked_editing;
