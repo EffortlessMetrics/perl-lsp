@@ -572,6 +572,8 @@ impl LspServer {
             "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
             // Linked editing ranges
             "textDocument/linkedEditingRange" => self.handle_linked_editing_range(request.params),
+            // Inline completion
+            "textDocument/inlineCompletion" => self.handle_inline_completion(request.params),
             // Semantic tokens range
             "textDocument/semanticTokens/range" => {
                 self.handle_semantic_tokens_range(request.params)
@@ -2852,15 +2854,24 @@ impl LspServer {
 
     /// Handle textDocument/implementation request
     fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        use crate::implementation_provider::ImplementationProvider;
+        
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    // For now, just find all subclasses in the workspace
-                    // A more sophisticated implementation would look at cursor position
-                    return Ok(Some(json!(self.find_all_implementations(ast, &documents))));
+                    let provider = ImplementationProvider::new(self.workspace_index.clone());
+                    
+                    // Convert documents to HashMap<String, String> for provider
+                    let doc_map: HashMap<String, String> =
+                        documents.iter().map(|(k, v)| (k.clone(), v.content.clone())).collect();
+                    
+                    let locations = provider.find_implementations(ast, line, character, uri, &doc_map);
+                    return Ok(Some(json!(locations)));
                 }
             }
         }
@@ -5041,6 +5052,29 @@ impl LspServer {
         Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
     }
 
+    /// Handle textDocument/inlineCompletion request
+    fn handle_inline_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        use crate::inline_completions::InlineCompletionProvider;
+        
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let provider = InlineCompletionProvider::new();
+                let completions = provider.get_inline_completions(&doc.content, line, character);
+                return Ok(Some(serde_json::to_value(completions).unwrap_or(Value::Null)));
+            }
+        }
+
+        Ok(Some(json!({
+            "items": []
+        })))
+    }
+    
     /// Handle textDocument/linkedEditingRange request
     fn handle_linked_editing_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature

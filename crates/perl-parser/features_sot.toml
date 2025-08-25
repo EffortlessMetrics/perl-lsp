@@ -5,7 +5,7 @@
 [meta]
 version = "0.8.5"
 lsp_version = "3.18"
-compliance_percent = 84  # Includes linkedEditingRange and codeLens
+compliance_percent = 87  # Includes linkedEditingRange, codeLens, implementation GA, typeDefinition GA, inline completions
 
 # Text Document Features
 
@@ -211,28 +211,28 @@ description = "Pull model diagnostics"
 id = "lsp.inline_completion"
 spec = "LSP 3.18"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
-description = "Inline AI-powered completions"
+maturity = "ga"
+advertised = true
+tests = ["src/inline_completions.rs"]
+description = "Deterministic inline completions (non-AI)"
 
 [[feature]]
 id = "lsp.type_definition"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "preview"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_type_definition_tests.rs"]
-description = "Go to type definition"
+description = "Go to type definition (with multi-file support)"
 
 [[feature]]
 id = "lsp.implementation"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "preview"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_implementation_tests.rs"]
-description = "Go to implementation"
+description = "Go to implementation (with workspace index)"
 
 [[feature]]
 id = "lsp.document_color"
@@ -243,14 +243,6 @@ advertised = false
 tests = []
 description = "Color decorators"
 
-[[feature]]
-id = "lsp.linked_editing_range"
-spec = "LSP 3.16"
-area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
-description = "Linked editing of related tokens"
 
 # Workspace Features
 

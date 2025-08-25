@@ -348,6 +348,11 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.linked_editing {
         caps.linked_editing_range_provider = Some(lsp_types::LinkedEditingRangeServerCapabilities::Simple(true));
     }
+    
+    // Note: inline_completion_provider is not in lsp-types 0.97, add when available
+    // if build.inline_completion {
+    //     caps.inline_completion_provider = Some(InlineCompletionOptions::default());
+    // }
 
     if build.call_hierarchy {
         caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
