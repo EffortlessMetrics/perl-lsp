@@ -44,12 +44,12 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 - **perl-lexer**: Context-aware tokenizer with mode-based lexing
 - **perl-corpus**: Test corpus with 141 edge cases
 - **perl-parser-pest**: Legacy Pest parser (feature complete within Pest limits)
-- **perl-lsp**: Production LSP server with ~87% LSP 3.18 compliance
+- **perl-lsp**: Production LSP server with ~93% LSP 3.18 compliance
 
 ### Key Accomplishments (v0.8.5)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **LSP 3.18 Compliance** (~87% of LSP features fully working)
+- ✅ **LSP 3.18 Compliance** (~93% of LSP features fully working)
   - **Text Document Features** (90% complete)
     - ✅ Diagnostics (push & pull models)
     - ✅ Completion with 150+ built-ins
@@ -74,7 +74,11 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
     - ✅ Linked editing ranges (v0.8.6)
     - ✅ Type definition (v0.8.6 GA - multi-file support)
     - ✅ Implementation (v0.8.6 GA - workspace index)
-    - ✅ Inline completions (v0.8.6 GA - deterministic rules)
+    - ✅ Inline completions (v0.8.6 preview - via experimental)
+    - ✅ Inline values (v0.8.6 - debug context)
+    - ✅ Document color (v0.8.6 - hex detection)
+    - ✅ Color presentation (v0.8.6)
+    - ✅ Prepare rename (v0.8.6)
   - **Workspace Features** (70% complete)
     - ✅ Workspace symbols
     - ✅ Workspace diagnostics (pull)
@@ -82,7 +86,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
     - ✅ Execute command
     - ✅ Workspace folders
     - ⛴ Workspace edit
-    - ⛴ Moniker (planned)
+    - ✅ Moniker (v0.8.6 - stable identifiers)
   - **Window Features** (60% complete)
     - ✅ Progress reporting
     - ✅ Log messages

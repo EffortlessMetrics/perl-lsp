@@ -555,6 +555,7 @@ impl LspServer {
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
             "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
+            "codeAction/resolve" => self.handle_code_action_resolve(request.params),
             // PR 6: Semantic tokens
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
             // PR 7: Inlay hints
@@ -574,6 +575,13 @@ impl LspServer {
             "textDocument/linkedEditingRange" => self.handle_linked_editing_range(request.params),
             // Inline completion
             "textDocument/inlineCompletion" => self.handle_inline_completion(request.params),
+            // Inline values for debugging
+            "textDocument/inlineValue" => self.handle_inline_value(request.params),
+            // Monikers
+            "textDocument/moniker" => self.handle_moniker(request.params),
+            // Document colors
+            "textDocument/documentColor" => self.handle_document_color(request.params),
+            "textDocument/colorPresentation" => self.handle_color_presentation(request.params),
             // Semantic tokens range
             "textDocument/semanticTokens/range" => {
                 self.handle_semantic_tokens_range(request.params)
@@ -3725,6 +3733,53 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
+    /// Handle codeAction/resolve request
+    fn handle_code_action_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(mut action) = params {
+            // The action should already have minimal information
+            // We now need to compute the actual edits
+            
+            if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
+                if kind == "quickfix" {
+                    // For quickfix actions, compute the workspace edit now
+                    if let Some(data) = action.get("data") {
+                        if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
+                            let documents = self.documents.lock().unwrap();
+                            if let Some(doc) = self.get_document(&documents, uri) {
+                                // Example: Add "use strict;" at the beginning
+                                if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
+                                    let text = format!("{}\n", pragma);
+                                    let edit = json!({
+                                        "changes": {
+                                            uri: [{
+                                                "range": {
+                                                    "start": {"line": 0, "character": 0},
+                                                    "end": {"line": 0, "character": 0}
+                                                },
+                                                "newText": text
+                                            }]
+                                        }
+                                    });
+                                    
+                                    if let Some(obj) = action.as_object_mut() {
+                                        obj.insert("edit".to_string(), edit);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Ok(Some(action))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Handle textDocument/semanticTokens/full request  
     fn handle_semantic_tokens(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
@@ -5073,6 +5128,163 @@ impl LspServer {
         Ok(Some(json!({
             "items": []
         })))
+    }
+
+    /// Handle textDocument/inlineValue request
+    fn handle_inline_value(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let range = &params["range"];
+            let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                // Extract visible scalar variables in the range
+                let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                let end_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
+                
+                let mut inline_values = Vec::new();
+                
+                // Simple implementation: find scalar variables in the visible range
+                let lines: Vec<&str> = doc.content.lines().collect();
+                for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
+                    let line_text = lines[line_num as usize];
+                    
+                    // Find scalar variables using regex
+                    let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+                    for cap in re.captures_iter(line_text) {
+                        if let Some(m) = cap.get(0) {
+                            let var_text = m.as_str();
+                            let col = m.start();
+                            
+                            // Create inline value text hint (showing the variable name as placeholder)
+                            inline_values.push(json!({
+                                "range": {
+                                    "start": { "line": line_num, "character": col as u32 },
+                                    "end": { "line": line_num, "character": (col + var_text.len()) as u32 }
+                                },
+                                "text": format!("{} = ?", var_text)
+                            }));
+                        }
+                    }
+                }
+                
+                return Ok(Some(json!(inline_values)));
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/moniker request
+    fn handle_moniker(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    
+                    // Find the symbol at the cursor position
+                    let current_pkg = crate::declaration::current_package_at(ast, offset);
+                    if let Some(key) = crate::declaration::symbol_at_cursor(ast, offset, current_pkg) {
+                        // Generate a stable moniker for the symbol
+                        let identifier = format!("{}::{}", key.pkg, key.name).replace("::", ".");
+                        let moniker = json!({
+                            "scheme": "perl",
+                            "identifier": identifier,
+                            "unique": "project",
+                            "kind": "export"
+                        });
+                        
+                        return Ok(Some(json!([moniker])));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/documentColor request
+    fn handle_document_color(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let mut colors = Vec::new();
+                
+                // Find hex colors in strings and comments using regex
+                let hex_re = regex::Regex::new(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b").unwrap();
+                
+                for (line_num, line) in doc.content.lines().enumerate() {
+                    // Check if line is a comment or contains strings
+                    if line.trim_start().starts_with('#') || line.contains('"') || line.contains('\'') {
+                        for cap in hex_re.captures_iter(line) {
+                            if let Some(m) = cap.get(0) {
+                                let hex = &m.as_str()[1..]; // Skip the #
+                                let (r, g, b) = if hex.len() == 3 {
+                                    // #RGB -> #RRGGBB
+                                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
+                                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
+                                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
+                                    (r, g, b)
+                                } else {
+                                    // #RRGGBB
+                                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32 / 255.0;
+                                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32 / 255.0;
+                                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32 / 255.0;
+                                    (r, g, b)
+                                };
+                                
+                                colors.push(json!({
+                                    "range": {
+                                        "start": { "line": line_num, "character": m.start() as u32 },
+                                        "end": { "line": line_num, "character": m.end() as u32 }
+                                    },
+                                    "color": {
+                                        "red": r,
+                                        "green": g,
+                                        "blue": b,
+                                        "alpha": 1.0
+                                    }
+                                }));
+                            }
+                        }
+                    }
+                }
+                
+                return Ok(Some(json!(colors)));
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/colorPresentation request
+    fn handle_color_presentation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let color = &params["color"];
+            let r = (color["red"].as_f64().unwrap_or(0.0) * 255.0) as u8;
+            let g = (color["green"].as_f64().unwrap_or(0.0) * 255.0) as u8;
+            let b = (color["blue"].as_f64().unwrap_or(0.0) * 255.0) as u8;
+            
+            // Return various color presentations
+            let presentations = vec![
+                json!({ "label": format!("#{:02x}{:02x}{:02x}", r, g, b) }),
+                json!({ "label": format!("#{:02X}{:02X}{:02X}", r, g, b) }),
+                json!({ "label": format!("rgb({}, {}, {})", r, g, b) }),
+            ];
+            
+            return Ok(Some(json!(presentations)));
+        }
+        
+        Ok(Some(json!([])))
     }
     
     /// Handle textDocument/linkedEditingRange request
@@ -7761,6 +7973,7 @@ impl LspServer {
         let ranges = folding_ranges_from_text(&text, 128);
         Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
     }
+
 }
 
 // Helper functions for non-blocking handlers
