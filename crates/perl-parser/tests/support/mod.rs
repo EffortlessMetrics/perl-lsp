@@ -4,10 +4,10 @@
 
 #![allow(clippy::collapsible_if)]
 
+pub mod client_caps;
 pub mod env_guard;
 pub mod lsp_client;
 pub mod lsp_harness;
-pub mod client_caps;
 
 use serde_json::Value;
 use std::time::{Duration, Instant};

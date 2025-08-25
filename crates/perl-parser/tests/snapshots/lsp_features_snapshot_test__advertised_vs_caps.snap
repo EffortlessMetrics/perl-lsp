@@ -10,9 +10,11 @@ caps:
   - lsp.document_highlight
   - lsp.document_link
   - lsp.document_symbol
+  - lsp.execute_command
   - lsp.folding_range
   - lsp.formatting
   - lsp.hover
+  - lsp.implementation
   - lsp.inlay_hint
   - lsp.on_type_formatting
   - lsp.pull_diagnostics
@@ -22,6 +24,7 @@ caps:
   - lsp.selection_range
   - lsp.semantic_tokens
   - lsp.signature_help
+  - lsp.type_definition
   - lsp.workspace_symbol
 catalog:
   - lsp.code_action

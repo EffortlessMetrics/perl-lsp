@@ -11,8 +11,8 @@ pub mod catalog {
 pub mod map;
 
 // Re-export the main functions for convenience
-pub use catalog::{advertised_features, compliance_percent, has_feature};
 pub use catalog::{LSP_VERSION, VERSION};
+pub use catalog::{advertised_features, compliance_percent, has_feature};
 
 /// Get features catalog as JSON
 pub fn to_json() -> String {
@@ -21,5 +21,6 @@ pub fn to_json() -> String {
         "lsp_version": LSP_VERSION,
         "compliance_percent": compliance_percent(),
         "advertised": advertised_features(),
-    }).to_string()
+    })
+    .to_string()
 }

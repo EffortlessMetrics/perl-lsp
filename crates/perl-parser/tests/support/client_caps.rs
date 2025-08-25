@@ -1,12 +1,13 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Returns comprehensive client capabilities for testing
 /// This ensures all tests use the same client configuration
+#[allow(dead_code)]
 pub fn full() -> Value {
     json!({
         "textDocument": {
             "completion": {
-                "completionItem": { 
+                "completionItem": {
                     "snippetSupport": true,
                     "documentationFormat": ["markdown", "plaintext"]
                 }
@@ -152,6 +153,7 @@ pub fn full() -> Value {
 }
 
 /// Returns minimal client capabilities for basic testing
+#[allow(dead_code)]
 pub fn minimal() -> Value {
     json!({
         "textDocument": {},
@@ -161,13 +163,14 @@ pub fn minimal() -> Value {
 }
 
 /// Returns client capabilities with specific features enabled
+#[allow(dead_code)]
 pub fn with_features(features: &[&str]) -> Value {
     let mut caps = json!({
         "textDocument": {},
         "workspace": {},
         "window": {}
     });
-    
+
     for feature in features {
         match *feature {
             "completion" => {
@@ -194,6 +197,6 @@ pub fn with_features(features: &[&str]) -> Value {
             _ => {}
         }
     }
-    
+
     caps
 }

@@ -175,6 +175,7 @@ pub mod trivia_parser;
 pub mod type_definition;
 pub mod type_hierarchy;
 pub mod type_inference;
+pub mod uri;
 pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;

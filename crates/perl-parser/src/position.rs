@@ -146,42 +146,49 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     if offset >= text.len() {
         let lines: Vec<&str> = text.lines().collect();
         let last_line = lines.len().saturating_sub(1) as u32;
-        let last_col = lines.last()
-            .map(|l| l.encode_utf16().count())
-            .unwrap_or(0) as u32;
+        let last_col = lines.last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
         return (last_line, last_col);
     }
-    
+
     let mut acc = 0usize;
     for (line_idx, line) in text.split_inclusive('\n').enumerate() {
         let next = acc + line.len();
         if offset < next {
             // Found the line containing our offset
             let rel = offset - acc;
-            // Get the slice up to our position
-            let prefix = &line[..rel.min(line.len())];
+
+            // Handle CRLF correctly: get logical line content without line ending
+            let logical_line = if line.ends_with("\r\n") {
+                &line[..line.len().saturating_sub(2)]
+            } else if line.ends_with('\n') {
+                &line[..line.len().saturating_sub(1)]
+            } else {
+                line
+            };
+
+            // Get the slice up to our position (clamped to logical line)
+            let prefix =
+                if rel <= logical_line.len() { &logical_line[..rel] } else { logical_line };
+
             // Count UTF-16 code units for LSP
             let utf16_col = prefix.encode_utf16().count() as u32;
             return (line_idx as u32, utf16_col);
         }
         acc = next;
     }
-    
+
     // Fallback: clamp to end
     let last_line = text.lines().count().saturating_sub(1) as u32;
-    let last_col = text.lines().last()
-        .map(|l| l.encode_utf16().count())
-        .unwrap_or(0) as u32;
+    let last_col = text.lines().last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
     (last_line, last_col)
 }
 
 /// Convert UTF-16 line and column to byte offset
 pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
-    let mut current_line = 0u32;
     let mut offset = 0usize;
-    
-    for line_text in text.split_inclusive('\n') {
-        if current_line == line {
+
+    for (current_line, line_text) in text.split_inclusive('\n').enumerate() {
+        if current_line as u32 == line {
             // Found the target line, now find the column
             let mut utf16_pos = 0u32;
             for (byte_idx, ch) in line_text.char_indices() {
@@ -193,10 +200,9 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
             // Column is beyond line end
             return offset + line_text.len().min(text.len() - offset);
         }
-        current_line += 1;
         offset += line_text.len();
     }
-    
+
     // Line is beyond document end
     text.len()
 }
@@ -274,5 +280,23 @@ mod tests {
             let roundtrip = utf16_line_col_to_offset(text, line, col);
             assert_eq!(offset, roundtrip, "Failed roundtrip at offset {}", offset);
         }
+    }
+
+    #[test]
+    fn test_crlf_handling() {
+        let text = "hello\r\nworld\r\n";
+        // Position at 'w' in world (after hello\r\n)
+        assert_eq!(offset_to_utf16_line_col(text, 7), (1, 0));
+        // Position at 'd' in world
+        assert_eq!(offset_to_utf16_line_col(text, 11), (1, 4));
+    }
+
+    #[test]
+    fn test_crlf_with_emoji() {
+        let text = "hello 😀\r\nworld";
+        // Position after emoji (which takes 4 bytes but 2 UTF-16 units)
+        assert_eq!(offset_to_utf16_line_col(text, 6), (0, 6)); // Before emoji
+        assert_eq!(offset_to_utf16_line_col(text, 10), (0, 8)); // After emoji (6 + 2 UTF-16 units)
+        assert_eq!(offset_to_utf16_line_col(text, 12), (1, 0)); // Next line after \r\n
     }
 }
