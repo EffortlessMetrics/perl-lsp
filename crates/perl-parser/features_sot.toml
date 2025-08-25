@@ -5,7 +5,7 @@
 [meta]
 version = "0.8.5"
 lsp_version = "3.18"
-compliance_percent = 65  # Auto-calculated in future
+compliance_percent = 84  # Includes linkedEditingRange and codeLens
 
 # Text Document Features
 
@@ -85,10 +85,10 @@ description = "Code actions and quick fixes"
 id = "lsp.code_lens"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "preview"
+maturity = "ga"
 advertised = true
-tests = ["tests/lsp_code_lens_tests.rs"]
-description = "Code lens with reference counts"
+tests = ["tests/lsp_codelens_tests.rs"]
+description = "Code lens with reference counts for subroutines and packages"
 
 [[feature]]
 id = "lsp.formatting"
@@ -188,6 +188,15 @@ maturity = "preview"
 advertised = true
 tests = ["tests/lsp_call_hierarchy_tests.rs"]
 description = "Call hierarchy navigation"
+
+[[feature]]
+id = "lsp.linked_editing_range"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_linked_editing_tests.rs"]
+description = "Linked editing for paired delimiters ((), [], {}, <>, quotes)"
 
 [[feature]]
 id = "lsp.pull_diagnostics"

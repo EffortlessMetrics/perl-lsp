@@ -570,6 +570,8 @@ impl LspServer {
             // Code lens support
             "textDocument/codeLens" => self.handle_code_lens(request.params),
             "codeLens/resolve" => self.handle_code_lens_resolve(request.params),
+            // Linked editing ranges
+            "textDocument/linkedEditingRange" => self.handle_linked_editing_range(request.params),
             // Semantic tokens range
             "textDocument/semanticTokens/range" => {
                 self.handle_semantic_tokens_range(request.params)
@@ -5037,6 +5039,29 @@ impl LspServer {
         }
 
         Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
+    }
+
+    /// Handle textDocument/linkedEditingRange request
+    fn handle_linked_editing_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().linked_editing {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let result = crate::linked_editing::handle_linked_editing(&doc.content, line, character);
+                return Ok(Some(serde_json::to_value(result).unwrap_or(Value::Null)));
+            }
+        }
+
+        Ok(Some(Value::Null))
     }
 
     /// Extract workspace symbols from a document's AST

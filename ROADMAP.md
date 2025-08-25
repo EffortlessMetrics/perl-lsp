@@ -44,12 +44,12 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 - **perl-lexer**: Context-aware tokenizer with mode-based lexing
 - **perl-corpus**: Test corpus with 141 edge cases
 - **perl-parser-pest**: Legacy Pest parser (feature complete within Pest limits)
-- **perl-lsp**: Production LSP server with ~82% LSP 3.18 compliance
+- **perl-lsp**: Production LSP server with ~84% LSP 3.18 compliance
 
 ### Key Accomplishments (v0.8.5)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **LSP 3.18 Compliance** (~82% of LSP features fully working)
+- ✅ **LSP 3.18 Compliance** (~84% of LSP features fully working)
   - **Text Document Features** (90% complete)
     - ✅ Diagnostics (push & pull models)
     - ✅ Completion with 150+ built-ins
@@ -71,6 +71,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
     - ✅ Inlay hints
     - ✅ Type hierarchy (v0.8.5)
     - ✅ Call hierarchy
+    - ✅ Linked editing ranges (v0.8.6)
     - ✅ Type definition (v0.8.6 preview)
     - ✅ Implementation (v0.8.6 preview)
     - ⛴ Inline completions (planned)

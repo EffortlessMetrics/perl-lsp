@@ -21,6 +21,7 @@ pub struct AdvertisedFeatures {
     pub rename: bool,
     pub folding_range: bool,
     pub selection_range: bool,
+    pub linked_editing: bool,
     pub inlay_hints: bool,
     pub semantic_tokens: bool,
     pub call_hierarchy: bool,
@@ -52,6 +53,7 @@ pub struct BuildFlags {
     pub code_lens: bool,      // Not advertised by default
     pub call_hierarchy: bool, // Not advertised by default
     pub type_hierarchy: bool, // Not implemented
+    pub linked_editing: bool, // Linked editing ranges
     pub formatting: bool,
     pub range_formatting: bool,
     pub folding_range: bool,
@@ -74,6 +76,7 @@ impl BuildFlags {
             rename: self.rename,
             folding_range: self.folding_range,
             selection_range: self.selection_ranges,
+            linked_editing: self.linked_editing,
             inlay_hints: self.inlay_hints,
             semantic_tokens: self.semantic_tokens,
             call_hierarchy: self.call_hierarchy,
@@ -103,9 +106,10 @@ impl BuildFlags {
             document_links: true,
             selection_ranges: true,
             on_type_formatting: true,
-            code_lens: false,        // Partial implementation
+            code_lens: true,         // Now implemented
             call_hierarchy: false,   // Partial implementation
             type_hierarchy: false,   // Not implemented
+            linked_editing: true,    // Implemented for paired delimiters
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
@@ -136,6 +140,7 @@ impl BuildFlags {
             code_lens: true,
             call_hierarchy: true,
             type_hierarchy: true,
+            linked_editing: true,
             formatting: true,
             range_formatting: true,
             folding_range: true,
@@ -166,6 +171,7 @@ impl BuildFlags {
             code_lens: false,
             call_hierarchy: false,
             type_hierarchy: false,
+            linked_editing: false,   // New feature, not GA yet
             formatting: false,
             range_formatting: false,
             folding_range: true,
@@ -337,6 +343,10 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
     if build.code_lens {
         caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(false) });
+    }
+
+    if build.linked_editing {
+        caps.linked_editing_range_provider = Some(lsp_types::LinkedEditingRangeServerCapabilities::Simple(true));
     }
 
     if build.call_hierarchy {

@@ -1,5 +1,8 @@
 {
   "codeActionProvider": true,
+  "codeLensProvider": {
+    "resolveProvider": false
+  },
   "completionProvider": {
     "resolveProvider": false,
     "triggerCharacters": [
@@ -40,6 +43,7 @@
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "linkedEditingRangeProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true

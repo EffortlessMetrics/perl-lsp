@@ -142,6 +142,7 @@ pub mod index;
 pub mod inlay_hints;
 pub mod inlay_hints_provider;
 pub mod line_index;
+pub mod linked_editing;
 pub mod lsp_document_link;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
