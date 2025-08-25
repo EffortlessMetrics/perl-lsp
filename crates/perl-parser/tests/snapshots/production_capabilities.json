@@ -6,8 +6,7 @@
       "$",
       "@",
       "%",
-      ":",
-      ">"
+      "->"
     ]
   },
   "definitionProvider": true,
@@ -27,8 +26,17 @@
   },
   "documentRangeFormattingProvider": true,
   "documentSymbolProvider": true,
+  "executeCommandProvider": {
+    "commands": [
+      "perl.tidy",
+      "perl.critic",
+      "perl.extractVariable",
+      "perl.extractSubroutine"
+    ]
+  },
   "foldingRangeProvider": true,
   "hoverProvider": true,
+  "implementationProvider": true,
   "inlayHintProvider": {
     "resolveProvider": true
   },
@@ -87,6 +95,7 @@
     ]
   },
   "textDocumentSync": 1,
+  "typeDefinitionProvider": true,
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }

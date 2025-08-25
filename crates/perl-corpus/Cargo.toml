@@ -1,7 +1,7 @@
 [package]
 name = "perl-corpus"
 rust-version = "1.89"
-version = "0.8.5"
+version = "0.8.6"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
