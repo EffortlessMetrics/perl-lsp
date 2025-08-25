@@ -1,10 +1,10 @@
 # Perl Parser Project - Roadmap
 
-> **Status**: ✅ **GA Release v0.8.5** – Three fully working parsers + Production LSP server with partial LSP 3.18 compliance (~65%); v3 achieves 100% edge-case coverage on our test corpus.
+> **Status**: ✅ **GA Release v0.8.6** – Three fully working parsers + Production LSP server with LSP 3.18 compliance (~70%); v3 achieves 100% edge-case coverage on our test corpus.
 
 ---
 
-## 🎉 Current State (v0.8.5 – August 2025)
+## 🎉 Current State (v0.8.6 – August 2025)
 
 We've built the most comprehensive Perl parsing solution available, **exceeding our Q1-Q2 2025 goals**:
 
@@ -14,7 +14,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 | **perl-lexer** | **Production** | Sub-microsecond | **100%** | Context-aware tokenization |
 | **perl-corpus** | **Production** | N/A | **141 edge cases** | Comprehensive test suite |
 | **perl-parser-pest** (v2) | **Legacy/Experimental** | 200-450µs | **99.995%** | Works within Pest limitations |
-| **LSP Server** 🚀 | **GA Ready** | <50ms | **~65% LSP 3.18** | Pull diagnostics, type hierarchy |
+| **LSP Server** 🚀 | **GA Ready** | <50ms | **~70% LSP 3.18** | Pull diagnostics, type hierarchy, type definition, implementation |
 
 *Compliance % computed from machine-readable feature catalog; only **advertised & tested** features count.*
 
@@ -70,8 +70,9 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
     - ✅ Inlay hints
     - ✅ Type hierarchy (v0.8.5)
     - ✅ Call hierarchy
+    - ✅ Type definition (v0.8.6 preview)
+    - ✅ Implementation (v0.8.6 preview)
     - ⛴ Inline completions (planned)
-    - ⛴ Type definition (planned)
   - **Workspace Features** (70% complete)
     - ✅ Workspace symbols
     - ✅ Workspace diagnostics (pull)
@@ -125,10 +126,11 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 **Goal**: Achieve 100% LSP 3.18 compliance and launch to the Perl community
 
 #### Immediate Priority (August-September) - LSP 3.18 Full Compliance
-- [ ] **LSP 3.18 Remaining Features** (35% to go)
+- [ ] **LSP 3.18 Remaining Features** (30% to go)
+  - [x] Type Definition Provider (v0.8.6 preview)
+  - [x] Implementation Provider (v0.8.6 preview)
   - [ ] Notebook Document support (LSP 3.17)
   - [ ] Inline Completions (LSP 3.18)
-  - [ ] Type Definition Provider
   - [ ] Inline Values for debugging
   - [ ] Moniker support for cross-project navigation
   - [ ] Linked Editing Ranges
@@ -147,14 +149,15 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - [ ] Public pre-built binaries for all platforms
   - [ ] Smart PATH detection and shell config
   - [x] Internal pre-built binaries for testing
-- [x] **LSP 3.18 Compliance** ✅ **IN PROGRESS (65% complete)**
+- [x] **LSP 3.18 Compliance** ✅ **IN PROGRESS (70% complete)**
   - [x] Pull Diagnostics support
   - [x] Type Hierarchy implementation
+  - [x] Type Definition provider (v0.8.6 preview)
+  - [x] Implementation provider (v0.8.6 preview)
   - [x] Typed ServerCapabilities
   - [x] Enhanced cancellation handling
   - [ ] Notebook support
   - [ ] Inline completions
-  - [ ] Type definition provider
 - [ ] **VSCode Extension v0.9.0 (LSP 3.18)**
   - [ ] Update to LSP 3.18 client
   - [ ] Add notebook support UI
@@ -221,9 +224,10 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - [ ] Incremental text document sync optimization
   - [ ] Pull-based document sync
 - [ ] **Advanced Language Features**
+  - [x] Type Definition provider (v0.8.6 preview)
+  - [x] Implementation provider (v0.8.6 preview)
   - [ ] Inline Completions provider
-  - [ ] Type Definition provider
-  - [ ] Implementation provider enhancements
+  - [ ] Implementation provider enhancements (multi-file)
   - [ ] Declaration provider improvements
 - [ ] **Debugging Support**
   - [ ] Inline Values provider
