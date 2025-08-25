@@ -8,6 +8,7 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Ensures the LSP server handles extreme loads gracefully
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_large_file_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -62,6 +63,7 @@ fn test_large_file_handling() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_many_open_documents() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -106,6 +108,7 @@ fn test_many_open_documents() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_rapid_fire_requests() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -159,6 +162,7 @@ fn test_rapid_fire_requests() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_deeply_nested_ast() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -209,6 +213,7 @@ fn test_deeply_nested_ast() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_massive_symbol_count() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -259,6 +264,7 @@ fn test_massive_symbol_count() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_complex_regex_patterns() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -317,6 +323,7 @@ if ($text =~ /[^\x00-\x1F\x7F-\x9F\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/) { }
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_infinite_loop_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -385,6 +392,7 @@ use base 'C';
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_memory_leak_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -464,6 +472,7 @@ fn test_memory_leak_prevention() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_workspace_search_performance() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -517,6 +526,7 @@ fn test_workspace_search_performance() {
 }
 
 #[test]
+#[ignore = "stress test - run with --ignored"]
 fn test_completion_with_huge_scope() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

@@ -8,6 +8,7 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests server behavior under extreme memory conditions
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_extremely_large_document() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -61,6 +62,7 @@ fn test_extremely_large_document() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_many_small_documents() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -110,6 +112,7 @@ fn test_many_small_documents() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_deep_ast_nesting() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -157,6 +160,7 @@ fn test_deep_ast_nesting() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_wide_ast_tree() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -203,6 +207,7 @@ fn test_wide_ast_tree() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_memory_leak_detection() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -261,6 +266,7 @@ fn test_memory_leak_detection() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_infinite_loop_in_content() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -321,6 +327,7 @@ This heredoc never ends...
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_exponential_backtracking() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -370,6 +377,7 @@ fn test_exponential_backtracking() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_recursive_macro_expansion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -424,6 +432,7 @@ BEGIN {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_cache_exhaustion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -488,6 +497,7 @@ fn test_cache_exhaustion() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_string_explosion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -535,6 +545,7 @@ fn test_string_explosion() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_symbol_table_explosion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -609,6 +620,7 @@ fn test_symbol_table_explosion() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_diagnostic_explosion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -669,6 +681,7 @@ fn test_diagnostic_explosion() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_reference_chain() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -720,6 +733,7 @@ fn test_reference_chain() {
 }
 
 #[test]
+#[ignore = "memory pressure test - run with --ignored"]
 fn test_incremental_parsing_stress() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

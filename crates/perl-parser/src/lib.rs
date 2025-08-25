@@ -108,6 +108,7 @@ pub mod error;
 pub mod error_classifier;
 pub mod error_recovery;
 pub mod execute_command;
+pub mod features;
 pub mod formatting;
 #[cfg(feature = "incremental")]
 pub mod incremental;

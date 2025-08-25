@@ -12,7 +12,14 @@ readme = "README.md"
 documentation = "https://docs.rs/perl-parser"
 keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
 categories = ["parsing", "development-tools", "text-editors"]
-include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
+include = [
+  "src/**",
+  "build.rs",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
 
 [dependencies]
 perl-lexer = { version = "0.8.5" }
@@ -62,8 +69,13 @@ error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
 
+[build-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
 [dev-dependencies]
 assert_cmd = "2"
+insta = { version = "1", features = ["yaml"] }
 criterion = "0.7.0"
 predicates = "3"
 pretty_assertions = "1.4.1"

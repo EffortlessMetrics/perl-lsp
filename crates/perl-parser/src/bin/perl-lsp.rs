@@ -52,6 +52,10 @@ fn main() {
                 println!("Perl Language Server using perl-parser v3");
                 process::exit(0);
             }
+            "--features-json" => {
+                println!("{}", perl_parser::features::to_json());
+                process::exit(0);
+            }
             "--help" | "-h" => {
                 print_help();
                 process::exit(0);
@@ -96,13 +100,14 @@ fn print_help() {
     eprintln!("Usage: perl-lsp [options]");
     eprintln!();
     eprintln!("Options:");
-    eprintln!("  --stdio      Use stdio for communication (default)");
-    eprintln!("  --socket     Use TCP socket for communication");
-    eprintln!("  --port       Port to listen on (default: 9257)");
-    eprintln!("  --log        Enable logging to stderr");
-    eprintln!("  --health     Quick health check (prints 'ok <version>')");
-    eprintln!("  --version    Show version information");
-    eprintln!("  --help       Show this help message");
+    eprintln!("  --stdio          Use stdio for communication (default)");
+    eprintln!("  --socket         Use TCP socket for communication");
+    eprintln!("  --port           Port to listen on (default: 9257)");
+    eprintln!("  --log            Enable logging to stderr");
+    eprintln!("  --health         Quick health check (prints 'ok <version>')");
+    eprintln!("  --version        Show version information");
+    eprintln!("  --features-json  Output features catalog as JSON");
+    eprintln!("  --help           Show this help message");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  # Run in stdio mode (for VSCode, Neovim, etc.)");
