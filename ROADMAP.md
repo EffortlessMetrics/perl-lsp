@@ -29,6 +29,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 | **perl-lexer** | v0.8.5 | ✅ Production | Context-aware tokenizer |
 | **perl-corpus** | v0.8.5 | ✅ Production | Test corpus (141 edge cases) |
 | **perl-parser-pest** | v0.8.5 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
+| **perl-lsp** |
 
 ### Component Integration
 - **perl-parser + perl-lexer**: Fully integrated for v3 parser
