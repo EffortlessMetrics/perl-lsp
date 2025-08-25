@@ -201,9 +201,23 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     let mut caps = ServerCapabilities::default();
 
     // Always-on capabilities
-    caps.text_document_sync = Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL));
+    // Use Options instead of Kind to comply with LSP 3.18 shape requirements
+    caps.text_document_sync = Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
+        open_close: Some(true),
+        change: Some(TextDocumentSyncKind::FULL),
+        will_save: None,
+        will_save_wait_until: None,
+        save: None,
+    }));
 
     caps.hover_provider = Some(HoverProviderCapability::Simple(true));
+    caps.document_highlight_provider = Some(OneOf::Left(true));
+    
+    caps.signature_help_provider = Some(SignatureHelpOptions {
+        trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+        retrigger_characters: Some(vec![",".to_string()]),
+        work_done_progress_options: WorkDoneProgressOptions::default(),
+    });
 
     caps.completion_provider = Some(CompletionOptions {
         resolve_provider: Some(false),
@@ -259,7 +273,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             inter_file_dependencies: false,
             workspace_diagnostics: true,
             work_done_progress_options: WorkDoneProgressOptions::default(),
-            identifier: None,
+            identifier: Some("perl-lsp".to_string()),
         }));
     }
 

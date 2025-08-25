@@ -1,269 +1,72 @@
-# LSP Implementation - Actual Status
+# LSP Feature Status
 
-This document provides an honest assessment of the Perl LSP server implementation status, clearly distinguishing between fully functional features, partial implementations, and stubs.
+Auto-generated from `features.toml` - DO NOT EDIT
 
-## 🎉 UPDATE: Major Improvements (Jan 2025)
+Version: 0.8.5 | LSP: 3.18
 
-**Significant improvements have been made** by wiring existing parser infrastructure to the LSP layer:
+## debug
 
-### New Capabilities Enabled
-- ✅ **Workspace indexing now always enabled** (was hidden behind PERL_LSP_WORKSPACE env variable)
-- ✅ **Cross-file navigation now works** - WorkspaceIndex properly connected
-- ✅ **Rich hover information** - SemanticAnalyzer provides type and scope data
-- ✅ **Refactoring produces real edits** - Extract variable/subroutine actually work
-- ✅ **Faster completion** - SymbolIndex properly utilized
-- ✅ **Type-aware completions** - TypeInferenceEngine enhances variable suggestions
-- ✅ **Enhanced symbol info in hover** - Shows sigil, kind, declaration, and docs
+| Feature | Spec | Status | Description |
+|---------|------|--------|-------------|
+| dap.inline_values | DAP 1.0 | 📋 Planned | Inline variable values while debugging |
+| dap.breakpoints | DAP 1.0 | 📋 Planned | Breakpoint support |
 
-### Improved Functionality
-**Previous**: ~35% functional (many stubs)  
-**Current**: ~80% functional (infrastructure wired + code quality integrated)  
-**Remaining**: ~20% needs implementation (not just wiring)
+## workspace
 
-## Implementation Categories
+| Feature | Spec | Status | Description |
+|---------|------|--------|-------------|
+| workspace_symbol | LSP 3.0 | ✅ Complete | Search symbols across workspace |
+| workspace_diagnostics | LSP 3.17 | ✅ Complete | Workspace-wide pull diagnostics |
+| execute_command | LSP 3.0 | ✅ Complete | Execute commands (Perl::Critic, etc) |
+| workspace_folders | LSP 3.6 | ✅ Complete | Multi-root workspace support |
+| file_operations | LSP 3.16 | ✅ Complete | File rename/create/delete tracking |
+| workspace_edit | LSP 3.0 | ⚠️ Experimental | Apply workspace-wide edits |
+| moniker | LSP 3.16 | 📋 Planned | Cross-project symbol identity |
 
-### ✅ Fully Implemented (Production Ready)
-These features have complete, working implementations with comprehensive test coverage:
+## notebook
 
-#### Core Text Synchronization
-- **textDocument/didOpen** - Full document tracking
-- **textDocument/didChange** - Incremental & full sync
-- **textDocument/didClose** - Document cleanup
-- **textDocument/didSave** - Save notifications
+| Feature | Spec | Status | Description |
+|---------|------|--------|-------------|
+| notebook_document_sync | LSP 3.17 | 📋 Planned | Notebook document synchronization |
+| notebook_cell_execution | LSP 3.17 | 📋 Planned | Execute notebook cells |
 
-#### Analysis & Diagnostics (Enhanced)
-- **textDocument/publishDiagnostics** - Real-time Perl syntax checking
-- **Undefined variable detection** - Under `use strict`
-- **Unused variable detection** - With scope analysis
-- **Syntax error reporting** - With error recovery
-- ✅ **NEW: Perl::Critic integration** - Built-in code quality analysis
-  - Best practices enforcement
-  - Security issue detection
-  - Code style violations
+## window
 
-#### Code Intelligence (Enhanced)
-- **textDocument/hover** - Shows rich symbol information
-  - ✅ **NEW: SemanticAnalyzer integration** - Detailed symbol analysis
-  - ✅ **NEW: Symbol kinds with sigils** - Shows type (scalar, array, hash)
-  - ✅ Variable type information
-  - ✅ Built-in function signatures (150+ functions)
-  - ✅ Declaration information
-  - ⚠️ Limited user-defined function docs
-- **textDocument/completion** - Type-aware completion support
-  - ✅ **NEW: TypeInferenceEngine integration** - Type details in suggestions
-  - ✅ Variables in scope
-  - ✅ Built-in functions and keywords
-  - ✅ Snippet templates
-  - ❌ Package members (TODO)
-  - ❌ File paths (TODO)
-- **textDocument/signatureHelp** - Function signatures
-  - ✅ Built-in functions (150+ signatures)
-  - ✅ Parameter highlighting
-  - ✅ Fallback for incomplete code
+| Feature | Spec | Status | Description |
+|---------|------|--------|-------------|
+| progress | LSP 3.0 | ✅ Complete | Progress reporting |
+| show_message | LSP 3.0 | ✅ Complete | Show messages to user |
+| log_message | LSP 3.0 | ✅ Complete | Log messages |
+| work_done_progress | LSP 3.15 | ⚠️ Experimental | Detailed work progress |
 
-#### Navigation (Enhanced - NOW WITH WORKSPACE SUPPORT)
-- **textDocument/documentSymbol** - File outline
-  - ✅ Subroutines and packages
-  - ✅ Variable declarations
-  - ⚠️ Limited nested structure support
-- **textDocument/definition** - Go to definition
-  - ✅ Local variables
-  - ✅ Subroutines in same file
-  - ✅ **NEW: Cross-file navigation** (WorkspaceIndex now wired)
-- **textDocument/references** - Find references
-  - ✅ In current file
-  - ✅ **NEW: Cross-file** (workspace-wide via WorkspaceIndex)
+## text document
 
-#### Refactoring (Basic)
-- **textDocument/rename** - Rename symbols
-  - ✅ Local scope renaming
-  - ❌ Cross-file renaming
-- **textDocument/formatting** - Document formatting
-  - ✅ Basic Perl::Tidy integration
-  - ✅ Range formatting
+| Feature | Spec | Status | Description |
+|---------|------|--------|-------------|
+| completion | LSP 3.0 | ✅ Complete | Code completion with 150+ built-in functions |
+| hover | LSP 3.0 | ✅ Complete | Hover information with documentation |
+| signature_help | LSP 3.0 | ✅ Complete | Signature help with parameter hints |
+| definition | LSP 3.0 | ✅ Complete | Go to definition |
+| declaration | LSP 3.14 | ✅ Complete | Go to declaration |
+| references | LSP 3.0 | ✅ Complete | Find references across workspace |
+| document_symbol | LSP 3.0 | ✅ Complete | Document symbols with hierarchy |
+| code_action | LSP 3.0 | ✅ Complete | Code actions and quick fixes |
+| code_lens | LSP 3.0 | 🔧 Preview | Code lens with reference counts |
+| formatting | LSP 3.0 | ✅ Complete | Document formatting with Perl::Tidy |
+| range_formatting | LSP 3.0 | ✅ Complete | Range formatting |
+| on_type_formatting | LSP 3.0 | ✅ Complete | On-type formatting with auto-indent |
+| rename | LSP 3.0 | ✅ Complete | Rename symbol across files |
+| document_link | LSP 3.0 | ✅ Complete | Document links to modules and docs |
+| folding_range | LSP 3.0 | ✅ Complete | Folding ranges with fallback |
+| selection_range | LSP 3.15 | ✅ Complete | Smart selection expansion |
+| semantic_tokens | LSP 3.16 | ✅ Complete | Enhanced syntax highlighting |
+| inlay_hint | LSP 3.17 | ✅ Complete | Parameter names and type hints |
+| type_hierarchy | LSP 3.17 | ✅ Complete | Type hierarchy for classes/roles |
+| call_hierarchy | LSP 3.16 | 🔧 Preview | Call hierarchy navigation |
+| pull_diagnostics | LSP 3.17 | ✅ Complete | Pull model diagnostics |
+| inline_completion | LSP 3.18 | 📋 Planned | Inline AI-powered completions |
+| type_definition | LSP 3.6 | ⚠️ Experimental | Go to type definition |
+| implementation | LSP 3.6 | ⚠️ Experimental | Go to implementation |
+| document_color | LSP 3.6 | 📋 Planned | Color decorators |
+| linked_editing_range | LSP 3.16 | 📋 Planned | Linked editing of related tokens |
 
-### ⚠️ Partial Implementations
-These features work but have significant limitations:
-
-#### Workspace Features
-- **workspace/symbol** - Limited to cached symbols
-- **workspace/didChangeWatchedFiles** - Basic file tracking only
-- **workspace/executeCommand** - Only restart command works
-
-#### Advanced Navigation
-- **textDocument/prepareTypeHierarchy** - Basic @ISA tracking only
-- **textDocument/documentLink** - MetaCPAN links work, local files limited
-- **textDocument/selectionRange** - Basic AST-based selection
-
-### ✅ NOW FUNCTIONAL: Enhanced Refactoring
-
-These features were stub implementations but **now work** after wiring:
-
-#### Code Actions (`code_actions_enhanced.rs`) - **NOW RETURNS REAL EDITS**
-- **Extract Variable** - Extracts expressions to named variables with smart naming
-- **Extract Subroutine** - Extracts code blocks to functions with parameter detection
-- **Convert Loop Styles** - Modernizes C-style for loops to foreach
-- **Add Error Checking** - Adds `or die` to file operations
-- **Convert to Postfix** - Transforms if/unless to postfix form
-- ✅ **NEW: Test Generation** - Generates unit tests for subroutines
-  - Test::More framework support
-  - Test2::V0 framework support
-  - Automatic parameter detection
-
-### ❌ Stub Implementations (Still Non-functional)
-These modules exist but still return empty results:
-
-#### Workspace Refactoring (`workspace_refactor.rs`)
-- **rename_symbol** - Returns empty edits (use textDocument/rename instead)
-- **extract_module** - Returns empty edits  
-- **optimize_imports** - Returns empty edits
-- **move_subroutine** - Returns empty edits
-- **inline_variable** - Returns empty edits
-
-#### Import Optimization (`import_optimizer.rs`)
-- **analyze_file** - Returns empty analysis
-- **generate_optimized_imports** - Returns empty string
-
-#### Dead Code Detection (`dead_code_detector.rs`)
-- **analyze_file** - Returns empty results
-- **analyze_workspace** - Returns zero stats
-
-#### Debug Adapter (`debug_adapter.rs`)
-- All debug functionality marked "TODO: Implement"
-- Breakpoints not actually set
-- Continue/step/next commands do nothing
-
-### 🚫 Not Implemented
-These LSP methods return appropriate errors:
-
-- **textDocument/typeDefinition** - Returns -32601 (MethodNotFound)
-- **textDocument/implementation** - Returns -32601 (MethodNotFound)
-- **textDocument/colorPresentation** - Not applicable to Perl
-- **textDocument/documentColor** - Not applicable to Perl
-- **workspace/willRenameFiles** - Not implemented
-- **workspace/didRenameFiles** - Not implemented
-
-## Testing Reality
-
-### Test Coverage Truth
-- **530+ tests** exist, but many only verify response shape, not functionality
-- Schema validation tests check JSON structure, not actual behavior
-- Many assertions like `assert!(response.is_null() || response.is_object())` don't verify correctness
-- Some tests explicitly marked with `TODO: Feature not implemented yet`
-
-### Actual Working Features Count
-- **~30-40% fully functional** of advertised 91 methods
-- **~30% partially functional** with limitations
-- **~30% stubs** returning empty/placeholder responses
-- **~10% not implemented** returning errors
-
-## Performance Claims
-
-### Verified Performance
-- Parser: ✅ <150μs for typical files (verified)
-- Basic operations: ✅ <50ms response time (verified)
-
-### Unverified Claims
-- "Workspace-wide" operations (most don't actually work)
-- Cross-file refactoring (not implemented)
-- Incremental parsing optimization (uses full reparse)
-
-## Known Issues & TODOs
-
-### Parser Limitations
-- Regex modifiers not fully parsed
-- String interpolation detection only (not parsed)
-- Format declarations not implemented
-- Some edge cases in heredocs
-
-### LSP Limitations
-- No real cross-file analysis
-- Package member completion missing
-- Module resolution incomplete
-- No real workspace indexing
-- Socket mode not implemented
-
-## Honest Recommendation
-
-### Use For:
-✅ Basic Perl development with syntax checking
-✅ Single-file navigation and refactoring
-✅ Simple code completion and hover information
-✅ Syntax error detection and diagnostics
-
-### Don't Expect:
-❌ Full IDE-level code intelligence
-❌ Workspace-wide refactoring
-❌ Cross-file navigation
-❌ Import optimization
-❌ Dead code detection
-❌ Debug adapter functionality
-
-## Roadmap to Full Implementation
-
-### Phase 1: Fix Core Features (Priority)
-1. Implement real workspace indexing
-2. Add cross-file navigation
-3. Complete package member completion
-4. Fix module resolution
-
-### Phase 2: Complete Stubs
-1. Implement workspace refactoring operations
-2. Add real import analysis
-3. Implement dead code detection
-4. Complete debug adapter
-
-### Phase 3: Advanced Features
-1. Add type inference system
-2. Implement data flow analysis
-3. Add real incremental parsing
-4. Complete semantic analysis
-
-## Contributing
-
-If you want to help complete these implementations:
-
-1. **Pick a stub module** - Good first contributions
-2. **Add tests first** - Real functional tests, not shape checks
-3. **Implement incrementally** - Small, working features over large stubs
-4. **Update this document** - Move features to "Fully Implemented" when done
-
-## Version Reality
-
-Current version: **0.8.3-rc.1**
-Parser readiness: **~0.9.0** (parser is nearly complete)
-LSP functionality: **~0.7.0** (most features now wired)
-
-**LATEST UPDATE**: We successfully wired the existing infrastructure:
-- **Parser**: 90% complete (v3 parser has comprehensive infrastructure)
-- **LSP Wiring**: 85% complete (code quality + test generation integrated)
-- **Actual Functionality**: 80% working (up from 35%)
-- **True Stubs**: Only ~10% remain as actual stubs
-
-### What Changed (Phase 1)
-- ✅ Enabled workspace feature by default
-- ✅ Removed environment variable gate on WorkspaceIndex
-- ✅ Connected SemanticAnalyzer to hover
-- ✅ Wired refactoring actions to return real edits
-- ✅ Utilized SymbolIndex for completion
-
-### What Changed (Phase 2)
-- ✅ Integrated TypeInferenceEngine with completions
-- ✅ Enhanced hover with rich symbol information
-- ✅ Connected organize imports (already in enhanced actions)
-- ✅ Verified CallHierarchy properly wired
-- ✅ Confirmed dead code detection via diagnostics
-
-### What Changed (Phase 3)
-- ✅ Integrated Perl::Critic BuiltInAnalyzer for code quality
-- ✅ Added TestGenerator for unit test generation
-- ✅ Enhanced diagnostics with best practice violations
-- ✅ Code actions now include test generation options
-
-### What's Left
-- 15% stub implementations (import optimization, debug adapter)
-- 5% missing features (require new implementation)
-
----
-
-*This document was created after discovering that many advertised features are non-functional stubs. It aims to provide transparency about what actually works versus what's planned or stubbed.*

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -224,7 +224,8 @@ fn verify_features() -> Result<()> {
     }
 
     if !missing_tests.is_empty() {
-        warnings.push(format!("Features missing tests: {}", missing_tests.join(", ")));
+        let test_list: Vec<String> = missing_tests.iter().map(|s| s.to_string()).collect();
+        warnings.push(format!("Features missing tests: {}", test_list.join(", ")));
     }
 
     // Check that advertised features exist in test directories
@@ -358,7 +359,7 @@ fn verify_features() -> Result<()> {
         for error in &errors {
             println!("  - {}", error);
         }
-        return Err(color_eyre::eyre::eyre!(
+        return Err(eyre!(
             "Feature verification failed with {} errors",
             errors.len()
         ));
