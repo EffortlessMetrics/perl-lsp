@@ -1,0 +1,79 @@
+# Minimal features catalog for negative testing
+# This disables some normally advertised features to test gating
+
+[meta]
+version = "0.8.5"
+lsp_version = "3.18.0"
+
+# Minimal set with some features disabled for testing
+[[feature]]
+id = "lsp.completion"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true  # Keep enabled
+description = "Code completion"
+
+[[feature]]
+id = "lsp.hover"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # DISABLED for testing
+description = "Hover information"
+
+[[feature]]
+id = "lsp.diagnostics"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true  # Keep enabled
+description = "Error and warning diagnostics"
+
+[[feature]]
+id = "lsp.rename"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # DISABLED for testing
+description = "Symbol renaming"
+
+[[feature]]
+id = "lsp.inlay_hints"
+area = "textDocument"
+spec = "3.16"
+maturity = "ga"
+advertised = false  # DISABLED for testing
+description = "Inline parameter hints"
+
+[[feature]]
+id = "lsp.semantic_tokens"
+area = "textDocument"
+spec = "3.16"
+maturity = "preview"
+advertised = false  # DISABLED for testing
+description = "Semantic highlighting"
+
+[[feature]]
+id = "lsp.workspace_symbols"
+area = "workspace"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # DISABLED for testing
+description = "Workspace-wide symbol search"
+
+[[feature]]
+id = "lsp.pull_diagnostics"
+area = "workspace"
+spec = "3.17"
+maturity = "preview"
+advertised = false  # DISABLED for testing
+description = "Pull-based diagnostics"
+
+[[feature]]
+id = "lsp.type_hierarchy"
+area = "textDocument"
+spec = "3.17"
+maturity = "planned"
+advertised = false  # Not available yet
+description = "Type hierarchy navigation"

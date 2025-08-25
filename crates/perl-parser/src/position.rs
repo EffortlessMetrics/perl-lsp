@@ -140,6 +140,67 @@ impl From<crate::ast::SourceLocation> for Range {
     }
 }
 
+/// Convert byte offset to UTF-16 line and column for LSP
+pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
+    // If offset is beyond text length, clamp to end
+    if offset >= text.len() {
+        let lines: Vec<&str> = text.lines().collect();
+        let last_line = lines.len().saturating_sub(1) as u32;
+        let last_col = lines.last()
+            .map(|l| l.encode_utf16().count())
+            .unwrap_or(0) as u32;
+        return (last_line, last_col);
+    }
+    
+    let mut acc = 0usize;
+    for (line_idx, line) in text.split_inclusive('\n').enumerate() {
+        let next = acc + line.len();
+        if offset < next {
+            // Found the line containing our offset
+            let rel = offset - acc;
+            // Get the slice up to our position
+            let prefix = &line[..rel.min(line.len())];
+            // Count UTF-16 code units for LSP
+            let utf16_col = prefix.encode_utf16().count() as u32;
+            return (line_idx as u32, utf16_col);
+        }
+        acc = next;
+    }
+    
+    // Fallback: clamp to end
+    let last_line = text.lines().count().saturating_sub(1) as u32;
+    let last_col = text.lines().last()
+        .map(|l| l.encode_utf16().count())
+        .unwrap_or(0) as u32;
+    (last_line, last_col)
+}
+
+/// Convert UTF-16 line and column to byte offset
+pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
+    let mut current_line = 0u32;
+    let mut offset = 0usize;
+    
+    for line_text in text.split_inclusive('\n') {
+        if current_line == line {
+            // Found the target line, now find the column
+            let mut utf16_pos = 0u32;
+            for (byte_idx, ch) in line_text.char_indices() {
+                if utf16_pos == col {
+                    return offset + byte_idx;
+                }
+                utf16_pos += ch.len_utf16() as u32;
+            }
+            // Column is beyond line end
+            return offset + line_text.len().min(text.len() - offset);
+        }
+        current_line += 1;
+        offset += line_text.len();
+    }
+    
+    // Line is beyond document end
+    text.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +246,33 @@ mod tests {
 
         assert!(range.is_empty());
         assert_eq!(range.len(), 0);
+    }
+
+    #[test]
+    fn test_offset_to_utf16_line_col() {
+        let text = "hello\nworld\n";
+        assert_eq!(offset_to_utf16_line_col(text, 0), (0, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 5), (0, 5));
+        assert_eq!(offset_to_utf16_line_col(text, 6), (1, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 11), (1, 5));
+    }
+
+    #[test]
+    fn test_utf16_with_emojis() {
+        let text = "hello 😀\nworld";
+        // The emoji takes 2 UTF-16 code units
+        assert_eq!(offset_to_utf16_line_col(text, 6), (0, 6)); // Before emoji
+        assert_eq!(offset_to_utf16_line_col(text, 10), (0, 8)); // After emoji (6 + 2 UTF-16 units)
+        assert_eq!(offset_to_utf16_line_col(text, 11), (1, 0)); // Next line
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let text = "hello\nworld\n";
+        for offset in 0..text.len() {
+            let (line, col) = offset_to_utf16_line_col(text, offset);
+            let roundtrip = utf16_line_col_to_offset(text, line, col);
+            assert_eq!(offset, roundtrip, "Failed roundtrip at offset {}", offset);
+        }
     }
 }

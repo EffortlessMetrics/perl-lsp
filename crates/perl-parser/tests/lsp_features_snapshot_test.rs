@@ -9,13 +9,18 @@ use support::lsp_harness::LspHarness;
 
 #[test]
 fn test_advertised_features_match_capabilities() {
+    use lsp_types::*;
+    
+    // Use shared client capabilities for consistency
+    let client_caps = support::client_caps::full();
+    
     // Get real ServerCapabilities from actual LSP initialization
     let mut harness = LspHarness::new();
-    let init_result = harness.initialize(None)
+    let init_result = harness.initialize(Some(client_caps))
         .expect("Failed to initialize LSP server");
     
     // Extract ServerCapabilities from initialization result
-    let caps: lsp_types::ServerCapabilities = serde_json::from_value(
+    let caps: ServerCapabilities = serde_json::from_value(
         init_result["capabilities"].clone()
     ).expect("Failed to deserialize ServerCapabilities");
     

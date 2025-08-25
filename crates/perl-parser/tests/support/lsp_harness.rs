@@ -437,6 +437,39 @@ impl LspHarness {
             }
         }
     }
+
+    /// Get type definition at a position
+    pub fn type_definition(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/typeDefinition",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Get implementation locations at a position
+    pub fn implementation(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/implementation",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Execute a command
+    pub fn execute_command(&mut self, command: &str, arguments: Vec<Value>) -> Result<Value, String> {
+        self.request(
+            "workspace/executeCommand",
+            json!({
+                "command": command,
+                "arguments": arguments
+            }),
+        )
+    }
 }
 
 /// Test writer that captures output

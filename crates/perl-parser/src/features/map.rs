@@ -78,6 +78,12 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
             "lsp.definition" => {
                 caps.definition_provider = Some(OneOf::Left(true));
             }
+            "lsp.type_definition" => {
+                caps.type_definition_provider = Some(TypeDefinitionProviderCapability::Simple(true));
+            }
+            "lsp.implementation" => {
+                caps.implementation_provider = Some(ImplementationProviderCapability::Simple(true));
+            }
             "lsp.references" => {
                 caps.references_provider = Some(OneOf::Left(true));
             }
@@ -150,8 +156,8 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
             "lsp.pull_diagnostics" => {
                 caps.diagnostic_provider = Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
                     identifier: Some("perl-parser".to_string()),
-                    inter_file_dependencies: Some(false),
-                    workspace_diagnostics: Some(true),
+                    inter_file_dependencies: false,
+                    workspace_diagnostics: true,
                     work_done_progress_options: Default::default(),
                 }));
             }
