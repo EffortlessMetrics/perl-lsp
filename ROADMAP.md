@@ -49,7 +49,18 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 ### Key Accomplishments (v0.8.5)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **LSP 3.18 Compliance** (~93% of LSP features fully working)
+- ✅ **LSP 3.18 Compliance** (75% of all LSP features, 100% of advertised features working)
+
+<!-- BEGIN: COMPLIANCE_TABLE -->
+| Area | Implemented | Total | Coverage |
+|------|-------------|-------|----------|
+| text_document | 23 | 26 | 88% |
+| workspace | 5 | 7 | 71% |
+| window | 3 | 4 | 75% |
+| notebook | 0 | 2 | 0% |
+| debug | 0 | 2 | 0% |
+| **Overall** | **31** | **41** | **75%** |
+<!-- END: COMPLIANCE_TABLE -->
   - **Text Document Features** (90% complete)
     - ✅ Diagnostics (push & pull models)
     - ✅ Completion with 150+ built-ins
