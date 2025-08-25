@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.5
+# LSP Actual Status - v0.8.6
 
 ## LSP GA Contract
 
@@ -10,9 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 65% of LSP features now work** (up from 60% in v0.8.4). This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 70% of LSP features now work** (up from 65% in v0.8.5). This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~65%)
+## ✅ Actually Working Features (~70%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -131,9 +131,21 @@ These features have been tested and provide real, useful functionality:
 - Container information
 - **Status**: Fully functional
 
+### 21. **Type Definition** (NEW in v0.8.6)
+- Navigate to type/class definitions
+- Find package definitions for blessed references
+- Supports method calls and ISA relationships
+- **Status**: ~80% functional (preview)
+
+### 22. **Implementation** (NEW in v0.8.6)
+- Find implementations of a class/method
+- Navigate to subclasses
+- Discover method overrides
+- **Status**: ~70% functional (preview)
+
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
-### ✅ Advertised in v0.8.5 (Working Features)
+### ✅ Advertised in v0.8.6 (Working Features)
 - `textDocumentSync` - File synchronization
 - `completionProvider` - Basic completions
 - `hoverProvider` - Hover information
@@ -156,8 +168,10 @@ These features have been tested and provide real, useful functionality:
 - `typeHierarchyProvider` - Type hierarchy (NEW in v0.8.5)
 - `diagnosticProvider` - Pull diagnostics (NEW in v0.8.5)
 - `workspaceSymbolProvider.resolveProvider` - Symbol resolve (NEW in v0.8.5)
+- `typeDefinitionProvider` - Type definition (NEW in v0.8.6)
+- `implementationProvider` - Implementation (NEW in v0.8.6)
 
-### ❌ NOT Advertised in v0.8.5 (Not Implemented)
+### ❌ NOT Advertised in v0.8.6 (Not Implemented)
 
 #### Code Lens
 - **Status:** Partial (not advertised).
