@@ -34,8 +34,17 @@ fn full_capabilities_match_contract() {
         "workspaceSymbolProvider should be object"
     );
     assert_eq!(caps["workspaceSymbolProvider"]["resolveProvider"], json!(true));
-    assert_eq!(caps["renameProvider"], json!(true));
-    assert!(caps["codeActionProvider"].is_object());
+    // renameProvider can be bool or object with prepareProvider
+    assert!(
+        caps["renameProvider"] == json!(true) 
+        || caps["renameProvider"] == json!({"prepareProvider": true}),
+        "renameProvider should be true or object with prepareProvider"
+    );
+    // codeActionProvider can be bool or object
+    assert!(
+        caps["codeActionProvider"] == json!(true) || caps["codeActionProvider"].is_object(),
+        "codeActionProvider should be true or object"
+    );
 
     let st = &caps["semanticTokensProvider"];
     assert!(st.is_object());
@@ -43,7 +52,7 @@ fn full_capabilities_match_contract() {
 
     let ih = &caps["inlayHintProvider"];
     assert!(ih.is_object());
-    assert_eq!(ih["resolveProvider"], json!(false));
+    assert_eq!(ih["resolveProvider"], json!(true));
 
     let dl = &caps["documentLinkProvider"];
     assert!(dl.is_object());
@@ -67,8 +76,9 @@ fn full_capabilities_match_contract() {
 
     // Must NOT be advertised until fully supported
     assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
+    // ExecuteCommand is now implemented in v0.8.6
     assert!(
-        caps["executeCommandProvider"].is_null(),
-        "executeCommandProvider must NOT be advertised"
+        !caps["executeCommandProvider"].is_null(),
+        "executeCommandProvider must be advertised (implemented in v0.8.6)"
     );
 }

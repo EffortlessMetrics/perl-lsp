@@ -92,9 +92,10 @@ fn test_ga_capabilities_contract() {
         caps["callHierarchyProvider"].is_null(),
         "callHierarchyProvider must NOT be advertised (partial ~15%)"
     );
+    // ExecuteCommand is now implemented in v0.8.6
     assert!(
-        caps["executeCommandProvider"].is_null(),
-        "executeCommandProvider must NOT be advertised (not wired)"
+        !caps["executeCommandProvider"].is_null(),
+        "executeCommandProvider must be advertised (implemented in v0.8.6)"
     );
 
     // documentFormattingProvider is conditional on perltidy availability - that's OK
@@ -128,11 +129,11 @@ fn test_unsupported_methods_return_error() {
     server.handle_request(initialized_request);
 
     // Test that truly unsupported methods return method_not_found error
-    // Updated for v0.8.4 - only test methods that truly return method_not_found
+    // Updated for v0.8.6 - only test methods that truly return method_not_found
     let unsupported_methods = [
-        "textDocument/typeDefinition", // Not implemented
-        "textDocument/implementation", // Not implemented
-        "workspace/executeCommand",    // Not wired
+        "textDocument/colorPresentation",  // Not implemented (color support)
+        "textDocument/documentColor",      // Not implemented (color support)
+        "textDocument/linkedEditingRange", // Not implemented (linked editing)
     ];
 
     for method in &unsupported_methods {

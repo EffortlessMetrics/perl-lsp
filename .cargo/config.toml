@@ -5,6 +5,7 @@ xtask = "run --package xtask --"
 [build]
 # Feature flags that should always be enabled
 # This ensures AI tools and bare `cargo build` commands use the right features
+# Tell rustc which cfg(feature=...) values are valid, so clippy stays strict
 rustflags = []
 
 # Default target directory (shared across all crates)

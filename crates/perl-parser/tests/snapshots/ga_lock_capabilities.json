@@ -5,8 +5,7 @@
       "$",
       "@",
       "%",
-      ":",
-      ">"
+      "->"
     ]
   },
   "definitionProvider": true,

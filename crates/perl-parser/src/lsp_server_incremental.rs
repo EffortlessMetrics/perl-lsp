@@ -229,7 +229,7 @@ impl IncrementalLspServer {
                     "save": true
                 },
                 "completionProvider": {
-                    "triggerCharacters": ["$", "@", "%", "->", ":"]
+                    "triggerCharacters": ["$", "@", "%", "->"]
                 },
                 "hoverProvider": true,
                 "definitionProvider": true,

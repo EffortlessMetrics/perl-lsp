@@ -2,7 +2,7 @@
 //!
 //! - **Tree-sitter compatible** kinds/fields/points.
 //! - Parser: ~100% edge cases; fast UTF-16 mapping.
-//! - LSP: contract-driven capability surface; ~60% functional in v0.8.4.
+//! - LSP: contract-driven capability surface; ~82% functional in v0.8.6.
 //!
 //! ## Quick use (library)
 //! ```rust

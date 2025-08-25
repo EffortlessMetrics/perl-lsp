@@ -22,7 +22,7 @@ impl ExtendedTestContext {
             server_capabilities: json!({
                 "textDocumentSync": 2,
                 "hoverProvider": true,
-                "completionProvider": {"triggerCharacters": ["$", "@", "%", ":", "->"]},
+                "completionProvider": {"triggerCharacters": ["$", "@", "%", "->"]},
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "documentSymbolProvider": true,
