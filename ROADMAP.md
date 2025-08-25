@@ -1,63 +1,93 @@
 # Perl Parser Project - Roadmap
 
-> **Status**: ✅ **GA Release** – Three complete parsers + Full LSP server; v3 achieves 100% edge-case coverage on our test corpus.
+> **Status**: ✅ **GA Release v0.8.5** – Three fully working parsers + Production LSP server with partial LSP 3.18 compliance (~65%); v3 achieves 100% edge-case coverage on our test corpus.
 
 ---
 
-## 🎉 Current State (v0.8.3 – August 2025)
+## 🎉 Current State (v0.8.5 – August 2025)
 
 We've built the most comprehensive Perl parsing solution available, **exceeding our Q1-Q2 2025 goals**:
 
-| Feature | v1 (C-based) | v2 (Pest) | v3 (Native) ⭐ | LSP Server 🚀 |
-|---------|--------------|-----------|----------------|---------------|
-| **Status** | Legacy | Production | **Recommended** | **Enterprise-Ready** |
-| **Performance** | ~12-68µs | ~200-450µs | **~1-150µs** | <50ms response |
-| **Perl Coverage** | ~95% | ~99.995% | **~100% of our test corpus** | Full support |
-| **Edge Cases** | Limited | 95% | **141/141** | All handled |
-| **Features** | Basic | Advanced | **Complete** | **35+ IDE features**<sup>†</sup> |
+| Component | Status | Performance | Coverage | Key Features |
+|-----------|--------|-------------|----------|-------------|
+| **perl-parser** (v3) ⭐ | **Production** | **1-150µs** | **100%** | Native parser, LSP server binary |
+| **perl-lexer** | **Production** | Sub-microsecond | **100%** | Context-aware tokenization |
+| **perl-corpus** | **Production** | N/A | **141 edge cases** | Comprehensive test suite |
+| **perl-parser-pest** (v2) | **Legacy/Experimental** | 200-450µs | **99.995%** | Works within Pest limitations |
+| **LSP Server** 🚀 | **GA Ready** | <50ms | **~65% LSP 3.18** | Pull diagnostics, type hierarchy |
+
+*Compliance % computed from machine-readable feature catalog; only **advertised & tested** features count.*
 
 ---
 
+## 📦 Component Status (v0.8.5)
+
+### Published Crates
+| Crate | Version | Status | Purpose |
+|-------|---------|--------|----------|
+| **perl-parser** | v0.8.5 | ✅ Production | Main parser + LSP server binary |
+| **perl-lexer** | v0.8.5 | ✅ Production | Context-aware tokenizer |
+| **perl-corpus** | v0.8.5 | ✅ Production | Test corpus (141 edge cases) |
+| **perl-parser-pest** | v0.8.5 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
+
+### Component Integration
+- **perl-parser + perl-lexer**: Fully integrated for v3 parser
+- **perl-corpus**: Used by all parsers for validation
+- **perl-lsp binary**: Ships with perl-parser crate
+- **Tree-sitter compatibility**: All parsers output compatible AST
+
 ## ✅ What We've Achieved
 
-### Parser Implementations
-- **v1**: Original C parser with Rust bindings (benchmark baseline)
-- **v2**: Pure Rust Pest parser with ~99.995% coverage
-- **v3**: Native lexer+parser with 100% coverage ⭐ **RECOMMENDED**
-- **LSP**: Full Language Server Protocol implementation 🚀
+### Production Components
+- **perl-parser**: Native recursive descent parser + LSP server ⭐ **MAIN CRATE**
+- **perl-lexer**: Context-aware tokenizer with mode-based lexing
+- **perl-corpus**: Test corpus with 141 edge cases
+- **perl-parser-pest**: Legacy Pest parser (feature complete within Pest limits)
+- **perl-lsp**: Production LSP server with ~65% LSP 3.18 compliance
 
-### Key Accomplishments (v0.8.3)
+### Key Accomplishments (v0.8.5)
 - ✅ **100% edge case coverage** (141/141 tests passing)
 - ✅ **World-class performance** (4-19x faster than C)
-- ✅ **Enterprise LSP implementation** (35+ professional IDE features)
-  - ✅ Real-time diagnostics with auto-fix
-  - ✅ Intelligent code completion (variables, functions, modules)
-  - ✅ Multi-file go to definition
-  - ✅ Cross-file find references
-  - ✅ Hover with 150+ built-in signatures
-  - ✅ Signature help with parameter hints
-  - ✅ Hierarchical document symbols
-  - ✅ Advanced code actions & refactoring
-  - ✅ Semantic syntax highlighting
-  - ✅ CodeLens with reference counts
-  - ✅ Call hierarchy navigation
-  - ✅ Inlay hints for parameters
-  - ✅ Document/range formatting (perltidy)
-  - ✅ Workspace-wide symbol search
-  - ✅ Test runner integration
-  - ✅ Extract variable/subroutine
-  - ✅ Loop style conversions
-  - ✅ Import organization
-  - ✅ Document links (MetaCPAN + local files) (v0.8.2)
-  - ✅ Selection ranges for smart expansion (v0.8.2)
-  - ✅ On-type formatting with indentation (v0.8.2)
-  - ✅ File watching for external changes (v0.8.2)
-  - ✅ **Perl::Critic integration** (v0.8.3)
-  - ✅ Enhanced fallback handlers with UTF-16 support (v0.8.3)
-  - ✅ Word boundary detection for references (v0.8.3)
-  - ✅ Deterministic test infrastructure (v0.8.3)
-  - ✅ Multi-message LSP protocol handling (v0.8.3)
-  - ✅ Workspace scanning & method completion (v0.8.3)
+- ✅ **LSP 3.18 Compliance** (~65% of LSP features fully working)
+  - **Text Document Features** (90% complete)
+    - ✅ Diagnostics (push & pull models)
+    - ✅ Completion with 150+ built-ins
+    - ✅ Hover with documentation
+    - ✅ Signature help with parameters
+    - ✅ Go to definition/declaration
+    - ✅ Find references (workspace-wide)
+    - ✅ Document symbols (hierarchical)
+    - ✅ Code actions & quick fixes
+    - ✅ Code lens with reference counts
+    - ✅ Document formatting (Perl::Tidy)
+    - ✅ Range formatting
+    - ✅ On-type formatting
+    - ✅ Rename symbol (cross-file)
+    - ✅ Document links
+    - ✅ Folding ranges
+    - ✅ Selection ranges
+    - ✅ Semantic tokens
+    - ✅ Inlay hints
+    - ✅ Type hierarchy (v0.8.5)
+    - ✅ Call hierarchy
+    - ⛴ Inline completions (planned)
+    - ⛴ Type definition (planned)
+  - **Workspace Features** (70% complete)
+    - ✅ Workspace symbols
+    - ✅ Workspace diagnostics (pull)
+    - ✅ File operations
+    - ✅ Execute command
+    - ✅ Workspace folders
+    - ⛴ Workspace edit
+    - ⛴ Moniker (planned)
+  - **Window Features** (60% complete)
+    - ✅ Progress reporting
+    - ✅ Log messages
+    - ✅ Show message
+    - ⛴ Work done progress
+  - **Notebook Support** (0% - planned)
+    - ⛴ Notebook document sync
+    - ⛴ Notebook cell execution
 - ✅ **Performance optimizations**
   - ✅ AST caching with LRU eviction
   - ✅ Symbol indexing with trie structure
@@ -91,37 +121,46 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
   - ✅ Debian/RPM build scripts ready
   - ✅ VSCode extension v0.6.0 configured
 
-### 🎯 Q2 2025: Official Release & Adoption
-**Goal**: Launch to the Perl community
+### 🎯 Q2 2025: LSP 3.18 Full Compliance & Community Adoption
+**Goal**: Achieve 100% LSP 3.18 compliance and launch to the Perl community
 
-#### Immediate Priority (February–March)
-- [x] **Release Infrastructure** ✅ **COMPLETED**
-  - [x] cargo-dist configuration for automated releases
-  - [x] Multi-platform binary builds (Linux/macOS/Windows, x86_64/aarch64)
-  - [x] SHA256 checksums for all artifacts
-  - [x] GitHub Actions release workflow
-- [x] **CI/CD Pipeline** ✅ **COMPLETED**  
-  - [x] Test matrix across all platforms
-  - [x] Static analysis and code coverage
-  - [x] Benchmark regression detection
-  - [x] Test discovery guard (>100 tests required)
+#### Immediate Priority (August-September) - LSP 3.18 Full Compliance
+- [ ] **LSP 3.18 Remaining Features** (35% to go)
+  - [ ] Notebook Document support (LSP 3.17)
+  - [ ] Inline Completions (LSP 3.18)
+  - [ ] Type Definition Provider
+  - [ ] Inline Values for debugging
+  - [ ] Moniker support for cross-project navigation
+  - [ ] Linked Editing Ranges
+  - [ ] Full Semantic Tokens modifiers
+- [ ] **Parser v3 Enhancements**
+  - [ ] Incremental parsing optimization
+  - [ ] Streaming parser for large files
+  - [ ] Error recovery improvements
+- [ ] **Corpus Expansion**
+  - [ ] Add CPAN top 100 modules test suite
+  - [ ] Property-based testing for edge cases
+  - [ ] Fuzzing harness integration
 - [ ] **Easy Installation** (public) — *in progress*
   - [ ] One-liner installer script with checksums
   - [ ] Homebrew formula for macOS
   - [ ] Public pre-built binaries for all platforms
   - [ ] Smart PATH detection and shell config
   - [x] Internal pre-built binaries for testing
-- [x] **Enhanced Type System** ✅ **COMPLETED**
-  - [x] Smart hash literal type inference
-  - [x] Type unification for collections
-  - [x] Union types for mixed values
-  - [x] Full test coverage
-- [ ] **VSCode Extension v0.6.0**
-  - [ ] Finalize publisher ID and marketplace metadata
-  - [ ] Add icon assets and screenshots
-  - [ ] Set engines.vscode version requirement
-  - [ ] Implement binary download logic per platform
-  - [ ] Publish to marketplace
+- [x] **LSP 3.18 Compliance** ✅ **IN PROGRESS (65% complete)**
+  - [x] Pull Diagnostics support
+  - [x] Type Hierarchy implementation
+  - [x] Typed ServerCapabilities
+  - [x] Enhanced cancellation handling
+  - [ ] Notebook support
+  - [ ] Inline completions
+  - [ ] Type definition provider
+- [ ] **VSCode Extension v0.9.0 (LSP 3.18)**
+  - [ ] Update to LSP 3.18 client
+  - [ ] Add notebook support UI
+  - [ ] Implement inline completions
+  - [ ] Add debugging visualizations
+  - [ ] Publish to marketplace with auto-updates
 - [ ] **Package Managers**
   - [ ] Homebrew formula with SHA256 verification
   - [ ] Debian package (.deb) with GPG signing
@@ -173,39 +212,37 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 **Impact**: Widespread adoption in Perl community
 
-### Q3 2025: v0.9.0 - Advanced Analysis & AI
-**Goal**: Next-generation development experience
+### Q3 2025: v0.9.0 - Full LSP 3.18 Compliance
+**Goal**: 100% LSP 3.18 feature compliance
 
-#### Code Intelligence
-- [ ] **Type Inference Engine**
-  - [ ] Infer variable types from usage
-  - [ ] Track type flow through program
-  - [ ] Warn on type mismatches
-- [ ] **Advanced Static Analysis**
-  - [ ] Taint analysis for security
-  - [ ] Dead code elimination
-  - [ ] Cyclomatic complexity metrics
-  - [ ] Dependency vulnerability scanning
-- [ ] **Smart Refactoring**
-  - [ ] Method extraction with parameter inference
-  - [ ] Safe module splitting
-  - [ ] Legacy pattern modernization
-  - [ ] Automated test generation
-
-#### AI Integration
-- [ ] **MCP Server Implementation**
-  - [ ] Natural language code search
-  - [ ] AI-powered code reviews
-  - [ ] Automated documentation generation
-  - [ ] Smart code completion with context
-- [ ] **GitHub Copilot Integration**
-  - [ ] Context provider for Perl
-  - [ ] Custom completion models
+#### LSP 3.18 Complete Implementation
+- [ ] **Document Synchronization**
+  - [ ] Notebook Document Synchronization
+  - [ ] Incremental text document sync optimization
+  - [ ] Pull-based document sync
+- [ ] **Advanced Language Features**
+  - [ ] Inline Completions provider
+  - [ ] Type Definition provider
+  - [ ] Implementation provider enhancements
+  - [ ] Declaration provider improvements
+- [ ] **Debugging Support**
+  - [ ] Inline Values provider
+  - [ ] Evaluate request handler
+  - [ ] Debug adapter protocol integration
+- [ ] **Cross-Project Features**
+  - [ ] Moniker provider for cross-repo navigation
+  - [ ] Linked Editing Ranges
+  - [ ] Workspace Diagnostics pull model
+- [ ] **Enhanced Semantic Tokens**
+  - [ ] All standard token types
+  - [ ] All standard token modifiers
+  - [ ] Delta semantic tokens
+  - [ ] Range semantic tokens
 
 **Impact**: AI-augmented Perl development
 
-### Q4 2025: v0.10.0 - Perl 7 & Beyond
-**Goal**: Future-proof for next-generation Perl
+### Q4 2025: v0.10.0 - Perl 7 & AI Integration
+**Goal**: Future-proof for next-generation Perl with AI capabilities
 
 #### Modern Perl Support
 - [ ] **Perl 7 Readiness**
@@ -325,7 +362,7 @@ We've built the most comprehensive Perl parsing solution available, **exceeding 
 
 *Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[BENCHMARKS.md](BENCHMARKS.md)** for the corpus, hardware, and exact commands; see **[FEATURE_ROADMAP.md](FEATURE_ROADMAP.md)** for the canonical feature matrix.
 
-<sup>†</sup> *"IDE features" refers to user-visible LSP capabilities surfaced in editors (completion, hover, code actions, formatting, diagnostics, symbols, folding, etc.). Internal or experimental endpoints not exposed in an editor are excluded from the count.*
+<sup>†</sup> *LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See LSP_ACTUAL_STATUS.md for detailed feature matrix.*
 
 ---
 
@@ -377,11 +414,12 @@ workspace/executeCommand: {
 - **v0.7.5** - February 2025 - Release automation, CI/CD, enhanced type inference
 - **v0.8.0** - February 2025 - Production-hardened position helpers
 - **v0.8.2** - February 2025 - Document links, selection ranges, on-type formatting
-- **v0.8.3** - August 2025 - GA: Perl::Critic integration, UTF-16 fallbacks, workspace scanning, method completion
+- **v0.8.3** - August 2025 - Perl::Critic integration, UTF-16 fallbacks, workspace scanning
+- **v0.8.5** - August 2025 - GA: LSP 3.18 partial compliance, pull diagnostics, type hierarchy
 
 ### Upcoming
-- **v0.9.0** - June 2025 - AI integration, advanced analysis
-- **v0.10.0** - September 2025 - Perl 7 support
+- **v0.9.0** - September 2025 - Full LSP 3.18 compliance (100%)
+- **v0.10.0** - October 2025 - Perl 7 support, AI integration
 - **v1.0.0** - January 2026 - Industry standard platform
 
 ---
@@ -398,4 +436,4 @@ workspace/executeCommand: {
 
 *The future of Perl tooling is here. Join us in building it!*
 
-*Last Updated: 2025-08-22*
+*Last Updated: 2025-08-25*
