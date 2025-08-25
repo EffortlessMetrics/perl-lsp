@@ -211,18 +211,18 @@ description = "Inline AI-powered completions"
 id = "lsp.type_definition"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "preview"
+advertised = true
+tests = ["tests/lsp_type_definition_tests.rs"]
 description = "Go to type definition"
 
 [[feature]]
 id = "lsp.implementation"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "experimental"
-advertised = false
-tests = []
+maturity = "preview"
+advertised = true
+tests = ["tests/lsp_implementation_tests.rs"]
 description = "Go to implementation"
 
 [[feature]]

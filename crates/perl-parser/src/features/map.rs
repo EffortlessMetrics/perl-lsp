@@ -3,44 +3,100 @@ use lsp_types::ServerCapabilities;
 /// Extract feature IDs from ServerCapabilities
 pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
     let mut v = Vec::new();
-    
+
     // Text Document Features
-    if c.completion_provider.is_some() { v.push("lsp.completion"); }
-    if c.hover_provider.is_some() { v.push("lsp.hover"); }
-    if c.signature_help_provider.is_some() { v.push("lsp.signature_help"); }
-    if c.definition_provider.is_some() { v.push("lsp.definition"); }
-    if c.type_definition_provider.is_some() { v.push("lsp.type_definition"); }
-    if c.implementation_provider.is_some() { v.push("lsp.implementation"); }
-    if c.references_provider.is_some() { v.push("lsp.references"); }
-    if c.document_highlight_provider.is_some() { v.push("lsp.document_highlight"); }
-    if c.document_symbol_provider.is_some() { v.push("lsp.document_symbol"); }
-    if c.code_action_provider.is_some() { v.push("lsp.code_action"); }
-    if c.code_lens_provider.is_some() { v.push("lsp.code_lens"); }
-    if c.document_link_provider.is_some() { v.push("lsp.document_link"); }
-    if c.color_provider.is_some() { v.push("lsp.color"); }
-    if c.document_formatting_provider.is_some() { v.push("lsp.formatting"); }
-    if c.document_range_formatting_provider.is_some() { v.push("lsp.range_formatting"); }
-    if c.document_on_type_formatting_provider.is_some() { v.push("lsp.on_type_formatting"); }
-    if c.rename_provider.is_some() { v.push("lsp.rename"); }
-    if c.folding_range_provider.is_some() { v.push("lsp.folding_range"); }
-    if c.selection_range_provider.is_some() { v.push("lsp.selection_range"); }
-    if c.linked_editing_range_provider.is_some() { v.push("lsp.linked_editing_range"); }
-    if c.call_hierarchy_provider.is_some() { v.push("lsp.call_hierarchy"); }
-    if c.semantic_tokens_provider.is_some() { v.push("lsp.semantic_tokens"); }
-    if c.moniker_provider.is_some() { v.push("lsp.moniker"); }
+    if c.completion_provider.is_some() {
+        v.push("lsp.completion");
+    }
+    if c.hover_provider.is_some() {
+        v.push("lsp.hover");
+    }
+    if c.signature_help_provider.is_some() {
+        v.push("lsp.signature_help");
+    }
+    if c.definition_provider.is_some() {
+        v.push("lsp.definition");
+    }
+    if c.type_definition_provider.is_some() {
+        v.push("lsp.type_definition");
+    }
+    if c.implementation_provider.is_some() {
+        v.push("lsp.implementation");
+    }
+    if c.references_provider.is_some() {
+        v.push("lsp.references");
+    }
+    if c.document_highlight_provider.is_some() {
+        v.push("lsp.document_highlight");
+    }
+    if c.document_symbol_provider.is_some() {
+        v.push("lsp.document_symbol");
+    }
+    if c.code_action_provider.is_some() {
+        v.push("lsp.code_action");
+    }
+    if c.code_lens_provider.is_some() {
+        v.push("lsp.code_lens");
+    }
+    if c.document_link_provider.is_some() {
+        v.push("lsp.document_link");
+    }
+    if c.color_provider.is_some() {
+        v.push("lsp.color");
+    }
+    if c.document_formatting_provider.is_some() {
+        v.push("lsp.formatting");
+    }
+    if c.document_range_formatting_provider.is_some() {
+        v.push("lsp.range_formatting");
+    }
+    if c.document_on_type_formatting_provider.is_some() {
+        v.push("lsp.on_type_formatting");
+    }
+    if c.rename_provider.is_some() {
+        v.push("lsp.rename");
+    }
+    if c.folding_range_provider.is_some() {
+        v.push("lsp.folding_range");
+    }
+    if c.selection_range_provider.is_some() {
+        v.push("lsp.selection_range");
+    }
+    if c.linked_editing_range_provider.is_some() {
+        v.push("lsp.linked_editing_range");
+    }
+    if c.call_hierarchy_provider.is_some() {
+        v.push("lsp.call_hierarchy");
+    }
+    if c.semantic_tokens_provider.is_some() {
+        v.push("lsp.semantic_tokens");
+    }
+    if c.moniker_provider.is_some() {
+        v.push("lsp.moniker");
+    }
     // Note: type_hierarchy_provider doesn't exist in lsp-types 0.97
     // This would be added in newer versions of lsp-types
-    if c.inline_value_provider.is_some() { v.push("lsp.inline_value"); }
-    if c.inlay_hint_provider.is_some() { v.push("lsp.inlay_hint"); }
-    if c.diagnostic_provider.is_some() { v.push("lsp.pull_diagnostics"); }
-    
+    if c.inline_value_provider.is_some() {
+        v.push("lsp.inline_value");
+    }
+    if c.inlay_hint_provider.is_some() {
+        v.push("lsp.inlay_hint");
+    }
+    if c.diagnostic_provider.is_some() {
+        v.push("lsp.pull_diagnostics");
+    }
+
     // Workspace Features
-    if c.workspace_symbol_provider.is_some() { v.push("lsp.workspace_symbol"); }
-    if c.execute_command_provider.is_some() { v.push("lsp.execute_command"); }
-    
+    if c.workspace_symbol_provider.is_some() {
+        v.push("lsp.workspace_symbol");
+    }
+    if c.execute_command_provider.is_some() {
+        v.push("lsp.execute_command");
+    }
+
     // Note: Some features like workspace edit, file operations etc. are in workspace capabilities
     // which are separate from ServerCapabilities
-    
+
     v.sort();
     v.dedup();
     v
@@ -49,9 +105,9 @@ pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
 /// Build ServerCapabilities from feature catalog
 pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
     use lsp_types::*;
-    
+
     let mut caps = ServerCapabilities::default();
-    
+
     for &feature in features {
         match feature {
             "lsp.completion" => {
@@ -79,7 +135,8 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.definition_provider = Some(OneOf::Left(true));
             }
             "lsp.type_definition" => {
-                caps.type_definition_provider = Some(TypeDefinitionProviderCapability::Simple(true));
+                caps.type_definition_provider =
+                    Some(TypeDefinitionProviderCapability::Simple(true));
             }
             "lsp.implementation" => {
                 caps.implementation_provider = Some(ImplementationProviderCapability::Simple(true));
@@ -106,60 +163,62 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
             }
             "lsp.semantic_tokens" => {
-                caps.semantic_tokens_provider = Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-                    SemanticTokensOptions {
-                        legend: SemanticTokensLegend {
-                            token_types: vec![
-                                SemanticTokenType::NAMESPACE,
-                                SemanticTokenType::TYPE,
-                                SemanticTokenType::CLASS,
-                                SemanticTokenType::ENUM,
-                                SemanticTokenType::INTERFACE,
-                                SemanticTokenType::STRUCT,
-                                SemanticTokenType::TYPE_PARAMETER,
-                                SemanticTokenType::PARAMETER,
-                                SemanticTokenType::VARIABLE,
-                                SemanticTokenType::PROPERTY,
-                                SemanticTokenType::ENUM_MEMBER,
-                                SemanticTokenType::EVENT,
-                                SemanticTokenType::FUNCTION,
-                                SemanticTokenType::METHOD,
-                                SemanticTokenType::MACRO,
-                                SemanticTokenType::KEYWORD,
-                                SemanticTokenType::MODIFIER,
-                                SemanticTokenType::COMMENT,
-                                SemanticTokenType::STRING,
-                                SemanticTokenType::NUMBER,
-                                SemanticTokenType::REGEXP,
-                                SemanticTokenType::OPERATOR,
-                            ],
-                            token_modifiers: vec![
-                                SemanticTokenModifier::DECLARATION,
-                                SemanticTokenModifier::DEFINITION,
-                                SemanticTokenModifier::READONLY,
-                                SemanticTokenModifier::STATIC,
-                                SemanticTokenModifier::DEPRECATED,
-                                SemanticTokenModifier::ABSTRACT,
-                                SemanticTokenModifier::ASYNC,
-                                SemanticTokenModifier::MODIFICATION,
-                                SemanticTokenModifier::DOCUMENTATION,
-                                SemanticTokenModifier::DEFAULT_LIBRARY,
-                            ],
+                caps.semantic_tokens_provider =
+                    Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: vec![
+                                    SemanticTokenType::NAMESPACE,
+                                    SemanticTokenType::TYPE,
+                                    SemanticTokenType::CLASS,
+                                    SemanticTokenType::ENUM,
+                                    SemanticTokenType::INTERFACE,
+                                    SemanticTokenType::STRUCT,
+                                    SemanticTokenType::TYPE_PARAMETER,
+                                    SemanticTokenType::PARAMETER,
+                                    SemanticTokenType::VARIABLE,
+                                    SemanticTokenType::PROPERTY,
+                                    SemanticTokenType::ENUM_MEMBER,
+                                    SemanticTokenType::EVENT,
+                                    SemanticTokenType::FUNCTION,
+                                    SemanticTokenType::METHOD,
+                                    SemanticTokenType::MACRO,
+                                    SemanticTokenType::KEYWORD,
+                                    SemanticTokenType::MODIFIER,
+                                    SemanticTokenType::COMMENT,
+                                    SemanticTokenType::STRING,
+                                    SemanticTokenType::NUMBER,
+                                    SemanticTokenType::REGEXP,
+                                    SemanticTokenType::OPERATOR,
+                                ],
+                                token_modifiers: vec![
+                                    SemanticTokenModifier::DECLARATION,
+                                    SemanticTokenModifier::DEFINITION,
+                                    SemanticTokenModifier::READONLY,
+                                    SemanticTokenModifier::STATIC,
+                                    SemanticTokenModifier::DEPRECATED,
+                                    SemanticTokenModifier::ABSTRACT,
+                                    SemanticTokenModifier::ASYNC,
+                                    SemanticTokenModifier::MODIFICATION,
+                                    SemanticTokenModifier::DOCUMENTATION,
+                                    SemanticTokenModifier::DEFAULT_LIBRARY,
+                                ],
+                            },
+                            ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                ));
+                    ));
             }
             "lsp.inlay_hint" => {
                 caps.inlay_hint_provider = Some(OneOf::Left(true));
             }
             "lsp.pull_diagnostics" => {
-                caps.diagnostic_provider = Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
-                    identifier: Some("perl-parser".to_string()),
-                    inter_file_dependencies: false,
-                    workspace_diagnostics: true,
-                    work_done_progress_options: Default::default(),
-                }));
+                caps.diagnostic_provider =
+                    Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+                        identifier: Some("perl-parser".to_string()),
+                        inter_file_dependencies: false,
+                        workspace_diagnostics: true,
+                        work_done_progress_options: Default::default(),
+                    }));
             }
             "lsp.type_hierarchy" => {
                 // Note: type_hierarchy_provider doesn't exist in lsp-types 0.97
@@ -186,7 +245,8 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 });
             }
             "lsp.selection_range" => {
-                caps.selection_range_provider = Some(SelectionRangeProviderCapability::Simple(true));
+                caps.selection_range_provider =
+                    Some(SelectionRangeProviderCapability::Simple(true));
             }
             "lsp.on_type_formatting" => {
                 caps.document_on_type_formatting_provider = Some(DocumentOnTypeFormattingOptions {
@@ -198,15 +258,13 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
             }
             "lsp.code_lens" => {
-                caps.code_lens_provider = Some(CodeLensOptions {
-                    resolve_provider: Some(false),
-                });
+                caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(false) });
             }
             _ => {
                 // Feature not mapped yet or not a server capability
             }
         }
     }
-    
+
     caps
 }

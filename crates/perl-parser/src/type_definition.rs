@@ -4,7 +4,8 @@
 //! finding the type/class definition for variables and references.
 
 use crate::ast::{Node, NodeKind};
-use serde_json::{Value, json};
+use crate::uri::parse_uri;
+use lsp_types::{LocationLink, Position, Range};
 use std::collections::HashMap;
 
 pub struct TypeDefinitionProvider;
@@ -21,16 +22,19 @@ impl TypeDefinitionProvider {
         line: u32,
         character: u32,
         uri: &str,
-        _documents: &HashMap<String, String>,
-    ) -> Option<Vec<Value>> {
+        documents: &HashMap<String, String>,
+    ) -> Option<Vec<LocationLink>> {
         // Find the node at the given position
         let target_node = self.find_node_at_position(ast, line, character)?;
-        
+
         // Get the type name from the node
         let type_name = self.extract_type_name(&target_node)?;
-        
+
+        // Get source text for position conversion
+        let source_text = documents.get(uri)?;
+
         // Find the package/class definition
-        self.find_package_definition(ast, &type_name, uri)
+        self.find_package_definition(ast, &type_name, uri, source_text)
     }
 
     /// Extract type name from a node
@@ -76,13 +80,11 @@ impl TypeDefinitionProvider {
                 }
             }
             // ISA check: $obj isa Package
-            NodeKind::Binary { op, right, .. } if op == "isa" => {
-                match &right.kind {
-                    NodeKind::String { value, .. } => Some(value.clone()),
-                    NodeKind::Identifier { name } => Some(name.clone()),
-                    _ => None,
-                }
-            }
+            NodeKind::Binary { op, right, .. } if op == "isa" => match &right.kind {
+                NodeKind::String { value, .. } => Some(value.clone()),
+                NodeKind::Identifier { name } => Some(name.clone()),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -115,15 +117,12 @@ impl TypeDefinitionProvider {
         ast: &Node,
         package_name: &str,
         uri: &str,
-    ) -> Option<Vec<Value>> {
+        source_text: &str,
+    ) -> Option<Vec<LocationLink>> {
         let mut locations = Vec::new();
-        self.find_package_in_node(ast, package_name, uri, &mut locations);
-        
-        if !locations.is_empty() {
-            Some(locations)
-        } else {
-            None
-        }
+        self.find_package_in_node(ast, package_name, uri, source_text, &mut locations);
+
+        if !locations.is_empty() { Some(locations) } else { None }
     }
 
     /// Recursively find package definitions
@@ -132,34 +131,40 @@ impl TypeDefinitionProvider {
         node: &Node,
         package_name: &str,
         uri: &str,
-        locations: &mut Vec<Value>,
+        source_text: &str,
+        locations: &mut Vec<LocationLink>,
     ) {
         match &node.kind {
             NodeKind::Package { name, .. } if name == package_name => {
-                // For now, use a dummy range - would need proper offset-to-position conversion
-                locations.push(json!({
-                    "uri": uri,
-                    "range": {
-                        "start": {
-                            "line": 0,
-                            "character": 0,
-                        },
-                        "end": {
-                            "line": 0,
-                            "character": 0,
-                        },
-                    },
-                }));
+                // Convert byte offsets to UTF-16 line/column
+                let (start_line, start_col) =
+                    crate::position::offset_to_utf16_line_col(source_text, node.location.start);
+                let (end_line, end_col) =
+                    crate::position::offset_to_utf16_line_col(source_text, node.location.end);
+
+                // Create typed LocationLink for better UI experience
+                locations.push(LocationLink {
+                    origin_selection_range: None, // Could be filled with the reference range
+                    target_uri: parse_uri(uri),
+                    target_range: Range::new(
+                        Position::new(start_line, start_col),
+                        Position::new(end_line, end_col),
+                    ),
+                    target_selection_range: Range::new(
+                        Position::new(start_line, start_col),
+                        Position::new(end_line, end_col),
+                    ),
+                });
             }
             _ => {}
         }
 
         // Recurse into children based on node type
         self.visit_children(node, |child| {
-            self.find_package_in_node(child, package_name, uri, locations);
+            self.find_package_in_node(child, package_name, uri, source_text, locations);
         });
     }
-    
+
     /// Helper to visit children of a node
     fn visit_children<F>(&self, node: &Node, mut f: F)
     where
@@ -191,8 +196,10 @@ impl TypeDefinitionProvider {
     fn find_node_at_position(&self, node: &Node, _line: u32, _character: u32) -> Option<Node> {
         // Simplified - would need proper offset calculation from line/column
         // For now, just return the first matching node type
-        if matches!(&node.kind, NodeKind::Package { .. } | NodeKind::Identifier { .. } | NodeKind::FunctionCall { .. })
-        {
+        if matches!(
+            &node.kind,
+            NodeKind::Package { .. } | NodeKind::Identifier { .. } | NodeKind::FunctionCall { .. }
+        ) {
             // Check children for more specific match
             let mut result = None;
             self.visit_children(node, |child| {
@@ -202,11 +209,11 @@ impl TypeDefinitionProvider {
                     }
                 }
             });
-            
+
             if result.is_some() {
                 return result;
             }
-            
+
             // No child contains the position, return this node
             return Some(node.clone());
         }
@@ -243,12 +250,12 @@ $obj->method();
 "#;
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
-        
+
         let provider = TypeDefinitionProvider::new();
         let uri = "file:///test.pl";
-        
+
         // Test finding MyClass definition
-        let locations = provider.find_package_definition(&ast, "MyClass", uri);
+        let locations = provider.find_package_definition(&ast, "MyClass", uri, code);
         assert!(locations.is_some());
         let locs = locations.unwrap();
         assert_eq!(locs.len(), 1);
@@ -258,10 +265,10 @@ $obj->method();
     fn test_extract_type_from_constructor() {
         let code = "my $obj = Package::Name->new();";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("Failed to parse");
-        
-        let provider = TypeDefinitionProvider::new();
-        
+        let _ast = parser.parse().expect("Failed to parse");
+
+        let _provider = TypeDefinitionProvider::new();
+
         // Would need to traverse to find the right node
         // This is a simplified test
     }

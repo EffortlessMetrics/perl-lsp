@@ -148,8 +148,8 @@ impl BuildFlags {
             completion: true,
             hover: true,
             definition: true,
-            type_definition: false,  // New feature, not GA yet
-            implementation: false,    // New feature, not GA yet
+            type_definition: false, // New feature, not GA yet
+            implementation: false,  // New feature, not GA yet
             references: true,
             document_symbol: true,
             workspace_symbol: false,
@@ -158,7 +158,7 @@ impl BuildFlags {
             workspace_symbol_resolve: false,
             semantic_tokens: false,
             code_actions: false,
-            execute_command: false,   // New feature, not GA yet
+            execute_command: false, // New feature, not GA yet
             rename: false,
             document_links: false,
             selection_ranges: false,
@@ -198,15 +198,17 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     });
 
     caps.definition_provider = Some(OneOf::Left(true));
-    
+
     if build.type_definition {
-        caps.type_definition_provider = Some(lsp_types::TypeDefinitionProviderCapability::Simple(true));
+        caps.type_definition_provider =
+            Some(lsp_types::TypeDefinitionProviderCapability::Simple(true));
     }
-    
+
     if build.implementation {
-        caps.implementation_provider = Some(lsp_types::ImplementationProviderCapability::Simple(true));
+        caps.implementation_provider =
+            Some(lsp_types::ImplementationProviderCapability::Simple(true));
     }
-    
+
     caps.references_provider = Some(OneOf::Left(true));
     caps.document_symbol_provider = Some(OneOf::Left(true));
     caps.workspace_symbol_provider = Some(OneOf::Left(true));
@@ -296,7 +298,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.code_actions {
         caps.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
     }
-    
+
     if build.execute_command {
         caps.execute_command_provider = Some(ExecuteCommandOptions {
             commands: vec![

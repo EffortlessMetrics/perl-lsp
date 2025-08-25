@@ -13,7 +13,6 @@ use crate::{
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
-    document_store::Document,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
     performance::{AstCache, SymbolIndex},
@@ -25,6 +24,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
 };
+use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -39,6 +39,7 @@ use std::sync::{
 };
 use url::Url;
 
+use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
 
@@ -817,22 +818,22 @@ impl LspServer {
         } else {
             crate::capabilities::BuildFlags::production()
         };
-        
+
         // Set formatting flags based on perltidy availability
         if has_perltidy {
             build_flags.formatting = true;
             build_flags.range_formatting = true;
         }
-        
+
         // Generate capabilities from build flags
         let server_caps = crate::capabilities::capabilities_for(build_flags.clone());
         let mut capabilities = serde_json::to_value(&server_caps).unwrap();
-        
+
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
         capabilities["documentHighlightProvider"] = json!(true);
-        
+
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
             "openClose": true,
@@ -2820,30 +2821,30 @@ impl LspServer {
     /// Handle textDocument/typeDefinition request
     fn handle_type_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         use crate::type_definition::TypeDefinitionProvider;
-        
+
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = TypeDefinitionProvider::new();
-                    
+
                     // Convert documents to HashMap<String, String> for provider
-                    let doc_map: HashMap<String, String> = documents
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.content.clone()))
-                        .collect();
-                    
-                    if let Some(locations) = provider.find_type_definition(ast, line, character, uri, &doc_map) {
+                    let doc_map: HashMap<String, String> =
+                        documents.iter().map(|(k, v)| (k.clone(), v.content.clone())).collect();
+
+                    if let Some(locations) =
+                        provider.find_type_definition(ast, line, character, uri, &doc_map)
+                    {
                         return Ok(Some(json!(locations)));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
@@ -2851,7 +2852,7 @@ impl LspServer {
     fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
@@ -2861,32 +2862,36 @@ impl LspServer {
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Find all implementations (simplified version)
-    fn find_all_implementations(&self, ast: &Node, documents: &HashMap<String, DocumentState>) -> Vec<Value> {
+    fn find_all_implementations(
+        &self,
+        ast: &Node,
+        documents: &HashMap<String, DocumentState>,
+    ) -> Vec<Location> {
         let mut results = Vec::new();
-        
+
         // Find packages in current file and look for their implementations
         let mut packages = Vec::new();
         self.find_packages_in_ast(ast, &mut packages);
-        
+
         for package_name in packages {
             let impls = self.find_subclasses(&package_name, documents);
             results.extend(impls);
         }
-        
+
         results
     }
-    
+
     /// Find all packages in an AST
     fn find_packages_in_ast(&self, node: &Node, packages: &mut Vec<String>) {
         if let NodeKind::Package { name, .. } = &node.kind {
             packages.push(name.clone());
         }
-        
+
         // Traverse based on node type
         match &node.kind {
             NodeKind::Program { statements } => {
@@ -2907,46 +2912,59 @@ impl LspServer {
             _ => {}
         }
     }
-    
+
     /// Find classes that extend a given base class
-    fn find_subclasses(&self, base_class: &str, documents: &HashMap<String, DocumentState>) -> Vec<Value> {
+    fn find_subclasses(
+        &self,
+        base_class: &str,
+        documents: &HashMap<String, DocumentState>,
+    ) -> Vec<Location> {
         let mut results = Vec::new();
-        
+
         for (uri, doc) in documents.iter() {
             if let Some(ref ast) = doc.ast {
                 self.find_subclasses_in_ast(ast, base_class, uri, &mut results);
             }
         }
-        
+
         results
     }
-    
+
     /// Find subclasses in an AST
-    fn find_subclasses_in_ast(&self, node: &Node, base_class: &str, uri: &str, results: &mut Vec<Value>) {
-        match &node.kind {
-            NodeKind::Package { name, .. } => {
-                // Check if this package extends the base class
-                // Look for @ISA assignment or 'use base' or 'use parent'
-                // This would need proper traversal - simplified for now
-                if self.check_inheritance_in_package(node, base_class) {
-                    results.push(json!({
-                        "uri": uri,
-                        "range": {
-                            "start": {
-                                "line": 0,
-                                "character": 0,
-                            },
-                            "end": {
-                                "line": 0,
-                                "character": 0,
-                            }
-                        }
-                    }));
+    fn find_subclasses_in_ast(
+        &self,
+        node: &Node,
+        base_class: &str,
+        uri: &str,
+        results: &mut Vec<Location>,
+    ) {
+        if let NodeKind::Package { name: _name, .. } = &node.kind {
+            // Check if this package extends the base class
+            // Look for @ISA assignment or 'use base' or 'use parent'
+            // This would need proper traversal - simplified for now
+            if self.check_inheritance_in_package(node, base_class) {
+                // Get source text for position conversion
+                let documents = self.documents.lock().unwrap();
+                if let Some(doc) = documents.get(uri) {
+                    let source_text = &doc.content;
+                    // Convert byte offsets to UTF-16 line/column
+                    let (start_line, start_col) =
+                        crate::position::offset_to_utf16_line_col(source_text, node.location.start);
+                    let (end_line, end_col) =
+                        crate::position::offset_to_utf16_line_col(source_text, node.location.end);
+
+                    // Create typed Location
+                    results.push(Location {
+                        uri: parse_uri(uri),
+                        range: lsp_types::Range::new(
+                            lsp_types::Position::new(start_line, start_col),
+                            lsp_types::Position::new(end_line, end_col),
+                        ),
+                    });
                 }
             }
-            _ => {}
         }
-        
+
         // Recurse into children based on node type
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
@@ -2962,15 +2980,14 @@ impl LspServer {
             _ => {}
         }
     }
-    
+
     /// Check if a package inherits from base class (simplified)
     fn check_inheritance_in_package(&self, _node: &Node, _base_class: &str) -> bool {
         // This is a simplified check - would need proper AST traversal
         // to find @ISA assignments and use base/parent statements
         false
     }
-    
-    
+
     /// Find method implementations in subclasses
     fn find_method_implementations(
         &self,
@@ -2979,26 +2996,31 @@ impl LspServer {
         documents: &HashMap<String, DocumentState>,
     ) -> Vec<Value> {
         let mut results = Vec::new();
-        
+
         // First find all subclasses
         let subclasses = self.find_subclasses(base_package, documents);
-        
+
         // Then find the method in each subclass
         for subclass_loc in subclasses {
-            if let Some(uri) = subclass_loc["uri"].as_str() {
-                if let Some(doc) = documents.get(uri) {
-                    if let Some(ref ast) = doc.ast {
-                        self.find_method_in_ast(ast, method_name, uri, &mut results);
-                    }
+            let uri_str = subclass_loc.uri.as_str();
+            if let Some(doc) = documents.get(uri_str) {
+                if let Some(ref ast) = doc.ast {
+                    self.find_method_in_ast(ast, method_name, uri_str, &mut results);
                 }
             }
         }
-        
+
         results
     }
-    
+
     /// Find a specific method in an AST
-    fn find_method_in_ast(&self, node: &Node, method_name: &str, uri: &str, results: &mut Vec<Value>) {
+    fn find_method_in_ast(
+        &self,
+        node: &Node,
+        method_name: &str,
+        uri: &str,
+        results: &mut Vec<Value>,
+    ) {
         // Check for function declarations (simplified - actual AST uses Subroutine)
         if let NodeKind::Subroutine { name: Some(name), .. } = &node.kind {
             if name == method_name {
@@ -3017,7 +3039,7 @@ impl LspServer {
                 }));
             }
         }
-        
+
         // Recurse into children based on node type
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
@@ -3033,7 +3055,6 @@ impl LspServer {
             _ => {}
         }
     }
-    
 
     /// Handle textDocument/references request
     fn handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {

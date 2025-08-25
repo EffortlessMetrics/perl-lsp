@@ -6,14 +6,11 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 /// Stress tests for resource exhaustion and performance limits
 /// Ensures the LSP server handles extreme loads gracefully
-
+///
 /// Get the number of iterations for stress tests from environment
 /// Default: 500 for dev, can be overridden with PERL_LSP_STRESS_ITERS
 fn stress_iterations() -> usize {
-    std::env::var("PERL_LSP_STRESS_ITERS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(500)
+    std::env::var("PERL_LSP_STRESS_ITERS").ok().and_then(|s| s.parse().ok()).unwrap_or(500)
 }
 
 #[test]

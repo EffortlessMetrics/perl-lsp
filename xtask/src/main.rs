@@ -322,10 +322,10 @@ enum Commands {
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
-    
+
     /// Verify features match capabilities
     Verify,
-    
+
     /// Generate compliance report
     Report,
 }
@@ -398,6 +398,6 @@ fn main() -> Result<()> {
             FeaturesCommand::SyncDocs => features::sync_docs(),
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
-        }
+        },
     }
 }
