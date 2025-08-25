@@ -172,6 +172,7 @@ pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
+pub mod type_definition;
 pub mod type_hierarchy;
 pub mod type_inference;
 pub mod workspace_index;

@@ -1,0 +1,53 @@
+---
+source: crates/perl-parser/tests/lsp_features_snapshot_test.rs
+assertion_line: 41
+expression: "&snapshot_data"
+---
+caps:
+  - lsp.code_action
+  - lsp.completion
+  - lsp.definition
+  - lsp.document_highlight
+  - lsp.document_link
+  - lsp.document_symbol
+  - lsp.folding_range
+  - lsp.formatting
+  - lsp.hover
+  - lsp.inlay_hint
+  - lsp.on_type_formatting
+  - lsp.pull_diagnostics
+  - lsp.range_formatting
+  - lsp.references
+  - lsp.rename
+  - lsp.selection_range
+  - lsp.semantic_tokens
+  - lsp.signature_help
+  - lsp.workspace_symbol
+catalog:
+  - lsp.code_action
+  - lsp.completion
+  - lsp.declaration
+  - lsp.definition
+  - lsp.document_link
+  - lsp.document_symbol
+  - lsp.execute_command
+  - lsp.file_operations
+  - lsp.folding_range
+  - lsp.formatting
+  - lsp.hover
+  - lsp.inlay_hint
+  - lsp.log_message
+  - lsp.on_type_formatting
+  - lsp.progress
+  - lsp.pull_diagnostics
+  - lsp.range_formatting
+  - lsp.references
+  - lsp.rename
+  - lsp.selection_range
+  - lsp.semantic_tokens
+  - lsp.show_message
+  - lsp.signature_help
+  - lsp.type_hierarchy
+  - lsp.workspace_diagnostics
+  - lsp.workspace_folders
+  - lsp.workspace_symbol

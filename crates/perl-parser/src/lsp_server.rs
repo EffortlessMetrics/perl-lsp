@@ -13,6 +13,7 @@ use crate::{
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
+    document_store::Document,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
     performance::{AstCache, SymbolIndex},
@@ -573,13 +574,9 @@ impl LspServer {
                 self.handle_semantic_tokens_range(request.params)
             }
             // GA contract: these methods remain unsupported in v0.8.3
-            "textDocument/typeDefinition"
-            | "textDocument/implementation"
-            | "workspace/executeCommand" => Err(JsonRpcError {
-                code: ERR_METHOD_NOT_FOUND,
-                message: format!("Method '{}' not supported in v0.8.3 GA", request.method),
-                data: None,
-            }),
+            "workspace/executeCommand" => self.handle_execute_command(request.params),
+            "textDocument/typeDefinition" => self.handle_type_definition(request.params),
+            "textDocument/implementation" => self.handle_implementation(request.params),
             "textDocument/documentSymbol" => {
                 eprintln!("Processing documentSymbol request");
                 let result = self.handle_document_symbol(request.params);
@@ -814,99 +811,39 @@ impl LspServer {
                 1 // Full document sync
             };
 
-        // Build capabilities based on feature flag and set advertised features
-        let build_flags;
-        let mut capabilities = if cfg!(feature = "lsp-ga-lock") {
-            build_flags = crate::capabilities::BuildFlags::ga_lock();
-            // Conservative GA set for emergency point releases
-            json!({
-                "positionEncoding": "utf-16",
-                "textDocumentSync": {
-                    "openClose": true,
-                    "change": sync_kind,
-                    "willSave": true,
-                    "willSaveWaitUntil": false,
-                    "save": { "includeText": true }
-                },
-                "completionProvider": {
-                    "triggerCharacters": ["$", "@", "%", "->"],
-                    "allCommitCharacters": [";", " ", ")", "]", "}"]
-                },
-                "hoverProvider": true,
-                "definitionProvider": true,
-                "declarationProvider": true,
-                "referencesProvider": true,
-                "documentSymbolProvider": true,
-                "foldingRangeProvider": true
-            })
+        // Build capabilities using catalog-driven approach
+        let mut build_flags = if cfg!(feature = "lsp-ga-lock") {
+            crate::capabilities::BuildFlags::ga_lock()
         } else {
-            build_flags = crate::capabilities::BuildFlags::production();
-            // Full set for main branch - only include a capability after its acceptance tests pass
-            json!({
-                "positionEncoding": "utf-16",
-                "textDocumentSync": {
-                    "openClose": true,
-                    "change": sync_kind,
-                    "willSave": true,
-                    "willSaveWaitUntil": false,
-                    "save": { "includeText": true }
-                },
-                "completionProvider": {
-                    "triggerCharacters": ["$", "@", "%", "->"],
-                    "allCommitCharacters": [";", " ", ")", "]", "}"]
-                },
-                "hoverProvider": true,
-                "definitionProvider": true,
-                "declarationProvider": true,
-                "referencesProvider": true,
-                "documentHighlightProvider": true,
-                "signatureHelpProvider": {
-                    "triggerCharacters": ["(", ","]
-                },
-                "documentSymbolProvider": true,
-                "foldingRangeProvider": true,
-
-                // ✅ Newly proven capabilities
-                "workspaceSymbolProvider": {
-                    "resolveProvider": true
-                },
-                "renameProvider": true,
-                "codeActionProvider": { "codeActionKinds": ["quickfix"] },
-
-                "semanticTokensProvider": {
-                    "legend": {
-                        "tokenTypes": ["namespace","class","function","method","variable","parameter","property","keyword","comment","string","number","regexp","operator","type","macro"],
-                        "tokenModifiers": ["declaration","definition","readonly","defaultLibrary","deprecated","static","async"]
-                    },
-                    "full": true
-                },
-                "inlayHintProvider": { "resolveProvider": false },
-                "documentLinkProvider": { "resolveProvider": false },
-                "selectionRangeProvider": true,
-                "documentOnTypeFormattingProvider": {
-                    "firstTriggerCharacter": "{",
-                    "moreTriggerCharacter": ["}", ";", "\n"]
-                },
-                // Type hierarchy is not implemented - don't advertise
-                // "typeHierarchyProvider": true,
-                "diagnosticProvider": {
-                    "interFileDependencies": false,
-                    "workspaceDiagnostics": true
-                }
-            })
+            crate::capabilities::BuildFlags::production()
         };
-
+        
         // Set formatting flags based on perltidy availability
-        let mut final_build_flags = build_flags;
         if has_perltidy {
-            final_build_flags.formatting = true;
-            final_build_flags.range_formatting = true;
-            capabilities["documentFormattingProvider"] = json!(true);
-            capabilities["documentRangeFormattingProvider"] = json!(true);
+            build_flags.formatting = true;
+            build_flags.range_formatting = true;
         }
+        
+        // Generate capabilities from build flags
+        let server_caps = crate::capabilities::capabilities_for(build_flags.clone());
+        let mut capabilities = serde_json::to_value(&server_caps).unwrap();
+        
+        // Add fields not yet in lsp-types 0.97
+        capabilities["positionEncoding"] = json!("utf-16");
+        capabilities["declarationProvider"] = json!(true);
+        capabilities["documentHighlightProvider"] = json!(true);
+        
+        // Override text document sync with more detailed options
+        capabilities["textDocumentSync"] = json!({
+            "openClose": true,
+            "change": sync_kind,
+            "willSave": true,
+            "willSaveWaitUntil": false,
+            "save": { "includeText": true }
+        });
 
         // Store advertised features for gating
-        *self.advertised_features.lock().unwrap() = final_build_flags.to_advertised_features();
+        *self.advertised_features.lock().unwrap() = build_flags.to_advertised_features();
 
         Ok(Some(json!({
             "capabilities": capabilities,
@@ -2879,6 +2816,224 @@ impl LspServer {
 
         Ok(Some(json!([])))
     }
+
+    /// Handle textDocument/typeDefinition request
+    fn handle_type_definition(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        use crate::type_definition::TypeDefinitionProvider;
+        
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    let provider = TypeDefinitionProvider::new();
+                    
+                    // Convert documents to HashMap<String, String> for provider
+                    let doc_map: HashMap<String, String> = documents
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.content.clone()))
+                        .collect();
+                    
+                    if let Some(locations) = provider.find_type_definition(ast, line, character, uri, &doc_map) {
+                        return Ok(Some(json!(locations)));
+                    }
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/implementation request
+    fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            
+            let documents = self.documents.lock().unwrap();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    // For now, just find all subclasses in the workspace
+                    // A more sophisticated implementation would look at cursor position
+                    return Ok(Some(json!(self.find_all_implementations(ast, &documents))));
+                }
+            }
+        }
+        
+        Ok(Some(json!([])))
+    }
+    
+    /// Find all implementations (simplified version)
+    fn find_all_implementations(&self, ast: &Node, documents: &HashMap<String, DocumentState>) -> Vec<Value> {
+        let mut results = Vec::new();
+        
+        // Find packages in current file and look for their implementations
+        let mut packages = Vec::new();
+        self.find_packages_in_ast(ast, &mut packages);
+        
+        for package_name in packages {
+            let impls = self.find_subclasses(&package_name, documents);
+            results.extend(impls);
+        }
+        
+        results
+    }
+    
+    /// Find all packages in an AST
+    fn find_packages_in_ast(&self, node: &Node, packages: &mut Vec<String>) {
+        if let NodeKind::Package { name, .. } = &node.kind {
+            packages.push(name.clone());
+        }
+        
+        // Traverse based on node type
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    self.find_packages_in_ast(stmt, packages);
+                }
+            }
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.find_packages_in_ast(stmt, packages);
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    self.find_packages_in_ast(b, packages);
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    /// Find classes that extend a given base class
+    fn find_subclasses(&self, base_class: &str, documents: &HashMap<String, DocumentState>) -> Vec<Value> {
+        let mut results = Vec::new();
+        
+        for (uri, doc) in documents.iter() {
+            if let Some(ref ast) = doc.ast {
+                self.find_subclasses_in_ast(ast, base_class, uri, &mut results);
+            }
+        }
+        
+        results
+    }
+    
+    /// Find subclasses in an AST
+    fn find_subclasses_in_ast(&self, node: &Node, base_class: &str, uri: &str, results: &mut Vec<Value>) {
+        match &node.kind {
+            NodeKind::Package { name, .. } => {
+                // Check if this package extends the base class
+                // Look for @ISA assignment or 'use base' or 'use parent'
+                // This would need proper traversal - simplified for now
+                if self.check_inheritance_in_package(node, base_class) {
+                    results.push(json!({
+                        "uri": uri,
+                        "range": {
+                            "start": {
+                                "line": 0,
+                                "character": 0,
+                            },
+                            "end": {
+                                "line": 0,
+                                "character": 0,
+                            }
+                        }
+                    }));
+                }
+            }
+            _ => {}
+        }
+        
+        // Recurse into children based on node type
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.find_subclasses_in_ast(stmt, base_class, uri, results);
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    self.find_subclasses_in_ast(b, base_class, uri, results);
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    /// Check if a package inherits from base class (simplified)
+    fn check_inheritance_in_package(&self, _node: &Node, _base_class: &str) -> bool {
+        // This is a simplified check - would need proper AST traversal
+        // to find @ISA assignments and use base/parent statements
+        false
+    }
+    
+    
+    /// Find method implementations in subclasses
+    fn find_method_implementations(
+        &self,
+        base_package: &str,
+        method_name: &str,
+        documents: &HashMap<String, DocumentState>,
+    ) -> Vec<Value> {
+        let mut results = Vec::new();
+        
+        // First find all subclasses
+        let subclasses = self.find_subclasses(base_package, documents);
+        
+        // Then find the method in each subclass
+        for subclass_loc in subclasses {
+            if let Some(uri) = subclass_loc["uri"].as_str() {
+                if let Some(doc) = documents.get(uri) {
+                    if let Some(ref ast) = doc.ast {
+                        self.find_method_in_ast(ast, method_name, uri, &mut results);
+                    }
+                }
+            }
+        }
+        
+        results
+    }
+    
+    /// Find a specific method in an AST
+    fn find_method_in_ast(&self, node: &Node, method_name: &str, uri: &str, results: &mut Vec<Value>) {
+        // Check for function declarations (simplified - actual AST uses Subroutine)
+        if let NodeKind::Subroutine { name: Some(name), .. } = &node.kind {
+            if name == method_name {
+                results.push(json!({
+                    "uri": uri,
+                    "range": {
+                        "start": {
+                            "line": 0,
+                            "character": 0,
+                        },
+                        "end": {
+                            "line": 0,
+                            "character": 0,
+                        }
+                    }
+                }));
+            }
+        }
+        
+        // Recurse into children based on node type
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.find_method_in_ast(stmt, method_name, uri, results);
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    self.find_method_in_ast(b, method_name, uri, results);
+                }
+            }
+            _ => {}
+        }
+    }
+    
 
     /// Handle textDocument/references request
     fn handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {

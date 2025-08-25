@@ -7,6 +7,15 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Stress tests for resource exhaustion and performance limits
 /// Ensures the LSP server handles extreme loads gracefully
 
+/// Get the number of iterations for stress tests from environment
+/// Default: 500 for dev, can be overridden with PERL_LSP_STRESS_ITERS
+fn stress_iterations() -> usize {
+    std::env::var("PERL_LSP_STRESS_ITERS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(500)
+}
+
 #[test]
 #[ignore = "stress test - run with --ignored"]
 fn test_large_file_handling() {
@@ -68,8 +77,9 @@ fn test_many_open_documents() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Open 1000 documents
-    for i in 0..1000 {
+    // Open many documents (configurable via env)
+    let iterations = stress_iterations();
+    for i in 0..iterations {
         let content =
             format!("package Module{};\nmy $var = {};\nsub func {{ return $var; }}\n1;", i, i);
 

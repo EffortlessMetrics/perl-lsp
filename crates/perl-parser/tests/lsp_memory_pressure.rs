@@ -7,6 +7,15 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Memory pressure and resource exhaustion tests
 /// Tests server behavior under extreme memory conditions
 
+/// Get the scale factor for memory tests from environment
+/// Default: 1 for dev, can be overridden with PERL_LSP_MEMORY_SCALE
+fn memory_scale() -> usize {
+    std::env::var("PERL_LSP_MEMORY_SCALE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1)
+}
+
 #[test]
 #[ignore = "memory pressure test - run with --ignored"]
 fn test_extremely_large_document() {
