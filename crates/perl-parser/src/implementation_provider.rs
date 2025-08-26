@@ -60,7 +60,7 @@ impl ImplementationProvider {
         let mut results = Vec::new();
         
         // Build inheritance index from all documents
-        let hierarchy_provider = TypeHierarchyProvider::new();
+        let _hierarchy_provider = TypeHierarchyProvider::new();
         
         for (uri, content) in documents {
             // Parse document
@@ -372,5 +372,6 @@ impl ImplementationProvider {
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
+    #[allow(dead_code)]
     BlessedType(String),
 }
