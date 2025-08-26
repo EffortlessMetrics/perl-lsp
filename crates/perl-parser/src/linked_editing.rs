@@ -5,7 +5,7 @@ use crate::position::{utf16_line_col_to_offset, offset_to_utf16_line_col};
 const OPEN: &[char] = &['(', '[', '{', '<', '\'', '"'];
 const CLOSE: &[char] = &[')', ']', '}', '>', '\'', '"'];
 
-fn is_pair(a: char, b: char) -> bool {
+fn _is_pair(a: char, b: char) -> bool {
     matches!((a, b),
         ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>')
         | ('\'','\'') | ('"','"')
