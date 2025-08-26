@@ -51,24 +51,17 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
-    // For non-paired, add delimiter back since extract_delimited_content expects it
+    let rest2_owned;
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) {
-            trimmed
-        } else {
-            // Paired delimiter missing, return what we have
-            return (pattern, String::new(), extract_modifiers(rest1));
+        if trimmed.starts_with(delimiter) { 
+            &trimmed[delimiter.len_utf8()..] 
+        } else { 
+            trimmed 
         }
     } else {
-        // For non-paired delimiters, we need to add the delimiter back
-        // since extract_delimited_content expects it to start with delimiter
-        if rest1.is_empty() {
-            rest1
-        } else {
-            // Create a new string with delimiter prepended for proper parsing
-            &format!("{}{}", delimiter, rest1)
-        }
+        rest2_owned = format!("{}{}", delimiter, rest1);
+        &rest2_owned
     };
 
     // Parse second body (replacement)
