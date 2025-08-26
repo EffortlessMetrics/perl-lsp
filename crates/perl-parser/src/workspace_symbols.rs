@@ -85,11 +85,18 @@ impl WorkspaceSymbolsProvider {
         // Extract symbols from the symbol table
         for (name, symbol_list) in &table.symbols {
             for symbol in symbol_list {
+                // Determine the container from the symbol's qualified name
+                let container = symbol
+                    .qualified_name
+                    .rsplitn(2, "::")
+                    .nth(1)
+                    .map(|s| s.to_string());
+
                 symbols.push(SymbolInfo {
                     name: name.clone(),
                     kind: symbol.kind,
                     location: symbol.location,
-                    container: None, // TODO: Track containing package/class
+                    container,
                 });
             }
         }
@@ -367,20 +374,61 @@ sub baz {
         let results = provider.search("foo", &source_map);
         assert_eq!(results.len(), 2); // foo and foobar
         assert_eq!(results[0].name, "foo"); // Exact match first
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
+        assert_eq!(results[1].container_name.as_deref(), Some("MyPackage"));
 
         // Test prefix match
         let results = provider.search("fo", &source_map);
         assert_eq!(results.len(), 2);
+        for res in &results {
+            assert_eq!(res.container_name.as_deref(), Some("MyPackage"));
+        }
 
         // Test contains match
         let results = provider.search("bar", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
 
         // Test fuzzy match
         let results = provider.search("fb", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
+    }
+
+    #[test]
+    fn test_workspace_symbol_container_names() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = r#"
+package Outer;
+sub foo {}
+
+package Outer::Inner;
+sub bar {}
+"#;
+
+        source_map.insert("file:///test2.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        provider.index_document("file:///test2.pl", &ast, source);
+
+        let res = provider.search("foo", &source_map);
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].container_name.as_deref(), Some("Outer"));
+
+        let res = provider.search("bar", &source_map);
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].container_name.as_deref(), Some("Outer::Inner"));
+
+        let res = provider.search("Outer::Inner", &source_map);
+        assert!(res
+            .iter()
+            .any(|s| s.name == "Outer::Inner" && s.container_name.as_deref() == Some("Outer")));
     }
 
     #[test]
