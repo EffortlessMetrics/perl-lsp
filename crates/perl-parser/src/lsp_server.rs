@@ -2863,7 +2863,7 @@ impl LspServer {
     /// Handle textDocument/implementation request
     fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         use crate::implementation_provider::ImplementationProvider;
-        
+
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
@@ -2873,12 +2873,13 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = ImplementationProvider::new(self.workspace_index.clone());
-                    
+
                     // Convert documents to HashMap<String, String> for provider
                     let doc_map: HashMap<String, String> =
                         documents.iter().map(|(k, v)| (k.clone(), v.content.clone())).collect();
-                    
-                    let locations = provider.find_implementations(ast, line, character, uri, &doc_map);
+
+                    let locations =
+                        provider.find_implementations(ast, line, character, uri, &doc_map);
                     return Ok(Some(json!(locations)));
                 }
             }
@@ -3741,14 +3742,14 @@ impl LspServer {
         if let Some(mut action) = params {
             // The action should already have minimal information
             // We now need to compute the actual edits
-            
+
             if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
                 if kind == "quickfix" {
                     // For quickfix actions, compute the workspace edit now
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
                             let documents = self.documents.lock().unwrap();
-                            if let Some(doc) = self.get_document(&documents, uri) {
+                            if let Some(_doc) = self.get_document(&documents, uri) {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
                                     let text = format!("{}\n", pragma);
@@ -3763,7 +3764,7 @@ impl LspServer {
                                             }]
                                         }
                                     });
-                                    
+
                                     if let Some(obj) = action.as_object_mut() {
                                         obj.insert("edit".to_string(), edit);
                                     }
@@ -3773,7 +3774,7 @@ impl LspServer {
                     }
                 }
             }
-            
+
             Ok(Some(action))
         } else {
             Ok(None)
@@ -5108,9 +5109,12 @@ impl LspServer {
     }
 
     /// Handle textDocument/inlineCompletion request
-    fn handle_inline_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_inline_completion(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         use crate::inline_completions::InlineCompletionProvider;
-        
+
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let position = &params["position"];
@@ -5136,27 +5140,28 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let range = &params["range"];
             let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Extract visible scalar variables in the range
                 let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
                 let end_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
-                
+
                 let mut inline_values = Vec::new();
-                
+
                 // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.content.lines().collect();
+                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+                
                 for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
-                    
+
                     // Find scalar variables using regex
-                    let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();
                             let col = m.start();
-                            
+
                             // Create inline value text hint (showing the variable name as placeholder)
                             inline_values.push(json!({
                                 "range": {
@@ -5168,11 +5173,11 @@ impl LspServer {
                         }
                     }
                 }
-                
+
                 return Ok(Some(json!(inline_values)));
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
@@ -5183,15 +5188,17 @@ impl LspServer {
             let position = &params["position"];
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    
+
                     // Find the symbol at the cursor position
                     let current_pkg = crate::declaration::current_package_at(ast, offset);
-                    if let Some(key) = crate::declaration::symbol_at_cursor(ast, offset, current_pkg) {
+                    if let Some(key) =
+                        crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                    {
                         // Generate a stable moniker for the symbol
                         let identifier = format!("{}::{}", key.pkg, key.name).replace("::", ".");
                         let moniker = json!({
@@ -5200,13 +5207,13 @@ impl LspServer {
                             "unique": "project",
                             "kind": "export"
                         });
-                        
+
                         return Ok(Some(json!([moniker])));
                     }
                 }
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
@@ -5214,34 +5221,49 @@ impl LspServer {
     fn handle_document_color(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            
+
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let mut colors = Vec::new();
-                
+
                 // Find hex colors in strings and comments using regex
                 let hex_re = regex::Regex::new(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b").unwrap();
-                
+
                 for (line_num, line) in doc.content.lines().enumerate() {
                     // Check if line is a comment or contains strings
-                    if line.trim_start().starts_with('#') || line.contains('"') || line.contains('\'') {
+                    if line.trim_start().starts_with('#')
+                        || line.contains('"')
+                        || line.contains('\'')
+                    {
                         for cap in hex_re.captures_iter(line) {
                             if let Some(m) = cap.get(0) {
                                 let hex = &m.as_str()[1..]; // Skip the #
                                 let (r, g, b) = if hex.len() == 3 {
                                     // #RGB -> #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
-                                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
-                                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0) as f32 / 255.0;
+                                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)
+                                        .unwrap_or(0)
+                                        as f32
+                                        / 255.0;
+                                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)
+                                        .unwrap_or(0)
+                                        as f32
+                                        / 255.0;
+                                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)
+                                        .unwrap_or(0)
+                                        as f32
+                                        / 255.0;
                                     (r, g, b)
                                 } else {
                                     // #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32 / 255.0;
-                                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32 / 255.0;
-                                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32 / 255.0;
+                                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32
+                                        / 255.0;
+                                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32
+                                        / 255.0;
+                                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32
+                                        / 255.0;
                                     (r, g, b)
                                 };
-                                
+
                                 colors.push(json!({
                                     "range": {
                                         "start": { "line": line_num, "character": m.start() as u32 },
@@ -5258,37 +5280,43 @@ impl LspServer {
                         }
                     }
                 }
-                
+
                 return Ok(Some(json!(colors)));
             }
         }
-        
+
         Ok(Some(json!([])))
     }
 
     /// Handle textDocument/colorPresentation request
-    fn handle_color_presentation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_color_presentation(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let color = &params["color"];
             let r = (color["red"].as_f64().unwrap_or(0.0) * 255.0) as u8;
             let g = (color["green"].as_f64().unwrap_or(0.0) * 255.0) as u8;
             let b = (color["blue"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-            
+
             // Return various color presentations
             let presentations = vec![
                 json!({ "label": format!("#{:02x}{:02x}{:02x}", r, g, b) }),
                 json!({ "label": format!("#{:02X}{:02X}{:02X}", r, g, b) }),
                 json!({ "label": format!("rgb({}, {}, {})", r, g, b) }),
             ];
-            
+
             return Ok(Some(json!(presentations)));
         }
-        
+
         Ok(Some(json!([])))
     }
-    
+
     /// Handle textDocument/linkedEditingRange request
-    fn handle_linked_editing_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_linked_editing_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().unwrap().linked_editing {
             return Err(crate::lsp_errors::method_not_advertised());
@@ -5302,7 +5330,8 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let result = crate::linked_editing::handle_linked_editing(&doc.content, line, character);
+                let result =
+                    crate::linked_editing::handle_linked_editing(&doc.content, line, character);
                 return Ok(Some(serde_json::to_value(result).unwrap_or(Value::Null)));
             }
         }
@@ -7973,7 +8002,6 @@ impl LspServer {
         let ranges = folding_ranges_from_text(&text, 128);
         Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
     }
-
 }
 
 // Helper functions for non-blocking handlers

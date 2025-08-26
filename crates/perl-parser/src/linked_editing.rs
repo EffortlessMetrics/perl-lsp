@@ -1,15 +1,13 @@
 // crates/perl-parser/src/linked_editing.rs
+use crate::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use lsp_types::{LinkedEditingRanges, Position, Range};
-use crate::position::{utf16_line_col_to_offset, offset_to_utf16_line_col};
 
 const OPEN: &[char] = &['(', '[', '{', '<', '\'', '"'];
 const CLOSE: &[char] = &[')', ']', '}', '>', '\'', '"'];
 
+#[allow(dead_code)]
 fn is_pair(a: char, b: char) -> bool {
-    matches!((a, b),
-        ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>')
-        | ('\'','\'') | ('"','"')
-    )
+    matches!((a, b), ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('\'', '\'') | ('"', '"'))
 }
 
 fn char_at(text: &str, byte: usize) -> Option<char> {
@@ -17,9 +15,13 @@ fn char_at(text: &str, byte: usize) -> Option<char> {
 }
 
 fn prev_char_pos(text: &str, mut byte: usize) -> Option<(usize, char)> {
-    if byte == 0 { return None; }
+    if byte == 0 {
+        return None;
+    }
     // step back to the previous char boundary
-    while byte > 0 && !text.is_char_boundary(byte) { byte -= 1; }
+    while byte > 0 && !text.is_char_boundary(byte) {
+        byte -= 1;
+    }
     let prev_start = text[..byte].char_indices().last()?.0;
     Some((prev_start, text[prev_start..].chars().next().unwrap()))
 }
@@ -40,9 +42,13 @@ fn find_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
             let mut i = pos + ch.len_utf8();
             while i < text.len() {
                 if let Some(c) = char_at(text, i) {
-                    if c == ch { return Some((pos, i)); }
+                    if c == ch {
+                        return Some((pos, i));
+                    }
                     i += c.len_utf8();
-                } else { break; }
+                } else {
+                    break;
+                }
             }
             return None;
         } else {
@@ -51,13 +57,19 @@ fn find_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
             let mut i = pos;
             while i < text.len() {
                 if let Some(c) = char_at(text, i) {
-                    if c == ch { depth += 1; }
+                    if c == ch {
+                        depth += 1;
+                    }
                     if c == close {
                         depth -= 1;
-                        if depth == 0 { return Some((pos, i)); }
+                        if depth == 0 {
+                            return Some((pos, i));
+                        }
                     }
                     i += c.len_utf8();
-                } else { break; }
+                } else {
+                    break;
+                }
             }
         }
     } else if let Some(close_idx) = CLOSE.iter().position(|&c| c == ch) {
@@ -70,29 +82,33 @@ fn find_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
         let mut i = pos;
         loop {
             if let Some((j, c)) = prev_char_pos(text, i) {
-                if c == ch { depth += 1; }
+                if c == ch {
+                    depth += 1;
+                }
                 if c == open {
                     depth -= 1;
-                    if depth == 0 { return Some((j, pos)); }
+                    if depth == 0 {
+                        return Some((j, pos));
+                    }
                 }
                 i = j;
-            } else { break; }
+            } else {
+                break;
+            }
         }
     }
     None
 }
 
-pub fn handle_linked_editing(
-    text: &str, line: u32, character: u32
-) -> Option<LinkedEditingRanges> {
+pub fn handle_linked_editing(text: &str, line: u32, character: u32) -> Option<LinkedEditingRanges> {
     let byte = utf16_line_col_to_offset(text, line, character);
     let (a, b) = find_pair(text, byte)?;
     let (a_line, a_char) = offset_to_utf16_line_col(text, a);
     let (b_line, b_char) = offset_to_utf16_line_col(text, b);
 
     let ranges = vec![
-        Range::new(Position::new(a_line, a_char), Position::new(a_line, a_char+1)),
-        Range::new(Position::new(b_line, b_char), Position::new(b_line, b_char+1)),
+        Range::new(Position::new(a_line, a_char), Position::new(a_line, a_char + 1)),
+        Range::new(Position::new(b_line, b_char), Position::new(b_line, b_char + 1)),
     ];
     Some(LinkedEditingRanges { ranges, word_pattern: None })
 }
