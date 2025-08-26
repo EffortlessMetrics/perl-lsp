@@ -20,7 +20,12 @@ fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
     server.handle_request(req);
 }
 
-fn inline_complete(server: &mut LspServer, uri: &str, line: u32, character: u32) -> serde_json::Value {
+fn inline_complete(
+    server: &mut LspServer,
+    uri: &str,
+    line: u32,
+    character: u32,
+) -> serde_json::Value {
     let resp = server
         .handle_request(JsonRpcRequest {
             _jsonrpc: "2.0".into(),
@@ -56,10 +61,8 @@ fn test_inline_completion_after_use() {
     let items = inline_complete(&mut server, uri, 0, 4)["items"].as_array().unwrap().clone();
     assert!(!items.is_empty());
 
-    let suggestions: Vec<String> = items
-        .iter()
-        .map(|i| i["insertText"].as_str().unwrap().to_string())
-        .collect();
+    let suggestions: Vec<String> =
+        items.iter().map(|i| i["insertText"].as_str().unwrap().to_string()).collect();
     assert!(suggestions.contains(&"strict;".to_string()));
     assert!(suggestions.contains(&"warnings;".to_string()));
 }
@@ -97,4 +100,3 @@ fn test_inline_completion_no_suggestions() {
     let items = inline_complete(&mut server, uri, 0, 10)["items"].as_array().unwrap().clone();
     assert!(items.is_empty());
 }
-

@@ -359,10 +359,7 @@ fn verify_features() -> Result<()> {
         for error in &errors {
             println!("  - {}", error);
         }
-        return Err(eyre!(
-            "Feature verification failed with {} errors",
-            errors.len()
-        ));
+        return Err(eyre!("Feature verification failed with {} errors", errors.len()));
     }
 
     if !warnings.is_empty() {
