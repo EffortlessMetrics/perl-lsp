@@ -558,7 +558,7 @@ module.exports = grammar({
           '+=', '-=', '.=',
           '*=', '/=', '%=', 'x=',
           '&=', '|=', '^=',
-          // TODO: Also &.= |.= ^.= when enabled
+          '&.=', '|.=', '^.=',
           '<<=', '>>=',
           '&&=', '||=', '//=',
         ),
@@ -607,7 +607,7 @@ module.exports = grammar({
     unary_expression: $ => choice(
       prec(TERMPREC.UMINUS, unop_pre('-', $._term)),
       prec(TERMPREC.UMINUS, unop_pre('+', $._term)),
-      prec(TERMPREC.UMINUS, unop_pre('~', $._term)), // TODO: also ~. when enabled
+      prec(TERMPREC.UMINUS, unop_pre(choice('~', '~.'), $._term)),
       prec(TERMPREC.UMINUS, unop_pre('!', $._term)),
     ),
     preinc_expression: $ =>
