@@ -217,10 +217,7 @@ impl ScopeAnalyzer {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
                         line: self.get_line_from_node(node, code),
-                        description: format!(
-                            "Bareword '{}' not allowed under 'use strict'",
-                            name
-                        ),
+                        description: format!("Bareword '{}' not allowed under 'use strict'", name),
                     });
                 }
             }
@@ -229,6 +226,13 @@ impl ScopeAnalyzer {
                 let is_hash_access = op == "{}";
                 self.analyze_node(left, scope, issues, code, pragma_map, false);
                 self.analyze_node(right, scope, issues, code, pragma_map, is_hash_access);
+            }
+
+            NodeKind::ArrayLiteral { elements } => {
+                // Handle hash slices like @h{key1, key2} where elements are hash keys
+                for element in elements {
+                    self.analyze_node(element, scope, issues, code, pragma_map, in_hash_subscript);
+                }
             }
 
             NodeKind::Block { statements } => {
