@@ -137,8 +137,10 @@ mod tests {
     #[test]
     fn test_simple_parse() {
         let input = "my $x = 42;";
-        let rust_output = TreeSitterPerlRsWrapper.parse_to_sexp(input).unwrap();
-        let perl_output = PerlParserWrapper.parse_to_sexp(input).unwrap();
+        let rust_parser = TreeSitterPerlRsWrapper;
+        let perl_parser = PerlParserWrapper;
+        let rust_output = rust_parser.parse_to_sexp(input).unwrap();
+        let perl_output = perl_parser.parse_to_sexp(input).unwrap();
         assert_eq!(rust_output, perl_output);
     }
 }
