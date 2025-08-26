@@ -42,6 +42,7 @@
 use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::fs;
 
 pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
@@ -59,21 +60,28 @@ pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>)
         args.push(bench_name);
     }
 
-    // Execute benchmarks
-    let status = cmd("cargo", &args).run().context("Failed to run benchmarks")?;
+    // Execute benchmarks and capture output
+    let result = cmd("cargo", &args)
+        .stderr_to_stdout()
+        .stdout_capture()
+        .run()
+        .context("Failed to run benchmarks")?;
 
-    if status.status.success() {
+    if result.status.success() {
         spinner.finish_with_message("✅ Benchmarks completed");
     } else {
         spinner.finish_with_message("❌ Benchmarks failed");
-        return Err(color_eyre::eyre::eyre!("Benchmarks failed with status: {}", status.status));
+        return Err(color_eyre::eyre::eyre!("Benchmarks failed with status: {}", result.status));
     }
 
     if save {
         spinner.set_message("Saving benchmark results");
 
         if let Some(output_path) = output {
-            // TODO: Implement custom result saving to specified path
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent).context("Failed to create output directory")?;
+            }
+            fs::write(&output_path, &result.stdout).context("Failed to write benchmark results")?;
             spinner.finish_with_message(format!(
                 "✅ Benchmark results saved to {}",
                 output_path.display()
