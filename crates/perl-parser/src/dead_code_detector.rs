@@ -1,9 +1,12 @@
-//! Dead code detection for Perl codebases (stub implementation)
+//! Dead code detection for Perl codebases
 //!
-//! This module identifies unused code including unreachable code and unused symbols.
-//! Currently a stub implementation to demonstrate the architecture.
+//! This module performs a lightweight analysis to locate unused subroutines in
+//! a workspace.  The original version only contained stubs; the implementation
+//! below uses the [`WorkspaceIndex`]'s document store to search for subroutine
+//! definitions that are never called.
 
-use crate::workspace_index::WorkspaceIndex;
+use crate::workspace_index::{fs_path_to_uri, uri_to_fs_path, WorkspaceIndex};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -70,21 +73,81 @@ impl DeadCodeDetector {
         self.entry_points.insert(path);
     }
 
-    /// Analyze a single file for dead code (stub implementation)
-    pub fn analyze_file(&self, _file_path: &Path) -> Result<Vec<DeadCode>, String> {
-        // Stub implementation
-        Ok(vec![])
+    /// Analyze a single file for dead code.
+    ///
+    /// Currently only unused subroutines are detected.  The implementation is
+    /// intentionally conservative and based on simple text matching.
+    pub fn analyze_file(&self, file_path: &Path) -> Result<Vec<DeadCode>, String> {
+        // Try to get file content from the document store first
+        let uri = fs_path_to_uri(file_path).unwrap_or_else(|_| file_path.to_string_lossy().into());
+        let content = if let Some(doc) = self._workspace_index.document_store().get(&uri) {
+            doc.text
+        } else {
+            std::fs::read_to_string(file_path)
+                .map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?
+        };
+
+        let mut results = Vec::new();
+        let sub_re = Regex::new(r"(?m)^sub\s+([A-Za-z_][A-Za-z0-9_]*)").unwrap();
+        for caps in sub_re.captures_iter(&content) {
+            let name = caps[1].to_string();
+            let start_line = content[..caps.get(0).unwrap().start()].lines().count() + 1;
+
+            // Search the entire workspace for calls to this subroutine
+            let call_re = Regex::new(&format!(r"\b{}\s*\(", regex::escape(&name))).unwrap();
+            let mut used = false;
+            for doc in self._workspace_index.document_store().all_documents() {
+                if call_re.is_match(&doc.text) {
+                    used = true;
+                    break;
+                }
+            }
+
+            if !used {
+                results.push(DeadCode {
+                    code_type: DeadCodeType::UnusedSubroutine,
+                    name: Some(name),
+                    file_path: file_path.to_path_buf(),
+                    start_line,
+                    end_line: start_line,
+                    reason: "Subroutine is never used".into(),
+                    confidence: 0.8,
+                    suggestion: Some("Consider removing the subroutine".into()),
+                });
+            }
+        }
+
+        Ok(results)
     }
 
-    /// Analyze entire workspace for dead code (stub implementation)
+    /// Analyze entire workspace for dead code.
     pub fn analyze_workspace(&self) -> DeadCodeAnalysis {
-        // Stub implementation
-        DeadCodeAnalysis {
-            dead_code: vec![],
-            stats: DeadCodeStats::default(),
-            files_analyzed: 0,
-            total_lines: 0,
+        let documents = self._workspace_index.document_store().all_documents();
+        let mut dead_code = Vec::new();
+        let mut stats = DeadCodeStats::default();
+        let mut total_lines = 0;
+
+        for doc in &documents {
+            total_lines += doc.text.lines().count();
+            if let Some(path) = uri_to_fs_path(&doc.uri) {
+                match self.analyze_file(&path) {
+                    Ok(mut dc) => {
+                        stats.unused_subroutines += dc
+                            .iter()
+                            .filter(|d| d.code_type == DeadCodeType::UnusedSubroutine)
+                            .count();
+                        for item in &dc {
+                            stats.total_dead_lines +=
+                                item.end_line.saturating_sub(item.start_line) + 1;
+                        }
+                        dead_code.append(&mut dc);
+                    }
+                    Err(_) => {}
+                }
+            }
         }
+
+        DeadCodeAnalysis { dead_code, stats, files_analyzed: documents.len(), total_lines }
     }
 }
 
