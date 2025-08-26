@@ -399,20 +399,15 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
             return full_reparse(state);
         }
 
-        // Find reparse window
-        let window = find_reparse_window(state, edit)?;
-
-        // If window is too large (>20% of doc), fall back to full parse
-        if window.end - window.start > state.source.len() / 5 {
-            apply_single_edit(state, edit)?;
-            return full_reparse(state);
-        }
-
         // Apply the edit with incremental lexing
-        apply_single_edit(state, edit)?;
-        let reparsed_bytes = window.end - window.start;
+        let reparsed_range = apply_single_edit(state, edit)?;
+        let reparsed_bytes = reparsed_range.end - reparsed_range.start;
+
+        // If reparsed too much (>20% of doc), might need full parse in future
+        // But for now, trust the incremental result
+
         Ok(ReparseResult {
-            changed_ranges: vec![window],
+            changed_ranges: vec![reparsed_range],
             diagnostics: vec![],
             reparsed_bytes,
         })
@@ -462,12 +457,14 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
         state.tokens.iter().position(|t| t.start >= checkpoint.byte).unwrap_or(state.tokens.len());
 
     let mut new_tokens = Vec::new();
+    let mut last_token_end = checkpoint.byte;
     loop {
         match lexer.next_token() {
             Some(token) => {
                 if token.token_type == TokenType::EOF {
                     break;
                 }
+                last_token_end = token.end;
                 new_tokens.push(token);
             }
             None => break,
@@ -480,26 +477,8 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     state.lex_checkpoints =
         IncrementalState::create_lex_checkpoints(&state.tokens, &state.line_index);
 
-    Ok(checkpoint.byte..state.source.len())
-}
-
-/// Find the window to reparse
-fn find_reparse_window(state: &IncrementalState, edit: &Edit) -> Result<Range<usize>> {
-    // Find safe boundaries around the edit
-    let start_checkpoint = state
-        .find_lex_checkpoint(edit.start_byte)
-        .ok_or_else(|| anyhow::anyhow!("No start checkpoint"))?;
-
-    // Find next safe boundary after edit
-    let end_byte = edit.new_end_byte;
-    let end_checkpoint = state
-        .lex_checkpoints
-        .iter()
-        .find(|cp| cp.byte > end_byte)
-        .map(|cp| cp.byte)
-        .unwrap_or(state.source.len());
-
-    Ok(start_checkpoint.byte..end_checkpoint)
+    // Return the actual reparsed range (from checkpoint to end of last new token)
+    Ok(checkpoint.byte..last_token_end)
 }
 
 /// Full document reparse fallback
