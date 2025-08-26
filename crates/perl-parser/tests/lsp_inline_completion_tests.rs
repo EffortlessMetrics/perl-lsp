@@ -3,77 +3,61 @@
 use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
-#[test]
-fn test_inline_completion_after_arrow() {
-    let mut server = LspServer::new();
-
-    // Open a document
-    let uri = "file:///test.pl";
-    server
-        .did_open(json!({
+fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
             "textDocument": {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $obj = Package->"
+                "text": text,
             }
-        }))
-        .unwrap();
+        })),
+    };
+    server.handle_request(request);
+}
 
-    // Request inline completions after ->
+fn inline_completion(
+    server: &mut LspServer,
+    uri: &str,
+    line: u32,
+    character: u32,
+) -> serde_json::Value {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: None,
+        id: Some(json!(1)),
         method: "textDocument/inlineCompletion".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 0, "character": 19 }
+            "position": { "line": line, "character": character }
         })),
     };
-    let response = server.handle_request(request).unwrap();
-    assert!(response.result.is_some());
-    let items = response.result.unwrap();
-    assert!(items.get("items").is_some());
-    let items = items["items"].as_array().unwrap();
-    assert!(!items.is_empty());
+    let response = server.handle_request(request).expect("inline completion response");
+    response.result.expect("result field present")
+}
 
-    // Should suggest new()
-    let first = &items[0];
-    assert_eq!(first["insertText"].as_str().unwrap(), "new()");
+#[test]
+fn test_inline_completion_after_arrow() {
+    let mut server = LspServer::new();
+    let uri = "file:///test.pl";
+    open_doc(&mut server, uri, "my $obj = Package->");
+    let result = inline_completion(&mut server, uri, 0, 19);
+    let items = result["items"].as_array().expect("items array");
+    assert!(!items.is_empty());
+    assert_eq!(items[0]["insertText"].as_str().unwrap(), "new()");
 }
 
 #[test]
 fn test_inline_completion_after_use() {
     let mut server = LspServer::new();
-
     let uri = "file:///test.pl";
-    server
-        .did_open(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": "use "
-            }
-        }))
-        .unwrap();
-
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: None,
-        method: "textDocument/inlineCompletion".into(),
-        params: Some(json!({
-            "textDocument": { "uri": uri },
-            "position": { "line": 0, "character": 4 }
-        })),
-    };
-    let response = server.handle_request(request).unwrap();
-    assert!(response.result.is_some());
-    let items = response.result.unwrap();
-    let items = items["items"].as_array().unwrap();
+    open_doc(&mut server, uri, "use ");
+    let result = inline_completion(&mut server, uri, 0, 4);
+    let items = result["items"].as_array().expect("items array");
     assert!(!items.is_empty());
-
-    // Should include strict and warnings
     let suggestions: Vec<String> =
         items.iter().map(|i| i["insertText"].as_str().unwrap().to_string()).collect();
     assert!(suggestions.contains(&"strict;".to_string()));
@@ -83,104 +67,31 @@ fn test_inline_completion_after_use() {
 #[test]
 fn test_inline_completion_shebang() {
     let mut server = LspServer::new();
-
     let uri = "file:///test.pl";
-    server
-        .did_open(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": "#!"
-            }
-        }))
-        .unwrap();
-
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: None,
-        method: "textDocument/inlineCompletion".into(),
-        params: Some(json!({
-            "textDocument": { "uri": uri },
-            "position": { "line": 0, "character": 2 }
-        })),
-    };
-    let response = server.handle_request(request).unwrap();
-    assert!(response.result.is_some());
-    let items = response.result.unwrap();
-    let items = items["items"].as_array().unwrap();
+    open_doc(&mut server, uri, "#!");
+    let result = inline_completion(&mut server, uri, 0, 2);
+    let items = result["items"].as_array().expect("items array");
     assert!(!items.is_empty());
-
-    // Should suggest shebang
-    let first = &items[0];
-    assert_eq!(first["insertText"].as_str().unwrap(), "/usr/bin/env perl");
+    assert_eq!(items[0]["insertText"].as_str().unwrap(), "/usr/bin/env perl");
 }
 
 #[test]
 fn test_inline_completion_sub_body() {
     let mut server = LspServer::new();
-
     let uri = "file:///test.pl";
-    server
-        .did_open(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": "sub test "
-            }
-        }))
-        .unwrap();
-
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: None,
-        method: "textDocument/inlineCompletion".into(),
-        params: Some(json!({
-            "textDocument": { "uri": uri },
-            "position": { "line": 0, "character": 9 }
-        })),
-    };
-    let response = server.handle_request(request).unwrap();
-    assert!(response.result.is_some());
-    let items = response.result.unwrap();
-    let items = items["items"].as_array().unwrap();
+    open_doc(&mut server, uri, "sub test ");
+    let result = inline_completion(&mut server, uri, 0, 9);
+    let items = result["items"].as_array().expect("items array");
     assert!(!items.is_empty());
-
-    // Should suggest opening brace
-    let first = &items[0];
-    assert!(first["insertText"].as_str().unwrap().contains("{"));
+    assert!(items[0]["insertText"].as_str().unwrap().contains("{"));
 }
 
 #[test]
 fn test_inline_completion_no_suggestions() {
     let mut server = LspServer::new();
-
     let uri = "file:///test.pl";
-    server
-        .did_open(json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": "perl",
-                "version": 1,
-                "text": "my $x = 42;"
-            }
-        }))
-        .unwrap();
-
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: None,
-        method: "textDocument/inlineCompletion".into(),
-        params: Some(json!({
-            "textDocument": { "uri": uri },
-            "position": { "line": 0, "character": 10 }
-        })),
-    };
-    let response = server.handle_request(request).unwrap();
-    assert!(response.result.is_some());
-    let items = response.result.unwrap();
-    let items = items["items"].as_array().unwrap();
-    // Should have no suggestions in middle of statement
+    open_doc(&mut server, uri, "my $x = 42;");
+    let result = inline_completion(&mut server, uri, 0, 10);
+    let items = result["items"].as_array().expect("items array");
     assert!(items.is_empty());
 }

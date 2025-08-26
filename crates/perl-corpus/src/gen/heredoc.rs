@@ -32,14 +32,13 @@ fn safe_content(lines: Vec<String>, terminator: &str) -> Vec<String> {
 pub fn heredoc_content() -> impl Strategy<Value = Vec<String>> {
     prop::collection::vec(
         prop_oneof![
-            "Line of text",
-            "  Indented line",
-            "\tTabbed line",
-            "$var interpolation",
-            "@array interpolation",
-            "Plain text with spaces",
-        ]
-        .prop_map(|s| s.to_string()),
+            Just("Line of text".to_string()),
+            Just("  Indented line".to_string()),
+            Just("\tTabbed line".to_string()),
+            Just("$var interpolation".to_string()),
+            Just("@array interpolation".to_string()),
+            Just("Plain text with spaces".to_string()),
+        ],
         1..5,
     )
 }
@@ -76,19 +75,21 @@ pub fn quoted_heredoc() -> impl Strategy<Value = String> {
 
 /// Generate indented heredoc (Perl 5.26+)
 pub fn indented_heredoc() -> impl Strategy<Value = String> {
-    (heredoc_id(), heredoc_content(), "[ \\t]{0,4}").prop_map(|(id, lines, indent)| {
-        let safe_lines = safe_content(lines, &id);
-        let mut result = format!("my $x = <<~{};\n", id);
-        for line in safe_lines {
+    (heredoc_id(), heredoc_content(), prop::string::string_regex("[ \t]{0,4}").unwrap()).prop_map(
+        |(id, lines, indent)| {
+            let safe_lines = safe_content(lines, &id);
+            let mut result = format!("my $x = <<~{};\n", id);
+            for line in safe_lines {
+                result.push_str(&indent);
+                result.push_str(&line);
+                result.push('\n');
+            }
             result.push_str(&indent);
-            result.push_str(&line);
+            result.push_str(&id);
             result.push('\n');
-        }
-        result.push_str(&indent);
-        result.push_str(&id);
-        result.push('\n');
-        result
-    })
+            result
+        },
+    )
 }
 
 /// Generate backtick heredoc (command execution)

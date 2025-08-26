@@ -5156,11 +5156,12 @@ impl LspServer {
 
                 // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.content.lines().collect();
+                // Move regex construction outside loop
+                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
                 for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
 
                     // Find scalar variables using regex
-                    let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();

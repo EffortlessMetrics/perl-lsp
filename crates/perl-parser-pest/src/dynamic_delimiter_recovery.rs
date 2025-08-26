@@ -125,7 +125,7 @@ impl DynamicDelimiterRecovery {
 
             RecoveryMode::BestGuess => {
                 // Try various heuristics
-                if let Some(delimiter) = self.try_resolve_variable(expression, context) {
+                if let Some(delimiter) = self.resolve_variable_value(expression, context) {
                     analysis.delimiter = Some(delimiter.value.clone());
                     analysis.confidence = delimiter.confidence;
                     analysis.recovery_strategy = format!("Resolved via {:?}", delimiter.source);
@@ -173,21 +173,82 @@ impl DynamicDelimiterRecovery {
         analysis
     }
 
-    /// Try to resolve a variable to its value
-    fn try_resolve_variable(&self, expr: &str, _context: &ParseContext) -> Option<&PossibleValue> {
-        // Simple case: just a variable like $delimiter
-        if let Some(var_name) = expr.strip_prefix("$") {
-            if let Some(values) = self.variable_values.get(var_name) {
-                // Return highest confidence value
-                return values
-                    .iter()
-                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap());
+    /// Resolve an expression to a possible delimiter value
+    fn resolve_variable_value(&self, expr: &str, _context: &ParseContext) -> Option<PossibleValue> {
+        let trimmed = expr.trim();
+
+        // Try simple variable resolution first (before stripping parentheses)
+        if let Some(result) = self.try_resolve_simple_variable(trimmed) {
+            return Some(result);
+        }
+
+        // Strip outer parentheses if present and try again
+        if trimmed.starts_with('(') && trimmed.ends_with(')') {
+            let inner = trimmed[1..trimmed.len() - 1].trim();
+
+            // Try simple variable resolution on inner content
+            if let Some(result) = self.try_resolve_simple_variable(inner) {
+                return Some(result);
+            }
+
+            // Try concatenation: $var . "END"
+            if let Some((left, right)) = inner.split_once('.') {
+                let left_val = self.resolve_variable_value(left.trim(), _context);
+                if let Some(mut base) = left_val {
+                    let right_trim = right.trim();
+                    let literal = self.extract_string_literal(right_trim);
+                    if let Some(lit) = literal {
+                        base.value.push_str(&lit);
+                        base.source = ValueSource::Concatenation;
+                        base.confidence *= 0.9; // Slightly reduced confidence
+                        return Some(base);
+                    }
+                }
             }
         }
 
-        // TODO: Handle more complex expressions like ${var} or $var . "END"
+        // Try concatenation without parentheses: $var . "END"
+        if let Some((left, right)) = trimmed.split_once('.') {
+            let left_val = self.resolve_variable_value(left.trim(), _context);
+            if let Some(mut base) = left_val {
+                let right_trim = right.trim();
+                let literal = self.extract_string_literal(right_trim);
+                if let Some(lit) = literal {
+                    base.value.push_str(&lit);
+                    base.source = ValueSource::Concatenation;
+                    base.confidence *= 0.9; // Slightly reduced confidence
+                    return Some(base);
+                }
+            }
+        }
 
         None
+    }
+
+    /// Try to resolve a simple variable reference ($var or ${var})
+    fn try_resolve_simple_variable(&self, expr: &str) -> Option<PossibleValue> {
+        // Extract variable name from ${var} or $var
+        // Check braced pattern first to avoid false positives
+        let var_name = if expr.starts_with("${") && expr.ends_with('}') {
+            &expr[2..expr.len() - 1]
+        } else if let Some(name) = expr.strip_prefix('$') {
+            name
+        } else {
+            return None;
+        };
+
+        // Look up and return the highest confidence value
+        self.variable_values.get(var_name).and_then(|values| {
+            values.iter().max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap()).cloned()
+        })
+    }
+
+    /// Extract string literal from quoted string
+    fn extract_string_literal(&self, s: &str) -> Option<String> {
+        s.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .or_else(|| s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+            .map(|s| s.to_string())
     }
 
     /// Guess common delimiters based on context
@@ -309,5 +370,57 @@ EOF
         let analysis = recovery.analyze_dynamic_delimiter("$foo", &context);
         assert!(analysis.delimiter.is_none());
         assert!(!analysis.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_braced_variable() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        recovery.variable_values.insert(
+            "var".to_string(),
+            vec![PossibleValue {
+                value: "END".to_string(),
+                confidence: 1.0,
+                source: ValueSource::Literal,
+            }],
+        );
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        let result = recovery.resolve_variable_value("${var}", &context);
+        assert!(result.is_some(), "Should resolve braced variable ${{var}}");
+        assert_eq!(result.unwrap().value, "END");
+    }
+
+    #[test]
+    fn test_resolve_concatenation() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        recovery.variable_values.insert(
+            "base".to_string(),
+            vec![PossibleValue {
+                value: "E".to_string(),
+                confidence: 0.8,
+                source: ValueSource::Literal,
+            }],
+        );
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        // Test without parentheses
+        let result = recovery.resolve_variable_value("$base . \"ND\"", &context);
+        assert!(result.is_some(), "Should resolve concatenation without parentheses");
+        assert_eq!(result.unwrap().value, "END");
+
+        // Test with parentheses (as used in heredoc syntax)
+        let result_with_parens = recovery.resolve_variable_value("($base . \"ND\")", &context);
+        assert!(result_with_parens.is_some(), "Should resolve concatenation with parentheses");
+        assert_eq!(result_with_parens.unwrap().value, "END");
     }
 }

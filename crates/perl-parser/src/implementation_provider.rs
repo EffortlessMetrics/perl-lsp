@@ -29,7 +29,8 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         // Find the node at position
-        let target_node = match self.find_node_at_position(ast, line, character, documents.get(uri)) {
+        let target_node = match self.find_node_at_position(ast, line, character, documents.get(uri))
+        {
             Some(node) => node,
             None => return Vec::new(),
         };
@@ -53,7 +54,7 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
-        
+
         for (uri, content) in documents {
             // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
@@ -105,7 +106,12 @@ impl ImplementationProvider {
         for subclass_link in &subclasses {
             if let Some(doc_content) = documents.get(subclass_link.target_uri.as_str()) {
                 if let Ok(ast) = crate::Parser::new(doc_content).parse() {
-                    self.find_method_in_ast(&ast, method, subclass_link.target_uri.as_str(), &mut results);
+                    self.find_method_in_ast(
+                        &ast,
+                        method,
+                        subclass_link.target_uri.as_str(),
+                        &mut results,
+                    );
                 }
             }
         }
@@ -122,7 +128,13 @@ impl ImplementationProvider {
         results: &mut Vec<LocationLink>,
     ) {
         let mut current_package = String::new();
-        self.find_inheriting_packages_recursive(node, base_package, uri, &mut current_package, results);
+        self.find_inheriting_packages_recursive(
+            node,
+            base_package,
+            uri,
+            &mut current_package,
+            results,
+        );
     }
 
     fn find_inheriting_packages_recursive(
@@ -173,7 +185,13 @@ impl ImplementationProvider {
             }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.find_inheriting_packages_recursive(stmt, base_package, uri, current_package, results);
+                    self.find_inheriting_packages_recursive(
+                        stmt,
+                        base_package,
+                        uri,
+                        current_package,
+                        results,
+                    );
                 }
             }
             _ => {}
@@ -226,9 +244,7 @@ impl ImplementationProvider {
                         method: parts[1].to_string(),
                     })
                 } else if parts.len() > 2 {
-                    Some(ImplementationTarget::Package(
-                        parts[..parts.len() - 1].join("::")
-                    ))
+                    Some(ImplementationTarget::Package(parts[..parts.len() - 1].join("::")))
                 } else {
                     None
                 }
@@ -246,9 +262,9 @@ impl ImplementationProvider {
         source: Option<&String>,
     ) -> Option<Node> {
         if let Some(src) = source {
-            let (start_line, start_col) = 
+            let (start_line, start_col) =
                 crate::position::offset_to_utf16_line_col(src, node.location.start);
-            let (end_line, end_col) = 
+            let (end_line, end_col) =
                 crate::position::offset_to_utf16_line_col(src, node.location.end);
 
             if line >= start_line && line <= end_line {
@@ -260,7 +276,9 @@ impl ImplementationProvider {
                     match &node.kind {
                         NodeKind::Program { statements } | NodeKind::Block { statements } => {
                             for stmt in statements {
-                                if let Some(child) = self.find_node_at_position(stmt, line, character, source) {
+                                if let Some(child) =
+                                    self.find_node_at_position(stmt, line, character, source)
+                                {
                                     return Some(child);
                                 }
                             }
@@ -276,10 +294,7 @@ impl ImplementationProvider {
 
     /// Convert node to LSP range
     fn node_to_range(&self, _node: &Node) -> Range {
-        Range {
-            start: Position { line: 0, character: 0 },
-            end: Position { line: 0, character: 0 },
-        }
+        Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } }
     }
 
     /// Extract parent name from use statement argument (not needed anymore)

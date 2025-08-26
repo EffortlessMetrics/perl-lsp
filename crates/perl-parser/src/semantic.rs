@@ -568,8 +568,7 @@ impl<'a> SemanticAnalyzer<'a> {
                 });
             }
 
-            NodeKind::Regex { pattern: _, modifiers: _ }
-            | NodeKind::Match { pattern: _, modifiers: _, .. } => {
+            NodeKind::Regex { .. } | NodeKind::Match { .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Regex,

@@ -109,10 +109,10 @@ fn test_experimental_features_enabled() {
     // When experimental features are enabled, additional capabilities appear
     let mut harness = LspHarness::new();
     let init_result = harness.initialize(None).unwrap();
-    let caps: ServerCapabilities =
+    let _caps: ServerCapabilities =
         serde_json::from_value(init_result["capabilities"].clone()).unwrap();
 
     // Check experimental features are present
     // (This would be filled in when experimental features are added)
-    assert!(true, "Placeholder for experimental feature checks");
+    // For now, just verify initialization worked
 }
