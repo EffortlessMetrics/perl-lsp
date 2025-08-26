@@ -104,14 +104,14 @@ impl IncrementalState {
         }
 
         // Create initial checkpoints
-        let lex_checkpoints = Self::create_lex_checkpoints(&tokens);
+        let lex_checkpoints = Self::create_lex_checkpoints(&tokens, &line_index);
         let parse_checkpoints = Self::create_parse_checkpoints(&ast);
 
         Self { rope, line_index, lex_checkpoints, parse_checkpoints, ast, tokens, source }
     }
 
     /// Create lexer checkpoints at safe boundaries
-    fn create_lex_checkpoints(tokens: &[Token]) -> Vec<LexCheckpoint> {
+    fn create_lex_checkpoints(tokens: &[Token], line_index: &LineIndex) -> Vec<LexCheckpoint> {
         let mut checkpoints =
             vec![LexCheckpoint { byte: 0, mode: LexerMode::ExpectTerm, line: 0, column: 0 }];
 
@@ -122,20 +122,22 @@ impl IncrementalState {
             mode = match token.token_type {
                 TokenType::Semicolon | TokenType::LeftBrace | TokenType::RightBrace => {
                     // Safe boundary - reset to ExpectTerm
+                    let (line, column) = line_index.byte_to_position(token.end);
                     checkpoints.push(LexCheckpoint {
                         byte: token.end,
                         mode: LexerMode::ExpectTerm,
-                        line: 0, // TODO: Calculate line/column from byte position
-                        column: 0,
+                        line,
+                        column,
                     });
                     LexerMode::ExpectTerm
                 }
                 TokenType::Keyword(ref kw) if kw.as_ref() == "sub" || kw.as_ref() == "package" => {
+                    let (line, column) = line_index.byte_to_position(token.start);
                     checkpoints.push(LexCheckpoint {
                         byte: token.start,
                         mode: LexerMode::ExpectTerm, // ExpectIdentifier not available
-                        line: 0,                     // TODO: Calculate line/column
-                        column: 0,
+                        line,
+                        column,
                     });
                     LexerMode::ExpectTerm // ExpectIdentifier not available
                 }
@@ -402,12 +404,6 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
         // Find reparse window
         let window = find_reparse_window(state, edit)?;
 
-        // If window is too large (>20% of doc), fall back to full parse
-        if window.end - window.start > state.source.len() / 5 {
-            apply_single_edit(state, edit)?;
-            return full_reparse(state);
-        }
-
         // Apply the edit to the source
         let mut new_source = String::with_capacity(
             state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
@@ -416,18 +412,47 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
         new_source.push_str(&edit.new_text);
         new_source.push_str(&state.source[edit.old_end_byte..]);
 
-        // Re-lex the window
-        let _window_text = &new_source[window.clone()];
-        let _checkpoint = state
-            .find_lex_checkpoint(window.start)
-            .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
+        // Re-lex entire source using real lexer
+        let mut lexer = PerlLexer::new(&new_source);
+        let mut tokens = Vec::new();
+        loop {
+            match lexer.next_token() {
+                Some(token) => {
+                    if token.token_type == TokenType::EOF {
+                        break;
+                    }
+                    tokens.push(token);
+                }
+                None => break,
+            }
+        }
 
-        // For now, fall back to full reparse
-        // TODO: Implement actual incremental lexing and parsing
+        // Parse entire source using real parser
+        let mut parser = Parser::new(&new_source);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => Node::new(
+                NodeKind::Error { message: e.to_string() },
+                SourceLocation { start: 0, end: new_source.len() },
+            ),
+        };
+
+        // Update state
         state.source = new_source;
         state.rope = Rope::from_str(&state.source);
         state.line_index = LineIndex::new(&state.source);
-        full_reparse(state)
+        state.tokens = tokens;
+        state.ast = ast;
+        state.lex_checkpoints =
+            IncrementalState::create_lex_checkpoints(&state.tokens, &state.line_index);
+        state.parse_checkpoints = IncrementalState::create_parse_checkpoints(&state.ast);
+
+        let reparsed_len = window.end - window.start;
+        Ok(ReparseResult {
+            changed_ranges: vec![window],
+            diagnostics: vec![],
+            reparsed_bytes: reparsed_len,
+        })
     } else {
         // Multiple edits - apply them in sequence
         for edit in sorted_edits {
@@ -501,7 +526,7 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     state.line_index = LineIndex::new(&state.source);
 
     // Rebuild checkpoints
-    state.lex_checkpoints = IncrementalState::create_lex_checkpoints(&state.tokens);
+    state.lex_checkpoints = IncrementalState::create_lex_checkpoints(&state.tokens, &state.line_index);
     state.parse_checkpoints = IncrementalState::create_parse_checkpoints(&state.ast);
 
     // No diagnostics for now, will be handled by the LSP server

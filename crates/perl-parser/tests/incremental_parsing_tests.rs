@@ -1,6 +1,7 @@
 #![cfg(feature = "incremental")]
 
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
+use perl_parser::NodeKind;
 
 #[test]
 fn test_incremental_state_creation() {
@@ -69,6 +70,42 @@ fn test_checkpoint_creation() {
     let bar_pos = state.source.find("sub bar").unwrap();
     let checkpoint = state.find_lex_checkpoint(bar_pos);
     assert!(checkpoint.is_some());
+}
+
+#[test]
+fn test_checkpoint_line_columns() {
+    let source = "my $x = 1;\nmy $y = 2;".to_string();
+    let state = IncrementalState::new(source);
+
+    // Checkpoint after first semicolon
+    let cp1 = state.lex_checkpoints.iter().find(|cp| cp.byte == 10).unwrap();
+    assert_eq!(cp1.line, 0);
+    assert_eq!(cp1.column, 10);
+
+    // Checkpoint after second semicolon
+    let cp2 = state.lex_checkpoints.iter().find(|cp| cp.byte == 21).unwrap();
+    assert_eq!(cp2.line, 1);
+    assert_eq!(cp2.column, 10);
+}
+
+#[test]
+fn test_node_position_after_edit() {
+    let source = "my $x = 1;\n".to_string();
+    let mut state = IncrementalState::new(source);
+
+    let edit = Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "42".to_string() };
+    let _result = apply_edits(&mut state, &[edit]).unwrap();
+
+    if let NodeKind::Program { statements } = &state.ast.kind {
+        if let NodeKind::VariableDeclaration { initializer: Some(init), .. } = &statements[0].kind {
+            assert_eq!(init.location.start, 8);
+            assert_eq!(init.location.end, 10);
+        } else {
+            panic!("expected variable declaration with initializer");
+        }
+    } else {
+        panic!("expected program node");
+    }
 }
 
 #[test]
