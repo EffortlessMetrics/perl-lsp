@@ -448,6 +448,34 @@ $a ^.= $b;
         (varname)))))
 
 ================================================================================
+EXPR &. EXPR
+================================================================================
+$a &. $b;
+$a |. $b;
+$a ^. $b;
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (binary_expression
+      left: (scalar
+        (varname))
+      right: (scalar
+        (varname))))
+  (expression_statement
+    (binary_expression
+      left: (scalar
+        (varname))
+      right: (scalar
+        (varname))))
+  (expression_statement
+    (binary_expression
+      left: (scalar
+        (varname))
+      right: (scalar
+        (varname)))))
+
+================================================================================
 range ops
 ================================================================================
 10 .. 20;
