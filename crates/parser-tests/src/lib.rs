@@ -6,7 +6,8 @@
 //! 3. tree-sitter-perl-c (Legacy C)
 
 use anyhow::Result;
-use std::time::Duration;
+use std::{fs, path::Path, time::Duration};
+use walkdir::WalkDir;
 
 pub mod corpus;
 pub mod corpus_converter;
@@ -145,8 +146,38 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
 
 /// Load test cases from the corpus directory
 pub fn load_corpus_tests() -> Result<Vec<TestCase>> {
-    // TODO: Implement loading from test/corpus
-    Ok(vec![])
+    let corpus_dir = Path::new("test/corpus");
+    if !corpus_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut all_tests = Vec::new();
+
+    for entry in WalkDir::new(corpus_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let path = entry.path();
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        if !(ext.is_empty() || matches!(ext, "pl" | "pm" | "t" | "txt")) {
+            continue;
+        }
+
+        let content = fs::read_to_string(path)?;
+        let mut tests = corpus::parse_corpus_file(&content)?;
+        let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+        for test in &mut tests {
+            if test.name.is_empty() {
+                test.name = filename.to_string();
+            } else {
+                test.name = format!("{}::{}", filename, test.name);
+            }
+        }
+        all_tests.extend(tests);
+    }
+
+    Ok(all_tests)
 }
 
 #[cfg(test)]
