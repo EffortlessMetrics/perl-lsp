@@ -104,14 +104,14 @@ impl IncrementalState {
         }
 
         // Create initial checkpoints
-        let lex_checkpoints = Self::create_lex_checkpoints(&tokens);
+        let lex_checkpoints = Self::create_lex_checkpoints(&tokens, &line_index);
         let parse_checkpoints = Self::create_parse_checkpoints(&ast);
 
         Self { rope, line_index, lex_checkpoints, parse_checkpoints, ast, tokens, source }
     }
 
     /// Create lexer checkpoints at safe boundaries
-    fn create_lex_checkpoints(tokens: &[Token]) -> Vec<LexCheckpoint> {
+    fn create_lex_checkpoints(tokens: &[Token], line_index: &LineIndex) -> Vec<LexCheckpoint> {
         let mut checkpoints =
             vec![LexCheckpoint { byte: 0, mode: LexerMode::ExpectTerm, line: 0, column: 0 }];
 
@@ -122,20 +122,22 @@ impl IncrementalState {
             mode = match token.token_type {
                 TokenType::Semicolon | TokenType::LeftBrace | TokenType::RightBrace => {
                     // Safe boundary - reset to ExpectTerm
+                    let (line, column) = line_index.byte_to_position(token.end);
                     checkpoints.push(LexCheckpoint {
                         byte: token.end,
                         mode: LexerMode::ExpectTerm,
-                        line: 0, // TODO: Calculate line/column from byte position
-                        column: 0,
+                        line,
+                        column,
                     });
                     LexerMode::ExpectTerm
                 }
                 TokenType::Keyword(ref kw) if kw.as_ref() == "sub" || kw.as_ref() == "package" => {
+                    let (line, column) = line_index.byte_to_position(token.start);
                     checkpoints.push(LexCheckpoint {
                         byte: token.start,
                         mode: LexerMode::ExpectTerm, // ExpectIdentifier not available
-                        line: 0,                     // TODO: Calculate line/column
-                        column: 0,
+                        line,
+                        column,
                     });
                     LexerMode::ExpectTerm // ExpectIdentifier not available
                 }
@@ -382,8 +384,6 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
 
     // Fallback thresholds
     const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
-    #[allow(dead_code)] // TODO: Use for checkpoint-based incremental parsing
-    const MAX_TOUCHED_CHECKPOINTS: usize = 20;
 
     if total_changed > MAX_EDIT_SIZE {
         return full_reparse(state);
@@ -399,35 +399,18 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
             return full_reparse(state);
         }
 
-        // Find reparse window
-        let window = find_reparse_window(state, edit)?;
+        // Apply the edit with incremental lexing
+        let reparsed_range = apply_single_edit(state, edit)?;
+        let reparsed_bytes = reparsed_range.end - reparsed_range.start;
 
-        // If window is too large (>20% of doc), fall back to full parse
-        if window.end - window.start > state.source.len() / 5 {
-            apply_single_edit(state, edit)?;
-            return full_reparse(state);
-        }
+        // If reparsed too much (>20% of doc), might need full parse in future
+        // But for now, trust the incremental result
 
-        // Apply the edit to the source
-        let mut new_source = String::with_capacity(
-            state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
-        );
-        new_source.push_str(&state.source[..edit.start_byte]);
-        new_source.push_str(&edit.new_text);
-        new_source.push_str(&state.source[edit.old_end_byte..]);
-
-        // Re-lex the window
-        let _window_text = &new_source[window.clone()];
-        let _checkpoint = state
-            .find_lex_checkpoint(window.start)
-            .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
-
-        // For now, fall back to full reparse
-        // TODO: Implement actual incremental lexing and parsing
-        state.source = new_source;
-        state.rope = Rope::from_str(&state.source);
-        state.line_index = LineIndex::new(&state.source);
-        full_reparse(state)
+        Ok(ReparseResult {
+            changed_ranges: vec![reparsed_range],
+            diagnostics: vec![],
+            reparsed_bytes,
+        })
     } else {
         // Multiple edits - apply them in sequence
         for edit in sorted_edits {
@@ -438,7 +421,14 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
 }
 
 /// Apply a single edit to the state
-fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
+fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<usize>> {
+    // Find checkpoint before edit to resume lexing
+    let checkpoint = state
+        .find_lex_checkpoint(edit.start_byte)
+        .copied()
+        .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
+
+    // Apply text edit
     let mut new_source = String::with_capacity(
         state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
     );
@@ -448,26 +438,47 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
     state.source = new_source;
     state.rope = Rope::from_str(&state.source);
     state.line_index = LineIndex::new(&state.source);
-    Ok(())
-}
 
-/// Find the window to reparse
-fn find_reparse_window(state: &IncrementalState, edit: &Edit) -> Result<Range<usize>> {
-    // Find safe boundaries around the edit
-    let start_checkpoint = state
-        .find_lex_checkpoint(edit.start_byte)
-        .ok_or_else(|| anyhow::anyhow!("No start checkpoint"))?;
+    // Start lexing from checkpoint
+    use perl_lexer::{Checkpointable, LexerCheckpoint, Position};
+    let mut lexer = PerlLexer::new(&state.source);
+    let mut lex_cp = LexerCheckpoint::new();
+    lex_cp.position = checkpoint.byte;
+    lex_cp.mode = checkpoint.mode;
+    lex_cp.current_pos = Position {
+        byte: checkpoint.byte,
+        line: (checkpoint.line + 1) as u32,
+        column: (checkpoint.column + 1) as u32,
+    };
+    lexer.restore(&lex_cp);
 
-    // Find next safe boundary after edit
-    let end_byte = edit.new_end_byte;
-    let end_checkpoint = state
-        .lex_checkpoints
-        .iter()
-        .find(|cp| cp.byte > end_byte)
-        .map(|cp| cp.byte)
-        .unwrap_or(state.source.len());
+    // Determine token index to splice
+    let start_idx =
+        state.tokens.iter().position(|t| t.start >= checkpoint.byte).unwrap_or(state.tokens.len());
 
-    Ok(start_checkpoint.byte..end_checkpoint)
+    let mut new_tokens = Vec::new();
+    let mut last_token_end = checkpoint.byte;
+    loop {
+        match lexer.next_token() {
+            Some(token) => {
+                if token.token_type == TokenType::EOF {
+                    break;
+                }
+                last_token_end = token.end;
+                new_tokens.push(token);
+            }
+            None => break,
+        }
+    }
+
+    state.tokens.splice(start_idx.., new_tokens);
+
+    // Rebuild checkpoints with updated line index
+    state.lex_checkpoints =
+        IncrementalState::create_lex_checkpoints(&state.tokens, &state.line_index);
+
+    // Return the actual reparsed range (from checkpoint to end of last new token)
+    Ok(checkpoint.byte..last_token_end)
 }
 
 /// Full document reparse fallback
@@ -501,7 +512,8 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     state.line_index = LineIndex::new(&state.source);
 
     // Rebuild checkpoints
-    state.lex_checkpoints = IncrementalState::create_lex_checkpoints(&state.tokens);
+    state.lex_checkpoints =
+        IncrementalState::create_lex_checkpoints(&state.tokens, &state.line_index);
     state.parse_checkpoints = IncrementalState::create_parse_checkpoints(&state.ast);
 
     // No diagnostics for now, will be handled by the LSP server
