@@ -4,9 +4,10 @@
 //! including semantic tokens for syntax highlighting, hover information,
 //! and code intelligence features.
 
-use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
-use crate::symbol::{ScopeId, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use crate::SourceLocation;
+use regex::Regex;
 use std::collections::HashMap;
 
 /// Semantic token types for syntax highlighting
@@ -88,23 +89,27 @@ pub struct SemanticAnalyzer {
     symbol_table: SymbolTable,
     semantic_tokens: Vec<SemanticToken>,
     hover_info: HashMap<SourceLocation, HoverInfo>,
+    source: String,
 }
 
 impl SemanticAnalyzer {
     /// Create a new semantic analyzer from an AST
     pub fn analyze(ast: &Node) -> Self {
-        // First extract symbols
+        Self::analyze_with_source(ast, "")
+    }
+
+    /// Create a new semantic analyzer from an AST and source text
+    pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
         let symbol_table = SymbolExtractor::new().extract(ast);
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,
             semantic_tokens: Vec::new(),
             hover_info: HashMap::new(),
+            source: source.to_string(),
         };
 
-        // Then perform semantic analysis
         analyzer.analyze_node(ast, 0);
-
         analyzer
     }
 
@@ -142,14 +147,51 @@ impl SemanticAnalyzer {
         for refs in self.symbol_table.references.values() {
             for reference in refs {
                 if reference.location.start <= position && reference.location.end >= position {
-                    // Found a reference, now find its definition
-                    let symbols = self.symbol_table.find_symbol(
-                        &reference.name,
-                        reference.scope_id,
-                        reference.kind,
-                    );
+                    // Handle qualified names like Foo::bar
+                    let symbols = if let Some((pkg, name)) = reference.name.rsplit_once("::") {
+                        if let Some(pkg_syms) = self.symbol_table.symbols.get(pkg) {
+                            let mut results = Vec::new();
+                            for sym in pkg_syms {
+                                if sym.kind == SymbolKind::Package {
+                                    // Find the scope associated with this package symbol
+                                    let pkg_scope = self
+                                        .symbol_table
+                                        .scopes
+                                        .values()
+                                        .find(|s| {
+                                            s.kind == ScopeKind::Package
+                                                && s.location.start == sym.location.start
+                                                && s.location.end == sym.location.end
+                                        })
+                                        .map(|s| s.id)
+                                        .unwrap_or(sym.scope_id);
+                                    // Symbols may live in an inner block scope
+                                    let search_scope = self
+                                        .symbol_table
+                                        .scopes
+                                        .values()
+                                        .find(|s| s.parent == Some(pkg_scope))
+                                        .map(|s| s.id)
+                                        .unwrap_or(pkg_scope);
+                                    results.extend(self.symbol_table.find_symbol(
+                                        name,
+                                        search_scope,
+                                        reference.kind,
+                                    ));
+                                }
+                            }
+                            results
+                        } else {
+                            self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
+                        }
+                    } else {
+                        self.symbol_table.find_symbol(
+                            &reference.name,
+                            reference.scope_id,
+                            reference.kind,
+                        )
+                    };
 
-                    // Return the first matching definition
                     if !symbols.is_empty() {
                         return Some(symbols[0]);
                     }
@@ -288,7 +330,7 @@ impl SemanticAnalyzer {
                     // Add hover info
                     let hover = HoverInfo {
                         signature: format!("{} {}{}", declarator, sigil, name),
-                        documentation: None,
+                        documentation: self.extract_documentation(node.location.start),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -373,7 +415,7 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature,
-                        documentation: None, // TODO: Extract from POD or comments
+                        documentation: self.extract_documentation(node.location.start),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -385,8 +427,8 @@ impl SemanticAnalyzer {
                 }
 
                 {
-                    // Get the subroutine scope
-                    let sub_scope = scope_id; // TODO: Get actual sub scope
+                    // Get the subroutine scope from the symbol table
+                    let sub_scope = self.get_scope_for(node, ScopeKind::Subroutine);
                     self.analyze_node(body, sub_scope);
                 }
             }
@@ -444,14 +486,14 @@ impl SemanticAnalyzer {
 
                 let hover = HoverInfo {
                     signature: format!("package {}", name),
-                    documentation: None,
+                    documentation: self.extract_documentation(node.location.start),
                     details: vec![],
                 };
 
                 self.hover_info.insert(node.location, hover);
 
                 if let Some(block_node) = block {
-                    let package_scope = scope_id; // TODO: Get actual package scope
+                    let package_scope = self.get_scope_for(node, ScopeKind::Package);
                     self.analyze_node(block_node, package_scope);
                 }
             }
@@ -549,11 +591,48 @@ impl SemanticAnalyzer {
         }
     }
 
+    /// Extract documentation (POD or comments) preceding a position
+    fn extract_documentation(&self, start: usize) -> Option<String> {
+        if self.source.is_empty() {
+            return None;
+        }
+        let before = &self.source[..start];
+
+        // Check for POD blocks ending with =cut
+        let pod_re = Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").ok()?;
+        if let Some(caps) = pod_re.captures(before) {
+            return Some(caps[1].trim().to_string());
+        }
+
+        // Check for consecutive comment lines
+        let comment_re = Regex::new(r"(?m)(#.*\n)+\s*$").ok()?;
+        if let Some(caps) = comment_re.captures(before) {
+            return Some(caps[0].trim().to_string());
+        }
+
+        None
+    }
+
+    /// Get scope id for a node by consulting the symbol table
+    fn get_scope_for(&self, node: &Node, kind: ScopeKind) -> ScopeId {
+        for scope in self.symbol_table.scopes.values() {
+            if scope.kind == kind
+                && scope.location.start == node.location.start
+                && scope.location.end == node.location.end
+            {
+                return scope.id;
+            }
+        }
+        0
+    }
+
     /// Get line number from byte offset (simplified version)
-    fn line_number(&self, _offset: usize) -> usize {
-        // In a real implementation, we'd need the source text to calculate this
-        // For now, return a placeholder
-        1
+    fn line_number(&self, offset: usize) -> usize {
+        if self.source.is_empty() {
+            1
+        } else {
+            self.source[..offset].lines().count() + 1
+        }
     }
 }
 
@@ -689,5 +768,49 @@ my $result = foo();
         // The hover info would be at specific locations
         // In practice, we'd look up by position
         assert!(!analyzer.hover_info.is_empty());
+    }
+
+    #[test]
+    fn test_hover_doc_from_pod() {
+        let code = r#"
+# This is foo
+# More docs
+sub foo {
+    return 1;
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find the symbol for foo and check its hover documentation
+        let sym = analyzer.symbol_table().symbols.get("foo").unwrap()[0].clone();
+        let hover = analyzer.hover_at(sym.location).unwrap();
+        assert!(hover.documentation.as_ref().unwrap().contains("This is foo"));
+    }
+
+    #[test]
+    fn test_cross_package_navigation() {
+        let code = r#"
+package Foo {
+    # bar sub
+    sub bar { 42 }
+}
+
+package main;
+Foo::bar();
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let pos = code.find("Foo::bar").unwrap() + 5; // position within "bar"
+        let def = analyzer.find_definition(pos).expect("definition");
+        assert_eq!(def.name, "bar");
+
+        let hover = analyzer.hover_at(def.location).unwrap();
+        assert!(hover.documentation.as_ref().unwrap().contains("bar sub"));
     }
 }
