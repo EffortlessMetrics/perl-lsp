@@ -36,7 +36,7 @@ impl Default for InlineCompletionProvider {
 
 impl InlineCompletionProvider {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Get inline completions for the given context
