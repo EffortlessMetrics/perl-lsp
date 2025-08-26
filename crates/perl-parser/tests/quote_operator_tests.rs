@@ -172,6 +172,12 @@ fn q_qq_different_delimiters_same_shape() {
 }
 
 #[test]
+fn s_modifiers_are_captured() {
+    let (_, _, modifiers) = perl_parser::quote_parser::extract_substitution_parts("s/foo/bar/g");
+    assert_eq!(modifiers, "g");
+}
+
+#[test]
 fn q_word_comparison_operators_parse() {
     // Test all word comparison operators with q()
     let operators = vec!["eq", "ne", "lt", "le", "gt", "ge", "cmp"];
