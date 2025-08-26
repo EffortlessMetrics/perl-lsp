@@ -27,6 +27,14 @@ This guide helps you find the right documentation for your needs.
 - **[../crates/perl-parser/README_LSP.md](../crates/perl-parser/README_LSP.md)** - Quick LSP reference
 - **[../crates/perl-parser/examples/](../crates/perl-parser/examples/)** - LSP demos and examples
 
+### Test-Driven Development (*Diataxis: How-to & Reference*)
+- **TestGenerator API**: Available in `perl-parser` crate with auto-detection capabilities
+- **Auto-detect Test Expectations**: Analyzes subroutine ASTs to detect expected return values
+- **Cross-Framework Support**: TestMore, Test2V0, TestSimple, TestClass framework generation
+- **Performance Testing**: AST complexity estimation for automated performance test creation
+- **Tutorial**: See README.md "Test Generation" section for getting started
+- **Reference**: See CLAUDE.md "TestGenerator Commands" section for comprehensive usage
+
 ### Heredoc Implementation
 - **[HEREDOC_IMPLEMENTATION.md](HEREDOC_IMPLEMENTATION.md)** - Core heredoc parsing
 - **[SLASH_DISAMBIGUATION.md](SLASH_DISAMBIGUATION.md)** - Slash operator handling

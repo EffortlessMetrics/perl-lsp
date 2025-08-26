@@ -17,7 +17,12 @@ This repository contains **four published crates** forming a complete Perl parsi
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
 - Tree-sitter compatible output
 - Includes LSP server binary (`perl-lsp`)
-- **v0.8.5 improvements**:
+- **Test-Driven Development Support**: Auto-detecting TestGenerator for TDD workflows
+- **Latest improvements**:
+  - **Auto-detect Test Expectations**: TestGenerator intelligently analyzes subroutine ASTs to detect expected return values
+  - **Enhanced TDD Workflows**: Generates comprehensive test suites with arithmetic, variable, and string evaluation
+  - **Cross-Framework Support**: Works with TestMore, Test2V0, TestSimple, and TestClass frameworks
+  - **Performance Test Integration**: AST complexity estimation for automated performance test generation
   - Typed ServerCapabilities for LSP 3.18 compliance
   - Pull Diagnostics support (workspace/diagnostic)
   - Stable error codes (-32802 for cancellation)
@@ -188,6 +193,49 @@ cargo run -p perl-parser --example test_more_edge_cases
 
 # Test LSP capabilities demo
 cargo run -p perl-parser --example lsp_capabilities
+```
+
+### TestGenerator Commands (*Diataxis: Tutorial & How-to*)
+
+The TestGenerator provides intelligent Test-Driven Development (TDD) support with auto-detection of expected return values:
+
+```bash
+# Generate tests programmatically using the TestGenerator API
+# Note: TestGenerator is a library component - create custom examples or use in LSP features
+
+# Basic usage pattern (create test_generator_example.rs):
+cargo run -p perl-parser --example test_generator_basic
+
+# Auto-detection demo - analyzes subroutines and generates expected values
+# For: sub add { my ($a, $b) = @_; return $a + $b; }
+# Generates: is($result, 3, 'Returns expected value'); # when called with (1, 2)
+
+# Cross-framework test generation:
+# - TestMore: is(), ok(), subtest()  
+# - Test2V0: ok() with enhanced features
+# - TestSimple: Basic ok() assertions
+# - TestClass: Method-based testing
+
+# Performance test integration with AST complexity estimation:
+# - Estimates complexity for performance thresholds
+# - Generates Benchmark::timethis() integration
+# - Creates performance regression tests
+```
+
+**Key Features** (*Diataxis: Reference*):
+- **Auto-detect Expected Returns**: Analyzes AST to detect return expressions and evaluates them
+- **Expression Evaluation**: Handles arithmetic (`+`, `-`, `*`, `/`), variables, strings, and unary operators
+- **Error Handling**: Gracefully handles division by zero and unparseable expressions
+- **Cross-Framework**: Generates tests for TestMore, Test2V0, TestSimple, TestClass
+- **Performance Integration**: AST complexity estimation for automated performance testing
+- **Edge Case Support**: Generates tests for undef parameters, empty values, and type variations
+
+**Usage Pattern** (*Diataxis: How-to*):
+```rust
+use perl_parser::TestGenerator;
+let generator = TestGenerator::new(TestFramework::TestMore);
+let tests = generator.generate_tests(&ast, source_code);
+// Returns Vec<TestCase> with auto-detected expected values
 ```
 
 ### LSP Development

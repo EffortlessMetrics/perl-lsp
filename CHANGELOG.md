@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Auto-detect Test Expectations** - TestGenerator now intelligently analyzes subroutine ASTs to detect expected return values for automatic test generation
+- **Enhanced TDD Workflows** - Comprehensive test suite generation with arithmetic, variable, and string evaluation support
+- **Cross-Framework TestGenerator** - Support for TestMore, Test2V0, TestSimple, and TestClass frameworks with auto-detection
+- **Performance Test Integration** - AST complexity estimation enables automated performance test generation with intelligent thresholds
+
+### Improved
+- **TestGenerator Expression Evaluation** - Enhanced support for binary operations (+, -, *, /), unary operators, variables, and strings
+- **TestGenerator Error Handling** - Graceful handling of division by zero and unparseable expressions
+- **TestGenerator Edge Cases** - Automatic generation of tests for undef parameters, empty values, and type variations
+
 ## [v0.8.5] - 2025-08-24
 
 ### Added
