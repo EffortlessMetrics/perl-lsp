@@ -3,7 +3,7 @@
 //! This crate provides a common test infrastructure to test:
 //! 1. perl-lexer + perl-parser (Modern Rust)
 //! 2. tree-sitter-perl-rs (Pure Rust Pest)
-//! 3. tree-sitter-perl-c (Legacy C)
+//! 3. tree-sitter-perl-c (Legacy C) -- currently unavailable
 
 use anyhow::Result;
 use std::time::Duration;
@@ -67,31 +67,13 @@ impl TestableParser for TreeSitterPerlRsWrapper {
     }
 
     fn parse_to_sexp(&self, input: &str) -> Result<String> {
-        use tree_sitter_perl::PureRustParser;
+        use tree_sitter_perl::{PureRustParser, PureRustPerlParser};
 
         let parser = PureRustParser::new();
-        let ast = parser.parse(input).map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
-        // The Pest parser returns an AstNode, need to convert to S-expression
-        Ok(format!("{:?}", ast)) // TODO: Implement proper to_sexp for Pest AST
-    }
-}
-
-/// Wrapper for tree-sitter-perl-c
-pub struct TreeSitterPerlCWrapper;
-
-impl TestableParser for TreeSitterPerlCWrapper {
-    fn name(&self) -> &'static str {
-        "tree-sitter-perl-c"
-    }
-
-    fn parse_to_sexp(&self, input: &str) -> Result<String> {
-        use tree_sitter_perl_c::create_parser;
-
-        let mut parser = create_parser();
-        let tree = parser.parse(input, None).ok_or_else(|| anyhow::anyhow!("Failed to parse"))?;
-
-        let sexp = tree.root_node().to_sexp();
-        Ok(sexp)
+        let ast = parser
+            .parse(input)
+            .map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
+        Ok(PureRustPerlParser::node_to_sexp(&ast))
     }
 }
 
@@ -100,7 +82,6 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
     let parsers: Vec<Box<dyn TestableParser>> = vec![
         Box::new(PerlParserWrapper),
         Box::new(TreeSitterPerlRsWrapper),
-        Box::new(TreeSitterPerlCWrapper),
     ];
 
     let mut results = Vec::new();
@@ -155,29 +136,9 @@ mod tests {
 
     #[test]
     fn test_simple_parse() {
-        let test = TestCase {
-            name: "simple_variable".to_string(),
-            input: "my $x = 42;".to_string(),
-            description: Some("Simple variable declaration".to_string()),
-            should_parse: true,
-            expected_sexp: None,
-        };
-
-        let results = run_test_on_all_parsers(&test);
-
-        for result in &results {
-            println!(
-                "{}: {} ({:?})",
-                result.parser_name,
-                if result.success { "PASS" } else { "FAIL" },
-                result.parse_time
-            );
-            if let Some(output) = &result.output {
-                println!("  Output: {}", output);
-            }
-            if let Some(error) = &result.error {
-                println!("  Error: {}", error);
-            }
-        }
+        let input = "my $x = 42;";
+        let rust_output = TreeSitterPerlRsWrapper.parse_to_sexp(input).unwrap();
+        let perl_output = PerlParserWrapper.parse_to_sexp(input).unwrap();
+        assert_eq!(rust_output, perl_output);
     }
 }
