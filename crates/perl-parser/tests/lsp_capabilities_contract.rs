@@ -131,9 +131,9 @@ fn test_unsupported_methods_return_error() {
     // Test that truly unsupported methods return method_not_found error
     // Updated for v0.8.6 - only test methods that truly return method_not_found
     let unsupported_methods = [
-        "textDocument/colorPresentation",  // Not implemented (color support)
-        "textDocument/documentColor",      // Not implemented (color support)
-        // Note: linkedEditingRange is actually implemented for paired delimiters
+        "textDocument/colorPresentation", // Not implemented (color support)
+        "textDocument/documentColor",     // Not implemented (color support)
+                                          // Note: linkedEditingRange is actually implemented for paired delimiters
     ];
 
     for method in &unsupported_methods {

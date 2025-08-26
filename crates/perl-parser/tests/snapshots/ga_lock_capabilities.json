@@ -10,6 +10,7 @@
   },
   "definitionProvider": true,
   "documentFormattingProvider": true,
+  "documentHighlightProvider": true,
   "documentRangeFormattingProvider": true,
   "documentSymbolProvider": true,
   "foldingRangeProvider": true,
@@ -24,6 +25,9 @@
       ","
     ]
   },
-  "textDocumentSync": 1,
+  "textDocumentSync": {
+    "change": 1,
+    "openClose": true
+  },
   "workspaceSymbolProvider": true
 }
