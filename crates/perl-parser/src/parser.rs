@@ -3751,98 +3751,9 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Parse replacement expression for substitution operator
-        let mut replacement = String::new();
-        if op == "s" {
-            if matches!(opening_delim, '{' | '[' | '(' | '<') {
-                // Consume opening delimiter for replacement
-                if let Some(token_kind) = self.peek_kind() {
-                    let expected = match opening_delim {
-                        '{' => TokenKind::LeftBrace,
-                        '[' => TokenKind::LeftBracket,
-                        '(' => TokenKind::LeftParen,
-                        '<' => TokenKind::Less,
-                        _ => unreachable!(),
-                    };
-                    if token_kind == expected {
-                        self.consume_token()?;
-                    }
-                }
-                let mut depth = 1;
-                while depth > 0 && !self.tokens.is_eof() {
-                    let token_kind = self.peek_kind();
-                    match (opening_delim, token_kind) {
-                        ('{', Some(TokenKind::LeftBrace)) => {
-                            self.consume_token()?;
-                            replacement.push('{');
-                            depth += 1;
-                        }
-                        ('{', Some(TokenKind::RightBrace)) => {
-                            self.consume_token()?;
-                            depth -= 1;
-                            if depth > 0 {
-                                replacement.push('}');
-                            }
-                        }
-                        ('[', Some(TokenKind::LeftBracket)) => {
-                            self.consume_token()?;
-                            replacement.push('[');
-                            depth += 1;
-                        }
-                        ('[', Some(TokenKind::RightBracket)) => {
-                            self.consume_token()?;
-                            depth -= 1;
-                            if depth > 0 {
-                                replacement.push(']');
-                            }
-                        }
-                        ('(', Some(TokenKind::LeftParen)) => {
-                            self.consume_token()?;
-                            replacement.push('(');
-                            depth += 1;
-                        }
-                        ('(', Some(TokenKind::RightParen)) => {
-                            self.consume_token()?;
-                            depth -= 1;
-                            if depth > 0 {
-                                replacement.push(')');
-                            }
-                        }
-                        ('<', Some(TokenKind::Less)) => {
-                            self.consume_token()?;
-                            replacement.push('<');
-                            depth += 1;
-                        }
-                        ('<', Some(TokenKind::Greater)) => {
-                            self.consume_token()?;
-                            depth -= 1;
-                            if depth > 0 {
-                                replacement.push('>');
-                            }
-                        }
-                        _ => {
-                            let token = self.consume_token()?;
-                            replacement.push_str(&token.text);
-                        }
-                    }
-                }
-            } else {
-                while !self.tokens.is_eof() {
-                    let token = self.consume_token()?;
-                    if token.text.contains(closing_delim) {
-                        if let Some(pos) = token.text.find(closing_delim) {
-                            replacement.push_str(&token.text[..pos]);
-                            break;
-                        }
-                    }
-                    replacement.push_str(&token.text);
-                }
-            }
-        }
-
         // Parse modifiers for regex operators
         let mut modifiers = String::new();
-        if matches!(op, "m" | "s" | "qr") {
+        if matches!(op, "m" | "qr") {
             // Check for modifiers (letters after closing delimiter)
             while let Ok(token) = self.tokens.peek() {
                 if token.kind == TokenKind::Identifier && token.text.len() == 1 {
@@ -3923,19 +3834,9 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator with replacement and modifiers
-                Ok(Node::new(
-                    NodeKind::Substitution {
-                        expr: Box::new(Node::new(
-                            NodeKind::Identifier { name: String::from("$_") },
-                            SourceLocation { start, end: start },
-                        )),
-                        pattern: content,
-                        replacement,
-                        modifiers,
-                    },
-                    SourceLocation { start, end },
-                ))
+                // Substitution operator shouldn't reach here - handled by TokenKind::Substitution
+                // This is kept for defensive programming
+                Err(ParseError::syntax("Substitution operator should be handled by TokenKind::Substitution", start))
             }
             _ => Err(ParseError::syntax(format!("Unknown quote operator: {}", op), start)),
         }
