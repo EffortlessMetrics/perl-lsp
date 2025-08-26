@@ -83,6 +83,25 @@ qr<lookahead(?=pattern)>m;
   (statement))
 
 ==================
+Substitution with modifier flags
+==================
+
+s/foo/bar/;
+s/foo/bar/g;
+s/foo/bar/gi;
+s/foo/bar/er;
+s/foo/bar/eeg;
+
+---
+
+(source_file
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
 Command execution operators
 ==================
 
@@ -227,6 +246,25 @@ s<angle><replace>x;
   (statement)
   (statement)
   (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Substitution with modifier flags
+==================
+
+s/foo/bar/;
+s/foo/bar/g;
+s/foo/bar/gi;
+s/foo/bar/er;
+s/foo/bar/eeg;
+
+---
+
+(source_file
   (statement)
   (statement)
   (statement)

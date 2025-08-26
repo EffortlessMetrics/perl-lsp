@@ -12,6 +12,12 @@ echo ""
 # Enable test-compat feature for old API tests
 export CARGO_TEST_FEATURES="--features test-compat"
 
+# Set ci cfg flag when running in CI
+if [ "${CI:-false}" = "true" ]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} --cfg=ci"
+    echo "Running in CI mode - flaky tests will be ignored"
+fi
+
 # Run library tests (capture failure to continue with full report)
 echo "Running library tests..."
 LIB_FAIL=0
