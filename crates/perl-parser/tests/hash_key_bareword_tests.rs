@@ -71,3 +71,69 @@ my @values = @h{$k1, $k2};
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
     assert_eq!(undeclared_errors.len(), 0);
 }
+
+#[test]
+fn test_hash_slice_mixed_elements() {
+    let source = r#"
+use strict;
+my %h = ();
+my $k = "key1";
+my @values = @h{$k, 'literal', func(), keys %h};
+print BAREWORD;
+"#;
+
+    let mut parser = Parser::new(source);
+    let ast = parser.parse().unwrap();
+    let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+
+    let bareword_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+
+    // Only BAREWORD after print should be flagged
+    assert_eq!(bareword_errors.len(), 1);
+    assert!(bareword_errors[0].message.contains("BAREWORD"));
+    // None of the hash slice elements should be flagged
+    assert!(!bareword_errors[0].message.contains("literal"));
+    assert!(!bareword_errors[0].message.contains("func"));
+}
+
+#[test]
+fn test_nested_hash_slice_expressions() {
+    let source = r#"
+use strict;
+my %h = ();
+my @arr = qw(a b c);
+my @values = @h{ @arr };
+"#;
+
+    let mut parser = Parser::new(source);
+    let ast = parser.parse().unwrap();
+    let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+
+    // No bareword errors expected - map expression inside hash slice
+    let bareword_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    assert_eq!(bareword_errors.len(), 0);
+}
+
+#[test]
+fn test_hash_slice_with_function_calls() {
+    let source = r#"
+use strict;
+my %h = ();
+sub get_keys { return ('key1', 'key2'); }
+my @values = @h{ get_keys() };
+"#;
+
+    let mut parser = Parser::new(source);
+    let ast = parser.parse().unwrap();
+    let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+
+    // Function calls in hash slices should not trigger bareword warnings
+    let bareword_errors: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    assert_eq!(bareword_errors.len(), 0);
+}
