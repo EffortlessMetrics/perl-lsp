@@ -176,21 +176,21 @@ impl DynamicDelimiterRecovery {
     /// Resolve an expression to a possible delimiter value
     fn resolve_variable_value(&self, expr: &str, _context: &ParseContext) -> Option<PossibleValue> {
         let trimmed = expr.trim();
-        
+
         // Try simple variable resolution first (before stripping parentheses)
         if let Some(result) = self.try_resolve_simple_variable(trimmed) {
             return Some(result);
         }
-        
+
         // Strip outer parentheses if present and try again
         if trimmed.starts_with('(') && trimmed.ends_with(')') {
             let inner = trimmed[1..trimmed.len() - 1].trim();
-            
+
             // Try simple variable resolution on inner content
             if let Some(result) = self.try_resolve_simple_variable(inner) {
                 return Some(result);
             }
-            
+
             // Try concatenation: $var . "END"
             if let Some((left, right)) = inner.split_once('.') {
                 let left_val = self.resolve_variable_value(left.trim(), _context);
@@ -238,14 +238,9 @@ impl DynamicDelimiterRecovery {
         };
 
         // Look up and return the highest confidence value
-        self.variable_values
-            .get(var_name)
-            .and_then(|values| {
-                values
-                    .iter()
-                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
-                    .cloned()
-            })
+        self.variable_values.get(var_name).and_then(|values| {
+            values.iter().max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap()).cloned()
+        })
     }
 
     /// Extract string literal from quoted string
@@ -422,7 +417,7 @@ EOF
         let result = recovery.resolve_variable_value("$base . \"ND\"", &context);
         assert!(result.is_some(), "Should resolve concatenation without parentheses");
         assert_eq!(result.unwrap().value, "END");
-        
+
         // Test with parentheses (as used in heredoc syntax)
         let result_with_parens = recovery.resolve_variable_value("($base . \"ND\")", &context);
         assert!(result_with_parens.is_some(), "Should resolve concatenation with parentheses");
