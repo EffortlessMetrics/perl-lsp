@@ -5,6 +5,7 @@
 
 use crate::SourceLocation;
 use crate::ast::Node;
+use crate::declaration::current_package_at;
 use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use std::collections::HashSet;
 
@@ -72,6 +73,7 @@ pub struct CompletionContext {
 /// Completion provider
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
+    ast: Node,
     keywords: HashSet<&'static str>,
     builtins: HashSet<&'static str>,
 }
@@ -299,7 +301,7 @@ impl CompletionProvider {
         .into_iter()
         .collect();
 
-        CompletionProvider { symbol_table, keywords, builtins }
+        CompletionProvider { symbol_table, ast: ast.clone(), keywords, builtins }
     }
 
     /// Get completions at a given position (with optional filepath for test detection)
@@ -333,10 +335,10 @@ impl CompletionProvider {
         } else if context.prefix.starts_with('&') {
             // Subroutine completion
             self.add_function_completions(&mut completions, &context);
-        } else if context.trigger_character == Some(':') && context.prefix.ends_with("::") {
+        } else if context.prefix.contains("::") {
             // Package member completion
             self.add_package_completions(&mut completions, &context);
-        } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
+        } else if context.prefix.contains("->") {
             // Method completion
             self.add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
@@ -405,6 +407,8 @@ impl CompletionProvider {
                         && c != '@'
                         && c != '%'
                         && c != '&'
+                        && c != '/'
+                        && c != '.'
                 })
                 .map(|p| p + 1)
                 .unwrap_or(0);
@@ -419,13 +423,15 @@ impl CompletionProvider {
         let in_regex = self.is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
+        let current_package = current_package_at(&self.ast, position).to_string();
+
         CompletionContext {
             position,
             trigger_character,
             in_string,
             in_regex,
             in_comment,
-            current_package: "main".to_string(), // TODO: Detect actual package
+            current_package,
             prefix: word_prefix,
         }
     }
@@ -633,11 +639,40 @@ impl CompletionProvider {
     #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_package_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement package member completion
-        // This would require analyzing package contents
+        if let Some(idx) = context.prefix.rfind("::") {
+            let pkg = &context.prefix[..idx];
+            let member_prefix = &context.prefix[idx + 2..];
+            let pkg_prefix = format!("{}::", pkg);
+            for symbols in self.symbol_table.symbols.values() {
+                for symbol in symbols {
+                    if symbol.qualified_name.starts_with(&pkg_prefix) {
+                        let member = symbol.qualified_name.split("::").last().unwrap_or("");
+                        if member.starts_with(member_prefix) {
+                            let kind = match symbol.kind {
+                                SymbolKind::Subroutine => CompletionItemKind::Function,
+                                SymbolKind::ScalarVariable
+                                | SymbolKind::ArrayVariable
+                                | SymbolKind::HashVariable => CompletionItemKind::Variable,
+                                _ => CompletionItemKind::Variable,
+                            };
+                            completions.push(CompletionItem {
+                                label: member.to_string(),
+                                kind,
+                                detail: Some(symbol.qualified_name.clone()),
+                                documentation: symbol.documentation.clone(),
+                                insert_text: Some(member.to_string()),
+                                sort_text: Some(format!("3_{}", member)),
+                                filter_text: Some(member.to_string()),
+                                additional_edits: vec![],
+                            });
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Add method completions
@@ -776,11 +811,38 @@ impl CompletionProvider {
     #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_file_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement file path completion
-        // This would require filesystem access
+        use std::fs;
+        use std::path::Path;
+
+        let (dir, file_prefix) = if let Some(idx) = context.prefix.rfind('/') {
+            (&context.prefix[..idx], &context.prefix[idx + 1..])
+        } else {
+            (".", context.prefix.as_str())
+        };
+
+        let dir = if dir.is_empty() { "." } else { dir };
+
+        if let Ok(entries) = fs::read_dir(Path::new(dir)) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with(file_prefix) {
+                    let full = if dir == "." { name.clone() } else { format!("{}/{}", dir, name) };
+                    completions.push(CompletionItem {
+                        label: name.clone(),
+                        kind: CompletionItemKind::File,
+                        detail: None,
+                        documentation: None,
+                        insert_text: Some(full),
+                        sort_text: Some(format!("6_{}", name)),
+                        filter_text: Some(name),
+                        additional_edits: vec![],
+                    });
+                }
+            }
+        }
     }
 
     /// Add all variables without sigils (for interpolation contexts)
@@ -976,5 +1038,43 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "printf"));
+    }
+
+    #[test]
+    fn test_package_member_completion() {
+        let code = r#"
+package Foo;
+sub helper {}
+package main;
+Foo::he"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(completions.iter().any(|c| c.label == "helper"));
+    }
+
+    #[test]
+    fn test_file_path_completion() {
+        use std::fs::File;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        File::create(dir.path().join("foo.txt")).unwrap();
+        File::create(dir.path().join("bar.log")).unwrap();
+
+        let path_str = dir.path().display().to_string();
+        let code = format!("my $f = \"{}/f\";", path_str);
+        let mut parser = Parser::new(&code);
+        let ast = parser.parse().unwrap();
+
+        let provider = CompletionProvider::new(&ast);
+        let pos = code.len() - 2;
+        let completions = provider.get_completions(&code, pos);
+
+        assert!(completions.iter().any(|c| c.label == "foo.txt"));
     }
 }
