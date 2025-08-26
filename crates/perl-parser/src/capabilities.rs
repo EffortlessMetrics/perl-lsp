@@ -50,14 +50,14 @@ pub struct BuildFlags {
     pub document_links: bool,
     pub selection_ranges: bool,
     pub on_type_formatting: bool,
-    pub code_lens: bool,      // Not advertised by default
-    pub call_hierarchy: bool, // Not advertised by default
-    pub type_hierarchy: bool, // Not implemented
-    pub linked_editing: bool, // Linked editing ranges
+    pub code_lens: bool,         // Not advertised by default
+    pub call_hierarchy: bool,    // Not advertised by default
+    pub type_hierarchy: bool,    // Not implemented
+    pub linked_editing: bool,    // Linked editing ranges
     pub inline_completion: bool, // Inline completion suggestions
-    pub inline_values: bool, // Inline values for debugging
-    pub moniker: bool, // Stable symbol identifiers
-    pub document_color: bool, // Color swatches in strings/comments
+    pub inline_values: bool,     // Inline values for debugging
+    pub moniker: bool,           // Stable symbol identifiers
+    pub document_color: bool,    // Color swatches in strings/comments
     pub formatting: bool,
     pub range_formatting: bool,
     pub folding_range: bool,
@@ -116,8 +116,8 @@ impl BuildFlags {
             linked_editing: true,    // Implemented for paired delimiters
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
-            moniker: true,          // Stable symbol identifiers
-            document_color: true,   // Color detection
+            moniker: true,           // Stable symbol identifiers
+            document_color: true,    // Color detection
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
@@ -183,11 +183,11 @@ impl BuildFlags {
             code_lens: false,
             call_hierarchy: false,
             type_hierarchy: false,
-            linked_editing: false,   // New feature, not GA yet
+            linked_editing: false,    // New feature, not GA yet
             inline_completion: false, // New feature, not GA yet
-            inline_values: false,    // New feature, not GA yet
-            moniker: false,         // New feature, not GA yet
-            document_color: false,  // New feature, not GA yet
+            inline_values: false,     // New feature, not GA yet
+            moniker: false,           // New feature, not GA yet
+            document_color: false,    // New feature, not GA yet
             formatting: false,
             range_formatting: false,
             folding_range: true,
@@ -212,7 +212,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
     caps.hover_provider = Some(HoverProviderCapability::Simple(true));
     caps.document_highlight_provider = Some(OneOf::Left(true));
-    
+
     caps.signature_help_provider = Some(SignatureHelpOptions {
         trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
         retrigger_characters: Some(vec![",".to_string()]),
@@ -331,17 +331,18 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.code_actions {
-        caps.code_action_provider = Some(CodeActionProviderCapability::Options(CodeActionOptions {
-            code_action_kinds: Some(vec![
-                CodeActionKind::QUICKFIX,
-                CodeActionKind::REFACTOR,
-                CodeActionKind::REFACTOR_EXTRACT,
-                CodeActionKind::REFACTOR_INLINE,
-                CodeActionKind::REFACTOR_REWRITE,
-            ]),
-            resolve_provider: Some(true),
-            work_done_progress_options: WorkDoneProgressOptions::default(),
-        }));
+        caps.code_action_provider =
+            Some(CodeActionProviderCapability::Options(CodeActionOptions {
+                code_action_kinds: Some(vec![
+                    CodeActionKind::QUICKFIX,
+                    CodeActionKind::REFACTOR,
+                    CodeActionKind::REFACTOR_EXTRACT,
+                    CodeActionKind::REFACTOR_INLINE,
+                    CodeActionKind::REFACTOR_REWRITE,
+                ]),
+                resolve_provider: Some(true),
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+            }));
     }
 
     if build.execute_command {
@@ -386,9 +387,10 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.linked_editing {
-        caps.linked_editing_range_provider = Some(lsp_types::LinkedEditingRangeServerCapabilities::Simple(true));
+        caps.linked_editing_range_provider =
+            Some(lsp_types::LinkedEditingRangeServerCapabilities::Simple(true));
     }
-    
+
     // Inline completion via experimental until lsp-types has the field
     if build.inline_completion {
         let mut experimental = caps.experimental.take().unwrap_or_else(|| serde_json::json!({}));

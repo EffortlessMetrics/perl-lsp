@@ -36,8 +36,8 @@ fn full_capabilities_match_contract() {
     assert_eq!(caps["workspaceSymbolProvider"]["resolveProvider"], json!(true));
     // renameProvider can be bool or object with prepareProvider
     assert!(
-        caps["renameProvider"] == json!(true) 
-        || caps["renameProvider"] == json!({"prepareProvider": true}),
+        caps["renameProvider"] == json!(true)
+            || caps["renameProvider"] == json!({"prepareProvider": true}),
         "renameProvider should be true or object with prepareProvider"
     );
     // codeActionProvider can be bool or object

@@ -1,7 +1,7 @@
 //! CodeLens tests
 mod support;
-use support::lsp_harness::LspHarness;
 use serde_json::json;
+use support::lsp_harness::LspHarness;
 
 #[test]
 fn test_shows_codelens_on_sub() {
@@ -17,24 +17,30 @@ my $z = add(1, 2);
     harness.initialize(None).unwrap();
     harness.open_document("file:///test.pl", doc).unwrap();
     let uri = "file:///test.pl";
-    
-    let result = harness.request("textDocument/codeLens", json!({
-        "textDocument": {"uri": uri}
-    })).unwrap_or(json!(null));
-    
+
+    let result = harness
+        .request(
+            "textDocument/codeLens",
+            json!({
+                "textDocument": {"uri": uri}
+            }),
+        )
+        .unwrap_or(json!(null));
+
     if let Some(lenses) = result.as_array() {
         assert!(!lenses.is_empty(), "Should have at least one code lens");
-        
+
         // Check that at least one lens is for references
         let has_ref_lens = lenses.iter().any(|lens| {
-            lens.get("data").is_some() || 
-            lens.get("command")
-                .and_then(|c| c.get("title"))
-                .and_then(|t| t.as_str())
-                .map(|t| t.contains("ref"))
-                .unwrap_or(false)
+            lens.get("data").is_some()
+                || lens
+                    .get("command")
+                    .and_then(|c| c.get("title"))
+                    .and_then(|t| t.as_str())
+                    .map(|t| t.contains("ref"))
+                    .unwrap_or(false)
         });
-        
+
         assert!(has_ref_lens, "Should have a reference code lens");
     }
 }
@@ -56,11 +62,16 @@ sub add {
     harness.initialize(None).unwrap();
     harness.open_document("file:///test.pl", doc).unwrap();
     let uri = "file:///test.pl";
-    
-    let result = harness.request("textDocument/codeLens", json!({
-        "textDocument": {"uri": uri}
-    })).unwrap_or(json!(null));
-    
+
+    let result = harness
+        .request(
+            "textDocument/codeLens",
+            json!({
+                "textDocument": {"uri": uri}
+            }),
+        )
+        .unwrap_or(json!(null));
+
     if let Some(lenses) = result.as_array() {
         // Check for Run Test lens
         let has_run_test = lenses.iter().any(|lens| {
@@ -70,7 +81,7 @@ sub add {
                 .map(|t| t.contains("Run Test"))
                 .unwrap_or(false)
         });
-        
+
         assert!(has_run_test, "Test subroutine should have a 'Run Test' code lens");
     }
 }
@@ -91,11 +102,16 @@ sub new {
     harness.initialize(None).unwrap();
     harness.open_document("file:///test.pl", doc).unwrap();
     let uri = "file:///test.pl";
-    
-    let result = harness.request("textDocument/codeLens", json!({
-        "textDocument": {"uri": uri}
-    })).unwrap_or(json!(null));
-    
+
+    let result = harness
+        .request(
+            "textDocument/codeLens",
+            json!({
+                "textDocument": {"uri": uri}
+            }),
+        )
+        .unwrap_or(json!(null));
+
     if let Some(lenses) = result.as_array() {
         // Should have lenses for both package and sub
         assert!(lenses.len() >= 2, "Should have code lenses for package and subroutine");
@@ -116,25 +132,29 @@ my $y = helper();
     harness.initialize(None).unwrap();
     harness.open_document("file:///test.pl", doc).unwrap();
     let uri = "file:///test.pl";
-    
+
     // First get the code lenses
-    let lenses_result = harness.request("textDocument/codeLens", json!({
-        "textDocument": {"uri": uri}
-    })).unwrap_or(json!(null));
-    
+    let lenses_result = harness
+        .request(
+            "textDocument/codeLens",
+            json!({
+                "textDocument": {"uri": uri}
+            }),
+        )
+        .unwrap_or(json!(null));
+
     if let Some(lenses) = lenses_result.as_array() {
         // Find a lens with data (unresolved references lens)
         if let Some(unresolved_lens) = lenses.iter().find(|l| l.get("data").is_some()) {
             // Try to resolve it
-            let resolved = harness.request("codeLens/resolve", unresolved_lens.clone()).unwrap_or(json!(null));
-            
+            let resolved =
+                harness.request("codeLens/resolve", unresolved_lens.clone()).unwrap_or(json!(null));
+
             // After resolution, it should have a command
             assert!(resolved.get("command").is_some(), "Resolved lens should have a command");
-            
+
             if let Some(command) = resolved.get("command") {
-                let title = command.get("title")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("");
+                let title = command.get("title").and_then(|t| t.as_str()).unwrap_or("");
                 assert!(title.contains("ref"), "Command title should mention references");
             }
         }
