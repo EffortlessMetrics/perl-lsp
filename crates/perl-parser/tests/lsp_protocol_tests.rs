@@ -1,121 +1,37 @@
 use perl_parser::lsp_server::LspServer;
-use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Cursor, Read};
-use std::sync::{Arc, Mutex};
+use serde_json::json;
 
-/// Mock transport for testing JSON-RPC messages
-#[allow(dead_code)]
-struct MockTransport {
-    output: Arc<Mutex<Vec<u8>>>,
-}
-
-impl MockTransport {
-    #[allow(dead_code)]
-    fn new() -> Self {
-        Self { output: Arc::new(Mutex::new(Vec::new())) }
-    }
-
-    #[allow(dead_code)]
-    fn get_output(&self) -> String {
-        let output = self.output.lock().unwrap();
-        String::from_utf8_lossy(&output).to_string()
-    }
-
-    #[allow(dead_code)]
-    fn parse_messages(&self) -> Vec<Value> {
-        let output = self.get_output();
-        let mut messages = Vec::new();
-        let mut reader = BufReader::new(Cursor::new(output));
-
-        loop {
-            let mut headers = Vec::new();
-
-            // Read headers
-            loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line).unwrap() == 0 {
-                    return messages; // EOF
-                }
-
-                if line == "\r\n" || line == "\n" {
-                    break; // End of headers
-                }
-
-                headers.push(line);
-            }
-
-            // Find Content-Length
-            let content_length = headers
-                .iter()
-                .find(|h| h.starts_with("Content-Length:"))
-                .and_then(|h| h.split(':').nth(1))
-                .and_then(|v| v.trim().parse::<usize>().ok());
-
-            if let Some(length) = content_length {
-                let mut content = vec![0u8; length];
-                reader.read_exact(&mut content).unwrap();
-                if let Ok(json) = serde_json::from_slice::<Value>(&content) {
-                    messages.push(json);
-                }
-            } else {
-                break; // No content length found
-            }
-        }
-
-        messages
-    }
-}
+mod support;
+use support::lsp_harness::LspHarness;
 
 #[test]
-fn test_diagnostics_clear_protocol_framing() {
-    // Create a mock stdout to capture output
-    let _original_stdout = std::io::stdout();
-    let _mock_transport = MockTransport::new();
+fn test_diagnostics_clear_protocol_framing() -> Result<(), String> {
+    let mut harness = LspHarness::new();
+    harness.initialize_default()?;
 
-    // Create LSP server
-    let _server = LspServer::new();
+    let uri = "file:///test/test.pl";
+    harness.open(uri, "my $x = 42;\nprint $x;\n")?;
 
-    // Initialize the server
-    let _init_request = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "rootUri": "file:///test",
-            "capabilities": {}
-        }
-    });
+    // Drain initial diagnostics published on open
+    harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
 
-    // Open a document
-    let _open_notification = json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didOpen",
-        "params": {
-            "textDocument": {
-                "uri": "file:///test/test.pl",
-                "languageId": "perl",
-                "version": 1,
-                "text": "my $x = 42;\nprint $x;\n"
-            }
-        }
-    });
+    harness.notify(
+        "textDocument/didClose",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    );
 
-    // Close the document - this should send a clear diagnostics notification
-    let _close_notification = json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/didClose",
-        "params": {
-            "textDocument": {
-                "uri": "file:///test/test.pl"
-            }
-        }
-    });
-
-    // Process requests (we'd need to mock stdout to capture output)
-    // For now, just verify the structure is correct
-
-    // This test primarily ensures the code compiles with the correct structure
-    // A full integration test would require mocking stdout
+    let diags = harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
+    assert_eq!(diags.len(), 1, "Expected one diagnostics notification");
+    let params = &diags[0]["params"];
+    assert_eq!(params["uri"].as_str(), Some(uri));
+    assert_eq!(
+        params["diagnostics"].as_array().map(|a| a.len()).unwrap_or(0),
+        0,
+        "Diagnostics should be empty after document close",
+    );
+    Ok(())
 }
 
 #[test]
