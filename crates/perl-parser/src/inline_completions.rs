@@ -30,7 +30,7 @@ pub struct InlineCompletionProvider;
 
 impl Default for InlineCompletionProvider {
     fn default() -> Self {
-        Self
+        Self::new()
     }
 }
 
