@@ -5217,98 +5217,26 @@ impl LspServer {
     }
 
     /// Handle textDocument/documentColor request
-    fn handle_document_color(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-
-            let documents = self.documents.lock().unwrap();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let mut colors = Vec::new();
-
-                // Find hex colors in strings and comments using regex
-                let hex_re = regex::Regex::new(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b").unwrap();
-
-                for (line_num, line) in doc.content.lines().enumerate() {
-                    // Check if line is a comment or contains strings
-                    if line.trim_start().starts_with('#')
-                        || line.contains('"')
-                        || line.contains('\'')
-                    {
-                        for cap in hex_re.captures_iter(line) {
-                            if let Some(m) = cap.get(0) {
-                                let hex = &m.as_str()[1..]; // Skip the #
-                                let (r, g, b) = if hex.len() == 3 {
-                                    // #RGB -> #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    (r, g, b)
-                                } else {
-                                    // #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    (r, g, b)
-                                };
-
-                                colors.push(json!({
-                                    "range": {
-                                        "start": { "line": line_num, "character": m.start() as u32 },
-                                        "end": { "line": line_num, "character": m.end() as u32 }
-                                    },
-                                    "color": {
-                                        "red": r,
-                                        "green": g,
-                                        "blue": b,
-                                        "alpha": 1.0
-                                    }
-                                }));
-                            }
-                        }
-                    }
-                }
-
-                return Ok(Some(json!(colors)));
-            }
-        }
-
-        Ok(Some(json!([])))
+    fn handle_document_color(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Not implemented - return method_not_found
+        Err(JsonRpcError {
+            code: -32601,
+            message: "Method not found".to_string(),
+            data: None,
+        })
     }
 
     /// Handle textDocument/colorPresentation request
     fn handle_color_presentation(
         &self,
-        params: Option<Value>,
+        _params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let color = &params["color"];
-            let r = (color["red"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-            let g = (color["green"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-            let b = (color["blue"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-
-            // Return various color presentations
-            let presentations = vec![
-                json!({ "label": format!("#{:02x}{:02x}{:02x}", r, g, b) }),
-                json!({ "label": format!("#{:02X}{:02X}{:02X}", r, g, b) }),
-                json!({ "label": format!("rgb({}, {}, {})", r, g, b) }),
-            ];
-
-            return Ok(Some(json!(presentations)));
-        }
-
-        Ok(Some(json!([])))
+        // Not implemented - return method_not_found
+        Err(JsonRpcError {
+            code: -32601,
+            message: "Method not found".to_string(),
+            data: None,
+        })
     }
 
     /// Handle textDocument/linkedEditingRange request

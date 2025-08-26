@@ -133,7 +133,7 @@ fn test_unsupported_methods_return_error() {
     let unsupported_methods = [
         "textDocument/colorPresentation",  // Not implemented (color support)
         "textDocument/documentColor",      // Not implemented (color support)
-        "textDocument/linkedEditingRange", // Not implemented (linked editing)
+        // Note: linkedEditingRange is actually implemented for paired delimiters
     ];
 
     for method in &unsupported_methods {

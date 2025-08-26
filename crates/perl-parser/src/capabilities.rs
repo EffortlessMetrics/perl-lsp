@@ -110,14 +110,14 @@ impl BuildFlags {
             document_links: true,
             selection_ranges: true,
             on_type_formatting: true,
-            code_lens: true,         // Now implemented
-            call_hierarchy: false,   // Partial implementation
+            code_lens: false,        // Only ~20% functional, not advertised
+            call_hierarchy: false,   // Partial implementation (~15%), not advertised
             type_hierarchy: false,   // Not implemented
             linked_editing: true,    // Implemented for paired delimiters
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
             moniker: true,           // Stable symbol identifiers
-            document_color: true,    // Color detection
+            document_color: false,   // Not implemented (returns method_not_found)
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
