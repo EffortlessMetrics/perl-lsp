@@ -125,7 +125,7 @@ impl DynamicDelimiterRecovery {
 
             RecoveryMode::BestGuess => {
                 // Try various heuristics
-                if let Some(delimiter) = self.try_resolve_variable(expression, context) {
+                if let Some(delimiter) = self.resolve_variable_value(expression, context) {
                     analysis.delimiter = Some(delimiter.value.clone());
                     analysis.confidence = delimiter.confidence;
                     analysis.recovery_strategy = format!("Resolved via {:?}", delimiter.source);
@@ -173,19 +173,48 @@ impl DynamicDelimiterRecovery {
         analysis
     }
 
-    /// Try to resolve a variable to its value
-    fn try_resolve_variable(&self, expr: &str, _context: &ParseContext) -> Option<&PossibleValue> {
-        // Simple case: just a variable like $delimiter
-        if let Some(var_name) = expr.strip_prefix("$") {
+    /// Resolve an expression to a possible delimiter value
+    fn resolve_variable_value(&self, expr: &str, _context: &ParseContext) -> Option<PossibleValue> {
+        let trimmed = expr.trim();
+
+        // Simple case: $var
+        if let Some(var_name) = trimmed.strip_prefix('$') {
             if let Some(values) = self.variable_values.get(var_name) {
-                // Return highest confidence value
                 return values
                     .iter()
-                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap());
+                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
+                    .cloned();
             }
         }
 
-        // TODO: Handle more complex expressions like ${var} or $var . "END"
+        // Braced variable: ${var}
+        if trimmed.starts_with("${") && trimmed.ends_with('}') {
+            let inner = &trimmed[2..trimmed.len() - 1];
+            if let Some(values) = self.variable_values.get(inner) {
+                return values
+                    .iter()
+                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
+                    .cloned();
+            }
+        }
+
+        // Concatenation: $var . "END"
+        if let Some((left, right)) = trimmed.split_once('.') {
+            let left_val = self.resolve_variable_value(left.trim(), _context);
+            if let Some(mut base) = left_val {
+                let right_trim = right.trim();
+                let literal = right_trim
+                    .strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .or_else(|| right_trim.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')));
+                if let Some(lit) = literal {
+                    base.value.push_str(lit);
+                    base.source = ValueSource::Concatenation;
+                    base.confidence *= 0.9; // Slightly reduced confidence
+                    return Some(base);
+                }
+            }
+        }
 
         None
     }
@@ -309,5 +338,49 @@ EOF
         let analysis = recovery.analyze_dynamic_delimiter("$foo", &context);
         assert!(analysis.delimiter.is_none());
         assert!(!analysis.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_braced_variable() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        recovery.variable_values.insert(
+            "var".to_string(),
+            vec![PossibleValue {
+                value: "END".to_string(),
+                confidence: 1.0,
+                source: ValueSource::Literal,
+            }],
+        );
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        let result = recovery.resolve_variable_value("${var}", &context);
+        assert_eq!(result.unwrap().value, "END");
+    }
+
+    #[test]
+    fn test_resolve_concatenation() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        recovery.variable_values.insert(
+            "base".to_string(),
+            vec![PossibleValue {
+                value: "E".to_string(),
+                confidence: 0.8,
+                source: ValueSource::Literal,
+            }],
+        );
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        let result = recovery.resolve_variable_value("$base . \"ND\"", &context);
+        assert_eq!(result.unwrap().value, "END");
     }
 }
