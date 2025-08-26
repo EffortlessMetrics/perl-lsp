@@ -167,23 +167,27 @@ impl IncrementalParserV2 {
 
     fn is_simple_value_edit(&self, tree: &IncrementalTree) -> bool {
         // Check if all edits only affect literal values
+        let mut cumulative_shift: isize = 0;
         for edit in &self.pending_edits.edits {
-            let affected_node = tree.find_containing_node(edit.start_byte, edit.old_end_byte);
+            // Map edit positions back to the original tree coordinates
+            let start = (edit.start_byte as isize - cumulative_shift) as usize;
+            let end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+
+            let affected_node = tree.find_containing_node(start, end);
 
             match affected_node {
-                Some(node) => {
-                    match &node.kind {
-                        NodeKind::Number { .. } | NodeKind::String { .. } => {
-                            // Check if the edit is contained within this literal
-                            if edit.start_byte >= node.location.start
-                                && edit.old_end_byte <= node.location.end
-                            {
-                                continue; // This is a simple value edit
-                            }
+                Some(node) => match &node.kind {
+                    NodeKind::Number { .. } | NodeKind::String { .. } => {
+                        if start >= node.location.start && end <= node.location.end {
+                            // Edit is entirely within the literal
+                            cumulative_shift += edit.byte_shift();
+                            continue;
+                        } else {
+                            return false;
                         }
-                        _ => return false, // Not a simple value
                     }
-                }
+                    _ => return false, // Structural edit
+                },
                 None => return false, // No containing node found
             }
         }
@@ -196,12 +200,10 @@ impl IncrementalParserV2 {
         source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
-        // For simple value edits, we can parse the new source but count reused nodes
-        let mut parser = Parser::new(source);
-        let new_root = parser.parse().ok()?;
+        // For simple value edits, reuse unaffected nodes from the previous tree
+        let new_root = self.clone_and_update_node(&last_tree.root, source, &last_tree.source);
 
-        // Count how many nodes we could have reused
-        // Note: We're doing a full parse but simulating incremental metrics
+        // Update reuse statistics
         self.count_reuse_potential(&last_tree.root, &new_root);
 
         Some(new_root)
@@ -215,18 +217,109 @@ impl IncrementalParserV2 {
         let affected = self.is_node_affected(node);
 
         if affected {
-            // This node is affected - reparse just this part
-            match &node.kind {
-                NodeKind::Number { .. } => {
-                    // Extract the new value from source
-                    let new_start = (node.location.start as isize + shift) as usize;
-                    let new_end =
-                        (node.location.end as isize + shift + self.calculate_content_delta(node))
-                            as usize;
+            let new_start = (node.location.start as isize + shift) as usize;
+            let new_end =
+                (node.location.end as isize + shift + self.calculate_content_delta(node)) as usize;
 
+            match &node.kind {
+                NodeKind::Program { statements } => {
+                    let new_stmts = statements
+                        .iter()
+                        .map(|s| self.clone_and_update_node(s, new_source, _old_source))
+                        .collect();
+                    return Node::new(
+                        NodeKind::Program { statements: new_stmts },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::Block { statements } => {
+                    let new_stmts = statements
+                        .iter()
+                        .map(|s| self.clone_and_update_node(s, new_source, _old_source))
+                        .collect();
+                    return Node::new(
+                        NodeKind::Block { statements: new_stmts },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                    let new_var = self.clone_and_update_node(variable, new_source, _old_source);
+                    let new_init = initializer
+                        .as_ref()
+                        .map(|i| self.clone_and_update_node(i, new_source, _old_source));
+                    return Node::new(
+                        NodeKind::VariableDeclaration {
+                            declarator: declarator.clone(),
+                            variable: Box::new(new_var),
+                            attributes: attributes.clone(),
+                            initializer: new_init.map(Box::new),
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::Binary { op, left, right } => {
+                    let new_left = self.clone_and_update_node(left, new_source, _old_source);
+                    let new_right = self.clone_and_update_node(right, new_source, _old_source);
+                    return Node::new(
+                        NodeKind::Binary {
+                            op: op.clone(),
+                            left: Box::new(new_left),
+                            right: Box::new(new_right),
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::Unary { op, operand } => {
+                    let new_operand = self.clone_and_update_node(operand, new_source, _old_source);
+                    return Node::new(
+                        NodeKind::Unary {
+                            op: op.clone(),
+                            operand: Box::new(new_operand),
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::FunctionCall { name, args } => {
+                    let new_args = args
+                        .iter()
+                        .map(|a| self.clone_and_update_node(a, new_source, _old_source))
+                        .collect();
+                    return Node::new(
+                        NodeKind::FunctionCall {
+                            name: name.clone(),
+                            args: new_args,
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                    let new_condition = self.clone_and_update_node(condition, new_source, _old_source);
+                    let new_then = self.clone_and_update_node(then_branch, new_source, _old_source);
+                    let new_elsif: Vec<(Box<Node>, Box<Node>)> = elsif_branches
+                        .iter()
+                        .map(|(c, b)| {
+                            (
+                                Box::new(self.clone_and_update_node(c, new_source, _old_source)),
+                                Box::new(self.clone_and_update_node(b, new_source, _old_source)),
+                            )
+                        })
+                        .collect();
+                    let new_else = else_branch
+                        .as_ref()
+                        .map(|b| Box::new(self.clone_and_update_node(b, new_source, _old_source)));
+                    return Node::new(
+                        NodeKind::If {
+                            condition: Box::new(new_condition),
+                            then_branch: Box::new(new_then),
+                            elsif_branches: new_elsif,
+                            else_branch: new_else,
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    );
+                }
+                NodeKind::Number { .. } => {
                     if new_start < new_source.len() && new_end <= new_source.len() {
                         let new_value = &new_source[new_start..new_end];
-
                         return Node::new(
                             NodeKind::Number { value: new_value.to_string() },
                             SourceLocation { start: new_start, end: new_end },
@@ -234,14 +327,8 @@ impl IncrementalParserV2 {
                     }
                 }
                 NodeKind::String { interpolated, .. } => {
-                    let new_start = (node.location.start as isize + shift) as usize;
-                    let new_end =
-                        (node.location.end as isize + shift + self.calculate_content_delta(node))
-                            as usize;
-
                     if new_start < new_source.len() && new_end <= new_source.len() {
                         let new_value = &new_source[new_start..new_end];
-
                         return Node::new(
                             NodeKind::String {
                                 value: new_value.to_string(),
@@ -522,17 +609,16 @@ mod tests {
     use crate::position::Position;
 
     #[test]
-    fn test_incremental_value_change() {
+    fn test_incremental_insertion() {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse
         let source1 = "my $x = 42;";
-        let _tree1 = parser.parse(source1).unwrap();
-        // Initial parse counts all nodes: Program + VarDecl + Variable + Number = 4
-        // But semicolon is not counted as a separate node
-        assert_eq!(parser.reparsed_nodes, 4); // Program, VarDecl, Variable, Number
+        parser.parse(source1).unwrap();
+        // Program + VarDecl + Variable + Number
+        assert_eq!(parser.reparsed_nodes, 4);
 
-        // Change the number value
+        // Insert characters into the number
         parser.edit(Edit::new(
             8,
             10,
@@ -545,13 +631,9 @@ mod tests {
         let source2 = "my $x = 4242;";
         let tree2 = parser.parse(source2).unwrap();
 
-        // TODO: Implement true incremental parsing with actual node reuse
-        // Current implementation does full parse
-        // Actually, analyze_reuse is finding 3 nodes that could be reused!
-        assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable can be reused
-        assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
+        assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable
+        assert_eq!(parser.reparsed_nodes, 1); // Number
 
-        // Verify the tree is correct
         if let NodeKind::Program { statements } = &tree2.kind {
             if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
                 &statements[0].kind
@@ -564,14 +646,38 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_value_changes() {
+    fn test_incremental_deletion() {
+        let mut parser = IncrementalParserV2::new();
+
+        let source1 = "my $x = 4242;";
+        parser.parse(source1).unwrap();
+
+        // Delete part of the number
+        parser.edit(Edit::new(
+            10,
+            12,
+            10, // remove "42"
+            Position::new(10, 1, 11),
+            Position::new(12, 1, 13),
+            Position::new(10, 1, 11),
+        ));
+
+        let source2 = "my $x = 42;";
+        parser.parse(source2).unwrap();
+
+        assert_eq!(parser.reused_nodes, 3);
+        assert_eq!(parser.reparsed_nodes, 1);
+    }
+
+    #[test]
+    fn test_multiple_value_edits() {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse
         let source1 = "my $x = 10;\nmy $y = 20;";
         parser.parse(source1).unwrap();
 
-        // Change both values
+        // First edit: insertion
         parser.edit(Edit::new(
             8,
             10,
@@ -581,20 +687,20 @@ mod tests {
             Position::new(11, 1, 12),
         ));
 
+        // Second edit: deletion after adjustment from first edit
         parser.edit(Edit::new(
-            21,
+            22,
             23,
-            25, // "20" -> "200" (adjusted for previous edit)
-            Position::new(21, 2, 9),
+            22, // "20" -> "2"
+            Position::new(22, 2, 10),
             Position::new(23, 2, 11),
-            Position::new(25, 2, 13),
+            Position::new(22, 2, 10),
         ));
 
-        let source2 = "my $x = 100;\nmy $y = 200;";
-        let _tree = parser.parse(source2).unwrap();
-        // Multiple edits cause fallback to full parse in current implementation
-        // TODO: Fix is_simple_value_edit to handle multiple edits correctly
-        assert_eq!(parser.reused_nodes, 0); // Falls back to full parse
-        assert_eq!(parser.reparsed_nodes, 7); // All nodes reparsed
+        let source2 = "my $x = 100;\nmy $y = 2;";
+        parser.parse(source2).unwrap();
+
+        assert_eq!(parser.reused_nodes, 5);
+        assert_eq!(parser.reparsed_nodes, 2);
     }
 }
