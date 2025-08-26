@@ -482,6 +482,7 @@ To extend the Pest grammar:
 - ✅ Comments and POD documentation
 - ✅ String interpolation ($var, @array, ${expr})
 - ✅ Regular expressions (qr//, =~, !~, s///, tr///)
+- ✅ Substitution operator (s///) with proper pattern, replacement, and modifiers parsing
 - ✅ Method calls and complex dereferencing (->@*, ->%*, ->$*)
 - ✅ Substitution operators via context-sensitive parsing
 - ✅ Heredocs with full multi-phase parsing (all variants)
