@@ -58,7 +58,7 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
-        
+
         for (uri, content) in documents {
             // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
