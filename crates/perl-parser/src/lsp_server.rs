@@ -3748,7 +3748,7 @@ impl LspServer {
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
                             let documents = self.documents.lock().unwrap();
-                            if let Some(doc) = self.get_document(&documents, uri) {
+                            if let Some(_doc) = self.get_document(&documents, uri) {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
                                     let text = format!("{}\n", pragma);
