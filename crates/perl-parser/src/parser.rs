@@ -2757,60 +2757,30 @@ impl<'a> Parser<'a> {
                                 },
                                 SourceLocation { start, end },
                             );
-                        } else if let NodeKind::Regex { pattern, modifiers } = &right.kind {
-                            // Create a Match node
-                            expr = Node::new(
-                                NodeKind::Match {
-                                    expr: Box::new(expr),
-                                    pattern: pattern.clone(),
-                                    modifiers: modifiers.clone(),
-                                },
-                                SourceLocation { start, end },
-                            );
-                        } else if let NodeKind::Regex { pattern, .. } = &right.kind {
-                            if pattern.starts_with("s/")
-                                || pattern.starts_with("s|")
-                                || pattern.starts_with("s{")
-                                || pattern.starts_with("s[")
-                            {
-                                // Parse as substitution
-                                let parts = quote_parser::extract_substitution_parts(pattern);
+                        } else if let NodeKind::Regex { pattern, replacement, modifiers } =
+                            &right.kind
+                        {
+                            if let Some(replacement) = replacement {
+                                let pat = if pattern.len() >= 2 {
+                                    pattern[1..pattern.len() - 1].to_string()
+                                } else {
+                                    pattern.clone()
+                                };
                                 expr = Node::new(
                                     NodeKind::Substitution {
                                         expr: Box::new(expr),
-                                        pattern: parts.0,
-                                        replacement: parts.1,
-                                        modifiers: parts.2,
-                                    },
-                                    SourceLocation { start, end },
-                                );
-                            } else if pattern.starts_with("tr/")
-                                || pattern.starts_with("y/")
-                                || pattern.starts_with("tr{")
-                                || pattern.starts_with("y{")
-                                || pattern.starts_with("tr[")
-                                || pattern.starts_with("y[")
-                            {
-                                // Parse as transliteration
-                                let parts = quote_parser::extract_transliteration_parts(pattern);
-                                expr = Node::new(
-                                    NodeKind::Transliteration {
-                                        expr: Box::new(expr),
-                                        search: parts.0,
-                                        replace: parts.1,
-                                        modifiers: parts.2,
+                                        pattern: pat,
+                                        replacement: replacement.clone(),
+                                        modifiers: modifiers.clone(),
                                     },
                                     SourceLocation { start, end },
                                 );
                             } else {
-                                // Regular match - extract modifiers
-                                let (pattern_with_delims, modifiers) =
-                                    quote_parser::extract_regex_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Match {
                                         expr: Box::new(expr),
-                                        pattern: pattern_with_delims,
-                                        modifiers,
+                                        pattern: pattern.clone(),
+                                        modifiers: modifiers.clone(),
                                     },
                                     SourceLocation { start, end },
                                 );
@@ -3771,7 +3741,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let end = self.previous_position();
+        let mut end = self.previous_position();
 
         // Create appropriate node based on operator
         match op {
@@ -3808,9 +3778,25 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
+                let mut modifiers = String::new();
+                while let Ok(token) = self.tokens.peek() {
+                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
+                        let ch = token.text.chars().next().unwrap();
+                        if ch.is_ascii_alphabetic() {
+                            modifiers.push(ch);
+                            self.tokens.next()?;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                end = self.previous_position();
                 Ok(Node::new(
                     NodeKind::Regex {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
+                        replacement: None,
                         modifiers,
                     },
                     SourceLocation { start, end },
@@ -3825,9 +3811,25 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
+                let mut modifiers = String::new();
+                while let Ok(token) = self.tokens.peek() {
+                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
+                        let ch = token.text.chars().next().unwrap();
+                        if ch.is_ascii_alphabetic() {
+                            modifiers.push(ch);
+                            self.tokens.next()?;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                end = self.previous_position();
                 Ok(Node::new(
                     NodeKind::Regex {
-                        pattern: format!("m{}{}{}", opening_delim, content, closing_delim),
+                        pattern: format!("{}{}{}", opening_delim, content, closing_delim),
+                        replacement: None,
                         modifiers,
                     },
                     SourceLocation { start, end },
@@ -3955,7 +3957,7 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 let (pattern, modifiers) = quote_parser::extract_regex_parts(&token.text);
                 Ok(Node::new(
-                    NodeKind::Regex { pattern, modifiers },
+                    NodeKind::Regex { pattern, replacement: None, modifiers },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
