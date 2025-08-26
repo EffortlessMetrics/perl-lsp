@@ -40,6 +40,9 @@ ropey = { version = "1.6.1" }
 # Optional dependencies for incremental parsing
 anyhow = { version = "1.0", optional = true }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+
 [[bin]]
 name = "perl-parse"
 required-features = ["cli"]
