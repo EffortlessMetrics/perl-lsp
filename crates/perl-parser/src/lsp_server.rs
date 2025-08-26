@@ -966,6 +966,11 @@ impl LspServer {
         Ok(())
     }
 
+    /// Convenience wrapper to open a document from tests
+    pub fn did_open(&self, params: Value) -> Result<(), JsonRpcError> {
+        self.handle_did_open(Some(params))
+    }
+
     /// Handle didChange notification
     pub(crate) fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
@@ -3749,7 +3754,7 @@ impl LspServer {
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
                             let documents = self.documents.lock().unwrap();
-                            if let Some(_doc) = self.get_document(&documents, uri) {
+                            if self.get_document(&documents, uri).is_some() {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
                                     let text = format!("{}\n", pragma);
@@ -7677,7 +7682,9 @@ impl LspServer {
                                     .line_starts
                                     .offset_to_position(&doc.content, sym.location.end);
 
-                                let mut resolved = symbol.clone();
+                                // Start with the provided symbol JSON so we can add
+                                // additional details without panicking if fields are missing
+                                let mut resolved = json!(symbol);
 
                                 // Add detail based on symbol kind
                                 let detail = match sym.kind {
