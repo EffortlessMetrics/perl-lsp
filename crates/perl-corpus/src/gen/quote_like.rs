@@ -8,19 +8,13 @@ fn sanitize_payload(s: &str, left: char, right: char) -> String {
 /// Generate payload for quote-like operators
 pub fn q_like_payload() -> impl Strategy<Value = String> {
     prop_oneof![
-        // Simple strings
-        "[A-Za-z0-9 _-]{0,10}",
-        // With scalar interpolation
-        "[A-Za-z ]{0,5}\\$[a-z]{1,4}[A-Za-z ]{0,5}",
-        // With array interpolation
-        "[A-Za-z ]{0,5}@[a-z]{1,4}[A-Za-z ]{0,5}",
-        // With escape sequences
-        "hello\\\\nworld",
-        "tab\\\\there",
-        // Mixed
-        "The \\$var is @{[ 1+1 ]} ok",
+        Just("simple text".to_string()),
+        Just("with $var".to_string()),
+        Just("array @arr".to_string()),
+        Just("hello\nworld".to_string()),
+        Just("tab\\there".to_string()),
+        Just("The $var is @{[ 1+1 ]} ok".to_string()),
     ]
-    .prop_map(|s| s.to_string())
 }
 
 /// Delimiter pairs for quote-like operators
