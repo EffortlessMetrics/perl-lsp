@@ -558,7 +558,7 @@ module.exports = grammar({
           '+=', '-=', '.=',
           '*=', '/=', '%=', 'x=',
           '&=', '|=', '^=',
-          // TODO: Also &.= |.= ^.= when enabled
+          '&.=', '|.=', '^.=',
           '<<=', '>>=',
           '&&=', '||=', '//=',
         ),
@@ -572,8 +572,8 @@ module.exports = grammar({
         [prec.right, binop, '**', TERMPREC.POWOP], // _POWOP
         [prec.left, binop, choice('||', '//', '^^'), TERMPREC.OROR], // _OROR_DORDOR
         [prec.left, binop, '&&', TERMPREC.ANDAND], // _ANDAND
-        [prec.left, binop, choice('|', '^'), TERMPREC.BITOROP], // _BITORDOP
-        [prec.left, binop, '&', TERMPREC.BITANDOP], // _BITANDOP
+        [prec.left, binop, choice('|', '^', '|.', '^.'), TERMPREC.BITOROP], // _BITORDOP
+        [prec.left, binop, choice('&', '&.'), TERMPREC.BITANDOP], // _BITANDOP
         [prec.left, binop, choice('<<', '>>'), TERMPREC.SHIFTOP], // _SHIFTOP
         [prec.left, binop, choice('+', '-', '.'), TERMPREC.ADDOP], // _ADDOP
         [prec.left, binop, choice('*', '/', '%', 'x'), TERMPREC.MULOP], // _MULOP
@@ -607,7 +607,7 @@ module.exports = grammar({
     unary_expression: $ => choice(
       prec(TERMPREC.UMINUS, unop_pre('-', $._term)),
       prec(TERMPREC.UMINUS, unop_pre('+', $._term)),
-      prec(TERMPREC.UMINUS, unop_pre('~', $._term)), // TODO: also ~. when enabled
+      prec(TERMPREC.UMINUS, unop_pre(choice('~', '~.'), $._term)),
       prec(TERMPREC.UMINUS, unop_pre('!', $._term)),
     ),
     preinc_expression: $ =>
