@@ -8,7 +8,6 @@ use crate::{
     edit::{Edit, EditSet},
     error::ParseResult,
     parser::Parser,
-    position::Range,
 };
 use std::collections::HashMap;
 
@@ -210,140 +209,135 @@ impl IncrementalParserV2 {
     }
 
     fn clone_and_update_node(&self, node: &Node, new_source: &str, _old_source: &str) -> Node {
-        // Calculate position shift for this node
         let shift = self.calculate_shift_at(node.location.start);
-
-        // Check if this node is affected by any edit
         let affected = self.is_node_affected(node);
+        let content_delta = if affected { self.calculate_content_delta(node) } else { 0 };
+        let new_start = (node.location.start as isize + shift) as usize;
+        let new_end = (node.location.end as isize + shift + content_delta) as usize;
 
-        if affected {
-            let new_start = (node.location.start as isize + shift) as usize;
-            let new_end =
-                (node.location.end as isize + shift + self.calculate_content_delta(node)) as usize;
-
-            match &node.kind {
-                NodeKind::Program { statements } => {
-                    let new_stmts = statements
-                        .iter()
-                        .map(|s| self.clone_and_update_node(s, new_source, _old_source))
-                        .collect();
-                    return Node::new(
-                        NodeKind::Program { statements: new_stmts },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::Block { statements } => {
-                    let new_stmts = statements
-                        .iter()
-                        .map(|s| self.clone_and_update_node(s, new_source, _old_source))
-                        .collect();
-                    return Node::new(
-                        NodeKind::Block { statements: new_stmts },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                    let new_var = self.clone_and_update_node(variable, new_source, _old_source);
-                    let new_init = initializer
-                        .as_ref()
-                        .map(|i| self.clone_and_update_node(i, new_source, _old_source));
-                    return Node::new(
-                        NodeKind::VariableDeclaration {
-                            declarator: declarator.clone(),
-                            variable: Box::new(new_var),
-                            attributes: attributes.clone(),
-                            initializer: new_init.map(Box::new),
-                        },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::Binary { op, left, right } => {
-                    let new_left = self.clone_and_update_node(left, new_source, _old_source);
-                    let new_right = self.clone_and_update_node(right, new_source, _old_source);
-                    return Node::new(
-                        NodeKind::Binary {
-                            op: op.clone(),
-                            left: Box::new(new_left),
-                            right: Box::new(new_right),
-                        },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::Unary { op, operand } => {
-                    let new_operand = self.clone_and_update_node(operand, new_source, _old_source);
-                    return Node::new(
-                        NodeKind::Unary {
-                            op: op.clone(),
-                            operand: Box::new(new_operand),
-                        },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::FunctionCall { name, args } => {
-                    let new_args = args
-                        .iter()
-                        .map(|a| self.clone_and_update_node(a, new_source, _old_source))
-                        .collect();
-                    return Node::new(
-                        NodeKind::FunctionCall {
-                            name: name.clone(),
-                            args: new_args,
-                        },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                    let new_condition = self.clone_and_update_node(condition, new_source, _old_source);
-                    let new_then = self.clone_and_update_node(then_branch, new_source, _old_source);
-                    let new_elsif: Vec<(Box<Node>, Box<Node>)> = elsif_branches
-                        .iter()
-                        .map(|(c, b)| {
-                            (
-                                Box::new(self.clone_and_update_node(c, new_source, _old_source)),
-                                Box::new(self.clone_and_update_node(b, new_source, _old_source)),
-                            )
-                        })
-                        .collect();
-                    let new_else = else_branch
-                        .as_ref()
-                        .map(|b| Box::new(self.clone_and_update_node(b, new_source, _old_source)));
-                    return Node::new(
-                        NodeKind::If {
-                            condition: Box::new(new_condition),
-                            then_branch: Box::new(new_then),
-                            elsif_branches: new_elsif,
-                            else_branch: new_else,
-                        },
-                        SourceLocation { start: new_start, end: new_end },
-                    );
-                }
-                NodeKind::Number { .. } => {
-                    if new_start < new_source.len() && new_end <= new_source.len() {
-                        let new_value = &new_source[new_start..new_end];
-                        return Node::new(
-                            NodeKind::Number { value: new_value.to_string() },
-                            SourceLocation { start: new_start, end: new_end },
-                        );
-                    }
-                }
-                NodeKind::String { interpolated, .. } => {
-                    if new_start < new_source.len() && new_end <= new_source.len() {
-                        let new_value = &new_source[new_start..new_end];
-                        return Node::new(
-                            NodeKind::String {
-                                value: new_value.to_string(),
-                                interpolated: *interpolated,
-                            },
-                            SourceLocation { start: new_start, end: new_end },
-                        );
-                    }
-                }
-                _ => {}
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                let new_stmts = statements
+                    .iter()
+                    .map(|s| self.clone_and_update_node(s, new_source, _old_source))
+                    .collect();
+                Node::new(
+                    NodeKind::Program { statements: new_stmts },
+                    SourceLocation { start: new_start, end: new_end },
+                )
             }
+            NodeKind::Block { statements } => {
+                let new_stmts = statements
+                    .iter()
+                    .map(|s| self.clone_and_update_node(s, new_source, _old_source))
+                    .collect();
+                Node::new(
+                    NodeKind::Block { statements: new_stmts },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                let new_var = self.clone_and_update_node(variable, new_source, _old_source);
+                let new_init = initializer
+                    .as_ref()
+                    .map(|i| self.clone_and_update_node(i, new_source, _old_source));
+                Node::new(
+                    NodeKind::VariableDeclaration {
+                        declarator: declarator.clone(),
+                        variable: Box::new(new_var),
+                        attributes: attributes.clone(),
+                        initializer: new_init.map(Box::new),
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::Binary { op, left, right } => {
+                let new_left = self.clone_and_update_node(left, new_source, _old_source);
+                let new_right = self.clone_and_update_node(right, new_source, _old_source);
+                Node::new(
+                    NodeKind::Binary {
+                        op: op.clone(),
+                        left: Box::new(new_left),
+                        right: Box::new(new_right),
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::Unary { op, operand } => {
+                let new_operand = self.clone_and_update_node(operand, new_source, _old_source);
+                Node::new(
+                    NodeKind::Unary {
+                        op: op.clone(),
+                        operand: Box::new(new_operand),
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::FunctionCall { name, args } => {
+                let new_args = args
+                    .iter()
+                    .map(|a| self.clone_and_update_node(a, new_source, _old_source))
+                    .collect();
+                Node::new(
+                    NodeKind::FunctionCall {
+                        name: name.clone(),
+                        args: new_args,
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                let new_condition = self.clone_and_update_node(condition, new_source, _old_source);
+                let new_then = self.clone_and_update_node(then_branch, new_source, _old_source);
+                let new_elsif: Vec<(Box<Node>, Box<Node>)> = elsif_branches
+                    .iter()
+                    .map(|(c, b)| {
+                        (
+                            Box::new(self.clone_and_update_node(c, new_source, _old_source)),
+                            Box::new(self.clone_and_update_node(b, new_source, _old_source)),
+                        )
+                    })
+                    .collect();
+                let new_else = else_branch
+                    .as_ref()
+                    .map(|b| Box::new(self.clone_and_update_node(b, new_source, _old_source)));
+                Node::new(
+                    NodeKind::If {
+                        condition: Box::new(new_condition),
+                        then_branch: Box::new(new_then),
+                        elsif_branches: new_elsif,
+                        else_branch: new_else,
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                )
+            }
+            NodeKind::Number { .. } => {
+                if affected && new_start < new_source.len() && new_end <= new_source.len() {
+                    let new_value = &new_source[new_start..new_end];
+                    Node::new(
+                        NodeKind::Number { value: new_value.to_string() },
+                        SourceLocation { start: new_start, end: new_end },
+                    )
+                } else {
+                    self.clone_with_shifted_positions(node, shift)
+                }
+            }
+            NodeKind::String { interpolated, .. } => {
+                if affected && new_start < new_source.len() && new_end <= new_source.len() {
+                    let new_value = &new_source[new_start..new_end];
+                    Node::new(
+                        NodeKind::String {
+                            value: new_value.to_string(),
+                            interpolated: *interpolated,
+                        },
+                        SourceLocation { start: new_start, end: new_end },
+                    )
+                } else {
+                    self.clone_with_shifted_positions(node, shift)
+                }
+            }
+            _ => self.clone_with_shifted_positions(node, shift),
         }
-
-        // Node is not affected or cannot be updated - clone with shifted positions
-        self.clone_with_shifted_positions(node, shift)
     }
 
     fn calculate_shift_at(&self, position: usize) -> isize {
@@ -351,21 +345,32 @@ impl IncrementalParserV2 {
     }
 
     fn calculate_content_delta(&self, node: &Node) -> isize {
-        // Calculate how much the content of this node changed
         let mut delta = 0;
+        let mut cumulative_shift: isize = 0;
 
         for edit in &self.pending_edits.edits {
-            if edit.start_byte >= node.location.start && edit.old_end_byte <= node.location.end {
+            let start = (edit.start_byte as isize - cumulative_shift) as usize;
+            let end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+            if start >= node.location.start && end <= node.location.end {
                 delta += edit.byte_shift();
             }
+            cumulative_shift += edit.byte_shift();
         }
 
         delta
     }
 
     fn is_node_affected(&self, node: &Node) -> bool {
-        let node_range = Range::from(node.location);
-        self.pending_edits.affects_range(&node_range)
+        let mut cumulative_shift: isize = 0;
+        for edit in &self.pending_edits.edits {
+            let start = (edit.start_byte as isize - cumulative_shift) as usize;
+            let end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+            if start < node.location.end && end > node.location.start {
+                return true;
+            }
+            cumulative_shift += edit.byte_shift();
+        }
+        false
     }
 
     #[allow(clippy::only_used_in_recursion)]
