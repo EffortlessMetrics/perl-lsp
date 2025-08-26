@@ -3836,7 +3836,10 @@ impl<'a> Parser<'a> {
             "s" => {
                 // Substitution operator shouldn't reach here - handled by TokenKind::Substitution
                 // This is kept for defensive programming
-                Err(ParseError::syntax("Substitution operator should be handled by TokenKind::Substitution", start))
+                Err(ParseError::syntax(
+                    "Substitution operator should be handled by TokenKind::Substitution",
+                    start,
+                ))
             }
             _ => Err(ParseError::syntax(format!("Unknown quote operator: {}", op), start)),
         }
