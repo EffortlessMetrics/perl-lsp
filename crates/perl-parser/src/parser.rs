@@ -3753,7 +3753,7 @@ impl<'a> Parser<'a> {
 
         // Parse modifiers for regex operators
         let mut modifiers = String::new();
-        if matches!(op, "m" | "s" | "qr") {
+        if matches!(op, "m" | "qr") {
             // Check for modifiers (letters after closing delimiter)
             while let Ok(token) = self.tokens.peek() {
                 if token.kind == TokenKind::Identifier && token.text.len() == 1 {
@@ -3834,14 +3834,11 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator - for now just parse as regex
-                // TODO: Parse replacement and modifiers
-                Ok(Node::new(
-                    NodeKind::Regex {
-                        pattern: format!("s{}{}{}", opening_delim, content, closing_delim),
-                        modifiers: String::new(),
-                    },
-                    SourceLocation { start, end },
+                // Substitution operator shouldn't reach here - handled by TokenKind::Substitution
+                // This is kept for defensive programming
+                Err(ParseError::syntax(
+                    "Substitution operator should be handled by TokenKind::Substitution",
+                    start,
                 ))
             }
             _ => Err(ParseError::syntax(format!("Unknown quote operator: {}", op), start)),

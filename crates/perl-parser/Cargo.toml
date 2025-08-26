@@ -48,6 +48,9 @@ required-features = ["cli"]
 name = "perl-lsp"
 path = "src/bin/perl-lsp.rs"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+
 [[bin]]
 name = "perl-dap"
 path = "src/bin/perl-dap.rs"

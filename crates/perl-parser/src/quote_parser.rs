@@ -51,15 +51,61 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
+    // For non-paired, add delimiter back since extract_delimited_content expects it
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
+        if trimmed.starts_with(delimiter) {
+            trimmed
+        } else {
+            // Paired delimiter missing, return what we have
+            return (pattern, String::new(), extract_modifiers(rest1));
+        }
     } else {
-        rest1
+        // For non-paired delimiters, we need to add the delimiter back
+        // since extract_delimited_content expects it to start with delimiter
+        if rest1.is_empty() {
+            rest1
+        } else {
+            // Create a new string with delimiter prepended for proper parsing
+            &format!("{}{}", delimiter, rest1)
+        }
     };
 
     // Parse second body (replacement)
-    let (replacement, modifiers_str) = extract_delimited_content(rest2, delimiter, closing);
+    // For non-paired delimiters, we need special handling
+    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+        // Manually parse the replacement for non-paired delimiters
+        let chars = rest1.char_indices();
+        let mut body = String::new();
+        let mut escaped = false;
+        let mut end_pos = rest1.len();
+
+        for (i, ch) in chars {
+            if escaped {
+                body.push(ch);
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    body.push(ch);
+                    escaped = true;
+                }
+                c if c == closing => {
+                    end_pos = i + ch.len_utf8();
+                    break;
+                }
+                _ => body.push(ch),
+            }
+        }
+
+        (body, &rest1[end_pos..])
+    } else if is_paired {
+        extract_delimited_content(rest2, delimiter, closing)
+    } else {
+        (String::new(), rest1)
+    };
 
     // Extract only alphabetic modifiers
     let modifiers = extract_modifiers(modifiers_str);
