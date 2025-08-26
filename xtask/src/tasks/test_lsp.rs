@@ -1,9 +1,18 @@
 //! Test LSP features with demo scripts
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, bail, eyre};
+use serde_json::{Value, json};
 use std::fs;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+/// Expected semantic tokens for the hover_test.pl fixture
+const EXPECTED_TOKENS: &[u32] = &[
+    1, 0, 6, 0, 4, 1, 0, 8, 0, 4, 4, 0, 13, 2, 3, 5, 3, 7, 4, 1, 1, 0, 5, 2, 36, 0, 6, 19, 9, 0, 3,
+    3, 6, 4, 1, 1, 3, 6, 4, 1, 1, 3, 7, 4, 1, 3, 0, 10, 0, 1, 2, 0, 3, 2, 3, 1, 7, 6, 4, 1, 4, 0,
+    3, 2, 3, 5, 0, 1, 10, 0,
+];
 
 /// Run LSP feature tests
 pub fn run(create_only: bool, test: Option<String>, cleanup: bool) -> Result<()> {
@@ -249,19 +258,105 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
 fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
 
-    // Check if LSP server is available
-    let output = Command::new("perl-lsp").arg("--version").output();
+    // Start the LSP server in stdio mode
+    let mut child = Command::new("cargo")
+        .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| eyre!("failed to start LSP server: {e}"))?;
 
-    match output {
-        Ok(_) => println!("   ✓ LSP server is available"),
-        Err(_) => println!(
-            "   ⚠ LSP server not found. Run: cargo install --path crates/perl-parser --bin perl-lsp"
-        ),
+    let mut writer = child.stdin.take().ok_or_else(|| eyre!("no stdin"))?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or_else(|| eyre!("no stdout"))?);
+
+    // Helper to write a JSON-RPC message
+    fn write_message(writer: &mut std::process::ChildStdin, value: &Value) -> Result<()> {
+        let content = serde_json::to_string(value)?;
+        write!(writer, "Content-Length: {}\r\n\r\n{}", content.len(), content)?;
+        writer.flush()?;
+        Ok(())
     }
 
-    // TODO: Add actual syntax highlighting test
-    println!("   ℹ Open test_features.pl in VSCode to verify semantic tokens");
+    // Helper to read a JSON-RPC message
+    fn read_message(reader: &mut BufReader<std::process::ChildStdout>) -> Result<Value> {
+        let mut header = String::new();
+        let mut content_length = None;
+        loop {
+            header.clear();
+            reader.read_line(&mut header)?;
+            if header == "\r\n" {
+                break;
+            }
+            if header.to_ascii_lowercase().starts_with("content-length:") {
+                let len = header.split(':').nth(1).unwrap().trim().parse()?;
+                content_length = Some(len);
+            }
+        }
+        let len = content_length.ok_or_else(|| eyre!("missing content length"))?;
+        let mut buf = vec![0; len];
+        reader.read_exact(&mut buf)?;
+        Ok(serde_json::from_slice(&buf)?)
+    }
 
+    // Initialize server
+    write_message(
+        &mut writer,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"capabilities": {}, "rootUri": null, "processId": std::process::id()}
+        }),
+    )?;
+    read_message(&mut reader)?;
+    write_message(&mut writer, &json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}))?;
+
+    // Open the fixture file
+    let fixture = Path::new("crates/perl-parser/tests/fixtures/hover_test.pl");
+    let text = fs::read_to_string(fixture)?;
+    let uri = format!("file://{}", fixture.canonicalize()?.display());
+    write_message(
+        &mut writer,
+        &json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            }
+        }),
+    )?;
+
+    // Request semantic tokens
+    write_message(
+        &mut writer,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "textDocument/semanticTokens/full",
+            "params": {"textDocument": {"uri": uri}}
+        }),
+    )?;
+    let response = read_message(&mut reader)?;
+    let data = response["result"]["data"]
+        .as_array()
+        .ok_or_else(|| eyre!("no semantic token data"))?
+        .iter()
+        .map(|v| v.as_u64().unwrap() as u32)
+        .collect::<Vec<_>>();
+
+    if data != EXPECTED_TOKENS {
+        bail!("semantic tokens differ: {:?} != {:?}", data, EXPECTED_TOKENS);
+    }
+
+    // Shut down server
+    let _ = child.kill();
+    println!("   ✓ Semantic tokens match expected values");
     Ok(())
 }
 
