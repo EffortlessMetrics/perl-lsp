@@ -6,7 +6,6 @@
 //! - Blessed references of a specific type
 
 use crate::ast::{Node, NodeKind};
-use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
 use lsp_types::{LocationLink, Position, Range};
@@ -58,9 +57,6 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
-        
-        // Build inheritance index from all documents
-        let hierarchy_provider = TypeHierarchyProvider::new();
         
         for (uri, content) in documents {
             // Parse document
@@ -372,5 +368,6 @@ impl ImplementationProvider {
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
+    #[allow(dead_code)]
     BlessedType(String),
 }

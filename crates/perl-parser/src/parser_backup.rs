@@ -2149,7 +2149,7 @@ impl<'a> Parser<'a> {
                                 },
                                 SourceLocation { start, end }
                             );
-                        } else if let NodeKind::Regex { pattern, modifiers } = &right.kind {
+                        } else if let NodeKind::Regex { pattern, replacement: _, modifiers } = &right.kind {
                             // Create a Match node
                             expr = Node::new(
                                 NodeKind::Match {
