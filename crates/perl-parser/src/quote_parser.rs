@@ -51,11 +51,13 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
+    let rest2_owned;
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
+        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { trimmed }
     } else {
-        rest1
+        rest2_owned = format!("{}{}", delimiter, rest1);
+        &rest2_owned
     };
 
     // Parse second body (replacement)

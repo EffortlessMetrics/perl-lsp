@@ -293,8 +293,8 @@ impl Node {
                 format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
             }
 
-            NodeKind::Regex { pattern, modifiers } => {
-                format!("(regex {:?} {:?})", pattern, modifiers)
+            NodeKind::Regex { pattern, replacement, modifiers } => {
+                format!("(regex {:?} {:?} {:?})", pattern, replacement, modifiers)
             }
 
             NodeKind::Match { expr, pattern, modifiers } => {
@@ -584,6 +584,7 @@ pub enum NodeKind {
     // Pattern matching
     Regex {
         pattern: String,
+        replacement: Option<String>,
         modifiers: String,
     },
 

@@ -206,9 +206,17 @@ impl Node {
                 format!("(string {})", value)
             }
 
-            NodeKind::Regex { pattern, modifiers } => {
-                format!("(regex (pattern {}) (modifiers {}))", pattern, modifiers)
-            }
+            NodeKind::Regex { pattern, replacement, modifiers } => match replacement {
+                Some(repl) => {
+                    format!(
+                        "(regex (pattern {}) (replacement {}) (modifiers {}))",
+                        pattern, repl, modifiers
+                    )
+                }
+                None => {
+                    format!("(regex (pattern {}) (modifiers {}))", pattern, modifiers)
+                }
+            },
 
             NodeKind::List { elements } => {
                 let items = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
@@ -448,6 +456,7 @@ pub enum NodeKind {
 
     Regex {
         pattern: Arc<str>,
+        replacement: Option<Arc<str>>,
         modifiers: Arc<str>,
     },
 
