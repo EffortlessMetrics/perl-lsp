@@ -20,7 +20,12 @@ fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
     server.handle_request(request);
 }
 
-fn inline_completion(server: &mut LspServer, uri: &str, line: u32, character: u32) -> serde_json::Value {
+fn inline_completion(
+    server: &mut LspServer,
+    uri: &str,
+    line: u32,
+    character: u32,
+) -> serde_json::Value {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -30,9 +35,7 @@ fn inline_completion(server: &mut LspServer, uri: &str, line: u32, character: u3
             "position": { "line": line, "character": character }
         })),
     };
-    let response = server
-        .handle_request(request)
-        .expect("inline completion response");
+    let response = server.handle_request(request).expect("inline completion response");
     response.result.expect("result field present")
 }
 
@@ -55,10 +58,8 @@ fn test_inline_completion_after_use() {
     let result = inline_completion(&mut server, uri, 0, 4);
     let items = result["items"].as_array().expect("items array");
     assert!(!items.is_empty());
-    let suggestions: Vec<String> = items
-        .iter()
-        .map(|i| i["insertText"].as_str().unwrap().to_string())
-        .collect();
+    let suggestions: Vec<String> =
+        items.iter().map(|i| i["insertText"].as_str().unwrap().to_string()).collect();
     assert!(suggestions.contains(&"strict;".to_string()));
     assert!(suggestions.contains(&"warnings;".to_string()));
 }
@@ -94,4 +95,3 @@ fn test_inline_completion_no_suggestions() {
     let items = result["items"].as_array().expect("items array");
     assert!(items.is_empty());
 }
-
