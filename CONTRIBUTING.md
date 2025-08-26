@@ -83,6 +83,21 @@ cargo xtask corpus --diagnose
 cargo test test_name
 ```
 
+### CI-only Test Behavior
+
+Some timing-sensitive LSP cancellation tests are ignored on CI and still run locally:
+
+- Tests use `#[cfg_attr(ci, ignore = "...")]` to skip on CI
+- CI sets `RUSTFLAGS="--cfg=ci"` in `.github/run_all_tests.sh`
+- To simulate CI locally:
+
+```bash
+export RUSTFLAGS="--cfg=ci"
+cargo test -p perl-parser --test lsp_cancel_test
+```
+
+This keeps CI signal high while preserving cancellation coverage for local runs.
+
 #### Feature-Gated Tests (Aspirational Features)
 Some tests are gated behind feature flags for functionality that's planned but not yet implemented:
 

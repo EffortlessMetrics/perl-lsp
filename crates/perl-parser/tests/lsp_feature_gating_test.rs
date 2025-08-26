@@ -114,5 +114,5 @@ fn test_experimental_features_enabled() {
 
     // Check experimental features are present
     // (This would be filled in when experimental features are added)
-    // For now, just ensure the server initializes correctly with experimental features
+    // For now, just verify initialization worked
 }
