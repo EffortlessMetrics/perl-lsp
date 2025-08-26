@@ -14,12 +14,16 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use peak_alloc::PeakAlloc;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
+
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
 pub fn run(
     c_only: bool,
@@ -218,13 +222,15 @@ fn run_single_test(
     let mut parse_error = false;
 
     for _ in 0..iterations {
+        PEAK_ALLOC.reset_peak_usage();
         let (ok, elapsed) = match impl_type {
             "c" => test_c_implementation(test_case)?,
             "rust" => test_rust_implementation(test_case)?,
             _ => return Err(color_eyre::eyre::eyre!("Unknown implementation type")),
         };
+        let memory = PEAK_ALLOC.peak_usage_as_mb() as f64;
         times.push(elapsed);
-        memories.push(0.0); // TODO: Add memory measurement
+        memories.push(memory);
         if ok {
             parse_success = true;
         } else {
@@ -244,6 +250,8 @@ fn run_single_test(
         times[times.len() / 2]
     };
 
+    let avg_memory = memories.iter().sum::<f64>() / memories.len() as f64;
+
     let file_size = std::fs::metadata(test_case).map(|m| m.len()).unwrap_or(0);
 
     Ok(Some(serde_json::json!({
@@ -253,7 +261,7 @@ fn run_single_test(
         "min_time": min_time,
         "max_time": max_time,
         "median_time": median_time,
-        "avg_memory": 0.0, // TODO: Add memory measurement
+        "avg_memory": avg_memory,
         "file_size": file_size,
         "parse_success": parse_success,
         "parse_error": parse_error
