@@ -1083,7 +1083,7 @@ impl<'a> ParserV2<'a> {
         let modifiers = Arc::from("");
 
         Ok(Node::new(
-            NodeKind::Regex { pattern, modifiers },
+            NodeKind::Regex { pattern, replacement: None, modifiers },
             SourceLocation { start: token.start, end: token.end },
         ))
     }

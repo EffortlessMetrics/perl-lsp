@@ -6,7 +6,6 @@
 //! - Blessed references of a specific type
 
 use crate::ast::{Node, NodeKind};
-// use crate::type_hierarchy::TypeHierarchyProvider; // Will be used when inheritance index is implemented
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
 use lsp_types::{LocationLink, Position, Range};
@@ -45,7 +44,9 @@ impl ImplementationProvider {
             Some(ImplementationTarget::Method { package, method }) => {
                 self.find_method_implementations(&package, &method, documents)
             }
-            // BlessedType case will be handled when blessed object types are implemented
+            Some(ImplementationTarget::BlessedType(type_name)) => {
+                self.find_blessed_implementations(&type_name, documents)
+            }
             None => Vec::new(),
         }
     }
@@ -57,10 +58,7 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
-
-        // Build inheritance index from all documents
-        // TypeHierarchyProvider::new(); // Not used yet, will be needed when inheritance index is implemented
-
+        
         for (uri, content) in documents {
             // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
@@ -126,7 +124,6 @@ impl ImplementationProvider {
     }
 
     /// Find blessed references of a specific type
-    #[allow(dead_code)]
     fn find_blessed_implementations(
         &self,
         type_name: &str,
@@ -387,5 +384,5 @@ impl ImplementationProvider {
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
-    // BlessedType(String), // Will be used for blessed object type implementations
+    BlessedType(String),
 }
