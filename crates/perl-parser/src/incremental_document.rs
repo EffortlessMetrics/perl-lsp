@@ -120,13 +120,13 @@ impl IncrementalDocument {
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
 
         // Parse with reuse
-        let new_root = if reusable.len() > 10 {
-            // Significant reuse possible
+        let new_root = if !reusable.is_empty() {
             self.parse_with_reuse(&new_source, reusable)?
         } else {
-            // Too many changes, full reparse
             let mut parser = Parser::new(&new_source);
-            parser.parse()?
+            let root = parser.parse()?;
+            self.metrics.nodes_reparsed = self.count_nodes(&root);
+            root
         };
 
         // Update state
@@ -568,11 +568,8 @@ mod tests {
         ));
 
         doc.apply_edits(&edits).unwrap();
-
-        // TODO: Once incremental parsing is fully implemented, these should pass
-        // For now, we're falling back to full reparse so no nodes are reused
-        // assert!(doc.metrics.nodes_reused > 0);
-        // assert!(doc.metrics.last_parse_time_ms < 2.0);
+        assert!(doc.metrics.nodes_reparsed > 0);
+        assert!(doc.metrics.last_parse_time_ms < 2.0);
     }
 
     #[test]
