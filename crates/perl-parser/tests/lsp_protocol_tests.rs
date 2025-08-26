@@ -1,93 +1,91 @@
 use perl_parser::lsp_server::LspServer;
-use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Cursor, Read};
+use serde_json::{json, Value};
+use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::sync::{Arc, Mutex};
 
-/// Mock transport for testing JSON-RPC messages
-#[allow(dead_code)]
-struct MockTransport {
-    output: Arc<Mutex<Vec<u8>>>,
+/// Frame a JSON value as an LSP message with proper headers.
+fn frame_message(value: &Value) -> Vec<u8> {
+    let content = serde_json::to_string(value).unwrap();
+    format!("Content-Length: {}\r\n\r\n{}", content.len(), content).into_bytes()
 }
 
-impl MockTransport {
-    #[allow(dead_code)]
-    fn new() -> Self {
-        Self { output: Arc::new(Mutex::new(Vec::new())) }
-    }
+/// Parse LSP messages from a byte buffer.
+fn parse_messages(data: &[u8]) -> Vec<Value> {
+    let mut reader = BufReader::new(Cursor::new(data));
+    let mut messages = Vec::new();
 
-    #[allow(dead_code)]
-    fn get_output(&self) -> String {
-        let output = self.output.lock().unwrap();
-        String::from_utf8_lossy(&output).to_string()
-    }
+    loop {
+        let mut headers = Vec::new();
 
-    #[allow(dead_code)]
-    fn parse_messages(&self) -> Vec<Value> {
-        let output = self.get_output();
-        let mut messages = Vec::new();
-        let mut reader = BufReader::new(Cursor::new(output));
-
+        // Read headers
         loop {
-            let mut headers = Vec::new();
-
-            // Read headers
-            loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line).unwrap() == 0 {
-                    return messages; // EOF
-                }
-
-                if line == "\r\n" || line == "\n" {
-                    break; // End of headers
-                }
-
-                headers.push(line);
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                return messages; // EOF
             }
 
-            // Find Content-Length
-            let content_length = headers
-                .iter()
-                .find(|h| h.starts_with("Content-Length:"))
-                .and_then(|h| h.split(':').nth(1))
-                .and_then(|v| v.trim().parse::<usize>().ok());
-
-            if let Some(length) = content_length {
-                let mut content = vec![0u8; length];
-                reader.read_exact(&mut content).unwrap();
-                if let Ok(json) = serde_json::from_slice::<Value>(&content) {
-                    messages.push(json);
-                }
-            } else {
-                break; // No content length found
+            if line == "\r\n" || line == "\n" {
+                break; // End of headers
             }
+
+            headers.push(line);
         }
 
-        messages
+        // Find Content-Length
+        let content_length = headers
+            .iter()
+            .find(|h| h.starts_with("Content-Length:"))
+            .and_then(|h| h.split(':').nth(1))
+            .and_then(|v| v.trim().parse::<usize>().ok());
+
+        if let Some(length) = content_length {
+            let mut content = vec![0u8; length];
+            reader.read_exact(&mut content).unwrap();
+            if let Ok(json) = serde_json::from_slice::<Value>(&content) {
+                messages.push(json);
+            }
+        } else {
+            break; // No content length found
+        }
+    }
+
+    messages
+}
+
+/// Writer that captures output into a shared buffer.
+struct BufferWriter(Arc<Mutex<Vec<u8>>>);
+
+impl Write for BufferWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
 #[test]
 fn test_diagnostics_clear_protocol_framing() {
-    // Create a mock stdout to capture output
-    let _original_stdout = std::io::stdout();
-    let _mock_transport = MockTransport::new();
-
-    // Create LSP server
-    let _server = LspServer::new();
+    // Capture server output so we can inspect the real LSP responses
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let writer: Arc<Mutex<Box<dyn Write + Send>>> =
+        Arc::new(Mutex::new(Box::new(BufferWriter(buffer.clone()))));
+    let mut server = LspServer::with_output(writer);
 
     // Initialize the server
-    let _init_request = json!({
+    let init_request = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
         "params": {
             "rootUri": "file:///test",
-            "capabilities": {}
+            "capabilities": {},
         }
     });
 
     // Open a document
-    let _open_notification = json!({
+    let open_notification = json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didOpen",
         "params": {
@@ -95,27 +93,52 @@ fn test_diagnostics_clear_protocol_framing() {
                 "uri": "file:///test/test.pl",
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 42;\nprint $x;\n"
+                "text": "my $x = 42;\nprint $x;\n",
             }
         }
     });
 
     // Close the document - this should send a clear diagnostics notification
-    let _close_notification = json!({
+    let close_notification = json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didClose",
         "params": {
             "textDocument": {
-                "uri": "file:///test/test.pl"
+                "uri": "file:///test/test.pl",
             }
         }
     });
 
-    // Process requests (we'd need to mock stdout to capture output)
-    // For now, just verify the structure is correct
+    // Send messages to the server
+    server
+        .handle_message(&mut Cursor::new(frame_message(&init_request)))
+        .unwrap();
+    server
+        .handle_message(&mut Cursor::new(frame_message(&open_notification)))
+        .unwrap();
+    server
+        .handle_message(&mut Cursor::new(frame_message(&close_notification)))
+        .unwrap();
 
-    // This test primarily ensures the code compiles with the correct structure
-    // A full integration test would require mocking stdout
+    // Parse all messages emitted by the server
+    let messages = {
+        let buf = buffer.lock().unwrap();
+        parse_messages(&buf)
+    };
+
+    // Verify initialization response was sent
+    assert!(messages.iter().any(|m| {
+        m.get("id") == Some(&json!(1)) && m.get("result").is_some()
+    }), "missing initialize response");
+
+    // Verify diagnostics were cleared on close
+    let diag = messages
+        .iter()
+        .rev()
+        .find(|m| m.get("method") == Some(&json!("textDocument/publishDiagnostics")))
+        .expect("no diagnostics notification emitted");
+    assert_eq!(diag["params"]["uri"], "file:///test/test.pl");
+    assert!(diag["params"]["diagnostics"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -233,7 +256,7 @@ fn test_position_encoding_advertised() {
         "method": "initialize",
         "params": {
             "rootUri": "file:///test",
-            "capabilities": {}
+            "capabilities": {},
         }
     });
 
