@@ -237,7 +237,7 @@ impl IncrementalParserV2 {
             // only affects areas that don't change the AST structure
             let start = edit.start_byte;
             let end = edit.old_end_byte;
-            
+
             // Check if the edit is in a comment or whitespace region
             if !self.is_in_non_structural_content(tree, start, end) {
                 return false;
@@ -247,7 +247,12 @@ impl IncrementalParserV2 {
     }
 
     /// Check if the given range only contains whitespace or comments
-    fn is_in_non_structural_content(&self, _tree: &IncrementalTree, _start: usize, _end: usize) -> bool {
+    fn is_in_non_structural_content(
+        &self,
+        _tree: &IncrementalTree,
+        _start: usize,
+        _end: usize,
+    ) -> bool {
         // For now, we're conservative and return false
         // In a full implementation, this would check if the range contains
         // only whitespace and comments based on token analysis
@@ -255,7 +260,11 @@ impl IncrementalParserV2 {
     }
 
     /// Parse with whitespace/comment optimizations
-    fn incremental_parse_whitespace(&mut self, _source: &str, last_tree: &IncrementalTree) -> Option<Node> {
+    fn incremental_parse_whitespace(
+        &mut self,
+        _source: &str,
+        last_tree: &IncrementalTree,
+    ) -> Option<Node> {
         // For whitespace-only changes, we can often reuse the entire tree
         // with just position adjustments
         let shift = self.calculate_total_shift();
@@ -298,7 +307,7 @@ impl IncrementalParserV2 {
         if node.location.start >= source.len() || node.location.end > source.len() {
             return false;
         }
-        
+
         if node.location.start > node.location.end {
             return false;
         }
