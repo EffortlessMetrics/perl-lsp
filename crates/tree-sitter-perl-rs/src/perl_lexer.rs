@@ -1186,46 +1186,45 @@ impl<'a> PerlLexer<'a> {
 
         // If this is not an ASCII character (high bit set), handle it as Unicode
         if ch > 127 {
-            if let Some(unicode_ch) = self.input[self.position..].chars().next() {
-                if self.is_unicode_identifier_start(unicode_ch) {
-                    // Parse Unicode identifier
-                    let char_len = unicode_ch.len_utf8();
-                    self.position += char_len;
+            if let Some(unicode_ch) = self.input[self.position..].chars().next()
+                && self.is_unicode_identifier_start(unicode_ch) {
+                // Parse Unicode identifier
+                let char_len = unicode_ch.len_utf8();
+                self.position += char_len;
 
-                    // Continue scanning identifier
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.input[self.position..].chars().next() {
-                            if self.is_unicode_identifier_continue(ch) {
-                                self.position += ch.len_utf8();
-                            } else if ch == ':' && self.position + ch.len_utf8() < self.input.len()
+                // Continue scanning identifier
+                while self.position < self.input.len() {
+                    if let Some(ch) = self.input[self.position..].chars().next() {
+                        if self.is_unicode_identifier_continue(ch) {
+                            self.position += ch.len_utf8();
+                        } else if ch == ':' && self.position + ch.len_utf8() < self.input.len()
+                        {
+                            // Check for :: in package names
+                            let next_pos = self.position + ch.len_utf8();
+                            if next_pos < self.input.len()
+                                && self.input.as_bytes()[next_pos] == b':'
                             {
-                                // Check for :: in package names
-                                let next_pos = self.position + ch.len_utf8();
-                                if next_pos < self.input.len()
-                                    && self.input.as_bytes()[next_pos] == b':'
-                                {
-                                    self.position += 2;
-                                } else {
-                                    break;
-                                }
+                                self.position += 2;
                             } else {
                                 break;
                             }
                         } else {
                             break;
                         }
+                    } else {
+                        break;
                     }
-
-                    let text = self.safe_slice(start, self.position);
-                    let token = Token {
-                        token_type: TokenType::Identifier(Arc::from(text)),
-                        text: Arc::from(text),
-                        start,
-                        end: self.position,
-                    };
-                    self.update_mode(&token.token_type);
-                    return Some(token);
                 }
+
+                let text = self.safe_slice(start, self.position);
+                let token = Token {
+                    token_type: TokenType::Identifier(Arc::from(text)),
+                    text: Arc::from(text),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                return Some(token);
             }
             // If not a valid identifier start, generate error token
             if let Some(unicode_ch) = self.input[self.position..].chars().next() {
@@ -1670,7 +1669,7 @@ impl<'a> PerlLexer<'a> {
                                 // Check if it's a single char like $^A or extended like ${^TAINT}
                                 if self.position < self.input.len() {
                                     let ch = self.input.as_bytes()[self.position];
-                                    if matches!(ch, b'A'..=b'Z') {
+                                    if ch.is_ascii_uppercase() {
                                         self.position += 1;
                                     }
                                 }
@@ -1939,7 +1938,7 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 };
                 self.update_mode(&token.token_type);
-                return Some(token);
+                Some(token)
             }
             b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' | b'\\' => {
                 // Check for number starting with decimal point
