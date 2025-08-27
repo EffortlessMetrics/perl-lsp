@@ -291,21 +291,14 @@ impl LspServer {
     pub fn run_with<R: Read, W: Write>(&mut self, reader: &mut R, writer: &mut W) -> io::Result<()> {
         let mut reader = BufReader::new(reader);
 
-        eprintln!("LSP server started");
-
         loop {
             match self.read_message_from(&mut reader)? {
                 Some(request) => {
-                    eprintln!("Received request: {}", request.method);
-
                     if let Some(response) = self.handle_request(request) {
                         self.send_message(writer, &response)?;
                     }
                 }
-                None => {
-                    eprintln!("LSP server: EOF on input, shutting down");
-                    break;
-                }
+                None => break,
             }
         }
 
