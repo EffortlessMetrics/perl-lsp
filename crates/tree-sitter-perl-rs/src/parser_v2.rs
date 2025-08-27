@@ -6,6 +6,7 @@
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::perl_lexer::PerlLexer;
+use crate::regex_parser::RegexParser;
 use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
 use std::sync::Arc;
 
@@ -1078,21 +1079,46 @@ impl<'a> ParserV2<'a> {
 
     fn parse_regex(&mut self) -> Result<Node, ParseError> {
         let token = self.advance();
-        // Extract pattern and modifiers from token
-        let pattern = token.text.clone();
-        let modifiers = Arc::from("");
+        let text = token.text.as_ref();
+
+        // Determine if this is an m// or bare // regex
+        let result = if text.starts_with('m')
+            && text.chars().nth(1).map_or(false, |c| !c.is_ascii_alphanumeric())
+        {
+            let mut parser = RegexParser::new(text, 1);
+            parser.parse_match_operator()
+        } else {
+            let mut parser = RegexParser::new(text, 0);
+            parser.parse_bare_regex()
+        };
+
+        let construct = result
+            .map_err(|e| ParseError::new(ParseErrorKind::InvalidRegex, token.start, e))?;
 
         Ok(Node::new(
-            NodeKind::Regex { pattern, replacement: None, modifiers },
+            NodeKind::Regex {
+                pattern: Arc::from(construct.pattern),
+                replacement: construct.replacement.map(Arc::from),
+                modifiers: Arc::from(construct.modifiers),
+            },
             SourceLocation { start: token.start, end: token.end },
         ))
     }
 
     fn parse_substitution(&mut self) -> Result<Node, ParseError> {
         let token = self.advance();
-        // For now, treat as a special string
+        let text = token.text.as_ref();
+        let mut parser = RegexParser::new(text, 1);
+        let construct = parser
+            .parse_substitute_operator()
+            .map_err(|e| ParseError::new(ParseErrorKind::InvalidRegex, token.start, e))?;
+
         Ok(Node::new(
-            NodeKind::String { value: token.text.clone() },
+            NodeKind::Regex {
+                pattern: Arc::from(construct.pattern),
+                replacement: construct.replacement.map(Arc::from),
+                modifiers: Arc::from(construct.modifiers),
+            },
             SourceLocation { start: token.start, end: token.end },
         ))
     }
