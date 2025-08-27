@@ -1187,7 +1187,8 @@ impl<'a> PerlLexer<'a> {
         // If this is not an ASCII character (high bit set), handle it as Unicode
         if ch > 127 {
             if let Some(unicode_ch) = self.input[self.position..].chars().next()
-                && self.is_unicode_identifier_start(unicode_ch) {
+                && self.is_unicode_identifier_start(unicode_ch)
+            {
                 // Parse Unicode identifier
                 let char_len = unicode_ch.len_utf8();
                 self.position += char_len;
@@ -1197,8 +1198,7 @@ impl<'a> PerlLexer<'a> {
                     if let Some(ch) = self.input[self.position..].chars().next() {
                         if self.is_unicode_identifier_continue(ch) {
                             self.position += ch.len_utf8();
-                        } else if ch == ':' && self.position + ch.len_utf8() < self.input.len()
-                        {
+                        } else if ch == ':' && self.position + ch.len_utf8() < self.input.len() {
                             // Check for :: in package names
                             let next_pos = self.position + ch.len_utf8();
                             if next_pos < self.input.len()

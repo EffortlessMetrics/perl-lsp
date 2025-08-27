@@ -5224,20 +5224,15 @@ impl LspServer {
 
     /// Handle textDocument/documentColor request
     fn handle_document_color(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        Err(JsonRpcError { 
-            code: -32601, 
-            message: "Method not found".into(), 
-            data: None 
-        })
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
     }
 
     /// Handle textDocument/colorPresentation request
-    fn handle_color_presentation(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        Err(JsonRpcError { 
-            code: -32601, 
-            message: "Method not found".into(), 
-            data: None 
-        })
+    fn handle_color_presentation(
+        &self,
+        _params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
     }
 
     /// Handle textDocument/linkedEditingRange request

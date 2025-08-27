@@ -169,21 +169,21 @@ impl BuildFlags {
             implementation: false,  // New feature, not GA yet
             references: true,
             document_symbol: true,
-            workspace_symbol: true,     // Working via index
-            inlay_hints: true,         // v0.8.4 feature - working
-            pull_diagnostics: true,    // v0.8.5 feature - working
+            workspace_symbol: true, // Working via index
+            inlay_hints: true,      // v0.8.4 feature - working
+            pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
-            semantic_tokens: true,     // v0.8.4 feature - working
-            code_actions: true,        // v0.8.4 feature - working
-            execute_command: true,     // v0.8.5 feature - working
-            rename: true,              // v0.8.4 feature - working
-            document_links: true,      // v0.8.4 feature - working
-            selection_ranges: true,    // v0.8.4 feature - working
-            on_type_formatting: true,  // v0.8.4 feature - working
-            code_lens: false,          // Only ~20% functional → don't advertise
-            call_hierarchy: false,     // Partial implementation
-            type_hierarchy: false,     // Not implemented
-            linked_editing: true,      // Implemented for paired delimiters
+            semantic_tokens: true,    // v0.8.4 feature - working
+            code_actions: true,       // v0.8.4 feature - working
+            execute_command: true,    // v0.8.5 feature - working
+            rename: true,             // v0.8.4 feature - working
+            document_links: true,     // v0.8.4 feature - working
+            selection_ranges: true,   // v0.8.4 feature - working
+            on_type_formatting: true, // v0.8.4 feature - working
+            code_lens: false,         // Only ~20% functional → don't advertise
+            call_hierarchy: false,    // Partial implementation
+            type_hierarchy: false,    // Not implemented
+            linked_editing: false,     // Not GA yet
             inline_completion: false, // New feature, not GA yet
             inline_values: false,     // New feature, not GA yet
             moniker: false,           // New feature, not GA yet

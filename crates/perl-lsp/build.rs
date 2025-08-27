@@ -1,4 +1,3 @@
-
 fn main() {
     // Get git tag for embedding in version output
     let tag = std::process::Command::new("git")

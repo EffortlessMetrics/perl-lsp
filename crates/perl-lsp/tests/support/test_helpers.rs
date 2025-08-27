@@ -51,10 +51,10 @@ fn assert_range_valid(range: &Value, context: &str) {
     let obj = range.as_object().expect("range should be object");
     assert!(obj.contains_key("start"), "{} must have start", context);
     assert!(obj.contains_key("end"), "{} must have end", context);
-    
+
     let start = &obj["start"];
     let end = &obj["end"];
-    
+
     assert_position_valid(start, &format!("{} start", context));
     assert_position_valid(end, &format!("{} end", context));
 }
@@ -64,7 +64,7 @@ fn assert_position_valid(position: &Value, context: &str) {
     let obj = position.as_object().expect("position should be object");
     assert!(obj.contains_key("line"), "{} must have line", context);
     assert!(obj.contains_key("character"), "{} must have character", context);
-    
+
     if let Some(line) = obj.get("line") {
         assert!(line.is_number(), "{} line must be number", context);
         let line_num = line.as_u64().expect("line should be u64");
@@ -72,7 +72,7 @@ fn assert_position_valid(position: &Value, context: &str) {
     } else {
         panic!("{} must have line", context);
     }
-    
+
     if let Some(character) = obj.get("character") {
         assert!(character.is_number(), "{} character must be number", context);
         let char_num = character.as_u64().expect("character should be u64");
