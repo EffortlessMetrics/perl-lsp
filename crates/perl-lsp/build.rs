@@ -10,6 +10,9 @@ fn main() {
 
     println!("cargo:rustc-env=GIT_TAG={}", tag.trim());
 
+    // Configure check-cfg for test-only cfg attributes
+    println!("cargo:rustc-check-cfg=cfg(ci)");
+
     // Also try to get the exact tag if we're on one
     let exact_tag = std::process::Command::new("git")
         .args(["describe", "--tags", "--exact-match"])

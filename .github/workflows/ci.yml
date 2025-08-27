@@ -48,6 +48,12 @@ jobs:
         shell: bash
         run: ./.github/run_all_tests.sh
         
+      - name: Build perl-lsp
+        run: cargo build -p perl-lsp --release
+        
+      - name: LSP health check
+        run: target/release/perl-lsp --health
+        
       - name: Run property tests (fast)
         env:
           PROPTEST_CASES: 64
