@@ -112,73 +112,42 @@ impl StatementTracker {
 pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
     let lines: Vec<&str> = input.lines().collect();
 
-    // For heredocs, we only care about the immediate statement boundary,
-    // not enclosing blocks. Just scan the heredoc line itself.
-    if heredoc_line > 0 && heredoc_line <= lines.len() {
-        let line = lines[heredoc_line - 1];
-
-        // Simple heuristic: if the line ends with a semicolon, the statement ends here
-        if line.trim_end().ends_with(';') {
-            return heredoc_line;
-        }
-
-        // If it's inside a parenthesized expression, find the closing paren
-        let mut paren_depth: i32 = 0;
-        let mut in_string = false;
-        let mut string_char = ' ';
-
-        // Count unclosed parens on the heredoc line
-        for ch in line.chars() {
-            if in_string {
-                if ch == string_char
-                    && line.chars().nth(line.find(ch).unwrap_or(0).saturating_sub(1)) != Some('\\')
-                {
-                    in_string = false;
-                }
-            } else {
-                match ch {
-                    '"' | '\'' => {
-                        in_string = true;
-                        string_char = ch;
-                    }
-                    '(' => paren_depth += 1,
-                    ')' => paren_depth = paren_depth.saturating_sub(1),
-                    _ => {}
-                }
-            }
-        }
-
-        // If we have unclosed parens, scan forward to find the closing
-        if paren_depth > 0 {
-            for (idx, scan_line) in lines.iter().enumerate().skip(heredoc_line) {
-                for ch in scan_line.chars() {
-                    if in_string {
-                        if ch == string_char {
-                            in_string = false;
-                        }
-                    } else {
-                        match ch {
-                            '"' | '\'' => {
-                                in_string = true;
-                                string_char = ch;
-                            }
-                            '(' => paren_depth += 1,
-                            ')' => {
-                                paren_depth = paren_depth.saturating_sub(1);
-                                if paren_depth == 0 && scan_line.trim_end().ends_with(");") {
-                                    return idx + 1;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+    if heredoc_line == 0 || heredoc_line > lines.len() {
+        return heredoc_line;
     }
 
-    // Default: statement ends on the same line as the heredoc
-    heredoc_line
+    let mut tracker = StatementTracker::new();
+    let mut prev_char: Option<char> = None;
+
+    // Pre-scan lines before the heredoc to establish bracket state
+    for line in lines.iter().take(heredoc_line - 1) {
+        for ch in line.chars() {
+            if tracker.process_char(ch, prev_char) {
+                tracker.reset();
+            }
+            prev_char = Some(ch);
+        }
+        if tracker.process_char('\n', prev_char) {
+            tracker.reset();
+        }
+        prev_char = None;
+    }
+
+    // Scan from the heredoc line forward until a statement boundary is found
+    for (idx, line) in lines.iter().enumerate().skip(heredoc_line - 1) {
+        for ch in line.chars() {
+            if tracker.process_char(ch, prev_char) {
+                return idx + 1;
+            }
+            prev_char = Some(ch);
+        }
+        if tracker.process_char('\n', prev_char) {
+            return idx + 1;
+        }
+        prev_char = None;
+    }
+
+    lines.len()
 }
 
 #[cfg(test)]
@@ -216,5 +185,18 @@ content
 EOF"#;
         let end = find_statement_end_line(input, 4);
         assert_eq!(end, 7); // Statement ends at line 7 with );
+    }
+
+    #[test]
+    fn test_array_ref() {
+        let input = r#"my $ref = [
+    "first",
+    <<'EOF',
+    "third"
+];
+content
+EOF"#;
+        let end = find_statement_end_line(input, 3);
+        assert_eq!(end, 5); // Statement ends at line 5 with ];
     }
 }

@@ -3,10 +3,8 @@
 //! This provider finds:
 //! - Subclasses that inherit from a base class
 //! - Overridden methods in derived classes
-//! - Blessed references of a specific type
 
 use crate::ast::{Node, NodeKind};
-use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
 use lsp_types::{LocationLink, Position, Range};
@@ -31,7 +29,8 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         // Find the node at position
-        let target_node = match self.find_node_at_position(ast, line, character, documents.get(uri)) {
+        let target_node = match self.find_node_at_position(ast, line, character, documents.get(uri))
+        {
             Some(node) => node,
             None => return Vec::new(),
         };
@@ -44,9 +43,6 @@ impl ImplementationProvider {
             Some(ImplementationTarget::Method { package, method }) => {
                 self.find_method_implementations(&package, &method, documents)
             }
-            Some(ImplementationTarget::BlessedType(type_name)) => {
-                self.find_blessed_implementations(&type_name, documents)
-            }
             None => Vec::new(),
         }
     }
@@ -58,10 +54,7 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
-        
-        // Build inheritance index from all documents
-        let hierarchy_provider = TypeHierarchyProvider::new();
-        
+
         for (uri, content) in documents {
             // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
@@ -113,25 +106,13 @@ impl ImplementationProvider {
         for subclass_link in &subclasses {
             if let Some(doc_content) = documents.get(subclass_link.target_uri.as_str()) {
                 if let Ok(ast) = crate::Parser::new(doc_content).parse() {
-                    self.find_method_in_ast(&ast, method, subclass_link.target_uri.as_str(), &mut results);
+                    self.find_method_in_ast(
+                        &ast,
+                        method,
+                        subclass_link.target_uri.as_str(),
+                        &mut results,
+                    );
                 }
-            }
-        }
-
-        results
-    }
-
-    /// Find blessed references of a specific type
-    fn find_blessed_implementations(
-        &self,
-        type_name: &str,
-        documents: &HashMap<String, String>,
-    ) -> Vec<LocationLink> {
-        let mut results = Vec::new();
-
-        for (uri, content) in documents {
-            if let Ok(ast) = crate::Parser::new(content).parse() {
-                self.find_blessed_refs_in_ast(&ast, type_name, uri, &mut results);
             }
         }
 
@@ -147,7 +128,13 @@ impl ImplementationProvider {
         results: &mut Vec<LocationLink>,
     ) {
         let mut current_package = String::new();
-        self.find_inheriting_packages_recursive(node, base_package, uri, &mut current_package, results);
+        self.find_inheriting_packages_recursive(
+            node,
+            base_package,
+            uri,
+            &mut current_package,
+            results,
+        );
     }
 
     fn find_inheriting_packages_recursive(
@@ -198,7 +185,13 @@ impl ImplementationProvider {
             }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.find_inheriting_packages_recursive(stmt, base_package, uri, current_package, results);
+                    self.find_inheriting_packages_recursive(
+                        stmt,
+                        base_package,
+                        uri,
+                        current_package,
+                        results,
+                    );
                 }
             }
             _ => {}
@@ -232,39 +225,6 @@ impl ImplementationProvider {
         }
     }
 
-    /// Find blessed references in AST
-    fn find_blessed_refs_in_ast(
-        &self,
-        node: &Node,
-        type_name: &str,
-        uri: &str,
-        results: &mut Vec<LocationLink>,
-    ) {
-        match &node.kind {
-            NodeKind::FunctionCall { name, args } if name == "bless" => {
-                if args.len() >= 2 {
-                    if let Some(blessed_type) = self.extract_string_value(&args[1]) {
-                        if blessed_type == type_name {
-                            let target_uri = parse_uri(uri);
-                            results.push(LocationLink {
-                                origin_selection_range: None,
-                                target_uri,
-                                target_range: self.node_to_range(node),
-                                target_selection_range: self.node_to_range(node),
-                            });
-                        }
-                    }
-                }
-            }
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                for stmt in statements {
-                    self.find_blessed_refs_in_ast(stmt, type_name, uri, results);
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// Extract implementation target from node
     fn extract_implementation_target(&self, node: &Node) -> Option<ImplementationTarget> {
         match &node.kind {
@@ -284,9 +244,7 @@ impl ImplementationProvider {
                         method: parts[1].to_string(),
                     })
                 } else if parts.len() > 2 {
-                    Some(ImplementationTarget::Package(
-                        parts[..parts.len() - 1].join("::")
-                    ))
+                    Some(ImplementationTarget::Package(parts[..parts.len() - 1].join("::")))
                 } else {
                     None
                 }
@@ -304,9 +262,9 @@ impl ImplementationProvider {
         source: Option<&String>,
     ) -> Option<Node> {
         if let Some(src) = source {
-            let (start_line, start_col) = 
+            let (start_line, start_col) =
                 crate::position::offset_to_utf16_line_col(src, node.location.start);
-            let (end_line, end_col) = 
+            let (end_line, end_col) =
                 crate::position::offset_to_utf16_line_col(src, node.location.end);
 
             if line >= start_line && line <= end_line {
@@ -318,7 +276,9 @@ impl ImplementationProvider {
                     match &node.kind {
                         NodeKind::Program { statements } | NodeKind::Block { statements } => {
                             for stmt in statements {
-                                if let Some(child) = self.find_node_at_position(stmt, line, character, source) {
+                                if let Some(child) =
+                                    self.find_node_at_position(stmt, line, character, source)
+                                {
                                     return Some(child);
                                 }
                             }
@@ -334,10 +294,7 @@ impl ImplementationProvider {
 
     /// Convert node to LSP range
     fn node_to_range(&self, _node: &Node) -> Range {
-        Range {
-            start: Position { line: 0, character: 0 },
-            end: Position { line: 0, character: 0 },
-        }
+        Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } }
     }
 
     /// Extract parent name from use statement argument (not needed anymore)
@@ -360,17 +317,9 @@ impl ImplementationProvider {
         }
     }
 
-    /// Extract string value from node
-    fn extract_string_value(&self, node: &Node) -> Option<String> {
-        match &node.kind {
-            NodeKind::String { value, .. } => Some(value.clone()),
-            _ => None,
-        }
-    }
 }
 
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
-    BlessedType(String),
 }

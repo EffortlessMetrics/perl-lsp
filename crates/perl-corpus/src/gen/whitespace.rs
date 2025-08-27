@@ -62,9 +62,9 @@ pub fn whitespace_pattern() -> impl Strategy<Value = String> {
 pub fn comment_pattern() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("# simple comment\n".to_string()),
-        Just("# TODO: fix this\n".to_string()),
-        Just("# FIXME: bug here\n".to_string()),
+        Just("# example usage\n".to_string()),
         Just("# NOTE: important\n".to_string()),
+        Just("# additional context\n".to_string()),
         Just("#\n".to_string()),
         Just("## section comment\n".to_string()),
     ]
@@ -108,10 +108,19 @@ pub fn insert_statement_comments(src: &str) -> String {
 /// Generate heavily commented code
 pub fn commented_code() -> impl Strategy<Value = String> {
     prop_oneof![
-        "# File header\n# Author: test\n\nuse strict;\n# Enable strictures\n\nmy $x = 1; # Initialize\n",
-        "#!/usr/bin/perl\n# -*- coding: utf-8 -*-\n\n# Main code\nprint 'hello'; # Output\n",
-        "# Before\nmy $x = 1;\n# Middle\n$x++;\n# After\nprint $x;\n",
-    ].prop_map(|s| s.to_string())
+        Just(
+            "# File header\n# Author: test\n\nuse strict;\n# Enable strictures\n\nmy $x = 1; # Initialize\n"
+                .to_string(),
+        ),
+        Just(
+            "#!/usr/bin/perl\n# -*- coding: utf-8 -*-\n\n# Main code\nprint 'hello'; # Output\n"
+                .to_string(),
+        ),
+        Just(
+            "# Before\nmy $x = 1;\n# Middle\n$x++;\n# After\nprint $x;\n"
+                .to_string(),
+        ),
+    ]
 }
 
 #[cfg(test)]
