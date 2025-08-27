@@ -1,4 +1,22 @@
 //! Test helper functions for LSP test assertions
+//!
+//! This module provides specialized assertion helpers for validating LSP responses.
+//! These functions are designed to be used by tests that need deep validation
+//! of LSP protocol structures.
+//!
+//! ## Usage
+//!
+//! Import specific functions you need:
+//! ```rust,ignore
+//! use support::test_helpers::assert_hover_has_text;
+//! ```
+//!
+//! Or import all helpers:
+//! ```rust,ignore
+//! use support::test_helpers::*;
+//! ```
+
+#![allow(dead_code)] // Test infrastructure - functions may not be used by all tests
 
 use serde_json::Value;
 
