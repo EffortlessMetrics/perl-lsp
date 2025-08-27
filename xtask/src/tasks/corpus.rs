@@ -66,29 +66,37 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let mut current_expected = String::new();
     let mut in_source = false;
     let mut in_expected = false;
+    let mut expecting_test_name = false;
 
     for line in content.lines() {
         if line.starts_with(
             "================================================================================",
         ) {
-            // Save previous test case if we have one
-            if !current_name.is_empty()
-                && !current_source.is_empty()
-                && !current_expected.is_empty()
-            {
-                test_cases.push(CorpusTestCase {
-                    name: current_name.clone(),
-                    source: current_source.clone(),
-                    expected: current_expected.clone(),
-                });
-            }
+            if expecting_test_name {
+                // This is the second === line, now we should start reading source
+                in_source = true;
+                expecting_test_name = false;
+            } else {
+                // Save previous test case if we have one
+                if !current_name.is_empty()
+                    && !current_source.is_empty()
+                    && !current_expected.is_empty()
+                {
+                    test_cases.push(CorpusTestCase {
+                        name: current_name.clone(),
+                        source: current_source.clone(),
+                        expected: current_expected.clone(),
+                    });
+                }
 
-            // Start new test case
-            current_name.clear();
-            current_source.clear();
-            current_expected.clear();
-            in_source = false;
-            in_expected = false;
+                // Start new test case - expect test name next
+                current_name.clear();
+                current_source.clear();
+                current_expected.clear();
+                in_source = false;
+                in_expected = false;
+                expecting_test_name = true;
+            }
         } else if line.starts_with("----") {
             // Transition from source to expected
             in_source = false;
@@ -99,10 +107,9 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
         } else if in_expected {
             current_expected.push_str(line);
             current_expected.push('\n');
-        } else if !line.trim().is_empty() && !line.starts_with("=") {
+        } else if expecting_test_name && !line.trim().is_empty() {
             // This is the test case name
             current_name = line.trim().to_string();
-            in_source = true;
         }
     }
 
@@ -119,11 +126,11 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 }
 
 fn normalize_sexp(s: &str) -> String {
-    s.lines()
-        .map(|line| line.trim_end())
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+    // Normalize by removing all whitespace - we only care about structural equality
+    // This handles differences between single-line and multi-line S-expression formats
+    s.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect()
 }
 
 /// Run a single corpus test case
@@ -146,6 +153,17 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
                 }
             }
         }
+        Some(ScannerType::V3) => {
+            // Use the perl-parser v3 native parser
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // TODO: Test both scanners and compare results
             // For now, use the C scanner
@@ -153,9 +171,15 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             tree.root_node().to_sexp()
         }
         None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Default to V3 parser for this branch
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
         }
     };
 
@@ -203,15 +227,32 @@ fn diagnose_parse_differences(
                 }
             }
         }
+        Some(ScannerType::V3) => {
+            // Use the perl-parser v3 native parser
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // Default to C scanner for now
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Default to V3 parser for this branch
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
         }
     };
 
