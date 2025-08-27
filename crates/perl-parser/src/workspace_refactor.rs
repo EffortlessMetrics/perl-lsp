@@ -4,10 +4,15 @@
 //! Currently a stub implementation to demonstrate the architecture.
 
 use crate::import_optimizer::ImportOptimizer;
-use crate::workspace_index::{uri_to_fs_path, WorkspaceIndex};
+use crate::workspace_index::{WorkspaceIndex, uri_to_fs_path};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use regex::Regex;
+
+// Move regex outside loop to avoid recompilation
+lazy_static::lazy_static! {
+    static ref IMPORT_BLOCK_RE: Regex = Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+").unwrap();
+}
 
 /// A file edit as part of a refactoring operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,7 +101,7 @@ impl WorkspaceRefactor {
             }
 
             // Replace the existing import block at the top of the file
-            let import_block_re = Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+").unwrap();
+            let import_block_re = &*IMPORT_BLOCK_RE;
             let (start, end) = if let Some(m) = import_block_re.find(&doc.text) {
                 (m.start(), m.end())
             } else {
@@ -105,11 +110,7 @@ impl WorkspaceRefactor {
 
             file_edits.push(FileEdit {
                 file_path: path.clone(),
-                edits: vec![TextEdit {
-                    start,
-                    end,
-                    new_text: format!("{}\n", optimized),
-                }],
+                edits: vec![TextEdit { start, end, new_text: format!("{}\n", optimized) }],
             });
         }
 

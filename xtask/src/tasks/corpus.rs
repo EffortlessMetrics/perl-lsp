@@ -128,9 +128,7 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 fn normalize_sexp(s: &str) -> String {
     // Normalize by removing all whitespace - we only care about structural equality
     // This handles differences between single-line and multi-line S-expression formats
-    s.chars()
-        .filter(|c| !c.is_whitespace())
-        .collect()
+    s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 /// Run a single corpus test case
