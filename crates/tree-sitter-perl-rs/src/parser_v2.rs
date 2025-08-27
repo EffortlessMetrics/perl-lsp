@@ -1233,7 +1233,7 @@ impl<'a> ParserV2<'a> {
                 // Collect words until closing delimiter
                 while !self.is_at_end() {
                     if let Some(token) = self.peek() {
-                        if token.text.chars().next() == Some(delim) {
+                        if token.text.starts_with(delim) {
                             self.advance();
                             break;
                         }

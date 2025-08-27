@@ -67,42 +67,58 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let mut in_source = false;
     let mut in_expected = false;
 
+    let mut seen_closing_separator = false;
+    
     for line in content.lines() {
         if line.starts_with(
             "================================================================================",
         ) {
-            // Save previous test case if we have one
-            if !current_name.is_empty()
-                && !current_source.is_empty()
-                && !current_expected.is_empty()
-            {
-                test_cases.push(CorpusTestCase {
-                    name: current_name.clone(),
-                    source: current_source.clone(),
-                    expected: current_expected.clone(),
-                });
+            if seen_closing_separator {
+                // Save previous test case if we have one
+                if !current_name.is_empty()
+                    && !current_source.is_empty()
+                    && !current_expected.is_empty()
+                {
+                    test_cases.push(CorpusTestCase {
+                        name: current_name.clone(),
+                        source: current_source.trim().to_string(),
+                        expected: current_expected.trim().to_string(),
+                    });
+                }
+                
+                // Reset for new test case
+                current_name.clear();
+                current_source.clear();
+                current_expected.clear();
+                in_source = false;
+                in_expected = false;
+                seen_closing_separator = false;
+            } else if !current_name.is_empty() {
+                // This is the closing separator for current test case
+                seen_closing_separator = true;
+                in_source = true;
+                in_expected = false;
             }
-
-            // Start new test case
-            current_name.clear();
-            current_source.clear();
-            current_expected.clear();
-            in_source = false;
-            in_expected = false;
+            // First separator or opening separator - just continue to look for name
         } else if line.starts_with("----") {
             // Transition from source to expected
             in_source = false;
             in_expected = true;
-        } else if in_source {
+        } else if !current_name.is_empty() && in_source {
+            // We're collecting source code
+            if !current_source.is_empty() {
+                current_source.push('\n');
+            }
             current_source.push_str(line);
-            current_source.push('\n');
         } else if in_expected {
+            // We're collecting expected output
+            if !current_expected.is_empty() {
+                current_expected.push('\n');
+            }
             current_expected.push_str(line);
-            current_expected.push('\n');
-        } else if !line.trim().is_empty() && !line.starts_with("=") {
+        } else if current_name.is_empty() && !line.trim().is_empty() && !line.starts_with("=") {
             // This is the test case name
             current_name = line.trim().to_string();
-            in_source = true;
         }
     }
 
@@ -110,8 +126,8 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
         test_cases.push(CorpusTestCase {
             name: current_name,
-            source: current_source,
-            expected: current_expected,
+            source: current_source.trim().to_string(),
+            expected: current_expected.trim().to_string(),
         });
     }
 
@@ -119,11 +135,41 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 }
 
 fn normalize_sexp(s: &str) -> String {
-    s.lines()
-        .map(|line| line.trim_end())
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+    // Remove all whitespace except single spaces between tokens
+    let mut result = String::new();
+    let mut prev_char = ' ';
+    let mut paren_depth = 0;
+    
+    for ch in s.chars() {
+        match ch {
+            '(' => {
+                if prev_char != ' ' && prev_char != '(' {
+                    result.push(' ');
+                }
+                result.push(ch);
+                paren_depth += 1;
+                prev_char = ch;
+            }
+            ')' => {
+                result.push(ch);
+                paren_depth -= 1;
+                prev_char = ch;
+            }
+            ' ' | '\t' | '\n' | '\r' => {
+                // Only add space if previous char wasn't whitespace and we're not at start/end
+                if prev_char != ' ' && prev_char != '(' && !result.is_empty() {
+                    result.push(' ');
+                    prev_char = ' ';
+                }
+            }
+            _ => {
+                result.push(ch);
+                prev_char = ch;
+            }
+        }
+    }
+    
+    result.trim().to_string()
 }
 
 /// Run a single corpus test case
@@ -369,7 +415,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
 
     // Find all corpus test files
     let corpus_path =
-        if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/corpus") };
+        if path.exists() { path } else { PathBuf::from("test/corpus") };
 
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
@@ -391,6 +437,11 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     {
         let file_path = entry.path();
         let file_name = file_path.file_name().unwrap().to_string_lossy();
+        
+        // Skip files that are clearly not corpus files
+        if file_name.starts_with('_') || file_name.ends_with(".md") || file_name.starts_with("README") {
+            continue;
+        }
 
         spinner.set_message(format!("Processing {}", file_name));
 
