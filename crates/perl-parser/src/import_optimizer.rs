@@ -73,10 +73,27 @@ pub struct ImportOptimizer;
 
 /// Check if a module is a pragma (affects compilation, no exports)
 fn is_pragma_module(module: &str) -> bool {
-    matches!(module, 
-        "strict" | "warnings" | "utf8" | "bytes" | "locale" | "integer" |
-        "less" | "sigtrap" | "subs" | "vars" | "feature" | "autodie" |
-        "autouse" | "base" | "parent" | "lib" | "bigint" | "bignum" | "bigrat"
+    matches!(
+        module,
+        "strict"
+            | "warnings"
+            | "utf8"
+            | "bytes"
+            | "locale"
+            | "integer"
+            | "less"
+            | "sigtrap"
+            | "subs"
+            | "vars"
+            | "feature"
+            | "autodie"
+            | "autouse"
+            | "base"
+            | "parent"
+            | "lib"
+            | "bigint"
+            | "bignum"
+            | "bigrat"
     )
 }
 
@@ -98,10 +115,10 @@ fn get_known_module_exports(module: &str) -> Vec<&'static str> {
         "URI::Escape" => vec!["uri_escape", "uri_unescape"],
         "LWP::Simple" => vec!["get", "head", "getprint", "getstore", "mirror"],
         "CGI" => vec!["param", "header", "start_html", "end_html"],
-        "DBI" => vec![], // DBI is object-oriented, no default exports
-        "strict" => vec![], // Pragma, no exports  
+        "DBI" => vec![],      // DBI is object-oriented, no default exports
+        "strict" => vec![],   // Pragma, no exports
         "warnings" => vec![], // Pragma, no exports
-        "utf8" => vec![], // Pragma, no exports
+        "utf8" => vec![],     // Pragma, no exports
         _ => vec![],
     }
 }
@@ -126,9 +143,10 @@ impl ImportOptimizer {
         ).unwrap();
         // Regex to capture `Module::symbol` references (more precise)
         let module_ref_re = Regex::new(
-            r"\b([A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)\b"
-        ).unwrap();
-        
+            r"\b([A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)\b",
+        )
+        .unwrap();
+
         // Regex patterns to exclude strings, comments, and regex literals (non-greedy)
         let string_re = Regex::new(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"|qq?\([^)]*\)|qr\([^)]*\)|qq?\{[^}]*\}|qr\{[^}]*\}|qq?\[[^\]]*\]|qr\[[^\]]*\]|qq?/[^/]*/[gimosxp]*|qr/[^/]*/[gimosxp]*"#).unwrap();
         let comment_re = Regex::new(r"(?m)#.*$").unwrap();
@@ -147,9 +165,10 @@ impl ImportOptimizer {
         for caps in import_re.captures_iter(&text) {
             let m = caps.get(0).unwrap();
             let module = caps[1].to_string();
-            
+
             // Extract symbols from qw() or qw{} or qw[] constructs
-            let symbols = caps.get(2)
+            let symbols = caps
+                .get(2)
                 .map(|m| {
                     m.as_str()
                         .split_whitespace()
@@ -158,14 +177,10 @@ impl ImportOptimizer {
                         .collect()
                 })
                 .unwrap_or_default();
-            
+
             let line = text[..m.start()].lines().count() + 1;
             imports.push(ImportLine {
-                stmt: ImportStatement {
-                    module,
-                    symbols,
-                    line,
-                },
+                stmt: ImportStatement { module, symbols, line },
                 start: m.start(),
                 end: m.end(),
             });
@@ -179,40 +194,37 @@ impl ImportOptimizer {
             last = imp.end;
         }
         text_without_imports.push_str(&text[last..]);
-        
+
         // Remove strings, comments, and POD sections for more accurate analysis
         let mut clean_text = text_without_imports.clone();
-        
+
         // Replace strings and regex literals with spaces to preserve line numbers
-        clean_text = string_re.replace_all(&clean_text, |m: &regex::Captures<'_>| {
-            " ".repeat(m.get(0).unwrap().as_str().len())
-        }).to_string();
-        
+        clean_text = string_re
+            .replace_all(&clean_text, |m: &regex::Captures<'_>| {
+                " ".repeat(m.get(0).unwrap().as_str().len())
+            })
+            .to_string();
+
         // Replace comments with spaces to preserve line numbers
-        clean_text = comment_re.replace_all(&clean_text, |m: &regex::Captures<'_>| {
-            " ".repeat(m.get(0).unwrap().as_str().len())
-        }).to_string();
-        
+        clean_text = comment_re
+            .replace_all(&clean_text, |m: &regex::Captures<'_>| {
+                " ".repeat(m.get(0).unwrap().as_str().len())
+            })
+            .to_string();
+
         // Remove POD sections
         clean_text = pod_re.replace_all(&clean_text, "").to_string();
 
         // Detect duplicates - group by module name and check for actual duplicates
         let mut module_lines: HashMap<String, Vec<usize>> = HashMap::new();
         for imp in &imports {
-            module_lines
-                .entry(imp.stmt.module.clone())
-                .or_default()
-                .push(imp.stmt.line);
+            module_lines.entry(imp.stmt.module.clone()).or_default().push(imp.stmt.line);
         }
         let mut duplicate_imports = Vec::new();
         for (module, mut lines) in module_lines {
             if lines.len() > 1 {
                 lines.sort();
-                duplicate_imports.push(DuplicateImport {
-                    module,
-                    lines,
-                    can_merge: true,
-                });
+                duplicate_imports.push(DuplicateImport { module, lines, can_merge: true });
             }
         }
 
@@ -223,12 +235,12 @@ impl ImportOptimizer {
             if imp.stmt.symbols.is_empty() {
                 // For modules without explicit imports, check for common usage patterns
                 let mut is_used = false;
-                
+
                 // Check 1: Pragma modules (strict, warnings, etc.) are always considered used
                 if is_pragma_module(&imp.stmt.module) {
                     is_used = true;
                 }
-                
+
                 if !is_used {
                     // Check 2: Full module name usage (Module::function)
                     let module_pattern = format!(r"\b{}::", regex::escape(&imp.stmt.module));
@@ -237,20 +249,20 @@ impl ImportOptimizer {
                         is_used = true;
                     }
                 }
-                
+
                 if !is_used {
                     // Check 3: Common known exports for popular modules
                     let known_exports = get_known_module_exports(&imp.stmt.module);
                     for export in known_exports {
-                        let export_re = Regex::new(&format!(r"\b{}\b", regex::escape(export)))
-                            .unwrap();
+                        let export_re =
+                            Regex::new(&format!(r"\b{}\b", regex::escape(export))).unwrap();
                         if export_re.is_match(&clean_text) {
                             is_used = true;
                             break;
                         }
                     }
                 }
-                
+
                 if !is_used {
                     unused_imports.push(UnusedImport {
                         module: imp.stmt.module.clone(),
@@ -285,12 +297,15 @@ impl ImportOptimizer {
             let symbol = caps[2].to_string();
             let pos = caps.get(0).unwrap().start();
             let line = clean_text[..pos].lines().count() + 1;
-            
+
             // Skip built-in Perl classes and common false positives
-            if matches!(module.as_str(), "CORE" | "SUPER" | "UNIVERSAL" | "IO" | "File" | "Cwd" | "HTTP" | "LWP") {
+            if matches!(
+                module.as_str(),
+                "CORE" | "SUPER" | "UNIVERSAL" | "IO" | "File" | "Cwd" | "HTTP" | "LWP"
+            ) {
                 continue;
             }
-            
+
             let import = imports.iter().find(|i| i.stmt.module == module);
             if let Some(imp) = import {
                 // If module is imported but specific symbol is not in qw() list
@@ -350,9 +365,7 @@ impl ImportOptimizer {
 
         // Add missing imports
         for missing in &analysis.missing_imports {
-            let entry = module_map
-                .entry(missing.module.clone())
-                .or_default();
+            let entry = module_map.entry(missing.module.clone()).or_default();
             for sym in &missing.symbols {
                 if !entry.contains(sym) {
                     entry.push(sym.clone());
@@ -412,12 +425,11 @@ print Dumper(\@ARGV);
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-
         assert_eq!(analysis.imports.len(), 3);
         assert_eq!(analysis.imports[0].module, "strict");
         assert_eq!(analysis.imports[1].module, "warnings");
         assert_eq!(analysis.imports[2].module, "Data::Dumper");
-        
+
         // Data::Dumper should not be marked as unused since Dumper is used
         assert!(analysis.unused_imports.is_empty());
     }
@@ -499,75 +511,65 @@ print "First: " . first { $_ > 3 } @nums;
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
         assert_eq!(analysis.imports.len(), 2);
-        
+
         let list_util = analysis.imports.iter().find(|i| i.module == "List::Util").unwrap();
         assert_eq!(list_util.symbols, vec!["first", "max", "min", "sum"]);
-        
+
         let scalar_util = analysis.imports.iter().find(|i| i.module == "Scalar::Util").unwrap();
         assert_eq!(scalar_util.symbols, vec!["blessed", "reftype"]);
-        
+
         // Should detect unused symbols in both modules
         assert_eq!(analysis.unused_imports.len(), 2);
-        
-        let list_util_unused = analysis.unused_imports.iter().find(|u| u.module == "List::Util").unwrap();
+
+        let list_util_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "List::Util").unwrap();
         assert_eq!(list_util_unused.symbols, vec!["min"]);
-        
-        let scalar_util_unused = analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").unwrap();
+
+        let scalar_util_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").unwrap();
         assert_eq!(scalar_util_unused.symbols, vec!["blessed", "reftype"]);
     }
 
     #[test]
     fn test_generate_optimized_imports() {
         let optimizer = ImportOptimizer::new();
-        
+
         let analysis = ImportAnalysis {
             imports: vec![
-                ImportStatement {
-                    module: "strict".to_string(),
-                    symbols: vec![],
-                    line: 1,
-                },
-                ImportStatement {
-                    module: "warnings".to_string(),
-                    symbols: vec![],
-                    line: 2,
-                },
+                ImportStatement { module: "strict".to_string(), symbols: vec![], line: 1 },
+                ImportStatement { module: "warnings".to_string(), symbols: vec![], line: 2 },
                 ImportStatement {
                     module: "List::Util".to_string(),
                     symbols: vec!["first".to_string(), "max".to_string(), "unused".to_string()],
                     line: 3,
                 },
             ],
-            unused_imports: vec![
-                UnusedImport {
-                    module: "List::Util".to_string(),
-                    symbols: vec!["unused".to_string()],
-                    line: 3,
-                    reason: "Symbol not used".to_string(),
-                },
-            ],
-            missing_imports: vec![
-                MissingImport {
-                    module: "Data::Dumper".to_string(),
-                    symbols: vec!["Dumper".to_string()],
-                    suggested_location: 10,
-                    confidence: 0.8,
-                },
-            ],
+            unused_imports: vec![UnusedImport {
+                module: "List::Util".to_string(),
+                symbols: vec!["unused".to_string()],
+                line: 3,
+                reason: "Symbol not used".to_string(),
+            }],
+            missing_imports: vec![MissingImport {
+                module: "Data::Dumper".to_string(),
+                symbols: vec!["Dumper".to_string()],
+                suggested_location: 10,
+                confidence: 0.8,
+            }],
             duplicate_imports: vec![],
             organization_suggestions: vec![],
         };
 
         let optimized = optimizer.generate_optimized_imports(&analysis);
-        
+
         // Should be sorted alphabetically
-        let expected_lines = vec![
+        let expected_lines = [
             "use Data::Dumper qw(Dumper);",
             "use List::Util qw(first max);",
             "use strict;",
             "use warnings;",
         ];
-        
+
         assert_eq!(optimized, expected_lines.join("\n"));
     }
 
@@ -615,14 +617,14 @@ print Dumper($response);
 
         // Should detect unused imports
         assert!(analysis.unused_imports.iter().any(|u| u.module == "LWP::UserAgent"));
-        
+
         // Should detect unused symbols from File::Spec::Functions
-        let file_spec_unused = analysis.unused_imports.iter()
-            .find(|u| u.module == "File::Spec::Functions");
+        let file_spec_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "File::Spec::Functions");
         if let Some(unused) = file_spec_unused {
             assert!(unused.symbols.contains(&"catdir".to_string()));
         }
-        
+
         // Should detect missing import for HTTP::Tiny
         assert!(analysis.missing_imports.iter().any(|m| m.module == "HTTP::Tiny"));
     }
