@@ -99,73 +99,148 @@ path = "src/bin/parse_rust.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "showcase_features"
+name = "pest_showcase_features"
 path = "examples/showcase_features.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "final_demo"
+name = "pest_final_demo"
 path = "examples/final_demo.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "advanced_features"
+name = "pest_advanced_features"
 path = "examples/advanced_features.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "comprehensive_demo"
+name = "pest_comprehensive_demo"
 path = "examples/comprehensive_demo.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "edge_case_tests"
+name = "pest_edge_case_tests"
 path = "examples/edge_case_tests.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "supported_edge_cases"
+name = "pest_supported_edge_cases"
 path = "examples/supported_edge_cases.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "heredoc_edge_cases"
+name = "pest_heredoc_edge_cases"
 path = "examples/heredoc_edge_cases.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "debug_heredoc"
+name = "pest_debug_heredoc"
 path = "examples/debug_heredoc.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_code_ref"
+name = "pest_test_code_ref"
 path = "examples/test_code_ref.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_for_loop"
+name = "pest_test_for_loop"
 path = "examples/test_for_loop.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_qq_operators"
+name = "pest_test_qq_operators"
 path = "examples/test_qq_operators.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_qq_edge_case"
+name = "pest_test_qq_edge_case"
 path = "examples/test_qq_edge_case.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_regex_delimiters"
+name = "pest_test_regex_delimiters"
 path = "examples/test_regex_delimiters.rs"
 required-features = ["pure-rust", "examples"]
 
 [[example]]
-name = "test_indirect_object"
+name = "pest_test_indirect_object"
 path = "examples/test_indirect_object.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_anti_pattern_analysis"
+path = "examples/anti_pattern_analysis.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_debug_parse"
+path = "examples/debug_parse.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_demo_parser"
+path = "examples/demo_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_demo_working_parser"
+path = "examples/demo_working_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_edge_case_demo"
+path = "examples/edge_case_demo.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_simple_lexer_demo"
+path = "examples/simple_lexer_demo.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_special_heredoc_usage"
+path = "examples/special_heredoc_usage.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_deref_v2"
+path = "examples/test_deref_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_enhanced_parser"
+path = "examples/test_enhanced_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_format_v2"
+path = "examples/test_format_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_parser"
+path = "examples/test_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_pest"
+path = "examples/test_pest.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_qq_simple"
+path = "examples/test_qq_simple.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_test_statement_modifiers_v2"
+path = "examples/test_statement_modifiers_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "pest_tree_sitter_compatibility"
+path = "examples/tree_sitter_compatibility.rs"
 required-features = ["pure-rust", "examples"]
 
 
