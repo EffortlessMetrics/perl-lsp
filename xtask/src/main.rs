@@ -316,6 +316,9 @@ enum Commands {
         #[command(subcommand)]
         command: FeaturesCommand,
     },
+
+    /// Validate memory profiling functionality
+    ValidateMemoryProfiler,
 }
 
 #[derive(Subcommand)]
@@ -399,5 +402,6 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
+        Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
     }
 }
