@@ -107,9 +107,9 @@ fn test_cancel_request_handling() {
     if let Some(resp) = response {
         if let Some(error) = resp.get("error") {
             let code = error["code"].as_i64().unwrap_or(0);
-            // -32802 = our server's cancellation code
+            // -32800 = RequestCancelled per LSP spec for $/cancelRequest
             // Accept it as cancelled
-            assert_eq!(code, -32802, "Should have cancellation error code -32802");
+            assert_eq!(code, -32800, "Should have cancellation error code -32800");
         } else {
             // Request completed before cancellation - that's OK for hover
             // but not for the slow operation
@@ -238,7 +238,7 @@ fn test_cancel_multiple_requests() {
                 // This one might be cancelled (or might complete if fast enough)
                 if let Some(error) = resp.get("error") {
                     let code = error["code"].as_i64().unwrap_or(0);
-                    assert_eq!(code, -32802, "Cancelled request should have -32802 code");
+                    assert_eq!(code, -32800, "Cancelled request should have -32800 code");
                 }
             } else {
                 // Other requests should complete normally
