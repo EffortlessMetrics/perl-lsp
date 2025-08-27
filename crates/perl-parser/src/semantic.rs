@@ -9,6 +9,7 @@ use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, Sym
 use crate::SourceLocation;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Semantic token types for syntax highlighting
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,51 +148,7 @@ impl SemanticAnalyzer {
         for refs in self.symbol_table.references.values() {
             for reference in refs {
                 if reference.location.start <= position && reference.location.end >= position {
-                    // Handle qualified names like Foo::bar
-                    let symbols = if let Some((pkg, name)) = reference.name.rsplit_once("::") {
-                        if let Some(pkg_syms) = self.symbol_table.symbols.get(pkg) {
-                            let mut results = Vec::new();
-                            for sym in pkg_syms {
-                                if sym.kind == SymbolKind::Package {
-                                    // Find the scope associated with this package symbol
-                                    let pkg_scope = self
-                                        .symbol_table
-                                        .scopes
-                                        .values()
-                                        .find(|s| {
-                                            s.kind == ScopeKind::Package
-                                                && s.location.start == sym.location.start
-                                                && s.location.end == sym.location.end
-                                        })
-                                        .map(|s| s.id)
-                                        .unwrap_or(sym.scope_id);
-                                    // Symbols may live in an inner block scope
-                                    let search_scope = self
-                                        .symbol_table
-                                        .scopes
-                                        .values()
-                                        .find(|s| s.parent == Some(pkg_scope))
-                                        .map(|s| s.id)
-                                        .unwrap_or(pkg_scope);
-                                    results.extend(self.symbol_table.find_symbol(
-                                        name,
-                                        search_scope,
-                                        reference.kind,
-                                    ));
-                                }
-                            }
-                            results
-                        } else {
-                            self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
-                        }
-                    } else {
-                        self.symbol_table.find_symbol(
-                            &reference.name,
-                            reference.scope_id,
-                            reference.kind,
-                        )
-                    };
-
+                    let symbols = self.resolve_reference_to_symbols(reference);
                     if !symbols.is_empty() {
                         return Some(symbols[0]);
                     }
@@ -201,6 +158,54 @@ impl SemanticAnalyzer {
 
         // If no reference found, check if we're on a definition itself
         self.symbol_at(SourceLocation { start: position, end: position })
+    }
+
+    /// Resolve a reference to its symbol definitions, handling cross-package lookups
+    fn resolve_reference_to_symbols(&self, reference: &crate::symbol::SymbolReference) -> Vec<&Symbol> {
+        // Handle qualified names like Foo::bar
+        if let Some((pkg, name)) = reference.name.rsplit_once("::") {
+            if let Some(pkg_syms) = self.symbol_table.symbols.get(pkg) {
+                let mut results = Vec::new();
+                for sym in pkg_syms {
+                    if sym.kind == SymbolKind::Package {
+                        // Find the scope associated with this package symbol
+                        let pkg_scope = self
+                            .symbol_table
+                            .scopes
+                            .values()
+                            .find(|s| {
+                                s.kind == ScopeKind::Package
+                                    && s.location.start == sym.location.start
+                                    && s.location.end == sym.location.end
+                            })
+                            .map(|s| s.id)
+                            .unwrap_or(sym.scope_id);
+                        // Symbols may live in an inner block scope
+                        let search_scope = self
+                            .symbol_table
+                            .scopes
+                            .values()
+                            .find(|s| s.parent == Some(pkg_scope))
+                            .map(|s| s.id)
+                            .unwrap_or(pkg_scope);
+                        results.extend(self.symbol_table.find_symbol(
+                            name,
+                            search_scope,
+                            reference.kind,
+                        ));
+                    }
+                }
+                results
+            } else {
+                self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
+            }
+        } else {
+            self.symbol_table.find_symbol(
+                &reference.name,
+                reference.scope_id,
+                reference.kind,
+            )
+        }
     }
 
     /// Find all references to a symbol at a given position
@@ -593,19 +598,26 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
+        static POD_RE: OnceLock<Regex> = OnceLock::new();
+        static COMMENT_RE: OnceLock<Regex> = OnceLock::new();
+        
         if self.source.is_empty() {
             return None;
         }
         let before = &self.source[..start];
 
         // Check for POD blocks ending with =cut
-        let pod_re = Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").ok()?;
+        let pod_re = POD_RE.get_or_init(|| {
+            Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").unwrap()
+        });
         if let Some(caps) = pod_re.captures(before) {
             return Some(caps[1].trim().to_string());
         }
 
         // Check for consecutive comment lines
-        let comment_re = Regex::new(r"(?m)(#.*\n)+\s*$").ok()?;
+        let comment_re = COMMENT_RE.get_or_init(|| {
+            Regex::new(r"(?m)(#.*\n)+\s*$").unwrap()
+        });
         if let Some(caps) = comment_re.captures(before) {
             return Some(caps[0].trim().to_string());
         }
@@ -812,5 +824,65 @@ Foo::bar();
 
         let hover = analyzer.hover_at(def.location).unwrap();
         assert!(hover.documentation.as_ref().unwrap().contains("bar sub"));
+    }
+
+    #[test]
+    fn test_pod_documentation_extraction() {
+        // Test with a simple case that parses correctly
+        let code = r#"# Simple comment before sub
+sub documented_with_comment {
+    return "test";
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("documented_with_comment", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        let doc = hover.documentation.as_ref().unwrap();
+        assert!(doc.contains("Simple comment before sub"));
+    }
+
+    #[test]
+    fn test_empty_source_handling() {
+        let code = "";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        // Should not crash with empty source
+        assert!(analyzer.semantic_tokens().is_empty());
+        assert!(analyzer.hover_info.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_comment_lines() {
+        let code = r#"
+# First comment
+# Second comment
+# Third comment
+sub multi_commented {
+    1;
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("multi_commented", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        let doc = hover.documentation.as_ref().unwrap();
+        assert!(doc.contains("First comment"));
+        assert!(doc.contains("Second comment"));
+        assert!(doc.contains("Third comment"));
     }
 }
