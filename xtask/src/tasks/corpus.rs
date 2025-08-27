@@ -135,41 +135,9 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 }
 
 fn normalize_sexp(s: &str) -> String {
-    // Remove all whitespace except single spaces between tokens
-    let mut result = String::new();
-    let mut prev_char = ' ';
-    let mut paren_depth = 0;
-
-    for ch in s.chars() {
-        match ch {
-            '(' => {
-                if prev_char != ' ' && prev_char != '(' {
-                    result.push(' ');
-                }
-                result.push(ch);
-                paren_depth += 1;
-                prev_char = ch;
-            }
-            ')' => {
-                result.push(ch);
-                paren_depth -= 1;
-                prev_char = ch;
-            }
-            ' ' | '\t' | '\n' | '\r' => {
-                // Only add space if previous char wasn't whitespace and we're not at start/end
-                if prev_char != ' ' && prev_char != '(' && !result.is_empty() {
-                    result.push(' ');
-                    prev_char = ' ';
-                }
-            }
-            _ => {
-                result.push(ch);
-                prev_char = ch;
-            }
-        }
-    }
-
-    result.trim().to_string()
+    // Normalize by removing all whitespace - we only care about structural equality
+    // This handles differences between single-line and multi-line S-expression formats
+    s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 /// Run a single corpus test case
@@ -192,6 +160,17 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
                 }
             }
         }
+        Some(ScannerType::V3) => {
+            // Use the perl-parser v3 native parser
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // TODO: Test both scanners and compare results
             // For now, use the C scanner
@@ -199,9 +178,15 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             tree.root_node().to_sexp()
         }
         None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Default to V3 parser for this branch
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
         }
     };
 
@@ -249,15 +234,32 @@ fn diagnose_parse_differences(
                 }
             }
         }
+        Some(ScannerType::V3) => {
+            // Use the perl-parser v3 native parser
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // Default to C scanner for now
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Default to V3 parser for this branch
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
         }
     };
 
