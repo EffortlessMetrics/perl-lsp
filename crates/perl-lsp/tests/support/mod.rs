@@ -3,7 +3,7 @@
 pub mod client_caps;
 pub mod lsp_client;
 pub mod lsp_harness;
-pub mod parser_support;
+pub mod test_helpers;
 
-// Re-export commonly used functions  
-pub use parser_support::*;
+// Re-export test helpers
+pub use test_helpers::*;
