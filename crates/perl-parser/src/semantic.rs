@@ -519,8 +519,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Regex { pattern: _, modifiers: _ }
-            | NodeKind::Match { pattern: _, modifiers: _, .. } => {
+            NodeKind::Regex { .. } | NodeKind::Match { .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Regex,
@@ -619,7 +618,14 @@ impl SemanticAnalyzer {
             Regex::new(r"(?m)(#.*\n)+\s*$").unwrap()
         });
         if let Some(caps) = comment_re.captures(before) {
-            return Some(caps[0].trim().to_string());
+            // Strip the # prefix from each comment line
+            let doc = caps[0]
+                .lines()
+                .map(|line| line.trim_start_matches('#').trim())
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Some(doc);
         }
 
         None
@@ -804,6 +810,26 @@ sub foo {
     }
 
     #[test]
+    fn test_comment_doc_extraction() {
+        let code = r#"
+# Adds two numbers
+sub add { 1 }
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
+    }
+
+    #[test]
     fn test_cross_package_navigation() {
         let code = r#"
 package Foo {
@@ -824,6 +850,32 @@ Foo::bar();
 
         let hover = analyzer.hover_at(def.location).unwrap();
         assert!(hover.documentation.as_ref().unwrap().contains("bar sub"));
+    }
+
+    #[test]
+    fn test_scope_identification() {
+        let code = r#"
+my $x = 0;
+package Foo {
+    my $x = 1;
+    sub bar { return $x; }
+}
+my $y = $x;
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let inner_ref_pos = code.find("return $x").unwrap() + "return ".len();
+        let inner_def = analyzer.find_definition(inner_ref_pos).unwrap();
+        let expected_inner = code.find("my $x = 1").unwrap() + 3;
+        assert_eq!(inner_def.location.start, expected_inner);
+
+        let outer_ref_pos = code.rfind("$x;").unwrap();
+        let outer_def = analyzer.find_definition(outer_ref_pos).unwrap();
+        let expected_outer = code.find("my $x = 0").unwrap() + 3;
+        assert_eq!(outer_def.location.start, expected_outer);
     }
 
     #[test]

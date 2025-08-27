@@ -33,6 +33,7 @@ url = "2.5"
 rustc-hash = "2.1.0"
 md5 = "0.7"
 phf = { version = "0.11", features = ["macros"] }
+nix = { version = "0.29", features = ["signal"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
@@ -47,6 +48,9 @@ required-features = ["cli"]
 [[bin]]
 name = "perl-lsp"
 path = "src/bin/perl-lsp.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
 
 [[bin]]
 name = "perl-dap"
