@@ -55,10 +55,7 @@ fn main() {
     if scanner_c.exists() {
         println!("cargo:rerun-if-changed={}", scanner_c.display());
     }
-    println!(
-        "cargo:rerun-if-changed={}",
-        grammar_src.join("tree_sitter/parser.h").display()
-    );
+    println!("cargo:rerun-if-changed={}", grammar_src.join("tree_sitter/parser.h").display());
 
     // ---
     // Audit: Known warnings from legacy C code and generated bindings

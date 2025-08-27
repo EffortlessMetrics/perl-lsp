@@ -57,8 +57,11 @@ pub fn parse_corpus_file(content: &str) -> Result<Vec<TestCase>> {
                     // End of current test, start of new test
                     if let Some(mut test) = current_test.take() {
                         test.input = input_lines.join("\n");
-                        test.expected_sexp =
-                            if output_lines.is_empty() { None } else { Some(output_lines.join("\n")) };
+                        test.expected_sexp = if output_lines.is_empty() {
+                            None
+                        } else {
+                            Some(output_lines.join("\n"))
+                        };
                         tests.push(test);
                     }
 
