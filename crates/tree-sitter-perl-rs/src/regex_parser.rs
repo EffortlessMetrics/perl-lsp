@@ -2,6 +2,7 @@
 //!
 //! Handles m//, s///, qr//, tr///, and other quote-like operators
 
+#[cfg(feature = "token-parser")]
 use crate::simple_token::Token;
 
 /// Quote-like operators in Perl
@@ -58,6 +59,7 @@ impl<'source> RegexParser<'source> {
     }
 
     /// Parse a quote-like operator (m//, s///, etc.)
+    #[cfg(feature = "token-parser")]
     pub fn parse_quote_operator(&mut self, _op: Token) -> Result<QuoteConstruct, String> {
         // This function currently always returns an error
         // The match below handles all cases with returns
