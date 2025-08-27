@@ -183,7 +183,7 @@ impl BuildFlags {
             code_lens: false,          // Only ~20% functional → don't advertise
             call_hierarchy: false,     // Partial implementation
             type_hierarchy: false,     // Not implemented
-            linked_editing: false,    // New feature, not GA yet
+            linked_editing: true,      // Implemented for paired delimiters
             inline_completion: false, // New feature, not GA yet
             inline_values: false,     // New feature, not GA yet
             moniker: false,           // New feature, not GA yet
