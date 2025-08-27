@@ -287,30 +287,23 @@ impl LspServer {
         output.flush()
     }
 
-    /// Run the LSP server
-    pub fn run(&mut self) -> io::Result<()> {
-        let stdin = io::stdin();
-        let stdout = io::stdout();
-        let mut reader = BufReader::new(stdin.lock());
-        let mut stdout = stdout.lock();
+    /// Run the LSP server with custom I/O streams
+    pub fn run_with<R: Read, W: Write>(&mut self, reader: &mut R, writer: &mut W) -> io::Result<()> {
+        let mut reader = BufReader::new(reader);
 
         eprintln!("LSP server started");
 
         loop {
-            // Read LSP message
             match self.read_message_from(&mut reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
-                    // Handle the request
                     if let Some(response) = self.handle_request(request) {
-                        // Send response
-                        self.send_message(&mut stdout, &response)?;
+                        self.send_message(writer, &response)?;
                     }
                 }
                 None => {
-                    // EOF reached, exit cleanly
-                    eprintln!("LSP server: EOF on stdin, shutting down");
+                    eprintln!("LSP server: EOF on input, shutting down");
                     break;
                 }
             }
@@ -319,10 +312,19 @@ impl LspServer {
         Ok(())
     }
 
-    /// Send an LSP message to stdout
-    fn send_message(
+    /// Run the LSP server using standard I/O streams
+    pub fn run(&mut self) -> io::Result<()> {
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        let mut input = stdin.lock();
+        let mut output = stdout.lock();
+        self.run_with(&mut input, &mut output)
+    }
+
+    /// Send an LSP message to the provided writer
+    fn send_message<W: Write>(
         &self,
-        stdout: &mut io::StdoutLock<'_>,
+        writer: &mut W,
         response: &JsonRpcResponse,
     ) -> io::Result<()> {
         let content = serde_json::to_string(response)?;
@@ -337,8 +339,8 @@ impl LspServer {
             content_length
         );
 
-        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-        stdout.flush()?;
+        write!(writer, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
+        writer.flush()?;
 
         Ok(())
     }
