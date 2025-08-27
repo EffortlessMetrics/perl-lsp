@@ -3,9 +3,11 @@
 //! This module provides refactoring capabilities that span multiple files.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use crate::workspace_index::WorkspaceIndex;
+use crate::import_optimizer::ImportOptimizer;
+use crate::workspace_index::{uri_to_fs_path, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use regex::Regex;
 
 /// A file edit as part of a refactoring operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,11 +79,42 @@ impl WorkspaceRefactor {
         })
     }
 
-    /// Optimize imports across the workspace (stub implementation)
+    /// Optimize imports across the workspace
     pub fn optimize_imports(&self) -> Result<RefactorResult, String> {
-        // Stub implementation
+        let optimizer = ImportOptimizer::new();
+        let mut file_edits = Vec::new();
+
+        // Iterate over all open documents in the workspace
+        for doc in self._index.document_store().all_documents() {
+            let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
+
+            let analysis = optimizer.analyze_file(&path)?;
+            let optimized = optimizer.generate_optimized_imports(&analysis);
+
+            if optimized.is_empty() {
+                continue;
+            }
+
+            // Replace the existing import block at the top of the file
+            let import_block_re = Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+").unwrap();
+            let (start, end) = if let Some(m) = import_block_re.find(&doc.text) {
+                (m.start(), m.end())
+            } else {
+                (0, 0)
+            };
+
+            file_edits.push(FileEdit {
+                file_path: path.clone(),
+                edits: vec![TextEdit {
+                    start,
+                    end,
+                    new_text: format!("{}\n", optimized),
+                }],
+            });
+        }
+
         Ok(RefactorResult {
-            file_edits: vec![],
+            file_edits,
             description: "Optimize imports across workspace".to_string(),
             warnings: vec![],
         })
