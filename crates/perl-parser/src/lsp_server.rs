@@ -323,15 +323,6 @@ impl LspServer {
         let content = serde_json::to_string(response)?;
         let content_length = content.len();
 
-        // Log outgoing response for debugging
-        eprintln!(
-            "[perl-lsp:tx] id={:?} has_result={} has_error={} len={}",
-            response.id,
-            response.result.is_some(),
-            response.error.is_some(),
-            content_length
-        );
-
         write!(writer, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
         writer.flush()?;
 
