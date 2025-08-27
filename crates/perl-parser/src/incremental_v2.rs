@@ -300,7 +300,6 @@ impl IncrementalParserV2 {
         self.pending_edits.affects_range(&node_range)
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
         let new_location = SourceLocation {
             start: (node.location.start as isize + shift) as usize,
@@ -449,7 +448,6 @@ impl IncrementalParserV2 {
         }
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn count_nodes(&self, node: &Node) -> usize {
         let mut count = 1;
 
