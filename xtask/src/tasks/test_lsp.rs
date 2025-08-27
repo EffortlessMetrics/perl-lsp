@@ -255,7 +255,7 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     match output {
         Ok(_) => println!("   ✓ LSP server is available"),
         Err(_) => println!(
-            "   ⚠ LSP server not found. Run: cargo install --path crates/perl-parser --bin perl-lsp"
+            "   ⚠ LSP server not found. Run: cargo install --path crates/perl-lsp"
         ),
     }
 
