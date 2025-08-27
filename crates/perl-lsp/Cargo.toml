@@ -1,36 +1,35 @@
 [package]
-name = "perl-parser"
+name = "perl-lsp"
 version = "0.8.6"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]
-description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
+description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 readme = "README.md"
-documentation = "https://docs.rs/perl-parser"
-keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
-categories = ["parsing", "development-tools", "text-editors"]
+documentation = "https://docs.rs/perl-lsp"
+keywords = ["perl", "lsp", "language-server", "ide"]
+categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
-  "build.rs",
-  "features_sot.toml",
   "Cargo.toml",
   "README.md",
   "LICENSE*"
 ]
 
 [dependencies]
-perl-lexer = { version = "0.8.6" }
-thiserror = "2.0.12"
+perl-parser = { path = "../perl-parser", version = "0.8.6" }
+lsp-types = "0.97.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
-regex = "1.11.1"
-lazy_static = "1.5.0"
-lsp-types = "0.97.0"
 url = "2.5"
 rustc-hash = "2.1.0"
+anyhow = "1.0"
+thiserror = "2.0.12"
+regex = "1.11.1"
+lazy_static = "1.5.0"
 md5 = "0.7"
 phf = { version = "0.11", features = ["macros"] }
 nix = { version = "0.29", features = ["signal"] }
@@ -38,25 +37,11 @@ nix = { version = "0.29", features = ["signal"] }
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
 
-# Optional dependencies for incremental parsing
-anyhow = { version = "1.0", optional = true }
-
-[[bin]]
-name = "perl-parse"
-required-features = ["cli"]
-
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
-
-[[bin]]
-name = "perl-dap"
-path = "src/bin/perl-dap.rs"
+[lints]
+workspace = true
 
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
-cli = []
-incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
@@ -71,45 +56,13 @@ error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
 
-[build-dependencies]
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-
 [dev-dependencies]
 assert_cmd = "2"
 insta = { version = "1", features = ["yaml"] }
-criterion = "0.7.0"
 predicates = "3"
 pretty_assertions = "1.4.1"
-regex = "1.11.1"
 serial_test = "3.0"
 tempfile = "3.8"
 proptest = "1"
 perl-corpus = { version = "0.8.6" }
 which = "6"
-
-[[bench]]
-name = "parser_benchmark"
-harness = false
-
-[[bench]]
-name = "incremental_benchmark"
-harness = false
-required-features = ["incremental"]
-
-# Edge case test examples
-[[example]]
-name = "test_all_edge_cases"
-path = "examples/test_all_edge_cases.rs"
-
-[[example]]
-name = "test_expanded_edge_cases"
-
-[[example]]
-name = "test_additional_edge_cases"
-
-[[example]]
-name = "test_more_edge_cases"
-
-[[example]]
-name = "test_label"
