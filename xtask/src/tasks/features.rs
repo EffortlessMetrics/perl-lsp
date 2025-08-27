@@ -13,7 +13,8 @@ struct FeaturesCatalog {
 struct Meta {
     version: String,
     lsp_version: String,
-    _compliance_percent: Option<u32>,
+    #[allow(dead_code)]
+    compliance_percent: Option<u32>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -311,6 +312,7 @@ fn verify_features() -> Result<()> {
     }
 
     // Verify compliance percentage matches what's documented
+    let _total_features = catalog.feature.len();
     let non_planned = catalog.feature.iter().filter(|f| f.maturity != "planned").count();
     let advertised_ga_prod = catalog
         .feature

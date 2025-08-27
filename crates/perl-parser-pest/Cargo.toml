@@ -12,6 +12,7 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 perl-lexer = { version = "0.8.6" }
 tree-sitter = "0.25.8"
+tree-sitter-perl = { path = "../tree-sitter-perl-rs", features = ["pure-rust", "test-utils"] }
 serde = { version = "1.0.219", features = ["derive"] }
 bincode = "2.0.1"
 proptest = "1.7.0"
@@ -58,113 +59,114 @@ pure-rust = []
 pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
 token-parser = []
 test-utils = []
+examples = []  # Gate examples to avoid filename collisions
 # Legacy features (for benchmarking only)
 c-scanner = []
 rust-scanner = []
 
 [lib]
-name = "tree_sitter_perl"
+name = "perl_parser_pest"
 path = "src/lib.rs"
 
 [[bin]]
-name = "bench_parser"
+name = "bench_parser_pest"
 path = "src/bin/bench_parser.rs"
 required-features = ["test-utils"]
 
 [[bin]]
-name = "compare_parsers"
+name = "compare_parsers_pest"
 path = "src/bin/compare_parsers.rs"
 required-features = ["test-utils"]
 
 [[bin]]
-name = "test_stacker"
+name = "test_stacker_pest"
 path = "src/bin/test_stacker.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[bin]]
 name = "benchmark_parsers_pest"
 path = "src/bin/benchmark_parsers.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[bin]]
 name = "test_parsers_pest"
 path = "src/bin/test_parsers.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[bin]]
 name = "parse-rust-pest"
 path = "src/bin/parse_rust.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "showcase_features"
 path = "examples/showcase_features.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "final_demo"
 path = "examples/final_demo.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "advanced_features"
 path = "examples/advanced_features.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "comprehensive_demo"
 path = "examples/comprehensive_demo.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "edge_case_tests"
 path = "examples/edge_case_tests.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "supported_edge_cases"
 path = "examples/supported_edge_cases.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "heredoc_edge_cases"
 path = "examples/heredoc_edge_cases.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "debug_heredoc"
 path = "examples/debug_heredoc.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_code_ref"
 path = "examples/test_code_ref.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_for_loop"
 path = "examples/test_for_loop.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_qq_operators"
 path = "examples/test_qq_operators.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_qq_edge_case"
 path = "examples/test_qq_edge_case.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_regex_delimiters"
 path = "examples/test_regex_delimiters.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 [[example]]
 name = "test_indirect_object"
 path = "examples/test_indirect_object.rs"
-required-features = ["pure-rust"]
+required-features = ["pure-rust", "examples"]
 
 
 [[bench]]
