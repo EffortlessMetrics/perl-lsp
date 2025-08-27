@@ -1442,7 +1442,7 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let provider = CompletionProvider::new(ast);
+                    let provider = CompletionProvider::new_with_index(ast, self.workspace_index.clone());
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
 
