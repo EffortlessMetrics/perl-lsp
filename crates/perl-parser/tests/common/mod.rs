@@ -99,7 +99,7 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Fallback: use cargo run
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
         v.push(c);
     }
 
