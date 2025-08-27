@@ -121,9 +121,7 @@ fn check_git_status() -> Result<bool> {
 
 fn build_binaries(release_dir: &Path) -> Result<()> {
     // Build perl-lsp
-    let output = Command::new("cargo")
-        .args(&["build", "--release", "-p", "perl-lsp"])
-        .output()?;
+    let output = Command::new("cargo").args(&["build", "--release", "-p", "perl-lsp"]).output()?;
     if !output.status.success() {
         bail!("Failed to build perl-lsp: {}", String::from_utf8_lossy(&output.stderr));
     }

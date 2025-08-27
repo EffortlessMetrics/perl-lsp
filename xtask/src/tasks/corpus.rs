@@ -68,7 +68,7 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let mut in_expected = false;
 
     let mut seen_closing_separator = false;
-    
+
     for line in content.lines() {
         if line.starts_with(
             "================================================================================",
@@ -85,7 +85,7 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
                         expected: current_expected.trim().to_string(),
                     });
                 }
-                
+
                 // Reset for new test case
                 current_name.clear();
                 current_source.clear();
@@ -139,7 +139,7 @@ fn normalize_sexp(s: &str) -> String {
     let mut result = String::new();
     let mut prev_char = ' ';
     let mut paren_depth = 0;
-    
+
     for ch in s.chars() {
         match ch {
             '(' => {
@@ -168,7 +168,7 @@ fn normalize_sexp(s: &str) -> String {
             }
         }
     }
-    
+
     result.trim().to_string()
 }
 
@@ -414,8 +414,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path =
-        if path.exists() { path } else { PathBuf::from("test/corpus") };
+    let corpus_path = if path.exists() { path } else { PathBuf::from("test/corpus") };
 
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
@@ -437,9 +436,12 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     {
         let file_path = entry.path();
         let file_name = file_path.file_name().unwrap().to_string_lossy();
-        
+
         // Skip files that are clearly not corpus files
-        if file_name.starts_with('_') || file_name.ends_with(".md") || file_name.starts_with("README") {
+        if file_name.starts_with('_')
+            || file_name.ends_with(".md")
+            || file_name.starts_with("README")
+        {
             continue;
         }
 
