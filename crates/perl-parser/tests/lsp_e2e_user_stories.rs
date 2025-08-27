@@ -998,55 +998,58 @@ fn test_user_story_code_review_workflow() {
     let review_code = r#"
 use strict;
 use warnings;
+use Crypt::PBKDF2;
+
+sub hash_password {
+    my ($password) = @_;
+    my $pbkdf2 = Crypt::PBKDF2->new();
+    return $pbkdf2->generate($password);
+}
 
 # PR #123: Add user authentication
 sub authenticate_user {
     my ($username, $password) = @_;
-    
-    # FIXME: Should hash password
+
     my $users = load_users();
-    
+    my $pbkdf2 = Crypt::PBKDF2->new();
+
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
-            # Security issue: plain text comparison
-            if ($user->{password} eq $password) {
+            if ($pbkdf2->validate($user->{password_hash}, $password)) {
                 return $user;
             }
         }
     }
-    
+
     return undef;
 }
 
 sub load_users {
-    # TODO: Load from database instead of file
     return [
-        { name => 'admin', password => 'admin123' },
-        { name => 'user', password => 'pass456' },
+        { name => 'admin', password_hash => hash_password('admin123') },
+        { name => 'user', password_hash => hash_password('pass456') },
     ];
 }
 
 # New feature: password reset
 sub reset_password {
     my ($username, $new_password) = @_;
-    
-    # Missing validation
+
     my $users = load_users();
-    
+
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
-            $user->{password} = $new_password;
+            $user->{password_hash} = hash_password($new_password);
             save_users($users);
             return 1;
         }
     }
-    
+
     return 0;
 }
 
 sub save_users {
     my ($users) = @_;
-    # Not implemented
     die "save_users not implemented";
 }
 "#;
@@ -1098,7 +1101,7 @@ sub save_users {
                 "uri": "file:///test/auth.pl"
             },
             "position": {
-                "line": 24,
+                "line": 39,
                 "character": 5  // On 'load_users'
             }
         })),
