@@ -1,21 +1,24 @@
 use perl_parser::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 use tempfile::tempdir;
 
 /// Helper to wait for a specific DAP event
-fn wait_for_event(rx: &Receiver<DapMessage>, event_name: &str, timeout_secs: u64) -> Result<DapMessage, String> {
+fn wait_for_event(
+    rx: &Receiver<DapMessage>,
+    event_name: &str,
+    timeout_secs: u64,
+) -> Result<DapMessage, String> {
     let timeout = Duration::from_secs(timeout_secs);
     loop {
         match rx.recv_timeout(timeout) {
             Ok(msg) => {
-                if let DapMessage::Event { ref event, .. } = msg {
-                    if event == event_name {
+                if let DapMessage::Event { ref event, .. } = msg
+                    && event == event_name {
                         return Ok(msg);
                     }
-                }
                 // Continue waiting for the specific event
             }
             Err(_) => return Err(format!("Timeout waiting for {} event", event_name)),
@@ -38,18 +41,28 @@ fn test_dap_initialize() {
     adapter.set_event_sender(tx);
 
     let response = adapter.handle_request(1, "initialize", None);
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "initialize");
             assert!(body.is_some());
-            
+
             // Verify capabilities
             let body = body.unwrap();
-            assert!(body.get("supportsConfigurationDoneRequest").and_then(|v| v.as_bool()).unwrap_or(false));
-            assert!(body.get("supportsConditionalBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false));
-            assert!(body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false));
+            assert!(
+                body.get("supportsConfigurationDoneRequest")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            );
+            assert!(
+                body.get("supportsConditionalBreakpoints")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            );
+            assert!(
+                body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false)
+            );
         }
         _ => panic!("Expected response message"),
     }
@@ -66,9 +79,9 @@ fn test_dap_launch_with_invalid_program() {
         "args": [],
         "stopOnEntry": false
     });
-    
+
     let response = adapter.handle_request(1, "launch", Some(launch_args));
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -87,7 +100,7 @@ fn test_dap_launch_missing_arguments() {
     adapter.set_event_sender(tx);
 
     let response = adapter.handle_request(1, "launch", None);
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -102,7 +115,7 @@ fn test_dap_launch_missing_arguments() {
 #[test]
 fn test_dap_breakpoints_no_session() {
     let mut adapter = DebugAdapter::new();
-    
+
     let bp_args = json!({
         "source": {"path": "/tmp/test.pl"},
         "breakpoints": [
@@ -110,18 +123,18 @@ fn test_dap_breakpoints_no_session() {
             {"line": 10, "condition": "$x > 5"}
         ]
     });
-    
+
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "setBreakpoints");
-            
+
             let body = body.unwrap();
             let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
             assert_eq!(breakpoints.len(), 2);
-            
+
             // Without active session, breakpoints should not be verified
             for bp in breakpoints {
                 assert!(!bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(true));
@@ -134,13 +147,13 @@ fn test_dap_breakpoints_no_session() {
 #[test]
 fn test_dap_breakpoints_missing_source() {
     let mut adapter = DebugAdapter::new();
-    
+
     let bp_args = json!({
         "breakpoints": [{"line": 5}]
     });
-    
+
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -154,7 +167,7 @@ fn test_dap_breakpoints_missing_source() {
 #[test]
 fn test_dap_breakpoints_invalid_line() {
     let mut adapter = DebugAdapter::new();
-    
+
     let bp_args = json!({
         "source": {"path": "/tmp/test.pl"},
         "breakpoints": [
@@ -162,18 +175,18 @@ fn test_dap_breakpoints_invalid_line() {
             {"line": -5}    // Invalid line
         ]
     });
-    
+
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success); // Request succeeds but breakpoints are not verified
             assert_eq!(command, "setBreakpoints");
-            
+
             let body = body.unwrap();
             let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
             assert_eq!(breakpoints.len(), 2);
-            
+
             // Invalid line breakpoints should not be verified
             for bp in breakpoints {
                 assert!(!bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(true));
@@ -187,13 +200,13 @@ fn test_dap_breakpoints_invalid_line() {
 #[test]
 fn test_dap_evaluate_empty_expression() {
     let mut adapter = DebugAdapter::new();
-    
+
     let eval_args = json!({
         "expression": ""
     });
-    
+
     let response = adapter.handle_request(1, "evaluate", Some(eval_args));
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -207,13 +220,13 @@ fn test_dap_evaluate_empty_expression() {
 #[test]
 fn test_dap_evaluate_no_session() {
     let mut adapter = DebugAdapter::new();
-    
+
     let eval_args = json!({
         "expression": "$x + 1"
     });
-    
+
     let response = adapter.handle_request(1, "evaluate", Some(eval_args));
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -227,14 +240,14 @@ fn test_dap_evaluate_no_session() {
 #[test]
 fn test_dap_threads_no_session() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "threads", None);
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "threads");
-            
+
             let body = body.unwrap();
             let threads = body.get("threads").and_then(|t| t.as_array()).unwrap();
             assert_eq!(threads.len(), 0); // No threads without session
@@ -246,18 +259,18 @@ fn test_dap_threads_no_session() {
 #[test]
 fn test_dap_stacktrace_no_session() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "stackTrace");
-            
+
             let body = body.unwrap();
             let frames = body.get("stackFrames").and_then(|f| f.as_array()).unwrap();
             assert_eq!(frames.len(), 0); // No frames without session
-            
+
             let total = body.get("totalFrames").and_then(|t| t.as_u64()).unwrap();
             assert_eq!(total, 0);
         }
@@ -268,9 +281,9 @@ fn test_dap_stacktrace_no_session() {
 #[test]
 fn test_dap_pause_no_session() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "pause", None);
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -286,10 +299,10 @@ fn test_dap_disconnect_cleans_up_session() {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
-    
+
     // First verify we can disconnect even without active session
     let response = adapter.handle_request(1, "disconnect", None);
-    
+
     match response {
         DapMessage::Response { success, command, .. } => {
             assert!(success);
@@ -302,9 +315,9 @@ fn test_dap_disconnect_cleans_up_session() {
 #[test]
 fn test_dap_unknown_command() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "unknownCommand", None);
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -318,9 +331,9 @@ fn test_dap_unknown_command() {
 #[test]
 fn test_dap_variables_missing_reference() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "variables", None);
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -334,27 +347,26 @@ fn test_dap_variables_missing_reference() {
 #[test]
 fn test_dap_variables_default_scope() {
     let mut adapter = DebugAdapter::new();
-    
+
     let var_args = json!({
         "variablesReference": 1
     });
-    
+
     let response = adapter.handle_request(1, "variables", Some(var_args));
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "variables");
-            
+
             let body = body.unwrap();
             let variables = body.get("variables").and_then(|v| v.as_array()).unwrap();
-            
+
             // Should return default Perl variables (@_, $_)
             assert_eq!(variables.len(), 2);
-            
-            let var_names: Vec<&str> = variables.iter()
-                .map(|v| v.get("name").and_then(|n| n.as_str()).unwrap())
-                .collect();
+
+            let var_names: Vec<&str> =
+                variables.iter().map(|v| v.get("name").and_then(|n| n.as_str()).unwrap()).collect();
             assert!(var_names.contains(&"@_"));
             assert!(var_names.contains(&"$_"));
         }
@@ -365,9 +377,9 @@ fn test_dap_variables_default_scope() {
 #[test]
 fn test_dap_scopes_missing_frame() {
     let mut adapter = DebugAdapter::new();
-    
+
     let response = adapter.handle_request(1, "scopes", None);
-    
+
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
@@ -381,22 +393,22 @@ fn test_dap_scopes_missing_frame() {
 #[test]
 fn test_dap_scopes_valid_frame() {
     let mut adapter = DebugAdapter::new();
-    
+
     let scope_args = json!({
         "frameId": 1
     });
-    
+
     let response = adapter.handle_request(1, "scopes", Some(scope_args));
-    
+
     match response {
         DapMessage::Response { success, command, body, .. } => {
             assert!(success);
             assert_eq!(command, "scopes");
-            
+
             let body = body.unwrap();
             let scopes = body.get("scopes").and_then(|s| s.as_array()).unwrap();
             assert_eq!(scopes.len(), 1);
-            
+
             let scope = &scopes[0];
             assert_eq!(scope.get("name").and_then(|n| n.as_str()).unwrap(), "Local");
             assert_eq!(scope.get("variablesReference").and_then(|v| v.as_i64()).unwrap(), 1);
@@ -408,15 +420,15 @@ fn test_dap_scopes_valid_frame() {
 #[test]
 fn test_sequence_number_increment() {
     let mut adapter = DebugAdapter::new();
-    
+
     // Test that sequence numbers increment properly by making multiple requests
     let _response1 = adapter.handle_request(1, "initialize", None);
     let _response2 = adapter.handle_request(1, "threads", None);
     let _response3 = adapter.handle_request(1, "disconnect", None);
-    
+
     // Since we can't access next_seq directly, we verify the adapter works
     // by successfully handling multiple requests
-    assert!(true); // Test passes if no panics occurred
+    // Test passes if no panics occurred
 }
 
 #[test]
@@ -430,7 +442,7 @@ my $y = 20;
 my $result = $x + $y;
 print "Result: $result\n";
 "#;
-    
+
     let script_path = create_test_script(script_content);
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
@@ -447,7 +459,7 @@ print "Result: $result\n";
         "stopOnEntry": true
     });
     let launch_response = adapter.handle_request(2, "launch", Some(launch_args));
-    
+
     match launch_response {
         DapMessage::Response { success, .. } => assert!(success),
         _ => panic!("Expected successful launch response"),
@@ -462,7 +474,7 @@ print "Result: $result\n";
         "breakpoints": [{"line": 5}]
     });
     let bp_response = adapter.handle_request(4, "setBreakpoints", Some(bp_args));
-    
+
     match bp_response {
         DapMessage::Response { success, body, .. } => {
             assert!(success);

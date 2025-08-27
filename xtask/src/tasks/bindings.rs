@@ -24,7 +24,7 @@ pub fn run(header: PathBuf, output: PathBuf) -> Result<()> {
 
     let header_dir = header.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
 
-    // Run bindgen on the provided header
+    // Run bindgen on the provided header - aligned with build.rs configuration
     let bindings = Builder::default()
         .header(header.to_string_lossy())
         .clang_arg(format!("-I{}", header_dir.display()))
@@ -32,6 +32,12 @@ pub fn run(header: PathBuf, output: PathBuf) -> Result<()> {
         .allowlist_type("TS.*")
         .allowlist_var("TREE_SITTER_LANGUAGE_VERSION")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate_inline_functions(true)
+        .size_t_is_usize(true)
+        // For Rust 2024 compatibility: generate safe extern blocks
+        .wrap_unsafe_ops(true)
+        // Additional setting for external functions
+        .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
         .generate()
         .context("unable to generate bindings")?;
 
