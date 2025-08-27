@@ -4,9 +4,9 @@
 //! including semantic tokens for syntax highlighting, hover information,
 //! and code intelligence features.
 
+use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
-use crate::SourceLocation;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -161,7 +161,10 @@ impl SemanticAnalyzer {
     }
 
     /// Resolve a reference to its symbol definitions, handling cross-package lookups
-    fn resolve_reference_to_symbols(&self, reference: &crate::symbol::SymbolReference) -> Vec<&Symbol> {
+    fn resolve_reference_to_symbols(
+        &self,
+        reference: &crate::symbol::SymbolReference,
+    ) -> Vec<&Symbol> {
         // Handle qualified names like Foo::bar
         if let Some((pkg, name)) = reference.name.rsplit_once("::") {
             if let Some(pkg_syms) = self.symbol_table.symbols.get(pkg) {
@@ -200,11 +203,7 @@ impl SemanticAnalyzer {
                 self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
             }
         } else {
-            self.symbol_table.find_symbol(
-                &reference.name,
-                reference.scope_id,
-                reference.kind,
-            )
+            self.symbol_table.find_symbol(&reference.name, reference.scope_id, reference.kind)
         }
     }
 
@@ -599,24 +598,21 @@ impl SemanticAnalyzer {
     fn extract_documentation(&self, start: usize) -> Option<String> {
         static POD_RE: OnceLock<Regex> = OnceLock::new();
         static COMMENT_RE: OnceLock<Regex> = OnceLock::new();
-        
+
         if self.source.is_empty() {
             return None;
         }
         let before = &self.source[..start];
 
         // Check for POD blocks ending with =cut
-        let pod_re = POD_RE.get_or_init(|| {
-            Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").unwrap()
-        });
+        let pod_re =
+            POD_RE.get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").unwrap());
         if let Some(caps) = pod_re.captures(before) {
             return Some(caps[1].trim().to_string());
         }
 
         // Check for consecutive comment lines
-        let comment_re = COMMENT_RE.get_or_init(|| {
-            Regex::new(r"(?m)(#.*\n)+\s*$").unwrap()
-        });
+        let comment_re = COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$").unwrap());
         if let Some(caps) = comment_re.captures(before) {
             // Strip the # prefix from each comment line
             let doc = caps[0]
@@ -646,11 +642,7 @@ impl SemanticAnalyzer {
 
     /// Get line number from byte offset (simplified version)
     fn line_number(&self, offset: usize) -> usize {
-        if self.source.is_empty() {
-            1
-        } else {
-            self.source[..offset].lines().count() + 1
-        }
+        if self.source.is_empty() { 1 } else { self.source[..offset].lines().count() + 1 }
     }
 }
 
@@ -821,9 +813,8 @@ sub add { 1 }
 
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-        let sub_symbols = analyzer
-            .symbol_table()
-            .find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty());
         let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
         assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
@@ -890,10 +881,12 @@ sub documented_with_comment {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
-        
-        let sub_symbols = analyzer
-            .symbol_table()
-            .find_symbol("documented_with_comment", 0, crate::symbol::SymbolKind::Subroutine);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "documented_with_comment",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
         assert!(!sub_symbols.is_empty());
         let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
         let doc = hover.documentation.as_ref().unwrap();
@@ -906,7 +899,7 @@ sub documented_with_comment {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
-        
+
         // Should not crash with empty source
         assert!(analyzer.semantic_tokens().is_empty());
         assert!(analyzer.hover_info.is_empty());
@@ -926,10 +919,12 @@ sub multi_commented {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
-        
-        let sub_symbols = analyzer
-            .symbol_table()
-            .find_symbol("multi_commented", 0, crate::symbol::SymbolKind::Subroutine);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "multi_commented",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
         assert!(!sub_symbols.is_empty());
         let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
         let doc = hover.documentation.as_ref().unwrap();

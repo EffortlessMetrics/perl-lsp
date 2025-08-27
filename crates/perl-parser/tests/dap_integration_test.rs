@@ -9,9 +9,10 @@ fn wait_for_event(rx: &std::sync::mpsc::Receiver<DapMessage>, name: &str) {
     loop {
         let msg = rx.recv_timeout(Duration::from_secs(10)).expect("event not received");
         if let DapMessage::Event { ref event, .. } = msg
-            && event == name {
-                return;
-            }
+            && event == name
+        {
+            return;
+        }
     }
 }
 
