@@ -109,7 +109,6 @@ pub struct IncrementalParserV2 {
     pub reparsed_nodes: usize,
 }
 
-#[allow(dead_code)]
 impl IncrementalParserV2 {
     pub fn new() -> Self {
         IncrementalParserV2 {
@@ -166,24 +165,32 @@ impl IncrementalParserV2 {
     }
 
     fn is_simple_value_edit(&self, tree: &IncrementalTree) -> bool {
-        // Check if all edits only affect literal values
+        // Track cumulative shift so we can map each edit back to the
+        // coordinates in the original source code represented by `tree`.
+        let mut cumulative_shift: isize = 0;
+
         for edit in &self.pending_edits.edits {
-            let affected_node = tree.find_containing_node(edit.start_byte, edit.old_end_byte);
+            let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
+            let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+
+            let affected_node = tree.find_containing_node(original_start, original_end);
 
             match affected_node {
-                Some(node) => {
-                    match &node.kind {
-                        NodeKind::Number { .. } | NodeKind::String { .. } => {
-                            // Check if the edit is contained within this literal
-                            if edit.start_byte >= node.location.start
-                                && edit.old_end_byte <= node.location.end
-                            {
-                                continue; // This is a simple value edit
-                            }
+                Some(node) => match &node.kind {
+                    NodeKind::Number { .. } | NodeKind::String { .. } => {
+                        // Ensure the edit stays within the literal node bounds
+                        if original_start >= node.location.start
+                            && original_end <= node.location.end
+                        {
+                            // continue checking subsequent edits
+                            cumulative_shift += edit.byte_shift();
+                            continue;
+                        } else {
+                            return false;
                         }
-                        _ => return false, // Not a simple value
                     }
-                }
+                    _ => return false, // Not a simple value
+                },
                 None => return false, // No containing node found
             }
         }
@@ -196,12 +203,11 @@ impl IncrementalParserV2 {
         source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
-        // For simple value edits, we can parse the new source but count reused nodes
-        let mut parser = Parser::new(source);
-        let new_root = parser.parse().ok()?;
+        // Reuse the previous tree by cloning nodes and applying the edits.
+        let new_root = self.clone_and_update_node(&last_tree.root, source, &last_tree.source);
 
-        // Count how many nodes we could have reused
-        // Note: We're doing a full parse but simulating incremental metrics
+        // After producing the new tree, analyse how many nodes were reused
+        // versus reparsed for metrics.
         self.count_reuse_potential(&last_tree.root, &new_root);
 
         Some(new_root)
@@ -260,19 +266,32 @@ impl IncrementalParserV2 {
     }
 
     fn calculate_shift_at(&self, position: usize) -> isize {
-        self.pending_edits.byte_shift_at(position)
+        // Calculate cumulative byte shift at `position` in the original source.
+        let mut shift = 0;
+        for edit in &self.pending_edits.edits {
+            let original_old_end = (edit.old_end_byte as isize - shift) as usize;
+            if original_old_end <= position {
+                shift += edit.byte_shift();
+            } else {
+                break;
+            }
+        }
+        shift
     }
 
     fn calculate_content_delta(&self, node: &Node) -> isize {
-        // Calculate how much the content of this node changed
+        // Calculate how much the content of this node changed by examining
+        // edits that fall within the node's original range.
         let mut delta = 0;
-
+        let mut shift = 0;
         for edit in &self.pending_edits.edits {
-            if edit.start_byte >= node.location.start && edit.old_end_byte <= node.location.end {
+            let start = (edit.start_byte as isize - shift) as usize;
+            let end = (edit.old_end_byte as isize - shift) as usize;
+            if start >= node.location.start && end <= node.location.end {
                 delta += edit.byte_shift();
             }
+            shift += edit.byte_shift();
         }
-
         delta
     }
 
@@ -418,15 +437,6 @@ impl IncrementalParserV2 {
         }
     }
 
-    fn count_reused(&self, old_node: &Node, new_node: &Node) -> usize {
-        // Count nodes that were reused (not reparsed)
-        if self.nodes_match(old_node, new_node) {
-            1 + self.count_children_reused(old_node, new_node)
-        } else {
-            self.count_children_reused(old_node, new_node)
-        }
-    }
-
     fn nodes_match(&self, node1: &Node, node2: &Node) -> bool {
         match (&node1.kind, &node2.kind) {
             (NodeKind::Number { value: v1 }, NodeKind::Number { value: v2 }) => v1 == v2,
@@ -437,31 +447,6 @@ impl IncrementalParserV2 {
             ) => s1 == s2 && n1 == n2,
             _ => true, // Consider structural nodes as reused if their type matches
         }
-    }
-
-    fn count_children_reused(&self, old_node: &Node, new_node: &Node) -> usize {
-        let mut count = 0;
-
-        match (&old_node.kind, &new_node.kind) {
-            (NodeKind::Program { statements: old }, NodeKind::Program { statements: new })
-            | (NodeKind::Block { statements: old }, NodeKind::Block { statements: new }) => {
-                for (old_stmt, new_stmt) in old.iter().zip(new.iter()) {
-                    count += self.count_reused(old_stmt, new_stmt);
-                }
-            }
-            (
-                NodeKind::VariableDeclaration { variable: old_v, initializer: old_i, .. },
-                NodeKind::VariableDeclaration { variable: new_v, initializer: new_i, .. },
-            ) => {
-                count += self.count_reused(old_v, new_v);
-                if let (Some(old_init), Some(new_init)) = (old_i, new_i) {
-                    count += self.count_reused(old_init, new_init);
-                }
-            }
-            _ => {}
-        }
-
-        count
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -545,9 +530,6 @@ mod tests {
         let source2 = "my $x = 4242;";
         let tree2 = parser.parse(source2).unwrap();
 
-        // TODO: Implement true incremental parsing with actual node reuse
-        // Current implementation does full parse
-        // Actually, analyze_reuse is finding 3 nodes that could be reused!
         assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable can be reused
         assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
 
@@ -584,17 +566,34 @@ mod tests {
         parser.edit(Edit::new(
             21,
             23,
-            25, // "20" -> "200" (adjusted for previous edit)
+            24, // "20" -> "200" (adjusted for previous edit)
             Position::new(21, 2, 9),
             Position::new(23, 2, 11),
-            Position::new(25, 2, 13),
+            Position::new(24, 2, 12),
         ));
 
         let source2 = "my $x = 100;\nmy $y = 200;";
-        let _tree = parser.parse(source2).unwrap();
-        // Multiple edits cause fallback to full parse in current implementation
-        // TODO: Fix is_simple_value_edit to handle multiple edits correctly
-        assert_eq!(parser.reused_nodes, 0); // Falls back to full parse
-        assert_eq!(parser.reparsed_nodes, 7); // All nodes reparsed
+        let tree = parser.parse(source2).unwrap();
+
+        assert_eq!(parser.reused_nodes, 5); // Program, decls and vars reused
+        assert_eq!(parser.reparsed_nodes, 2); // Only the numbers reparsed
+
+        // Verify both values were updated correctly
+        if let NodeKind::Program { statements } = &tree.kind {
+            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
+                &statements[0].kind
+            {
+                if let NodeKind::Number { value } = &init.kind {
+                    assert_eq!(value, "100");
+                }
+            }
+            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
+                &statements[1].kind
+            {
+                if let NodeKind::Number { value } = &init.kind {
+                    assert_eq!(value, "200");
+                }
+            }
+        }
     }
 }
