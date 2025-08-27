@@ -4,10 +4,12 @@
 //! including semantic tokens for syntax highlighting, hover information,
 //! and code intelligence features.
 
-use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use crate::SourceLocation;
+use regex::Regex;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Semantic token types for syntax highlighting
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,34 +86,31 @@ pub struct HoverInfo {
 
 /// Semantic analyzer that provides IDE features
 #[derive(Debug)]
-pub struct SemanticAnalyzer<'a> {
-    source: &'a str,
+pub struct SemanticAnalyzer {
     symbol_table: SymbolTable,
     semantic_tokens: Vec<SemanticToken>,
     hover_info: HashMap<SourceLocation, HoverInfo>,
+    source: String,
 }
 
-impl<'a> SemanticAnalyzer<'a> {
-    /// Create a new semantic analyzer from an AST without source text
-    pub fn analyze(ast: &Node) -> SemanticAnalyzer<'static> {
-        SemanticAnalyzer::analyze_with_source("", ast)
+impl SemanticAnalyzer {
+    /// Create a new semantic analyzer from an AST
+    pub fn analyze(ast: &Node) -> Self {
+        Self::analyze_with_source(ast, "")
     }
 
-    /// Create a new semantic analyzer from source and AST
-    pub fn analyze_with_source(source: &'a str, ast: &Node) -> Self {
-        // First extract symbols
+    /// Create a new semantic analyzer from an AST and source text
+    pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
         let symbol_table = SymbolExtractor::new().extract(ast);
 
         let mut analyzer = SemanticAnalyzer {
-            source,
             symbol_table,
             semantic_tokens: Vec::new(),
             hover_info: HashMap::new(),
+            source: source.to_string(),
         };
 
-        // Then perform semantic analysis
         analyzer.analyze_node(ast, 0);
-
         analyzer
     }
 
@@ -149,14 +148,7 @@ impl<'a> SemanticAnalyzer<'a> {
         for refs in self.symbol_table.references.values() {
             for reference in refs {
                 if reference.location.start <= position && reference.location.end >= position {
-                    // Found a reference, now find its definition
-                    let symbols = self.symbol_table.find_symbol(
-                        &reference.name,
-                        reference.scope_id,
-                        reference.kind,
-                    );
-
-                    // Return the first matching definition
+                    let symbols = self.resolve_reference_to_symbols(reference);
                     if !symbols.is_empty() {
                         return Some(symbols[0]);
                     }
@@ -166,6 +158,54 @@ impl<'a> SemanticAnalyzer<'a> {
 
         // If no reference found, check if we're on a definition itself
         self.symbol_at(SourceLocation { start: position, end: position })
+    }
+
+    /// Resolve a reference to its symbol definitions, handling cross-package lookups
+    fn resolve_reference_to_symbols(&self, reference: &crate::symbol::SymbolReference) -> Vec<&Symbol> {
+        // Handle qualified names like Foo::bar
+        if let Some((pkg, name)) = reference.name.rsplit_once("::") {
+            if let Some(pkg_syms) = self.symbol_table.symbols.get(pkg) {
+                let mut results = Vec::new();
+                for sym in pkg_syms {
+                    if sym.kind == SymbolKind::Package {
+                        // Find the scope associated with this package symbol
+                        let pkg_scope = self
+                            .symbol_table
+                            .scopes
+                            .values()
+                            .find(|s| {
+                                s.kind == ScopeKind::Package
+                                    && s.location.start == sym.location.start
+                                    && s.location.end == sym.location.end
+                            })
+                            .map(|s| s.id)
+                            .unwrap_or(sym.scope_id);
+                        // Symbols may live in an inner block scope
+                        let search_scope = self
+                            .symbol_table
+                            .scopes
+                            .values()
+                            .find(|s| s.parent == Some(pkg_scope))
+                            .map(|s| s.id)
+                            .unwrap_or(pkg_scope);
+                        results.extend(self.symbol_table.find_symbol(
+                            name,
+                            search_scope,
+                            reference.kind,
+                        ));
+                    }
+                }
+                results
+            } else {
+                self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
+            }
+        } else {
+            self.symbol_table.find_symbol(
+                &reference.name,
+                reference.scope_id,
+                reference.kind,
+            )
+        }
     }
 
     /// Find all references to a symbol at a given position
@@ -262,92 +302,6 @@ impl<'a> SemanticAnalyzer<'a> {
         symbol.scope_id == 0
     }
 
-    /// Find the scope id that matches a given location and kind
-    fn scope_for_location(&self, location: SourceLocation, kind: ScopeKind) -> ScopeId {
-        self
-            .symbol_table
-            .scopes
-            .values()
-            .find(|s| s.kind == kind && s.location == location)
-            .map(|s| s.id)
-            .unwrap_or(0)
-    }
-
-    /// Extract documentation from comments or POD preceding a position
-    fn extract_documentation(&self, start: usize) -> Option<String> {
-        if self.source.is_empty() {
-            return None;
-        }
-
-        let mut pos = start.min(self.source.len());
-        let bytes = self.source.as_bytes();
-        while pos > 0 && matches!(bytes[pos - 1], b' ' | b'\t' | b'\n' | b'\r') {
-            pos -= 1;
-        }
-
-        // Collect preceding line comments
-        let mut lines = Vec::new();
-        let mut cursor = pos;
-        while cursor > 0 {
-            let line_start = match self.source[..cursor].rfind('\n') {
-                Some(p) => p + 1,
-                None => 0,
-            };
-            let line = self.source[line_start..cursor].trim_end();
-            if line.starts_with('#') {
-                lines.push(line.trim_start_matches('#').trim().to_string());
-                if line_start == 0 {
-                    break;
-                }
-                cursor = line_start.saturating_sub(1);
-                continue;
-            } else if line.trim().is_empty() {
-                if lines.is_empty() {
-                    if line_start == 0 {
-                        break;
-                    }
-                    cursor = line_start.saturating_sub(1);
-                    continue;
-                } else {
-                    break;
-                }
-            } else {
-                lines.clear();
-                break;
-            }
-        }
-        if !lines.is_empty() {
-            lines.reverse();
-            return Some(lines.join("\n"));
-        }
-
-        // Check for POD blocks
-        let preceding = &self.source[..pos];
-        if let Some(cut_idx) = preceding.rfind("\n=cut") {
-            if preceding[cut_idx + 5..].trim().is_empty() {
-                let before_cut = &preceding[..cut_idx];
-                let start_idx = before_cut.rfind("\n=").or_else(|| {
-                    if before_cut.starts_with('=') { Some(0) } else { None }
-                });
-                if let Some(start_idx) = start_idx {
-                    let block = &before_cut[start_idx + if start_idx == 0 { 0 } else { 1 }..];
-                    let mut iter = block.lines();
-                    let first = iter.next().unwrap_or("");
-                    if first.starts_with("=pod")
-                        || first.starts_with("=head")
-                        || first.starts_with("=begin")
-                        || first.starts_with("=for")
-                    {
-                        let content = iter.collect::<Vec<_>>().join("\n");
-                        return Some(content.trim().to_string());
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     /// Analyze a node and generate semantic information
     fn analyze_node(&mut self, node: &Node, scope_id: ScopeId) {
         match &node.kind {
@@ -381,7 +335,7 @@ impl<'a> SemanticAnalyzer<'a> {
                     // Add hover info
                     let hover = HoverInfo {
                         signature: format!("{} {}{}", declarator, sigil, name),
-                        documentation: None,
+                        documentation: self.extract_documentation(node.location.start),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -464,10 +418,9 @@ impl<'a> SemanticAnalyzer<'a> {
                         signature.push_str("(...)");
                     }
 
-                    let doc = self.extract_documentation(node.location.start);
                     let hover = HoverInfo {
                         signature,
-                        documentation: doc,
+                        documentation: self.extract_documentation(node.location.start),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -479,8 +432,8 @@ impl<'a> SemanticAnalyzer<'a> {
                 }
 
                 {
-                    // Get the subroutine scope
-                    let sub_scope = self.scope_for_location(node.location, ScopeKind::Subroutine);
+                    // Get the subroutine scope from the symbol table
+                    let sub_scope = self.get_scope_for(node, ScopeKind::Subroutine);
                     self.analyze_node(body, sub_scope);
                 }
             }
@@ -536,18 +489,16 @@ impl<'a> SemanticAnalyzer<'a> {
                     modifiers: vec![SemanticTokenModifier::Declaration],
                 });
 
-                let doc = self.extract_documentation(node.location.start);
                 let hover = HoverInfo {
                     signature: format!("package {}", name),
-                    documentation: doc,
+                    documentation: self.extract_documentation(node.location.start),
                     details: vec![],
                 };
 
                 self.hover_info.insert(node.location, hover);
 
                 if let Some(block_node) = block {
-                    let package_scope =
-                        self.scope_for_location(node.location, ScopeKind::Package);
+                    let package_scope = self.get_scope_for(node, ScopeKind::Package);
                     self.analyze_node(block_node, package_scope);
                 }
             }
@@ -644,13 +595,62 @@ impl<'a> SemanticAnalyzer<'a> {
         }
     }
 
-    /// Get line number from byte offset
+    /// Extract documentation (POD or comments) preceding a position
+    fn extract_documentation(&self, start: usize) -> Option<String> {
+        static POD_RE: OnceLock<Regex> = OnceLock::new();
+        static COMMENT_RE: OnceLock<Regex> = OnceLock::new();
+        
+        if self.source.is_empty() {
+            return None;
+        }
+        let before = &self.source[..start];
+
+        // Check for POD blocks ending with =cut
+        let pod_re = POD_RE.get_or_init(|| {
+            Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").unwrap()
+        });
+        if let Some(caps) = pod_re.captures(before) {
+            return Some(caps[1].trim().to_string());
+        }
+
+        // Check for consecutive comment lines
+        let comment_re = COMMENT_RE.get_or_init(|| {
+            Regex::new(r"(?m)(#.*\n)+\s*$").unwrap()
+        });
+        if let Some(caps) = comment_re.captures(before) {
+            // Strip the # prefix from each comment line
+            let doc = caps[0]
+                .lines()
+                .map(|line| line.trim_start_matches('#').trim())
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Some(doc);
+        }
+
+        None
+    }
+
+    /// Get scope id for a node by consulting the symbol table
+    fn get_scope_for(&self, node: &Node, kind: ScopeKind) -> ScopeId {
+        for scope in self.symbol_table.scopes.values() {
+            if scope.kind == kind
+                && scope.location.start == node.location.start
+                && scope.location.end == node.location.end
+            {
+                return scope.id;
+            }
+        }
+        0
+    }
+
+    /// Get line number from byte offset (simplified version)
     fn line_number(&self, offset: usize) -> usize {
         if self.source.is_empty() {
-            return 1;
+            1
+        } else {
+            self.source[..offset].lines().count() + 1
         }
-        let capped = offset.min(self.source.len());
-        self.source[..capped].bytes().filter(|b| *b == b'\n').count() + 1
     }
 }
 
@@ -736,7 +736,7 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parser::Parser, symbol::SymbolKind};
+    use crate::parser::Parser;
 
     #[test]
     fn test_semantic_tokens() {
@@ -789,6 +789,27 @@ my $result = foo();
     }
 
     #[test]
+    fn test_hover_doc_from_pod() {
+        let code = r#"
+# This is foo
+# More docs
+sub foo {
+    return 1;
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find the symbol for foo and check its hover documentation
+        let sym = analyzer.symbol_table().symbols.get("foo").unwrap()[0].clone();
+        let hover = analyzer.hover_at(sym.location).unwrap();
+        assert!(hover.documentation.as_ref().unwrap().contains("This is foo"));
+    }
+
+    #[test]
     fn test_comment_doc_extraction() {
         let code = r#"
 # Adds two numbers
@@ -798,16 +819,38 @@ sub add { 1 }
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
 
-        let analyzer = SemanticAnalyzer::analyze_with_source(code, &ast);
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols = analyzer
             .symbol_table()
-            .find_symbol("add", 0, SymbolKind::Subroutine);
+            .find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty());
         let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
         assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
     }
 
+    #[test]
+    fn test_cross_package_navigation() {
+        let code = r#"
+package Foo {
+    # bar sub
+    sub bar { 42 }
+}
+
+package main;
+Foo::bar();
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let pos = code.find("Foo::bar").unwrap() + 5; // position within "bar"
+        let def = analyzer.find_definition(pos).expect("definition");
+        assert_eq!(def.name, "bar");
+
+        let hover = analyzer.hover_at(def.location).unwrap();
+        assert!(hover.documentation.as_ref().unwrap().contains("bar sub"));
+    }
 
     #[test]
     fn test_scope_identification() {
@@ -822,7 +865,7 @@ my $y = $x;
 
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
-        let analyzer = SemanticAnalyzer::analyze_with_source(code, &ast);
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let inner_ref_pos = code.find("return $x").unwrap() + "return ".len();
         let inner_def = analyzer.find_definition(inner_ref_pos).unwrap();
@@ -833,5 +876,65 @@ my $y = $x;
         let outer_def = analyzer.find_definition(outer_ref_pos).unwrap();
         let expected_outer = code.find("my $x = 0").unwrap() + 3;
         assert_eq!(outer_def.location.start, expected_outer);
+    }
+
+    #[test]
+    fn test_pod_documentation_extraction() {
+        // Test with a simple case that parses correctly
+        let code = r#"# Simple comment before sub
+sub documented_with_comment {
+    return "test";
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("documented_with_comment", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        let doc = hover.documentation.as_ref().unwrap();
+        assert!(doc.contains("Simple comment before sub"));
+    }
+
+    #[test]
+    fn test_empty_source_handling() {
+        let code = "";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        // Should not crash with empty source
+        assert!(analyzer.semantic_tokens().is_empty());
+        assert!(analyzer.hover_info.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_comment_lines() {
+        let code = r#"
+# First comment
+# Second comment
+# Third comment
+sub multi_commented {
+    1;
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("multi_commented", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        let doc = hover.documentation.as_ref().unwrap();
+        assert!(doc.contains("First comment"));
+        assert!(doc.contains("Second comment"));
+        assert!(doc.contains("Third comment"));
     }
 }
