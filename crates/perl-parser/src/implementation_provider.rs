@@ -316,7 +316,6 @@ impl ImplementationProvider {
             _ => false,
         }
     }
-
 }
 
 enum ImplementationTarget {

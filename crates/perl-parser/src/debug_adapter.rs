@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::io::{self, BufRead, BufReader, Write, Read};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -223,7 +223,10 @@ impl DebugAdapter {
                             }
                         }
                     } else {
-                        eprintln!("Failed to parse DAP message: {}", String::from_utf8_lossy(&buffer));
+                        eprintln!(
+                            "Failed to parse DAP message: {}",
+                            String::from_utf8_lossy(&buffer)
+                        );
                     }
                 } else {
                     eprintln!("Invalid Content-Length header: {}", content_length);
@@ -529,7 +532,8 @@ impl DebugAdapter {
                             if let Some(file) = caps.name("file").or_else(|| caps.name("file2")) {
                                 current_file = file.as_str().to_string();
                             }
-                            if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2")) {
+                            if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2"))
+                            {
                                 current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
                             }
                             continue;
@@ -704,7 +708,7 @@ impl DebugAdapter {
                         } else {
                             format!("b {}\n", line)
                         };
-                        
+
                         success = stdin.write_all(cmd.as_bytes()).is_ok() && stdin.flush().is_ok();
                     }
                 }
@@ -880,7 +884,7 @@ impl DebugAdapter {
                                 let _ = stdin.flush();
                             }
                         }
-                        
+
                         // Return placeholder variables for now
                         vec![
                             Variable {
@@ -1059,11 +1063,7 @@ impl DebugAdapter {
             success,
             command: "pause".to_string(),
             body: None,
-            message: if !success {
-                Some("Failed to pause debugger".to_string())
-            } else {
-                None
-            },
+            message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
         }
     }
 
@@ -1071,7 +1071,7 @@ impl DebugAdapter {
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
             let expression = args.get("expression").and_then(|e| e.as_str()).unwrap_or("");
-            
+
             if expression.is_empty() {
                 return DapMessage::Response {
                     seq,

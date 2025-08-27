@@ -211,7 +211,7 @@ mod tests {
         println!("Perl parser output: {}", perl_output);
     }
 
-    #[test] 
+    #[test]
     fn test_sexp_format_validation() {
         // Test various Perl constructs to ensure S-expression format validity
         let test_cases = vec![
@@ -227,22 +227,36 @@ mod tests {
 
         for (input, description) in test_cases {
             println!("\nTesting {}: {}", description, input);
-            
+
             // Both parsers should succeed
             match (rust_parser.parse_to_sexp(input), perl_parser.parse_to_sexp(input)) {
                 (Ok(rust_output), Ok(perl_output)) => {
                     // Both should be valid S-expressions
-                    assert!(rust_output.starts_with('(') && rust_output.ends_with(')'), 
-                           "{}: Rust output not valid S-expression: {}", description, rust_output);
-                    assert!(perl_output.starts_with('(') && perl_output.ends_with(')'), 
-                           "{}: Perl output not valid S-expression: {}", description, perl_output);
-                           
+                    assert!(
+                        rust_output.starts_with('(') && rust_output.ends_with(')'),
+                        "{}: Rust output not valid S-expression: {}",
+                        description,
+                        rust_output
+                    );
+                    assert!(
+                        perl_output.starts_with('(') && perl_output.ends_with(')'),
+                        "{}: Perl output not valid S-expression: {}",
+                        description,
+                        perl_output
+                    );
+
                     // Both should be non-empty
-                    assert!(!rust_output.trim().is_empty(), 
-                           "{}: Rust output is empty", description);
-                    assert!(!perl_output.trim().is_empty(), 
-                           "{}: Perl output is empty", description);
-                           
+                    assert!(
+                        !rust_output.trim().is_empty(),
+                        "{}: Rust output is empty",
+                        description
+                    );
+                    assert!(
+                        !perl_output.trim().is_empty(),
+                        "{}: Perl output is empty",
+                        description
+                    );
+
                     println!("  Rust: {}", rust_output);
                     println!("  Perl: {}", perl_output);
                     println!("  ✓ Both parsers succeeded");

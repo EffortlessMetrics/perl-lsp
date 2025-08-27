@@ -16,9 +16,10 @@ fn wait_for_event(
         match rx.recv_timeout(timeout) {
             Ok(msg) => {
                 if let DapMessage::Event { ref event, .. } = msg
-                    && event == event_name {
-                        return Ok(msg);
-                    }
+                    && event == event_name
+                {
+                    return Ok(msg);
+                }
                 // Continue waiting for the specific event
             }
             Err(_) => return Err(format!("Timeout waiting for {} event", event_name)),
