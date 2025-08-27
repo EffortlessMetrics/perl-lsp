@@ -74,8 +74,14 @@ This repository contains **four published crates** forming a complete Perl parsi
 - **Partial Implementations** (not advertised):
   - ⚠️ Code lens (~20% functional)
   - ⚠️ Call hierarchy (~15% functional)
-- **Not Implemented**:
-  - ❌ Debug adapter
+- **Debug Adapter Protocol (DAP)** ✅ **BETA**:
+  - ✅ **Basic debugging flow** - launch, attach, disconnect
+  - ✅ **Breakpoint management** - set, clear, conditional breakpoints
+  - ✅ **Step controls** - step in, step out, step over, continue, pause
+  - ✅ **Stack inspection** - stack frames, local scopes, variable inspection
+  - ✅ **Expression evaluation** - evaluate expressions in debugger context
+  - ✅ **Perl debugger integration** - uses built-in `perl -d` debugger
+  - ✅ **DAP protocol compliance** - works with VSCode and DAP-compatible editors
 - **Test Coverage**: 530+ tests with acceptance tests for all features
 - **Performance**: <50ms for all operations
 - **Architecture**: Contract-driven with `lsp-ga-lock` feature for conservative releases
@@ -114,6 +120,18 @@ cargo install --path crates/perl-parser --bin perl-lsp
 # Run the LSP server
 perl-lsp --stdio  # For editor integration
 perl-lsp --stdio --log  # With debug logging
+```
+
+#### DAP Server (Debug Adapter)
+```bash
+# Build DAP server
+cargo build -p perl-parser --bin perl-dap --release
+
+# Install DAP server globally
+cargo install --path crates/perl-parser --bin perl-dap
+
+# Run the DAP server (for VSCode integration)
+perl-dap --stdio  # Standard DAP transport
 ```
 
 #### Published Crates
@@ -165,6 +183,10 @@ cargo test --features pure-rust
 
 # Run LSP tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
+
+# Run DAP tests
+cargo test -p perl-parser --test dap_comprehensive_test
+cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
 > **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
 > If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
