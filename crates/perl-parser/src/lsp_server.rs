@@ -1442,7 +1442,9 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let provider = CompletionProvider::new(ast);
+                    let provider =
+                        CompletionProvider::new_with_index(ast, self.workspace_index.clone());
+
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
 
@@ -1549,6 +1551,7 @@ impl LspServer {
                             filter_text: None,
                             documentation: None,
                             additional_edits: Vec::new(),
+                            text_edit_range: None, // Workspace completions don't need precise text edit
                         });
                     }
                 }
@@ -4627,6 +4630,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4642,6 +4646,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -4654,6 +4659,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4669,6 +4675,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4685,6 +4692,7 @@ impl LspServer {
                             additional_edits: vec![],
                             sort_text: None,
                             filter_text: None,
+                            text_edit_range: None,
                         });
                     }
                 }
