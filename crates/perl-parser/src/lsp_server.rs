@@ -50,11 +50,11 @@ const ERR_INVALID_PARAMS: i32 = -32602;
 // LSP 3.17 standard error codes:
 // -32802 ServerCancelled (preferred for server-side cancellations)
 // -32801 ContentModified (document changed; redo request)
-// -32800 RequestCancelled (client-side; rarely distinguishable; we use -32802)
+// -32800 RequestCancelled (client-side; we use this for $/cancelRequest)
+#[allow(dead_code)]
 const ERR_SERVER_CANCELLED: i32 = -32802; // Server cancelled the request (LSP 3.17)
 const ERR_CONTENT_MODIFIED: i32 = -32801; // Content modified, operation obsolete
-#[allow(dead_code)]
-const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled (kept for reference)
+const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled via $/cancelRequest
 
 /// Helper to create a cancelled response
 fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
@@ -63,7 +63,7 @@ fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
         id: Some(id.clone()),
         result: None,
         error: Some(JsonRpcError {
-            code: ERR_SERVER_CANCELLED,
+            code: ERR_REQUEST_CANCELLED,
             message: "Request cancelled".into(),
             data: None,
         }),

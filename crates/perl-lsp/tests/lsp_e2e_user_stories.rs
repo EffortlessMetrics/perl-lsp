@@ -3,6 +3,7 @@
 //! Each test represents a complete user story, simulating real-world usage patterns
 //! to ensure the LSP server provides a smooth developer experience.
 
+#[path = "support/mod.rs"]
 mod support;
 
 use perl_parser::{JsonRpcRequest, LspServer, Parser};

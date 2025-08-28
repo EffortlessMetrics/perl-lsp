@@ -45,11 +45,18 @@
       "perl.extractSubroutine"
     ]
   },
+  "experimental": {
+    "inlineCompletionProvider": {}
+  },
   "foldingRangeProvider": true,
   "hoverProvider": true,
+  "implementationProvider": true,
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "inlineValueProvider": true,
+  "linkedEditingRangeProvider": true,
+  "monikerProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
@@ -108,6 +115,7 @@
     "change": 1,
     "openClose": true
   },
+  "typeDefinitionProvider": true,
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }

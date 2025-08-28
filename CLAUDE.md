@@ -7,16 +7,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **four published crates** forming a complete Perl parsing ecosystem:
+This repository contains **five published crates** forming a complete Perl parsing ecosystem:
 
-### Published Crates (v0.8.5 GA)
+### Published Crates (v0.8.6)
 
 #### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
 - Native recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
 - Tree-sitter compatible output
-- Includes LSP server binary (`perl-lsp`)
+- Core library for all parser functionality
+
+#### 2. **perl-lsp** (`/crates/perl-lsp/`) 🚀 **LSP SERVER**
+- Dedicated Language Server Protocol binary
+- Comprehensive IDE features (diagnostics, completion, hover, etc.)
+- ~65% LSP 3.17 compliance with all advertised features working
+- Clean install: `cargo install perl-lsp`
+- Built on perl-parser for parsing functionality
 - **v0.8.5 improvements**:
   - Typed ServerCapabilities for LSP 3.18 compliance
   - Pull Diagnostics support (workspace/diagnostic)
@@ -29,21 +36,21 @@ This repository contains **four published crates** forming a complete Perl parsi
   - qw() array parsing with all delimiters
   - Enhanced go-to-definition using DeclarationProvider
 
-#### 2. **perl-lexer** (`/crates/perl-lexer/`)
+#### 3. **perl-lexer** (`/crates/perl-lexer/`)
 - Context-aware tokenizer
 - Mode-based lexing (ExpectTerm, ExpectOperator)
 - Handles slash disambiguation at lexing phase
 - Zero dependencies
 - Used by perl-parser
 
-#### 3. **perl-corpus** (`/crates/perl-corpus/`)
+#### 4. **perl-corpus** (`/crates/perl-corpus/`)
 - Comprehensive test corpus
 - Property-based testing infrastructure
 - Edge case collection
 - Used for parser validation
 - Feature: `ci-fast` for conditional test execution
 
-#### 4. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
+#### 5. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
 - Pest-based parser (v2 implementation)
 - ~99.995% Perl 5 coverage
 - Marked as legacy - use perl-parser instead
@@ -112,10 +119,10 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # Build from source
-cargo build -p perl-parser --bin perl-lsp --release
+cargo build -p perl-lsp --release
 
 # Install globally
-cargo install --path crates/perl-parser --bin perl-lsp
+cargo install --path crates/perl-lsp
 
 # Run the LSP server
 perl-lsp --stdio  # For editor integration
@@ -137,7 +144,7 @@ perl-dap --stdio  # Standard DAP transport
 #### Published Crates
 ```bash
 # Install from crates.io
-cargo install perl-parser --bin perl-lsp  # LSP server
+cargo install perl-lsp                     # LSP server
 cargo add perl-parser                      # As library dependency
 cargo add perl-corpus --dev                # For testing
 
