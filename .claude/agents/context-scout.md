@@ -52,12 +52,34 @@ Key subsystem locations:
 3. **Execute Precisely**: Use Glob to scope files, Grep for targeted searches, Read focused regions only
 4. **Cross-Reference**: Follow imports to implementations, find related tests
 
-## Pattern Recognition
-**LSP Features**: `textDocument/`, `workspace/`, `handle_`, `lsp_types::`, `tower_lsp::`, `ServerCapabilities`, providers, DAP methods
-**Parser/Grammar**: `parse_`, AST nodes, `Token::`, error recovery, `Node::`, regex disambiguation, heredoc multi-phase parsing
-**Perl Edge Cases**: `m!pattern!`, indirect object syntax, `{ key => value }` hash literals, `@{[ expr ]}` interpolation
-**Rust 2024 Patterns**: `impl`, `pub fn`, `mod`, `use`, `#[test]`, `#[cfg(test)]`, workspace deps, xtask/just automation, cargo-nextest
-**Performance**: benchmarking patterns, `criterion`, `Arc<str>` usage, zero-copy parsing, memory profiling
+## Domain-Specific Pattern Recognition
+
+**Perl Language Patterns**:
+- **Perl 5 Syntax**: `sub`, `package`, `use strict`, `my`/`our`/`local`/`state`, complex operators (`~~`, `//`, `<=>`)
+- **Edge Cases**: `m!pattern!` regex delimiters, indirect object syntax (`print $fh "hello"`), hash literals (`{ key => value }`)
+- **Modern Perl**: try/catch, class/method (5.38+), signatures, postfix dereferencing, unicode identifiers
+- **Complex Features**: heredocs, string interpolation (`$var`, `@array`, `${expr}`), quote operators, format declarations
+- **Pragma System**: `use warnings`, `use feature`, version bundles, lexical pragmas
+
+**LSP Server Architecture**:
+- **Protocol Methods**: `textDocument/`, `workspace/`, `initialize`, `shutdown`, capabilities negotiation
+- **Server Components**: `handle_`, `lsp_types::`, `tower_lsp::`, `ServerCapabilities`, request/response patterns
+- **Feature Providers**: completion, hover, diagnostics, code_actions, semantic_tokens, folding_ranges
+- **LSP 3.18+ Features**: pull diagnostics, inlay hints, inline completion, type hierarchy, workspace symbols
+- **DAP Integration**: Debug Adapter Protocol methods, breakpoints, stack frames, variable inspection
+
+**Parser Architecture Patterns**:
+- **Recursive Descent**: `parse_`, AST nodes, operator precedence, error recovery, position tracking
+- **Lexing**: `Token::`, mode-based lexing (`ExpectTerm`/`ExpectOperator`), slash disambiguation
+- **AST Generation**: `Node::`, tree-sitter compatibility, Arc<str> usage, zero-copy parsing
+- **Error Handling**: fallback mechanisms, partial parsing, diagnostic generation, recovery strategies
+- **Multi-phase Parsing**: heredoc handling, context-sensitive constructs, phase-aware BEGIN/END
+
+**Modern Rust Ecosystem**:
+- **Rust 2024**: `impl`, `pub fn`, `mod`, `use`, async patterns, modern syntax, workspace deps
+- **Testing**: `#[test]`, `#[cfg(test)]`, cargo-nextest, property-based testing, corpus validation
+- **Automation**: xtask patterns, cargo workspace, build scripts, performance benchmarking
+- **Performance**: `criterion`, memory profiling, Arc usage, allocation patterns, benchmark regression
 
 ## Output Format (Strict)
 **Summary**

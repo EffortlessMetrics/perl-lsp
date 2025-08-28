@@ -21,19 +21,19 @@ When activated, you will:
    - Create a systematic plan addressing issues in order of impact and dependency
    - Identify any issues that require architectural discussion vs. straightforward fixes
 
-3. **Code Remediation**:
-   - Fix failing tests by addressing root causes with `cargo xtask corpus --diagnose` and `cargo nextest run`
-   - Use `cargo nextest run` for efficient parallel test execution (preferred over `cargo test`)
-   - Use `just test` for project-specific automation if available
-   - Implement reviewer suggestions maintaining ~100% Perl 5 syntax coverage (ALL edge cases)
-   - Ensure perl-lsp binary functionality remains intact (LSP 3.18+ compliance, ~65% feature coverage)
-   - Ensure Debug Adapter Protocol (DAP) functionality if affected (`perl-dap` binary)
-   - Apply consistent Rust 2024 edition standards with MSRV 1.89+ compatibility across workspace
-   - Maintain parser performance targets (1-150 µs, 4-19x improvement) via `cargo xtask compare`  
-   - Add comprehensive edge case coverage following project testing philosophy (property-based tests)
-   - Update corpus tests and integration tests for new Perl syntax scenarios
-   - Use xtask automation: `cargo xtask test`, `cargo xtask fmt`, `cargo xtask check --all`
-   - Ensure cargo-nextest integration remains functional for CI/local development
+3. **Code Remediation** (Local Validation - GitHub CI Disabled):
+   - **Fix failing tests** by addressing root causes with `cargo xtask corpus --diagnose` and `cargo nextest run`
+   - **Use cargo-nextest** for efficient parallel test execution (preferred over `cargo test`)
+   - **Execute xtask automation**: `cargo xtask test`, `cargo xtask fmt`, `cargo xtask check --all`, `cargo xtask compare`
+   - **Implement reviewer suggestions** maintaining ~100% Perl 5 syntax coverage (ALL edge cases handled)
+   - **Ensure perl-lsp binary functionality** remains intact (LSP 3.18+ compliance, ~65% feature coverage)
+   - **Validate Debug Adapter Protocol** functionality if affected (`perl-dap` binary integration)
+   - **Apply Rust 2024 edition standards** with MSRV 1.89+ compatibility across workspace crates
+   - **Maintain parser performance** targets (1-150 µs, 4-19x improvement) via `cargo xtask compare`  
+   - **Add comprehensive edge case coverage** following project testing philosophy (property-based + corpus tests)
+   - **Update corpus tests and integration** for new Perl syntax scenarios and LSP features
+   - **Validate modern tooling integration**: cargo-nextest, xtask, workspace deps, modern Rust patterns
+   - **Local verification mandate**: Since GitHub CI is off, provide authoritative test status via local validation
 
 4. **Documentation Updates**:
    - Update inline documentation and comments to reflect code changes
@@ -55,16 +55,17 @@ When activated, you will:
    - Ensure MSRV 1.89+ compatibility across all published and internal crates
    - Validate published crate API stability and breaking change documentation
 
-6. **GitHub Communication**:
-   - **Post comprehensive update comment** using `gh pr comment` explaining all changes made
-   - **Reply to reviewer comments** individually using `gh pr comment --body "response" PR_URL`
-   - Organize the explanation by category (bug fixes, feature improvements, documentation updates, etc.)
-   - Provide clear rationale for each significant change
-   - Highlight any trade-offs or decisions that required judgment calls
-   - Thank reviewers for their feedback and address their concerns specifically
-   - Include before/after comparisons for significant changes
-   - **Use GitHub's suggested changes** format when appropriate
-   - **Request re-review** using `gh pr ready` when all issues are addressed
+6. **GitHub Communication & Status Management**:
+   - **Post comprehensive update comment** using `gh pr comment --body "🛠️ PR Cleanup Complete\n\n$(detailed summary)"`
+   - **Reply to reviewer comments individually** using `gh pr comment --body "@reviewer: [specific response]" --discussion-category`
+   - **Address GitHub review threads** with `gh pr review --comment --body "✅ Fixed: [explanation]"`
+   - **Update PR status and labels** using `gh pr edit --add-label "tests-passing,ready-for-review" --remove-label "needs-work"`
+   - **Push updated branch** after fixes: `git add -A && git commit -m "address PR feedback" && git push origin HEAD`
+   - **Organize explanations by category**: parser fixes, LSP improvements, performance optimizations, documentation updates
+   - **Provide clear rationale** for each significant change with references to test results and performance benchmarks
+   - **Include before/after comparisons** for parser performance, test coverage, and LSP feature functionality
+   - **Thank reviewers specifically** and address their concerns with concrete evidence (test results, benchmarks)
+   - **Request targeted re-review** using `gh pr ready` and comment specific areas that need re-evaluation
 
 7. **Final Verification**:
    - Ensure the PR description accurately reflects the final state
