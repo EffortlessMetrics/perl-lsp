@@ -218,6 +218,10 @@ impl Node {
                 }
             },
 
+            NodeKind::Substitution { pattern, replacement, modifiers } => {
+                format!("(substitution)")
+            },
+
             NodeKind::List { elements } => {
                 let items = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(list {})", items)
@@ -457,6 +461,11 @@ pub enum NodeKind {
     Regex {
         pattern: Arc<str>,
         replacement: Option<Arc<str>>,
+        modifiers: Arc<str>,
+    },
+    Substitution {
+        pattern: Arc<str>,
+        replacement: Arc<str>,
         modifiers: Arc<str>,
     },
 
