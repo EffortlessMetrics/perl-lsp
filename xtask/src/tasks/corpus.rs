@@ -67,28 +67,38 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let mut in_source = false;
     let mut in_expected = false;
 
+    let mut expecting_test_name = false;
+    let mut expecting_source_start = false;
+    
     for line in content.lines() {
         if line.starts_with(
             "================================================================================",
         ) {
-            // Save previous test case if we have one
-            if !current_name.is_empty()
-                && !current_source.is_empty()
-                && !current_expected.is_empty()
-            {
-                test_cases.push(CorpusTestCase {
-                    name: current_name.clone(),
-                    source: current_source.clone(),
-                    expected: current_expected.clone(),
-                });
-            }
+            if expecting_source_start {
+                // This is the second ==== line, start reading source
+                in_source = true;
+                expecting_source_start = false;
+            } else {
+                // Save previous test case if we have one
+                if !current_name.is_empty()
+                    && !current_source.is_empty()
+                    && !current_expected.is_empty()
+                {
+                    test_cases.push(CorpusTestCase {
+                        name: current_name.clone(),
+                        source: current_source.clone(),
+                        expected: current_expected.clone(),
+                    });
+                }
 
-            // Start new test case
-            current_name.clear();
-            current_source.clear();
-            current_expected.clear();
-            in_source = false;
-            in_expected = false;
+                // Start new test case
+                current_name.clear();
+                current_source.clear();
+                current_expected.clear();
+                in_source = false;
+                in_expected = false;
+                expecting_test_name = true;
+            }
         } else if line.starts_with("----") {
             // Transition from source to expected
             in_source = false;
@@ -99,10 +109,11 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
         } else if in_expected {
             current_expected.push_str(line);
             current_expected.push('\n');
-        } else if !line.trim().is_empty() && !line.starts_with("=") {
+        } else if expecting_test_name && !line.trim().is_empty() {
             // This is the test case name
             current_name = line.trim().to_string();
-            in_source = true;
+            expecting_test_name = false;
+            expecting_source_start = true;
         }
     }
 

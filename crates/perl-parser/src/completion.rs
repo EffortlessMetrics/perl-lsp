@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Type of completion item
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CompletionItemKind {
     /// Variable (scalar, array, hash)
     Variable,
@@ -50,6 +50,8 @@ pub struct CompletionItem {
     pub filter_text: Option<String>,
     /// Additional text edits to apply
     pub additional_edits: Vec<(SourceLocation, String)>,
+    /// Range to replace in the document (for proper prefix handling)
+    pub text_edit_range: Option<(usize, usize)>, // (start, end) offsets
 }
 
 /// Context for completion
@@ -69,6 +71,8 @@ pub struct CompletionContext {
     pub current_package: String,
     /// Prefix text before cursor
     pub prefix: String,
+    /// Start position of the prefix (for text edit range calculation)
+    pub prefix_start: usize,
 }
 
 /// Completion provider
@@ -317,9 +321,37 @@ impl CompletionProvider {
         position: usize,
         filepath: Option<&str>,
     ) -> Vec<CompletionItem> {
-        let context = self.analyze_context(source, position);
+        self.get_completions_with_path_cancellable(source, position, filepath, &|| false)
+    }
+
+    /// Get completions at a given position with cancellation support
+    pub fn get_completions_with_path_cancellable(
+        &self,
+        source: &str,
+        position: usize,
+        filepath: Option<&str>,
+        is_cancelled: &dyn Fn() -> bool,
+    ) -> Vec<CompletionItem> {
+        // Input validation
+        if position > source.len() {
+            return vec![];
+        }
+
+        let context = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.analyze_context(source, position)
+        })) {
+            Ok(ctx) => ctx,
+            Err(_) => {
+                return vec![];
+            }
+        };
 
         if context.in_comment {
+            return vec![];
+        }
+
+        // Early cancellation check
+        if is_cancelled() {
             return vec![];
         }
 
@@ -329,14 +361,23 @@ impl CompletionProvider {
         if context.prefix.starts_with('$') {
             // Scalar variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::ScalarVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::ArrayVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::HashVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "%");
         } else if context.prefix.starts_with('&') {
             // Subroutine completion
@@ -356,15 +397,27 @@ impl CompletionProvider {
             // General completion: keywords, functions, variables
             if context.prefix.is_empty() || self.could_be_keyword(&context.prefix) {
                 self.add_keyword_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
             }
 
             if context.prefix.is_empty() || self.could_be_function(&context.prefix) {
                 self.add_builtin_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
                 self.add_function_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
             }
 
             // Also suggest variables without sigils in some contexts
             self.add_all_variables(&mut completions, &context);
+            if is_cancelled() {
+                return vec![];
+            }
 
             // Add Test::More completions if in test context
             if self.is_test_context(source, filepath) {
@@ -372,9 +425,80 @@ impl CompletionProvider {
             }
         }
 
-        // Sort completions by relevance
+        // Remove duplicates and sort completions by relevance
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.deduplicate_and_sort(completions.clone())
+        })) {
+            Ok(sorted_completions) => sorted_completions,
+            Err(_) => {
+                completions // Return unsorted completions as fallback
+            }
+        }
+    }
+
+    /// Remove duplicates and sort completions with stable, deterministic ordering
+    fn deduplicate_and_sort(&self, mut completions: Vec<CompletionItem>) -> Vec<CompletionItem> {
+        if completions.is_empty() {
+            return completions;
+        }
+
+        // Remove duplicates based on label, keeping the one with better sort_text
+        let mut seen = std::collections::HashMap::<String, usize>::new();
+        let mut to_remove = std::collections::HashSet::<usize>::new();
+
+        for (i, item) in completions.iter().enumerate() {
+            if item.label.is_empty() {
+                // Skip items with empty labels
+                to_remove.insert(i);
+                continue;
+            }
+
+            if let Some(&existing_idx) = seen.get(&item.label) {
+                let existing_sort = completions[existing_idx]
+                    .sort_text
+                    .as_ref()
+                    .unwrap_or(&completions[existing_idx].label);
+                let current_sort = item.sort_text.as_ref().unwrap_or(&item.label);
+
+                if current_sort < existing_sort {
+                    // Current item is better, remove the existing one
+                    to_remove.insert(existing_idx);
+                    seen.insert(item.label.clone(), i);
+                } else {
+                    // Existing item is better, remove current one
+                    to_remove.insert(i);
+                }
+            } else {
+                seen.insert(item.label.clone(), i);
+            }
+        }
+
+        // Remove marked duplicates in reverse order to maintain indices
+        let mut indices: Vec<usize> = to_remove.into_iter().collect();
+        indices.sort_by(|a, b| b.cmp(a)); // Sort in descending order
+        for idx in indices {
+            completions.remove(idx);
+        }
+
+        // Sort with stable, deterministic ordering
         completions.sort_by(|a, b| {
-            a.sort_text.as_ref().unwrap_or(&a.label).cmp(b.sort_text.as_ref().unwrap_or(&b.label))
+            let a_sort = a.sort_text.as_ref().unwrap_or(&a.label);
+            let b_sort = b.sort_text.as_ref().unwrap_or(&b.label);
+
+            // Primary sort: by sort_text/label
+            match a_sort.cmp(b_sort) {
+                std::cmp::Ordering::Equal => {
+                    // Secondary sort: by completion kind for stability
+                    match a.kind.cmp(&b.kind) {
+                        std::cmp::Ordering::Equal => {
+                            // Tertiary sort: by label for full determinism
+                            a.label.cmp(&b.label)
+                        }
+                        other => other,
+                    }
+                }
+                other => other,
+            }
         });
 
         completions
@@ -393,31 +517,31 @@ impl CompletionProvider {
 
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
-        let word_prefix = if position >= 2 && &source[position.saturating_sub(2)..position] == "->"
-        {
-            // We're right after ->, find the receiver variable
-            let receiver_start = source[..position.saturating_sub(2)]
-                .rfind(|c: char| {
-                    !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
-                })
-                .map(|p| p + 1)
-                .unwrap_or(0);
-            source[receiver_start..position].to_string()
-        } else {
-            let word_start = source[..position]
-                .rfind(|c: char| {
-                    !c.is_alphanumeric()
-                        && c != '_'
-                        && c != ':'
-                        && c != '$'
-                        && c != '@'
-                        && c != '%'
-                        && c != '&'
-                })
-                .map(|p| p + 1)
-                .unwrap_or(0);
-            source[word_start..position].to_string()
-        };
+        let (word_prefix, prefix_start) =
+            if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
+                // We're right after ->, find the receiver variable
+                let receiver_start = source[..position.saturating_sub(2)]
+                    .rfind(|c: char| {
+                        !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
+                    })
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                (source[receiver_start..position].to_string(), receiver_start)
+            } else {
+                let word_start = source[..position]
+                    .rfind(|c: char| {
+                        !c.is_alphanumeric()
+                            && c != '_'
+                            && c != ':'
+                            && c != '$'
+                            && c != '@'
+                            && c != '%'
+                            && c != '&'
+                    })
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                (source[word_start..position].to_string(), word_start)
+            };
 
         // Detect trigger character
         let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
@@ -435,6 +559,7 @@ impl CompletionProvider {
             in_comment,
             current_package: "main".to_string(), // TODO: Detect actual package
             prefix: word_prefix,
+            prefix_start,
         }
     }
 
@@ -472,6 +597,7 @@ impl CompletionProvider {
                         sort_text: Some(format!("1_{}", name)), // Variables have high priority
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
+                        text_edit_range: Some((context.prefix_start, context.position)),
                     });
                 }
             }
@@ -531,6 +657,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("0_{}", var)), // Special vars have highest priority
                     filter_text: Some(var.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -557,6 +684,7 @@ impl CompletionProvider {
                         sort_text: Some(format!("2_{}", name)),
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
+                        text_edit_range: Some((context.prefix_start, context.position)),
                     });
                 }
             }
@@ -591,6 +719,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("3_{}", builtin)),
                     filter_text: Some(builtin.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -632,6 +761,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("4_{}", keyword)),
                     filter_text: Some(keyword.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -672,6 +802,7 @@ impl CompletionProvider {
                             sort_text: Some(format!("1_{}", symbol.name)),
                             filter_text: Some(symbol.name.clone()),
                             additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
                         });
                     }
                 }
@@ -686,6 +817,7 @@ impl CompletionProvider {
                             sort_text: Some(format!("1_{}", symbol.name)),
                             filter_text: Some(symbol.name.clone()),
                             additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
                         });
                     }
                 }
@@ -700,6 +832,7 @@ impl CompletionProvider {
                             sort_text: Some(format!("1_{}", symbol.name)),
                             filter_text: Some(symbol.name.clone()),
                             additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
                         });
                     }
                 }
@@ -780,6 +913,7 @@ impl CompletionProvider {
                 sort_text: Some(format!("2_{}", method)),
                 filter_text: Some(method.to_string()),
                 additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
             });
         }
 
@@ -800,6 +934,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("9_{}", method)), // Lower priority
                     filter_text: Some(method.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -882,6 +1017,7 @@ impl CompletionProvider {
                             sort_text: Some(format!("5_{}", name)),
                             filter_text: Some(name.clone()),
                             additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
                         });
                     }
                 }
@@ -977,6 +1113,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("2_{}", name)),
                     filter_text: Some(name.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -1060,9 +1197,7 @@ sub exported_sub { }
 sub internal_sub { }
 1;
 "#;
-        index
-            .index_file(module_uri, module_code.to_string())
-            .expect("indexing module");
+        index.index_file(module_uri, module_code.to_string()).expect("indexing module");
 
         // Code that triggers package completion
         let code = "use MyModule;\nMyModule::";
