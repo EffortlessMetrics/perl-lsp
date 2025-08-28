@@ -1,4 +1,4 @@
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 mod tests {
     use tree_sitter_perl::{NodeKind, ParserV2};
 
@@ -14,24 +14,24 @@ mod tests {
     #[test]
     fn captures_replacement_and_modifier() {
         match parse_first_node("s/foo/bar/g;") {
-            NodeKind::Regex { pattern, replacement, modifiers } => {
+            NodeKind::Substitution { pattern, replacement, modifiers } => {
                 assert_eq!(pattern.as_ref(), "foo");
-                assert_eq!(replacement.as_ref().map(|s| s.as_ref()), Some("bar"));
+                assert_eq!(replacement.as_ref(), "bar");
                 assert_eq!(modifiers.as_ref(), "g");
             }
-            other => panic!("expected regex node, got {:?}", other),
+            other => panic!("expected substitution node, got {:?}", other),
         }
     }
 
     #[test]
     fn captures_multiple_modifiers() {
         match parse_first_node("s/foo/bar/gi;") {
-            NodeKind::Regex { pattern, replacement, modifiers } => {
+            NodeKind::Substitution { pattern, replacement, modifiers } => {
                 assert_eq!(pattern.as_ref(), "foo");
-                assert_eq!(replacement.as_ref().map(|s| s.as_ref()), Some("bar"));
+                assert_eq!(replacement.as_ref(), "bar");
                 assert_eq!(modifiers.as_ref(), "gi");
             }
-            other => panic!("expected regex node, got {:?}", other),
+            other => panic!("expected substitution node, got {:?}", other),
         }
     }
 }

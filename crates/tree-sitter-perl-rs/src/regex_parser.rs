@@ -1,4 +1,4 @@
-//! Regex and quote-like operator parsing for the token-based parser
+//! Regex and quote-like operator parsing
 //!
 //! Handles m//, s///, qr//, tr///, and other quote-like operators
 
@@ -61,43 +61,16 @@ impl<'source> RegexParser<'source> {
     /// Parse a quote-like operator (m//, s///, etc.)
     #[cfg(feature = "token-parser")]
     pub fn parse_quote_operator(&mut self, _op: Token) -> Result<QuoteConstruct, String> {
-        // This function currently always returns an error
-        // The match below handles all cases with returns
+        // This function currently always returns an error - stub implementation
         match _op {
             Token::BinMatch => {
                 // This is =~, not a quote operator
-                return Err("BinMatch is not a quote operator".to_string());
+                Err("BinMatch is not a quote operator".to_string())
             }
-            _ => return Err(format!("Unexpected token for quote operator: {:?}", _op)),
-        }
-
-        // Skip optional whitespace (unreachable but kept for future extension)
-        #[allow(unreachable_code)]
-        {
-            self.skip_whitespace();
-
-            // Get delimiter
-            let delimiter = self.parse_delimiter()?;
-
-            // Parse pattern
-            let pattern = self.parse_until_delimiter(delimiter)?;
-
-            // This code is unreachable but kept for future implementation
-            // For substitution and transliteration, parse replacement
-            let operator = QuoteOperator::Match; // Placeholder since this is unreachable
-            let replacement = match operator {
-                QuoteOperator::Substitute | QuoteOperator::Transliterate => {
-                    Some(self.parse_until_delimiter(delimiter)?)
-                }
-                _ => None,
-            };
-
-            // Parse modifiers
-            let modifiers = self.parse_modifiers();
-
-            Ok(QuoteConstruct { operator, delimiter, pattern, replacement, modifiers })
+            _ => Err(format!("Unexpected token for quote operator: {:?}", _op)),
         }
     }
+
 
     /// Parse m// operator
     pub fn parse_match_operator(&mut self) -> Result<QuoteConstruct, String> {
