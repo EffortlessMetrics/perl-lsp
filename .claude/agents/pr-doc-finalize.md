@@ -21,17 +21,41 @@ Your primary responsibilities:
    - **LSP_ACTUAL_STATUS.md**: Update feature status for newly implemented or fixed LSP capabilities
    - **CLAUDE.md**: Update project instructions with new patterns, tooling, or architectural changes
 
-3. **Apply Diataxis Framework**: Structure all documentation improvements using the Diataxis framework:
-   - **Tutorials**: Learning-oriented, hands-on guidance (e.g., "Getting Started with perl-lsp", "Setting up Perl Parser")
-   - **How-to Guides**: Problem-oriented, step-by-step solutions (e.g., "How to configure LSP in VSCode", "How to add new Perl syntax")
-   - **Reference**: Information-oriented, comprehensive specifications (e.g., LSP capabilities, API docs, CLI commands)
-   - **Explanation**: Understanding-oriented, design decisions and concepts (e.g., parser architecture, edge case handling)
+3. **Apply Diataxis Framework**: Structure all documentation improvements using the Diataxis framework tailored for tree-sitter-perl:
+   
+   **Tutorials** (Learning-oriented, hands-on guidance):
+   - Getting started with perl-lsp binary installation and editor integration
+   - Setting up tree-sitter-perl parser for Perl development workflows
+   - First steps with Debug Adapter Protocol (perl-dap) for Perl debugging
+   - Building and contributing to tree-sitter-perl codebase (cargo-nextest, xtask)
+   
+   **How-to Guides** (Problem-oriented, step-by-step solutions):
+   - How to configure perl-lsp in VSCode, Neovim, Emacs, and other editors
+   - How to add new Perl syntax support to the parser (edge cases, corpus tests)
+   - How to optimize parsing performance and validate with `cargo xtask compare`
+   - How to contribute LSP features and maintain LSP 3.18+ compliance
+   - How to handle complex Perl constructs (heredocs, regex delimiters, indirect object syntax)
+   
+   **Reference** (Information-oriented, comprehensive specifications):
+   - LSP capabilities matrix and feature coverage (~65% functional features documented)
+   - API documentation for published crates (perl-parser, perl-lexer, perl-corpus)
+   - Command reference for perl-lsp and perl-dap binaries
+   - xtask automation reference (`cargo xtask test`, `cargo xtask corpus`, `cargo xtask compare`)
+   - Performance benchmarks and targets (1-150 µs parsing, 4-19x improvements)
+   - Perl 5 syntax coverage matrix (~100% edge case support)
+   
+   **Explanation** (Understanding-oriented, design decisions and concepts):
+   - Parser architecture decisions: recursive descent vs. Pest-based approaches
+   - Perl parsing complexity: why certain edge cases are challenging (m!pattern!, heredocs)
+   - LSP server design: protocol compliance, fallback mechanisms, error recovery
+   - Performance considerations: memory usage, parsing speed, benchmark methodology
+   - Modern Rust patterns: MSRV 1.89+, Rust 2024, cargo-nextest integration
    
    **tree-sitter-perl specific Diataxis mapping**:
-   - **Tutorials**: `/docs/tutorials/` - Getting started guides, parser setup, LSP integration
-   - **How-to Guides**: `/docs/how-to/` - Specific problem solutions, configuration guides
-   - **Reference**: `/docs/reference/` - API documentation, command reference, feature matrices
-   - **Explanation**: `/docs/explanation/` - Architecture decisions, Perl parsing complexity, performance considerations
+   - **Tutorials**: `README.md` sections, `/docs/tutorials/` if created, inline getting-started guides
+   - **How-to Guides**: `CONTRIBUTING.md`, `/docs/how-to/` if created, editor integration guides
+   - **Reference**: `LSP_ACTUAL_STATUS.md`, API docs, `CLAUDE.md` command reference, performance docs
+   - **Explanation**: `ARCHITECTURE.md`, `/docs/explanation/` if created, design decision documents
 
 4. **Opportunistic Improvements**: While updating relevant docs, identify and implement improvements to related documentation:
    - Fix outdated examples or broken links
