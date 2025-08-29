@@ -112,7 +112,9 @@ impl Scope {
     }
 }
 
-pub struct ScopeAnalyzer;
+pub struct ScopeAnalyzer {
+    hash_key_stack: RefCell<Vec<bool>>,
+}
 
 impl Default for ScopeAnalyzer {
     fn default() -> Self {
@@ -122,7 +124,7 @@ impl Default for ScopeAnalyzer {
 
 impl ScopeAnalyzer {
     pub fn new() -> Self {
-        Self
+        Self { hash_key_stack: RefCell::new(Vec::new()) }
     }
 
     pub fn analyze(
@@ -151,6 +153,9 @@ impl ScopeAnalyzer {
         pragma_map: &[(Range<usize>, PragmaState)],
         in_hash_subscript: bool,
     ) {
+        // Track whether we're currently within a hash key context
+        self.hash_key_stack.borrow_mut().push(in_hash_subscript);
+
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
         let strict_mode = pragma_state.strict_subs;
@@ -185,11 +190,13 @@ impl ScopeAnalyzer {
 
                 // Skip package-qualified variables
                 if full_name.contains("::") {
+                    self.hash_key_stack.borrow_mut().pop();
                     return;
                 }
 
                 // Skip built-in global variables
                 if is_builtin_global(&full_name) {
+                    self.hash_key_stack.borrow_mut().pop();
                     return;
                 }
 
@@ -212,7 +219,7 @@ impl ScopeAnalyzer {
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
-                if strict_mode && !in_hash_subscript && !is_known_function(name) {
+                if strict_mode && !self.is_in_hash_key_context(node) && !is_known_function(name) {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
@@ -348,6 +355,7 @@ impl ScopeAnalyzer {
                 }
             }
         }
+        self.hash_key_stack.borrow_mut().pop();
     }
 
     fn collect_unused_variables(
@@ -398,9 +406,8 @@ impl ScopeAnalyzer {
 
     #[allow(dead_code)]
     fn is_in_hash_key_context(&self, _node: &Node) -> bool {
-        // TODO: Check if node is within a hash subscript context
-        // For now, return false to be conservative
-        false
+        // Walk the ancestor stack to see if any parent indicates a hash subscript
+        self.hash_key_stack.borrow().iter().any(|&b| b)
     }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
