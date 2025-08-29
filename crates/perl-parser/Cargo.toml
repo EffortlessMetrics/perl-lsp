@@ -33,6 +33,7 @@ url = "2.5"
 rustc-hash = "2.1.0"
 md5 = "0.7"
 phf = { version = "0.11", features = ["macros"] }
+nix = { version = "0.28", default-features = false, features = ["signal"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }

@@ -11,6 +11,10 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
+#[cfg(unix)]
+use nix::sys::signal::{kill, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
 
 /// DAP server that handles debug sessions
 pub struct DebugAdapter {
@@ -279,6 +283,26 @@ impl DebugAdapter {
         }
     }
 
+    /// Helper to send a command to the underlying Perl debugger
+    fn send_debugger_command(&self, cmd: &str) -> Result<(), String> {
+        let mut guard = self.session.lock().unwrap();
+        if let Some(ref mut session) = *guard {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                stdin
+                    .write_all(cmd.as_bytes())
+                    .and_then(|_| stdin.write_all(b"\n"))
+                    .and_then(|_| stdin.flush())
+                    .map_err(|e| e.to_string())?;
+                session.state = DebugState::Running;
+                Ok(())
+            } else {
+                Err("Debugger stdin not available".into())
+            }
+        } else {
+            Err("No active session".into())
+        }
+    }
+
     /// Handle initialize request
     fn handle_initialize(
         &self,
@@ -451,8 +475,143 @@ impl DebugAdapter {
 
     /// Start thread to read debugger output
     fn start_output_reader(&self) {
-        // TODO: Implement output reader that parses Perl debugger output
-        // and sends appropriate events (stopped, output, etc.)
+        let session = self.session.clone();
+        let event_sender = self.event_sender.clone();
+        let seq_counter = self.seq.clone();
+
+        // Extract stdout/stderr handles and thread id
+        let (stdout, stderr, thread_id) = {
+            let mut guard = session.lock().unwrap();
+            if let Some(ref mut sess) = *guard {
+                (
+                    sess.process.stdout.take(),
+                    sess.process.stderr.take(),
+                    sess.thread_id,
+                )
+            } else {
+                return;
+            }
+        };
+
+        // Helper to generate next sequence number inside thread
+        fn next_seq(seq: &Arc<Mutex<i64>>) -> i64 {
+            let mut s = seq.lock().unwrap();
+            *s += 1;
+            *s
+        }
+
+        // Reader for stdout (debugger output)
+        if let Some(out) = stdout {
+            let session_clone = session.clone();
+            let sender_clone = event_sender.clone();
+            let seq_clone = seq_counter.clone();
+            thread::spawn(move || {
+                let reader = BufReader::new(out);
+                for line in reader.lines() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break,
+                    };
+
+                    // Detect stop location like `main::(file.pl:3):`
+                    if let Some(pos) = line.find("::(") {
+                        if let Some(end) = line[pos + 3..].find("):") {
+                            let loc = &line[pos + 3..pos + 3 + end];
+                            if let Some(colon) = loc.rfind(':') {
+                                let file = loc[..colon].to_string();
+                                let line_num = loc[colon + 1..]
+                                    .parse::<i32>()
+                                    .unwrap_or(0);
+
+                                // Update session stack frame
+                                {
+                                    let mut guard = session_clone.lock().unwrap();
+                                    if let Some(ref mut sess) = *guard {
+                                        sess.stack_frames = vec![StackFrame {
+                                            id: 1,
+                                            name: "main".to_string(),
+                                            source: Source {
+                                                name: Some(file.clone()),
+                                                path: file.clone(),
+                                                source_reference: None,
+                                            },
+                                            line: line_num,
+                                            column: 1,
+                                            end_line: None,
+                                            end_column: None,
+                                        }];
+                                        sess.state = DebugState::Stopped;
+                                    }
+                                }
+
+                                if let Some(ref sender) = sender_clone {
+                                    let seq = next_seq(&seq_clone);
+                                    let _ = sender.send(DapMessage::Event {
+                                        seq,
+                                        event: "stopped".to_string(),
+                                        body: Some(json!({
+                                            "reason": "breakpoint",
+                                            "threadId": thread_id,
+                                            "allThreadsStopped": true
+                                        })),
+                                    });
+                                }
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Normal output line
+                    if let Some(ref sender) = sender_clone {
+                        let seq = next_seq(&seq_clone);
+                        let _ = sender.send(DapMessage::Event {
+                            seq,
+                            event: "output".to_string(),
+                            body: Some(json!({
+                                "category": "stdout",
+                                "output": format!("{}\n", line)
+                            })),
+                        });
+                    }
+                }
+
+                // Process terminated
+                if let Some(ref sender) = sender_clone {
+                    let seq = next_seq(&seq_clone);
+                    let _ = sender.send(DapMessage::Event { seq, event: "terminated".into(), body: None });
+                }
+                let mut guard = session_clone.lock().unwrap();
+                if let Some(ref mut sess) = *guard {
+                    sess.state = DebugState::Terminated;
+                }
+            });
+        }
+
+        // Reader for stderr -> output events with category stderr
+        if let Some(err) = stderr {
+            let sender_clone = event_sender.clone();
+            let seq_clone = seq_counter.clone();
+            thread::spawn(move || {
+                let reader = BufReader::new(err);
+                for line in reader.lines() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break,
+                    };
+                    if let Some(ref sender) = sender_clone {
+                        let seq = next_seq(&seq_clone);
+                        let _ = sender.send(DapMessage::Event {
+                            seq,
+                            event: "output".to_string(),
+                            body: Some(json!({
+                                "category": "stderr",
+                                "output": format!("{}\n", line)
+                            })),
+                        });
+                    }
+                }
+            });
+        }
     }
 
     /// Handle attach request
@@ -564,8 +723,19 @@ impl DebugAdapter {
 
     /// Handle configurationDone request
     fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
-        // Continue execution after configuration
-        // TODO: Send continue command to Perl debugger
+        // Apply any pending breakpoints and resume execution
+        {
+            let breakpoints = self.breakpoints.lock().unwrap().clone();
+            for (file, bps) in breakpoints.iter() {
+                for bp in bps {
+                    let cmd = format!("b {}:{}", file, bp.line);
+                    let _ = self.send_debugger_command(&cmd);
+                }
+            }
+        }
+
+        // Continue running program
+        let _ = self.send_debugger_command("c");
 
         DapMessage::Response {
             seq,
@@ -697,7 +867,7 @@ impl DebugAdapter {
 
     /// Handle continue request
     fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // TODO: Send continue command to Perl debugger
+        let _ = self.send_debugger_command("c");
 
         DapMessage::Response {
             seq,
@@ -713,7 +883,7 @@ impl DebugAdapter {
 
     /// Handle next request
     fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // TODO: Send next command to Perl debugger
+        let _ = self.send_debugger_command("n");
 
         DapMessage::Response {
             seq,
@@ -727,7 +897,7 @@ impl DebugAdapter {
 
     /// Handle stepIn request
     fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // TODO: Send step command to Perl debugger
+        let _ = self.send_debugger_command("s");
 
         DapMessage::Response {
             seq,
@@ -741,7 +911,7 @@ impl DebugAdapter {
 
     /// Handle stepOut request
     fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // TODO: Send return command to Perl debugger
+        let _ = self.send_debugger_command("r");
 
         DapMessage::Response {
             seq,
@@ -755,7 +925,11 @@ impl DebugAdapter {
 
     /// Handle pause request
     fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // TODO: Send interrupt signal to Perl debugger
+        if let Some(ref session) = *self.session.lock().unwrap() {
+            let pid = session.process.id();
+            #[cfg(unix)]
+            let _ = kill(Pid::from_raw(pid as i32), Signal::SIGINT);
+        }
 
         DapMessage::Response {
             seq,
@@ -803,6 +977,8 @@ impl DebugAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use serde_json::json;
 
     #[test]
     fn test_debug_adapter_creation() {
@@ -831,6 +1007,29 @@ mod tests {
                 assert!(body.is_some());
             }
             _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_launch_and_disconnect() {
+        let mut script = tempfile::NamedTempFile::new().unwrap();
+        writeln!(script, "print \"hi\\n\";").unwrap();
+        let path = script.path().to_str().unwrap();
+
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", None);
+
+        let launch_args = json!({"program": path, "stopOnEntry": true});
+        let resp = adapter.handle_request(2, "launch", Some(launch_args));
+        match resp {
+            DapMessage::Response { success, .. } => assert!(success),
+            _ => panic!("expected response"),
+        }
+
+        let resp = adapter.handle_request(3, "disconnect", None);
+        match resp {
+            DapMessage::Response { success, .. } => assert!(success),
+            _ => panic!("expected response"),
         }
     }
 }
