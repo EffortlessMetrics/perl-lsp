@@ -62,7 +62,7 @@ impl ParserContext {
     /// Create a new parser context
     pub fn new(source: String) -> Self {
         let mut tokens = VecDeque::new();
-        let _position_tracker = PositionTracker::new();
+        let mut position_tracker = PositionTracker::new();
 
         // Tokenize the source using mode-aware lexer
         let mut lexer = perl_lexer::PerlLexer::new(&source);
@@ -77,9 +77,18 @@ impl ParserContext {
                     let start = token.start;
                     let end = token.end;
 
-                    // Convert to positions
-                    let start_pos = Position::new(start, 0, 0); // TODO: track line/column properly
-                    let end_pos = Position::new(end, 0, 0);
+                    if start < position_tracker._byte_offset {
+                        // In case of out-of-order tokens, reset tracker
+                        position_tracker = PositionTracker::new();
+                    }
+
+                    // Advance to start position
+                    position_tracker.advance(&source[position_tracker._byte_offset..start]);
+                    let start_pos = position_tracker.current_position();
+
+                    // Advance to end position and record
+                    position_tracker.advance(&source[start..end]);
+                    let end_pos = position_tracker.current_position();
 
                     tokens.push_back(TokenWithPosition::new(token, start_pos, end_pos));
                 }
@@ -93,7 +102,7 @@ impl ParserContext {
             id_generator: NodeIdGenerator::new(),
             errors: Vec::new(),
             source,
-            _position_tracker: PositionTracker::new(),
+            _position_tracker: position_tracker,
         }
     }
 
@@ -248,5 +257,49 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert_eq!(errors[0].message, "Error 1");
         assert_eq!(errors[1].message, "Error 2");
+    }
+
+    #[test]
+    fn test_multiline_positions() {
+        let source = "my $x = 42;\nmy $y = 43;".to_string();
+        let ctx = ParserContext::new(source.clone());
+
+        let first_offset = source.find("my").unwrap();
+        let second_offset = source.rfind("my").unwrap();
+
+        let first =
+            ctx.tokens.iter().find(|t| t.range().start.byte == first_offset).expect("first token");
+        assert_eq!(first.range().start.line, 1);
+        assert_eq!(first.range().start.column, 1);
+        assert_eq!(first.range().end.line, 1);
+        assert_eq!(first.range().end.column, 3);
+
+        let second = ctx
+            .tokens
+            .iter()
+            .find(|t| t.range().start.byte == second_offset)
+            .expect("second token");
+        assert_eq!(second.range().start.line, 2);
+        assert_eq!(second.range().start.column, 1);
+        assert_eq!(second.range().end.line, 2);
+        assert_eq!(second.range().end.column, 3);
+    }
+
+    #[test]
+    fn test_multiline_string_token_positions() {
+        let source = "my $s = \"a\nb\";".to_string();
+        let ctx = ParserContext::new(source.clone());
+
+        let string_offset = source.find('"').unwrap();
+        let token = ctx
+            .tokens
+            .iter()
+            .find(|t| t.range().start.byte == string_offset)
+            .expect("string token");
+
+        assert_eq!(token.range().start.line, 1);
+        assert_eq!(token.range().start.column, 9);
+        assert_eq!(token.range().end.line, 2);
+        assert_eq!(token.range().end.column, 3);
     }
 }
