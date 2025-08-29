@@ -220,7 +220,7 @@ impl Node {
 
             NodeKind::Substitution { pattern, replacement, modifiers } => {
                 format!("(substitution)")
-            },
+            }
 
             NodeKind::List { elements } => {
                 let items = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");

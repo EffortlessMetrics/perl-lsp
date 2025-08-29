@@ -1115,7 +1115,7 @@ impl<'a> ParserV2<'a> {
     fn parse_substitution(&mut self) -> Result<Node, ParseError> {
         let token = self.advance();
         let text = token.text.as_ref();
-        
+
         // Try to parse with RegexParser to extract components
         let mut parser = RegexParser::new(text, 1);
         match parser.parse_substitute_operator() {
