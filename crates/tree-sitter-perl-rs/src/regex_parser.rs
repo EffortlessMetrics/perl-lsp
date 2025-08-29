@@ -71,7 +71,6 @@ impl<'source> RegexParser<'source> {
         }
     }
 
-
     /// Parse m// operator
     pub fn parse_match_operator(&mut self) -> Result<QuoteConstruct, String> {
         // Skip optional whitespace after 'm'
