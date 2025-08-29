@@ -367,3 +367,28 @@ given ($value) {
     let issues = analyze_code(code);
     assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
+
+#[test]
+fn test_hash_key_bareword_not_flagged() {
+    let code = r#"
+use strict;
+my %h;
+$h{foo} = 1;
+"#;
+
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UnquotedBareword)));
+}
+
+#[test]
+fn test_hash_key_expression_bareword_not_flagged() {
+    let code = r#"
+use strict;
+my %h;
+my $x = 1;
+$h{foo + $x} = 2;
+"#;
+
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UnquotedBareword)));
+}
