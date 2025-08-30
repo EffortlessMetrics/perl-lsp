@@ -184,6 +184,71 @@ impl ScopeAnalyzer {
                 }
             }
 
+            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+                let is_our = declarator == "our";
+                for variable in variables {
+                    let var_name = self.extract_variable_name(variable);
+                    let line = self.get_line_from_node(variable, code);
+
+                    if let Some(issue_kind) =
+                        scope.declare_variable(&var_name, variable.location.start, is_our)
+                    {
+                        issues.push(ScopeIssue {
+                            kind: issue_kind,
+                            variable_name: var_name.clone(),
+                            line,
+                            description: match issue_kind {
+                                IssueKind::VariableShadowing => {
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        var_name
+                                    )
+                                }
+                                IssueKind::VariableRedeclaration => {
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        var_name
+                                    )
+                                }
+                                _ => String::new(),
+                            },
+                        });
+                    }
+                }
+            }
+
+            NodeKind::Use { module, args } => {
+                // Handle 'use vars' pragma for global variable declarations
+                if module == "vars" {
+                    for arg in args {
+                        // Parse qw() style arguments to extract individual variable names
+                        if arg.starts_with("qw(") && arg.ends_with(")") {
+                            let content = &arg[3..arg.len() - 1]; // Remove qw( and )
+                            for var_name in content.split_whitespace() {
+                                if !var_name.is_empty()
+                                    && (var_name.starts_with('$')
+                                        || var_name.starts_with('@')
+                                        || var_name.starts_with('%'))
+                                {
+                                    // Declare these variables as globals in the current scope
+                                    scope.declare_variable(var_name, node.location.start, true); // true = is_our (global)
+                                }
+                            }
+                        } else {
+                            // Handle regular variable names (not in qw())
+                            let var_name = arg.trim();
+                            if !var_name.is_empty()
+                                && (var_name.starts_with('$')
+                                    || var_name.starts_with('@')
+                                    || var_name.starts_with('%'))
+                            {
+                                scope.declare_variable(var_name, node.location.start, true);
+                            }
+                        }
+                    }
+                }
+            }
+
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
 
@@ -401,7 +466,6 @@ impl ScopeAnalyzer {
         code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
-    #[allow(dead_code)]
     fn is_in_hash_key_context(
         &self,
         node: &Node,
@@ -410,9 +474,32 @@ impl ScopeAnalyzer {
         let mut current = node as *const Node;
         while let Some(parent) = parent_map.get(&current) {
             match &parent.kind {
+                // Hash subscript: $hash{key} or %hash{key}
                 NodeKind::Binary { op, left: _, right } if op == "{}" => {
-                    if right.as_ref() as *const _ == current {
+                    // Check if current node is the key (right side of the {} operation)
+                    if std::ptr::eq(right.as_ref(), current) {
                         return true;
+                    }
+                }
+                // Hash literal: { key => value }
+                NodeKind::HashLiteral { pairs } => {
+                    // Check if current node is a key in any of the pairs
+                    for (key, _value) in pairs {
+                        if std::ptr::eq(key, current) {
+                            return true;
+                        }
+                    }
+                }
+                // Array literal containing hash keys (for hash slices @hash{key1, key2})
+                NodeKind::ArrayLiteral { elements: _ } => {
+                    // Check if the parent of this array literal is a hash subscript
+                    if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
+                        if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
+                            if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
+                                // This array literal is the key part of a hash slice
+                                return true;
+                            }
+                        }
                     }
                 }
                 _ => {}
