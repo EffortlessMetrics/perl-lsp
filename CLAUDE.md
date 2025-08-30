@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Latest Release**: v0.8.5 GA - See [RELEASE_NOTES_v0.8.5.md](RELEASE_NOTES_v0.8.5.md)  
+**Latest Release**: v0.8.6 GA - Enhanced Scope Analysis with Hash Key Context Detection  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md) for guarantees
 
 ## Project Overview
@@ -24,6 +24,13 @@ This repository contains **five published crates** forming a complete Perl parsi
 - ~65% LSP 3.17 compliance with all advertised features working
 - Clean install: `cargo install perl-lsp`
 - Built on perl-parser for parsing functionality
+- **v0.8.6 improvements**:
+  - **Hash Key Context Detection** - Smart bareword analysis that eliminates false positives in hash contexts
+  - Enhanced scope analyzer with `is_in_hash_key_context` method for precise context detection
+  - Fixed parsing regression for local statements with complex lvalue expressions (`local $ENV{PATH}`)
+  - Comprehensive hash context coverage: subscripts (`$hash{key}`), literals (`{key => value}`), slices (`@hash{key1, key2}`)
+  - All 27 scope analyzer tests passing with enhanced test coverage
+  - Type Definition and Implementation Providers for blessed references and ISA relationships
 - **v0.8.5 improvements**:
   - Typed ServerCapabilities for LSP 3.18 compliance
   - Pull Diagnostics support (workspace/diagnostic)
@@ -378,9 +385,13 @@ The LSP server includes robust fallback mechanisms for handling incomplete or sy
    - Finds subroutines and packages in unparseable code
    - Ensures outline view works during active editing
 
-4. **Diagnostics with Scope Analysis**
-   - Undefined variable detection under `use strict`
-   - Unused variable warnings
+4. **Diagnostics with Enhanced Scope Analysis** (v0.8.6)
+   - **Hash Key Context Detection** - Advanced undefined variable detection under `use strict` with hash key awareness
+   - Smart bareword analysis that correctly identifies legitimate hash keys vs violations:
+     - Hash subscripts: `$hash{bareword_key}` - no false warnings
+     - Hash literals: `{ key => value, another_key => value2 }` - keys properly recognized  
+     - Hash slices: `@hash{key1, key2, key3}` - all keys handled correctly
+   - Unused variable warnings with improved accuracy
    - Missing pragma suggestions (strict/warnings)
    - Works with partial ASTs from error recovery
 

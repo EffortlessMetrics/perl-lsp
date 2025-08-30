@@ -6,4 +6,5 @@ pub mod lsp_harness;
 pub mod test_helpers;
 
 // Re-export test helpers for convenience in test files that use `support::*`
+#[allow(unused_imports)]
 pub use test_helpers::*;
