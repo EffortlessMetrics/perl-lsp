@@ -1710,8 +1710,8 @@ impl PureRustPerlParser {
                 let mut else_block = None;
 
                 // Check for else clause
-                if let Some(else_clause) = inner.next() {
-                    if else_clause.as_rule() == Rule::else_clause {
+                if let Some(else_clause) = inner.next()
+                    && else_clause.as_rule() == Rule::else_clause {
                         let mut else_inner = else_clause.into_inner();
                         if let Some(else_block_pair) = else_inner.next() {
                             else_block = Some(Box::new(
@@ -1720,7 +1720,6 @@ impl PureRustPerlParser {
                             ));
                         }
                     }
-                }
 
                 Ok(Some(AstNode::UnlessStatement { condition, block, else_block }))
             }
