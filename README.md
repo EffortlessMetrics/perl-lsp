@@ -220,7 +220,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 
 ```bash
 # LSP server
-cargo install perl-parser --bin perl-lsp --locked
+#cargo install perl-parser --bin perl-lsp --locked - old instructions - need correction
 
 # run in your editor
 perl-lsp --stdio
