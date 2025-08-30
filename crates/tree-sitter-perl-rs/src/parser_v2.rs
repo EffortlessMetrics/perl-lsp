@@ -1083,7 +1083,7 @@ impl<'a> ParserV2<'a> {
 
         // Try to parse with RegexParser, but fall back to original behavior on failure
         let (pattern, modifiers) = if text.starts_with('m')
-            && text.chars().nth(1).map_or(false, |c| !c.is_ascii_alphanumeric())
+            && text.chars().nth(1).is_some_and(|c| !c.is_ascii_alphanumeric())
         {
             // Try parsing m// regex
             let mut parser = RegexParser::new(text, 1);
@@ -1276,7 +1276,7 @@ impl<'a> ParserV2<'a> {
                 // Collect words until closing delimiter
                 while !self.is_at_end() {
                     if let Some(token) = self.peek() {
-                        if token.text.chars().next() == Some(delim) {
+                        if token.text.starts_with(delim) {
                             self.advance();
                             break;
                         }

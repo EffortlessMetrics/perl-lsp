@@ -655,7 +655,7 @@ impl<'a> PerlLexer<'a> {
         // Check if we have 'm' followed by a delimiter without advancing position yet
         let has_m_prefix = self.peek_str("m");
         let delimiter_pos = if has_m_prefix { self.position + 1 } else { self.position };
-        
+
         // Get delimiter
         if delimiter_pos >= self.input.len() {
             return None;
@@ -664,7 +664,7 @@ impl<'a> PerlLexer<'a> {
         if !Self::is_regex_delimiter(delimiter) {
             return None;
         }
-        
+
         // Now that we've confirmed this is a valid regex pattern, advance position
         if has_m_prefix {
             self.position += 1;
