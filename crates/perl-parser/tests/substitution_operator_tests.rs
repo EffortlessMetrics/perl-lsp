@@ -3,7 +3,6 @@
 /// including edge cases, modifiers, and special delimiters
 use perl_parser::{Parser, ast::NodeKind};
 
-
 #[test]
 fn test_basic_substitution() {
     let code = "s/foo/bar/";
