@@ -72,8 +72,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
-- **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
+- **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support)
 - **Pure Rust**: Built with Pest parser generator, zero C dependencies
+- **Enhanced Regex/Substitution**: Dedicated AST nodes and fallback mechanisms (PR #42)
 - **Well Tested**: 100% edge case coverage for supported features
 - **Good Performance**: ~200-450 µs for typical files
 
@@ -82,7 +83,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
-  - Regular expressions with all operators and modifiers
+  - Regular expressions with all operators and modifiers (enhanced substitution support)
   - 100+ operators with correct precedence (including ~~, ISA)
   - All control flow (if/elsif/else, given/when, statement modifiers)
   - Subroutines with signatures and type constraints (Perl 5.36+)
