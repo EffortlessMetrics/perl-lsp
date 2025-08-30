@@ -218,7 +218,7 @@ impl Node {
                 }
             },
 
-            NodeKind::Substitution { pattern, replacement, modifiers } => {
+            NodeKind::Substitution { pattern: _, replacement: _, modifiers: _ } => {
                 format!("(substitution)")
             }
 

@@ -12,7 +12,7 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 perl-lexer = { version = "0.8.6" }
 tree-sitter = "0.25.8"
-tree-sitter-perl = { path = "../tree-sitter-perl-rs", features = ["pure-rust", "test-utils"] }
+tree-sitter-perl = { path = "../tree-sitter-perl-rs", features = ["pure-rust", "test-utils"], default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
 bincode = "2.0.1"
 proptest = "1.7.0"
@@ -166,6 +166,81 @@ required-features = ["pure-rust", "examples"]
 [[example]]
 name = "test_indirect_object"
 path = "examples/test_indirect_object.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_parser_pest"
+path = "examples/test_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "demo_working_parser_pest"
+path = "examples/demo_working_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_pest_parser"
+path = "examples/test_pest.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "anti_pattern_analysis_pest"
+path = "examples/anti_pattern_analysis.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "debug_parse_pest"
+path = "examples/debug_parse.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "demo_parser_pest"
+path = "examples/demo_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "edge_case_demo_pest"
+path = "examples/edge_case_demo.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "simple_lexer_demo_pest"
+path = "examples/simple_lexer_demo.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "special_heredoc_usage_pest"
+path = "examples/special_heredoc_usage.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_deref_v2_pest"
+path = "examples/test_deref_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_enhanced_parser_pest"
+path = "examples/test_enhanced_parser.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_format_v2_pest"
+path = "examples/test_format_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_qq_simple_pest"
+path = "examples/test_qq_simple.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "test_statement_modifiers_v2_pest"
+path = "examples/test_statement_modifiers_v2.rs"
+required-features = ["pure-rust", "examples"]
+
+[[example]]
+name = "tree_sitter_compatibility_pest"
+path = "examples/tree_sitter_compatibility.rs"
 required-features = ["pure-rust", "examples"]
 
 

@@ -1,7 +1,13 @@
 {
-  "codeActionProvider": true,
-  "codeLensProvider": {
-    "resolveProvider": false
+  "codeActionProvider": {
+    "codeActionKinds": [
+      "quickfix",
+      "refactor",
+      "refactor.extract",
+      "refactor.inline",
+      "refactor.rewrite"
+    ],
+    "resolveProvider": true
   },
   "completionProvider": {
     "resolveProvider": false,
@@ -14,10 +20,12 @@
   },
   "definitionProvider": true,
   "diagnosticProvider": {
+    "identifier": "perl-lsp",
     "interFileDependencies": false,
     "workspaceDiagnostics": true
   },
   "documentFormattingProvider": true,
+  "documentHighlightProvider": true,
   "documentLinkProvider": {
     "resolveProvider": false
   },
@@ -37,13 +45,18 @@
       "perl.extractSubroutine"
     ]
   },
+  "experimental": {
+    "inlineCompletionProvider": {}
+  },
   "foldingRangeProvider": true,
   "hoverProvider": true,
   "implementationProvider": true,
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "inlineValueProvider": true,
   "linkedEditingRangeProvider": true,
+  "monikerProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
@@ -98,7 +111,10 @@
       ","
     ]
   },
-  "textDocumentSync": 1,
+  "textDocumentSync": {
+    "change": 1,
+    "openClose": true
+  },
   "typeDefinitionProvider": true,
   "workspaceSymbolProvider": {
     "resolveProvider": true
