@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.4)
+### 📦 Published Crates (v0.8.6)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
 2. **perl-lexer** - Context-aware tokenizer for Perl syntax
@@ -24,15 +24,22 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.4
+## 📦 Latest Release: v0.8.6
 
-### v0.8.4 - LSP Feature Complete Release 🚀
+### v0.8.6 - Type Navigation & Position Handling 🚀
+- ✨ **Type Definition Provider**: Navigate to blessed references and ISA relationships
+- ✨ **Implementation Provider**: Find class/method implementations and overrides
+- 🧭 **Enhanced Position Handling**: UTF-16 with CRLF/emoji support, real Location objects
+- 📈 **70% LSP Functionality**: Up from 65% in v0.8.5 - all advertised features fully working
+- 🎯 **Single Source of Truth**: Catalog-driven LSP capability management
+- 🏗️ **Production Clean**: Zero warnings, comprehensive test coverage
+- ✅ **All Tests Passing**: 530+ tests including comprehensive E2E coverage
+
+### v0.8.4 - LSP Feature Complete Release 
 - ✨ **9 New LSP Features**: Workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
-- 📈 **60% LSP Functionality**: Up from 35% in v0.8.3 - all advertised features fully working
 - 🎯 **Contract-Driven Testing**: Every capability backed by acceptance tests
 - 🔒 **Feature Flag Control**: `lsp-ga-lock` for conservative releases
 - 🏗️ **Robust Architecture**: Fallback mechanisms for incomplete code
-- ✅ **All Tests Passing**: 530+ tests including comprehensive E2E coverage
 
 ### v0.8.3 - General Availability Release
 - ✅ **Hash Literals Fixed**: `{ key => value }` now correctly produces HashLiteral nodes
@@ -72,10 +79,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
-- **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support)
+- **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support via PR #42)
 - **Pure Rust**: Built with Pest parser generator, zero C dependencies
-- **Enhanced Regex/Substitution**: Dedicated AST nodes and fallback mechanisms (PR #42)
-- **Well Tested**: 100% edge case coverage for supported features
+- **Enhanced Substitution Parsing**: Robust s/// delimiter handling with paired delimiters support (PR #42)
+- **Improved Quote Parser**: Better error handling and nested delimiter support (PR #42)
+- **Well Tested**: 100% edge case coverage for supported features including comprehensive substitution tests
 - **Good Performance**: ~200-450 µs for typical files
 
 ### All Parsers Support:
@@ -172,7 +180,7 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8"
+perl-parser = "0.8.6"
 ```
 
 ```rust
@@ -220,7 +228,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 
 ```bash
 # LSP server
-#cargo install perl-parser --bin perl-lsp --locked - old instructions - need correction
+cargo install perl-parser --bin perl-lsp
 
 # run in your editor
 perl-lsp --stdio
@@ -916,11 +924,11 @@ The benchmarking system provides:
 
 ```toml
 [dependencies]
-perl-parser = "0.8.3"
+perl-parser = "0.8.6"
 # Optional: for custom lexing
-perl-lexer = "0.8.3"
+perl-lexer = "0.8.6"
 # Optional: for testing
-perl-corpus = "0.8.3"
+perl-corpus = "0.8.6"
 ```
 
 ### From Source
