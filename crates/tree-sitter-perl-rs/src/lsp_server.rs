@@ -7,6 +7,7 @@ use crate::enhanced_full_parser::EnhancedFullParser;
 use crate::error_recovery::ErrorRecoveryParser;
 use crate::incremental_parser::{Edit, IncrementalParser, Position as ParsePosition};
 use crate::pure_rust_parser::AstNode;
+use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -138,7 +139,7 @@ pub enum SymbolKind {
 struct DocumentState {
     #[allow(dead_code)]
     uri: String,
-    content: String,
+    content: Rope,
     version: i32,
     parser: IncrementalParser,
     symbols: Vec<SymbolInformation>,
@@ -221,7 +222,7 @@ impl PerlLanguageServer {
 
         let state = DocumentState {
             uri: uri.clone(),
-            content: text,
+            content: Rope::from_str(&text),
             version,
             parser,
             symbols,
@@ -246,10 +247,11 @@ impl PerlLanguageServer {
                 if let Some(range) = change.range {
                     // Incremental change
                     let edit = self.range_to_edit(&range, &state.content, &change.text);
-                    state.content = self.apply_text_edit(&state.content, &range, &change.text);
+                    self.apply_text_edit(&mut state.content, &range, &change.text);
+                    let content_str = state.content.to_string();
 
                     // Re-parse incrementally
-                    match state.parser.apply_edit(edit, &state.content) {
+                    match state.parser.apply_edit(edit, &content_str) {
                         Ok(_) => {
                             state.diagnostics.clear();
                         }
@@ -263,10 +265,13 @@ impl PerlLanguageServer {
                             }];
                         }
                     }
+
+                    state.symbols = self.extract_symbols(&uri, &content_str);
                 } else {
                     // Full document change
-                    state.content = change.text;
-                    match state.parser.parse_initial(&state.content) {
+                    state.content = Rope::from_str(&change.text);
+                    let content_str = state.content.to_string();
+                    match state.parser.parse_initial(&content_str) {
                         Ok(_) => state.diagnostics.clear(),
                         Err(e) => {
                             state.diagnostics = vec![Diagnostic {
@@ -281,11 +286,10 @@ impl PerlLanguageServer {
                             }];
                         }
                     }
+                    state.symbols = self.extract_symbols(&uri, &content_str);
                 }
             }
 
-            // Update symbols
-            state.symbols = self.extract_symbols(&uri, &state.content);
             state.version = version;
         }
     }
@@ -438,7 +442,7 @@ impl PerlLanguageServer {
     }
 
     /// Convert LSP range to parser edit
-    fn range_to_edit(&self, range: &Range, content: &str, new_text: &str) -> Edit {
+    fn range_to_edit(&self, range: &Range, content: &Rope, new_text: &str) -> Edit {
         let start_byte = self.position_to_byte(&range.start, content);
         let end_byte = self.position_to_byte(&range.end, content);
 
@@ -456,39 +460,24 @@ impl PerlLanguageServer {
             },
             new_end_position: ParsePosition {
                 line: range.start.line as usize,
-                column: range.start.character as usize + new_text.len(),
+                column: range.start.character as usize + new_text.chars().count(),
             },
         }
     }
 
     /// Convert position to byte offset
-    fn position_to_byte(&self, pos: &Position, content: &str) -> usize {
-        let mut line = 0;
-        let mut byte = 0;
-
-        for ch in content.chars() {
-            if line == pos.line as usize && byte == pos.character as usize {
-                return byte;
-            }
-            if ch == '\n' {
-                line += 1;
-            }
-            byte += ch.len_utf8();
-        }
-
-        byte
+    fn position_to_byte(&self, pos: &Position, content: &Rope) -> usize {
+        let line_start = content.line_to_char(pos.line as usize);
+        let char_idx = line_start + pos.character as usize;
+        content.char_to_byte(char_idx)
     }
 
     /// Apply text edit to content
-    fn apply_text_edit(&self, content: &str, range: &Range, new_text: &str) -> String {
+    fn apply_text_edit(&self, content: &mut Rope, range: &Range, new_text: &str) {
         let start = self.position_to_byte(&range.start, content);
         let end = self.position_to_byte(&range.end, content);
-
-        let mut result = String::new();
-        result.push_str(&content[..start]);
-        result.push_str(new_text);
-        result.push_str(&content[end..]);
-        result
+        content.remove(start..end);
+        content.insert(start, new_text);
     }
 }
 
