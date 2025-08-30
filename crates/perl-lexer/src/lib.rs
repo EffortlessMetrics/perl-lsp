@@ -1162,7 +1162,8 @@ impl<'a> PerlLexer<'a> {
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
     fn is_quote_delim(c: char) -> bool {
-        !c.is_ascii_alphanumeric() // punctuation is OK
+        // Quote delimiters are punctuation, but not whitespace or control characters
+        !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
     }
 
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
@@ -1265,9 +1266,18 @@ impl<'a> PerlLexer<'a> {
                     "sub" => {
                         self.in_prototype = true;
                     }
-                    // Quote operators expect a delimiter next
+                    // Quote operators expect a delimiter next (must be immediately adjacent)
                     "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" | "tr" | "y" => {
-                        if let Some(next) = self.peek_nonspace() {
+                        // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
+                        // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
+                        let next_char = if matches!(text, "m" | "s" | "tr" | "y") {
+                            self.current_char() // Must be immediately adjacent
+                        } else {
+                            self.peek_nonspace() // Can skip whitespace
+                        };
+                        
+                        
+                        if let Some(next) = next_char {
                             if Self::is_quote_delim(next) {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
