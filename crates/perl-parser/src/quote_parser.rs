@@ -64,7 +64,8 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
         let trimmed = rest1.trim_start();
         // For paired delimiters like s{pattern}{replacement}, we expect another opening delimiter
         if trimmed.starts_with(delimiter) { 
-            &trimmed[delimiter.len_utf8()..] 
+            // Keep the delimiter - don't strip it here since extract_delimited_content expects it
+            trimmed
         } else { 
             // If no second delimiter found, the replacement is empty
             ""
