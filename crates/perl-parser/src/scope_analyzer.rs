@@ -134,7 +134,11 @@ impl ScopeAnalyzer {
         let mut issues = Vec::new();
         let root_scope = Rc::new(Scope::new());
 
-        self.analyze_node(ast, &root_scope, &mut issues, code, pragma_map, false);
+        // Build a parent map so we can walk ancestor relationships
+        let mut parent_map: HashMap<*const Node, &Node> = HashMap::new();
+        self.build_parent_map(ast, None, &mut parent_map);
+
+        self.analyze_node(ast, &root_scope, &parent_map, &mut issues, code, pragma_map);
 
         // Collect all unused variables from all scopes
         self.collect_unused_variables(&root_scope, &mut issues, code);
@@ -146,10 +150,10 @@ impl ScopeAnalyzer {
         &self,
         node: &Node,
         scope: &Rc<Scope>,
+        parent_map: &HashMap<*const Node, &Node>,
         issues: &mut Vec<ScopeIssue>,
         code: &str,
         pragma_map: &[(Range<usize>, PragmaState)],
-        in_hash_subscript: bool,
     ) {
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
@@ -177,6 +181,71 @@ impl ScopeAnalyzer {
                             _ => String::new(),
                         },
                     });
+                }
+            }
+
+            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+                let is_our = declarator == "our";
+                for variable in variables {
+                    let var_name = self.extract_variable_name(variable);
+                    let line = self.get_line_from_node(variable, code);
+
+                    if let Some(issue_kind) =
+                        scope.declare_variable(&var_name, variable.location.start, is_our)
+                    {
+                        issues.push(ScopeIssue {
+                            kind: issue_kind,
+                            variable_name: var_name.clone(),
+                            line,
+                            description: match issue_kind {
+                                IssueKind::VariableShadowing => {
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        var_name
+                                    )
+                                }
+                                IssueKind::VariableRedeclaration => {
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        var_name
+                                    )
+                                }
+                                _ => String::new(),
+                            },
+                        });
+                    }
+                }
+            }
+
+            NodeKind::Use { module, args } => {
+                // Handle 'use vars' pragma for global variable declarations
+                if module == "vars" {
+                    for arg in args {
+                        // Parse qw() style arguments to extract individual variable names
+                        if arg.starts_with("qw(") && arg.ends_with(")") {
+                            let content = &arg[3..arg.len() - 1]; // Remove qw( and )
+                            for var_name in content.split_whitespace() {
+                                if !var_name.is_empty()
+                                    && (var_name.starts_with('$')
+                                        || var_name.starts_with('@')
+                                        || var_name.starts_with('%'))
+                                {
+                                    // Declare these variables as globals in the current scope
+                                    scope.declare_variable(var_name, node.location.start, true); // true = is_our (global)
+                                }
+                            }
+                        } else {
+                            // Handle regular variable names (not in qw())
+                            let var_name = arg.trim();
+                            if !var_name.is_empty()
+                                && (var_name.starts_with('$')
+                                    || var_name.starts_with('@')
+                                    || var_name.starts_with('%'))
+                            {
+                                scope.declare_variable(var_name, node.location.start, true);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -212,7 +281,10 @@ impl ScopeAnalyzer {
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
-                if strict_mode && !in_hash_subscript && !is_known_function(name) {
+                if strict_mode
+                    && !self.is_in_hash_key_context(node, parent_map)
+                    && !is_known_function(name)
+                {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
@@ -222,23 +294,21 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Binary { op, left, right } => {
-                let is_hash_access = op == "{}";
-                self.analyze_node(left, scope, issues, code, pragma_map, false);
-                self.analyze_node(right, scope, issues, code, pragma_map, is_hash_access);
+            NodeKind::Binary { left, right, .. } => {
+                self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                // Handle hash slices like @h{key1, key2} where elements are hash keys
                 for element in elements {
-                    self.analyze_node(element, scope, issues, code, pragma_map, in_hash_subscript);
+                    self.analyze_node(element, scope, parent_map, issues, code, pragma_map);
                 }
             }
 
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, issues, code, pragma_map, false);
+                    self.analyze_node(stmt, &block_scope, parent_map, issues, code, pragma_map);
                 }
                 self.collect_unused_variables(&block_scope, issues, code);
             }
@@ -247,15 +317,15 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(init_node, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(cond, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(upd, &loop_scope, parent_map, issues, code, pragma_map);
                 }
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map, false);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -264,9 +334,9 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, issues, code, pragma_map, false);
-                self.analyze_node(list, &loop_scope, issues, code, pragma_map, false);
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map, false);
+                self.analyze_node(variable, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(list, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -312,7 +382,7 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                self.analyze_node(body, &sub_scope, issues, code, pragma_map, false);
+                self.analyze_node(body, &sub_scope, parent_map, issues, code, pragma_map);
 
                 // Check for unused parameters
                 for param in params {
@@ -344,7 +414,7 @@ impl ScopeAnalyzer {
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
-                    self.analyze_node(child, scope, issues, code, pragma_map, false);
+                    self.analyze_node(child, scope, parent_map, issues, code, pragma_map);
                 }
             }
         }
@@ -396,11 +466,61 @@ impl ScopeAnalyzer {
         code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
-    #[allow(dead_code)]
-    fn is_in_hash_key_context(&self, _node: &Node) -> bool {
-        // TODO: Check if node is within a hash subscript context
-        // For now, return false to be conservative
+    fn is_in_hash_key_context(
+        &self,
+        node: &Node,
+        parent_map: &HashMap<*const Node, &Node>,
+    ) -> bool {
+        let mut current = node as *const Node;
+        while let Some(parent) = parent_map.get(&current) {
+            match &parent.kind {
+                // Hash subscript: $hash{key} or %hash{key}
+                NodeKind::Binary { op, left: _, right } if op == "{}" => {
+                    // Check if current node is the key (right side of the {} operation)
+                    if std::ptr::eq(right.as_ref(), current) {
+                        return true;
+                    }
+                }
+                // Hash literal: { key => value }
+                NodeKind::HashLiteral { pairs } => {
+                    // Check if current node is a key in any of the pairs
+                    for (key, _value) in pairs {
+                        if std::ptr::eq(key, current) {
+                            return true;
+                        }
+                    }
+                }
+                // Array literal containing hash keys (for hash slices @hash{key1, key2})
+                NodeKind::ArrayLiteral { elements: _ } => {
+                    // Check if the parent of this array literal is a hash subscript
+                    if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
+                        if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
+                            if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
+                                // This array literal is the key part of a hash slice
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            current = *parent as *const _;
+        }
         false
+    }
+
+    fn build_parent_map<'a>(
+        &self,
+        node: &'a Node,
+        parent: Option<&'a Node>,
+        map: &mut HashMap<*const Node, &'a Node>,
+    ) {
+        if let Some(p) = parent {
+            map.insert(node as *const _, p);
+        }
+        for child in node.children() {
+            self.build_parent_map(child, Some(node), map);
+        }
     }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
