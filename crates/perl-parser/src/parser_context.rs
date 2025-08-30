@@ -7,7 +7,7 @@ use crate::{
     ast_v2::NodeIdGenerator,
     error_recovery::ParseError,
     position::{Position, Range},
-    token_wrapper::TokenWithPosition,
+    token_wrapper::{PositionTracker, TokenWithPosition},
 };
 use perl_lexer::TokenType;
 use std::collections::VecDeque;
@@ -24,45 +24,13 @@ pub struct ParserContext {
     errors: Vec<ParseError>,
     /// Source text
     source: String,
-    /// Current position tracker
-    _position_tracker: PositionTracker,
-}
-
-/// Tracks current position in the source
-struct PositionTracker {
-    _byte_offset: usize,
-    _line: usize,
-    _column: usize,
-}
-
-#[allow(dead_code)]
-impl PositionTracker {
-    fn new() -> Self {
-        PositionTracker { _byte_offset: 0, _line: 1, _column: 1 }
-    }
-
-    fn current_position(&self) -> Position {
-        Position::new(self._byte_offset, self._line as u32, self._column as u32)
-    }
-
-    fn advance(&mut self, text: &str) {
-        for ch in text.chars() {
-            self._byte_offset += ch.len_utf8();
-            if ch == '\n' {
-                self._line += 1;
-                self._column = 1;
-            } else {
-                self._column += 1;
-            }
-        }
-    }
 }
 
 impl ParserContext {
     /// Create a new parser context
     pub fn new(source: String) -> Self {
         let mut tokens = VecDeque::new();
-        let _position_tracker = PositionTracker::new();
+        let tracker = PositionTracker::new(&source);
 
         // Tokenize the source using mode-aware lexer
         let mut lexer = perl_lexer::PerlLexer::new(&source);
@@ -74,14 +42,7 @@ impl ParserContext {
                         break;
                     }
 
-                    let start = token.start;
-                    let end = token.end;
-
-                    // Convert to positions
-                    let start_pos = Position::new(start, 0, 0); // TODO: track line/column properly
-                    let end_pos = Position::new(end, 0, 0);
-
-                    tokens.push_back(TokenWithPosition::new(token, start_pos, end_pos));
+                    tokens.push_back(tracker.wrap_token(token));
                 }
                 None => break,
             }
@@ -93,7 +54,6 @@ impl ParserContext {
             id_generator: NodeIdGenerator::new(),
             errors: Vec::new(),
             source,
-            _position_tracker: PositionTracker::new(),
         }
     }
 
@@ -248,5 +208,18 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert_eq!(errors[0].message, "Error 1");
         assert_eq!(errors[1].message, "Error 2");
+    }
+
+    #[test]
+    fn test_multiline_token_positions() {
+        let source = "\"line1\nline2\"".to_string();
+        let ctx = ParserContext::new(source);
+
+        assert_eq!(ctx.tokens.len(), 1);
+        let token = &ctx.tokens[0];
+        assert_eq!(token.start_pos.line, 1);
+        assert_eq!(token.start_pos.column, 1);
+        assert_eq!(token.end_pos.line, 2);
+        assert_eq!(token.end_pos.column, 7);
     }
 }
