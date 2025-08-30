@@ -36,7 +36,7 @@ pub struct PossibleValue {
     pub source: ValueSource,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueSource {
     Literal,        // Direct assignment
     Concatenation,  // String concatenation
@@ -174,18 +174,85 @@ impl DynamicDelimiterRecovery {
     }
 
     /// Try to resolve a variable to its value
-    fn try_resolve_variable(&self, expr: &str, _context: &ParseContext) -> Option<&PossibleValue> {
-        // Simple case: just a variable like $delimiter
-        if let Some(var_name) = expr.strip_prefix("$") {
-            if let Some(values) = self.variable_values.get(var_name) {
-                // Return highest confidence value
-                return values
-                    .iter()
-                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap());
+    fn try_resolve_variable(&self, expr: &str, _context: &ParseContext) -> Option<PossibleValue> {
+        let expr = expr.trim();
+
+        // Simple variable like $delimiter
+        if let Some(var_name) = expr.strip_prefix('$') {
+            if !expr.contains('.') && !expr.contains('{') {
+                if let Some(values) = self.variable_values.get(var_name) {
+                    return values
+                        .iter()
+                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
+                        .cloned();
+                }
             }
         }
 
-        // TODO: Handle more complex expressions like ${var} or $var . "END"
+        // Braced variable ${var}
+        if let Some(var_name) = expr.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+            if let Some(values) = self.variable_values.get(var_name) {
+                return values
+                    .iter()
+                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
+                    .cloned();
+            }
+        }
+
+        // Concatenation: $var . "END" (supports multiple parts)
+        if expr.contains('.') {
+            let mut resolved = String::new();
+            let mut confidences = Vec::new();
+
+            for part in expr.split('.') {
+                let part = part.trim();
+                if part.is_empty() {
+                    return None;
+                }
+
+                if part.starts_with('"') && part.ends_with('"') && part.len() >= 2 {
+                    resolved.push_str(&part[1..part.len() - 1]);
+                    confidences.push(1.0);
+                } else if part.starts_with(char::from(39)) && part.ends_with(char::from(39)) && part.len() >= 2 {
+                    resolved.push_str(&part[1..part.len() - 1]);
+                    confidences.push(1.0);
+                } else if part.starts_with("${") && part.ends_with('}') {
+                    let var_name = &part[2..part.len() - 1];
+                    if let Some(values) = self.variable_values.get(var_name) {
+                        let val = values
+                            .iter()
+                            .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
+                            .clone();
+                        resolved.push_str(&val.value);
+                        confidences.push(val.confidence);
+                    } else {
+                        return None;
+                    }
+                } else if let Some(var_name) = part.strip_prefix('$') {
+                    if let Some(values) = self.variable_values.get(var_name) {
+                        let val = values
+                            .iter()
+                            .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
+                            .clone();
+                        resolved.push_str(&val.value);
+                        confidences.push(val.confidence);
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+
+            if !resolved.is_empty() {
+                let confidence = confidences.into_iter().fold(1.0_f32, |acc, c| acc.min(c));
+                return Some(PossibleValue {
+                    value: resolved,
+                    confidence,
+                    source: ValueSource::Concatenation,
+                });
+            }
+        }
 
         None
     }
@@ -309,5 +376,42 @@ EOF
         let analysis = recovery.analyze_dynamic_delimiter("$foo", &context);
         assert!(analysis.delimiter.is_none());
         assert!(!analysis.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_braced_variable_resolution() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        let code = r#"my $marker = "END";"#;
+        recovery.scan_for_assignments(code);
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        let result = recovery
+            .try_resolve_variable("${marker}", &context)
+            .expect("should resolve");
+        assert_eq!(result.value, "END");
+    }
+
+    #[test]
+    fn test_concatenation_resolution() {
+        let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
+        let code = r#"my $base = "ST";"#;
+        recovery.scan_for_assignments(code);
+        let context = ParseContext {
+            current_package: None,
+            imported_modules: vec![],
+            in_subroutine: None,
+            file_type_hint: None,
+        };
+
+        let result = recovery
+            .try_resolve_variable("$base . \"ART\"", &context)
+            .expect("should resolve");
+        assert_eq!(result.value, "START");
+        assert_eq!(result.source, ValueSource::Concatenation);
     }
 }
