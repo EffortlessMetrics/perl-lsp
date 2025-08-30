@@ -2,7 +2,7 @@
 //!
 //! Provides cross-file renaming functionality using the workspace index.
 
-use crate::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
+use crate::workspace_index::{Location, SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -44,6 +44,9 @@ pub fn build_rename_edit(
         let end_line = loc.range.end.line;
         let end_char = loc.range.end.character;
 
+        // Inspect original text for qualified names
+        let qualifier = extract_qualifier(idx, &loc);
+
         // Compute replacement text based on symbol kind
         let replacement = match key.kind {
             SymKind::Var => {
@@ -51,14 +54,13 @@ pub fn build_rename_edit(
                 let sigil = key.sigil.unwrap_or('$');
                 format!("{}{}", sigil, new_name_bare)
             }
-            SymKind::Sub => {
-                // For subroutines, use the bare name
-                // TODO: Preserve qualifiers if present in original
-                new_name_bare.to_string()
-            }
-            SymKind::Pack => {
-                // Package names are replaced as-is
-                new_name_bare.to_string()
+            SymKind::Sub | SymKind::Pack => {
+                // Preserve module qualifiers if present
+                if let Some(q) = qualifier {
+                    format!("{}{}", q, new_name_bare)
+                } else {
+                    new_name_bare.to_string()
+                }
             }
         };
 
@@ -71,6 +73,16 @@ pub fn build_rename_edit(
 
     // Convert to RenameEdit structs
     grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+}
+
+// Extract the module qualifier (e.g., "Some::Module::") from the original text
+fn extract_qualifier(idx: &WorkspaceIndex, loc: &Location) -> Option<String> {
+    let mut doc = idx.document_store().get(&loc.uri)?;
+    let start =
+        doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.character)?;
+    let end = doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.character)?;
+    let original = &doc.text[start..end];
+    if let Some(pos) = original.rfind("::") { Some(original[..pos + 2].to_string()) } else { None }
 }
 
 /// Convert RenameEdit to LSP WorkspaceEdit JSON
@@ -119,4 +131,37 @@ pub fn validate_rename(_key: &SymbolKey, new_name: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use url::Url;
+
+    #[test]
+    fn rename_preserves_qualified_sub() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///test.pl";
+        let code = r#"package Some::Module;
+
+sub my_sub {}
+Some::Module::my_sub();
+"#;
+        index.index_file(Url::parse(uri).unwrap(), code.to_string()).unwrap();
+
+        let key = SymbolKey {
+            pkg: Arc::from("Some::Module"),
+            name: Arc::from("my_sub"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let edits = build_rename_edit(&index, &key, "renamed");
+        let file_edits = edits.into_iter().find(|e| e.uri == uri).expect("file edits");
+        let new_texts: Vec<String> = file_edits.edits.iter().map(|e| e.new_text.clone()).collect();
+
+        assert!(new_texts.contains(&"Some::Module::renamed".to_string()));
+        assert!(new_texts.contains(&"renamed".to_string()));
+    }
 }
