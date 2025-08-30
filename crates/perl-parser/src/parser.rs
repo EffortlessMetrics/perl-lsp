@@ -2139,6 +2139,8 @@ impl<'a> Parser<'a> {
 
     /// Parse expression statement
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        
         // Check for special blocks like AUTOLOAD and DESTROY
         if let Ok(token) = self.tokens.peek() {
             if matches!(token.text.as_str(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
@@ -2158,8 +2160,16 @@ impl<'a> Parser<'a> {
         expr = self.parse_word_or_expr(expr)?;
 
         // Statement modifiers are handled at the statement level in parse_statement()
-
-        Ok(expr)
+        
+        let end = self.previous_position();
+        
+        // Wrap the expression in an ExpressionStatement node
+        Ok(Node::new(
+            NodeKind::ExpressionStatement {
+                expression: Box::new(expr),
+            },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
@@ -3934,6 +3944,17 @@ impl<'a> Parser<'a> {
                 | "untie"
                 | "scalar"
                 | "wantarray"
+                // Math functions
+                | "abs"
+                | "atan2"
+                | "cos"
+                | "sin"
+                | "exp"
+                | "log"
+                | "sqrt"
+                | "rand"
+                | "srand"
+                | "int"
         )
     }
 
@@ -4425,7 +4446,8 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-            args.push(self.parse_expression()?);
+            // Use parse_assignment instead of parse_expression to avoid comma operator handling
+            args.push(self.parse_assignment()?);
 
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?;

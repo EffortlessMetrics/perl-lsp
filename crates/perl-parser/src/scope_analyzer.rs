@@ -466,46 +466,86 @@ impl ScopeAnalyzer {
         code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
+    /// Determines if a node is in a hash key context, where barewords are legitimate.
+    ///
+    /// This method efficiently detects various hash key contexts to avoid false positives
+    /// in strict mode bareword detection. It handles:
+    ///
+    /// # Hash Key Contexts Detected:
+    /// - **Hash subscripts**: `$hash{bareword_key}` or `%hash{bareword_key}`
+    /// - **Hash literals**: `{ key => value, another_key => value2 }`
+    /// - **Hash slices**: `@hash{key1, key2, key3}` where keys are in an array
+    /// - **Nested hash structures**: Complex nested hash access patterns
+    ///
+    /// # Performance Characteristics:
+    /// - Early termination on first positive match
+    /// - Efficient pointer-based parent traversal
+    /// - O(depth) complexity where depth is AST nesting level
+    /// - Typical case: 1-3 parent checks for hash contexts
+    ///
+    /// # Examples:
+    /// ```perl
+    /// use strict;
+    /// my %hash = (key1 => 'value1');        # key1 is in hash key context
+    /// my $val = $hash{bareword_key};         # bareword_key is in hash key context  
+    /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
+    /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
+    /// ```
     fn is_in_hash_key_context(
         &self,
         node: &Node,
         parent_map: &HashMap<*const Node, &Node>,
     ) -> bool {
         let mut current = node as *const Node;
+
+        // Traverse up the AST to find hash key contexts
+        // Limit traversal depth to prevent excessive searching
+        let mut depth = 0;
+        const MAX_TRAVERSAL_DEPTH: usize = 10;
+
         while let Some(parent) = parent_map.get(&current) {
+            if depth > MAX_TRAVERSAL_DEPTH {
+                break; // Safety limit for deeply nested structures
+            }
+
             match &parent.kind {
-                // Hash subscript: $hash{key} or %hash{key}
-                NodeKind::Binary { op, left: _, right } if op == "{}" => {
-                    // Check if current node is the key (right side of the {} operation)
+                // Case 1: Hash subscript - $hash{key} or %hash{key}
+                NodeKind::Binary { op, right, .. } if op == "{}" => {
                     if std::ptr::eq(right.as_ref(), current) {
                         return true;
                     }
                 }
-                // Hash literal: { key => value }
+
+                // Case 2: Hash literal - { key => value, ... }
                 NodeKind::HashLiteral { pairs } => {
-                    // Check if current node is a key in any of the pairs
-                    for (key, _value) in pairs {
-                        if std::ptr::eq(key, current) {
-                            return true;
-                        }
+                    // Use early return for performance - no need to check all pairs
+                    if pairs.iter().any(|(key, _)| std::ptr::eq(key, current)) {
+                        return true;
                     }
                 }
-                // Array literal containing hash keys (for hash slices @hash{key1, key2})
-                NodeKind::ArrayLiteral { elements: _ } => {
-                    // Check if the parent of this array literal is a hash subscript
+
+                // Case 3: Array literal that might be hash slice keys - @hash{key1, key2}
+                NodeKind::ArrayLiteral { .. } => {
                     if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
                         if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
                             if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
-                                // This array literal is the key part of a hash slice
                                 return true;
                             }
                         }
                     }
                 }
-                _ => {}
+
+                // Case 4: Handle nested hash contexts (hash of hashes)
+                // This covers cases like $hash{key1}{key2} where we might be in key2 context
+                // Note: These cases are already handled by Cases 1 and 2 above, but this
+                // documents that we explicitly support nested hash structures
+                _ => {} // Continue traversing for other node types
             }
+
             current = *parent as *const _;
+            depth += 1;
         }
+
         false
     }
 

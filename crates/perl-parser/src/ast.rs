@@ -24,7 +24,11 @@ impl Node {
         match &self.kind {
             NodeKind::Program { statements } => {
                 let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(program {})", stmts)
+                format!("(source_file {})", stmts)
+            }
+
+            NodeKind::ExpressionStatement { expression } => {
+                format!("(expression_statement {})", expression.to_sexp())
             }
 
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
@@ -71,8 +75,9 @@ impl Node {
                 }
             }
 
-            NodeKind::Variable { sigil, name } => {
-                format!("(variable {} {})", sigil, name)
+            NodeKind::Variable { sigil: _, name: _ } => {
+                // Tree-sitter format - all variables are just (variable)
+                "(variable)".to_string()
             }
 
             NodeKind::VariableWithAttributes { variable, attributes } => {
@@ -89,8 +94,9 @@ impl Node {
                 )
             }
 
-            NodeKind::Binary { op, left, right } => {
-                format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
+            NodeKind::Binary { op: _, left, right } => {
+                // Tree-sitter format: (binary_expression left right)
+                format!("(binary_expression {} {})", left.to_sexp(), right.to_sexp())
             }
 
             NodeKind::Ternary { condition, then_expr, else_expr } => {
@@ -102,8 +108,9 @@ impl Node {
                 )
             }
 
-            NodeKind::Unary { op, operand } => {
-                format!("(unary_{} {})", op, operand.to_sexp())
+            NodeKind::Unary { op: _, operand } => {
+                // Tree-sitter format: (unary_expression operand)
+                format!("(unary_expression {})", operand.to_sexp())
             }
 
             NodeKind::Diamond => "(diamond)".to_string(),
@@ -124,16 +131,14 @@ impl Node {
                 format!("(glob {})", pattern)
             }
 
-            NodeKind::Number { value } => {
-                format!("(number {})", value)
+            NodeKind::Number { value: _ } => {
+                // Tree-sitter format - just the node type
+                "(number)".to_string()
             }
 
-            NodeKind::String { value, interpolated } => {
-                if *interpolated {
-                    format!("(string_interpolated {:?})", value)
-                } else {
-                    format!("(string {:?})", value)
-                }
+            NodeKind::String { value: _, interpolated: _ } => {
+                // Tree-sitter format - all strings are just (string)
+                "(string)".to_string()
             }
 
             NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
@@ -259,22 +264,37 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, params, attributes, body } => {
-                let name_str = name.as_deref().unwrap_or("anonymous");
-                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
-                let attrs_str = if attributes.is_empty() {
-                    String::new()
+            NodeKind::Subroutine { name, params: _, attributes, body } => {
+                if name.is_some() {
+                    // Named subroutine - tree-sitter format with labeled fields
+                    if attributes.is_empty() {
+                        format!("(subroutine_declaration_statement (bareword) (block {}))", body.to_sexp())
+                    } else {
+                        let attrs: Vec<String> = attributes.iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        format!("(subroutine_declaration_statement (bareword) (attrlist {}) (block {}))", 
+                                attrs.join(""), body.to_sexp())
+                    }
                 } else {
-                    format!(" (attributes {})", attributes.join(" "))
-                };
-                format!("(sub {} ({}){}{})", name_str, params_str, attrs_str, body.to_sexp())
+                    // Anonymous subroutine 
+                    if attributes.is_empty() {
+                        format!("(expression_statement (anonymous_subroutine_expression (block {})))", body.to_sexp())
+                    } else {
+                        let attrs: Vec<String> = attributes.iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        format!("(expression_statement (anonymous_subroutine_expression (attrlist {}) (block {})))", 
+                                attrs.join(""), body.to_sexp())
+                    }
+                }
             }
 
             NodeKind::Return { value } => {
                 if let Some(val) = value {
-                    format!("(return {})", val.to_sexp())
+                    format!("(return_statement {})", val.to_sexp())
                 } else {
-                    "(return)".to_string()
+                    "(return_statement)".to_string()
                 }
             }
 
@@ -283,9 +303,16 @@ impl Node {
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
 
-            NodeKind::FunctionCall { name, args } => {
+            NodeKind::FunctionCall { name: _, args } => {
+                // Tree-sitter format: 
+                // - Multiple args: (call_expression (identifier) (argument_list arg1 arg2 ...))
+                // - Single arg: (call_expression (identifier) arg)
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(call {} ({}))", name, args_str)
+                if args.len() == 1 {
+                    format!("(call_expression (identifier) {})", args_str)
+                } else {
+                    format!("(call_expression (identifier) (argument_list {}))", args_str)
+                }
             }
 
             NodeKind::IndirectCall { method, object, args } => {
@@ -372,8 +399,9 @@ impl Node {
                 format!("(format {} {:?})", name, body)
             }
 
-            NodeKind::Identifier { name } => {
-                format!("(identifier {})", name)
+            NodeKind::Identifier { name: _ } => {
+                // Tree-sitter format - content is implicit
+                "(identifier)".to_string()
             }
 
             NodeKind::Error { message } => {
@@ -390,6 +418,10 @@ pub enum NodeKind {
     // Program structure
     Program {
         statements: Vec<Node>,
+    },
+
+    ExpressionStatement {
+        expression: Box<Node>,
     },
 
     // Variable operations
