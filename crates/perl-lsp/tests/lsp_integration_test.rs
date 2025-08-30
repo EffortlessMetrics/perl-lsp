@@ -2,9 +2,9 @@
 
 use perl_parser::LspServer;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Read, Write};
-use std::sync::mpsc;
-use std::time::Duration;
+use std::io::{BufRead, BufReader, Write, Seek, SeekFrom};
+use std::sync::{Arc, Mutex};
+use tempfile::tempfile;
 
 /// Helper to create LSP messages
 fn create_lsp_message(content: &str) -> Vec<u8> {
@@ -50,46 +50,15 @@ fn read_lsp_response(reader: &mut impl BufRead) -> Option<Value> {
 
 #[test]
 fn test_lsp_initialize() {
-    // Create channels for communication
-    let (tx_in, _rx_in) = mpsc::channel::<Vec<u8>>();
-    let (_tx_out, _rx_out) = mpsc::channel::<Vec<u8>>();
+    // Use real IO via temporary files to simulate stdin/stdout
+    let mut input = tempfile().expect("create input tempfile");
+    let mut output_reader = tempfile().expect("create output tempfile");
+    let output_writer = output_reader
+        .try_clone()
+        .expect("clone tempfile for writing");
+    let output = Arc::new(Mutex::new(Box::new(output_writer) as Box<dyn Write + Send>));
+    let mut server = LspServer::with_output(output);
 
-    // Mock stdin/stdout
-    #[allow(dead_code)]
-    struct MockIO {
-        input: mpsc::Receiver<Vec<u8>>,
-        output: mpsc::Sender<Vec<u8>>,
-        buffer: Vec<u8>,
-    }
-
-    impl Read for MockIO {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            if self.buffer.is_empty() {
-                match self.input.recv_timeout(Duration::from_millis(100)) {
-                    Ok(data) => self.buffer = data,
-                    Err(_) => return Ok(0),
-                }
-            }
-
-            let len = std::cmp::min(buf.len(), self.buffer.len());
-            buf[..len].copy_from_slice(&self.buffer[..len]);
-            self.buffer.drain(..len);
-            Ok(len)
-        }
-    }
-
-    impl Write for MockIO {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.output.send(buf.to_vec()).unwrap();
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    // Test initialize request
     let init_request = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -97,19 +66,28 @@ fn test_lsp_initialize() {
         "params": {
             "processId": null,
             "rootUri": "file:///test",
-            "capabilities": {}
+            "capabilities": {},
         }
     });
 
-    // Send request
-    tx_in.send(create_lsp_message(&init_request.to_string())).unwrap();
+    // Write request to input file and reset position
+    input
+        .write_all(&create_lsp_message(&init_request.to_string()))
+        .unwrap();
+    input.seek(SeekFrom::Start(0)).unwrap();
 
-    // TODO: The current LspServer implementation expects real stdin/stdout
-    // We need to refactor it to accept generic Read/Write traits for testing
+    // Handle the request and flush response to output file
+    server.handle_message(&mut input).unwrap();
 
-    // For now, just verify the server can be created
-    let _server = LspServer::new();
-    // Server successfully created
+    // Read response from output file
+    output_reader.seek(SeekFrom::Start(0)).unwrap();
+    let mut reader = BufReader::new(output_reader);
+    let response = read_lsp_response(&mut reader).expect("Failed to read LSP response");
+
+    assert_eq!(response["jsonrpc"], "2.0");
+    assert_eq!(response["id"], 1);
+    assert!(response["result"]["capabilities"].is_object());
+    assert_eq!(response["result"]["serverInfo"]["name"], "perl-lsp");
 }
 
 #[test]
@@ -138,3 +116,4 @@ fn test_lsp_response_parsing() {
     assert_eq!(value["id"], 1);
     assert_eq!(value["result"]["test"], true);
 }
+
