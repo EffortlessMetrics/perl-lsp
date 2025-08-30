@@ -652,18 +652,22 @@ impl<'a> PerlLexer<'a> {
     fn scan_match_regex(&mut self) -> Option<Token> {
         let start = self.position;
 
-        // Skip 'm' if present
-        if self.peek_str("m") {
-            self.position += 1;
-        }
+        // Check if we have 'm' followed by a delimiter without advancing position yet
+        let has_m_prefix = self.peek_str("m");
+        let delimiter_pos = if has_m_prefix { self.position + 1 } else { self.position };
 
         // Get delimiter
-        if self.position >= self.input.len() {
+        if delimiter_pos >= self.input.len() {
             return None;
         }
-        let delimiter = self.input.as_bytes()[self.position] as char;
+        let delimiter = self.input.as_bytes()[delimiter_pos] as char;
         if !Self::is_regex_delimiter(delimiter) {
             return None;
+        }
+
+        // Now that we've confirmed this is a valid regex pattern, advance position
+        if has_m_prefix {
+            self.position += 1;
         }
         self.position += 1;
 
