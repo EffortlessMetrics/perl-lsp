@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.4)
+### 📦 Published Crates (v0.8.6)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
 2. **perl-lexer** - Context-aware tokenizer for Perl syntax
@@ -24,9 +24,17 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.4
+## 📦 Latest Release: v0.8.6
 
-### v0.8.4 - LSP Feature Complete Release 🚀
+### v0.8.6 - Enhanced Scope Analysis Release 🎯
+- 🧠 **Hash Key Context Detection**: Smart bareword analysis that correctly identifies legitimate hash keys vs violations under `use strict`
+- 🔍 **Enhanced Diagnostics**: Reduced false positives for hash subscripts (`$hash{key}`), hash literals (`{key => value}`), and hash slices (`@hash{key1, key2}`)
+- 🛠️ **Parsing Improvements**: Fixed local statement handling for complex lvalue expressions (`local $ENV{PATH}`)
+- 📋 **Comprehensive Testing**: All 27 scope analyzer tests passing with new hash key context coverage
+- 🔒 **Backward Compatible**: All existing functionality preserved while improving accuracy
+- 🏗️ **Type Definition & Implementation Providers**: Preview support for navigating to type definitions and implementations
+
+### Previous: v0.8.4 - LSP Feature Complete Release 🚀
 - ✨ **9 New LSP Features**: Workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
 - 📈 **60% LSP Functionality**: Up from 35% in v0.8.3 - all advertised features fully working
 - 🎯 **Contract-Driven Testing**: Every capability backed by acceptance tests

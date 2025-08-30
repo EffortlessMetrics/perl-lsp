@@ -510,6 +510,152 @@ fn test_semantic_tokens_full() {
 }
 ```
 
+## How to Implement Enhanced Scope Analysis (v0.8.6)
+
+### Overview
+
+The scope analyzer provides context-aware diagnostics that handle Perl's complex scoping rules, particularly around `use strict` and bareword detection.
+
+### Step 1: Understanding Hash Key Context Detection
+
+```rust
+// scope_analyzer.rs
+impl ScopeAnalyzer {
+    fn is_in_hash_key_context(
+        &self,
+        node: &Node,
+        parent_map: &HashMap<*const Node, &Node>,
+    ) -> bool {
+        let mut current = node as *const Node;
+        while let Some(parent) = parent_map.get(&current) {
+            match &parent.kind {
+                // Hash subscript: $hash{key}
+                NodeKind::Binary { op, right, .. } if op == "{}" => {
+                    if std::ptr::eq(right.as_ref(), current) {
+                        return true;
+                    }
+                }
+                // Hash literal: { key => value }
+                NodeKind::HashLiteral { pairs } => {
+                    for (key, _value) in pairs {
+                        if std::ptr::eq(key, current) {
+                            return true;
+                        }
+                    }
+                }
+                // Hash slices: @hash{key1, key2}
+                NodeKind::ArrayLiteral { .. } => {
+                    // Check if parent is hash subscript
+                    if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
+                        if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
+                            if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            current = *parent as *const _;
+        }
+        false
+    }
+}
+```
+
+### Step 2: Integrating with Diagnostics
+
+```rust
+fn analyze_identifier(&self, node: &Node, scope: &Scope, parent_map: &HashMap<*const Node, &Node>, issues: &mut Vec<ScopeIssue>) {
+    if let NodeKind::Identifier { name } = &node.kind {
+        // Get pragma state for this location
+        let strict_mode = self.pragma_tracker.is_strict_at_location(node.range.start);
+        
+        if strict_mode 
+            && !self.is_in_hash_key_context(node, parent_map)
+            && !is_known_function(name) 
+        {
+            issues.push(ScopeIssue {
+                kind: IssueKind::UnquotedBareword,
+                variable_name: name.clone(),
+                line: self.get_line_from_node(node),
+                description: format!("Bareword '{}' not allowed under 'use strict'", name),
+            });
+        }
+    }
+}
+```
+
+### Step 3: Building the Parent Map
+
+```rust
+fn build_parent_map(node: &Node) -> HashMap<*const Node, &Node> {
+    let mut parent_map = HashMap::new();
+    
+    fn visit<'a>(node: &'a Node, parent: Option<&'a Node>, parent_map: &mut HashMap<*const Node, &'a Node>) {
+        if let Some(p) = parent {
+            parent_map.insert(node as *const Node, p);
+        }
+        
+        // Visit all child nodes
+        match &node.kind {
+            NodeKind::Binary { left, right, .. } => {
+                visit(left, Some(node), parent_map);
+                visit(right, Some(node), parent_map);
+            }
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    visit(stmt, Some(node), parent_map);
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    visit(key, Some(node), parent_map);
+                    visit(value, Some(node), parent_map);
+                }
+            }
+            // ... handle other node types
+            _ => {}
+        }
+    }
+    
+    visit(node, None, &mut parent_map);
+    parent_map
+}
+```
+
+### Step 4: Testing the Implementation
+
+```rust
+#[test]
+fn test_hash_key_context_detection() {
+    let code = r#"
+use strict;
+my %hash = (key1 => 'value1', key2 => 'value2');
+my $value = $hash{bareword_key};
+my @values = @hash{key1, key2, another_key};
+print INVALID_BAREWORD;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> = issues.iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnquotedBareword))
+        .collect();
+
+    // Only INVALID_BAREWORD should be flagged - hash keys should be ignored
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "INVALID_BAREWORD");
+}
+```
+
+### Key Implementation Points
+
+1. **Pointer Equality**: Use `std::ptr::eq` for precise node identity checking
+2. **AST Traversal**: Walk up the parent chain to find hash contexts
+3. **Context Types**: Handle all three hash contexts (subscripts, literals, slices)
+4. **Backward Compatibility**: Only add logic, don't change existing behavior
+5. **Test Coverage**: Comprehensive tests for all hash key scenarios
+
 ## Debugging Tips
 
 1. **Enable LSP Tracing**
