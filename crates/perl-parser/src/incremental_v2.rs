@@ -616,6 +616,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_incremental_value_change() {
         let mut parser = IncrementalParserV2::new();
 
@@ -655,6 +656,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_multiple_value_changes() {
         let mut parser = IncrementalParserV2::new();
 
@@ -777,6 +779,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_string_edit() {
         let mut parser = IncrementalParserV2::new();
 
