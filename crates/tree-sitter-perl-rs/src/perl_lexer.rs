@@ -710,7 +710,7 @@ impl<'a> PerlLexer<'a> {
     }
 
     /// Scan a substitution operator (s///)
-    /// 
+    ///
     /// Handles various delimiter forms:
     /// - s/pattern/replacement/flags (standard form)
     /// - s{pattern}{replacement}flags (braced form)
@@ -776,7 +776,9 @@ impl<'a> PerlLexer<'a> {
             } else {
                 // If we don't find the expected second delimiter, this is an error
                 return Some(Token {
-                    token_type: TokenType::Error(Arc::from("Expected opening delimiter for replacement in substitution")),
+                    token_type: TokenType::Error(Arc::from(
+                        "Expected opening delimiter for replacement in substitution",
+                    )),
                     text: Arc::from(self.safe_slice(start, self.position)),
                     start,
                     end: self.position,
