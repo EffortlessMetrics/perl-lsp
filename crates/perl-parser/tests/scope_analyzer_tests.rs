@@ -367,3 +367,35 @@ given ($value) {
     let issues = analyze_code(code);
     assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
+
+#[test]
+fn test_hash_key_not_flagged_as_bareword() {
+    let code = r#"
+use strict;
+my %h = ();
+my $x = $h{key};
+print FOO;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "FOO");
+}
+
+#[test]
+fn test_hash_slice_bareword_keys() {
+    let code = r#"
+use strict;
+my %h = ();
+my @values = @h{key1, key2};
+print STDERR;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "STDERR");
+}

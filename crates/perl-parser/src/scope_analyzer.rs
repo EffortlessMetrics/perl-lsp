@@ -134,7 +134,11 @@ impl ScopeAnalyzer {
         let mut issues = Vec::new();
         let root_scope = Rc::new(Scope::new());
 
-        self.analyze_node(ast, &root_scope, &mut issues, code, pragma_map, false);
+        // Build a parent map so we can walk ancestor relationships
+        let mut parent_map: HashMap<*const Node, &Node> = HashMap::new();
+        self.build_parent_map(ast, None, &mut parent_map);
+
+        self.analyze_node(ast, &root_scope, &parent_map, &mut issues, code, pragma_map);
 
         // Collect all unused variables from all scopes
         self.collect_unused_variables(&root_scope, &mut issues, code);
@@ -146,10 +150,10 @@ impl ScopeAnalyzer {
         &self,
         node: &Node,
         scope: &Rc<Scope>,
+        parent_map: &HashMap<*const Node, &Node>,
         issues: &mut Vec<ScopeIssue>,
         code: &str,
         pragma_map: &[(Range<usize>, PragmaState)],
-        in_hash_subscript: bool,
     ) {
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
@@ -212,7 +216,10 @@ impl ScopeAnalyzer {
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
-                if strict_mode && !in_hash_subscript && !is_known_function(name) {
+                if strict_mode
+                    && !self.is_in_hash_key_context(node, parent_map)
+                    && !is_known_function(name)
+                {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
@@ -222,23 +229,21 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Binary { op, left, right } => {
-                let is_hash_access = op == "{}";
-                self.analyze_node(left, scope, issues, code, pragma_map, false);
-                self.analyze_node(right, scope, issues, code, pragma_map, is_hash_access);
+            NodeKind::Binary { left, right, .. } => {
+                self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                // Handle hash slices like @h{key1, key2} where elements are hash keys
                 for element in elements {
-                    self.analyze_node(element, scope, issues, code, pragma_map, in_hash_subscript);
+                    self.analyze_node(element, scope, parent_map, issues, code, pragma_map);
                 }
             }
 
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, issues, code, pragma_map, false);
+                    self.analyze_node(stmt, &block_scope, parent_map, issues, code, pragma_map);
                 }
                 self.collect_unused_variables(&block_scope, issues, code);
             }
@@ -247,15 +252,15 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(init_node, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(cond, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, issues, code, pragma_map, false);
+                    self.analyze_node(upd, &loop_scope, parent_map, issues, code, pragma_map);
                 }
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map, false);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -264,9 +269,9 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, issues, code, pragma_map, false);
-                self.analyze_node(list, &loop_scope, issues, code, pragma_map, false);
-                self.analyze_node(body, &loop_scope, issues, code, pragma_map, false);
+                self.analyze_node(variable, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(list, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -312,7 +317,7 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                self.analyze_node(body, &sub_scope, issues, code, pragma_map, false);
+                self.analyze_node(body, &sub_scope, parent_map, issues, code, pragma_map);
 
                 // Check for unused parameters
                 for param in params {
@@ -344,7 +349,7 @@ impl ScopeAnalyzer {
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
-                    self.analyze_node(child, scope, issues, code, pragma_map, false);
+                    self.analyze_node(child, scope, parent_map, issues, code, pragma_map);
                 }
             }
         }
@@ -397,10 +402,38 @@ impl ScopeAnalyzer {
     }
 
     #[allow(dead_code)]
-    fn is_in_hash_key_context(&self, _node: &Node) -> bool {
-        // TODO: Check if node is within a hash subscript context
-        // For now, return false to be conservative
+    fn is_in_hash_key_context(
+        &self,
+        node: &Node,
+        parent_map: &HashMap<*const Node, &Node>,
+    ) -> bool {
+        let mut current = node as *const Node;
+        while let Some(parent) = parent_map.get(&current) {
+            match &parent.kind {
+                NodeKind::Binary { op, left: _, right } if op == "{}" => {
+                    if right.as_ref() as *const _ == current {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            current = *parent as *const _;
+        }
         false
+    }
+
+    fn build_parent_map<'a>(
+        &self,
+        node: &'a Node,
+        parent: Option<&'a Node>,
+        map: &mut HashMap<*const Node, &'a Node>,
+    ) {
+        if let Some(p) = parent {
+            map.insert(node as *const _, p);
+        }
+        for child in node.children() {
+            self.build_parent_map(child, Some(node), map);
+        }
     }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
