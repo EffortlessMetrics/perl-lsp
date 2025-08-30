@@ -218,8 +218,11 @@ impl Node {
                 }
             },
 
-            NodeKind::Substitution { pattern: _, replacement: _, modifiers: _ } => {
-                format!("(substitution)")
+            NodeKind::Substitution { pattern, replacement, modifiers } => {
+                format!(
+                    "(substitution (pattern {}) (replacement {}) (modifiers {}))",
+                    pattern, replacement, modifiers
+                )
             }
 
             NodeKind::List { elements } => {
@@ -554,5 +557,22 @@ mod tests {
         );
 
         assert_eq!(program.to_sexp(), "(program (variable $x))");
+    }
+
+    #[test]
+    fn test_substitution_to_sexp() {
+        let substitution = Node::new(
+            NodeKind::Substitution {
+                pattern: Arc::from("foo"),
+                replacement: Arc::from("bar"),
+                modifiers: Arc::from("g"),
+            },
+            SourceLocation { start: 0, end: 9 },
+        );
+
+        assert_eq!(
+            substitution.to_sexp(),
+            "(substitution (pattern foo) (replacement bar) (modifiers g))"
+        );
     }
 }

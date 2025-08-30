@@ -6,7 +6,6 @@ fn main() {
     println!("Testing Pest parser...");
 
     let code = "my $x = 42; print $x;";
-    #[allow(unused_mut)]
     let mut parser = PureRustParser::new();
 
     match parser.parse(code) {
