@@ -103,10 +103,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
-| **[perl-parser](https://crates.io/crates/perl-parser)** ⭐ | Main parser & LSP | **Always use this** for parsing and IDE support |
+| **[perl-lsp](https://crates.io/crates/perl-lsp)** ⭐ | Main LSP | **Always use this** for IDE support |
+| **[perl-parser](https://crates.io/crates/perl-parser)** | Main parser | **Always use this** for parsing - Automatically used by perl-lsp |
 | **[perl-lexer](https://crates.io/crates/perl-lexer)** | Tokenization | Automatically used by perl-parser |
 | **[perl-corpus](https://crates.io/crates/perl-corpus)** | Test corpus | For testing parser implementations |
-| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Legacy parser | Migration/comparison only |
+| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Early experimental Pest-based parser | Migration/comparison only |
 
 ### Quick Decision
 - **Need to parse Perl?** → Use `perl-parser`
