@@ -961,8 +961,7 @@ impl PureRustPerlParser {
                             Rule::postfix_dereference => {
                                 let deref_str = op_inner.as_str();
                                 // Extract the dereference type after "->"
-                                let deref_type =
-                                    deref_str.strip_prefix("->").unwrap_or(deref_str);
+                                let deref_type = deref_str.strip_prefix("->").unwrap_or(deref_str);
                                 expr = AstNode::PostfixDereference {
                                     expr: Box::new(expr),
                                     deref_type: Arc::from(deref_type),
@@ -987,19 +986,13 @@ impl PureRustPerlParser {
                                     }
                                 }
 
-                                expr = AstNode::MethodCall {
-                                    object: Box::new(expr),
-                                    method,
-                                    args,
-                                };
+                                expr = AstNode::MethodCall { object: Box::new(expr), method, args };
                             }
                             Rule::typeglob_slot_access => {
                                 let slot =
                                     Arc::from(op_inner.into_inner().next().unwrap().as_str());
-                                expr = AstNode::TypeglobSlotAccess {
-                                    typeglob: Box::new(expr),
-                                    slot,
-                                };
+                                expr =
+                                    AstNode::TypeglobSlotAccess { typeglob: Box::new(expr), slot };
                             }
                             Rule::array_access => {
                                 let index_expr = self
@@ -1020,8 +1013,7 @@ impl PureRustPerlParser {
                                 };
                             }
                             Rule::function_call => {
-                                let args = if let Some(args_pair) = op_inner.into_inner().next()
-                                {
+                                let args = if let Some(args_pair) = op_inner.into_inner().next() {
                                     self.parse_arg_list(args_pair)?
                                 } else {
                                     Vec::new()
@@ -1199,10 +1191,11 @@ impl PureRustPerlParser {
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from q{__HEREDOC__content__HEREDOC__}
                     if let Some(start_idx) = content.find("{__HEREDOC__")
-                        && let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
-                        }
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                    {
+                        let heredoc_content = &content[start_idx + 12..end_idx];
+                        return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
+                    }
                 }
                 Ok(Some(AstNode::String(Arc::from(content))))
             }
@@ -1213,10 +1206,11 @@ impl PureRustPerlParser {
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from qq{__HEREDOC__content__HEREDOC__}
                     if let Some(start_idx) = content.find("{__HEREDOC__")
-                        && let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
-                        }
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                    {
+                        let heredoc_content = &content[start_idx + 12..end_idx];
+                        return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
+                    }
                 }
                 Ok(Some(AstNode::QqString(Arc::from(content))))
             }
@@ -1711,15 +1705,15 @@ impl PureRustPerlParser {
 
                 // Check for else clause
                 if let Some(else_clause) = inner.next()
-                    && else_clause.as_rule() == Rule::else_clause {
-                        let mut else_inner = else_clause.into_inner();
-                        if let Some(else_block_pair) = else_inner.next() {
-                            else_block = Some(Box::new(
-                                self.build_node(else_block_pair)?
-                                    .unwrap_or(AstNode::EmptyExpression),
-                            ));
-                        }
+                    && else_clause.as_rule() == Rule::else_clause
+                {
+                    let mut else_inner = else_clause.into_inner();
+                    if let Some(else_block_pair) = else_inner.next() {
+                        else_block = Some(Box::new(
+                            self.build_node(else_block_pair)?.unwrap_or(AstNode::EmptyExpression),
+                        ));
                     }
+                }
 
                 Ok(Some(AstNode::UnlessStatement { condition, block, else_block }))
             }
@@ -1836,11 +1830,13 @@ impl PureRustPerlParser {
                     // foreach-style for loop - use ForeachStatement AST node
                     // If there's a declarator, wrap the variable in a declaration
                     let final_variable = if let Some(decl) = declarator {
-                        variable.map(|var| Box::new(AstNode::VariableDeclaration {
+                        variable.map(|var| {
+                            Box::new(AstNode::VariableDeclaration {
                                 scope: decl,
                                 variables: vec![*var],
                                 initializer: None,
-                            }))
+                            })
+                        })
                     } else {
                         variable
                     };
