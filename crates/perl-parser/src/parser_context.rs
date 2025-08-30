@@ -24,36 +24,41 @@ pub struct ParserContext {
     errors: Vec<ParseError>,
     /// Source text
     source: String,
-    /// Current position tracker
-    _position_tracker: PositionTracker,
 }
 
 /// Tracks current position in the source
 struct PositionTracker {
-    _byte_offset: usize,
-    _line: usize,
-    _column: usize,
+    byte_offset: usize,
+    line: usize,
+    column: usize,
 }
 
 #[allow(dead_code)]
 impl PositionTracker {
     fn new() -> Self {
-        PositionTracker { _byte_offset: 0, _line: 1, _column: 1 }
+        PositionTracker { byte_offset: 0, line: 1, column: 1 }
     }
 
     fn current_position(&self) -> Position {
-        Position::new(self._byte_offset, self._line as u32, self._column as u32)
+        Position::new(self.byte_offset, self.line as u32, self.column as u32)
     }
 
     fn advance(&mut self, text: &str) {
         for ch in text.chars() {
-            self._byte_offset += ch.len_utf8();
+            self.byte_offset += ch.len_utf8();
             if ch == '\n' {
-                self._line += 1;
-                self._column = 1;
+                self.line += 1;
+                self.column = 1;
             } else {
-                self._column += 1;
+                self.column += 1;
             }
+        }
+    }
+
+    fn advance_to(&mut self, byte: usize, source: &str) {
+        if byte > self.byte_offset {
+            let slice = &source[self.byte_offset..byte];
+            self.advance(slice);
         }
     }
 }
@@ -62,29 +67,22 @@ impl ParserContext {
     /// Create a new parser context
     pub fn new(source: String) -> Self {
         let mut tokens = VecDeque::new();
-        let _position_tracker = PositionTracker::new();
+        let mut tracker = PositionTracker::new();
 
         // Tokenize the source using mode-aware lexer
         let mut lexer = perl_lexer::PerlLexer::new(&source);
-        loop {
-            match lexer.next_token() {
-                Some(token) => {
-                    // Skip EOF tokens to avoid infinite loop
-                    if matches!(token.token_type, TokenType::EOF) {
-                        break;
-                    }
-
-                    let start = token.start;
-                    let end = token.end;
-
-                    // Convert to positions
-                    let start_pos = Position::new(start, 0, 0); // TODO: track line/column properly
-                    let end_pos = Position::new(end, 0, 0);
-
-                    tokens.push_back(TokenWithPosition::new(token, start_pos, end_pos));
-                }
-                None => break,
+        while let Some(token) = lexer.next_token() {
+            // Skip EOF tokens to avoid infinite loop
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
             }
+
+            tracker.advance_to(token.start, &source);
+            let start_pos = tracker.current_position();
+            tracker.advance(&source[token.start..token.end]);
+            let end_pos = tracker.current_position();
+
+            tokens.push_back(TokenWithPosition::new(token, start_pos, end_pos));
         }
 
         ParserContext {
@@ -93,7 +91,6 @@ impl ParserContext {
             id_generator: NodeIdGenerator::new(),
             errors: Vec::new(),
             source,
-            _position_tracker: PositionTracker::new(),
         }
     }
 
@@ -248,5 +245,31 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert_eq!(errors[0].message, "Error 1");
         assert_eq!(errors[1].message, "Error 2");
+    }
+
+    #[test]
+    fn test_token_positions_match_source() {
+        let source = "my $x = 42;\nmy $y = $x + 1;".to_string();
+        let ctx = ParserContext::new(source.clone());
+
+        let tokens: Vec<_> = ctx.tokens.into_iter().collect();
+
+        // First token: 'my'
+        assert_eq!(tokens[0].range().start, Position::new(0, 1, 1));
+        assert_eq!(tokens[0].range().end, Position::new(2, 1, 3));
+
+        // Token after newline: second 'my'
+        assert_eq!(tokens[5].range().start, Position::new(12, 2, 1));
+        assert_eq!(tokens[5].range().end, Position::new(14, 2, 3));
+
+        // Last number token '1'
+        assert_eq!(tokens[10].range().start, Position::new(25, 2, 14));
+        assert_eq!(tokens[10].range().end, Position::new(26, 2, 15));
+
+        // Source slices should match token text
+        for token in tokens {
+            let slice = &source[token.range().start.byte..token.range().end.byte];
+            assert_eq!(slice, token.token.text.as_ref());
+        }
     }
 }
