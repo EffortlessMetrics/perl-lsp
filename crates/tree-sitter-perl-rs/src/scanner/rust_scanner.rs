@@ -265,11 +265,10 @@ impl RustScanner {
 
     fn scan_identifier(&mut self, input: &[u8]) -> ParseResult<Option<TokenType>> {
         // Check if it's a keyword first
-        if let Ok(s) = std::str::from_utf8(input) {
-            if let Some(token_type) = self.keyword_cache.get(s) {
+        if let Ok(s) = std::str::from_utf8(input)
+            && let Some(token_type) = self.keyword_cache.get(s) {
                 return Ok(Some(token_type.clone()));
             }
-        }
         Ok(Some(TokenType::Identifier))
     }
 

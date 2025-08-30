@@ -1186,8 +1186,8 @@ impl<'a> PerlLexer<'a> {
 
         // If this is not an ASCII character (high bit set), handle it as Unicode
         if ch > 127 {
-            if let Some(unicode_ch) = self.input[self.position..].chars().next() {
-                if self.is_unicode_identifier_start(unicode_ch) {
+            if let Some(unicode_ch) = self.input[self.position..].chars().next()
+                && self.is_unicode_identifier_start(unicode_ch) {
                     // Parse Unicode identifier
                     let char_len = unicode_ch.len_utf8();
                     self.position += char_len;
@@ -1226,7 +1226,6 @@ impl<'a> PerlLexer<'a> {
                     self.update_mode(&token.token_type);
                     return Some(token);
                 }
-            }
             // If not a valid identifier start, generate error token
             if let Some(unicode_ch) = self.input[self.position..].chars().next() {
                 let char_len = unicode_ch.len_utf8();
@@ -1248,7 +1247,7 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Check for regex-like constructs first
-        if ch == b'/'
+        if (ch == b'/'
             || (self.mode == LexerMode::ExpectTerm
                 && (self.peek_str("s/")
                     || self.peek_str("s{")
@@ -1257,13 +1256,11 @@ impl<'a> PerlLexer<'a> {
                     || self.peek_str("tr/")
                     || self.peek_str("y/")
                     || self.peek_str("qr/")
-                    || self.peek_str("qr{")))
-        {
-            if let Some(token) = self.scan_regex_like() {
+                    || self.peek_str("qr{"))))
+            && let Some(token) = self.scan_regex_like() {
                 self.update_mode(&token.token_type);
                 return Some(token);
             }
-        }
 
         // Check for quote operators
         if self.peek_str("q/")
@@ -1670,7 +1667,7 @@ impl<'a> PerlLexer<'a> {
                                 // Check if it's a single char like $^A or extended like ${^TAINT}
                                 if self.position < self.input.len() {
                                     let ch = self.input.as_bytes()[self.position];
-                                    if matches!(ch, b'A'..=b'Z') {
+                                    if ch.is_ascii_uppercase() {
                                         self.position += 1;
                                     }
                                 }
@@ -1796,51 +1793,21 @@ impl<'a> PerlLexer<'a> {
                 // Check for regex operators first
                 if self.position < self.input.len() {
                     let ch = self.input.as_bytes()[self.position] as char;
-                    if ch == 's' && self.position + 1 < self.input.len() {
+                    if (matches!(ch, 's' | 'm' | 'y') && self.position + 1 < self.input.len()) {
                         let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
+                        if Self::is_regex_delimiter(next)
+                            && let Some(token) = self.scan_regex_like() {
                                 self.update_mode(&token.token_type);
                                 return Some(token);
                             }
-                        }
-                    } else if ch == 'm' && self.position + 1 < self.input.len() {
-                        let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
-                        }
-                    } else if ch == 'y' && self.position + 1 < self.input.len() {
-                        let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
-                        }
-                    } else if ch == 't' && self.position + 2 < self.input.len() {
-                        if self.input.as_bytes()[self.position + 1] == b'r' {
+                    } else if (ch == 't' || ch == 'q') && self.position + 2 < self.input.len()
+                        && self.input.as_bytes()[self.position + 1] == b'r' {
                             let next = self.input.as_bytes()[self.position + 2] as char;
-                            if Self::is_regex_delimiter(next) {
-                                if let Some(token) = self.scan_regex_like() {
+                            if Self::is_regex_delimiter(next)
+                                && let Some(token) = self.scan_regex_like() {
                                     self.update_mode(&token.token_type);
                                     return Some(token);
                                 }
-                            }
-                        }
-                    } else if ch == 'q'
-                        && self.position + 2 < self.input.len()
-                        && self.input.as_bytes()[self.position + 1] == b'r'
-                    {
-                        let next = self.input.as_bytes()[self.position + 2] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
-                        }
                     }
                 }
 
@@ -1939,7 +1906,7 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 };
                 self.update_mode(&token.token_type);
-                return Some(token);
+                Some(token)
             }
             b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' | b'\\' => {
                 // Check for number starting with decimal point
@@ -2010,10 +1977,7 @@ impl<'a> PerlLexer<'a> {
                             }
                         }
                         // File test operators
-                        (b'-', ch2)
-                            if matches!(
-                                ch2,
-                                b'r' | b'w'
+                        (b'-', b'r' | b'w'
                                     | b'x'
                                     | b'o'
                                     | b'R'
@@ -2038,9 +2002,7 @@ impl<'a> PerlLexer<'a> {
                                     | b'B'
                                     | b'M'
                                     | b'A'
-                                    | b'C'
-                            ) =>
-                        {
+                                    | b'C') => {
                             self.position += 1;
                         }
                         (b'<', b'=') | (b'>', b'=') | (b'!', b'=') | (b'=', b'=') => {
