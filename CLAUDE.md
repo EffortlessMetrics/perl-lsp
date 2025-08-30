@@ -195,6 +195,24 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
+# CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
+# Quick capped test (2 threads)
+cargo t2
+
+# Capped tests with preflight system checks
+./scripts/test-capped.sh
+
+# Capped E2E tests with resource gating
+./scripts/test-e2e-capped.sh
+
+# Manual capped test run
+RUST_TEST_THREADS=2 cargo test -- --test-threads=2
+
+# Container-isolated tests (hard resource limits)
+docker-compose -f docker-compose.test.yml up rust-tests
+docker-compose -f docker-compose.test.yml up rust-e2e-tests
+docker-compose -f docker-compose.test.yml up rust-lsp-tests
+
 > **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
 > If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
 ```
@@ -558,9 +576,13 @@ To extend the Pest grammar:
 - **Status**: Legacy, kept for benchmarking
 
 ### v2: Pest-based Parser
-- **Coverage**: ~99.995% of Perl syntax
+- **Coverage**: ~99.996% of Perl syntax (improved substitution support as of PR #42)
 - **Performance**: ~200-450 µs for typical files
 - **Status**: Production ready, excellent for most use cases
+- **Recent improvements (PR #42)**:
+  - ✅ Enhanced substitution parsing with dedicated `Substitution` AST nodes
+  - ✅ Improved S-expression output for `s/pattern/replacement/modifiers`
+  - ✅ Backward compatibility with fallback mechanisms
 - **Limitations**: 
   - Cannot parse `m!pattern!` or other non-slash regex delimiters
   - Struggles with indirect object syntax
@@ -637,7 +659,7 @@ To extend the Pest grammar:
 
 | Feature | v1 (C) | v2 (Pest) | v3 (Native) |
 |---------|--------|-----------|-------------|
-| Coverage | ~95% | ~99.995% | ~100% |
+| Coverage | ~95% | ~99.996% | ~100% |
 | Performance | ~12-68 µs | ~200-450 µs | ~1-150 µs |
 | Regex delimiters | ❌ | ❌ | ✅ |
 | Indirect object | ❌ | ❌ | ✅ |

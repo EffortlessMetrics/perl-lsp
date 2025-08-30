@@ -72,8 +72,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
-- **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
+- **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support)
 - **Pure Rust**: Built with Pest parser generator, zero C dependencies
+- **Enhanced Regex/Substitution**: Dedicated AST nodes and fallback mechanisms (PR #42)
 - **Well Tested**: 100% edge case coverage for supported features
 - **Good Performance**: ~200-450 µs for typical files
 
@@ -82,7 +83,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
-  - Regular expressions with all operators and modifiers
+  - Regular expressions with all operators and modifiers (enhanced substitution support)
   - 100+ operators with correct precedence (including ~~, ISA)
   - All control flow (if/elsif/else, given/when, statement modifiers)
   - Subroutines with signatures and type constraints (Perl 5.36+)
@@ -102,10 +103,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
-| **[perl-parser](https://crates.io/crates/perl-parser)** ⭐ | Main parser & LSP | **Always use this** for parsing and IDE support |
+| **[perl-lsp](https://crates.io/crates/perl-lsp)** ⭐ | Main LSP | **Always use this** for IDE support |
+| **[perl-parser](https://crates.io/crates/perl-parser)** | Main parser | **Always use this** for parsing - Automatically used by perl-lsp |
 | **[perl-lexer](https://crates.io/crates/perl-lexer)** | Tokenization | Automatically used by perl-parser |
 | **[perl-corpus](https://crates.io/crates/perl-corpus)** | Test corpus | For testing parser implementations |
-| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Legacy parser | Migration/comparison only |
+| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Early experimental Pest-based parser | Migration/comparison only |
 
 ### Quick Decision
 - **Need to parse Perl?** → Use `perl-parser`
@@ -218,7 +220,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 
 ```bash
 # LSP server
-cargo install perl-parser --bin perl-lsp --locked
+#cargo install perl-parser --bin perl-lsp --locked - old instructions - need correction
 
 # run in your editor
 perl-lsp --stdio
