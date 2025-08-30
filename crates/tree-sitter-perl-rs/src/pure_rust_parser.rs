@@ -400,7 +400,7 @@ impl PureRustPerlParser {
         let mut i = 0;
 
         while i < chars.len() {
-            if i + 3 < chars.len() && &chars[i..i + 3] == &['(', '?', '<'] {
+            if i + 3 < chars.len() && chars[i..i + 3] == ['(', '?', '<'] {
                 // Found start of named group
                 i += 3;
                 let mut name = String::new();
@@ -919,7 +919,21 @@ impl PureRustPerlParser {
                         // No unary operator, just pass through
                         self.build_node(first)
                     }
-                    Rule::file_test_operator | _ => {
+                    Rule::file_test_operator => {
+                        // It's an operator
+                        let op = Arc::from(first.as_str());
+                        if let Some(next_pair) = inner.next() {
+                            if let Some(operand_node) = self.build_node(next_pair)? {
+                                let operand = Box::new(operand_node);
+                                Ok(Some(AstNode::UnaryOp { op, operand }))
+                            } else {
+                                Ok(None)
+                            }
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    _ => {
                         // It's an operator
                         let op = Arc::from(first.as_str());
                         if let Some(next_pair) = inner.next() {
@@ -941,84 +955,81 @@ impl PureRustPerlParser {
 
                 // Apply postfix operators
                 for postfix_op in inner {
-                    match postfix_op.as_rule() {
-                        Rule::postfix_operator => {
-                            let op_inner = postfix_op.into_inner().next().unwrap();
-                            match op_inner.as_rule() {
-                                Rule::postfix_dereference => {
-                                    let deref_str = op_inner.as_str();
-                                    // Extract the dereference type after "->"
-                                    let deref_type =
-                                        deref_str.strip_prefix("->").unwrap_or(deref_str);
-                                    expr = AstNode::PostfixDereference {
-                                        expr: Box::new(expr),
-                                        deref_type: Arc::from(deref_type),
-                                    };
-                                }
-                                Rule::method_call => {
-                                    let method_inner = op_inner.into_inner();
-                                    let mut method = Arc::from("");
-                                    let mut args = Vec::new();
-
-                                    for p in method_inner {
-                                        match p.as_rule() {
-                                            Rule::method_name => {
-                                                method = Arc::from(p.as_str());
-                                            }
-                                            Rule::function_args => {
-                                                if let Some(arg_list) = p.into_inner().next() {
-                                                    args = self.parse_arg_list(arg_list)?;
-                                                }
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-
-                                    expr = AstNode::MethodCall {
-                                        object: Box::new(expr),
-                                        method,
-                                        args,
-                                    };
-                                }
-                                Rule::typeglob_slot_access => {
-                                    let slot =
-                                        Arc::from(op_inner.into_inner().next().unwrap().as_str());
-                                    expr = AstNode::TypeglobSlotAccess {
-                                        typeglob: Box::new(expr),
-                                        slot,
-                                    };
-                                }
-                                Rule::array_access => {
-                                    let index_expr = self
-                                        .build_node(op_inner.into_inner().next().unwrap())?
-                                        .unwrap();
-                                    expr = AstNode::ArrayAccess {
-                                        array: Box::new(expr),
-                                        index: Box::new(index_expr),
-                                    };
-                                }
-                                Rule::hash_access => {
-                                    let key_expr = self
-                                        .build_node(op_inner.into_inner().next().unwrap())?
-                                        .unwrap();
-                                    expr = AstNode::HashAccess {
-                                        hash: Box::new(expr),
-                                        key: Box::new(key_expr),
-                                    };
-                                }
-                                Rule::function_call => {
-                                    let args = if let Some(args_pair) = op_inner.into_inner().next()
-                                    {
-                                        self.parse_arg_list(args_pair)?
-                                    } else {
-                                        Vec::new()
-                                    };
-                                    expr = AstNode::FunctionCall { function: Box::new(expr), args };
-                                }
-                                _ => {}
+                    if postfix_op.as_rule() == Rule::postfix_operator {
+                        let op_inner = postfix_op.into_inner().next().unwrap();
+                        match op_inner.as_rule() {
+                            Rule::postfix_dereference => {
+                                let deref_str = op_inner.as_str();
+                                // Extract the dereference type after "->"
+                                let deref_type =
+                                    deref_str.strip_prefix("->").unwrap_or(deref_str);
+                                expr = AstNode::PostfixDereference {
+                                    expr: Box::new(expr),
+                                    deref_type: Arc::from(deref_type),
+                                };
                             }
+                            Rule::method_call => {
+                                let method_inner = op_inner.into_inner();
+                                let mut method = Arc::from("");
+                                let mut args = Vec::new();
+
+                                for p in method_inner {
+                                    match p.as_rule() {
+                                        Rule::method_name => {
+                                            method = Arc::from(p.as_str());
+                                        }
+                                        Rule::function_args => {
+                                            if let Some(arg_list) = p.into_inner().next() {
+                                                args = self.parse_arg_list(arg_list)?;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                expr = AstNode::MethodCall {
+                                    object: Box::new(expr),
+                                    method,
+                                    args,
+                                };
+                            }
+                            Rule::typeglob_slot_access => {
+                                let slot =
+                                    Arc::from(op_inner.into_inner().next().unwrap().as_str());
+                                expr = AstNode::TypeglobSlotAccess {
+                                    typeglob: Box::new(expr),
+                                    slot,
+                                };
+                            }
+                            Rule::array_access => {
+                                let index_expr = self
+                                    .build_node(op_inner.into_inner().next().unwrap())?
+                                    .unwrap();
+                                expr = AstNode::ArrayAccess {
+                                    array: Box::new(expr),
+                                    index: Box::new(index_expr),
+                                };
+                            }
+                            Rule::hash_access => {
+                                let key_expr = self
+                                    .build_node(op_inner.into_inner().next().unwrap())?
+                                    .unwrap();
+                                expr = AstNode::HashAccess {
+                                    hash: Box::new(expr),
+                                    key: Box::new(key_expr),
+                                };
+                            }
+                            Rule::function_call => {
+                                let args = if let Some(args_pair) = op_inner.into_inner().next()
+                                {
+                                    self.parse_arg_list(args_pair)?
+                                } else {
+                                    Vec::new()
+                                };
+                                expr = AstNode::FunctionCall { function: Box::new(expr), args };
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
 
@@ -1109,11 +1120,11 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::builtin_list_op => {
-                let mut inner = pair.into_inner();
+                let inner = pair.into_inner();
                 let mut name = Arc::from("");
                 let mut args = Vec::new();
 
-                while let Some(p) = inner.next() {
+                for p in inner {
                     match p.as_rule() {
                         Rule::builtin_list_op_name => {
                             name = Arc::from(p.as_str().trim());
@@ -1187,12 +1198,11 @@ impl PureRustPerlParser {
                 let content = pair.as_str();
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from q{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
+                    if let Some(start_idx) = content.find("{__HEREDOC__")
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}") {
                             let heredoc_content = &content[start_idx + 12..end_idx];
                             return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
                         }
-                    }
                 }
                 Ok(Some(AstNode::String(Arc::from(content))))
             }
@@ -1202,12 +1212,11 @@ impl PureRustPerlParser {
                 let content = pair.as_str();
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from qq{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
+                    if let Some(start_idx) = content.find("{__HEREDOC__")
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}") {
                             let heredoc_content = &content[start_idx + 12..end_idx];
                             return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
                         }
-                    }
                 }
                 Ok(Some(AstNode::QqString(Arc::from(content))))
             }
@@ -1548,7 +1557,7 @@ impl PureRustPerlParser {
                 let mut inner = pair.into_inner();
                 if let Some(first) = inner.next() {
                     match first.as_rule() {
-                        rule if rule == Rule::match_regex => {
+                        Rule::match_regex => {
                             let mut match_inner = first.into_inner();
                             let pattern = match_inner
                                 .next()
@@ -1828,15 +1837,11 @@ impl PureRustPerlParser {
                     // foreach-style for loop - use ForeachStatement AST node
                     // If there's a declarator, wrap the variable in a declaration
                     let final_variable = if let Some(decl) = declarator {
-                        if let Some(var) = variable {
-                            Some(Box::new(AstNode::VariableDeclaration {
+                        variable.map(|var| Box::new(AstNode::VariableDeclaration {
                                 scope: decl,
                                 variables: vec![*var],
                                 initializer: None,
                             }))
-                        } else {
-                            None
-                        }
                     } else {
                         variable
                     };

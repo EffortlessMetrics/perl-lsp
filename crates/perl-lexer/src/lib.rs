@@ -1275,8 +1275,7 @@ impl<'a> PerlLexer<'a> {
                         } else {
                             self.peek_nonspace() // Can skip whitespace
                         };
-                        
-                        
+
                         if let Some(next) = next_char {
                             if Self::is_quote_delim(next) {
                                 self.mode = LexerMode::ExpectDelimiter;
