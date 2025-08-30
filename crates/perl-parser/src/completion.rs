@@ -390,8 +390,15 @@ impl CompletionProvider {
             self.add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
             // String interpolation or file path
-            if context.prefix.contains('/') {
-                self.add_file_completions(&mut completions, &context);
+            let line_prefix = &source[..context.position];
+            if let Some(start) = line_prefix.rfind(['"', '\'']) {
+                let path_prefix = &line_prefix[start + 1..];
+                if path_prefix.contains('/') {
+                    let mut file_context = context.clone();
+                    file_context.prefix = path_prefix.to_string();
+                    file_context.prefix_start = start + 1;
+                    self.add_file_completions(&mut completions, &file_context);
+                }
             }
         } else {
             // General completion: keywords, functions, variables
@@ -979,11 +986,53 @@ impl CompletionProvider {
     #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_file_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement file path completion
-        // This would require filesystem access
+        use std::fs;
+        use std::path::Path;
+
+        let prefix = context.prefix.as_str();
+
+        // Split the prefix into directory and file components
+        let (dir_part, file_part) = match prefix.rsplit_once('/') {
+            Some((dir, file)) => (dir, file),
+            None => (".", prefix),
+        };
+
+        let dir_path = Path::new(dir_part);
+
+        if let Ok(entries) = fs::read_dir(dir_path) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let file_name = file_name.to_string_lossy();
+
+                if file_name.starts_with(file_part) {
+                    let mut path = if dir_part == "." {
+                        file_name.to_string()
+                    } else {
+                        format!("{}/{}", dir_part.trim_end_matches('/'), file_name)
+                    };
+
+                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    if is_dir {
+                        path.push('/');
+                    }
+
+                    completions.push(CompletionItem {
+                        label: path.clone(),
+                        kind: CompletionItemKind::File,
+                        detail: Some(if is_dir { "directory" } else { "file" }.to_string()),
+                        documentation: None,
+                        insert_text: Some(path.clone()),
+                        sort_text: Some(format!("1_{}", path)),
+                        filter_text: Some(path.clone()),
+                        additional_edits: vec![],
+                        text_edit_range: Some((context.prefix_start, context.position)),
+                    });
+                }
+            }
+        }
     }
 
     /// Add all variables without sigils (for interpolation contexts)
