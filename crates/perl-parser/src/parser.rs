@@ -438,7 +438,15 @@ impl<'a> Parser<'a> {
             Ok(node)
         } else {
             // Single variable declaration
-            let variable = self.parse_variable()?;
+            // For 'local', we need to parse lvalue expressions (not just simple variables)
+            // because local can take complex forms like local $ENV{PATH}
+            let variable = if declarator == "local" {
+                // For local, parse a general lvalue expression
+                self.parse_assignment()?
+            } else {
+                // For my/our/state, parse a simple variable
+                self.parse_variable()?
+            };
 
             // Parse optional attributes
             let mut attributes = Vec::new();
