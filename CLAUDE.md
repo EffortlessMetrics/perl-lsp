@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **five published crates** forming a complete Perl parsing ecosystem:
+This repository contains **four published crates** forming a complete Perl parsing ecosystem:
 
 ### Published Crates (v0.8.7 GA)
 
@@ -17,6 +17,7 @@ This repository contains **five published crates** forming a complete Perl parsi
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
 - **True incremental parsing** with subtree reuse for <1ms LSP updates
 - Tree-sitter compatible output
+- Includes LSP server binary (`perl-lsp`)
 - **v0.8.7 improvements** (Post-PR #69):
   - **Production-stable hash key context detection** - industry-leading bareword analysis with comprehensive coverage
   - **Enhanced S-expression format** - proper NodeKind variants for Prototype, Signature, Method parameters
@@ -31,6 +32,7 @@ This repository contains **five published crates** forming a complete Perl parsi
   - Robust delimiter handling for s/// operators with paired delimiters
   - Single Source of Truth LSP capability management
 
+<<<<<<< HEAD
 #### 2. **perl-lsp** (`/crates/perl-lsp/`) 🚀 **LSP SERVER**
 - Dedicated Language Server Protocol binary with **incremental parsing**
 - Comprehensive IDE features (diagnostics, completion, hover, etc.)
@@ -51,20 +53,23 @@ This repository contains **five published crates** forming a complete Perl parsi
   - Enhanced go-to-definition using DeclarationProvider
 
 #### 3. **perl-lexer** (`/crates/perl-lexer/`)
+=======
+#### 2. **perl-lexer** (`/crates/perl-lexer/`)
+>>>>>>> origin/master
 - Context-aware tokenizer
 - Mode-based lexing (ExpectTerm, ExpectOperator)
 - Handles slash disambiguation at lexing phase
 - Zero dependencies
 - Used by perl-parser
 
-#### 4. **perl-corpus** (`/crates/perl-corpus/`)
+#### 3. **perl-corpus** (`/crates/perl-corpus/`)
 - Comprehensive test corpus
 - Property-based testing infrastructure
 - Edge case collection
 - Used for parser validation
 - Feature: `ci-fast` for conditional test execution
 
-#### 5. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
+#### 4. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
 - Pest-based parser (v2 implementation)
 - ~99.995% Perl 5 coverage
 - Marked as legacy - use perl-parser instead
@@ -84,7 +89,10 @@ This repository contains **five published crates** forming a complete Perl parsi
   - ✅ **Complete AST compatibility** for subroutine declarations, signature parsing, and method structures
   - ✅ **All 530+ tests passing** including comprehensive hash context detection and S-expression format validation
   - ✅ **Type Definition and Implementation Providers** for blessed references and ISA relationships
+<<<<<<< HEAD
   - ✅ **Incremental parsing with subtree reuse** - <1ms real-time editing performance
+=======
+>>>>>>> origin/master
   - ✅ Code completion (variables, 150+ built-ins, keywords)
   - ✅ Hover information with documentation
   - ✅ Go-to-definition with DeclarationProvider
@@ -103,6 +111,8 @@ This repository contains **five published crates** forming a complete Perl parsi
   - ✅ **Pull diagnostics** - LSP 3.17 support (v0.8.5)
   - ✅ **Type hierarchy** - class/role relationships (v0.8.5)
   - ✅ **Execute command** - Perl::Critic, perltidy, refactorings (v0.8.5)
+  - ✅ **Type definition** - blessed references, ISA relationships (v0.8.6)
+  - ✅ **Implementation** - class/method implementations (v0.8.6)
 - **Partial Implementations** (not advertised):
   - ⚠️ Code lens (~20% functional)
   - ⚠️ Call hierarchy (~15% functional)
@@ -220,11 +230,31 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
+<<<<<<< HEAD
 # Run incremental parsing tests
 cargo test -p perl-parser --test incremental_integration_test
 
 # Benchmark incremental parsing performance
 cargo bench incremental
+=======
+# CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
+# Quick capped test (2 threads)
+cargo t2
+
+# Capped tests with preflight system checks
+./scripts/test-capped.sh
+
+# Capped E2E tests with resource gating
+./scripts/test-e2e-capped.sh
+
+# Manual capped test run
+RUST_TEST_THREADS=2 cargo test -- --test-threads=2
+
+# Container-isolated tests (hard resource limits)
+docker-compose -f docker-compose.test.yml up rust-tests
+docker-compose -f docker-compose.test.yml up rust-e2e-tests
+docker-compose -f docker-compose.test.yml up rust-lsp-tests
+>>>>>>> origin/master
 
 > **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
 > If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
@@ -359,32 +389,68 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
 
 ### Testing LSP Features
 
-#### Test Infrastructure (v0.7.4)
-The project includes a robust test infrastructure in `tests/support/mod.rs` with production-grade assertion helpers:
+#### Test Infrastructure (v0.8.6)
+The project includes a robust test infrastructure with async LSP harness and production-grade assertion helpers:
 
-- **Assertion Helpers**: `assert_hover_has_text()`, `assert_completion_has_items()`, etc.
+**Async LSP Harness** (`tests/support/lsp_harness.rs`):
+- **Thread-safe Communication**: Uses mpsc channels for non-blocking server communication
+- **Timeout Support**: Configurable timeouts for all LSP operations (default: 2s)
+- **Real JSON-RPC Protocol**: Tests actual protocol compliance, not mocked responses  
+- **Background Processing**: Server runs in separate thread preventing test blocking
+- **Notification Handling**: Separate buffer for server notifications and diagnostics
+
+**Assertion Helpers** (`tests/support/mod.rs`):
 - **Deep Validation**: All LSP responses are validated for proper structure
 - **Meaningful Errors**: Clear error messages for debugging test failures
 - **No Tautologies**: All assertions actually validate response content
 
+**How-to Guide: Using the Async Test Harness**:
+```rust
+// Create harness with automatic server initialization
+let mut harness = LspHarness::new();
+harness.initialize(None)?;
+
+// Test with custom timeout (useful for slow operations)
+let response = harness.request_with_timeout(
+    "textDocument/completion", 
+    params, 
+    Duration::from_millis(500)
+)?;
+
+// Test notifications (like diagnostics)
+harness.open_document("file:///test.pl", "my $var = 42;");
+let notifications = harness.drain_notifications(
+    Some("textDocument/publishDiagnostics"), 
+    1000  // 1 second timeout
+);
+
+// Test bounded operations (prevents infinite hangs)
+let definition = harness.request_with_timeout(
+    "textDocument/definition",
+    definition_params,
+    Duration::from_millis(500)
+)?;
+```
+
+**Test Commands**:
 ```bash
 # Unit tests
 cargo test -p perl-parser your_feature
 
-# Integration tests
+# LSP API contract tests (async harness)
+cargo test -p perl-lsp lsp_api_contracts
+
+# Integration tests with timeout handling
 cargo test -p perl-parser lsp_your_feature_tests
 
-# Manual testing with example
-cargo run -p perl-parser --example test_your_feature
-
-# Full LSP testing
+# Manual testing with real protocol
 echo '{"jsonrpc":"2.0","method":"your_method",...}' | perl-lsp --stdio
 
-# Run comprehensive E2E tests (100% passing as of v0.7.4)
+# Run comprehensive E2E tests (100% passing as of v0.8.6)
 cargo test -p perl-parser lsp_comprehensive_e2e_test
 
-# Run all tests (33 comprehensive tests)
-cargo test -p perl-parser
+# Run all LSP tests with async harness (48+ tests)
+cargo test -p perl-lsp
 ```
 
 ### Error Recovery and Fallback Mechanisms
@@ -409,9 +475,15 @@ The LSP server includes robust fallback mechanisms for handling incomplete or sy
    - Finds subroutines and packages in unparseable code
    - Ensures outline view works during active editing
 
-4. **Diagnostics with Scope Analysis**
-   - Undefined variable detection under `use strict`
-   - Unused variable warnings
+4. **Diagnostics with Production-Stable Scope Analysis** (v0.8.7)
+   - **Hash Key Context Detection** - Industry-leading undefined variable detection under `use strict` with comprehensive hash key awareness
+   - Production-proven bareword analysis that correctly identifies legitimate hash keys vs violations:
+     - Hash subscripts: `$hash{bareword_key}` - no false warnings, O(depth) performance
+     - Hash literals: `{ key => value, another_key => value2 }` - keys properly recognized in all contexts
+     - Hash slices: `@hash{key1, key2, key3}` - comprehensive array-based key detection
+     - Nested hash access: `$hash{level1}{level2}{level3}` - deep nesting with safety limits
+   - Enhanced scope analysis with stabilized `is_in_hash_key_context()` method
+   - Unused variable warnings with improved accuracy
    - Missing pragma suggestions (strict/warnings)
    - Works with partial ASTs from error recovery
 
@@ -419,7 +491,7 @@ These fallbacks ensure the LSP remains functional during active development when
 
 ## Architecture Overview
 
-### Crate Structure (v0.8.3 GA)
+### Crate Structure (v0.8.7 GA)
 
 #### Production Crates
 - **`/crates/perl-parser/`**: Main parser and LSP server
@@ -430,9 +502,12 @@ These fallbacks ensure the LSP remains functional during active development when
   - Published as `perl-parser` on crates.io
 
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
-  - `src/lib.rs`: Lexer API
+  - `src/lib.rs`: Lexer API with Unicode support
   - `src/token.rs`: Token definitions
-  - `src/mode.rs`: Lexer modes
+  - `src/mode.rs`: Lexer modes (ExpectTerm, ExpectOperator)
+  - `src/unicode.rs`: Unicode identifier support
+  - **Unicode Handling**: Robust support for Unicode characters in all contexts
+  - **Heredoc Safety**: Proper bounds checking for Unicode + heredoc syntax
   - Published as `perl-lexer` on crates.io
 
 - **`/crates/perl-corpus/`**: Test corpus
@@ -616,6 +691,43 @@ println!("Nodes reparsed: {}", doc.metrics.nodes_reparsed);
 2. Use `cargo xtask compare` to compare implementations
 3. Check for performance gates: `cargo xtask compare --check-gates`
 
+## Unicode Handling (v0.8.6)
+
+The lexer includes comprehensive Unicode support with recent robustness improvements:
+
+### Unicode Features
+- **Unicode Identifiers**: Full support for Unicode characters in variable names (`my $♥ = 'love'`)  
+- **Unicode Operators**: Support for Unicode operators and symbols
+- **UTF-8 Text Processing**: Proper handling of UTF-8 encoded Perl source files
+- **Context-Aware Parsing**: Unicode characters properly handled in all lexer contexts
+
+### Recent Improvements (v0.8.6)
+**Fixed Unicode + Heredoc Panic** (`perl-lexer` v0.8.6):
+- **Problem**: Lexer would panic on Unicode characters followed by incomplete heredoc syntax (e.g., `¡<<'`)
+- **Root Cause**: Bounds checking failure during heredoc delimiter extraction with Unicode text
+- **Solution**: Enhanced text construction tracking throughout heredoc parsing phases
+- **Testing**: Added comprehensive Unicode test cases to prevent regression
+
+**Troubleshooting Guide: Unicode Issues**:
+```perl
+# These cases are now handled correctly:
+¡<<'             # Unicode + incomplete heredoc (was panic, now graceful)
+my $♥ = 42;      # Unicode variable names (always worked)  
+¡ << 'END'       # Unicode with spacing (always worked)
+print "♥";       # Unicode in strings (always worked)
+```
+
+**Technical Details**:
+- Uses `src/unicode.rs` for Unicode character classification
+- Implements `is_perl_identifier_start()` and `is_perl_identifier_continue()`
+- Maintains text construction state during all parsing phases
+- Provides graceful error handling for malformed Unicode sequences
+
+**Reference: Unicode Test Coverage**:
+- Property-based testing with Unicode edge cases
+- Regression tests for specific Unicode + heredoc combinations  
+- Performance testing ensures no Unicode processing overhead
+
 ## Current Status
 
 ### v1: C-based Parser
@@ -624,20 +736,36 @@ println!("Nodes reparsed: {}", doc.metrics.nodes_reparsed);
 - **Status**: Legacy, kept for benchmarking
 
 ### v2: Pest-based Parser
-- **Coverage**: ~99.995% of Perl syntax
+- **Coverage**: ~99.996% of Perl syntax (improved substitution support as of PR #42)
 - **Performance**: ~200-450 µs for typical files
 - **Status**: Production ready, excellent for most use cases
+- **Recent improvements (PR #42)**:
+  - ✅ **Enhanced substitution parsing** - improved coverage from ~99.995% to ~99.996%
+  - ✅ **Robust delimiter handling** for s/// operators with paired delimiters (s{pattern}{replacement})
+  - ✅ **Improved quote parser** with better error handling and nested delimiter support
+  - ✅ **Comprehensive test coverage** for substitution edge cases
+  - ✅ Backward compatibility with fallback mechanisms
 - **Limitations**: 
   - Cannot parse `m!pattern!` or other non-slash regex delimiters
   - Struggles with indirect object syntax
   - Heredoc-in-string edge case
 
-### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.8.4)
+### v3: Native Lexer+Parser ⭐ **RECOMMENDED** (v0.8.7)
 - **Parser Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Parser Status**: Production ready, feature complete
-- **LSP Status**: ✅ ~60% functional (all advertised features work)
-- **Recent improvements (v0.8.4)**:
+- **LSP Status**: ✅ ~70% functional (all advertised features work)
+- **Recent improvements (v0.8.7)**:
+  - ✅ **Production-stable hash key context detection** - industry-leading bareword analysis with comprehensive hash context coverage
+  - ✅ **Enhanced S-expression format** - proper NodeKind variants for Prototype, Signature, Method parameters  
+  - ✅ **Stabilized scope analyzer** - `is_in_hash_key_context()` method proven in production with O(depth) performance
+  - ✅ **Complete AST compatibility** - fixed subroutine declaration format and signature parameter parsing
+- **Previous improvements (v0.8.6)**:
+  - ✅ Type Definition Provider for blessed references and ISA relationships
+  - ✅ Implementation Provider for class/method implementations  
+  - ✅ Enhanced UTF-16 position handling with CRLF/emoji support
+  - ✅ Single Source of Truth LSP capability management
+- **Previous improvements (v0.8.4)**:
   - ✅ Added 9 new LSP features - workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
   - ✅ Contract-driven testing - every capability backed by acceptance tests
   - ✅ Feature flag control - `lsp-ga-lock` for conservative releases
@@ -703,7 +831,7 @@ println!("Nodes reparsed: {}", doc.metrics.nodes_reparsed);
 
 | Feature | v1 (C) | v2 (Pest) | v3 (Native) |
 |---------|--------|-----------|-------------|
-| Coverage | ~95% | ~99.995% | ~100% |
+| Coverage | ~95% | ~99.996% | ~100% |
 | Performance | ~12-68 µs | ~200-450 µs | ~1-150 µs |
 | Regex delimiters | ❌ | ❌ | ✅ |
 | Indirect object | ❌ | ❌ | ✅ |
