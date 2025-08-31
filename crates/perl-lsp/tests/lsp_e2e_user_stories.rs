@@ -8,7 +8,10 @@ mod support;
 
 use perl_parser::{JsonRpcRequest, LspServer, Parser};
 use serde_json::{Value, json};
-use support::test_helpers::{assert_hover_has_text, assert_references_found, assert_call_hierarchy_items, assert_code_actions_available, assert_completion_has_items};
+use support::test_helpers::{
+    assert_call_hierarchy_items, assert_code_actions_available, assert_completion_has_items,
+    assert_hover_has_text, assert_references_found,
+};
 
 /// Helper to create a test LSP server instance
 fn create_test_server() -> LspServer {
