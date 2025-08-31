@@ -75,9 +75,16 @@ impl Node {
                 }
             }
 
-            NodeKind::Variable { sigil: _, name: _ } => {
-                // Tree-sitter format - all variables are just (variable)
-                "(variable)".to_string()
+            NodeKind::Variable { sigil, name } => {
+                // Tree-sitter format based on sigil type
+                match sigil.as_str() {
+                    "$" => "(scalar (varname))".to_string(),
+                    "@" => "(array (varname))".to_string(),
+                    "%" => "(hash (varname))".to_string(),
+                    "&" => "(amper (varname))".to_string(),
+                    "*" => "(glob (varname))".to_string(),
+                    _ => "(variable)".to_string(), // fallback
+                }
             }
 
             NodeKind::VariableWithAttributes { variable, attributes } => {
@@ -265,27 +272,35 @@ impl Node {
             }
 
             NodeKind::Subroutine { name, params: _, attributes, body } => {
+                // Extract block contents to avoid double-nesting
+                let block_contents = match &body.kind {
+                    NodeKind::Block { statements } => {
+                        statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
+                    }
+                    _ => body.to_sexp(), // fallback if body is not a Block
+                };
+
                 if name.is_some() {
                     // Named subroutine - tree-sitter format with labeled fields
                     if attributes.is_empty() {
-                        format!("(subroutine_declaration_statement (bareword) (block {}))", body.to_sexp())
+                        format!("(subroutine_declaration_statement (bareword) (block {}))", block_contents)
                     } else {
                         let attrs: Vec<String> = attributes.iter()
                             .map(|_attr| "(attribute (attribute_name))".to_string())
                             .collect();
                         format!("(subroutine_declaration_statement (bareword) (attrlist {}) (block {}))", 
-                                attrs.join(""), body.to_sexp())
+                                attrs.join(""), block_contents)
                     }
                 } else {
-                    // Anonymous subroutine 
+                    // Anonymous subroutine needs to be wrapped in expression_statement
                     if attributes.is_empty() {
-                        format!("(expression_statement (anonymous_subroutine_expression (block {})))", body.to_sexp())
+                        format!("(expression_statement (anonymous_subroutine_expression (block {})))", block_contents)
                     } else {
                         let attrs: Vec<String> = attributes.iter()
                             .map(|_attr| "(attribute (attribute_name))".to_string())
                             .collect();
                         format!("(expression_statement (anonymous_subroutine_expression (attrlist {}) (block {})))", 
-                                attrs.join(""), body.to_sexp())
+                                attrs.join(""), block_contents)
                     }
                 }
             }

@@ -649,6 +649,23 @@ impl Node {
             NodeKind::While { condition, body, .. } => {
                 vec![condition.as_ref(), body.as_ref()]
             }
+            NodeKind::ExpressionStatement { expression } => {
+                vec![expression.as_ref()]
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                let mut children = vec![variable.as_ref()];
+                if let Some(init) = initializer {
+                    children.push(init.as_ref());
+                }
+                children
+            }
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                let mut children: Vec<&Node> = variables.iter().collect();
+                if let Some(init) = initializer {
+                    children.push(init.as_ref());
+                }
+                children
+            }
             _ => vec![],
         }
     }
