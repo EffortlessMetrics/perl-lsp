@@ -32,30 +32,7 @@ This repository contains **four published crates** forming a complete Perl parsi
   - Robust delimiter handling for s/// operators with paired delimiters
   - Single Source of Truth LSP capability management
 
-<<<<<<< HEAD
-#### 2. **perl-lsp** (`/crates/perl-lsp/`) 🚀 **LSP SERVER**
-- Dedicated Language Server Protocol binary with **incremental parsing**
-- Comprehensive IDE features (diagnostics, completion, hover, etc.)
-- **~75% LSP 3.18+ compliance** with all advertised features working
-- **Real-time editing performance** - <1ms updates with subtree reuse
-- Clean install: `cargo install perl-lsp`
-- Built on perl-parser for parsing functionality
-- **v0.8.5 improvements**:
-  - Typed ServerCapabilities for LSP 3.18 compliance
-  - Pull Diagnostics support (workspace/diagnostic)
-  - Stable error codes (-32802 for cancellation)
-  - Enhanced inlay hints with type anchors
-  - Improved cancellation handling with test endpoint
-- **v0.8.3 improvements**:
-  - Hash literal parsing fixed (`{ key => value }`)
-  - Parenthesized expressions with word operators
-  - qw() array parsing with all delimiters
-  - Enhanced go-to-definition using DeclarationProvider
-
-#### 3. **perl-lexer** (`/crates/perl-lexer/`)
-=======
 #### 2. **perl-lexer** (`/crates/perl-lexer/`)
->>>>>>> origin/master
 - Context-aware tokenizer
 - Mode-based lexing (ExpectTerm, ExpectOperator)
 - Handles slash disambiguation at lexing phase
@@ -89,10 +66,6 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Complete AST compatibility** for subroutine declarations, signature parsing, and method structures
   - ✅ **All 530+ tests passing** including comprehensive hash context detection and S-expression format validation
   - ✅ **Type Definition and Implementation Providers** for blessed references and ISA relationships
-<<<<<<< HEAD
-  - ✅ **Incremental parsing with subtree reuse** - <1ms real-time editing performance
-=======
->>>>>>> origin/master
   - ✅ Code completion (variables, 150+ built-ins, keywords)
   - ✅ Hover information with documentation
   - ✅ Go-to-definition with DeclarationProvider
@@ -230,13 +203,6 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
-<<<<<<< HEAD
-# Run incremental parsing tests
-cargo test -p perl-parser --test incremental_integration_test
-
-# Benchmark incremental parsing performance
-cargo bench incremental
-=======
 # CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
 # Quick capped test (2 threads)
 cargo t2
@@ -254,7 +220,6 @@ RUST_TEST_THREADS=2 cargo test -- --test-threads=2
 docker-compose -f docker-compose.test.yml up rust-tests
 docker-compose -f docker-compose.test.yml up rust-e2e-tests
 docker-compose -f docker-compose.test.yml up rust-lsp-tests
->>>>>>> origin/master
 
 > **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
 > If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
