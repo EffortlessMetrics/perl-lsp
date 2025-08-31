@@ -336,15 +336,15 @@ impl Node {
                     let inner_parts = if parts.is_empty() {
                         format!("(block {})", block_contents)
                     } else {
-                        format!("{}", parts.join(" "))
+                        parts.join(" ").to_string()
                     };
                     
                     format!("(expression_statement (anonymous_subroutine_expression {}))", inner_parts)
                 }
             }
 
-            NodeKind::Prototype { content } => {
-                format!("(prototype)")
+            NodeKind::Prototype { content: _ } => {
+                "(prototype)".to_string()
             }
 
             NodeKind::Signature { parameters } => {
@@ -368,7 +368,7 @@ impl Node {
                 format!("(named_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method { name: _, signature, attributes, body } => {
                 let block_contents = match &body.kind {
                     NodeKind::Block { statements } => {
                         statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
