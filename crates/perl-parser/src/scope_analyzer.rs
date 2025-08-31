@@ -180,6 +180,33 @@ impl ScopeAnalyzer {
                 }
             }
 
+            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+                let is_our = declarator == "our";
+                for variable in variables {
+                    let var_name = self.extract_variable_name(variable);
+                    let line = self.get_line_from_node(variable, code);
+
+                    if let Some(issue_kind) =
+                        scope.declare_variable(&var_name, variable.location.start, is_our)
+                    {
+                        issues.push(ScopeIssue {
+                            kind: issue_kind,
+                            variable_name: var_name.clone(),
+                            line,
+                            description: match issue_kind {
+                                IssueKind::VariableShadowing => {
+                                    format!("Variable '{}' shadows a variable in outer scope", var_name)
+                                }
+                                IssueKind::VariableRedeclaration => {
+                                    format!("Variable '{}' is already declared in this scope", var_name)
+                                }
+                                _ => String::new(),
+                            },
+                        });
+                    }
+                }
+            }
+
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
 
@@ -193,13 +220,18 @@ impl ScopeAnalyzer {
                     return;
                 }
 
-                // Try to use the variable, with enhanced resolution for complex patterns
+                // Try to use the variable
                 let mut variable_used = scope.use_variable(&full_name);
 
-                // If not found as simple variable, try enhanced resolution patterns
-                if !variable_used {
-                    if let Some(resolved_var) = self.try_resolve_variable_reference(node, scope) {
-                        variable_used = scope.use_variable(&resolved_var);
+                // If not found as simple variable, check if this is part of a hash/array access pattern
+                if !variable_used && sigil == "$" {
+                    // Check if the corresponding hash or array exists
+                    let hash_name = format!("%{}", name);
+                    let array_name = format!("@{}", name);
+                    
+                    if scope.lookup_variable(&hash_name).is_some() || scope.lookup_variable(&array_name).is_some() {
+                        // This is likely part of a hash/array access pattern, don't flag as undefined
+                        variable_used = true;
                     }
                 }
 
@@ -228,9 +260,44 @@ impl ScopeAnalyzer {
             }
 
             NodeKind::Binary { op, left, right } => {
-                let is_hash_access = op == "{}";
-                self.analyze_node(left, scope, issues, code, pragma_map, false);
-                self.analyze_node(right, scope, issues, code, pragma_map, is_hash_access);
+                match op.as_str() {
+                    "{}" => {
+                        // Hash access: $hash{key} -> mark %hash as used if it exists
+                        if let NodeKind::Variable { sigil, name } = &left.kind {
+                            if sigil == "$" {
+                                let hash_name = format!("%{}", name);
+                                // Only mark as used if the hash actually exists
+                                if scope.lookup_variable(&hash_name).is_some() {
+                                    scope.use_variable(&hash_name);
+                                }
+                            }
+                        }
+                        // Always process both children to ensure undefined variables are caught
+                        self.analyze_node(left, scope, issues, code, pragma_map, false);
+                        self.analyze_node(right, scope, issues, code, pragma_map, true);
+                    }
+                    "[]" => {
+                        // Array access: $array[index] -> mark @array as used if it exists
+                        if let NodeKind::Variable { sigil, name } = &left.kind {
+                            if sigil == "$" {
+                                let array_name = format!("@{}", name);
+                                // Only mark as used if the array actually exists
+                                if scope.lookup_variable(&array_name).is_some() {
+                                    scope.use_variable(&array_name);
+                                }
+                            }
+                        }
+                        // Always process both children to ensure undefined variables are caught
+                        self.analyze_node(left, scope, issues, code, pragma_map, false);
+                        self.analyze_node(right, scope, issues, code, pragma_map, false);
+                    }
+                    _ => {
+                        // Other binary operations
+                        let is_hash_access = op == "{}";
+                        self.analyze_node(left, scope, issues, code, pragma_map, false);
+                        self.analyze_node(right, scope, issues, code, pragma_map, is_hash_access);
+                    }
+                }
             }
 
             NodeKind::ArrayLiteral { elements } => {
@@ -346,6 +413,13 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, code);
             }
 
+            NodeKind::FunctionCall { args, .. } => {
+                // Handle function arguments, which may contain complex variable patterns
+                for arg in args {
+                    self.analyze_node(arg, scope, issues, code, pragma_map, false);
+                }
+            }
+
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
@@ -401,47 +475,6 @@ impl ScopeAnalyzer {
         }
     }
 
-    /// Enhanced variable name extraction supporting complex patterns
-    fn try_resolve_variable_reference(&self, node: &Node, scope: &Rc<Scope>) -> Option<String> {
-        match &node.kind {
-            NodeKind::Variable { sigil, name } => {
-                let full_name = format!("{}{}", sigil, name);
-                if scope.lookup_variable(&full_name).is_some() { Some(full_name) } else { None }
-            }
-            NodeKind::Binary { op, left, right: _ } => {
-                match op.as_str() {
-                    "{}" => {
-                        // Hash access: $hash{key} -> try to resolve $hash
-                        if let Some(base_var) = self.try_resolve_variable_reference(left, scope) {
-                            // Convert scalar reference to hash reference
-                            if let Some(stripped) = base_var.strip_prefix('$') {
-                                let hash_name = format!("%{}", stripped);
-                                if scope.lookup_variable(&hash_name).is_some() {
-                                    return Some(hash_name);
-                                }
-                            }
-                        }
-                        None
-                    }
-                    "[]" => {
-                        // Array access: $array[index] -> try to resolve $array
-                        if let Some(base_var) = self.try_resolve_variable_reference(left, scope) {
-                            // Convert scalar reference to array reference
-                            if let Some(stripped) = base_var.strip_prefix('$') {
-                                let array_name = format!("@{}", stripped);
-                                if scope.lookup_variable(&array_name).is_some() {
-                                    return Some(array_name);
-                                }
-                            }
-                        }
-                        None
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
 
     fn get_line_from_node(&self, node: &Node, code: &str) -> usize {
         self.get_line_number(code, node.location.start)
