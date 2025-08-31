@@ -5152,21 +5152,30 @@ mod tests {
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(source_file (expression_statement (array (string) (string))))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
 
         // Test qw with non-paired delimiters
         let mut parser = Parser::new("qw/alpha beta/");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(source_file (expression_statement (array (string) (string))))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
 
         // Test qw with exclamation marks
         let mut parser = Parser::new("qw!hello world!");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(source_file (expression_statement (array (string) (string))))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
     }
 
     #[test]

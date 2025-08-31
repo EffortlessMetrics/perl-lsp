@@ -478,7 +478,7 @@ open(FH, "<", "file.txt");
 
             // Note: Inlay hints may not work with new AST structure yet
             // For now just ensure it doesn't crash - empty result is acceptable
-            
+
             // Check basic structure if hints are generated
             if !hints.is_empty() {
                 assert!(hints[0].label.contains("ARRAY") || hints[0].label.contains(":"));
