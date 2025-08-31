@@ -11,7 +11,7 @@ use std::time::Duration;
 
 #[path = "support/mod.rs"]
 mod support;
-use support::*;
+use support::test_helpers::assert_hover_has_text;
 
 // ===================== Test Context =====================
 

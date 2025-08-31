@@ -11,6 +11,7 @@ mod support;
 use perl_parser::{JsonRpcRequest, LspServer, Parser};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use support::test_helpers::apply_text_edits;
 
 // ======================== TEST INFRASTRUCTURE ========================
 
@@ -941,7 +942,7 @@ return$x*2}
             let edits = res.as_array().unwrap();
             if !edits.is_empty() {
                 // Apply all edits to verify they produce valid Perl
-                let formatted = support::apply_text_edits(unformatted, edits);
+                let formatted = apply_text_edits(unformatted, edits);
                 // Just ensure the result is non-empty valid text
                 assert!(!formatted.is_empty(), "Formatted code should not be empty");
             }
