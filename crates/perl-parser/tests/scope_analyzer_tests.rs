@@ -615,3 +615,56 @@ print $simple_var;
     // Simple variables should still work with enhanced resolution
     assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
 }
+
+#[test]
+fn test_hash_key_not_flagged_as_bareword() {
+    let code = r#"
+use strict;
+my %h = ();
+my $x = $h{key};
+print FOO;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "FOO");
+}
+
+#[test]
+fn test_hash_slice_bareword_keys() {
+    let code = r#"
+use strict;
+my %h = ();
+my @values = @h{key1, key2};
+print STDERR;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "STDERR");
+}
+
+#[test]
+fn test_comprehensive_hash_key_context() {
+    let code = r#"
+use strict;
+my %hash = (key1 => 'value1', key2 => 'value2');
+my $value = $hash{bareword_key};
+my @values = @hash{key1, key2, another_key};
+my %hash2 = ( another_key => 'value' );
+print INVALID_BAREWORD;
+"#;
+
+    let issues = analyze_code(code);
+    let bareword_issues: Vec<_> =
+        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+
+    // Only INVALID_BAREWORD should be flagged - hash keys should be ignored
+    assert_eq!(bareword_issues.len(), 1);
+    assert_eq!(bareword_issues[0].variable_name, "INVALID_BAREWORD");
+}
+}

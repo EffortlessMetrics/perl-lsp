@@ -6,7 +6,7 @@
 use crate::{
     ast::Node,
     error::ParseResult,
-    incremental_document::IncrementalDocument,
+    incremental_document::{IncrementalDocument, ParseMetrics},
     incremental_edit::{IncrementalEdit, IncrementalEditSet},
     parser::Parser,
 };
@@ -207,16 +207,10 @@ impl DocumentParser {
     }
 
     /// Get parsing metrics (if available)
-    pub fn metrics(&self) -> Option<String> {
+    pub fn metrics(&self) -> Option<&ParseMetrics> {
         match self {
             DocumentParser::Full { .. } => None,
-            DocumentParser::Incremental { document, .. } => {
-                let m = &document.metrics;
-                Some(format!(
-                    "Parse: {:.1}ms, Reused: {}, Reparsed: {}, Cache hits: {}",
-                    m.last_parse_time_ms, m.nodes_reused, m.nodes_reparsed, m.cache_hits
-                ))
-            }
+            DocumentParser::Incremental { document, .. } => Some(document.metrics()),
         }
     }
 }
