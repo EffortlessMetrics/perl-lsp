@@ -1118,26 +1118,34 @@ impl<'a> Parser<'a> {
         }
 
         // Parse optional prototype or signature after attributes
-        let (params, _prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
+        let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
-                let proto = self.parse_prototype()?;
-                // Store prototype as an attribute
-                attributes.push(format!("prototype({})", proto));
-                (Vec::new(), Some(proto))
+                let proto_content = self.parse_prototype()?;
+                let proto_node = Node::new(
+                    NodeKind::Prototype { content: proto_content },
+                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                );
+                (Some(Box::new(proto_node)), None)
             } else {
-                (self.parse_signature()?, None)
+                // Parse as signature
+                let params = self.parse_signature()?;
+                let sig_node = Node::new(
+                    NodeKind::Signature { parameters: params },
+                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                );
+                (None, Some(Box::new(sig_node)))
             }
         } else {
-            (Vec::new(), None)
+            (None, None)
         };
 
         let body = self.parse_block()?;
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Subroutine { name, params, attributes, body: Box::new(body) },
+            NodeKind::Subroutine { name, prototype, signature, attributes, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -1165,17 +1173,21 @@ impl<'a> Parser<'a> {
         let name = name_token.text.clone();
 
         // Parse optional signature
-        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.parse_signature()?
+        let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            let params = self.parse_signature()?;
+            Some(Box::new(Node::new(
+                NodeKind::Signature { parameters: params },
+                SourceLocation { start: self.current_position(), end: self.current_position() },
+            )))
         } else {
-            Vec::new()
+            None
         };
 
         let body = self.parse_block()?;
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Method { name, params, body: Box::new(body) },
+            NodeKind::Method { name, signature, attributes: Vec::new(), body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -1247,7 +1259,7 @@ impl<'a> Parser<'a> {
     /// Parse a single signature parameter
     fn parse_signature_param(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
-
+        
         // Check for named parameter (:$name)
         let named = if self.peek_kind() == Some(TokenKind::Colon) {
             self.tokens.next()?; // consume :
@@ -1255,9 +1267,9 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
-
+        
         // Check for type constraint (Type $var)
-        let type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
+        let _type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
             // Look ahead to see if this is a type constraint
             let token = self.tokens.peek()?;
             if !token.text.starts_with('$')
@@ -1273,10 +1285,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
+        
         // Parse the variable
         let variable = self.parse_variable()?;
-
+        
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
@@ -1285,40 +1297,28 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
+        
         let end = if let Some(ref default) = default_value {
             default.location.end
         } else {
             variable.location.end
         };
-
-        // Create a parameter node
-        // For now, we'll use the Variable node with additional context
-        // In a full implementation, we might want a dedicated Parameter node kind
-        if named || type_constraint.is_some() || default_value.is_some() {
-            // We need to wrap this in a more complex structure
-            // For now, let's use a Block node to hold the parameter info
-            let mut statements = vec![variable];
-
-            // Add type constraint as an identifier if present
-            if let Some(tc) = type_constraint {
-                let tc_node = Node::new(
-                    NodeKind::Identifier { name: tc },
-                    SourceLocation { start, end: start },
-                );
-                statements.insert(0, tc_node);
-            }
-
-            // Add default value if present
-            if let Some(default) = default_value {
-                statements.push(*default);
-            }
-
-            Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        
+        // Check if variable is slurpy (@args or %hash)
+        let is_slurpy = matches!(&variable.kind, NodeKind::Variable { sigil, .. } if sigil == "@" || sigil == "%");
+        
+        // Create the appropriate parameter node type
+        let param_kind = if named {
+            NodeKind::NamedParameter { variable: Box::new(variable) }
+        } else if is_slurpy {
+            NodeKind::SlurpyParameter { variable: Box::new(variable) }
+        } else if let Some(default) = default_value {
+            NodeKind::OptionalParameter { variable: Box::new(variable), default_value: default }
         } else {
-            // Simple parameter, just return the variable
-            Ok(variable)
-        }
+            NodeKind::MandatoryParameter { variable: Box::new(variable) }
+        };
+        
+        Ok(Node::new(param_kind, SourceLocation { start, end }))
     }
 
     /// Parse package declaration
@@ -1777,7 +1777,8 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
-                params: vec![],
+                prototype: None,
+                signature: None,
                 attributes: vec![],
                 body: Box::new(block),
             },
@@ -2140,7 +2141,7 @@ impl<'a> Parser<'a> {
     /// Parse expression statement
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
-        
+
         // Check for special blocks like AUTOLOAD and DESTROY
         if let Ok(token) = self.tokens.peek() {
             if matches!(token.text.as_str(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
@@ -2160,14 +2161,12 @@ impl<'a> Parser<'a> {
         expr = self.parse_word_or_expr(expr)?;
 
         // Statement modifiers are handled at the statement level in parse_statement()
-        
+
         let end = self.previous_position();
-        
+
         // Wrap the expression in an ExpressionStatement node
         Ok(Node::new(
-            NodeKind::ExpressionStatement {
-                expression: Box::new(expr),
-            },
+            NodeKind::ExpressionStatement { expression: Box::new(expr) },
             SourceLocation { start, end },
         ))
     }

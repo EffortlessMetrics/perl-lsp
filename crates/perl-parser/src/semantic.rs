@@ -401,7 +401,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine { name, params, attributes, body } => {
+            NodeKind::Subroutine { name, prototype: _, signature, attributes, body } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
                         location: node.location,
@@ -412,13 +412,13 @@ impl SemanticAnalyzer {
                     self.semantic_tokens.push(token);
 
                     // Add hover info
-                    let mut signature = format!("sub {}", sub_name);
-                    if !params.is_empty() {
-                        signature.push_str("(...)");
+                    let mut signature_str = format!("sub {}", sub_name);
+                    if signature.is_some() {
+                        signature_str.push_str("(...)");
                     }
 
                     let hover = HoverInfo {
-                        signature,
+                        signature: signature_str,
                         documentation: self.extract_documentation(node.location.start),
                         details: if attributes.is_empty() {
                             vec![]

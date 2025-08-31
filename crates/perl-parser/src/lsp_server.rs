@@ -2202,11 +2202,12 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
-            if !sub_params.is_empty() {
-                // Extract parameter names from the params node
-                for param in sub_params {
-                    self.extract_params(param, &mut params);
+        if let NodeKind::Subroutine { signature: sub_signature, body, .. } = &sub_node.kind {
+            if let Some(sig) = sub_signature {
+                if let NodeKind::Signature { parameters } = &sig.kind {
+                    for param in parameters {
+                        self.extract_params(param, &mut params);
+                    }
                 }
             } else {
                 // Look for my (...) = @_; pattern in the body

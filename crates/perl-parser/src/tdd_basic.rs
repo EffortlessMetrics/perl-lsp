@@ -55,10 +55,10 @@ impl TestGenerator {
 
     fn find_subroutines_recursive(&self, node: &Node, subs: &mut Vec<SubroutineInfo>) {
         match &node.kind {
-            NodeKind::Subroutine { name, params, .. } => {
+            NodeKind::Subroutine { name, signature, .. } => {
                 subs.push(SubroutineInfo {
                     name: name.clone().unwrap_or_else(|| "anonymous".to_string()),
-                    param_count: params.len(),
+                    param_count: signature.as_ref().map(|s| if let NodeKind::Signature { parameters } = &s.kind { parameters.len() } else { 0 }).unwrap_or(0),
                 });
             }
             NodeKind::Program { statements } => {
@@ -146,16 +146,17 @@ impl RefactoringAnalyzer {
         suggestions: &mut Vec<RefactoringSuggestion>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name, params, body, .. } => {
+            NodeKind::Subroutine { name, signature, body, .. } => {
                 let sub_name = name.clone().unwrap_or_else(|| "anonymous".to_string());
 
                 // Check parameter count
-                if params.len() > self.max_params {
+                let param_count = signature.as_ref().map(|s| if let NodeKind::Signature { parameters } = &s.kind { parameters.len() } else { 0 }).unwrap_or(0);
+                if param_count > self.max_params {
                     suggestions.push(RefactoringSuggestion {
                         title: format!("Too many parameters in {}", sub_name),
                         description: format!(
                             "Function has {} parameters, consider using a hash",
-                            params.len()
+                            param_count
                         ),
                         category: RefactoringCategory::TooManyParameters,
                     });
@@ -421,7 +422,8 @@ mod tests {
                 statements: vec![Node::new(
                     NodeKind::Subroutine {
                         name: Some("test_func".to_string()),
-                        params: vec![],
+                        prototype: None,
+                        signature: None,
                         attributes: vec![],
                         body: Box::new(Node::new(
                             NodeKind::Block { statements: vec![] },
@@ -448,32 +450,24 @@ mod tests {
         let ast = Node::new(
             NodeKind::Subroutine {
                 name: Some("complex".to_string()),
-                params: vec![
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "c".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "d".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "e".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "f".to_string() },
-                        SourceLocation { start: 0, end: 0 },
-                    ),
-                ],
+                prototype: None,
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature {
+                        parameters: vec![
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
+                                        SourceLocation { start: 0, end: 0 },
+                                    ))
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            // Add more parameters as MandatoryParameter nodes if needed
+                        ],
+                    },
+                    SourceLocation { start: 0, end: 0 },
+                ))),
                 attributes: vec![],
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },

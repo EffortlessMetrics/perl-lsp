@@ -168,7 +168,7 @@ impl TddWorkflow {
     }
 
     fn generate_basic_test(&self, name: &str, params: &[String]) -> String {
-        let args = params.iter()
+        let args = signature.as_ref().map(|s| vec![s]).unwrap_or_default().iter()
             .enumerate()
             .map(|(i, _)| format!("'test_value_{}'", i))
             .collect::<Vec<_>>()

@@ -73,7 +73,7 @@ impl CodeLensProvider {
                 }
             }
 
-            NodeKind::Subroutine { name, params: _, attributes: _, body } => {
+            NodeKind::Subroutine { name, prototype: _, signature: _, attributes: _, body } => {
                 if let Some(name) = name {
                     // Add "Run Test" lens for test subroutines
                     if self.is_test_subroutine(name) {

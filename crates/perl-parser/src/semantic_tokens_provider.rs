@@ -179,7 +179,7 @@ impl SemanticTokensProvider {
                 }
             }
 
-            NodeKind::Subroutine { name, params, body, .. } => {
+            NodeKind::Subroutine { name, signature, body, .. } => {
                 // Function name
                 if let Some(name_str) = name {
                     let modifiers =
@@ -194,8 +194,12 @@ impl SemanticTokensProvider {
                 }
 
                 // Parameters
-                for param in params {
-                    self.visit_node(param, tokens, true);
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            self.visit_node(param, tokens, true);
+                        }
+                    }
                 }
 
                 // Body
