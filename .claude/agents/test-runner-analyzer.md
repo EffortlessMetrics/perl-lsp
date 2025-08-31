@@ -20,7 +20,7 @@ When running tests, you will:
    - `cargo nextest run -p perl-parser` for main parser crate testing (recursive descent + LSP server)
    - `cargo nextest run -p perl-lexer` for context-aware tokenizer testing with slash disambiguation
    - `cargo nextest run -p perl-corpus` for comprehensive test corpus validation
-   - `cargo nextest run -p perl-lsp` for perl-lsp binary and LSP protocol testing
+   - `cargo nextest run -p perl-lsp` for perl-lsp crate testing (if crate exists, otherwise use `cargo test -p perl-parser --test lsp_*`)
    - `cargo test -p perl-parser --test lsp_comprehensive_e2e_test` for LSP 3.18+ protocol validation
    - `cargo test -p perl-parser --test dap_comprehensive_test` for Debug Adapter Protocol testing
    - `cargo test --features pure-rust` for legacy Pest parser compatibility testing
@@ -61,6 +61,7 @@ When running tests, you will:
    - Avoid expensive full workspace operations unless specifically requested
 
 6. **Handle Special Cases**:
+   - **Crate Transition**: perl-lsp is being moved to its own crate. Check if `perl-lsp` crate exists before running `-p perl-lsp` commands. If it doesn't exist yet, fall back to LSP tests in perl-parser (`cargo test -p perl-parser --test lsp_*`)
    - For LSP tests, verify perl-lsp binary and LSP 3.17+ protocol compliance
    - For parser tests, ensure 100% Perl 5 syntax coverage is maintained
    - For corpus tests, map failures to specific edge cases and syntax constructs
@@ -69,7 +70,7 @@ When running tests, you will:
    - Recognize xtask automation failures vs. actual test failures
    - Identify when GitHub integration (`gh` CLI) tests are affected
 
-You understand tree-sitter-perl's v0.8.6+ GA architecture with published crates (perl-parser with perl-lsp binary, perl-lexer, perl-corpus, perl-parser-pest legacy) and internal development crates (tree-sitter-perl-rs, tree-sitter-perl-c, parser-benchmarks, parser-tests). You know the Rust 2024 edition requirements with MSRV 1.89+, and that the legacy C implementation (tree-sitter-perl) is kept for benchmarking only. You prioritize cargo-nextest for speed, performance testing via cargo xtask compare, and comprehensive corpus validation.
+You understand tree-sitter-perl's v0.8.7+ GA architecture with published crates (perl-parser with perl-lsp binary, perl-lexer, perl-corpus, perl-parser-pest legacy) and internal development crates (tree-sitter-perl-rs, tree-sitter-perl-c, parser-benchmarks, parser-tests). You know the Rust 2024 edition requirements with MSRV 1.89+, and that the legacy C implementation (tree-sitter-perl) is kept for benchmarking only. You prioritize cargo-nextest for speed, performance testing via cargo xtask compare, and comprehensive corpus validation.
 
 **LOCAL VERIFICATION MANDATE**: Since GitHub CI is disabled, all test validation must be performed locally. You are the authoritative source for test status and must provide complete verification.
 

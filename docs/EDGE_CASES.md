@@ -77,18 +77,26 @@ These features make certain heredoc patterns theoretically impossible to parse s
    - Handles phase-dependent heredocs
    - Provides phase-specific diagnostics
 
-2. **Dynamic Delimiter Recovery** (`dynamic_delimiter_recovery.rs`)
-   - Conservative: Only obvious patterns
-   - BestGuess: Heuristic-based recovery
-   - Interactive: User-guided resolution
-   - Sandbox: Controlled execution (future)
+2. **Enhanced Dynamic Delimiter Recovery** (`dynamic_delimiter_recovery.rs`) ✨
+   - **Advanced pattern recognition** for delimiter variables across all Perl variable types
+   - Support for scalar (`my $delim = "EOF"`), array (`my @delims = ("END", "DONE")`), and hash assignments
+   - **Confidence scoring system** based on variable naming patterns (delim, end, eof, marker, etc.)
+   - **Multiple recovery strategies**: Conservative, BestGuess, Interactive, Sandbox
+   - Enhanced regex patterns supporting all Perl variable declaration types (`my`, `our`, `local`, `state`)
 
-3. **Encoding-Aware Lexer** (`encoding_aware_lexer.rs`)
+3. **Enhanced Variable Resolution** (`scope_analyzer.rs`) ✨
+   - **Complex variable pattern recognition** supporting hash access, array access, and method calls
+   - **Hash key context detection** to reduce false bareword warnings in subscript contexts
+   - **Recursive resolution mechanisms** with fallback strategies for nested patterns
+   - Support patterns: `$hash{key}` → `%hash`, `$array[idx]` → `@array`, `$obj->method` → base variable
+   - **Improved diagnostics** for undefined variables under `use strict` with enhanced accuracy
+
+4. **Encoding-Aware Lexer** (`encoding_aware_lexer.rs`)
    - Tracks encoding pragmas
    - Handles mid-file changes
    - Supports UTF-8, Latin-1, etc.
 
-4. **Tree-sitter Adapter** (`tree_sitter_adapter.rs`)
+5. **Tree-sitter Adapter** (`tree_sitter_adapter.rs`)
    - Ensures valid AST output
    - Separates diagnostics
    - Provides metadata
@@ -129,7 +137,38 @@ EOF
 
 **Recovery Strategy**: Enhanced confidence scoring, pattern matching, special variable detection
 
-### 2. Phase-Dependent Heredocs
+### 2. Enhanced Variable Pattern Resolution ✨
+
+The scope analyzer now supports complex variable access patterns that are common in real-world Perl code:
+
+```perl
+# Hash access patterns - WORKS
+my %config = (host => 'localhost', port => 3000);
+print $config{host};  # Correctly resolves %config
+
+# Array access patterns - WORKS  
+my @items = qw(foo bar baz);
+my $first = $items[0];  # Correctly resolves @items
+
+# Method call patterns - WORKS
+my $obj = SomeClass->new();
+$obj->method();  # Correctly resolves $obj
+
+# Complex nested patterns - WORKS
+my %data = (users => [{ name => 'John' }]);
+print $data{users}->[0]->{name};  # Advanced resolution
+
+# Hash slice patterns - WORKS
+my @values = @config{qw(host port)};  # Correctly identifies hash context
+```
+
+**Implementation Features**:
+- Recursive pattern matching with fallback resolution
+- Hash key context detection reduces false bareword warnings
+- Support for method calls, array/hash access, complex dereference patterns
+- Enhanced diagnostics accuracy under `use strict`
+
+### 3. Phase-Dependent Heredocs
 
 ```perl
 BEGIN {
@@ -149,7 +188,7 @@ CLEANUP
 
 **Handling**: Phase tracking, compile-time evaluation hints
 
-### 3. Encoding-Aware Heredocs
+### 4. Encoding-Aware Heredocs
 
 ```perl
 use utf8;
@@ -165,7 +204,7 @@ FIN
 
 **Handling**: Encoding pragma tracking, multi-encoding support
 
-### 4. Anti-Pattern Combinations
+### 5. Anti-Pattern Combinations
 
 ```perl
 # Multiple issues
