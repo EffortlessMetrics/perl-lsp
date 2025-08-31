@@ -385,7 +385,20 @@ impl LspServer {
         if let Some(content_length) = headers.get("Content-Length") {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
-                reader.read_exact(&mut content)?;
+                let mut bytes_read = 0;
+
+                // Read content in chunks to handle partial reads
+                while bytes_read < length {
+                    let bytes_to_read = length - bytes_read;
+                    let mut chunk = vec![0u8; bytes_to_read];
+                    match reader.read(&mut chunk)? {
+                        0 => return Ok(None), // Unexpected EOF
+                        n => {
+                            content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
+                            bytes_read += n;
+                        }
+                    }
+                }
 
                 // Parse JSON-RPC request
                 if let Ok(request) = serde_json::from_slice(&content) {
