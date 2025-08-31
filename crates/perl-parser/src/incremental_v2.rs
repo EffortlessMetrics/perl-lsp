@@ -155,7 +155,10 @@ impl IncrementalParserV2 {
         } else {
             // Check if this was a fallback due to too many edits, invalid conditions, or empty source
             // In such cases, we should report 0 reused nodes as it's truly a full reparse
-            if source.is_empty() || self.pending_edits.edits.len() > 10 || !self.is_simple_value_edit(&self.last_tree.as_ref().unwrap()) {
+            if source.is_empty()
+                || self.pending_edits.edits.len() > 10
+                || !self.is_simple_value_edit(self.last_tree.as_ref().unwrap())
+            {
                 // Full fallback - no actual reuse
                 self.reused_nodes = 0;
                 self.reparsed_nodes = self.count_nodes(&root);
@@ -343,7 +346,6 @@ impl IncrementalParserV2 {
 
         // Check if this node is affected by any edit
         let affected = self.is_node_affected(node);
-        
 
         // Handle container nodes that need recursive processing
         match &node.kind {
@@ -353,10 +355,12 @@ impl IncrementalParserV2 {
                     .iter()
                     .map(|stmt| self.clone_and_update_node(stmt, new_source, _old_source))
                     .collect();
-                
+
                 let new_start = (node.location.start as isize + shift) as usize;
-                let new_end = (node.location.end as isize + shift + self.calculate_content_delta(node)) as usize;
-                
+                let new_end = (node.location.end as isize
+                    + shift
+                    + self.calculate_content_delta(node)) as usize;
+
                 return Node::new(
                     NodeKind::Program { statements: new_statements },
                     SourceLocation { start: new_start, end: new_end },
@@ -365,15 +369,17 @@ impl IncrementalParserV2 {
             NodeKind::VariableDeclaration { declarator, variable, initializer, attributes } => {
                 // Recursively update child nodes
                 let new_variable = self.clone_and_update_node(variable, new_source, _old_source);
-                let new_initializer = initializer.as_ref().map(|init| {
-                    self.clone_and_update_node(init, new_source, _old_source)
-                });
-                
+                let new_initializer = initializer
+                    .as_ref()
+                    .map(|init| self.clone_and_update_node(init, new_source, _old_source));
+
                 let new_start = (node.location.start as isize + shift) as usize;
-                let new_end = (node.location.end as isize + shift + self.calculate_content_delta(node)) as usize;
-                
+                let new_end = (node.location.end as isize
+                    + shift
+                    + self.calculate_content_delta(node)) as usize;
+
                 return Node::new(
-                    NodeKind::VariableDeclaration { 
+                    NodeKind::VariableDeclaration {
                         declarator: declarator.clone(),
                         variable: Box::new(new_variable),
                         initializer: new_initializer.map(Box::new),
@@ -394,7 +400,7 @@ impl IncrementalParserV2 {
                     let new_end =
                         (node.location.end as isize + shift + self.calculate_content_delta(node))
                             as usize;
-                    
+
                     if new_start < new_source.len() && new_end <= new_source.len() {
                         let new_value = &new_source[new_start..new_end];
 

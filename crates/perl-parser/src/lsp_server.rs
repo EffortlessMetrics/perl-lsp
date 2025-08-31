@@ -386,7 +386,7 @@ impl LspServer {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
                 let mut bytes_read = 0;
-                
+
                 // Read content in chunks to handle partial reads
                 while bytes_read < length {
                     let bytes_to_read = length - bytes_read;
