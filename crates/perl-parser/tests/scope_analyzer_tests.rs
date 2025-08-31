@@ -667,4 +667,3 @@ print INVALID_BAREWORD;
     assert_eq!(bareword_issues.len(), 1);
     assert_eq!(bareword_issues[0].variable_name, "INVALID_BAREWORD");
 }
-}
