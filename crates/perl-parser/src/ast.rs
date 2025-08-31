@@ -283,17 +283,17 @@ impl Node {
                 if name.is_some() {
                     // Named subroutine - tree-sitter format without field labels
                     let mut parts = vec!["(bareword)".to_string()];
-                    
+
                     // Add prototype if present
                     if let Some(proto) = prototype {
                         parts.push(proto.to_sexp());
                     }
-                    
+
                     // Add signature if present
                     if let Some(sig) = signature {
                         parts.push(sig.to_sexp());
                     }
-                    
+
                     // Add attributes if present
                     if !attributes.is_empty() {
                         let attrs: Vec<String> = attributes
@@ -302,25 +302,25 @@ impl Node {
                             .collect();
                         parts.push(format!("(attrlist {})", attrs.join("")));
                     }
-                    
+
                     // Add body
                     parts.push(format!("(block {})", block_contents));
-                    
+
                     format!("(subroutine_declaration_statement {})", parts.join(" "))
                 } else {
                     // Anonymous subroutine needs to be wrapped in expression_statement
                     let mut parts = Vec::new();
-                    
+
                     // Add prototype if present
                     if let Some(proto) = prototype {
                         parts.push(proto.to_sexp());
                     }
-                    
+
                     // Add signature if present
                     if let Some(sig) = signature {
                         parts.push(sig.to_sexp());
                     }
-                    
+
                     // Add attributes if present
                     if !attributes.is_empty() {
                         let attrs: Vec<String> = attributes
@@ -329,23 +329,24 @@ impl Node {
                             .collect();
                         parts.push(format!("(attrlist {})", attrs.join("")));
                     }
-                    
+
                     // Add body
                     parts.push(format!("(block {})", block_contents));
-                    
+
                     let inner_parts = if parts.is_empty() {
                         format!("(block {})", block_contents)
                     } else {
                         parts.join(" ").to_string()
                     };
-                    
-                    format!("(expression_statement (anonymous_subroutine_expression {}))", inner_parts)
+
+                    format!(
+                        "(expression_statement (anonymous_subroutine_expression {}))",
+                        inner_parts
+                    )
                 }
             }
 
-            NodeKind::Prototype { content: _ } => {
-                "(prototype)".to_string()
-            }
+            NodeKind::Prototype { content: _ } => "(prototype)".to_string(),
 
             NodeKind::Signature { parameters } => {
                 let params = parameters.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
@@ -377,21 +378,21 @@ impl Node {
                 };
 
                 let mut parts = vec!["(bareword)".to_string()];
-                
+
                 // Add signature if present
                 if let Some(sig) = signature {
                     parts.push(sig.to_sexp());
                 }
-                
+
                 // Add attributes if present
                 if !attributes.is_empty() {
                     let attrs: Vec<String> = attributes
                         .iter()
                         .map(|_attr| "(attribute (attribute_name))".to_string())
                         .collect();
-                    parts.push(format!("(attrlist {})", attrs.join(""))); 
+                    parts.push(format!("(attrlist {})", attrs.join("")));
                 }
-                
+
                 parts.push(format!("(block {})", block_contents));
                 format!("(method_declaration_statement {})", parts.join(" "))
             }

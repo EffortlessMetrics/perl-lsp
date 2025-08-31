@@ -58,7 +58,16 @@ impl TestGenerator {
             NodeKind::Subroutine { name, signature, .. } => {
                 subs.push(SubroutineInfo {
                     name: name.clone().unwrap_or_else(|| "anonymous".to_string()),
-                    param_count: signature.as_ref().map(|s| if let NodeKind::Signature { parameters } = &s.kind { parameters.len() } else { 0 }).unwrap_or(0),
+                    param_count: signature
+                        .as_ref()
+                        .map(|s| {
+                            if let NodeKind::Signature { parameters } = &s.kind {
+                                parameters.len()
+                            } else {
+                                0
+                            }
+                        })
+                        .unwrap_or(0),
                 });
             }
             NodeKind::Program { statements } => {
@@ -150,7 +159,16 @@ impl RefactoringAnalyzer {
                 let sub_name = name.clone().unwrap_or_else(|| "anonymous".to_string());
 
                 // Check parameter count
-                let param_count = signature.as_ref().map(|s| if let NodeKind::Signature { parameters } = &s.kind { parameters.len() } else { 0 }).unwrap_or(0);
+                let param_count = signature
+                    .as_ref()
+                    .map(|s| {
+                        if let NodeKind::Signature { parameters } = &s.kind {
+                            parameters.len()
+                        } else {
+                            0
+                        }
+                    })
+                    .unwrap_or(0);
                 if param_count > self.max_params {
                     suggestions.push(RefactoringSuggestion {
                         title: format!("Too many parameters in {}", sub_name),
@@ -457,9 +475,12 @@ mod tests {
                             Node::new(
                                 NodeKind::MandatoryParameter {
                                     variable: Box::new(Node::new(
-                                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "a".to_string(),
+                                        },
                                         SourceLocation { start: 0, end: 0 },
-                                    ))
+                                    )),
                                 },
                                 SourceLocation { start: 0, end: 0 },
                             ),

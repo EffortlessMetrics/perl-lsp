@@ -1259,7 +1259,7 @@ impl<'a> Parser<'a> {
     /// Parse a single signature parameter
     fn parse_signature_param(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
-        
+
         // Check for named parameter (:$name)
         let named = if self.peek_kind() == Some(TokenKind::Colon) {
             self.tokens.next()?; // consume :
@@ -1267,7 +1267,7 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
-        
+
         // Check for type constraint (Type $var)
         let _type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
             // Look ahead to see if this is a type constraint
@@ -1285,10 +1285,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        
+
         // Parse the variable
         let variable = self.parse_variable()?;
-        
+
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
@@ -1297,16 +1297,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        
+
         let end = if let Some(ref default) = default_value {
             default.location.end
         } else {
             variable.location.end
         };
-        
+
         // Check if variable is slurpy (@args or %hash)
         let is_slurpy = matches!(&variable.kind, NodeKind::Variable { sigil, .. } if sigil == "@" || sigil == "%");
-        
+
         // Create the appropriate parameter node type
         let param_kind = if named {
             NodeKind::NamedParameter { variable: Box::new(variable) }
@@ -1317,7 +1317,7 @@ impl<'a> Parser<'a> {
         } else {
             NodeKind::MandatoryParameter { variable: Box::new(variable) }
         };
-        
+
         Ok(Node::new(param_kind, SourceLocation { start, end }))
     }
 

@@ -346,7 +346,7 @@ impl ScopeAnalyzer {
 
                 // Check for duplicate parameters and shadowing
                 let mut param_names = std::collections::HashSet::new();
-                
+
                 // Extract parameters from signature if present
                 let params_to_check = if let Some(sig) = signature {
                     match &sig.kind {
@@ -356,7 +356,7 @@ impl ScopeAnalyzer {
                 } else {
                     Vec::new()
                 };
-                
+
                 for param in &params_to_check {
                     if let NodeKind::Variable { sigil, name } = &param.kind {
                         let full_name = format!("{}{}", sigil, name);
