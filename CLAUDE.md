@@ -66,6 +66,7 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Complete AST compatibility** for subroutine declarations, signature parsing, and method structures
   - ✅ **All 530+ tests passing** including comprehensive hash context detection and S-expression format validation
   - ✅ **Type Definition and Implementation Providers** for blessed references and ISA relationships
+  - ✅ **Incremental parsing with subtree reuse** - <1ms real-time editing performance
   - ✅ Code completion (variables, 150+ built-ins, keywords)
   - ✅ Hover information with documentation
   - ✅ Go-to-definition with DeclarationProvider
@@ -202,6 +203,12 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 # Run DAP tests
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
+
+# Run incremental parsing tests
+cargo test -p perl-parser --test incremental_integration_test
+
+# Benchmark incremental parsing performance
+cargo bench incremental
 
 # CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
 # Quick capped test (2 threads)
