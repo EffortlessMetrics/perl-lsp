@@ -101,15 +101,3 @@ required-features = ["incremental"]
 [[example]]
 name = "test_all_edge_cases"
 path = "examples/test_all_edge_cases.rs"
-
-[[example]]
-name = "test_expanded_edge_cases"
-
-[[example]]
-name = "test_additional_edge_cases"
-
-[[example]]
-name = "test_more_edge_cases"
-
-[[example]]
-name = "test_label"
