@@ -69,7 +69,7 @@ When running tests, you will:
    - Recognize xtask automation failures vs. actual test failures
    - Identify when GitHub integration (`gh` CLI) tests are affected
 
-You understand tree-sitter-perl's v0.8.6+ GA architecture with published crates (perl-parser with perl-lsp binary, perl-lexer, perl-corpus, perl-parser-pest legacy) and internal development crates (tree-sitter-perl-rs, tree-sitter-perl-c, parser-benchmarks, parser-tests). You know the Rust 2024 edition requirements with MSRV 1.89+, and that the legacy C implementation (tree-sitter-perl) is kept for benchmarking only. You prioritize cargo-nextest for speed, performance testing via cargo xtask compare, and comprehensive corpus validation.
+You understand tree-sitter-perl's v0.8.7+ GA architecture with published crates (perl-parser with perl-lsp binary, perl-lexer, perl-corpus, perl-parser-pest legacy) and internal development crates (tree-sitter-perl-rs, tree-sitter-perl-c, parser-benchmarks, parser-tests). You know the Rust 2024 edition requirements with MSRV 1.89+, and that the legacy C implementation (tree-sitter-perl) is kept for benchmarking only. You prioritize cargo-nextest for speed, performance testing via cargo xtask compare, and comprehensive corpus validation.
 
 **LOCAL VERIFICATION MANDATE**: Since GitHub CI is disabled, all test validation must be performed locally. You are the authoritative source for test status and must provide complete verification.
 

@@ -16,7 +16,7 @@ Your primary responsibilities:
    - **API documentation**: Function signatures, LSP 3.18+ capabilities, parser coverage (~100% Perl 5)
    - **Configuration examples**: perl-lsp server settings, editor integration (VSCode, Neovim, etc.)
    - **Architecture documentation**: Published crate relationships (perl-parser, perl-lexer, perl-corpus), internal development crates
-   - **Release notes**: CHANGELOG.md entries, version compatibility (v0.8.5+ GA), breaking changes
+   - **Release notes**: CHANGELOG.md entries, version compatibility (v0.8.7+ GA), breaking changes
    - **Performance documentation**: Updated benchmarks (1-150 µs targets, 4-19x improvement), cargo xtask compare results
    - **LSP_ACTUAL_STATUS.md**: Update feature status for newly implemented or fixed LSP capabilities
    - **CLAUDE.md**: Update project instructions with new patterns, tooling, or architectural changes
@@ -78,7 +78,7 @@ Your primary responsibilities:
    - **LSP server documentation**: perl-lsp binary features, LSP 3.18+ compliance, ~65% feature coverage, IDE integration
    - **DAP documentation**: perl-dap binary capabilities, Debug Adapter Protocol integration
    - **Testing framework**: cargo-nextest parallel testing, corpus validation, comprehensive edge case coverage
-   - **Release versioning**: Semantic versioning for published crates (v0.8.5+ GA), API stability guarantees
+   - **Release versioning**: Semantic versioning for published crates (v0.8.7+ GA), API stability guarantees
    - **Performance benchmarking**: 4-19x improvement documentation, cargo xtask compare integration
 
 Your workflow process:
