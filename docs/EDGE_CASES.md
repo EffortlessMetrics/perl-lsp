@@ -18,11 +18,22 @@ This document consolidates all information about edge case handling in the Pure 
 
 The Pure Rust Perl parser provides comprehensive support for most Perl constructs while maintaining tree-sitter compatibility. This document covers both parsing limitations and heredoc-specific edge cases.
 
-### Coverage Statistics (v0.1.0 Release)
-- **~99.995%** - Direct parsing of Perl code (✅ Verified)
+### Coverage Statistics (Updated for PR #42)
+- **~99.996%** - Direct parsing of Perl code (✅ Verified, improved with substitution support)
 - **~0.004%** - Design limitations (heredoc-in-string only)
 - **~0.001%** - Theoretical edge cases (require interpreter)
 - **100%** - Edge case test coverage (15/15 passing)
+
+### Recent Improvements (PR #42) - Regex/Substitution Parsing
+The v2 Pest-based parser has been enhanced with improved regex and substitution parsing:
+
+- ✅ **Dedicated Substitution AST Nodes**: Added separate `NodeKind::Substitution` for proper s/// operator parsing
+- ✅ **Enhanced S-expression Output**: Substitution operations now generate correct `(substitution)` nodes instead of generic `(regex)` nodes
+- ✅ **Backward Compatibility**: Fallback mechanisms preserve existing behavior when new parser fails
+- ✅ **Improved Test Coverage**: All substitution tests passing with enhanced pattern/replacement/modifier parsing
+- ✅ **Structural Compatibility**: Maintains tree-sitter AST format while improving semantic accuracy
+
+**Impact**: This improves parsing accuracy for regex substitution operations (`s/pattern/replacement/modifiers`) and provides better AST representation for IDE tools and static analysis.
 
 ## Known Parsing Limitations
 

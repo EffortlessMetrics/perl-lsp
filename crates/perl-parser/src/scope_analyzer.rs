@@ -509,35 +509,39 @@ impl ScopeAnalyzer {
             }
 
             match &parent.kind {
-                // Case 1: Hash subscript - $hash{key} or %hash{key}
-                NodeKind::Binary { op, right, .. } if op == "{}" => {
+                // Hash subscript: $hash{key} or %hash{key}
+                NodeKind::Binary { op, left: _, right } if op == "{}" => {
+                    // Check if current node is the key (right side of the {} operation)
                     if std::ptr::eq(right.as_ref(), current) {
                         return true;
                     }
                 }
 
-                // Case 2: Hash literal - { key => value, ... }
+                // Hash literal: { key => value }
                 NodeKind::HashLiteral { pairs } => {
-                    // Use early return for performance - no need to check all pairs
-                    if pairs.iter().any(|(key, _)| std::ptr::eq(key, current)) {
-                        return true;
+                    // Check if current node is a key in any of the pairs
+                    for (key, _value) in pairs {
+                        if std::ptr::eq(key, current) {
+                            return true;
+                        }
                     }
                 }
-
-                // Case 3: Array literal that might be hash slice keys - @hash{key1, key2}
-                NodeKind::ArrayLiteral { .. } => {
+                // Array literal containing hash keys (for hash slices @hash{key1, key2})
+                NodeKind::ArrayLiteral { elements: _ } => {
+                    // Check if the parent of this array literal is a hash subscript
                     if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
                         if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
                             if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
+                                // This array literal is the key part of a hash slice
                                 return true;
                             }
                         }
                     }
                 }
 
-                // Case 4: Handle nested hash contexts (hash of hashes)
+                // Handle nested hash contexts (hash of hashes)
                 // This covers cases like $hash{key1}{key2} where we might be in key2 context
-                // Note: These cases are already handled by Cases 1 and 2 above, but this
+                // Note: These cases are already handled by cases above, but this
                 // documents that we explicitly support nested hash structures
                 _ => {} // Continue traversing for other node types
             }
@@ -545,7 +549,6 @@ impl ScopeAnalyzer {
             current = *parent as *const _;
             depth += 1;
         }
-
         false
     }
 
