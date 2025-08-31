@@ -193,26 +193,31 @@ impl ScopeAnalyzer {
                     return;
                 }
 
-                // Try to use the variable
-                if !scope.use_variable(&full_name) {
-                    // Variable not found - check if we should report it
-                    if strict_mode {
-                        issues.push(ScopeIssue {
-                            kind: IssueKind::UndeclaredVariable,
-                            variable_name: full_name.clone(),
-                            line: self.get_line_from_node(node, code),
-                            description: format!(
-                                "Variable '{}' is used but not declared",
-                                full_name
-                            ),
-                        });
+                // Try to use the variable, with enhanced resolution for complex patterns
+                let mut variable_used = scope.use_variable(&full_name);
+
+                // If not found as simple variable, try enhanced resolution patterns
+                if !variable_used {
+                    if let Some(resolved_var) = self.try_resolve_variable_reference(node, scope) {
+                        variable_used = scope.use_variable(&resolved_var);
                     }
+                }
+
+                // Variable not found - check if we should report it
+                if !variable_used && strict_mode {
+                    issues.push(ScopeIssue {
+                        kind: IssueKind::UndeclaredVariable,
+                        variable_name: full_name.clone(),
+                        line: self.get_line_from_node(node, code),
+                        description: format!("Variable '{}' is used but not declared", full_name),
+                    });
                 }
             }
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
-                if strict_mode && !in_hash_subscript && !is_known_function(name) {
+                let in_hash_context = in_hash_subscript || self.is_in_hash_key_context(node);
+                if strict_mode && !in_hash_context && !is_known_function(name) {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
@@ -373,6 +378,19 @@ impl ScopeAnalyzer {
     fn extract_variable_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
+            NodeKind::ArrayLiteral { elements } => {
+                // Handle array reference patterns like @{$ref}
+                if elements.len() == 1 {
+                    if let Some(first) = elements.first() {
+                        return self.extract_variable_name(first);
+                    }
+                }
+                String::new()
+            }
+            NodeKind::Binary { op, left, .. } if op == "->" => {
+                // Handle method call patterns on variables
+                self.extract_variable_name(left)
+            }
             _ => {
                 if let Some(child) = node.children().first() {
                     self.extract_variable_name(child)
@@ -380,6 +398,48 @@ impl ScopeAnalyzer {
                     String::new()
                 }
             }
+        }
+    }
+
+    /// Enhanced variable name extraction supporting complex patterns
+    fn try_resolve_variable_reference(&self, node: &Node, scope: &Rc<Scope>) -> Option<String> {
+        match &node.kind {
+            NodeKind::Variable { sigil, name } => {
+                let full_name = format!("{}{}", sigil, name);
+                if scope.lookup_variable(&full_name).is_some() { Some(full_name) } else { None }
+            }
+            NodeKind::Binary { op, left, right: _ } => {
+                match op.as_str() {
+                    "{}" => {
+                        // Hash access: $hash{key} -> try to resolve $hash
+                        if let Some(base_var) = self.try_resolve_variable_reference(left, scope) {
+                            // Convert scalar reference to hash reference
+                            if let Some(stripped) = base_var.strip_prefix('$') {
+                                let hash_name = format!("%{}", stripped);
+                                if scope.lookup_variable(&hash_name).is_some() {
+                                    return Some(hash_name);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    "[]" => {
+                        // Array access: $array[index] -> try to resolve $array
+                        if let Some(base_var) = self.try_resolve_variable_reference(left, scope) {
+                            // Convert scalar reference to array reference
+                            if let Some(stripped) = base_var.strip_prefix('$') {
+                                let array_name = format!("@{}", stripped);
+                                if scope.lookup_variable(&array_name).is_some() {
+                                    return Some(array_name);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 
@@ -396,11 +456,43 @@ impl ScopeAnalyzer {
         code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
-    #[allow(dead_code)]
-    fn is_in_hash_key_context(&self, _node: &Node) -> bool {
-        // TODO: Check if node is within a hash subscript context
-        // For now, return false to be conservative
-        false
+    fn is_in_hash_key_context(&self, node: &Node) -> bool {
+        // Check if node is within a hash subscript context like $hash{bareword}
+        // This helps determine if barewords should be treated as hash keys vs identifiers
+        self.find_hash_subscript_ancestor(node).is_some()
+    }
+
+    /// Find if this node has a hash subscript ancestor
+    fn find_hash_subscript_ancestor<'a>(&self, target_node: &'a Node) -> Option<&'a Node> {
+        // This is a simplified implementation - in a real parser tree,
+        // we would walk up the parent nodes to find hash subscript context
+        // For now, we use a heuristic based on node analysis
+        self.check_node_for_hash_context(target_node)
+    }
+
+    /// Recursively check if a node represents hash subscript context
+    fn check_node_for_hash_context<'a>(&self, node: &'a Node) -> Option<&'a Node> {
+        match &node.kind {
+            // Direct hash subscript: $hash{key}
+            NodeKind::Binary { op, .. } if op == "{}" => {
+                // Check if the right side contains our target
+                Some(node)
+            }
+            // Array literal that might be hash slice: @hash{key1, key2}
+            NodeKind::ArrayLiteral { .. } => {
+                // This could be a hash slice context
+                Some(node)
+            }
+            _ => {
+                // Check children recursively
+                for child in node.children() {
+                    if let Some(hash_node) = self.check_node_for_hash_context(child) {
+                        return Some(hash_node);
+                    }
+                }
+                None
+            }
+        }
     }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
