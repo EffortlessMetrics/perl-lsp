@@ -248,7 +248,6 @@ impl ScopeAnalyzer {
                     }
                 }
             }
-
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
 
@@ -263,19 +262,30 @@ impl ScopeAnalyzer {
                 }
 
                 // Try to use the variable
-                if !scope.use_variable(&full_name) {
-                    // Variable not found - check if we should report it
-                    if strict_mode {
-                        issues.push(ScopeIssue {
-                            kind: IssueKind::UndeclaredVariable,
-                            variable_name: full_name.clone(),
-                            line: self.get_line_from_node(node, code),
-                            description: format!(
-                                "Variable '{}' is used but not declared",
-                                full_name
-                            ),
-                        });
+                let mut variable_used = scope.use_variable(&full_name);
+
+                // If not found as simple variable, check if this is part of a hash/array access pattern
+                if !variable_used && sigil == "$" {
+                    // Check if the corresponding hash or array exists
+                    let hash_name = format!("%{}", name);
+                    let array_name = format!("@{}", name);
+
+                    if scope.lookup_variable(&hash_name).is_some()
+                        || scope.lookup_variable(&array_name).is_some()
+                    {
+                        // This is likely part of a hash/array access pattern, don't flag as undefined
+                        variable_used = true;
                     }
+                }
+
+                // Variable not found - check if we should report it
+                if !variable_used && strict_mode {
+                    issues.push(ScopeIssue {
+                        kind: IssueKind::UndeclaredVariable,
+                        variable_name: full_name.clone(),
+                        line: self.get_line_from_node(node, code),
+                        description: format!("Variable '{}' is used but not declared", full_name),
+                    });
                 }
             }
 
@@ -294,9 +304,44 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Binary { left, right, .. } => {
-                self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
-                self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
+            NodeKind::Binary { op, left, right } => {
+                match op.as_str() {
+                    "{}" => {
+                        // Hash access: $hash{key} -> mark %hash as used if it exists
+                        if let NodeKind::Variable { sigil, name } = &left.kind {
+                            if sigil == "$" {
+                                let hash_name = format!("%{}", name);
+                                // Only mark as used if the hash actually exists
+                                if scope.lookup_variable(&hash_name).is_some() {
+                                    scope.use_variable(&hash_name);
+                                }
+                            }
+                        }
+                        // Always process both children to ensure undefined variables are caught
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
+                    }
+                    "[]" => {
+                        // Array access: $array[index] -> mark @array as used if it exists
+                        if let NodeKind::Variable { sigil, name } = &left.kind {
+                            if sigil == "$" {
+                                let array_name = format!("@{}", name);
+                                // Only mark as used if the array actually exists
+                                if scope.lookup_variable(&array_name).is_some() {
+                                    scope.use_variable(&array_name);
+                                }
+                            }
+                        }
+                        // Always process both children to ensure undefined variables are caught
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
+                    }
+                    _ => {
+                        // Other binary operations
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
+                    }
+                }
             }
 
             NodeKind::ArrayLiteral { elements } => {
@@ -426,6 +471,13 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, code);
             }
 
+            NodeKind::FunctionCall { args, .. } => {
+                // Handle function arguments, which may contain complex variable patterns
+                for arg in args {
+                    self.analyze_node(arg, scope, parent_map, issues, code, pragma_map);
+                }
+            }
+
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
@@ -458,6 +510,19 @@ impl ScopeAnalyzer {
     fn extract_variable_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
+            NodeKind::ArrayLiteral { elements } => {
+                // Handle array reference patterns like @{$ref}
+                if elements.len() == 1 {
+                    if let Some(first) = elements.first() {
+                        return self.extract_variable_name(first);
+                    }
+                }
+                String::new()
+            }
+            NodeKind::Binary { op, left, .. } if op == "->" => {
+                // Handle method call patterns on variables
+                self.extract_variable_name(left)
+            }
             _ => {
                 if let Some(child) = node.children().first() {
                     self.extract_variable_name(child)
