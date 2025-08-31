@@ -195,10 +195,16 @@ impl ScopeAnalyzer {
                             line,
                             description: match issue_kind {
                                 IssueKind::VariableShadowing => {
-                                    format!("Variable '{}' shadows a variable in outer scope", var_name)
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        var_name
+                                    )
                                 }
                                 IssueKind::VariableRedeclaration => {
-                                    format!("Variable '{}' is already declared in this scope", var_name)
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        var_name
+                                    )
                                 }
                                 _ => String::new(),
                             },
@@ -228,8 +234,10 @@ impl ScopeAnalyzer {
                     // Check if the corresponding hash or array exists
                     let hash_name = format!("%{}", name);
                     let array_name = format!("@{}", name);
-                    
-                    if scope.lookup_variable(&hash_name).is_some() || scope.lookup_variable(&array_name).is_some() {
+
+                    if scope.lookup_variable(&hash_name).is_some()
+                        || scope.lookup_variable(&array_name).is_some()
+                    {
                         // This is likely part of a hash/array access pattern, don't flag as undefined
                         variable_used = true;
                     }
@@ -474,7 +482,6 @@ impl ScopeAnalyzer {
             }
         }
     }
-
 
     fn get_line_from_node(&self, node: &Node, code: &str) -> usize {
         self.get_line_number(code, node.location.start)

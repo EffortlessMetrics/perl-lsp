@@ -89,7 +89,7 @@ This repository contains **five published crates** forming a complete Perl parsi
   - ✅ **Expression evaluation** - evaluate expressions in debugger context
   - ✅ **Perl debugger integration** - uses built-in `perl -d` debugger
   - ✅ **DAP protocol compliance** - works with VSCode and DAP-compatible editors
-- **Test Coverage**: 530+ tests with acceptance tests for all features
+- **Test Coverage**: 530+ tests with acceptance tests for all features (including 38 comprehensive scope analyzer tests)
 - **Performance**: <50ms for all operations
 - **Architecture**: Contract-driven with `lsp-ga-lock` feature for conservative releases
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
@@ -271,6 +271,23 @@ cargo xtask test-edge-cases --coverage
 
 # Run specific edge case test
 cargo xtask test-edge-cases --test test_dynamic_delimiters
+
+# Run scope analyzer tests specifically
+cargo test -p perl-parser --test scope_analyzer_tests
+```
+
+### Scope Analyzer Testing
+```bash
+# Run all scope analyzer tests (38 comprehensive tests)
+cargo test -p perl-parser --test scope_analyzer_tests
+
+# Test enhanced variable resolution patterns
+cargo test -p perl-parser scope_analyzer_tests::test_hash_access_variable_resolution
+cargo test -p perl-parser scope_analyzer_tests::test_array_access_variable_resolution
+cargo test -p perl-parser scope_analyzer_tests::test_complex_variable_patterns
+
+# Test hash key context detection
+cargo test -p perl-parser scope_analyzer_tests::test_hash_key_context_detection
 ```
 
 ### Parser Generation
@@ -378,11 +395,14 @@ The LSP server includes robust fallback mechanisms for handling incomplete or sy
    - Finds subroutines and packages in unparseable code
    - Ensures outline view works during active editing
 
-4. **Diagnostics with Scope Analysis**
-   - Undefined variable detection under `use strict`
-   - Unused variable warnings
+4. **Diagnostics with Enhanced Scope Analysis**
+   - Undefined variable detection under `use strict` with advanced pattern recognition
+   - **Enhanced Variable Resolution**: Hash access (`$hash{key}` → `%hash`), array access (`$array[idx]` → `@array`)
+   - Unused variable warnings with comprehensive coverage
    - Missing pragma suggestions (strict/warnings)
+   - Context-aware bareword detection in hash keys
    - Works with partial ASTs from error recovery
+   - **38 comprehensive test cases** covering all resolution patterns and edge cases
 
 These fallbacks ensure the LSP remains functional during active development when code is temporarily invalid.
 
@@ -571,8 +591,14 @@ To extend the Pest grammar:
 - **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Parser Status**: Production ready, feature complete
 - **LSP Status**: ✅ ~60% functional (all advertised features work)
-- **Recent improvements (v0.8.7+)**:
-  - ✅ **Enhanced variable resolution patterns** - support for complex Perl variable access patterns
+- **Recent improvements (v0.8.8+)**:
+  - ✅ **Enhanced Variable Resolution Patterns** - comprehensive support for complex Perl variable access patterns
+    - Hash access resolution: `$hash{key}` → `%hash` (reduces false undefined variable warnings)
+    - Array access resolution: `$array[idx]` → `@array` (proper sigil conversion for array elements)
+    - Advanced pattern recognition for nested hash/array structures
+    - Context-aware hash key detection to reduce false bareword warnings
+    - Fallback mechanisms for complex nested patterns and method call contexts
+    - **Test Coverage**: 38 scope analyzer tests passing (24 existing + 14 new comprehensive tests)
   - ✅ **Advanced scope analysis** - hash access (`$hash{key}`), array access (`$array[idx]`), method calls
   - ✅ **Improved hash key context detection** - reduces false bareword warnings in hash subscripts
   - ✅ **Enhanced delimiter recovery** - comprehensive pattern recognition for dynamic delimiters
@@ -628,7 +654,13 @@ To extend the Pest grammar:
   - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, etc.)
   - ✅ Indirect object syntax (`print $fh "Hello"`, `print STDOUT "msg"`, `new Class`)
   - ✅ Quote operators with custom delimiters
-  - ✅ **Enhanced variable resolution patterns** (`$hash{key}`, `$array[idx]`, `$obj->method`)
+  - ✅ **Enhanced variable resolution patterns** - comprehensive scope analysis improvements:
+    - Hash element access: `$hash{key}` → `%hash` (proper sigil conversion)
+    - Array element access: `$array[idx]` → `@array` (proper sigil conversion)
+    - Array/hash slices: `@hash{keys}`, `@array[indices]`
+    - Complex nested patterns: `$data{user}->{name}`, `$items[0]->{field}`
+    - Context-aware bareword detection in hash keys
+    - **38 comprehensive scope analyzer tests** ensuring all patterns work correctly
   - ✅ **Advanced delimiter recovery** with comprehensive pattern recognition
   - ✅ **Hash key context detection** to reduce false bareword warnings
   - ✅ All modern Perl features
