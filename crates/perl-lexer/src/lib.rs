@@ -631,10 +631,12 @@ impl<'a> PerlLexer<'a> {
         }
 
         let start = self.position;
+        let mut text = String::from("<<");
         self.position += 2; // Skip <<
 
         // Check for indented heredoc (~)
         let allow_indent = if self.current_char() == Some('~') {
+            text.push('~');
             self.advance();
             true
         } else {
@@ -644,6 +646,7 @@ impl<'a> PerlLexer<'a> {
         // Skip whitespace
         while let Some(ch) = self.current_char() {
             if ch == ' ' || ch == '\t' {
+                text.push(ch);
                 self.advance();
             } else {
                 break;
@@ -652,6 +655,7 @@ impl<'a> PerlLexer<'a> {
 
         // Optional backslash disables interpolation, treat like single-quoted label
         let _backslashed = if self.current_char() == Some('\\') {
+            text.push('\\');
             self.advance();
             true
         } else {
@@ -659,40 +663,58 @@ impl<'a> PerlLexer<'a> {
         };
 
         // Parse delimiter
-        let delimiter_start = self.position;
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
                 Some('"') if !_backslashed => {
                     // Double-quoted delimiter
+                    text.push('"');
                     self.advance();
-                    let delim_start = self.position;
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
-                        if self.current_char() == Some('"') {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '"' {
+                                text.push('"');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
                             self.advance();
+                        } else {
                             break;
                         }
-                        self.advance();
                     }
-                    self.input[delim_start..self.position - 1].to_string()
+                    delim
                 }
                 Some('\'') if !_backslashed => {
                     // Single-quoted delimiter
+                    text.push('\'');
                     self.advance();
-                    let delim_start = self.position;
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
-                        if self.current_char() == Some('\'') {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '\'' {
+                                text.push('\'');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
                             self.advance();
+                        } else {
                             break;
                         }
-                        self.advance();
                     }
-                    self.input[delim_start..self.position - 1].to_string()
+                    delim
                 }
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
                         if let Some(c) = self.current_char() {
                             if is_perl_identifier_continue(c) {
+                                delim.push(c);
+                                text.push(c);
                                 self.advance();
                             } else {
                                 break;
@@ -701,7 +723,7 @@ impl<'a> PerlLexer<'a> {
                             break;
                         }
                     }
-                    self.input[delimiter_start..self.position].to_string()
+                    delim
                 }
                 _ => return None,
             }
@@ -722,7 +744,7 @@ impl<'a> PerlLexer<'a> {
 
         Some(Token {
             token_type: TokenType::HeredocStart,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(text),
             start,
             end: self.position,
         })

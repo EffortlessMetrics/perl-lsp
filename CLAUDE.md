@@ -353,32 +353,68 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
 
 ### Testing LSP Features
 
-#### Test Infrastructure (v0.7.4)
-The project includes a robust test infrastructure in `tests/support/mod.rs` with production-grade assertion helpers:
+#### Test Infrastructure (v0.8.6)
+The project includes a robust test infrastructure with async LSP harness and production-grade assertion helpers:
 
-- **Assertion Helpers**: `assert_hover_has_text()`, `assert_completion_has_items()`, etc.
+**Async LSP Harness** (`tests/support/lsp_harness.rs`):
+- **Thread-safe Communication**: Uses mpsc channels for non-blocking server communication
+- **Timeout Support**: Configurable timeouts for all LSP operations (default: 2s)
+- **Real JSON-RPC Protocol**: Tests actual protocol compliance, not mocked responses  
+- **Background Processing**: Server runs in separate thread preventing test blocking
+- **Notification Handling**: Separate buffer for server notifications and diagnostics
+
+**Assertion Helpers** (`tests/support/mod.rs`):
 - **Deep Validation**: All LSP responses are validated for proper structure
 - **Meaningful Errors**: Clear error messages for debugging test failures
 - **No Tautologies**: All assertions actually validate response content
 
+**How-to Guide: Using the Async Test Harness**:
+```rust
+// Create harness with automatic server initialization
+let mut harness = LspHarness::new();
+harness.initialize(None)?;
+
+// Test with custom timeout (useful for slow operations)
+let response = harness.request_with_timeout(
+    "textDocument/completion", 
+    params, 
+    Duration::from_millis(500)
+)?;
+
+// Test notifications (like diagnostics)
+harness.open_document("file:///test.pl", "my $var = 42;");
+let notifications = harness.drain_notifications(
+    Some("textDocument/publishDiagnostics"), 
+    1000  // 1 second timeout
+);
+
+// Test bounded operations (prevents infinite hangs)
+let definition = harness.request_with_timeout(
+    "textDocument/definition",
+    definition_params,
+    Duration::from_millis(500)
+)?;
+```
+
+**Test Commands**:
 ```bash
 # Unit tests
 cargo test -p perl-parser your_feature
 
-# Integration tests
+# LSP API contract tests (async harness)
+cargo test -p perl-lsp lsp_api_contracts
+
+# Integration tests with timeout handling
 cargo test -p perl-parser lsp_your_feature_tests
 
-# Manual testing with example
-cargo run -p perl-parser --example test_your_feature
-
-# Full LSP testing
+# Manual testing with real protocol
 echo '{"jsonrpc":"2.0","method":"your_method",...}' | perl-lsp --stdio
 
-# Run comprehensive E2E tests (100% passing as of v0.7.4)
+# Run comprehensive E2E tests (100% passing as of v0.8.6)
 cargo test -p perl-parser lsp_comprehensive_e2e_test
 
-# Run all tests (33 comprehensive tests)
-cargo test -p perl-parser
+# Run all LSP tests with async harness (48+ tests)
+cargo test -p perl-lsp
 ```
 
 ### Error Recovery and Fallback Mechanisms
@@ -430,9 +466,12 @@ These fallbacks ensure the LSP remains functional during active development when
   - Published as `perl-parser` on crates.io
 
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
-  - `src/lib.rs`: Lexer API
+  - `src/lib.rs`: Lexer API with Unicode support
   - `src/token.rs`: Token definitions
-  - `src/mode.rs`: Lexer modes
+  - `src/mode.rs`: Lexer modes (ExpectTerm, ExpectOperator)
+  - `src/unicode.rs`: Unicode identifier support
+  - **Unicode Handling**: Robust support for Unicode characters in all contexts
+  - **Heredoc Safety**: Proper bounds checking for Unicode + heredoc syntax
   - Published as `perl-lexer` on crates.io
 
 - **`/crates/perl-corpus/`**: Test corpus
@@ -580,6 +619,43 @@ To extend the Pest grammar:
 1. Run benchmarks before and after changes
 2. Use `cargo xtask compare` to compare implementations
 3. Check for performance gates: `cargo xtask compare --check-gates`
+
+## Unicode Handling (v0.8.6)
+
+The lexer includes comprehensive Unicode support with recent robustness improvements:
+
+### Unicode Features
+- **Unicode Identifiers**: Full support for Unicode characters in variable names (`my $♥ = 'love'`)  
+- **Unicode Operators**: Support for Unicode operators and symbols
+- **UTF-8 Text Processing**: Proper handling of UTF-8 encoded Perl source files
+- **Context-Aware Parsing**: Unicode characters properly handled in all lexer contexts
+
+### Recent Improvements (v0.8.6)
+**Fixed Unicode + Heredoc Panic** (`perl-lexer` v0.8.6):
+- **Problem**: Lexer would panic on Unicode characters followed by incomplete heredoc syntax (e.g., `¡<<'`)
+- **Root Cause**: Bounds checking failure during heredoc delimiter extraction with Unicode text
+- **Solution**: Enhanced text construction tracking throughout heredoc parsing phases
+- **Testing**: Added comprehensive Unicode test cases to prevent regression
+
+**Troubleshooting Guide: Unicode Issues**:
+```perl
+# These cases are now handled correctly:
+¡<<'             # Unicode + incomplete heredoc (was panic, now graceful)
+my $♥ = 42;      # Unicode variable names (always worked)  
+¡ << 'END'       # Unicode with spacing (always worked)
+print "♥";       # Unicode in strings (always worked)
+```
+
+**Technical Details**:
+- Uses `src/unicode.rs` for Unicode character classification
+- Implements `is_perl_identifier_start()` and `is_perl_identifier_continue()`
+- Maintains text construction state during all parsing phases
+- Provides graceful error handling for malformed Unicode sequences
+
+**Reference: Unicode Test Coverage**:
+- Property-based testing with Unicode edge cases
+- Regression tests for specific Unicode + heredoc combinations  
+- Performance testing ensures no Unicode processing overhead
 
 ## Current Status
 
