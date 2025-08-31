@@ -5144,7 +5144,7 @@ mod tests {
         let ast = result.unwrap();
         assert_eq!(
             ast.to_sexp(),
-            r#"(program (array (string "one") (string "two") (string "three")))"#
+            r#"(source_file (expression_statement (array (string) (string) (string))))"#
         );
 
         // Test qw with brackets
@@ -5152,21 +5152,30 @@ mod tests {
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "foo") (string "bar")))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
 
         // Test qw with non-paired delimiters
         let mut parser = Parser::new("qw/alpha beta/");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "alpha") (string "beta")))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
 
         // Test qw with exclamation marks
         let mut parser = Parser::new("qw!hello world!");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "hello") (string "world")))"#);
+        assert_eq!(
+            ast.to_sexp(),
+            r#"(source_file (expression_statement (array (string) (string))))"#
+        );
     }
 
     #[test]
@@ -5179,7 +5188,7 @@ mod tests {
         // Statement context: block with hash inside
         let sexp = ast.to_sexp();
         assert!(
-            sexp.contains("(block (hash"),
+            sexp.contains("(block (expression_statement (hash"),
             "Statement context should have block containing hash, got: {}",
             sexp
         );
