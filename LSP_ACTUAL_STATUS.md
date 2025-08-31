@@ -328,6 +328,12 @@ See [LSP_WIRING_OPPORTUNITIES.md](LSP_WIRING_OPPORTUNITIES.md) for technical det
 
 ## 📈 Version History
 
+### v0.8.6
+- **Async LSP Test Harness**: Production-grade testing infrastructure with timeout support
+- **Unicode Lexer Fix**: Fixed panic on Unicode + incomplete heredoc syntax (`¡<<'`)
+- Enhanced test reliability with thread-safe communication and real JSON-RPC protocol testing
+- LSP remains ~70% functional with improved testing coverage
+
 ### v0.8.3 GA
 - Fixed go-to-definition with DeclarationProvider
 - Enhanced inlay hints for hash literals
@@ -370,6 +376,33 @@ The scope analyzer includes a production-proven `is_in_hash_key_context()` metho
 - **Comprehensive Coverage**: Handles all Perl hash key contexts (subscripts, literals, slices, nested access)
 - **Performance Optimized**: O(depth) complexity with early termination and safety limits for production use
 - **Backward Compatible**: Existing functionality unchanged, only improved accuracy and stability
+
+## 🧪 Testing Infrastructure (v0.8.6)
+
+### Async LSP Test Harness
+The LSP server includes a production-grade async test harness with the following capabilities:
+
+**Thread-Safe Architecture**:
+- Server runs in background thread via mpsc channels
+- Non-blocking communication prevents test timeouts
+- Separate notification buffer for diagnostics and server events
+
+**Timeout Management**:  
+- Configurable timeouts for all LSP operations (default: 2s)
+- Bounded test execution prevents hanging in CI
+- Graceful timeout handling with clear error messages
+
+**Protocol Compliance Testing**:
+- Tests real JSON-RPC protocol (not mocked responses)
+- Validates message format and LSP specification compliance
+- Ensures thread safety for concurrent editor usage
+
+**Test Coverage**:
+- 48+ LSP-specific tests using the async harness
+- 15 API contract tests for capability validation
+- Comprehensive E2E testing for all advertised features
+
+This testing infrastructure ensures that advertised LSP capabilities actually work in real-world usage scenarios.
 
 ## 🚦 Summary
 
