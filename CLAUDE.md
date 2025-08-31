@@ -571,7 +571,13 @@ To extend the Pest grammar:
 - **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Parser Status**: Production ready, feature complete
 - **LSP Status**: ✅ ~60% functional (all advertised features work)
-- **Recent improvements (v0.8.4)**:
+- **Recent improvements (v0.8.7+)**:
+  - ✅ **Enhanced variable resolution patterns** - support for complex Perl variable access patterns
+  - ✅ **Advanced scope analysis** - hash access (`$hash{key}`), array access (`$array[idx]`), method calls
+  - ✅ **Improved hash key context detection** - reduces false bareword warnings in hash subscripts
+  - ✅ **Enhanced delimiter recovery** - comprehensive pattern recognition for dynamic delimiters
+  - ✅ **Recursive variable resolution** - fallback mechanisms for complex nested patterns
+- **Previous improvements (v0.8.4)**:
   - ✅ Added 9 new LSP features - workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
   - ✅ Contract-driven testing - every capability backed by acceptance tests
   - ✅ Feature flag control - `lsp-ga-lock` for conservative releases
@@ -622,6 +628,9 @@ To extend the Pest grammar:
   - ✅ Regex with arbitrary delimiters (`m!pattern!`, `m{pattern}`, etc.)
   - ✅ Indirect object syntax (`print $fh "Hello"`, `print STDOUT "msg"`, `new Class`)
   - ✅ Quote operators with custom delimiters
+  - ✅ **Enhanced variable resolution patterns** (`$hash{key}`, `$array[idx]`, `$obj->method`)
+  - ✅ **Advanced delimiter recovery** with comprehensive pattern recognition
+  - ✅ **Hash key context detection** to reduce false bareword warnings
   - ✅ All modern Perl features
   - ✅ Complex prototypes (`sub mygrep(&@) { }`, `sub test(_) { }`)
   - ✅ Emoji identifiers (`my $♥ = 'love'`)

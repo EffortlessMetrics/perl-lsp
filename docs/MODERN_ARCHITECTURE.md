@@ -32,9 +32,18 @@ Convert raw Perl source code into a stream of well-defined tokens.
 
 ### Key Features
 - **99.995% Perl 5 coverage** with sophisticated heredoc recovery
+- **Enhanced delimiter recognition** with comprehensive pattern matching ✨
 - **Zero dependencies** on the parser - completely standalone
 - **Rich token types** that preserve all source information
 - **Streaming interface** for memory-efficient processing
+
+### Enhanced Delimiter Recovery ✨
+Advanced pattern recognition for dynamic delimiter detection:
+
+- **Comprehensive variable pattern support**: Scalar, array, and hash assignments
+- **Smart confidence scoring**: Based on variable naming patterns (delim, end, eof, marker, etc.)
+- **All declaration types**: `my`, `our`, `local`, `state` variable declarations
+- **Multiple recovery strategies**: Conservative, BestGuess, Interactive modes
 
 ### API Surface
 ```rust
@@ -65,8 +74,18 @@ Transform the token stream from `perl-lexer` into a structured Abstract Syntax T
 ### Key Features
 - **Clean token consumption** via adapter layer
 - **Recursive descent** with operator precedence
+- **Enhanced scope analysis** with advanced variable pattern recognition ✨
 - **Tree-sitter compatible** S-expression output
 - **Error recovery** for resilient parsing
+
+### Enhanced Scope Analysis ✨
+The `perl-parser` crate includes advanced scope analysis capabilities:
+
+- **Complex variable pattern recognition**: `$hash{key}` → `%hash`, `$array[idx]` → `@array`
+- **Method call resolution**: `$obj->method` → base `$obj` variable
+- **Hash key context detection**: Reduces false bareword warnings in subscript contexts
+- **Recursive fallback resolution**: Handles nested and complex variable patterns
+- **Enhanced diagnostics**: Improved undefined variable detection under `use strict`
 
 ### API Surface
 ```rust

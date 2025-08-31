@@ -141,10 +141,13 @@ pub enum AstNode {
 - Handles compile-time vs runtime distinctions
 - Preserves execution order semantics
 
-#### Dynamic Recovery (`dynamic_delimiter_recovery.rs`)
-- Detects runtime-determined delimiters
-- Multiple recovery strategies
-- Clear diagnostics for unparseable cases
+#### Enhanced Dynamic Recovery (`dynamic_delimiter_recovery.rs`) ✨
+- **Advanced pattern recognition** for delimiter variables across all Perl variable types
+- Support for scalar (`my $delim = "EOF"`), array (`my @delims = ("END", "DONE")`), and hash assignments
+- **Confidence scoring system** based on variable naming patterns (delim, end, eof, marker, etc.)
+- **Multiple recovery strategies** (Conservative, BestGuess, Interactive, Sandbox)
+- Enhanced regex patterns supporting all Perl variable declaration types (`my`, `our`, `local`, `state`)
+- Clear diagnostics for unparseable cases with suggestions
 
 ### 5. LSP Server (`/crates/perl-parser/src/lsp_server.rs`)
 
@@ -175,7 +178,13 @@ LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
 - Manages document versions
 
 #### Language Services
-- **DiagnosticsProvider**: Syntax error detection
+- **Enhanced DiagnosticsProvider**: Advanced syntax error detection with variable pattern recognition
+- **ScopeAnalyzer**: Advanced variable resolution supporting complex patterns
+  - Hash access patterns: `$hash{key}` → resolves `%hash`
+  - Array access patterns: `$array[idx]` → resolves `@array`
+  - Method call patterns: `$obj->method` → resolves base variable
+  - Hash key context detection to reduce false bareword warnings
+  - Recursive pattern resolution with fallback mechanisms
 - **DocumentSymbolProvider**: Outline generation
 - **DefinitionProvider**: Go to definition
 - **ReferencesProvider**: Find all references
