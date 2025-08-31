@@ -166,7 +166,7 @@ impl SignatureHelpProvider {
                 signatures.push(SignatureInfo {
                     label: sig_str.to_string(),
                     documentation: Some(builtin.documentation.to_string()),
-                    parameters: params,
+                    parameters: Vec::new(), // TODO: Extract from signature node
                     active_parameter: None,
                 });
             }
@@ -258,7 +258,7 @@ impl SignatureHelpProvider {
         SignatureInfo {
             label,
             documentation: symbol.documentation.clone(),
-            parameters: params,
+            parameters: Vec::new(), // TODO: Extract from signature node
             active_parameter: None,
         }
     }

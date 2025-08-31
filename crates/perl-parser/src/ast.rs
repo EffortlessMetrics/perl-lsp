@@ -75,7 +75,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Variable { sigil, name } => {
+            NodeKind::Variable { sigil, name: _ } => {
                 // Tree-sitter format based on sigil type
                 match sigil.as_str() {
                     "$" => "(scalar (varname))".to_string(),
@@ -271,7 +271,7 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, params: _, attributes, body } => {
+            NodeKind::Subroutine { name, prototype, signature, attributes, body } => {
                 // Extract block contents to avoid double-nesting
                 let block_contents = match &body.kind {
                     NodeKind::Block { statements } => {
@@ -281,28 +281,119 @@ impl Node {
                 };
 
                 if name.is_some() {
-                    // Named subroutine - tree-sitter format with labeled fields
-                    if attributes.is_empty() {
-                        format!("(subroutine_declaration_statement (bareword) (block {}))", block_contents)
-                    } else {
-                        let attrs: Vec<String> = attributes.iter()
+                    // Named subroutine - tree-sitter format without field labels
+                    let mut parts = vec!["(bareword)".to_string()];
+                    
+                    // Add prototype if present
+                    if let Some(proto) = prototype {
+                        parts.push(proto.to_sexp());
+                    }
+                    
+                    // Add signature if present
+                    if let Some(sig) = signature {
+                        parts.push(sig.to_sexp());
+                    }
+                    
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
                             .map(|_attr| "(attribute (attribute_name))".to_string())
                             .collect();
-                        format!("(subroutine_declaration_statement (bareword) (attrlist {}) (block {}))", 
-                                attrs.join(""), block_contents)
+                        parts.push(format!("(attrlist {})", attrs.join("")));
                     }
+                    
+                    // Add body
+                    parts.push(format!("(block {})", block_contents));
+                    
+                    format!("(subroutine_declaration_statement {})", parts.join(" "))
                 } else {
                     // Anonymous subroutine needs to be wrapped in expression_statement
-                    if attributes.is_empty() {
-                        format!("(expression_statement (anonymous_subroutine_expression (block {})))", block_contents)
-                    } else {
-                        let attrs: Vec<String> = attributes.iter()
+                    let mut parts = Vec::new();
+                    
+                    // Add prototype if present
+                    if let Some(proto) = prototype {
+                        parts.push(proto.to_sexp());
+                    }
+                    
+                    // Add signature if present
+                    if let Some(sig) = signature {
+                        parts.push(sig.to_sexp());
+                    }
+                    
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
                             .map(|_attr| "(attribute (attribute_name))".to_string())
                             .collect();
-                        format!("(expression_statement (anonymous_subroutine_expression (attrlist {}) (block {})))", 
-                                attrs.join(""), block_contents)
+                        parts.push(format!("(attrlist {})", attrs.join("")));
                     }
+                    
+                    // Add body
+                    parts.push(format!("(block {})", block_contents));
+                    
+                    let inner_parts = if parts.is_empty() {
+                        format!("(block {})", block_contents)
+                    } else {
+                        format!("{}", parts.join(" "))
+                    };
+                    
+                    format!("(expression_statement (anonymous_subroutine_expression {}))", inner_parts)
                 }
+            }
+
+            NodeKind::Prototype { content } => {
+                format!("(prototype)")
+            }
+
+            NodeKind::Signature { parameters } => {
+                let params = parameters.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(signature {})", params)
+            }
+
+            NodeKind::MandatoryParameter { variable } => {
+                format!("(mandatory_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::OptionalParameter { variable, default_value } => {
+                format!("(optional_parameter {} {})", variable.to_sexp(), default_value.to_sexp())
+            }
+
+            NodeKind::SlurpyParameter { variable } => {
+                format!("(slurpy_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::NamedParameter { variable } => {
+                format!("(named_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::Method { name, signature, attributes, body } => {
+                let block_contents = match &body.kind {
+                    NodeKind::Block { statements } => {
+                        statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
+                    }
+                    _ => body.to_sexp(),
+                };
+
+                let mut parts = vec!["(bareword)".to_string()];
+                
+                // Add signature if present
+                if let Some(sig) = signature {
+                    parts.push(sig.to_sexp());
+                }
+                
+                // Add attributes if present
+                if !attributes.is_empty() {
+                    let attrs: Vec<String> = attributes
+                        .iter()
+                        .map(|_attr| "(attribute (attribute_name))".to_string())
+                        .collect();
+                    parts.push(format!("(attrlist {})", attrs.join(""))); 
+                }
+                
+                parts.push(format!("(block {})", block_contents));
+                format!("(method_declaration_statement {})", parts.join(" "))
             }
 
             NodeKind::Return { value } => {
@@ -319,7 +410,7 @@ impl Node {
             }
 
             NodeKind::FunctionCall { name: _, args } => {
-                // Tree-sitter format: 
+                // Tree-sitter format:
                 // - Multiple args: (call_expression (identifier) (argument_list arg1 arg2 ...))
                 // - Single arg: (call_expression (identifier) arg)
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
@@ -403,11 +494,6 @@ impl Node {
 
             NodeKind::Class { name, body } => {
                 format!("(class {} {})", name, body.to_sexp())
-            }
-
-            NodeKind::Method { name, params, body } => {
-                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(method {} ({}) {})", name, params_str, body.to_sexp())
             }
 
             NodeKind::Format { name, body } => {
@@ -602,7 +688,44 @@ pub enum NodeKind {
     // Functions
     Subroutine {
         name: Option<String>,
-        params: Vec<Node>,
+        prototype: Option<Box<Node>>,
+        signature: Option<Box<Node>>,
+        attributes: Vec<String>,
+        body: Box<Node>,
+    },
+
+    // Prototype for subroutine
+    Prototype {
+        content: String,
+    },
+
+    // Signature for subroutine
+    Signature {
+        parameters: Vec<Node>,
+    },
+
+    // Signature parameter types
+    MandatoryParameter {
+        variable: Box<Node>,
+    },
+
+    OptionalParameter {
+        variable: Box<Node>,
+        default_value: Box<Node>,
+    },
+
+    SlurpyParameter {
+        variable: Box<Node>,
+    },
+
+    NamedParameter {
+        variable: Box<Node>,
+    },
+
+    // Method declaration (Perl 5.38+)
+    Method {
+        name: String,
+        signature: Option<Box<Node>>,
         attributes: Vec<String>,
         body: Box<Node>,
     },
@@ -686,12 +809,6 @@ pub enum NodeKind {
     // Modern Perl OOP (5.38+)
     Class {
         name: String,
-        body: Box<Node>,
-    },
-
-    Method {
-        name: String,
-        params: Vec<Node>,
         body: Box<Node>,
     },
 

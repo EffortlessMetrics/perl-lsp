@@ -98,6 +98,3 @@ harness = false
 required-features = ["incremental"]
 
 # Edge case test examples
-[[example]]
-name = "test_all_edge_cases"
-path = "examples/test_all_edge_cases.rs"

@@ -341,12 +341,23 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
 
-            NodeKind::Subroutine { params, body, .. } => {
+            NodeKind::Subroutine { signature, body, .. } => {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Check for duplicate parameters and shadowing
                 let mut param_names = std::collections::HashSet::new();
-                for param in params {
+                
+                // Extract parameters from signature if present
+                let params_to_check = if let Some(sig) = signature {
+                    match &sig.kind {
+                        NodeKind::Signature { parameters } => parameters.clone(),
+                        _ => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
+                };
+                
+                for param in &params_to_check {
                     if let NodeKind::Variable { sigil, name } = &param.kind {
                         let full_name = format!("{}{}", sigil, name);
 
@@ -385,24 +396,28 @@ impl ScopeAnalyzer {
                 self.analyze_node(body, &sub_scope, parent_map, issues, code, pragma_map);
 
                 // Check for unused parameters
-                for param in params {
-                    if let NodeKind::Variable { sigil, name } = &param.kind {
-                        let full_name = format!("{}{}", sigil, name);
-                        // Skip parameters starting with underscore (intentionally unused)
-                        if name.starts_with('_') {
-                            continue;
-                        }
-                        if let Some(var) = sub_scope.lookup_variable(&full_name) {
-                            if !*var.is_used.borrow() {
-                                issues.push(ScopeIssue {
-                                    kind: IssueKind::UnusedParameter,
-                                    variable_name: full_name.clone(),
-                                    line: self.get_line_from_node(param, code),
-                                    description: format!(
-                                        "Parameter '{}' is declared but never used",
-                                        full_name
-                                    ),
-                                });
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            if let NodeKind::Variable { sigil, name } = &param.kind {
+                                let full_name = format!("{}{}", sigil, name);
+                                // Skip parameters starting with underscore (intentionally unused)
+                                if name.starts_with('_') {
+                                    continue;
+                                }
+                                if let Some(var) = sub_scope.lookup_variable(&full_name) {
+                                    if !*var.is_used.borrow() {
+                                        issues.push(ScopeIssue {
+                                            kind: IssueKind::UnusedParameter,
+                                            variable_name: full_name.clone(),
+                                            line: self.get_line_from_node(param, code),
+                                            description: format!(
+                                                "Parameter '{}' is declared but never used",
+                                                full_name
+                                            ),
+                                        });
+                                    }
+                                }
                             }
                         }
                     }

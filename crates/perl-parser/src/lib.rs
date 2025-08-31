@@ -313,12 +313,30 @@ mod tests {
 
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
-                assert!(!statements.is_empty());
-                if let NodeKind::Binary { op, .. } = &statements[0].kind {
-                    assert_eq!(op, expected_op);
+                assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
+                
+                // Find the binary node, which might be wrapped in an ExpressionStatement
+                let binary_node = match &statements[0].kind {
+                    NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                        NodeKind::Binary { op, left, right } => Some((op, left, right)),
+                        _ => None,
+                    },
+                    NodeKind::Binary { op, left, right } => Some((op, left, right)),
+                    _ => None,
+                };
+
+                if let Some((op, left, right)) = binary_node {
+                    assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
+                    
+                    // Additional diagnostic information
+                    println!("Parsing: {}", code);
+                    println!("Left node: {:?}", left);
+                    println!("Right node: {:?}", right);
                 } else {
-                    panic!("Expected Binary operator for: {}", code);
+                    panic!("Expected Binary operator for: {}. Found: {:?}", code, statements[0].kind);
                 }
+            } else {
+                panic!("Expected Program node, found: {:?}", ast.kind);
             }
         }
     }
