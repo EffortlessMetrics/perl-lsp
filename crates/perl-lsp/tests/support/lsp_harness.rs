@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{Cursor, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use url::Url;
@@ -50,11 +51,15 @@ impl TempWorkspace {
 
 /// LSP Test Harness for testing with real JSON-RPC protocol
 pub struct LspHarness {
-    server: LspServer,
+    sender: mpsc::Sender<Vec<u8>>,
     output_buffer: Arc<Mutex<Vec<u8>>>,
     notification_buffer: Arc<Mutex<VecDeque<Value>>>,
     next_request_id: i32,
+    handle: Option<thread::JoinHandle<()>>,
 }
+
+struct SendableServer(LspServer);
+unsafe impl Send for SendableServer {}
 
 impl LspHarness {
     /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
@@ -63,13 +68,31 @@ impl LspHarness {
         let notification_buffer = Arc::new(Mutex::new(VecDeque::new()));
 
         // Create server with captured output
-        let server = LspServer::with_output(Arc::new(Mutex::new(Box::new(TestWriter {
+        let writer = Arc::new(Mutex::new(Box::new(TestWriter {
             buffer: output_buffer.clone(),
             notifications: notification_buffer.clone(),
-        })
-            as Box<dyn Write + Send>)));
+        }) as Box<dyn Write + Send>));
+        let server = SendableServer(LspServer::with_output(writer));
 
-        Self { server, output_buffer, notification_buffer, next_request_id: 1 }
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        let handle = thread::spawn(move || {
+            let mut server = server;
+            while let Ok(msg) = rx.recv() {
+                if msg.is_empty() {
+                    break;
+                }
+                let mut cursor = Cursor::new(msg);
+                let _ = server.0.handle_message(&mut cursor);
+            }
+        });
+
+        Self {
+            sender: tx,
+            output_buffer,
+            notification_buffer,
+            next_request_id: 1,
+            handle: Some(handle),
+        }
     }
 
     /// Create a new test harness
@@ -222,14 +245,14 @@ impl LspHarness {
             let notifications = self.notification_buffer.lock().unwrap();
             if notifications.is_empty() {
                 // No notifications for a bit, assume idle
-                std::thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(20));
                 let notifications = self.notification_buffer.lock().unwrap();
                 if notifications.is_empty() {
                     break; // Quiet period confirmed
                 }
             }
             drop(notifications);
-            std::thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -258,7 +281,7 @@ impl LspHarness {
                     }
                 }
             }
-            std::thread::sleep(Duration::from_millis(40));
+            thread::sleep(Duration::from_millis(40));
         }
         Err(format!("symbol '{}' not ready within {:?}", query, budget))
     }
@@ -304,8 +327,7 @@ impl LspHarness {
         let request_str = format!("{}\r\n", notification);
         let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
 
-        let mut input = Cursor::new(content.into_bytes());
-        let _result = self.server.handle_message(&mut input);
+        let _ = self.sender.send(content.into_bytes());
     }
 
     /// Drain notifications from the buffer
@@ -315,7 +337,7 @@ impl LspHarness {
 
         // Wait a bit for notifications to arrive
         while start.elapsed() < timeout {
-            std::thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
 
             let notifications = self.notification_buffer.lock().unwrap();
             if !notifications.is_empty() {
@@ -373,12 +395,9 @@ impl LspHarness {
         let request_str = request.to_string();
         let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
 
-        // Send to server
-        let mut input = Cursor::new(content.into_bytes());
-        let result = self.server.handle_message(&mut input);
-
-        if let Err(e) = result {
-            return Err(format!("Server error: {:?}", e));
+        // Send to server thread
+        if let Err(e) = self.sender.send(content.into_bytes()) {
+            return Err(format!("Server send error: {}", e));
         }
 
         // Wait for response with timeout
@@ -389,51 +408,52 @@ impl LspHarness {
             }
 
             // Check if we have a response
-            let output = self.output_buffer.lock().unwrap();
-            let output_str = String::from_utf8_lossy(&output);
+            if let Ok(output) = self.output_buffer.try_lock() {
+                let output_str = String::from_utf8_lossy(&output);
 
-            // Parse all messages in the output (might be multiple)
-            let mut remaining = output_str.as_ref();
-            while !remaining.is_empty() {
-                // Look for Content-Length header
-                if let Some(content_start) = remaining.find("Content-Length:") {
-                    remaining = &remaining[content_start..];
+                // Parse all messages in the output (might be multiple)
+                let mut remaining = output_str.as_ref();
+                while !remaining.is_empty() {
+                    // Look for Content-Length header
+                    if let Some(content_start) = remaining.find("Content-Length:") {
+                        remaining = &remaining[content_start..];
 
-                    // Parse content length
-                    if let Some(header_end) = remaining.find("\r\n\r\n") {
-                        let header = &remaining[..header_end];
-                        if let Some(length_str) = header.strip_prefix("Content-Length:") {
-                            if let Ok(length) = length_str.trim().parse::<usize>() {
-                                let json_start = header_end + 4; // Skip \r\n\r\n
-                                if remaining.len() >= json_start + length {
-                                    let json_str = &remaining[json_start..json_start + length];
-                                    if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
-                                        // Check if this is our response (has matching id)
-                                        if msg.get("id").is_some() {
-                                            if let Some(error) = msg.get("error") {
-                                                return Err(format!("LSP error: {:?}", error));
-                                            }
-                                            if let Some(result) = msg.get("result") {
-                                                return Ok(result.clone());
+                        // Parse content length
+                        if let Some(header_end) = remaining.find("\r\n\r\n") {
+                            let header = &remaining[..header_end];
+                            if let Some(length_str) = header.strip_prefix("Content-Length:") {
+                                if let Ok(length) = length_str.trim().parse::<usize>() {
+                                    let json_start = header_end + 4; // Skip \r\n\r\n
+                                    if remaining.len() >= json_start + length {
+                                        let json_str = &remaining[json_start..json_start + length];
+                                        if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
+                                            // Check if this is our response (has matching id)
+                                            if msg.get("id").is_some() {
+                                                if let Some(error) = msg.get("error") {
+                                                    return Err(format!("LSP error: {:?}", error));
+                                                }
+                                                if let Some(result) = msg.get("result") {
+                                                    return Ok(result.clone());
+                                                }
                                             }
                                         }
+                                        // Move to next message
+                                        remaining = &remaining[json_start + length..];
+                                        continue;
                                     }
-                                    // Move to next message
-                                    remaining = &remaining[json_start + length..];
-                                    continue;
                                 }
                             }
                         }
                     }
+                    break; // No more complete messages
                 }
-                break; // No more complete messages
-            }
 
-            drop(output);
+                drop(output);
+            }
 
             // If no response yet, wait a bit
             if start.elapsed() < timeout {
-                std::thread::sleep(Duration::from_millis(10));
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
@@ -483,6 +503,13 @@ impl LspHarness {
                 "arguments": arguments
             }),
         )
+    }
+}
+
+impl Drop for LspHarness {
+    fn drop(&mut self) {
+        let _ = self.sender.send(Vec::new());
+        self.handle.take();
     }
 }
 

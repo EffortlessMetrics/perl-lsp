@@ -132,8 +132,8 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::Subroutine { name: _, params: _, body, .. }
-            | NodeKind::Method { name: _, params: _, body } => {
+            NodeKind::Subroutine { name: _, prototype: _, signature: _, body, .. }
+            | NodeKind::Method { name: _, signature: _, body, .. } => {
                 // Subroutines and methods are foldable
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
