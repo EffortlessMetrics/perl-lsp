@@ -390,6 +390,13 @@ See [LSP_WIRING_OPPORTUNITIES.md](LSP_WIRING_OPPORTUNITIES.md) for technical det
 
 ## 📈 Version History
 
+### v0.8.8
+- Enhanced tree-sitter grammar with given/when/default support
+- Improved Tree-sitter compatibility for modern Perl control flow
+- Comprehensive corpus testing for switch-style control structures
+- Parser remains 100% complete with enhanced grammar coverage
+- LSP functionality improved (~75% functional)
+
 ### v0.8.6
 - **Async LSP Test Harness**: Production-grade testing infrastructure with timeout support
 - **Unicode Lexer Fix**: Fixed panic on Unicode + incomplete heredoc syntax (`¡<<'`)
