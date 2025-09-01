@@ -162,11 +162,11 @@ impl SignatureHelpProvider {
         // Check built-in functions
         if let Some(builtin) = self.builtin_signatures.get(function_name) {
             for sig_str in &builtin.signatures {
-                let params = self.parse_builtin_parameters(sig_str);
+                let _params = self.parse_builtin_parameters(sig_str);
                 signatures.push(SignatureInfo {
                     label: sig_str.to_string(),
                     documentation: Some(builtin.documentation.to_string()),
-                    parameters: params,
+                    parameters: Vec::new(), // TODO: Extract from signature node
                     active_parameter: None,
                 });
             }
@@ -258,7 +258,7 @@ impl SignatureHelpProvider {
         SignatureInfo {
             label,
             documentation: symbol.documentation.clone(),
-            parameters: params,
+            parameters: Vec::new(), // TODO: Extract from signature node
             active_parameter: None,
         }
     }

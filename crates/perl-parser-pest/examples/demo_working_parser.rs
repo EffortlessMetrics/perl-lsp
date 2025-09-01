@@ -5,6 +5,14 @@
 #[cfg(not(feature = "pure-rust-standalone"))]
 use tree_sitter_perl::working_parser::WorkingParser;
 
+#[cfg(feature = "pure-rust-standalone")]
+fn main() {
+    eprintln!(
+        "This example requires the working_parser module which is not available with pure-rust-standalone"
+    );
+    std::process::exit(1);
+}
+
 #[cfg(not(feature = "pure-rust-standalone"))]
 fn main() {
     println!("=== Working Perl Parser Demo ===\n");
