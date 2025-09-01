@@ -23,7 +23,8 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
+                let stmts =
+                    statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
                 format!("(program {})", stmts)
             }
 
@@ -276,7 +277,7 @@ impl Node {
                 if let Some(sub_name) = name {
                     // Named subroutine - format expected by tests: (sub name ()(block ...))
                     let mut parts = vec![];
-                    
+
                     // Add prototype if present (otherwise empty parens)
                     if let Some(_proto) = prototype {
                         parts.push("()".to_string()); // Simplified for tests
