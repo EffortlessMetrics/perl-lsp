@@ -356,10 +356,14 @@ SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```
 
-**Comment Documentation Extraction**:
+**Comment Documentation Extraction** (Enhanced in PR #71):
 - **Leading Comments**: Extracts multi-line comments immediately preceding symbol declarations
 - **Blank Line Handling**: Stops at blank lines (not whitespace-only lines) for accurate comment boundaries  
 - **Whitespace Resilient**: Handles varying indentation and comment prefixes (`#`, `##`, `###`)
+- **Performance Optimized**: Pre-allocated string capacity and reduced memory allocations for large comment blocks
+- **Unicode Safe**: Proper UTF-8 character boundary handling for international comments
+- **Multi-Package Support**: Correct comment extraction across package boundaries and complex formatting
+- **Edge Case Robust**: Handles empty comments, source boundaries, and special whitespace characters
 - **AST Integration**: Documentation attached to Symbol structs for use across all LSP features
 
 **Comment Documentation Examples** (**Diataxis: Tutorial**):
@@ -384,12 +388,19 @@ sub foo {  # Not documentation
 
 **Testing Comment Documentation** (**Diataxis: How-to**):
 ```bash
-# Test comment extraction edge cases
+# Test comment extraction edge cases (18 comprehensive tests)
 cargo test -p perl-parser --test symbol_documentation_tests
 
-# Test specific comment patterns
+# Test specific comment patterns and edge cases
 cargo test -p perl-parser symbol_documentation_tests::comment_separated_by_blank_line_is_not_captured
 cargo test -p perl-parser symbol_documentation_tests::comment_with_extra_hashes_and_spaces
+cargo test -p perl-parser symbol_documentation_tests::multi_package_comment_scenarios
+cargo test -p perl-parser symbol_documentation_tests::complex_comment_formatting
+cargo test -p perl-parser symbol_documentation_tests::unicode_in_comments
+cargo test -p perl-parser symbol_documentation_tests::performance_with_large_comment_blocks
+
+# Performance benchmarking
+cargo test -p perl-parser symbol_documentation_tests::performance_benchmark_comment_extraction -- --nocapture
 ```
 
 ### Adding New LSP Features
