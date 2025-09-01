@@ -501,11 +501,11 @@ To extend the Pest grammar:
 3. Update the `build_node` method to handle new rules
 4. Add tests for new constructs
 
-### Current Grammar Coverage (~99.99%)
+### Current Grammar Coverage (~100%)
 - ✅ Variables (scalar, array, hash) with all declaration types (my, our, local, state)
 - ✅ Literals (numbers, strings with interpolation, identifiers, lists)
 - ✅ All operators with proper precedence including smart match (~~)
-- ✅ Control flow (if/elsif/else, unless, while, until, for, foreach, given/when)
+- ✅ Control flow (if/elsif/else, unless, while, until, for, foreach, given/when/default)
 - ✅ Subroutines (named and anonymous) with signatures and prototypes
 - ✅ Package system (package, use, require, BEGIN/END blocks)
 - ✅ Comments and POD documentation

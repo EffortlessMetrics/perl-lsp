@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.6
+# LSP Actual Status - v0.8.7
 
 ## LSP GA Contract
 
@@ -318,6 +318,13 @@ If you want to help connect the existing infrastructure:
 See [LSP_WIRING_OPPORTUNITIES.md](LSP_WIRING_OPPORTUNITIES.md) for technical details.
 
 ## 📈 Version History
+
+### v0.8.7
+- Enhanced tree-sitter grammar with given/when/default support
+- Improved Tree-sitter compatibility for modern Perl control flow
+- Comprehensive corpus testing for switch-style control structures
+- Parser remains 100% complete with enhanced grammar coverage
+- LSP functionality unchanged (~70% functional)
 
 ### v0.8.3 GA
 - Fixed go-to-definition with DeclarationProvider

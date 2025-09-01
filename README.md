@@ -84,7 +84,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
   - Full string interpolation ($var, @array, ${expr})
   - Regular expressions with all operators and modifiers
   - 100+ operators with correct precedence (including ~~, ISA)
-  - All control flow (if/elsif/else, given/when, statement modifiers)
+  - All control flow (if/elsif/else, given/when/default, statement modifiers)
   - Subroutines with signatures and type constraints (Perl 5.36+)
   - Full package system with qualified names
   - Modern Perl features (try/catch, defer, class/method)

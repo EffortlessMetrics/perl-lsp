@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Tree-sitter Grammar Enhancement** - Added given/when/default grammar rules for complete switch-style control flow support
+- **Enhanced Control Flow** - Tree-sitter grammar now supports all modern Perl control flow constructs
+- **Comprehensive Corpus Testing** - Added test corpus for given/when/default constructs with edge case coverage
+
 ## [v0.8.5] - 2025-08-24
 
 ### Added
@@ -625,9 +630,8 @@ The following edge cases still need implementation:
 2. **Subroutine attributes** - `sub bar : lvalue { }`
 3. **Variable attributes** - `my $x :shared`
 4. **Format declarations** - `format STDOUT =`
-5. **Default in given/when** - `default { }` blocks
-6. **Class declarations** - `class Foo { }` (Perl 5.38+)
-7. **Method declarations** - `method bar { }` (Perl 5.38+)
+5. **Class declarations** - `class Foo { }` (Perl 5.38+)
+6. **Method declarations** - `method bar { }` (Perl 5.38+)
 
 ### Test Results
 - **94.5% edge case coverage** - Major improvement from previous 82.8%
