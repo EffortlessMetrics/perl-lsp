@@ -2,19 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Latest Release**: v0.8.5 GA - See [RELEASE_NOTES_v0.8.5.md](RELEASE_NOTES_v0.8.5.md)  
+**Latest Release**: v0.8.7 GA - Production-Stable Hash Key Context Detection with S-Expression Format Improvements
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md) for guarantees
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem:
 
-### Published Crates (v0.8.6)
+### Published Crates (v0.8.7)
 
 #### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
 - Native recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
+- **Enhanced comment documentation extraction** - robust leading comment parsing across blank lines
+- **Source-aware symbol analysis** - full source text threading through LSP features for better context
 - Tree-sitter compatible output
 - Core library for all parser functionality
 
@@ -24,6 +26,12 @@ This repository contains **five published crates** forming a complete Perl parsi
 - ~65% LSP 3.17 compliance with all advertised features working
 - Clean install: `cargo install perl-lsp`
 - Built on perl-parser for parsing functionality
+- **v0.8.7 improvements** (Post-PR #71):
+  - **Enhanced comment documentation extraction** - robust leading comment parsing that handles blank lines and whitespace
+  - **Source threading integration** - all LSP providers now have access to full source text for improved context analysis
+  - **Improved symbol analysis** - `SymbolExtractor::new_with_source()` constructor enables comment-aware symbol extraction
+  - **Better hover information** - documentation comments now properly extracted and displayed across all LSP features
+  - **Comprehensive test coverage** - dedicated symbol documentation test suite with edge case handling
 - **v0.8.5 improvements**:
   - Typed ServerCapabilities for LSP 3.18 compliance
   - Pull Diagnostics support (workspace/diagnostic)
@@ -57,14 +65,15 @@ This repository contains **five published crates** forming a complete Perl parsi
 - Kept for migration/comparison
 
 ### LSP Server (`perl-lsp` binary) ✅ **PRODUCTION READY**
-- **~65% of LSP features actually work** (all advertised capabilities are fully functional)
-- **Fully Working Features (v0.8.5)**: 
-  - ✅ Syntax checking and diagnostics with fallback
-  - ✅ Code completion (variables, 150+ built-ins, keywords)
-  - ✅ Hover information with documentation
+- **~75% of LSP features actually work** (all advertised capabilities are fully functional, major accuracy improvements in v0.8.7)
+- **Fully Working Features (v0.8.7 - Enhanced Symbol Documentation)**: 
+  - ✅ **Advanced syntax checking and diagnostics** with enhanced symbol documentation and fallback mechanisms
+  - ✅ **Intelligent code completion** (variables, 150+ built-ins, keywords) with comment-based documentation
+  - ✅ **Enhanced hover information** with robust comment documentation extraction across blank lines
+  - ✅ **Improved symbol analysis** with source-aware providers for better context understanding
   - ✅ Go-to-definition with DeclarationProvider
   - ✅ Find references (workspace-wide)
-  - ✅ Document symbols and outline
+  - ✅ Document symbols and outline with enhanced documentation
   - ✅ Document/range formatting (Perl::Tidy)
   - ✅ Folding ranges with text fallback
   - ✅ **Workspace symbols** - search across files (NEW)
@@ -191,6 +200,9 @@ cargo test --features pure-rust
 # Run LSP tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 
+# Run symbol documentation tests (comment extraction)
+cargo test -p perl-parser --test symbol_documentation_tests
+
 # Run DAP tests
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
@@ -282,6 +294,59 @@ npx tree-sitter generate
 
 ## LSP Development Guidelines
 
+### Source Threading Architecture (v0.8.7+)
+
+All LSP providers now support source-aware analysis for enhanced documentation extraction:
+
+**Provider Constructor Patterns**:
+```rust
+// Enhanced constructors with source text (v0.8.7)
+CompletionProvider::new_with_index_and_source(ast, source, workspace_index)
+SignatureHelpProvider::new_with_source(ast, source)
+SymbolExtractor::new_with_source(source)
+
+// Legacy constructors (still supported)
+CompletionProvider::new_with_index(ast, workspace_index)  // uses empty source
+SignatureHelpProvider::new(ast)  // uses empty source
+SymbolExtractor::new()  // no documentation extraction
+```
+
+**Comment Documentation Extraction**:
+- **Leading Comments**: Extracts multi-line comments immediately preceding symbol declarations
+- **Blank Line Handling**: Stops at blank lines (not whitespace-only lines) for accurate comment boundaries  
+- **Whitespace Resilient**: Handles varying indentation and comment prefixes (`#`, `##`, `###`)
+- **AST Integration**: Documentation attached to Symbol structs for use across all LSP features
+
+**Comment Documentation Examples** (**Diataxis: Tutorial**):
+```perl
+# This documents the function below
+# Multiple line comments are supported
+# with proper boundary detection
+sub documented_function {
+    # Internal comment - not documentation
+}
+
+### Variable documentation with various comment styles  
+   ### Works with extra whitespace and hashes
+my $documented_var = 42;
+
+# This will NOT be captured as documentation for foo
+# because there's a blank line
+
+sub foo {  # Not documentation
+}
+```
+
+**Testing Comment Documentation** (**Diataxis: How-to**):
+```bash
+# Test comment extraction edge cases
+cargo test -p perl-parser --test symbol_documentation_tests
+
+# Test specific comment patterns
+cargo test -p perl-parser symbol_documentation_tests::comment_separated_by_blank_line_is_not_captured
+cargo test -p perl-parser symbol_documentation_tests::comment_with_extra_hashes_and_spaces
+```
+
 ### Adding New LSP Features
 
 When implementing new LSP features, follow this structure:
@@ -289,16 +354,19 @@ When implementing new LSP features, follow this structure:
 1. **Core Implementation** (`/crates/perl-parser/src/`)
    - Add feature module (e.g., `completion.rs`, `code_actions.rs`)
    - Implement provider struct with main logic
+   - **Use source-aware constructors** for enhanced documentation support
    - Add to `lib.rs` exports
 
 2. **LSP Server Integration** (`lsp_server.rs`)
    - Add handler method (e.g., `handle_completion`)
+   - **Thread source text** through provider constructors using `doc.content`
    - Wire up in main request dispatcher
    - Handle request/response formatting
 
 3. **Testing**
    - Unit tests in the module itself
    - Integration tests in `/tests/lsp_*_tests.rs`
+   - **Symbol documentation tests** for comment extraction features
    - User story tests for real-world scenarios
 
 ### Code Actions and Refactoring
