@@ -52,9 +52,23 @@ pub fn build_rename_edit(
                 format!("{}{}", sigil, new_name_bare)
             }
             SymKind::Sub => {
-                // For subroutines, use the bare name
-                // TODO: Preserve qualifiers if present in original
-                new_name_bare.to_string()
+                // For subroutines, preserve any existing package qualifier
+                let mut replacement = new_name_bare.to_string();
+
+                if let Some(mut doc) = idx.document_store().get(&loc.uri) {
+                    if let (Some(start_off), Some(end_off)) = (
+                        doc.line_index.position_to_offset(start_line, start_char),
+                        doc.line_index.position_to_offset(end_line, end_char),
+                    ) {
+                        if let Some(original) = doc.text.get(start_off..end_off) {
+                            if let Some((qual, _)) = original.rsplit_once("::") {
+                                replacement = format!("{}::{}", qual, new_name_bare);
+                            }
+                        }
+                    }
+                }
+
+                replacement
             }
             SymKind::Pack => {
                 // Package names are replaced as-is
@@ -119,4 +133,74 @@ pub fn validate_rename(_key: &SymbolKey, new_name: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use url::Url;
+
+    fn index_text(idx: &WorkspaceIndex, uri: &str, text: &str) {
+        let url = Url::parse(uri).unwrap();
+        idx.index_file(url, text.to_string()).unwrap();
+    }
+
+    #[test]
+    fn rename_sub_preserves_package_qualifier() {
+        let idx = WorkspaceIndex::new();
+        let uri = "file:///test.pl";
+        let text = r#"
+package Package;
+my $var = 0;
+sub name { }
+Package::name();
+name();
+$var;
+"#;
+        index_text(&idx, uri, text);
+
+        let key = SymbolKey {
+            pkg: Arc::from("Package"),
+            name: Arc::from("name"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let edits = build_rename_edit(&idx, &key, "new_name");
+        assert_eq!(edits.len(), 1);
+
+        let texts: Vec<String> = edits[0].edits.iter().map(|e| e.new_text.clone()).collect();
+        assert_eq!(texts.len(), 2);
+        assert!(texts.contains(&"Package::new_name".to_string()));
+        assert!(texts.contains(&"new_name".to_string()));
+
+        // Apply edits and verify other symbols remain unchanged
+        let mut doc = idx.document_store().get(uri).unwrap();
+        let mut replacements: Vec<(usize, usize, &str)> = edits[0]
+            .edits
+            .iter()
+            .map(|e| {
+                let start = doc
+                    .line_index
+                    .position_to_offset(e.start.0, e.start.1)
+                    .unwrap();
+                let end = doc
+                    .line_index
+                    .position_to_offset(e.end.0, e.end.1)
+                    .unwrap();
+                (start, end, e.new_text.as_str())
+            })
+            .collect();
+        replacements.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut new_text = text.to_string();
+        for (start, end, rep) in replacements {
+            new_text.replace_range(start..end, rep);
+        }
+
+        assert!(new_text.contains("package Package;"));
+        assert!(new_text.contains("$var"));
+        assert!(new_text.contains("Package::new_name"));
+        assert!(new_text.contains("name();"));
+    }
 }
