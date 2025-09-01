@@ -77,6 +77,9 @@ impl IncrementalDocument {
         let start = Instant::now();
         self.version += 1;
 
+        // Reset metrics for this parse cycle
+        self.metrics = ParseMetrics::default();
+
         // Apply the edit to the source
         let new_source = self.apply_edit_to_source(&edit);
 
@@ -102,6 +105,9 @@ impl IncrementalDocument {
         let start = Instant::now();
         self.version += 1;
 
+        // Reset metrics for this batch of edits
+        self.metrics = ParseMetrics::default();
+
         // Sort edits by position (reverse order for correct application)
         let mut sorted_edits = edits.edits.clone();
         sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
@@ -119,12 +125,10 @@ impl IncrementalDocument {
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
 
-        // Parse with reuse
-        let new_root = if reusable.len() > 10 {
-            // Significant reuse possible
+        // Parse with reuse when possible
+        let new_root = if !reusable.is_empty() {
             self.parse_with_reuse(&new_source, reusable)?
         } else {
-            // Too many changes, full reparse
             let mut parser = Parser::new(&new_source);
             parser.parse()?
         };
@@ -326,16 +330,52 @@ impl IncrementalDocument {
     }
 
     /// Parse with reusable subtrees
-    fn parse_with_reuse(&mut self, source: &str, _reusable: Vec<Arc<Node>>) -> ParseResult<Node> {
-        // Create a custom parser that can use cached subtrees
+    fn parse_with_reuse(&mut self, source: &str, reusable: Vec<Arc<Node>>) -> ParseResult<Node> {
+        // Start with a fresh parse of the new source
         let mut parser = Parser::new(source);
+        let mut root = parser.parse()?;
 
-        // For now, do a full parse but track metrics
-        let root = parser.parse()?;
+        // Try to splice in any reusable subtrees by matching on byte ranges
+        for node in reusable {
+            self.insert_reusable(&mut root, &node);
+        }
 
+        // Update metrics based on reused nodes
         self.metrics.nodes_reparsed = self.count_nodes(&root) - self.metrics.nodes_reused;
 
         Ok(root)
+    }
+
+    /// Replace matching nodes in `target` with a reusable subtree
+    fn insert_reusable(&self, target: &mut Node, reusable: &Arc<Node>) -> bool {
+        if target.location.start == reusable.location.start
+            && target.location.end == reusable.location.end
+            && std::mem::discriminant(&target.kind) == std::mem::discriminant(&reusable.kind)
+        {
+            *target = (**reusable).clone();
+            return true;
+        }
+
+        match &mut target.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if self.insert_reusable(stmt, reusable) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::Binary { left, right, .. } => {
+                if self.insert_reusable(left, reusable) {
+                    return true;
+                }
+                if self.insert_reusable(right, reusable) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+
+        false
     }
 
     /// Adjust node positions after an edit
@@ -569,8 +609,7 @@ mod tests {
 
         doc.apply_edits(&edits).unwrap();
 
-        // TODO: Once incremental parsing is fully implemented, these should pass
-        // For now, we're falling back to full reparse so no nodes are reused
+        // TODO: enable metrics assertions once multi-edit reuse is fully implemented
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
     }
