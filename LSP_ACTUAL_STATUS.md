@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.6
+# LSP Actual Status - v0.8.7
 
 ## LSP GA Contract
 
@@ -10,9 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 70% of LSP features now work** (up from 65% in v0.8.5). This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 70% in v0.8.6). Major v0.8.7 improvements include enhanced comment documentation extraction and source threading for better context awareness. This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~70%)
+## ✅ Actually Working Features (~75%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -23,12 +23,13 @@ These features have been tested and provide real, useful functionality:
 - Missing pragma suggestions (strict/warnings)
 - **Status**: Fully functional
 
-### 2. **Basic Code Completion**
-- Variables in current scope
-- Perl built-in functions
+### 2. **Enhanced Code Completion** (v0.8.7)
+- Variables in current scope with comment documentation
+- Perl built-in functions with signatures
 - Keywords (my, sub, if, etc.)
+- **Enhanced**: Source-aware completion with symbol documentation
 - **Limitations**: No package members, no imports, no file paths
-- **Status**: ~60% functional
+- **Status**: ~65% functional
 
 ### 3. **Go to Definition** (Single File Only)
 - Jump to variable declarations
@@ -42,19 +43,22 @@ These features have been tested and provide real, useful functionality:
 - **Limitations**: Current file only
 - **Status**: ~70% functional
 
-### 5. **Hover Information**
-- Basic variable type info
+### 5. **Enhanced Hover Information** (v0.8.7)
+- Basic variable type info with comment documentation
 - Built-in function signatures
+- **Enhanced**: Leading comment extraction across blank lines for all symbols
+- **Improved**: Source-aware symbol analysis with better context
 - **Limitations**: No package docs, no POD extraction
-- **Status**: ~50% functional
+- **Status**: ~60% functional
 
 ### 6. **Signature Help**
 - Parameter hints for 150+ built-in functions
 - Works even with incomplete/invalid code
 - **Status**: ~80% functional
 
-### 7. **Document Symbols**
+### 7. **Enhanced Document Symbols** (v0.8.7)
 - Outline view with subroutines and packages
+- **Enhanced**: Symbol documentation from leading comments
 - Hierarchical structure
 - Icons for different symbol types
 - **Status**: Fully functional
