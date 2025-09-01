@@ -143,9 +143,8 @@ impl<'a> Parser<'a> {
             }
 
             // Variable declarations
-            TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
-                self.parse_variable_declaration()
-            }
+            TokenKind::My | TokenKind::Our | TokenKind::State => self.parse_variable_declaration(),
+            TokenKind::Local => self.parse_local_statement(),
 
             // Control flow
             TokenKind::If => self.parse_if_statement(),
@@ -477,6 +476,35 @@ impl<'a> Parser<'a> {
             );
             Ok(node)
         }
+    }
+
+    /// Parse local statement (can localize any lvalue, not just simple variables)
+    fn parse_local_statement(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let declarator_token = self.consume_token()?; // consume 'local'
+        let declarator = declarator_token.text.clone();
+
+        // Parse the lvalue expression that's being localized
+        let variable = Box::new(self.parse_expression()?);
+
+        let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+            self.tokens.next()?; // consume =
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+
+        let end = self.previous_position();
+        let node = Node::new(
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes: Vec::new(),
+                initializer,
+            },
+            SourceLocation { start, end },
+        );
+        Ok(node)
     }
 
     /// Parse a variable ($foo, @bar, %baz)
