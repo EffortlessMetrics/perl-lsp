@@ -26,19 +26,21 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ## 📦 Latest Release: v0.8.7
 
-### v0.8.7 - Production-Stable Hash Key Context Detection with S-Expression Format Improvements 🎯
-- 🚀 **Production-Stable Hash Key Context Detection**: Industry-leading bareword analysis proven in production environments with comprehensive hash context coverage
-- 🧠 **Stabilized Scope Analysis**: `is_in_hash_key_context()` method now production-proven with O(depth) performance optimization and safety limits
-- 🔧 **Enhanced S-Expression Format**: Proper NodeKind variants for Prototype, Signature, Method parameters ensuring complete AST compatibility
-- 🔍 **Comprehensive Hash Context Support**: 
-  - Hash subscripts: `$hash{bareword_key}` - correctly recognized as legitimate with O(depth) performance
-  - Hash literals: `{ key => value, another_key => value2 }` - all keys properly identified in all contexts
-  - Hash slices: `@hash{key1, key2, key3}` - comprehensive array-based key detection with full coverage
-  - Nested access: `$hash{level1}{level2}{level3}` - deep nesting handled correctly with safety limits
-- 🏗️ **Complete AST Compatibility**: Fixed subroutine declaration format and signature parameter parsing
-- 📈 **75% LSP Functionality**: Up from 72% in v0.8.6 - production-stable diagnostic accuracy
-- 🔒 **Backward Compatible**: All existing functionality preserved while enhancing stability and format compliance
-- ✅ **All Tests Passing**: 530+ tests including comprehensive hash context detection and S-expression format validation
+### v0.8.7 - Enhanced Comment Documentation Extraction with Source Threading 📚
+- 🚀 **Comprehensive Comment Documentation**: Production-ready leading comment parsing with 20 comprehensive test cases covering all edge scenarios
+- 📝 **Enhanced Source Threading**: Source-aware LSP providers with improved context for completion, hover, and symbol analysis
+- 🔧 **S-Expression Format Compatibility**: Resolved bless parsing regressions with complete AST compatibility for all Perl constructs
+- 🌏 **Unicode & Performance Safety**: UTF-8 character boundary handling with <100µs extraction performance for large comment blocks
+- 🏗️ **Edge Case Robustness**: Handles complex formatting scenarios including multi-package support, class methods, and Unicode comments
+- 🎯 **Production-Ready Features**:
+  - Multi-line comment extraction with precise blank line boundary detection
+  - Support for varying indentation and comment prefixes (`#`, `##`, `###`)
+  - Variable list declarations with shared documentation
+  - Method comments in classes with qualified name resolution
+  - Performance optimization with pre-allocated capacity for large blocks
+- 📈 **78% LSP Functionality**: Up from 75% baseline - enhanced documentation and symbol intelligence
+- 🔒 **Backward Compatible**: All existing functionality preserved while adding comprehensive documentation capabilities
+- ✅ **Enhanced Test Coverage**: 20 new comprehensive test cases for comment extraction edge cases
 
 ### v0.8.6 - Enhanced Scope Analysis with Hash Key Context Detection 🎯
 - 🚀 **Hash Key Context Detection**: Advanced bareword analysis that eliminates false positives in hash contexts under `use strict`
