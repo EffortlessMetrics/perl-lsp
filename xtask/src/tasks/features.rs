@@ -13,6 +13,7 @@ struct FeaturesCatalog {
 struct Meta {
     version: String,
     lsp_version: String,
+    #[allow(dead_code)]
     compliance_percent: Option<u32>,
 }
 
@@ -72,7 +73,7 @@ fn sync_docs_impl() -> Result<()> {
 }
 
 fn update_roadmap(
-    catalog: &FeaturesCatalog,
+    _catalog: &FeaturesCatalog,
     area_stats: &HashMap<String, (usize, usize)>,
 ) -> Result<()> {
     let roadmap_path = Path::new("ROADMAP.md");
@@ -311,7 +312,7 @@ fn verify_features() -> Result<()> {
     }
 
     // Verify compliance percentage matches what's documented
-    let total_features = catalog.feature.len();
+    let _total_features = catalog.feature.len();
     let non_planned = catalog.feature.iter().filter(|f| f.maturity != "planned").count();
     let advertised_ga_prod = catalog
         .feature

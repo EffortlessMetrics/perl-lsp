@@ -50,11 +50,11 @@ const ERR_INVALID_PARAMS: i32 = -32602;
 // LSP 3.17 standard error codes:
 // -32802 ServerCancelled (preferred for server-side cancellations)
 // -32801 ContentModified (document changed; redo request)
-// -32800 RequestCancelled (client-side; rarely distinguishable; we use -32802)
+// -32800 RequestCancelled (client-side; we use this for $/cancelRequest)
+#[allow(dead_code)]
 const ERR_SERVER_CANCELLED: i32 = -32802; // Server cancelled the request (LSP 3.17)
 const ERR_CONTENT_MODIFIED: i32 = -32801; // Content modified, operation obsolete
-#[allow(dead_code)]
-const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled (kept for reference)
+const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled via $/cancelRequest
 
 /// Helper to create a cancelled response
 fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
@@ -63,7 +63,7 @@ fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
         id: Some(id.clone()),
         result: None,
         error: Some(JsonRpcError {
-            code: ERR_SERVER_CANCELLED,
+            code: ERR_REQUEST_CANCELLED,
             message: "Request cancelled".into(),
             data: None,
         }),
@@ -385,7 +385,20 @@ impl LspServer {
         if let Some(content_length) = headers.get("Content-Length") {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
-                reader.read_exact(&mut content)?;
+                let mut bytes_read = 0;
+
+                // Read content in chunks to handle partial reads
+                while bytes_read < length {
+                    let bytes_to_read = length - bytes_read;
+                    let mut chunk = vec![0u8; bytes_to_read];
+                    match reader.read(&mut chunk)? {
+                        0 => return Ok(None), // Unexpected EOF
+                        n => {
+                            content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
+                            bytes_read += n;
+                        }
+                    }
+                }
 
                 // Parse JSON-RPC request
                 if let Ok(request) = serde_json::from_slice(&content) {
@@ -966,6 +979,11 @@ impl LspServer {
         Ok(())
     }
 
+    /// Convenience wrapper to open a document from tests
+    pub fn did_open(&self, params: Value) -> Result<(), JsonRpcError> {
+        self.handle_did_open(Some(params))
+    }
+
     /// Handle didChange notification
     pub(crate) fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
@@ -1437,7 +1455,9 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let provider = CompletionProvider::new(ast);
+                    let provider =
+                        CompletionProvider::new_with_index(ast, self.workspace_index.clone());
+
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
 
@@ -1544,6 +1564,7 @@ impl LspServer {
                             filter_text: None,
                             documentation: None,
                             additional_edits: Vec::new(),
+                            text_edit_range: None, // Workspace completions don't need precise text edit
                         });
                     }
                 }
@@ -2194,11 +2215,12 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
-            if !sub_params.is_empty() {
-                // Extract parameter names from the params node
-                for param in sub_params {
-                    self.extract_params(param, &mut params);
+        if let NodeKind::Subroutine { signature: sub_signature, body, .. } = &sub_node.kind {
+            if let Some(sig) = sub_signature {
+                if let NodeKind::Signature { parameters } = &sig.kind {
+                    for param in parameters {
+                        self.extract_params(param, &mut params);
+                    }
                 }
             } else {
                 // Look for my (...) = @_; pattern in the body
@@ -3749,7 +3771,7 @@ impl LspServer {
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
                             let documents = self.documents.lock().unwrap();
-                            if let Some(_doc) = self.get_document(&documents, uri) {
+                            if self.get_document(&documents, uri).is_some() {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
                                     let text = format!("{}\n", pragma);
@@ -4622,6 +4644,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4637,6 +4660,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -4649,6 +4673,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4664,6 +4689,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4680,6 +4706,7 @@ impl LspServer {
                             additional_edits: vec![],
                             sort_text: None,
                             filter_text: None,
+                            text_edit_range: None,
                         });
                     }
                 }
@@ -5218,98 +5245,16 @@ impl LspServer {
     }
 
     /// Handle textDocument/documentColor request
-    fn handle_document_color(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-
-            let documents = self.documents.lock().unwrap();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let mut colors = Vec::new();
-
-                // Find hex colors in strings and comments using regex
-                let hex_re = regex::Regex::new(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b").unwrap();
-
-                for (line_num, line) in doc.content.lines().enumerate() {
-                    // Check if line is a comment or contains strings
-                    if line.trim_start().starts_with('#')
-                        || line.contains('"')
-                        || line.contains('\'')
-                    {
-                        for cap in hex_re.captures_iter(line) {
-                            if let Some(m) = cap.get(0) {
-                                let hex = &m.as_str()[1..]; // Skip the #
-                                let (r, g, b) = if hex.len() == 3 {
-                                    // #RGB -> #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)
-                                        .unwrap_or(0)
-                                        as f32
-                                        / 255.0;
-                                    (r, g, b)
-                                } else {
-                                    // #RRGGBB
-                                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f32
-                                        / 255.0;
-                                    (r, g, b)
-                                };
-
-                                colors.push(json!({
-                                    "range": {
-                                        "start": { "line": line_num, "character": m.start() as u32 },
-                                        "end": { "line": line_num, "character": m.end() as u32 }
-                                    },
-                                    "color": {
-                                        "red": r,
-                                        "green": g,
-                                        "blue": b,
-                                        "alpha": 1.0
-                                    }
-                                }));
-                            }
-                        }
-                    }
-                }
-
-                return Ok(Some(json!(colors)));
-            }
-        }
-
-        Ok(Some(json!([])))
+    fn handle_document_color(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
     }
 
     /// Handle textDocument/colorPresentation request
     fn handle_color_presentation(
         &self,
-        params: Option<Value>,
+        _params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let color = &params["color"];
-            let r = (color["red"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-            let g = (color["green"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-            let b = (color["blue"].as_f64().unwrap_or(0.0) * 255.0) as u8;
-
-            // Return various color presentations
-            let presentations = vec![
-                json!({ "label": format!("#{:02x}{:02x}{:02x}", r, g, b) }),
-                json!({ "label": format!("#{:02X}{:02X}{:02X}", r, g, b) }),
-                json!({ "label": format!("rgb({}, {}, {})", r, g, b) }),
-            ];
-
-            return Ok(Some(json!(presentations)));
-        }
-
-        Ok(Some(json!([])))
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
     }
 
     /// Handle textDocument/linkedEditingRange request
@@ -7677,7 +7622,9 @@ impl LspServer {
                                     .line_starts
                                     .offset_to_position(&doc.content, sym.location.end);
 
-                                let mut resolved = symbol.clone();
+                                // Start with the provided symbol JSON so we can add
+                                // additional details without panicking if fields are missing
+                                let mut resolved = json!(symbol);
 
                                 // Add detail based on symbol kind
                                 let detail = match sym.kind {

@@ -1,4 +1,4 @@
-use perl_parser::{Parser, scope_analyzer::ScopeAnalyzer};
+use perl_parser::{DiagnosticsProvider, Parser};
 
 fn main() {
     let test_cases = vec![
@@ -31,13 +31,18 @@ sub get_package { return $package_var; }
 sub get_lexical { return $lexical_var; }
 "#,
         ),
+        (
+            "bareword_hash_key",
+            r#"use strict;
+my %h = ();
+my $x = $h{key};
+print FOO;"#,
+        ),
     ];
 
     for (name, code) in test_cases {
         println!("\n=== Test: {} ===", name);
         println!("Code:\n{}", code);
-
-        let analyzer = ScopeAnalyzer::new();
 
         // Parse the code first
         let mut parser = Parser::new(code);
@@ -49,11 +54,18 @@ sub get_lexical { return $lexical_var; }
             }
         };
 
-        let issues = analyzer.analyze(&ast, code, &[]);
+        println!("AST: {}", ast.to_sexp());
 
-        println!("\nFound {} issues:", issues.len());
-        for issue in &issues {
-            println!("  - {:?}: {} (line {})", issue.kind, issue.description, issue.line);
+        // Use DiagnosticsProvider which handles pragma detection properly
+        let diagnostics_provider = DiagnosticsProvider::new(&ast, code.to_string());
+        let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], code);
+
+        println!("\nFound {} diagnostics:", diagnostics.len());
+        for diagnostic in &diagnostics {
+            println!(
+                "  - {:?}: {} at range {:?}",
+                diagnostic.code, diagnostic.message, diagnostic.range
+            );
         }
     }
 }
