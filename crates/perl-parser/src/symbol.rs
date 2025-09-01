@@ -678,13 +678,21 @@ impl SymbolExtractor {
         while end > 0 && bytes[end - 1].is_ascii_whitespace() {
             end -= 1;
         }
+        
+        // Ensure we don't break UTF-8 sequences by finding the nearest char boundary
+        while end > 0 && !self.source.is_char_boundary(end) {
+            end -= 1;
+        }
+        
         let prefix = &self.source[..end];
         let mut lines = prefix.lines().rev();
         let mut docs = Vec::new();
         for line in &mut lines {
             let trimmed = line.trim_start();
             if trimmed.starts_with('#') {
-                docs.push(trimmed.trim_start_matches('#').trim_start().to_string());
+                // Optimize: avoid string allocation by using string slice references
+                let content = trimmed.trim_start_matches('#').trim_start();
+                docs.push(content);
             } else {
                 // Stop at any non-comment line (including empty lines).
                 break;
@@ -694,7 +702,16 @@ impl SymbolExtractor {
             None
         } else {
             docs.reverse();
-            Some(docs.join("\n"))
+            // Optimize: pre-calculate capacity to avoid reallocations
+            let total_len: usize = docs.iter().map(|s| s.len()).sum::<usize>() + docs.len().saturating_sub(1);
+            let mut result = String::with_capacity(total_len);
+            for (i, doc) in docs.iter().enumerate() {
+                if i > 0 {
+                    result.push('\n');
+                }
+                result.push_str(doc);
+            }
+            Some(result)
         }
     }
 
