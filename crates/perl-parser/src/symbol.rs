@@ -4,8 +4,8 @@
 //! that tracks definitions, references, and scopes for IDE features like
 //! go-to-definition, find-all-references, and semantic highlighting.
 
-use crate::ast::{Node, NodeKind};
 use crate::SourceLocation;
+use crate::ast::{Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
