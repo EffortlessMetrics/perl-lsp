@@ -52,7 +52,12 @@ pub struct SignatureHelpProvider {
 impl SignatureHelpProvider {
     /// Create a new signature help provider
     pub fn new(ast: &Node) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+        Self::new_with_source(ast, "")
+    }
+
+    /// Create a new signature help provider with source
+    pub fn new_with_source(ast: &Node, source: &str) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let builtin_signatures = create_builtin_signatures();
 
         SignatureHelpProvider { symbol_table, builtin_signatures }
