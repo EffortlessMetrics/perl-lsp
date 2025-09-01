@@ -767,9 +767,11 @@ impl<'a> DeclarationProvider<'a> {
                 }
                 children
             }
-            NodeKind::Subroutine { params, body, .. } => {
+            NodeKind::Subroutine { signature, body, .. } => {
                 let mut children = vec![body.as_ref()];
-                children.extend(params.iter());
+                if let Some(sig) = signature {
+                    children.push(sig.as_ref());
+                }
                 children
             }
             NodeKind::FunctionCall { args, .. } => args.iter().collect(),

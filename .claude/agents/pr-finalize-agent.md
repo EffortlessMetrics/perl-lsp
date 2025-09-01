@@ -34,7 +34,7 @@ Your primary responsibilities:
   - Performance impact assessment via `cargo xtask compare` (maintain 1-150 µs parsing, 4-19x improvement targets)
   - Workspace lint inheritance validation and modern Rust 2024 patterns with MSRV 1.89+ compatibility
 - Verify documentation updates complete and accurate (especially for perl-lsp binary features)
-- Ensure breaking changes properly documented for published crates (v0.8.5+ GA compatibility)
+- Ensure breaking changes properly documented for published crates (v0.8.7+ GA compatibility)
 - Validate change scope matches original intent (parser coverage, LSP 3.18+ functionality)
 - Check for production impact on published crate ecosystem: perl-parser, perl-lexer, perl-corpus
 - Confirm internal development crates remain compatible (benchmarking, testing infrastructure)

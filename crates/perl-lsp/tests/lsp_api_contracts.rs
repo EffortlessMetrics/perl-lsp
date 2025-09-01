@@ -397,7 +397,6 @@ fn test_apply_edit_with_version() {
 // ======================== PERFORMANCE CONTRACTS ========================
 
 #[test]
-#[ignore] // TODO: Test infrastructure issue - harness blocks on server communication
 fn test_bounded_definition_timeout() {
     // This test verifies that module resolution completes quickly
     // even when the module doesn't exist. We've improved the timeout
@@ -409,12 +408,13 @@ fn test_bounded_definition_timeout() {
     let uri = open_doc(&mut harness, r#"My::Missing::Module->new()"#);
 
     let start = Instant::now();
-    let response = harness.request(
+    let response = harness.request_with_timeout(
         "textDocument/definition",
         json!({
             "textDocument": { "uri": uri },
             "position": { "line": 0, "character": 10 }
         }),
+        Duration::from_millis(400),
     );
     let elapsed = start.elapsed();
 

@@ -113,7 +113,7 @@ impl TestGenerator {
 
     fn find_subroutines_recursive(&self, node: &Node, subs: &mut Vec<SubroutineInfo>) {
         match &node.kind {
-            NodeKind::SubroutineDeclaration { name, params, .. } => {
+            NodeKind::SubroutineDeclaration { name, signature, .. } => {
                 if let Some(name) = name {
                     let is_private = name.starts_with('_');
                     if !is_private || self.options.test_private {
@@ -838,7 +838,7 @@ impl RefactoringSuggester {
 
     fn check_parameter_count_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::SubroutineDeclaration { name, params, .. } => {
+            NodeKind::SubroutineDeclaration { name, signature, .. } => {
                 if let Some(params) = params {
                     if params.len() > 5 {
                         self.suggestions.push(RefactoringSuggestion {

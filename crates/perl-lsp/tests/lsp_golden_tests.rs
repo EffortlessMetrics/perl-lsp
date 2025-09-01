@@ -6,7 +6,9 @@ mod support;
 
 use serde_json::{Value, json};
 use std::fs;
-use support::*;
+use support::test_helpers::{
+    assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
+};
 
 /// Test context that manages the LSP server lifecycle
 struct TestContext {
