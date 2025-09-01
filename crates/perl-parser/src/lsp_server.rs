@@ -385,7 +385,20 @@ impl LspServer {
         if let Some(content_length) = headers.get("Content-Length") {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
-                reader.read_exact(&mut content)?;
+                let mut bytes_read = 0;
+
+                // Read content in chunks to handle partial reads
+                while bytes_read < length {
+                    let bytes_to_read = length - bytes_read;
+                    let mut chunk = vec![0u8; bytes_to_read];
+                    match reader.read(&mut chunk)? {
+                        0 => return Ok(None), // Unexpected EOF
+                        n => {
+                            content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
+                            bytes_read += n;
+                        }
+                    }
+                }
 
                 // Parse JSON-RPC request
                 if let Ok(request) = serde_json::from_slice(&content) {
@@ -2205,11 +2218,12 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
-            if !sub_params.is_empty() {
-                // Extract parameter names from the params node
-                for param in sub_params {
-                    self.extract_params(param, &mut params);
+        if let NodeKind::Subroutine { signature: sub_signature, body, .. } = &sub_node.kind {
+            if let Some(sig) = sub_signature {
+                if let NodeKind::Signature { parameters } = &sig.kind {
+                    for param in parameters {
+                        self.extract_params(param, &mut params);
+                    }
                 }
             } else {
                 // Look for my (...) = @_; pattern in the body

@@ -51,9 +51,10 @@ print $x + $y;
         assert!(doc.content().contains("99"));
         assert!(format!("{:?}", ast2).contains("Variable"));
 
-        // Check metrics if available
+        // Check incremental parsing metrics
         if let Some(metrics) = doc.metrics() {
-            println!("Incremental parse metrics: {}", metrics);
+            assert!(metrics.nodes_reused > 0);
+            assert!(metrics.last_parse_time_ms < 2.0);
         }
 
         unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };

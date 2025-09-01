@@ -60,7 +60,7 @@ You will:
 - Parsing performance targets (1-150 µs) and memory efficiency
 - xtask automation compatibility (`cargo xtask test`, `cargo xtask compare`)
 - Workspace lint configuration and modern Rust patterns
-- Impact on published crates.io versions (v0.8.5+ GA)
+- Impact on published crates.io versions (v0.8.7+ GA)
 
 **GITHUB COMMUNICATION**:
 - Use `gh pr comment` to post structured review feedback

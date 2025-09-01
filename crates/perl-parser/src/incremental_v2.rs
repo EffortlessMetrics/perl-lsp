@@ -147,7 +147,30 @@ impl IncrementalParserV2 {
         let mut parser = Parser::new(source);
         let root = parser.parse()?;
 
-        self.reparsed_nodes = self.count_nodes(&root);
+        // For first parse or structural changes, all nodes are reparsed
+        if self.last_tree.is_none() {
+            // First parse - no reuse possible
+            self.reused_nodes = 0;
+            self.reparsed_nodes = self.count_nodes(&root);
+        } else {
+            // Check if this was a fallback due to too many edits, invalid conditions, or empty source
+            // In such cases, we should report 0 reused nodes as it's truly a full reparse
+            if source.is_empty()
+                || self.pending_edits.edits.len() > 10
+                || !self.is_simple_value_edit(self.last_tree.as_ref().unwrap())
+            {
+                // Full fallback - no actual reuse
+                self.reused_nodes = 0;
+                self.reparsed_nodes = self.count_nodes(&root);
+            } else {
+                // Normal incremental fallback - still compare against old tree
+                let old_tree = self.last_tree.as_ref().unwrap();
+                let (reused, reparsed) = self.analyze_reuse(&old_tree.root, &root);
+                self.reused_nodes = reused;
+                self.reparsed_nodes = reparsed;
+            }
+        }
+
         self.last_tree = Some(IncrementalTree::new(root.clone(), source.to_string()));
         self.pending_edits = EditSet::new();
 
@@ -323,6 +346,50 @@ impl IncrementalParserV2 {
 
         // Check if this node is affected by any edit
         let affected = self.is_node_affected(node);
+
+        // Handle container nodes that need recursive processing
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                // Recursively update child nodes
+                let new_statements: Vec<Node> = statements
+                    .iter()
+                    .map(|stmt| self.clone_and_update_node(stmt, new_source, _old_source))
+                    .collect();
+
+                let new_start = (node.location.start as isize + shift) as usize;
+                let new_end = (node.location.end as isize
+                    + shift
+                    + self.calculate_content_delta(node)) as usize;
+
+                return Node::new(
+                    NodeKind::Program { statements: new_statements },
+                    SourceLocation { start: new_start, end: new_end },
+                );
+            }
+            NodeKind::VariableDeclaration { declarator, variable, initializer, attributes } => {
+                // Recursively update child nodes
+                let new_variable = self.clone_and_update_node(variable, new_source, _old_source);
+                let new_initializer = initializer
+                    .as_ref()
+                    .map(|init| self.clone_and_update_node(init, new_source, _old_source));
+
+                let new_start = (node.location.start as isize + shift) as usize;
+                let new_end = (node.location.end as isize
+                    + shift
+                    + self.calculate_content_delta(node)) as usize;
+
+                return Node::new(
+                    NodeKind::VariableDeclaration {
+                        declarator: declarator.clone(),
+                        variable: Box::new(new_variable),
+                        initializer: new_initializer.map(Box::new),
+                        attributes: attributes.clone(),
+                    },
+                    SourceLocation { start: new_start, end: new_end },
+                );
+            }
+            _ => {}
+        }
 
         if affected {
             // This node is affected - reparse just this part
@@ -639,7 +706,7 @@ mod tests {
         let source2 = "my $x = 4242;";
         let tree2 = parser.parse(source2).unwrap();
 
-        assert_eq!(parser.reused_nodes, 4); // Program, VarDecl, Variable, and one more can be reused
+        assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable can be reused
         assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
 
         // Verify the tree is correct

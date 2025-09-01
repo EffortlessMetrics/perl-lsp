@@ -333,7 +333,7 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
             }
 
-            NodeKind::Subroutine { name, params: _, attributes, body } => {
+            NodeKind::Subroutine { name, prototype: _, signature: _, attributes, body } => {
                 let sub_name =
                     name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
 
@@ -594,7 +594,7 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Method { name, params: _, body } => {
+            NodeKind::Method { name, signature: _, attributes: _, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let symbol = Symbol {
                     name: name.clone(),
