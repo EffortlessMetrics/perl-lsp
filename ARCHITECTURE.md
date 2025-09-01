@@ -150,22 +150,30 @@ pub enum AstNode {
 - Enhanced regex patterns supporting all Perl variable declaration types (`my`, `our`, `local`, `state`)
 - Clear diagnostics for unparseable cases with suggestions
 
-### 5. Incremental Parsing System (NEW v0.8.7) 🚀
+### 5. Incremental Parsing with Rope-based Document Management (v0.8.7) 🚀
 
-**Purpose**: High-performance real-time editing with subtree reuse
+**Purpose**: High-performance real-time editing with Rope-based text management and subtree reuse
 
 **Architecture**:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Incremental Parsing Flow                     │
+│                 Incremental Parsing with Rope Integration      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ LSP Client  │  │    Edit     │  │   IncrementalDocument   │  │
-│  │  (Editor)   │→ │   Event     │→ │    State Manager        │  │
+│  │ LSP Client  │  │  LSP Edit   │  │   IncrementalDocument   │  │
+│  │  (Editor)   │→ │   Event     │→ │  + Rope Integration     │  │
 │  └─────────────┘  └─────────────┘  └───────────┬─────────────┘  │
 │                                                │                 │
 │  ┌─────────────────────────────────────────────▼─────────────┐  │
+│  │                 Rope-based Position Manager               │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
+│  │  │ UTF-16/UTF-8│  │CRLF/LF Line │  │  Position Cache │   │  │
+│  │  │ Conversion  │  │  Handling   │  │   with Rope     │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────────┘   │  │
+│  └─────────────────────┬─────────────────────────────────────┘  │
+│                        │                                        │
+│  ┌─────────────────────▼─────────────────────────────────────┐  │
 │  │                Subtree Cache                              │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
 │  │  │Content-based│  │Position-based│  │   LRU Cache     │   │  │
@@ -182,20 +190,61 @@ pub enum AstNode {
 │  └─────────────────────┬─────────────────────────────────────┘  │
 │                        │                                        │
 │  ┌─────────────────────▼─────────────────────────────────────┐  │
-│  │              Updated AST with Metrics                     │  │
+│  │           Updated AST with Rope-optimized Metrics         │  │
 │  │   • Nodes reused: 142    • Nodes reparsed: 3             │  │
 │  │   • Cache hits: 89%      • Parse time: 0.7ms             │  │
+│  │   • UTF-16 conversions: 15   • Rope operations: 8       │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Components** (**Diataxis: Reference**):
+**Rope Integration Components** (**Diataxis: Reference**):
+
+#### Rope-based Position Management
+- **`textdoc.rs`**: Core document structure with `ropey::Rope` for efficient text operations
+- **`position_mapper.rs`**: Centralized UTF-16 ↔ UTF-8 position conversion with line ending support
+- **`incremental_integration.rs`**: LSP change event processing with Rope-based position tracking
+- **`incremental_handler_v2.rs`**: Enhanced document change handling using Rope operations
+
+#### UTF-16/UTF-8 Conversion (Production-Ready)
+```rust
+// Rope-based position conversion
+pub struct PositionMapper {
+    rope: Rope,                    // Efficient text representation
+    line_ending: LineEnding,       // CRLF/LF/CR detection
+}
+
+// Convert LSP positions (UTF-16) to parser byte offsets
+impl PositionMapper {
+    pub fn lsp_pos_to_byte(&self, pos: Position) -> Option<usize> {
+        // Handles emoji, surrogate pairs, and mixed line endings
+    }
+    
+    pub fn byte_to_lsp_pos(&self, byte_offset: usize) -> Position {
+        // Accurate UTF-16 code unit calculation
+    }
+}
+```
+
+#### Line Ending Support
+- **Windows (CRLF)**: `\r\n` sequences properly handled
+- **Unix (LF)**: Standard `\n` line endings  
+- **Classic Mac (CR)**: Legacy `\r` line endings
+- **Mixed Documents**: Robust detection and per-line handling
+
+**Core Components** (**Diataxis: Reference**):
 
 #### IncrementalDocument (`incremental_document.rs`)
-- **Document State**: Version-tracked source text with parsed AST
-- **Subtree Cache**: Dual-indexing (content hash + byte range) for reuse
-- **Metrics Tracking**: Performance analytics (reused vs reparsed nodes)
-- **Edit Application**: Efficient delta processing with position adjustment
+- **Document State**: Version-tracked source text with parsed AST and Rope integration
+- **Subtree Cache**: Dual-indexing (content hash + byte range) with Rope-optimized position tracking
+- **Metrics Tracking**: Performance analytics (reused vs reparsed nodes, UTF-16 conversions)
+- **Edit Application**: Efficient delta processing with Rope-based position adjustment
+
+#### Rope Integration Layer
+- **`textdoc::Doc`**: Core document wrapper with `ropey::Rope` for text storage
+- **`position_mapper::PositionMapper`**: UTF-16/UTF-8 conversion with line ending detection
+- **`incremental_integration::DocumentParser`**: Bridge between LSP and incremental parsing
+- **UTF-16 Support**: Handles emoji, surrogate pairs, and variable-width Unicode characters
 
 #### SubtreeCache (Internal)
 - **Content Indexing**: Hash-based lookup for common patterns (literals, identifiers)  

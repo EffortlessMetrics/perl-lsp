@@ -15,9 +15,10 @@ This repository contains **four published crates** forming a complete Perl parsi
 - Native recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
-- **True incremental parsing** with subtree reuse for <1ms LSP updates
+- **True incremental parsing** with Rope-based document management and subtree reuse for <1ms LSP updates
+- **Production-ready Rope integration** for UTF-16/UTF-8 position conversion and line ending support
 - Tree-sitter compatible output
-- Includes LSP server binary (`perl-lsp`)
+- Includes LSP server binary (`perl-lsp`) with full Rope-based document state
 - **v0.8.7 improvements** (Post-PR #69):
   - **Production-stable hash key context detection** - industry-leading bareword analysis with comprehensive coverage
   - **Enhanced S-expression format** - proper NodeKind variants for Prototype, Signature, Method parameters
@@ -54,6 +55,7 @@ This repository contains **four published crates** forming a complete Perl parsi
 
 ### LSP Server (`perl-lsp` binary) ✅ **PRODUCTION READY**
 - **~75% of LSP features actually work** (all advertised capabilities are fully functional, major accuracy improvements in v0.8.7 with production-stable hash context detection)
+- **Full Rope-based document management** for efficient text operations and UTF-16/UTF-8 position conversion
 - **Fully Working Features (v0.8.7 - Production-Stable Hash Key Context Detection)**: 
   - ✅ **Advanced syntax checking and diagnostics** with breakthrough hash key context detection:
     - Hash subscripts: `$hash{bareword_key}` - correctly recognized as legitimate
@@ -556,17 +558,30 @@ These fallbacks ensure the LSP remains functional during active development when
 
 ## Development Guidelines
 
-### Choosing a Crate
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready
-2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate
+### Choosing a Crate (**Diataxis: How-to**)
+1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
+2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate - includes full Rope-based document management  
 3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
 
-### Development Locations
-- **Parser & LSP**: `/crates/perl-parser/` - main development
+### Development Locations (**Diataxis: Reference**)
+- **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
-- **Legacy**: `/crates/perl-parser-pest/` - maintenance only
+- **Legacy**: `/crates/perl-parser-pest/` - maintenance only (contains outdated Rope usage)
+
+### Rope Development Guidelines (**Diataxis: How-to**)
+**IMPORTANT**: All Rope improvements should target the **production perl-parser crate**, not internal test harnesses.
+
+**Production Rope Modules** (Target for improvements):
+- **`/crates/perl-parser/src/textdoc.rs`**: Core document management with `ropey::Rope`
+- **`/crates/perl-parser/src/position_mapper.rs`**: UTF-16/UTF-8 position conversion
+- **`/crates/perl-parser/src/incremental_integration.rs`**: LSP integration bridge
+- **`/crates/perl-parser/src/incremental_handler_v2.rs`**: Document change processing
+
+**Do NOT modify these Rope usages** (internal test code):
+- **`/crates/tree-sitter-perl-rs/`**: Legacy test harnesses with outdated Rope usage
+- **Internal test infrastructure**: Focus on production code, not test utilities
 
 ### Testing
 ```bash
@@ -628,40 +643,103 @@ To extend the Pest grammar:
 - Predictable: ~180 µs/KB parsing speed
 - Legacy C parser: ~12-68 µs (kept for benchmark reference only)
 
-## Incremental Parsing (v0.8.7) 🚀
+## Incremental Parsing with Rope-based Document Management (v0.8.7) 🚀
 
-The native parser now includes **true incremental parsing** capabilities for real-time LSP editing:
+The native parser includes **production-ready incremental parsing** with **Rope-based document management** for efficient real-time LSP editing:
 
-### Architecture
-- **IncrementalDocument**: High-performance document state with subtree caching
-- **Subtree Reuse**: Container nodes reuse unchanged AST subtrees from cache
+### Architecture (**Diataxis: Explanation**)
+- **IncrementalDocument**: High-performance document state with subtree caching and Rope integration
+- **Rope-based Text Management**: Efficient UTF-16/UTF-8 position conversion using `ropey` crate
+- **Subtree Reuse**: Container nodes reuse unchanged AST subtrees from cache  
 - **Metrics Tracking**: Detailed performance metrics (reused vs reparsed nodes)
 - **Content-based Caching**: Hash-based subtree matching for common patterns
-- **Position-based Caching**: Range-based subtree matching for accurate placement
+- **Position-based Caching**: Range-based subtree matching with precise Rope position tracking
 
-### Performance Targets
-- **<1ms updates** for small edits (single token changes)
-- **<2ms updates** for moderate edits (function-level changes)
-- **Cache hit ratios** of 70-90% for typical editing scenarios
-- **Memory efficient** with LRU cache eviction and Arc<Node> sharing
+### Rope Integration (**Diataxis: Reference**)
+The perl-parser crate includes comprehensive Rope support for document management:
 
-### Key Features (**Diataxis: Reference**)
+**Core Rope Modules**:
+- **`textdoc.rs`**: UTF-16 aware text document handling with `ropey::Rope`
+- **`position_mapper.rs`**: Centralized position mapping (CRLF/LF/CR line endings, UTF-16 code units, byte offsets)
+- **`incremental_integration.rs`**: Bridge between LSP server and incremental parsing with Rope
+- **`incremental_handler_v2.rs`**: Enhanced incremental document updates using Rope
+
+**Position Conversion Features**:
 ```rust
-// True incremental parsing with subtree reuse
+// UTF-16/UTF-8 position conversion
+use crate::textdoc::{Doc, PosEnc, lsp_pos_to_byte, byte_to_lsp_pos};
+use ropey::Rope;
+
+// Create document with Rope
+let mut doc = Doc { rope: Rope::from_str(content), version };
+
+// Convert LSP positions (UTF-16) to byte offsets 
+let byte_offset = lsp_pos_to_byte(&doc.rope, pos, PosEnc::Utf16);
+
+// Convert byte offsets to LSP positions
+let lsp_pos = byte_to_lsp_pos(&doc.rope, byte_offset, PosEnc::Utf16);
+```
+
+**Line Ending Support**:
+- **CRLF handling**: Proper Windows line ending support
+- **Mixed line endings**: Robust detection and handling of mixed CRLF/LF/CR
+- **UTF-16 emoji support**: Correct positioning with Unicode characters requiring surrogate pairs
+
+### Performance Targets (**Diataxis: Reference**)
+- **<1ms updates** for small edits (single token changes) with Rope optimization
+- **<2ms updates** for moderate edits (function-level changes) with subtree reuse
+- **Cache hit ratios** of 70-90% for typical editing scenarios
+- **Memory efficient** with LRU cache eviction, Arc<Node> sharing, and Rope's piece table architecture
+
+### Incremental Parsing API (**Diataxis: Tutorial**)
+```rust
+// Create incremental document with Rope support
 let mut doc = IncrementalDocument::new(source)?;
+
+// Apply single edit (automatically uses Rope for position tracking)
+let edit = IncrementalEdit::new(start_byte, end_byte, new_text);
 doc.apply_edit(edit)?;
 
-// Performance metrics
+// Apply multiple edits in batch (Rope handles position adjustments)
+let mut edits = IncrementalEditSet::new();
+edits.add(edit1);
+edits.add(edit2);
+doc.apply_edits(&edits)?;
+
+// Performance metrics with Rope-optimized parsing
 println!("Parse time: {:.2}ms", doc.metrics.last_parse_time_ms);
 println!("Nodes reused: {}", doc.metrics.nodes_reused);
 println!("Nodes reparsed: {}", doc.metrics.nodes_reparsed);
 ```
 
-### Integration (**Diataxis: How-to**)
-- **LSP Server**: Automatically enabled for real-time editing
-- **Configuration**: Enable via `PERL_LSP_INCREMENTAL=1` environment variable
-- **Fallback**: Graceful degradation to full parsing when needed
-- **Testing**: Comprehensive integration tests with async LSP harness
+### LSP Integration (**Diataxis: How-to**)
+- **Document Management**: LSP server uses Rope for all document state (`textdoc::Doc`)
+- **Position Conversion**: Automatic UTF-16 ↔ UTF-8 conversion via `position_mapper::PositionMapper`
+- **Incremental Updates**: Enable via `PERL_LSP_INCREMENTAL=1` environment variable
+- **Change Application**: Efficient change processing using `textdoc::apply_changes()`
+- **Fallback Mechanisms**: Graceful degradation to full parsing when incremental parsing fails
+- **Testing**: Comprehensive integration tests with async LSP harness and Rope-based position validation
+
+### Development Guidelines (**Diataxis: How-to**)
+**Where to Make Rope Improvements**:
+- **Production Code**: `/crates/perl-parser/src/` - All Rope enhancements should target this crate
+- **Key Modules**: `textdoc.rs`, `position_mapper.rs`, `incremental_*.rs` modules
+- **NOT Internal Test Harnesses**: Avoid modifying `/crates/tree-sitter-perl-rs/` or other internal test code
+
+**Rope Testing Commands**:
+```bash
+# Test Rope-based position mapping
+cargo test -p perl-parser position_mapper
+
+# Test incremental parsing with Rope integration  
+cargo test -p perl-parser incremental_integration_test
+
+# Test UTF-16 position conversion with multibyte characters
+cargo test -p perl-parser multibyte_edit_test
+
+# Test LSP document changes with Rope
+cargo test -p perl-lsp lsp_comprehensive_e2e_test
+```
 
 ## Common Development Tasks
 
