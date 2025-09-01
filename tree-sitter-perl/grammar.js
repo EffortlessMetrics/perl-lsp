@@ -204,7 +204,9 @@ module.exports = grammar({
       $.method_declaration_statement,
       $.phaser_statement,
       $.conditional_statement,
-      /* TODO: given/when/default */
+      $.given_statement,
+      $.when_statement,
+      $.default_statement,
       $.loop_statement,
       $.cstyle_for_statement,
       $.for_statement,
@@ -331,6 +333,11 @@ module.exports = grammar({
         field('block', $.block),
         optional($._else)
       ),
+    given_statement: $ =>
+      seq('given', '(', field('value', $._expr), ')', field('block', $.block)),
+    when_statement: $ =>
+      seq('when', '(', field('condition', $._expr), ')', field('block', $.block)),
+    default_statement: $ => seq('default', field('block', $.block)),
     _loop_body: $ => seq(field('block', $.block), optseq('continue', field('continue', $.block))),
     loop_statement: $ => seq($._loops, '(', field('condition', $._expr), ')', $._loop_body),
     cstyle_for_statement: $ =>

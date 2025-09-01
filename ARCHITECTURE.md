@@ -93,7 +93,23 @@ statement = {
 }
 ```
 
-### 2. AST Builder (`src/pure_rust_parser.rs`)
+### 2. Tree-sitter Grammar (`/tree-sitter-perl/grammar.js`)
+
+**Purpose**: Original Tree-sitter grammar with enhanced control flow support
+
+**Key Features**:
+- **Enhanced Control Flow**: Complete support for given/when/default statements
+- **Tree-sitter Compatibility**: Native integration with Tree-sitter ecosystem  
+- **Grammar Completeness**: Expanded coverage of modern Perl control structures
+- **AST Node Types**: Dedicated nodes for given_statement, when_statement, default_statement
+- **Test Coverage**: Comprehensive corpus testing for all control flow constructs
+
+**Recent Improvements**:
+- Added given/when/default grammar rules for switch-style control flow
+- Enhanced test corpus with comprehensive edge case coverage  
+- Improved Tree-sitter compatibility for modern Perl features
+
+### 3. AST Builder (`src/pure_rust_parser.rs`)
 
 **Purpose**: Converts Pest parse trees to strongly-typed AST nodes
 
@@ -116,7 +132,7 @@ pub enum AstNode {
 }
 ```
 
-### 3. S-Expression Generator
+### 4. S-Expression Generator
 
 **Purpose**: Outputs tree-sitter compatible format
 
@@ -126,7 +142,7 @@ pub enum AstNode {
 - **Position Info**: Includes byte ranges for all nodes
 - **Streaming**: Can output large ASTs efficiently
 
-### 4. Edge Case Handling System
+### 5. Edge Case Handling System
 
 **Purpose**: Handles Perl's most complex parsing challenges
 
@@ -270,7 +286,6 @@ impl PositionMapper {
 - **Error Recovery**: Maintains functionality during incomplete/invalid code states  
 - **Fallback Support**: Full reparse available when incremental parsing fails
 - **Test Infrastructure**: Comprehensive async harness with timeout support
-
 ### 6. LSP Server (`/crates/perl-parser/src/lsp_server.rs`)
 
 **Purpose**: Language Server Protocol implementation for IDE integration
