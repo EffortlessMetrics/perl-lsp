@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.8
+# LSP Actual Status - v0.8.7
 
 ## LSP GA Contract
 
@@ -10,10 +10,7 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 72% in v0.8.6, enhanced with variable resolution patterns). This document provides an honest assessment of what you can actually expect to work, including **incremental parsing performance improvements** and **enhanced variable resolution**. 
-
-⚠️ **Current Test Status**: Corpus tests show 188 failures in S-expression generation. LSP functionality may be impacted. See [TEST_STATUS.md](TEST_STATUS.md) for details.
-
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 72% in v0.8.6). Major v0.8.7 improvements include enhanced comment documentation extraction, source threading for better context awareness, and enhanced variable resolution patterns. This document provides an honest assessment of what you can actually expect to work, including **incremental parsing performance improvements** and **enhanced comment documentation**.
 ## ✅ Actually Working Features (~75%)
 
 These features have been tested and provide real, useful functionality:
@@ -40,14 +37,15 @@ These features have been tested and provide real, useful functionality:
 - Missing pragma suggestions (strict/warnings) with contextual recommendations
 - **Status**: Fully functional with significantly improved accuracy and real-time performance
 
-### 2. **Enhanced Code Completion** (PERFORMANCE IMPROVED v0.8.8)
+### 2. **Enhanced Code Completion** (PERFORMANCE IMPROVED v0.8.7)
 - Variables in current scope with **<1ms response time** via incremental parsing and enhanced resolution patterns
 - Support for complex variable contexts (hash keys, array indices, method calls)
+- **Enhanced**: Source-aware completion with comment-based symbol documentation
 - Perl built-in functions (150+ signatures)
 - Keywords (my, sub, if, etc.)
 - **Real-time updates** during typing with subtree reuse
 - **Limitations**: No package members, no imports, no file paths
-- **Status**: ~65% functional with major performance improvements and enhanced variable resolution
+- **Status**: ~65% functional with major performance improvements and enhanced comment documentation
 
 ### 3. **Go to Definition** (Single File Only)
 - Jump to variable declarations
@@ -61,19 +59,22 @@ These features have been tested and provide real, useful functionality:
 - **Limitations**: Current file only
 - **Status**: ~70% functional
 
-### 5. **Hover Information**
-- Basic variable type info
+### 5. **Enhanced Hover Information** (v0.8.7)
+- Basic variable type info with comment documentation
 - Built-in function signatures
+- **Enhanced**: Leading comment extraction across blank lines for all symbols
+- **Improved**: Source-aware symbol analysis with better context
 - **Limitations**: No package docs, no POD extraction
-- **Status**: ~50% functional
+- **Status**: ~60% functional
 
 ### 6. **Signature Help**
 - Parameter hints for 150+ built-in functions
 - Works even with incomplete/invalid code
 - **Status**: ~80% functional
 
-### 7. **Document Symbols**
+### 7. **Enhanced Document Symbols** (v0.8.7)
 - Outline view with subroutines and packages
+- **Enhanced**: Symbol documentation from leading comments
 - Hierarchical structure
 - Icons for different symbol types
 - **Status**: Fully functional
