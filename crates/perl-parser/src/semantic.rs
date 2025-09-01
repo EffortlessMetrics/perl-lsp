@@ -101,7 +101,7 @@ impl SemanticAnalyzer {
 
     /// Create a new semantic analyzer from an AST and source text
     pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,

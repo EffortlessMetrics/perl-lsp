@@ -674,7 +674,8 @@ impl SymbolExtractor {
         }
         let mut end = start.min(self.source.len());
         let bytes = self.source.as_bytes();
-        while end > 0 && (bytes[end - 1] == b' ' || bytes[end - 1] == b'\t') {
+        // Trim all preceding whitespace, including newlines, to find the real end of comments.
+        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
             end -= 1;
         }
         let prefix = &self.source[..end];
@@ -684,9 +685,8 @@ impl SymbolExtractor {
             let trimmed = line.trim_start();
             if trimmed.starts_with('#') {
                 docs.push(trimmed.trim_start_matches('#').trim_start().to_string());
-            } else if trimmed.is_empty() {
-                break;
             } else {
+                // Stop at any non-comment line (including empty lines).
                 break;
             }
         }
@@ -804,7 +804,7 @@ sub bar {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
 
-        let extractor = SymbolExtractor::new();
+        let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);
 
         // Check package symbol

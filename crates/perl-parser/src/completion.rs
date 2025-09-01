@@ -117,7 +117,16 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 impl CompletionProvider {
     /// Create a new completion provider from parsed AST
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+        Self::new_with_index_and_source(ast, "", workspace_index)
+    }
+
+    /// Create a new completion provider from parsed AST and source
+    pub fn new_with_index_and_source(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+    ) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 
         let keywords = [
             "my",

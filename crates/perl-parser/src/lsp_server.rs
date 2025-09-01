@@ -1442,8 +1442,11 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let provider =
-                        CompletionProvider::new_with_index(ast, self.workspace_index.clone());
+                    let provider = CompletionProvider::new_with_index_and_source(
+                        ast,
+                        &doc.content,
+                        self.workspace_index.clone(),
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
@@ -3974,7 +3977,7 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
-                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
                     let symbol_table = extractor.extract(ast);
 
                     // Convert to DocumentSymbol format
@@ -7593,7 +7596,7 @@ impl LspServer {
             if let Some(doc) = doc_opt {
                 if let Some(ast) = &doc.ast {
                     // Find the symbol in the AST to get more accurate information
-                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
                     let symbol_table = extractor.extract(ast);
 
                     // Find matching symbol
