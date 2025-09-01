@@ -23,8 +23,8 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(source_file {})", stmts)
+                let stmts = statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
+                format!("(program {})", stmts)
             }
 
             NodeKind::ExpressionStatement { expression } => {
@@ -75,16 +75,9 @@ impl Node {
                 }
             }
 
-            NodeKind::Variable { sigil, name: _ } => {
-                // Tree-sitter format based on sigil type
-                match sigil.as_str() {
-                    "$" => "(scalar (varname))".to_string(),
-                    "@" => "(array (varname))".to_string(),
-                    "%" => "(hash (varname))".to_string(),
-                    "&" => "(amper (varname))".to_string(),
-                    "*" => "(glob (varname))".to_string(),
-                    _ => "(variable)".to_string(), // fallback
-                }
+            NodeKind::Variable { sigil, name } => {
+                // Format expected by tests: (variable sigil name)
+                format!("(variable {} {})", sigil, name)
             }
 
             NodeKind::VariableWithAttributes { variable, attributes } => {
@@ -138,14 +131,14 @@ impl Node {
                 format!("(glob {})", pattern)
             }
 
-            NodeKind::Number { value: _ } => {
-                // Tree-sitter format - just the node type
-                "(number)".to_string()
+            NodeKind::Number { value } => {
+                // Format expected by tests: (number value)
+                format!("(number {})", value)
             }
 
-            NodeKind::String { value: _, interpolated: _ } => {
-                // Tree-sitter format - all strings are just (string)
-                "(string)".to_string()
+            NodeKind::String { value, interpolated: _ } => {
+                // Format expected by tests: (string "value")
+                format!("(string \"{}\")", value)
             }
 
             NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
@@ -410,15 +403,13 @@ impl Node {
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
 
-            NodeKind::FunctionCall { name: _, args } => {
-                // Tree-sitter format:
-                // - Multiple args: (call_expression (identifier) (argument_list arg1 arg2 ...))
-                // - Single arg: (call_expression (identifier) arg)
+            NodeKind::FunctionCall { name, args } => {
+                // Format expected by tests: (call function_name (arg1 arg2 ...))
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
-                if args.len() == 1 {
-                    format!("(call_expression (identifier) {})", args_str)
+                if args.is_empty() {
+                    format!("(call {} ())", name)
                 } else {
-                    format!("(call_expression (identifier) (argument_list {}))", args_str)
+                    format!("(call {} ({}))", name, args_str)
                 }
             }
 
@@ -501,15 +492,29 @@ impl Node {
                 format!("(format {} {:?})", name, body)
             }
 
-            NodeKind::Identifier { name: _ } => {
-                // Tree-sitter format - content is implicit
-                "(identifier)".to_string()
+            NodeKind::Identifier { name } => {
+                // Format expected by tests: (identifier name)
+                format!("(identifier {})", name)
             }
 
             NodeKind::Error { message } => {
                 format!("(ERROR {})", message)
             }
             NodeKind::UnknownRest => "(UNKNOWN_REST)".to_string(),
+        }
+    }
+
+    /// Convert the AST to S-expression format that unwraps expression statements in programs
+    pub fn to_sexp_inner(&self) -> String {
+        match &self.kind {
+            NodeKind::ExpressionStatement { expression } => {
+                // In the inner format, expression statements are unwrapped
+                expression.to_sexp()
+            }
+            _ => {
+                // For all other node types, use regular to_sexp
+                self.to_sexp()
+            }
         }
     }
 }

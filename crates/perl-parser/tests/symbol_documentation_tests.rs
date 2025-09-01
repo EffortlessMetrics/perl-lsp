@@ -1,5 +1,4 @@
 use perl_parser::{Parser, SymbolExtractor};
-use std::time::Instant;
 
 #[test]
 fn sub_comment_is_captured() {
@@ -335,4 +334,49 @@ fn edge_case_malformed_utf8_handling() {
     
     // Should not panic and should extract some form of documentation
     assert!(symbols[0].documentation.is_some());
+}
+
+#[test]
+fn bless_with_comment_documentation() {
+    // Regression test: ensure comment extraction doesn't interfere with bless parsing
+    let src = "# This creates a blessed object\nmy $obj = bless { foo => 1 }, 'MyClass';";
+    let mut parser = Parser::new(src);
+    let ast = parser.parse().unwrap();
+    
+    // Verify parsing succeeds and generates correct AST structure
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(call bless"));
+    assert!(sexp.contains("(hash"));
+    assert!(sexp.contains("MyClass"));
+    
+    // Also verify symbol extraction works
+    let extractor = SymbolExtractor::new_with_source(src);
+    let symbol_table = extractor.extract(&ast);
+    
+    // Should have extracted the variable symbol
+    assert!(symbol_table.symbols.contains_key("obj"));
+    let obj_symbols = &symbol_table.symbols["obj"];
+    assert_eq!(obj_symbols.len(), 1);
+    // Variable should have the preceding comment as documentation
+    assert_eq!(obj_symbols[0].documentation, Some("This creates a blessed object".to_string()));
+}
+
+#[test] 
+fn subroutine_with_bless_return() {
+    // Regression test: ensure subroutines that return blessed objects work correctly
+    let src = "# Constructor\nsub new {\n    return bless {}, shift;\n}";
+    let mut parser = Parser::new(src);
+    let ast = parser.parse().unwrap();
+    
+    // Verify parsing succeeds
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(call bless"));
+    
+    // Verify symbol extraction captures subroutine documentation
+    let extractor = SymbolExtractor::new_with_source(src);
+    let symbol_table = extractor.extract(&ast);
+    
+    assert!(symbol_table.symbols.contains_key("new"));
+    let new_symbols = &symbol_table.symbols["new"];
+    assert_eq!(new_symbols[0].documentation, Some("Constructor".to_string()));
 }
