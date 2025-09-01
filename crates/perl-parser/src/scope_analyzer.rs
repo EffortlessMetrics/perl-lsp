@@ -113,7 +113,7 @@ impl Scope {
 }
 
 /// Advanced scope analyzer with hash key context detection
-/// 
+///
 /// This analyzer provides comprehensive Perl scope analysis including:
 /// - Variable declaration tracking (my, our, local, state)
 /// - Undefined variable detection under `use strict`
@@ -210,10 +210,16 @@ impl ScopeAnalyzer {
                             line,
                             description: match issue_kind {
                                 IssueKind::VariableShadowing => {
-                                    format!("Variable '{}' shadows a variable in outer scope", var_name)
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        var_name
+                                    )
                                 }
                                 IssueKind::VariableRedeclaration => {
-                                    format!("Variable '{}' is already declared in this scope", var_name)
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        var_name
+                                    )
                                 }
                                 _ => String::new(),
                             },
@@ -456,11 +462,11 @@ impl ScopeAnalyzer {
     }
 
     /// Check if the current analysis context is within a hash key
-    /// 
+    ///
     /// This method provides **production-stable hash key context detection** for accurate
     /// bareword analysis under `use strict`. It prevents false positives for legitimate
     /// Perl constructs like:
-    /// 
+    ///
     /// ```perl
     /// use strict;
     /// my %hash;
@@ -468,17 +474,17 @@ impl ScopeAnalyzer {
     /// my @values = @hash{key1, key2};  # No warning - hash slice keys  
     /// my $nested = $hash{level1}{level2}; # No warning - nested access
     /// ```
-    /// 
+    ///
     /// **Performance**: O(depth) where depth is the nesting level of hash access.
     /// Typical performance is <1μs for normal nesting levels (1-10 deep).
-    /// 
+    ///
     /// **Implementation**: Uses a stack-based approach where each `analyze_node` call
     /// pushes its hash context state, enabling accurate tracking through complex
     /// nested structures and expressions.
-    /// 
+    ///
     /// # Arguments
     /// * `_node` - Currently unused, reserved for future node-specific optimizations
-    /// 
+    ///
     /// # Returns
     /// * `true` if the current context is within a hash key position
     /// * `false` otherwise
@@ -493,7 +499,8 @@ impl ScopeAnalyzer {
         // Extract content from qw(...) expression
         if let Some(content) = qw_expr.strip_prefix("qw(").and_then(|s| s.strip_suffix(")")) {
             // Split by whitespace and filter for variables
-            content.split_whitespace()
+            content
+                .split_whitespace()
                 .filter(|s| s.starts_with('$') || s.starts_with('@') || s.starts_with('%'))
                 .map(|s| s.to_string())
                 .collect()
