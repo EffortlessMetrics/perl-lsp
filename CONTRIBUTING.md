@@ -1,32 +1,163 @@
-# Contributing to Pure Rust Perl Parser
+# Contributing to tree-sitter-perl
 
-Thank you for your interest in contributing to the Pure Rust Perl Parser! This document provides guidelines for contributing to the project.
+**Diataxis Framework Guide** - Comprehensive contribution guidelines using structured documentation principles
 
-## Table of Contents
+Thank you for your interest in contributing to tree-sitter-perl! This document provides complete guidelines for contributing to the project using the Diataxis documentation framework.
 
-- [Project Structure](#project-structure)
-- [Development Setup](#development-setup)
+## 📋 Table of Contents
+
+**Tutorials** (Learning-oriented):
+- [First-Time Contributor Setup](#first-time-contributor-setup)
+- [Making Your First Contribution](#making-your-first-contribution)
+
+**How-to Guides** (Task-oriented):
+- [Development Setup](#development-setup)  
 - [Testing Guidelines](#testing-guidelines)
 - [Adding New Features](#adding-new-features)
-- [Incremental Parsing Development](#incremental-parsing-development)
-- [Code Style](#code-style)
-- [Pull Request Process](#pull-request-process)
+- [LSP Feature Development](#lsp-feature-development)
+- [Performance Optimization](#performance-optimization)
 
-## Project Structure
+**Reference** (Information-oriented):
+- [Project Structure](#project-structure)
+- [Code Style Standards](#code-style-standards)
+- [API Compatibility](#api-compatibility)
 
+**Explanation** (Understanding-oriented):
+- [Architecture Decisions](#architecture-decisions)
+- [Parser Design Principles](#parser-design-principles)
+- [Testing Philosophy](#testing-philosophy)
+
+---
+
+## 📚 Tutorials (Learning-oriented)
+
+### First-Time Contributor Setup
+
+**Goal**: Get your development environment ready for your first contribution
+
+#### Prerequisites
+- Rust 1.89+ with 2024 edition support
+- Git for version control
+- Basic familiarity with Rust and parser concepts
+
+#### Step-by-Step Setup
+1. **Fork and Clone**
+   ```bash
+   git clone https://github.com/YOUR-USERNAME/tree-sitter-perl
+   cd tree-sitter-perl
+   ```
+
+2. **Install Development Tools**
+   ```bash
+   # Install required Rust components
+   rustup component add rustfmt clippy
+   
+   # Install development dependencies
+   cargo install cargo-nextest  # Fast test runner
+   cargo install cargo-watch    # File watching
+   ```
+
+3. **Verify Installation**
+   ```bash
+   # Build all crates
+   cargo build --all
+   
+   # Run basic tests
+   cargo nextest run -p perl-parser
+   
+   # Check code formatting
+   cargo fmt --all -- --check
+   ```
+
+4. **Run Your First Parse**
+   ```bash
+   # Test the parser on a simple Perl script
+   echo 'my $x = 42; print $x;' > test.pl
+   cargo run -p perl-parser --example parse_file test.pl
+   ```
+
+### Making Your First Contribution
+
+**Goal**: Submit your first pull request successfully
+
+#### Choose Your First Issue
+1. **Good First Issues**: Look for `good-first-issue` label
+2. **Documentation**: README improvements, typo fixes
+3. **Tests**: Add test cases for existing functionality
+4. **Small Features**: Add support for minor Perl constructs
+
+#### Development Workflow
+1. **Create Feature Branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make Changes Following TDD**
+   ```bash
+   # 1. Write failing test
+   cargo nextest run test_your_feature  # Should fail
+   
+   # 2. Implement feature
+   # Edit relevant files...
+   
+   # 3. Make test pass
+   cargo nextest run test_your_feature  # Should pass
+   ```
+
+3. **Quality Checks**
+   ```bash
+   # Format code
+   cargo fmt --all
+   
+   # Fix linting issues  
+   cargo clippy --all -- -W clippy::all
+   
+   # Run full test suite
+   cargo xtask test
+   ```
+
+---
+
+## 🛠️ How-to Guides (Task-oriented)
+
+### Development Setup
+
+**Reference**: Complete project structure and development environment
+
+#### Project Structure (v0.8.8+)
 ```
 tree-sitter-perl/
-├── crates/tree-sitter-perl-rs/     # Pure Rust Perl Parser
-│   ├── src/
-│   │   ├── grammar.pest            # Pest PEG grammar for Perl 5
-│   │   ├── pure_rust_parser.rs     # Main parser implementation
-│   │   ├── edge_case_handler.rs    # Edge case handling system
-│   │   └── lib.rs                  # Public API
-│   └── Cargo.toml
-├── docs/                           # Architecture and design docs
+├── crates/                         # Published crates ecosystem
+│   ├── perl-parser/                # Main parser & LSP server ⭐
+│   │   ├── src/
+│   │   │   ├── parser.rs           # Recursive descent parser
+│   │   │   ├── lsp_server.rs       # LSP implementation  
+│   │   │   └── ast.rs              # AST definitions
+│   │   └── bin/perl-lsp.rs         # LSP server binary
+│   ├── perl-lexer/                 # Context-aware tokenizer
+│   │   └── src/
+│   │       ├── lib.rs              # Lexer API
+│   │       └── token.rs            # Token definitions
+│   ├── perl-corpus/                # Test corpus and validation
+│   │   ├── src/lib.rs              # Corpus API
+│   │   └── tests/*.pl              # Test files
+│   └── perl-parser-pest/           # Legacy Pest parser (deprecated)
+├── docs/                           # Architecture documentation
 ├── xtask/                          # Development automation
-├── benches/                        # Performance benchmarks
-└── tree-sitter-perl/               # Legacy reference (corpus tests)
+├── benches/                        # Performance benchmarks  
+└── tree-sitter-perl/              # Original C reference
+```
+
+#### Development Environment
+```bash
+# Build the native parser (recommended)
+cargo build -p perl-lexer -p perl-parser
+
+# Build LSP server
+cargo build -p perl-parser --bin perl-lsp --release
+
+# Build with all features
+cargo build --all --all-features
 ```
 
 ## Development Setup

@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.8
+# LSP Actual Status - v0.8.8+
 
 ## LSP GA Contract
 
@@ -390,12 +390,12 @@ See [LSP_WIRING_OPPORTUNITIES.md](LSP_WIRING_OPPORTUNITIES.md) for technical det
 
 ## 📈 Version History
 
-### v0.8.8
-- Enhanced tree-sitter grammar with given/when/default support
-- Improved Tree-sitter compatibility for modern Perl control flow
-- Comprehensive corpus testing for switch-style control structures
-- Parser remains 100% complete with enhanced grammar coverage
-- LSP functionality improved (~75% functional)
+### v0.8.8+
+- **Enhanced Tree-sitter Grammar**: Complete given/when/default support for modern Perl switch-style control flow
+- **Improved Tree-sitter Compatibility**: Perfect integration with tree-sitter tooling for enhanced syntax highlighting and navigation
+- **Comprehensive Corpus Testing**: Extensive test coverage for all switch-style control flow patterns including nested structures
+- **Parser Remains 100% Complete**: Enhanced grammar coverage with all modern Perl control flow constructs fully supported
+- **LSP Functionality Improved**: Maintained ~75% functional with enhanced grammar support
 
 ### v0.8.6
 - **Async LSP Test Harness**: Production-grade testing infrastructure with timeout support

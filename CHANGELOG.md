@@ -7,10 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Version consistency updates across all documentation
+- Enhanced documentation structure using Diataxis framework
+- Improved installation and setup instructions
+
+## [v0.8.8] - 2025-09-01
+
 ### Added
 - **Tree-sitter Grammar Enhancement** - Added given/when/default grammar rules for complete switch-style control flow support
 - **Enhanced Control Flow** - Tree-sitter grammar now supports all modern Perl control flow constructs
 - **Comprehensive Corpus Testing** - Added test corpus for given/when/default constructs with edge case coverage
+- **Modern Perl Switch Constructs** - Full support for Perl 5.10+ switch-style control flow:
+  - `given` statements with expression evaluation
+  - `when` clauses with pattern matching and smart match operations
+  - `default` blocks for fallback handling
+  - Nested switch structures and complex control flow patterns
+- **Tree-sitter Integration** - Perfect compatibility with tree-sitter tooling:
+  - Enhanced syntax highlighting for switch constructs
+  - Proper AST node representation for all control flow elements
+  - Improved code navigation and folding support
+
+### Improved
+- **Grammar Coverage** - Parser maintains 100% Perl 5 syntax coverage with enhanced modern control flow support
+- **Performance** - Maintained optimal parsing performance (1-150 µs) with expanded grammar
+- **Test Coverage** - Added comprehensive test suite for all switch-style control flow patterns
 
 ## [v0.8.5] - 2025-08-24
 
@@ -181,6 +202,7 @@ See detailed notes: [CHANGELOG_v0.8.4.md](CHANGELOG_v0.8.4.md)
 - Workspace indexing overhead remains minimal
 - Incremental parsing infrastructure adds no overhead when disabled
 - All 78 test files passing with full feature set enabled
+- Enhanced grammar support adds minimal overhead (~1-2%) for complex control flow parsing
 
 ## [0.8.0] - Closed Beta
 

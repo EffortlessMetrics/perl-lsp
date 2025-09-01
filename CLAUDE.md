@@ -116,6 +116,51 @@ The project includes `.cargo/config.toml` which automatically configures:
 
 **AI tools can run bare `cargo build` and `cargo test` commands** - the configuration ensures correct behavior.
 
+## 🚀 Quick Start (Diataxis: Tutorials)
+
+### For LSP Users (Recommended)
+```bash
+# 1. Install the LSP server
+curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+
+# 2. Verify installation
+perl-lsp --version
+
+# 3. Test basic functionality
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+```
+
+### For Parser Library Users
+```toml
+# Add to your Cargo.toml
+[dependencies]
+perl-parser = "0.8.8"
+```
+
+```rust
+// Basic usage
+use perl_parser::Parser;
+
+let source = "my $x = 42; print $x;";
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+println!("AST: {:?}", ast);
+```
+
+### For Contributors
+```bash
+# 1. Clone and setup
+git clone https://github.com/EffortlessSteven/tree-sitter-perl
+cd tree-sitter-perl
+cargo build --all
+
+# 2. Run tests
+cargo xtask test
+
+# 3. Test LSP features
+cargo run -p perl-parser --bin perl-lsp -- --stdio
+```
+
 ## Key Commands
 
 ### Build Commands

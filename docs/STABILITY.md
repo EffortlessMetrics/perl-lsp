@@ -1,15 +1,15 @@
-# API Stability & SemVer - v0.8.3 GA
+# API Stability & SemVer - v0.8.8+ GA
 
 **MSRV:** 1.89 • **Edition:** 2024 • **Status:** General Availability
 
-## Published Crates (v0.8.3 GA)
+## Published Crates (v0.8.8+ GA)
 
 | Crate | Version | Purpose | Stability |
 |-------|---------|---------|-----------|
-| [perl-parser](https://crates.io/crates/perl-parser) | 0.8.3 | Parser & LSP | Beta (API stabilizing) |
-| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.8.3 | Tokenizer | Beta (API stabilizing) |
-| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.8.3 | Test corpus | Stable |
-| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.8.3 | Legacy parser | Deprecated |
+| [perl-parser](https://crates.io/crates/perl-parser) | 0.8.8+ | Parser & LSP | Stable (GA) |
+| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.8.8+ | Tokenizer | Stable (GA) |
+| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.8.8+ | Test corpus | Stable |
+| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.8.8+ | Legacy parser | Deprecated |
 
 ## What's considered stable (≥0.8.x)
 
@@ -77,7 +77,7 @@
 
 | perl-parser | perl-lexer | perl-corpus | Notes |
 |-------------|------------|-------------|-------|
-| 0.8.3 | 0.8.3 | 0.8.3 | Current GA release |
+| 0.8.8+ | 0.8.8+ | 0.8.8+ | Current GA release |
 | 0.8.x | 0.8.x | 0.8.x | Patch versions compatible |
 | 0.9.x | 0.9.x | 0.9.x | Next minor (breaking allowed) |
 
@@ -99,4 +99,4 @@
 
 ---
 
-*This document is authoritative for API stability questions. Last updated: 2025-02-23 (v0.8.3 GA)*
+*This document is authoritative for API stability questions. Last updated: 2025-09-01 (v0.8.8+ GA)*
