@@ -5,7 +5,7 @@
 
 use crate::SourceLocation;
 use crate::ast::Node;
-use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
 use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -73,6 +73,80 @@ pub struct CompletionContext {
     pub prefix: String,
     /// Start position of the prefix (for text edit range calculation)
     pub prefix_start: usize,
+}
+
+impl CompletionContext {
+    fn detect_current_package(symbol_table: &SymbolTable, position: usize) -> String {
+        // First, check for innermost package scope containing the position
+        let mut scope_start: Option<usize> = None;
+        for scope in symbol_table.scopes.values() {
+            if scope.kind == ScopeKind::Package
+                && scope.location.start <= position
+                && position <= scope.location.end
+            {
+                if scope_start.map_or(true, |s| scope.location.start >= s) {
+                    scope_start = Some(scope.location.start);
+                }
+            }
+        }
+
+        if let Some(start) = scope_start {
+            if let Some(sym) = symbol_table
+                .symbols
+                .values()
+                .flat_map(|v| v.iter())
+                .find(|sym| sym.kind == SymbolKind::Package && sym.location.start == start)
+            {
+                return sym.name.clone();
+            }
+        }
+
+        // Fallback: find last package declaration without block before position
+        let mut current = "main".to_string();
+        let mut packages: Vec<&crate::symbol::Symbol> = symbol_table
+            .symbols
+            .values()
+            .flat_map(|v| v.iter())
+            .filter(|sym| sym.kind == SymbolKind::Package)
+            .collect();
+        packages.sort_by_key(|sym| sym.location.start);
+        for sym in packages {
+            if sym.location.start <= position {
+                let has_scope = symbol_table.scopes.values().any(|sc| {
+                    sc.kind == ScopeKind::Package && sc.location.start == sym.location.start
+                });
+                if !has_scope {
+                    current = sym.name.clone();
+                }
+            } else {
+                break;
+            }
+        }
+        current
+    }
+
+    fn new(
+        symbol_table: &SymbolTable,
+        position: usize,
+        trigger_character: Option<char>,
+        in_string: bool,
+        in_regex: bool,
+        in_comment: bool,
+        prefix: String,
+        prefix_start: usize,
+    ) -> Self {
+        let current_package = Self::detect_current_package(symbol_table, position);
+        CompletionContext {
+            position,
+            trigger_character,
+            in_string,
+            in_regex,
+            in_comment,
+            current_package,
+            prefix,
+            prefix_start,
+        }
+    }
 }
 
 /// Completion provider
@@ -560,16 +634,16 @@ impl CompletionProvider {
         let in_regex = self.is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
-        CompletionContext {
+        CompletionContext::new(
+            &self.symbol_table,
             position,
             trigger_character,
             in_string,
             in_regex,
             in_comment,
-            current_package: "main".to_string(), // TODO: Detect actual package
-            prefix: word_prefix,
+            word_prefix,
             prefix_start,
-        }
+        )
     }
 
     /// Add variable completions
@@ -1193,6 +1267,46 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "printf"));
+    }
+
+    #[test]
+    fn test_current_package_detection() {
+        let code = r#"package Foo;
+my $x = 1;
+$x
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = CompletionProvider::new(&ast);
+
+        // position at end of file
+        let context = provider.analyze_context(code, code.len());
+        assert_eq!(context.current_package, "Foo");
+    }
+
+    #[test]
+    fn test_package_block_detection() {
+        let code = r#"package Foo {
+    my $x;
+    $x;
+}
+package Bar;
+$"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = CompletionProvider::new(&ast);
+
+        // Inside Foo block
+        let pos_foo = code.find("$x;").unwrap() + 2; // position after $x
+        let ctx_foo = provider.analyze_context(code, pos_foo);
+        assert_eq!(ctx_foo.current_package, "Foo");
+
+        // After block, in Bar package
+        let pos_bar = code.len();
+        let ctx_bar = provider.analyze_context(code, pos_bar);
+        assert_eq!(ctx_bar.current_package, "Bar");
     }
 
     #[test]
