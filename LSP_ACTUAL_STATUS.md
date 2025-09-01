@@ -10,7 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 72% in v0.8.6, enhanced with variable resolution patterns). This document provides an honest assessment of what you can actually expect to work, including **incremental parsing performance improvements** and **enhanced variable resolution**.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 72% in v0.8.6, enhanced with variable resolution patterns). This document provides an honest assessment of what you can actually expect to work, including **incremental parsing performance improvements** and **enhanced variable resolution**. 
+
+⚠️ **Current Test Status**: Corpus tests show 188 failures in S-expression generation. LSP functionality may be impacted. See [TEST_STATUS.md](TEST_STATUS.md) for details.
 
 ## ✅ Actually Working Features (~75%)
 

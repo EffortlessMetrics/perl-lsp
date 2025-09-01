@@ -66,7 +66,7 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Production-stable scope analyzer** with `is_in_hash_key_context()` method - now proven in production with O(depth) performance
   - ✅ **Enhanced S-expression format** with proper NodeKind variants for Prototype, Signature, Method parameters
   - ✅ **Complete AST compatibility** for subroutine declarations, signature parsing, and method structures
-  - ✅ **All 530+ tests passing** including comprehensive hash context detection and S-expression format validation
+  - ⚠️ **Mixed test status** - Scope analyzer: 41/41 passing, Corpus tests: 188 failures in S-expression generation
   - ✅ **Type Definition and Implementation Providers** for blessed references and ISA relationships
   - ✅ **Incremental parsing with subtree reuse** - <1ms real-time editing performance
   - ✅ Code completion (variables, 150+ built-ins, keywords)
@@ -100,7 +100,7 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Expression evaluation** - evaluate expressions in debugger context
   - ✅ **Perl debugger integration** - uses built-in `perl -d` debugger
   - ✅ **DAP protocol compliance** - works with VSCode and DAP-compatible editors
-- **Test Coverage**: 530+ tests with acceptance tests for all features
+- **Test Coverage**: ⚠️ **PARTIAL** - Scope analyzer: 41/41 tests passing, Corpus tests: 188 failures detected
 - **Performance**: <50ms for all operations
 - **Architecture**: Contract-driven with `lsp-ga-lock` feature for conservative releases
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
@@ -838,7 +838,7 @@ print "♥";       # Unicode in strings (always worked)
   - ✅ **Enhanced delimiter recovery** - comprehensive pattern recognition for dynamic delimiters
   - ✅ **Recursive variable resolution** - fallback mechanisms for complex nested patterns
 - **Previous improvements (v0.8.7)**:
-  - ✅ **Enhanced S-expression format** - proper NodeKind variants for Prototype, Signature, Method parameters  
+  - ⚠️ **S-expression format needs attention** - proper NodeKind variants implemented, but corpus tests show generation issues  
   - ✅ **Stabilized scope analyzer** - `is_in_hash_key_context()` method proven in production with O(depth) performance
   - ✅ **Complete AST compatibility** - fixed subroutine declaration format and signature parameter parsing
 - **Previous improvements (v0.8.6)**:
