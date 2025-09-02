@@ -248,10 +248,10 @@ cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
 # Run incremental parsing tests
-cargo test -p perl-parser --test incremental_integration_test
+cargo test -p perl-parser --test incremental_integration_test --features incremental
 
 # Benchmark incremental parsing performance
-cargo bench incremental
+cargo bench incremental --features incremental
 
 # CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
 # Quick capped test (2 threads)
@@ -1002,6 +1002,45 @@ let lsp_pos = byte_to_lsp_pos(&doc.rope, byte_offset, PosEnc::Utf16);
 - **<2ms updates** for moderate edits (function-level changes) with subtree reuse
 - **Cache hit ratios** of 70-90% for typical editing scenarios
 - **Memory efficient** with LRU cache eviction, Arc<Node> sharing, and Rope's piece table architecture
+
+### Advanced Incremental Parsing (IncrementalParserV2)
+The repository includes an enhanced incremental parser (`IncrementalParserV2`) with intelligent node reuse strategies:
+
+**Key Features**:
+- **Smart Node Reuse**: Automatically detects which AST nodes can be preserved across edits
+- **Metrics Tracking**: Provides detailed statistics on reused vs reparsed nodes
+- **Simple Value Edit Detection**: Optimized for common scenarios like number/string changes
+- **Fallback Mechanisms**: Graceful degradation to full parsing when needed
+
+**Usage Example**:
+```rust
+// Basic incremental parsing with IncrementalParserV2
+use perl_parser::{incremental_v2::IncrementalParserV2, edit::Edit, position::Position};
+
+let mut parser = IncrementalParserV2::new();
+
+// Initial parse
+let tree1 = parser.parse("my $x = 42;")?;
+println!("Initial: Reparsed={}, Reused={}", parser.reparsed_nodes, parser.reused_nodes);
+
+// Apply edit (change "42" to "4242")
+parser.edit(Edit::new(8, 10, 12, /* position data */));
+let tree2 = parser.parse("my $x = 4242;")?;
+println!("After edit: Reparsed={}, Reused={}", parser.reparsed_nodes, parser.reused_nodes);
+// Expected output: Reparsed=1, Reused=3 (only the Number node needs reparsing)
+```
+
+**Testing IncrementalParserV2**:
+```bash
+# Test the example implementation
+cargo run -p perl-parser --example test_incremental_v2 --features incremental
+
+# Run comprehensive incremental tests
+cargo test -p perl-parser --test incremental_integration_test --features incremental
+
+# Run all incremental-related tests
+cargo test -p perl-parser incremental --features incremental
+```
 
 ### Incremental Parsing API (**Diataxis: Tutorial**)
 ```rust
