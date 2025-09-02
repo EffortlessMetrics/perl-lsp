@@ -1,1 +1,0 @@
-my $x = qq{hello}

@@ -71,6 +71,14 @@ The tree-sitter-perl project provides **multiple parser implementations** and **
 - Pratt parsing for operators
 - 100% edge case coverage
 - Tree-sitter compatible AST
+- **Enhanced Position Tracking** (v0.8.7+): O(log n) LSP-compliant UTF-16 position mapping
+
+**Position Tracking Architecture** (**Diataxis: Explanation**):
+- **PositionTracker**: Production-ready position mapping with LineStartsCache integration
+- **ParserContext**: Enhanced token stream processing with accurate position tracking
+- **UTF-16 Compliance**: Proper character counting for multi-byte Unicode characters and emoji
+- **Multi-line Support**: Accurate position tracking for tokens spanning multiple lines
+- **Performance**: Binary search-based position lookups for real-time LSP editing
 
 ### 2. v2: Pest Grammar (`/crates/tree-sitter-perl-rs/src/grammar.pest`)
 
@@ -313,6 +321,7 @@ LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
 - Tracks open documents
 - Caches parsed ASTs
 - Manages document versions
+- **Enhanced Position Tracking** (v0.8.7+): LSP-compliant UTF-16 position mapping with O(log n) performance
 
 #### Language Services
 - **Enhanced DiagnosticsProvider**: Advanced syntax error detection with variable pattern recognition
