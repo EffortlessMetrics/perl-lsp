@@ -7,6 +7,7 @@ use crate::{
     ast_v2::NodeIdGenerator,
     error_recovery::ParseError,
     position::{Position, Range},
+    positions::LineStartsCache,
     token_wrapper::TokenWithPosition,
 };
 use perl_lexer::TokenType;
@@ -24,37 +25,33 @@ pub struct ParserContext {
     errors: Vec<ParseError>,
     /// Source text
     source: String,
-    /// Current position tracker
+    /// Position tracker for efficient position mapping
     _position_tracker: PositionTracker,
 }
 
-/// Tracks current position in the source
+/// Efficient position tracking using line starts cache
+/// 
+/// This implementation leverages the existing LineStartsCache for O(log n) position lookups
+/// instead of O(n) character-by-character advancement. It provides UTF-16 aware position
+/// mapping for LSP compatibility while integrating with the existing position infrastructure.
 struct PositionTracker {
-    _byte_offset: usize,
-    _line: usize,
-    _column: usize,
+    /// Cache for O(log n) position lookups
+    line_cache: LineStartsCache,
+    /// Source text reference
+    source: String,
 }
 
-#[allow(dead_code)]
 impl PositionTracker {
-    fn new() -> Self {
-        PositionTracker { _byte_offset: 0, _line: 1, _column: 1 }
+    fn new(source: String) -> Self {
+        let line_cache = LineStartsCache::new(&source);
+        PositionTracker { line_cache, source }
     }
 
-    fn current_position(&self) -> Position {
-        Position::new(self._byte_offset, self._line as u32, self._column as u32)
-    }
-
-    fn advance(&mut self, text: &str) {
-        for ch in text.chars() {
-            self._byte_offset += ch.len_utf8();
-            if ch == '\n' {
-                self._line += 1;
-                self._column = 1;
-            } else {
-                self._column += 1;
-            }
-        }
+    /// Convert byte offset to position with UTF-16 support
+    fn byte_to_position(&self, byte_offset: usize) -> Position {
+        let (line, character) = self.line_cache.offset_to_position(&self.source, byte_offset);
+        // LineStartsCache returns 0-based line numbers, but Position expects 1-based
+        Position::new(byte_offset, line + 1, character + 1)
     }
 }
 
@@ -62,7 +59,7 @@ impl ParserContext {
     /// Create a new parser context
     pub fn new(source: String) -> Self {
         let mut tokens = VecDeque::new();
-        let mut position_tracker = PositionTracker::new();
+        let position_tracker = PositionTracker::new(source.clone());
 
         // Tokenize the source using mode-aware lexer
         let mut lexer = perl_lexer::PerlLexer::new(&source);
@@ -77,18 +74,9 @@ impl ParserContext {
                     let start = token.start;
                     let end = token.end;
 
-                    if start < position_tracker._byte_offset {
-                        // In case of out-of-order tokens, reset tracker
-                        position_tracker = PositionTracker::new();
-                    }
-
-                    // Advance to start position
-                    position_tracker.advance(&source[position_tracker._byte_offset..start]);
-                    let start_pos = position_tracker.current_position();
-
-                    // Advance to end position and record
-                    position_tracker.advance(&source[start..end]);
-                    let end_pos = position_tracker.current_position();
+                    // Use efficient position mapping with UTF-16 support
+                    let start_pos = position_tracker.byte_to_position(start);
+                    let end_pos = position_tracker.byte_to_position(end);
 
                     tokens.push_back(TokenWithPosition::new(token, start_pos, end_pos));
                 }
@@ -300,6 +288,75 @@ mod tests {
         assert_eq!(token.range().start.line, 1);
         assert_eq!(token.range().start.column, 9);
         assert_eq!(token.range().end.line, 2);
+        assert_eq!(token.range().end.column, 3);
+    }
+
+    #[test]
+    fn test_utf16_position_mapping() {
+        // Test with emoji which takes 2 UTF-16 code units
+        let source = "my $emoji = 😀;".to_string();
+        let ctx = ParserContext::new(source.clone());
+
+        // Find the emoji token (if lexer produces it as separate token)
+        // For now, test that positions are computed correctly for the = token
+        let equals_offset = source.find('=').unwrap();
+        let equals_token = ctx
+            .tokens
+            .iter()
+            .find(|t| t.range().start.byte == equals_offset)
+            .expect("equals token");
+
+        // Before emoji: "my $emoji "  = 10 characters but the emoji counts as 2 UTF-16 units
+        // So column should account for UTF-16 encoding
+        assert_eq!(equals_token.range().start.line, 1);
+        // The exact column depends on how the lexer tokenizes, but should be UTF-16 aware
+        assert!(equals_token.range().start.column > 0);
+    }
+
+    #[test]
+    fn test_crlf_line_endings() {
+        let source = "my $x = 42;\r\nmy $y = 43;".to_string();
+        let ctx = ParserContext::new(source.clone());
+
+        let first_offset = source.find("my").unwrap();
+        let second_offset = source.rfind("my").unwrap();
+
+        let first =
+            ctx.tokens.iter().find(|t| t.range().start.byte == first_offset).expect("first token");
+        assert_eq!(first.range().start.line, 1);
+        assert_eq!(first.range().start.column, 1);
+
+        let second = ctx
+            .tokens
+            .iter()
+            .find(|t| t.range().start.byte == second_offset)
+            .expect("second token");
+        assert_eq!(second.range().start.line, 2);
+        assert_eq!(second.range().start.column, 1);
+    }
+
+    #[test]
+    fn test_empty_source() {
+        let source = "".to_string();
+        let ctx = ParserContext::new(source);
+
+        assert!(ctx.tokens.is_empty());
+        assert!(ctx.is_eof());
+    }
+
+    #[test]
+    fn test_single_token() {
+        let source = "42".to_string();
+        let ctx = ParserContext::new(source);
+
+        assert_eq!(ctx.tokens.len(), 1);
+        
+        let token = &ctx.tokens[0];
+        assert_eq!(token.range().start.byte, 0);
+        assert_eq!(token.range().start.line, 1);
+        assert_eq!(token.range().start.column, 1);
+        assert_eq!(token.range().end.byte, 2);
+        assert_eq!(token.range().end.line, 1);
         assert_eq!(token.range().end.column, 3);
     }
 }

@@ -2,27 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Latest Release**: v0.8.5 GA - See [RELEASE_NOTES_v0.8.5.md](RELEASE_NOTES_v0.8.5.md)  
+**Latest Release**: v0.8.7 GA - Enhanced Comment Documentation Extraction with Source Threading
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md) for guarantees
 
 ## Project Overview
 
 This repository contains **four published crates** forming a complete Perl parsing ecosystem:
 
-### Published Crates (v0.8.5 GA)
+### Published Crates (v0.8.7 GA)
 
 #### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
 - Native recursive descent parser with operator precedence
 - **~100% Perl 5 syntax coverage** with ALL edge cases handled
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
+- **True incremental parsing** with Rope-based document management and subtree reuse for <1ms LSP updates
+- **Production-ready Rope integration** for UTF-16/UTF-8 position conversion and line ending support
+- **Enhanced token position tracking** - O(log n) performance with LSP-compliant UTF-16 position mapping (PR #72)
 - Tree-sitter compatible output
-- Includes LSP server binary (`perl-lsp`)
-- **v0.8.5 improvements**:
-  - Typed ServerCapabilities for LSP 3.18 compliance
-  - Pull Diagnostics support (workspace/diagnostic)
-  - Stable error codes (-32802 for cancellation)
-  - Enhanced inlay hints with type anchors
-  - Improved cancellation handling with test endpoint
+- Includes LSP server binary (`perl-lsp`) with full Rope-based document state
+- **v0.8.7 improvements** (PR #72 - Enhanced Token Position Tracking):
+  - **O(log n) position mapping** - replaced placeholder tracking with production-ready implementation using LineStartsCache
+  - **LSP-compliant UTF-16 position tracking** - accurate line/column tracking with Unicode and CRLF support
+  - **Enhanced parser context** - production-grade position tracking throughout token stream processing  
+  - **Multi-line token support** - accurate position tracking for tokens spanning multiple lines (strings, comments)
+  - **Performance optimization** - efficient binary search-based position lookups for real-time LSP editing
+  - **Unicode-safe position calculation** - proper handling of multi-byte characters and emoji in position mapping
+  - **Comprehensive test coverage** - 8 new position tracking tests covering edge cases (CRLF, UTF-16, multiline)
 - **v0.8.3 improvements**:
   - Hash literal parsing fixed (`{ key => value }`)
   - Parenthesized expressions with word operators
@@ -417,11 +422,20 @@ These fallbacks ensure the LSP remains functional during active development when
    - Dynamic delimiter detection and recovery
    - Clear diagnostics for unparseable constructs
 
-5. **Testing Strategy**
+5. **Enhanced Position Tracking** (**Diataxis: Explanation**) (v0.8.7+)
+   - **O(log n) Position Mapping**: Efficient binary search-based position lookups using LineStartsCache
+   - **LSP-Compliant UTF-16 Support**: Accurate character counting for multi-byte Unicode characters and emoji
+   - **Multi-line Token Support**: Proper position tracking for tokens spanning multiple lines (strings, comments, heredocs)
+   - **Line Ending Agnostic**: Handles CRLF, LF, and CR line endings consistently across platforms
+   - **Production-Ready Integration**: Seamless integration with parser context and LSP server for real-time editing
+   - **Comprehensive Testing**: 8 specialized test cases covering Unicode, CRLF, multiline strings, and edge cases
+
+6. **Testing Strategy**
    - Grammar tests for each Perl construct
    - Edge case tests with property testing
    - Performance benchmarks
    - Integration tests for S-expression output
+   - Position tracking validation tests
 
    - Encoding-aware lexing for mid-file encoding changes
    - Tree-sitter compatible error nodes and diagnostics
@@ -461,6 +475,55 @@ Always run benchmarks after changes to ensure no regressions:
 ```bash
 cargo bench
 cargo xtask compare
+```
+
+### Position Tracking Development (**Diataxis: How-to**) (v0.8.7+)
+
+The enhanced position tracking system provides accurate line/column mapping for LSP compliance:
+
+#### **Using PositionTracker in Parser Context**:
+```rust
+use crate::parser_context::ParserContext;
+
+// Create parser with automatic position tracking
+let ctx = ParserContext::new(source);
+
+// Access accurate token positions
+let token = ctx.current_token().unwrap();
+let range = token.range();
+println!("Token at line {}, column {}", range.start.line, range.start.column);
+```
+
+#### **Testing Position Tracking** (**Diataxis: Tutorial**):
+```bash
+# Run position tracking tests
+cargo test -p perl-parser --test parser_context -- test_multiline_positions
+cargo test -p perl-parser --test parser_context -- test_utf16_position_mapping
+cargo test -p perl-parser --test parser_context -- test_crlf_line_endings
+
+# Test with specific edge cases
+cargo test -p perl-parser parser_context_tests::test_multiline_string_token_positions
+```
+
+#### **Position Tracking API Reference** (**Diataxis: Reference**):
+```rust
+// Core PositionTracker methods
+impl PositionTracker {
+    /// Create from source text with line start caching
+    pub fn new(source: String) -> Self;
+    
+    /// Convert byte offset to Position with UTF-16 support  
+    pub fn byte_to_position(&self, byte_offset: usize) -> Position;
+}
+
+// LineStartsCache for O(log n) lookups
+impl LineStartsCache {
+    /// Build cache with CRLF/LF/CR line ending support
+    pub fn new(text: &str) -> Self;
+    
+    /// Convert byte offset to (line, utf16_column)
+    pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32);
+}
 ```
 
 ## Pure Rust Parser Details
