@@ -72,6 +72,12 @@ These features have been tested and provide real, useful functionality:
 - **Limitations**: Current file only
 - **Status**: ~70% functional
 
+### 4a. **Document Highlights** (ENHANCED)
+- **Enhanced variable occurrence tracking** with comprehensive expression statement support
+- Highlights all instances of a symbol at cursor position
+- Improved AST traversal to detect variables within expression statements
+- **Status**: Fully functional with improved coverage
+
 ### 5. **Enhanced Hover Information** (COMPREHENSIVE v0.8.7 PR #71)
 - Basic variable type info with **comprehensive comment documentation**
 - Built-in function signatures
@@ -188,9 +194,9 @@ These features have been tested and provide real, useful functionality:
 - `completionProvider` - Basic completions
 - `hoverProvider` - Hover information
 - `definitionProvider` - Go to definition
-- `declarationProvider` - Go to declaration
+- `declarationProvider` - Go to declaration  
 - `referencesProvider` - Find references
-- `documentHighlightProvider` - Highlight occurrences
+- `documentHighlightProvider` - Enhanced highlight occurrences with expression statement support
 - `signatureHelpProvider` - Signature help
 - `documentSymbolProvider` - Document symbols
 - `foldingRangeProvider` - Folding ranges
