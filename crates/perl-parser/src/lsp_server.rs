@@ -1465,13 +1465,10 @@ impl LspServer {
                         &doc.content,
                         self.workspace_index.clone(),
                     );
-                    
+
                     #[cfg(not(feature = "workspace"))]
-                    let provider = CompletionProvider::new_with_index_and_source(
-                        ast,
-                        &doc.content,
-                        None,
-                    );
+                    let provider =
+                        CompletionProvider::new_with_index_and_source(ast, &doc.content, None);
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
@@ -2911,7 +2908,7 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     #[cfg(feature = "workspace")]
                     let provider = ImplementationProvider::new(self.workspace_index.clone());
-                    
+
                     #[cfg(not(feature = "workspace"))]
                     let provider = ImplementationProvider::new(None);
 
