@@ -21,3 +21,5 @@ perl-parser = { workspace = true }
 tree-sitter = { workspace = true }
 regex = "1.11.1"
 serde_yaml = "0.9"
+bindgen = "0.72.0"
+peak_alloc = "0.3"

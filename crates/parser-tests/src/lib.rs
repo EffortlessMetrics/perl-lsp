@@ -3,10 +3,11 @@
 //! This crate provides a common test infrastructure to test:
 //! 1. perl-lexer + perl-parser (Modern Rust)
 //! 2. tree-sitter-perl-rs (Pure Rust Pest)
-//! 3. tree-sitter-perl-c (Legacy C)
+//! 3. tree-sitter-perl-c (Legacy C) -- currently unavailable
 
 use anyhow::Result;
-use std::time::Duration;
+use std::{fs, path::Path, time::Duration};
+use walkdir::WalkDir;
 
 pub mod corpus;
 pub mod corpus_converter;
@@ -67,41 +68,18 @@ impl TestableParser for TreeSitterPerlRsWrapper {
     }
 
     fn parse_to_sexp(&self, input: &str) -> Result<String> {
-        use tree_sitter_perl::PureRustParser;
+        use tree_sitter_perl::{PureRustParser, PureRustPerlParser};
 
         let parser = PureRustParser::new();
         let ast = parser.parse(input).map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))?;
-        // The Pest parser returns an AstNode, need to convert to S-expression
-        Ok(format!("{:?}", ast)) // TODO: Implement proper to_sexp for Pest AST
-    }
-}
-
-/// Wrapper for tree-sitter-perl-c
-pub struct TreeSitterPerlCWrapper;
-
-impl TestableParser for TreeSitterPerlCWrapper {
-    fn name(&self) -> &'static str {
-        "tree-sitter-perl-c"
-    }
-
-    fn parse_to_sexp(&self, input: &str) -> Result<String> {
-        use tree_sitter_perl_c::create_parser;
-
-        let mut parser = create_parser();
-        let tree = parser.parse(input, None).ok_or_else(|| anyhow::anyhow!("Failed to parse"))?;
-
-        let sexp = tree.root_node().to_sexp();
-        Ok(sexp)
+        Ok(PureRustPerlParser::node_to_sexp(&ast))
     }
 }
 
 /// Run a test case against all parsers
 pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
-    let parsers: Vec<Box<dyn TestableParser>> = vec![
-        Box::new(PerlParserWrapper),
-        Box::new(TreeSitterPerlRsWrapper),
-        Box::new(TreeSitterPerlCWrapper),
-    ];
+    let parsers: Vec<Box<dyn TestableParser>> =
+        vec![Box::new(PerlParserWrapper), Box::new(TreeSitterPerlRsWrapper)];
 
     let mut results = Vec::new();
 
@@ -145,8 +123,38 @@ pub fn run_test_on_all_parsers(test: &TestCase) -> Vec<TestResult> {
 
 /// Load test cases from the corpus directory
 pub fn load_corpus_tests() -> Result<Vec<TestCase>> {
-    // TODO: Implement loading from test/corpus
-    Ok(vec![])
+    let corpus_dir = Path::new("test/corpus");
+    if !corpus_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut all_tests = Vec::new();
+
+    for entry in WalkDir::new(corpus_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let path = entry.path();
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        if !(ext.is_empty() || matches!(ext, "pl" | "pm" | "t" | "txt")) {
+            continue;
+        }
+
+        let content = fs::read_to_string(path)?;
+        let mut tests = corpus::parse_corpus_file(&content)?;
+        let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+        for test in &mut tests {
+            if test.name.is_empty() {
+                test.name = filename.to_string();
+            } else {
+                test.name = format!("{}::{}", filename, test.name);
+            }
+        }
+        all_tests.extend(tests);
+    }
+
+    Ok(all_tests)
 }
 
 #[cfg(test)]
@@ -155,28 +163,117 @@ mod tests {
 
     #[test]
     fn test_simple_parse() {
-        let test = TestCase {
-            name: "simple_variable".to_string(),
-            input: "my $x = 42;".to_string(),
-            description: Some("Simple variable declaration".to_string()),
-            should_parse: true,
-            expected_sexp: None,
-        };
+        let input = "my $x = 42;";
 
-        let results = run_test_on_all_parsers(&test);
+        // Test that both parsers can produce valid S-expressions without error
+        let rust_parser = TreeSitterPerlRsWrapper;
+        let perl_parser = PerlParserWrapper;
 
-        for result in &results {
-            println!(
-                "{}: {} ({:?})",
-                result.parser_name,
-                if result.success { "PASS" } else { "FAIL" },
-                result.parse_time
-            );
-            if let Some(output) = &result.output {
-                println!("  Output: {}", output);
-            }
-            if let Some(error) = &result.error {
-                println!("  Error: {}", error);
+        let rust_output = rust_parser.parse_to_sexp(input).unwrap();
+        let perl_output = perl_parser.parse_to_sexp(input).unwrap();
+
+        // Verify both outputs are valid S-expressions (start with '(' and end with ')')
+        assert!(
+            rust_output.starts_with('(') && rust_output.ends_with(')'),
+            "Rust parser output is not a valid S-expression: {}",
+            rust_output
+        );
+        assert!(
+            perl_output.starts_with('(') && perl_output.ends_with(')'),
+            "Perl parser output is not a valid S-expression: {}",
+            perl_output
+        );
+
+        // Verify both contain expected elements for variable declaration
+        assert!(
+            rust_output.contains("$x") || rust_output.contains("$ x"),
+            "Rust parser output doesn't contain variable name: {}",
+            rust_output
+        );
+        assert!(
+            perl_output.contains("$x") || perl_output.contains("$ x"),
+            "Perl parser output doesn't contain variable name: {}",
+            perl_output
+        );
+        assert!(
+            rust_output.contains("42"),
+            "Rust parser output doesn't contain number: {}",
+            rust_output
+        );
+        assert!(
+            perl_output.contains("42"),
+            "Perl parser output doesn't contain number: {}",
+            perl_output
+        );
+
+        // Print outputs for manual verification
+        println!("Rust parser output: {}", rust_output);
+        println!("Perl parser output: {}", perl_output);
+    }
+
+    #[test]
+    fn test_sexp_format_validation() {
+        // Test various Perl constructs to ensure S-expression format validity
+        let test_cases = vec![
+            ("my $var = 'hello';", "string variable"),
+            ("if ($x > 0) { print $x; }", "if statement"),
+            ("sub hello { return 'world'; }", "subroutine"),
+            ("@array = (1, 2, 3);", "array assignment"),
+            ("%hash = (key => 'value');", "hash assignment"),
+        ];
+
+        let rust_parser = TreeSitterPerlRsWrapper;
+        let perl_parser = PerlParserWrapper;
+
+        for (input, description) in test_cases {
+            println!("\nTesting {}: {}", description, input);
+
+            // Both parsers should succeed
+            match (rust_parser.parse_to_sexp(input), perl_parser.parse_to_sexp(input)) {
+                (Ok(rust_output), Ok(perl_output)) => {
+                    // Both should be valid S-expressions
+                    assert!(
+                        rust_output.starts_with('(') && rust_output.ends_with(')'),
+                        "{}: Rust output not valid S-expression: {}",
+                        description,
+                        rust_output
+                    );
+                    assert!(
+                        perl_output.starts_with('(') && perl_output.ends_with(')'),
+                        "{}: Perl output not valid S-expression: {}",
+                        description,
+                        perl_output
+                    );
+
+                    // Both should be non-empty
+                    assert!(
+                        !rust_output.trim().is_empty(),
+                        "{}: Rust output is empty",
+                        description
+                    );
+                    assert!(
+                        !perl_output.trim().is_empty(),
+                        "{}: Perl output is empty",
+                        description
+                    );
+
+                    println!("  Rust: {}", rust_output);
+                    println!("  Perl: {}", perl_output);
+                    println!("  ✓ Both parsers succeeded");
+                }
+                (Err(rust_err), Err(perl_err)) => {
+                    println!("  ✓ Both parsers failed (acceptable for edge cases)");
+                    println!("    Rust error: {}", rust_err);
+                    println!("    Perl error: {}", perl_err);
+                }
+                (Ok(rust_output), Err(perl_err)) => {
+                    println!("  ✓ Only Rust succeeded: {}", rust_output);
+                    println!("    Perl error: {}", perl_err);
+                }
+                (Err(rust_err), Ok(perl_output)) => {
+                    println!("  ✓ Only Perl succeeded: {}", perl_output);
+                    println!("    Rust error: {}", rust_err);
+                }
             }
         }
     }

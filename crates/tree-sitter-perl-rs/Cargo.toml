@@ -12,6 +12,7 @@ categories = ["parsing", "text-processing"]
 
 [dependencies]
 perl-lexer = { workspace = true }
+perl-parser = { workspace = true }
 tree-sitter = "0.25.8"
 serde = { version = "1.0.219", features = ["derive"] }
 bincode = "2.0.1"

@@ -5,11 +5,14 @@
 
 use crate::SourceLocation;
 use crate::ast::Node;
-use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
+use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 /// Type of completion item
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CompletionItemKind {
     /// Variable (scalar, array, hash)
     Variable,
@@ -48,6 +51,8 @@ pub struct CompletionItem {
     pub filter_text: Option<String>,
     /// Additional text edits to apply
     pub additional_edits: Vec<(SourceLocation, String)>,
+    /// Range to replace in the document (for proper prefix handling)
+    pub text_edit_range: Option<(usize, usize)>, // (start, end) offsets
 }
 
 /// Context for completion
@@ -67,6 +72,82 @@ pub struct CompletionContext {
     pub current_package: String,
     /// Prefix text before cursor
     pub prefix: String,
+    /// Start position of the prefix (for text edit range calculation)
+    pub prefix_start: usize,
+}
+
+impl CompletionContext {
+    fn detect_current_package(symbol_table: &SymbolTable, position: usize) -> String {
+        // First, check for innermost package scope containing the position
+        let mut scope_start: Option<usize> = None;
+        for scope in symbol_table.scopes.values() {
+            if scope.kind == ScopeKind::Package
+                && scope.location.start <= position
+                && position <= scope.location.end
+            {
+                if scope_start.is_none_or(|s| scope.location.start >= s) {
+                    scope_start = Some(scope.location.start);
+                }
+            }
+        }
+
+        if let Some(start) = scope_start {
+            if let Some(sym) = symbol_table
+                .symbols
+                .values()
+                .flat_map(|v| v.iter())
+                .find(|sym| sym.kind == SymbolKind::Package && sym.location.start == start)
+            {
+                return sym.name.clone();
+            }
+        }
+
+        // Fallback: find last package declaration without block before position
+        let mut current = "main".to_string();
+        let mut packages: Vec<&crate::symbol::Symbol> = symbol_table
+            .symbols
+            .values()
+            .flat_map(|v| v.iter())
+            .filter(|sym| sym.kind == SymbolKind::Package)
+            .collect();
+        packages.sort_by_key(|sym| sym.location.start);
+        for sym in packages {
+            if sym.location.start <= position {
+                let has_scope = symbol_table.scopes.values().any(|sc| {
+                    sc.kind == ScopeKind::Package && sc.location.start == sym.location.start
+                });
+                if !has_scope {
+                    current = sym.name.clone();
+                }
+            } else {
+                break;
+            }
+        }
+        current
+    }
+
+    fn new(
+        symbol_table: &SymbolTable,
+        position: usize,
+        trigger_character: Option<char>,
+        in_string: bool,
+        in_regex: bool,
+        in_comment: bool,
+        prefix: String,
+        prefix_start: usize,
+    ) -> Self {
+        let current_package = Self::detect_current_package(symbol_table, position);
+        CompletionContext {
+            position,
+            trigger_character,
+            in_string,
+            in_regex,
+            in_comment,
+            current_package,
+            prefix,
+            prefix_start,
+        }
+    }
 }
 
 /// Completion provider
@@ -74,6 +155,7 @@ pub struct CompletionProvider {
     symbol_table: SymbolTable,
     keywords: HashSet<&'static str>,
     builtins: HashSet<&'static str>,
+    workspace_index: Option<Arc<WorkspaceIndex>>,
 }
 
 // Test::More function completions
@@ -109,8 +191,17 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 
 impl CompletionProvider {
     /// Create a new completion provider from parsed AST
-    pub fn new(ast: &Node) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+    pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
+        Self::new_with_index_and_source(ast, "", workspace_index)
+    }
+
+    /// Create a new completion provider from parsed AST and source
+    pub fn new_with_index_and_source(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+    ) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 
         let keywords = [
             "my",
@@ -299,7 +390,12 @@ impl CompletionProvider {
         .into_iter()
         .collect();
 
-        CompletionProvider { symbol_table, keywords, builtins }
+        CompletionProvider { symbol_table, keywords, builtins, workspace_index }
+    }
+
+    /// Create a new completion provider from parsed AST without workspace context
+    pub fn new(ast: &Node) -> Self {
+        Self::new_with_index(ast, None)
     }
 
     /// Get completions at a given position (with optional filepath for test detection)
@@ -309,9 +405,37 @@ impl CompletionProvider {
         position: usize,
         filepath: Option<&str>,
     ) -> Vec<CompletionItem> {
-        let context = self.analyze_context(source, position);
+        self.get_completions_with_path_cancellable(source, position, filepath, &|| false)
+    }
+
+    /// Get completions at a given position with cancellation support
+    pub fn get_completions_with_path_cancellable(
+        &self,
+        source: &str,
+        position: usize,
+        filepath: Option<&str>,
+        is_cancelled: &dyn Fn() -> bool,
+    ) -> Vec<CompletionItem> {
+        // Input validation
+        if position > source.len() {
+            return vec![];
+        }
+
+        let context = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.analyze_context(source, position)
+        })) {
+            Ok(ctx) => ctx,
+            Err(_) => {
+                return vec![];
+            }
+        };
 
         if context.in_comment {
+            return vec![];
+        }
+
+        // Early cancellation check
+        if is_cancelled() {
             return vec![];
         }
 
@@ -321,14 +445,23 @@ impl CompletionProvider {
         if context.prefix.starts_with('$') {
             // Scalar variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::ScalarVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::ArrayVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
             self.add_variable_completions(&mut completions, &context, SymbolKind::HashVariable);
+            if is_cancelled() {
+                return vec![];
+            }
             self.add_special_variables(&mut completions, &context, "%");
         } else if context.prefix.starts_with('&') {
             // Subroutine completion
@@ -341,22 +474,62 @@ impl CompletionProvider {
             self.add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
             // String interpolation or file path
-            if context.prefix.contains('/') {
-                self.add_file_completions(&mut completions, &context);
+            let line_prefix = &source[..context.position];
+            if let Some(start) = line_prefix.rfind(['"', '\'']) {
+                // Find the end of the string to check for dangerous characters
+                let quote_char = source.chars().nth(start).unwrap();
+                let string_end = source[start + 1..]
+                    .find(quote_char)
+                    .map(|i| start + 1 + i)
+                    .unwrap_or(source.len());
+                let full_string_content = &source[start + 1..string_end];
+
+                // Security check: reject strings with null bytes or other dangerous characters
+                if full_string_content.contains('\0') {
+                    return completions; // Return early without file completions
+                }
+
+                let path_prefix = &line_prefix[start + 1..];
+                if path_prefix.contains('/')
+                    || path_prefix
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == '-')
+                {
+                    let mut file_context = context.clone();
+                    file_context.prefix = path_prefix.to_string();
+                    file_context.prefix_start = start + 1;
+                    self.add_file_completions_with_cancellation(
+                        &mut completions,
+                        &file_context,
+                        is_cancelled,
+                    );
+                }
             }
         } else {
             // General completion: keywords, functions, variables
             if context.prefix.is_empty() || self.could_be_keyword(&context.prefix) {
                 self.add_keyword_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
             }
 
             if context.prefix.is_empty() || self.could_be_function(&context.prefix) {
                 self.add_builtin_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
                 self.add_function_completions(&mut completions, &context);
+                if is_cancelled() {
+                    return vec![];
+                }
             }
 
             // Also suggest variables without sigils in some contexts
             self.add_all_variables(&mut completions, &context);
+            if is_cancelled() {
+                return vec![];
+            }
 
             // Add Test::More completions if in test context
             if self.is_test_context(source, filepath) {
@@ -364,9 +537,80 @@ impl CompletionProvider {
             }
         }
 
-        // Sort completions by relevance
+        // Remove duplicates and sort completions by relevance
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.deduplicate_and_sort(completions.clone())
+        })) {
+            Ok(sorted_completions) => sorted_completions,
+            Err(_) => {
+                completions // Return unsorted completions as fallback
+            }
+        }
+    }
+
+    /// Remove duplicates and sort completions with stable, deterministic ordering
+    fn deduplicate_and_sort(&self, mut completions: Vec<CompletionItem>) -> Vec<CompletionItem> {
+        if completions.is_empty() {
+            return completions;
+        }
+
+        // Remove duplicates based on label, keeping the one with better sort_text
+        let mut seen = std::collections::HashMap::<String, usize>::new();
+        let mut to_remove = std::collections::HashSet::<usize>::new();
+
+        for (i, item) in completions.iter().enumerate() {
+            if item.label.is_empty() {
+                // Skip items with empty labels
+                to_remove.insert(i);
+                continue;
+            }
+
+            if let Some(&existing_idx) = seen.get(&item.label) {
+                let existing_sort = completions[existing_idx]
+                    .sort_text
+                    .as_ref()
+                    .unwrap_or(&completions[existing_idx].label);
+                let current_sort = item.sort_text.as_ref().unwrap_or(&item.label);
+
+                if current_sort < existing_sort {
+                    // Current item is better, remove the existing one
+                    to_remove.insert(existing_idx);
+                    seen.insert(item.label.clone(), i);
+                } else {
+                    // Existing item is better, remove current one
+                    to_remove.insert(i);
+                }
+            } else {
+                seen.insert(item.label.clone(), i);
+            }
+        }
+
+        // Remove marked duplicates in reverse order to maintain indices
+        let mut indices: Vec<usize> = to_remove.into_iter().collect();
+        indices.sort_by(|a, b| b.cmp(a)); // Sort in descending order
+        for idx in indices {
+            completions.remove(idx);
+        }
+
+        // Sort with stable, deterministic ordering
         completions.sort_by(|a, b| {
-            a.sort_text.as_ref().unwrap_or(&a.label).cmp(b.sort_text.as_ref().unwrap_or(&b.label))
+            let a_sort = a.sort_text.as_ref().unwrap_or(&a.label);
+            let b_sort = b.sort_text.as_ref().unwrap_or(&b.label);
+
+            // Primary sort: by sort_text/label
+            match a_sort.cmp(b_sort) {
+                std::cmp::Ordering::Equal => {
+                    // Secondary sort: by completion kind for stability
+                    match a.kind.cmp(&b.kind) {
+                        std::cmp::Ordering::Equal => {
+                            // Tertiary sort: by label for full determinism
+                            a.label.cmp(&b.label)
+                        }
+                        other => other,
+                    }
+                }
+                other => other,
+            }
         });
 
         completions
@@ -385,31 +629,31 @@ impl CompletionProvider {
 
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
-        let word_prefix = if position >= 2 && &source[position.saturating_sub(2)..position] == "->"
-        {
-            // We're right after ->, find the receiver variable
-            let receiver_start = source[..position.saturating_sub(2)]
-                .rfind(|c: char| {
-                    !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
-                })
-                .map(|p| p + 1)
-                .unwrap_or(0);
-            source[receiver_start..position].to_string()
-        } else {
-            let word_start = source[..position]
-                .rfind(|c: char| {
-                    !c.is_alphanumeric()
-                        && c != '_'
-                        && c != ':'
-                        && c != '$'
-                        && c != '@'
-                        && c != '%'
-                        && c != '&'
-                })
-                .map(|p| p + 1)
-                .unwrap_or(0);
-            source[word_start..position].to_string()
-        };
+        let (word_prefix, prefix_start) =
+            if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
+                // We're right after ->, find the receiver variable
+                let receiver_start = source[..position.saturating_sub(2)]
+                    .rfind(|c: char| {
+                        !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
+                    })
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                (source[receiver_start..position].to_string(), receiver_start)
+            } else {
+                let word_start = source[..position]
+                    .rfind(|c: char| {
+                        !c.is_alphanumeric()
+                            && c != '_'
+                            && c != ':'
+                            && c != '$'
+                            && c != '@'
+                            && c != '%'
+                            && c != '&'
+                    })
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                (source[word_start..position].to_string(), word_start)
+            };
 
         // Detect trigger character
         let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
@@ -419,15 +663,16 @@ impl CompletionProvider {
         let in_regex = self.is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
-        CompletionContext {
+        CompletionContext::new(
+            &self.symbol_table,
             position,
             trigger_character,
             in_string,
             in_regex,
             in_comment,
-            current_package: "main".to_string(), // TODO: Detect actual package
-            prefix: word_prefix,
-        }
+            word_prefix,
+            prefix_start,
+        )
     }
 
     /// Add variable completions
@@ -464,6 +709,7 @@ impl CompletionProvider {
                         sort_text: Some(format!("1_{}", name)), // Variables have high priority
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
+                        text_edit_range: Some((context.prefix_start, context.position)),
                     });
                 }
             }
@@ -523,6 +769,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("0_{}", var)), // Special vars have highest priority
                     filter_text: Some(var.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -549,6 +796,7 @@ impl CompletionProvider {
                         sort_text: Some(format!("2_{}", name)),
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
+                        text_edit_range: Some((context.prefix_start, context.position)),
                     });
                 }
             }
@@ -583,6 +831,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("3_{}", builtin)),
                     filter_text: Some(builtin.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -624,6 +873,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("4_{}", keyword)),
                     filter_text: Some(keyword.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -633,11 +883,74 @@ impl CompletionProvider {
     #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn add_package_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement package member completion
-        // This would require analyzing package contents
+        // Only proceed if we have a workspace index to query
+        let Some(index) = &self.workspace_index else {
+            return;
+        };
+
+        // Split the prefix into package name and member prefix
+        let mut parts: Vec<&str> = context.prefix.split("::").collect();
+        if parts.len() < 2 {
+            return;
+        }
+        let member_prefix = parts.pop().unwrap_or("");
+        let package_name = parts.join("::");
+
+        // Query workspace index for members of the package
+        let members = index.get_package_members(&package_name);
+        for symbol in members {
+            match symbol.kind {
+                WsSymbolKind::Export | WsSymbolKind::Subroutine | WsSymbolKind::Method => {
+                    if symbol.name.starts_with(member_prefix) {
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Function,
+                            detail: Some(package_name.clone()),
+                            documentation: symbol.documentation.clone(),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
+                }
+                WsSymbolKind::Variable => {
+                    if symbol.name.starts_with(member_prefix) {
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Variable,
+                            detail: Some(package_name.clone()),
+                            documentation: symbol.documentation.clone(),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
+                }
+                WsSymbolKind::Constant => {
+                    if symbol.name.starts_with(member_prefix) {
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Constant,
+                            detail: Some(package_name.clone()),
+                            documentation: symbol.documentation.clone(),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Add method completions
@@ -712,6 +1025,7 @@ impl CompletionProvider {
                 sort_text: Some(format!("2_{}", method)),
                 filter_text: Some(method.to_string()),
                 additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
             });
         }
 
@@ -732,6 +1046,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("9_{}", method)), // Lower priority
                     filter_text: Some(method.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -772,15 +1087,300 @@ impl CompletionProvider {
         None
     }
 
-    /// Add file path completions
-    #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
+    /// Add file path completions with comprehensive security and performance safeguards
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
+    #[allow(dead_code)] // Backward compatibility wrapper, may be used by external code
     fn add_file_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement file path completion
-        // This would require filesystem access
+        self.add_file_completions_with_cancellation(completions, context, &|| false);
+    }
+
+    /// Add file path completions with cancellation support
+    fn add_file_completions_with_cancellation(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        is_cancelled: &dyn Fn() -> bool,
+    ) {
+        use walkdir::WalkDir;
+
+        // Early cancellation check
+        if is_cancelled() {
+            return;
+        }
+
+        let prefix = context.prefix.as_str().trim();
+
+        // Security: Reject dangerous prefixes (but allow empty for current directory completion)
+        if prefix.len() > 1024 {
+            return;
+        }
+
+        // Security: Sanitize and validate the input path
+        let safe_prefix = match self.sanitize_path(prefix) {
+            Some(path) => path,
+            None => return, // Path was deemed unsafe
+        };
+
+        // Split into directory and filename components
+        let (dir_part, file_part) = self.split_path_components(&safe_prefix);
+
+        // Security: Ensure directory is safe to traverse
+        let base_dir = match self.resolve_safe_directory(&dir_part) {
+            Some(dir) => dir,
+            None => return, // Directory traversal not allowed
+        };
+
+        // Performance: Limit the scope of filesystem operations
+        let max_results = 50; // Limit number of completions
+        let max_depth = 1; // Only traverse immediate directory
+        let max_entries = 200; // Limit total entries examined
+
+        let mut result_count = 0;
+        let mut entries_examined = 0;
+
+        // Use walkdir for safe, controlled filesystem traversal
+        for entry in WalkDir::new(&base_dir)
+            .max_depth(max_depth)
+            .follow_links(false) // Security: don't follow symlinks
+            .into_iter()
+            .filter_entry(|e| {
+                // Security: Skip hidden files and certain patterns
+                !self.is_hidden_or_forbidden(e)
+            })
+        {
+            // Cancellation check for responsiveness
+            if is_cancelled() {
+                break;
+            }
+
+            // Performance: Limit entries examined
+            entries_examined += 1;
+            if entries_examined > max_entries {
+                break;
+            }
+
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue, // Skip entries we can't read
+            };
+
+            // Skip the base directory itself
+            if entry.path() == base_dir {
+                continue;
+            }
+
+            let file_name = match entry.file_name().to_str() {
+                Some(name) => name,
+                None => continue, // Skip non-UTF8 filenames
+            };
+
+            // Filter by file part prefix
+            if !file_name.starts_with(&file_part) {
+                continue;
+            }
+
+            // Security: Additional filename validation
+            if !self.is_safe_filename(file_name) {
+                continue;
+            }
+
+            // Build the completion path
+            let completion_path =
+                self.build_completion_path(&dir_part, file_name, entry.file_type().is_dir());
+
+            let (detail, documentation) = self.get_file_completion_metadata(&entry);
+
+            completions.push(CompletionItem {
+                label: completion_path.clone(),
+                kind: CompletionItemKind::File,
+                detail: Some(detail),
+                documentation,
+                insert_text: Some(completion_path.clone()),
+                sort_text: Some(format!("1_{}", completion_path)),
+                filter_text: Some(completion_path.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+            });
+
+            result_count += 1;
+            if result_count >= max_results {
+                break;
+            }
+        }
+    }
+
+    /// Sanitize and validate a file path for security
+    fn sanitize_path(&self, path: &str) -> Option<String> {
+        // Handle empty path (current directory completion)
+        if path.is_empty() {
+            return Some(String::new());
+        }
+
+        // Security checks
+        if path.contains('\0') {
+            return None; // Null bytes not allowed
+        }
+
+        // Check for path traversal attempts
+        let path_obj = Path::new(path);
+        for component in path_obj.components() {
+            match component {
+                Component::ParentDir => return None, // No .. allowed
+                Component::RootDir if path != "/" => return None, // Absolute paths generally not allowed
+                Component::Prefix(_) => return None, // Windows drive letters not allowed
+                _ => {}
+            }
+        }
+
+        // Additional dangerous pattern checks
+        if path.contains("../") || path.contains("..\\") || path.starts_with('/') && path != "/" {
+            return None;
+        }
+
+        // Normalize path separators for cross-platform compatibility
+        Some(path.replace('\\', "/"))
+    }
+
+    /// Split path into directory and filename components safely
+    fn split_path_components(&self, path: &str) -> (String, String) {
+        match path.rsplit_once('/') {
+            Some((dir, file)) if !dir.is_empty() => (dir.to_string(), file.to_string()),
+            _ => (".".to_string(), path.to_string()),
+        }
+    }
+
+    /// Resolve and validate a directory path for safe traversal
+    fn resolve_safe_directory(&self, dir_part: &str) -> Option<PathBuf> {
+        let path = Path::new(dir_part);
+
+        // Security: Only allow relative paths and current directory
+        if path.is_absolute() && dir_part != "/" {
+            return None;
+        }
+
+        // For current directory, just return it directly
+        if dir_part == "." {
+            return Some(Path::new(".").to_path_buf());
+        }
+
+        // Convert to canonical path to resolve any remaining issues
+        match path.canonicalize() {
+            Ok(canonical) => {
+                // For tests and scenarios where cwd has changed, be more permissive
+                Some(canonical)
+            }
+            Err(_) => {
+                // If canonicalization fails, try the original path if it exists and is safe
+                if path.exists() && path.is_dir() { Some(path.to_path_buf()) } else { None }
+            }
+        }
+    }
+
+    /// Check if a directory entry should be filtered out for security
+    fn is_hidden_or_forbidden(&self, entry: &walkdir::DirEntry) -> bool {
+        let file_name = entry.file_name().to_string_lossy();
+
+        // Skip hidden files (Unix convention)
+        if file_name.starts_with('.') && file_name.len() > 1 {
+            return true;
+        }
+
+        // Skip certain system directories and files
+        matches!(
+            file_name.as_ref(),
+            "node_modules"
+                | ".git"
+                | ".svn"
+                | ".hg"
+                | "target"
+                | "build"
+                | ".cargo"
+                | ".rustup"
+                | "System Volume Information"
+                | "$RECYCLE.BIN"
+                | "__pycache__"
+                | ".pytest_cache"
+                | ".mypy_cache"
+        )
+    }
+
+    /// Validate filename for safety
+    fn is_safe_filename(&self, filename: &str) -> bool {
+        // Basic safety checks
+        if filename.is_empty() || filename.len() > 255 {
+            return false;
+        }
+
+        // Check for null bytes or other control characters
+        if filename.contains('\0') || filename.chars().any(|c| c.is_control()) {
+            return false;
+        }
+
+        // Check for Windows reserved names (even on Unix for cross-platform safety)
+        let name_upper = filename.to_uppercase();
+        let reserved = [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+
+        for reserved_name in &reserved {
+            if name_upper == *reserved_name
+                || name_upper.starts_with(&format!("{}.", reserved_name))
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Build the completion path string
+    fn build_completion_path(&self, dir_part: &str, filename: &str, is_dir: bool) -> String {
+        let mut path = if dir_part == "." {
+            filename.to_string()
+        } else {
+            format!("{}/{}", dir_part.trim_end_matches('/'), filename)
+        };
+
+        // Add trailing slash for directories
+        if is_dir {
+            path.push('/');
+        }
+
+        path
+    }
+
+    /// Get metadata for file completion item
+    fn get_file_completion_metadata(&self, entry: &walkdir::DirEntry) -> (String, Option<String>) {
+        let file_type = entry.file_type();
+
+        if file_type.is_dir() {
+            ("directory".to_string(), Some("Directory".to_string()))
+        } else if file_type.is_file() {
+            // Try to provide helpful information about file type
+            let extension = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or("");
+
+            let file_type_desc = match extension.to_lowercase().as_str() {
+                "pl" | "pm" | "t" => "Perl file",
+                "rs" => "Rust source file",
+                "js" => "JavaScript file",
+                "py" => "Python file",
+                "txt" => "Text file",
+                "md" => "Markdown file",
+                "json" => "JSON file",
+                "yaml" | "yml" => "YAML file",
+                "toml" => "TOML file",
+                _ => "file",
+            };
+
+            (file_type_desc.to_string(), None)
+        } else {
+            ("file".to_string(), None)
+        }
     }
 
     /// Add all variables without sigils (for interpolation contexts)
@@ -814,6 +1414,7 @@ impl CompletionProvider {
                             sort_text: Some(format!("5_{}", name)),
                             filter_text: Some(name.clone()),
                             additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
                         });
                     }
                 }
@@ -909,6 +1510,7 @@ impl CompletionProvider {
                     sort_text: Some(format!("2_{}", name)),
                     filter_text: Some(name.to_string()),
                     additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
         }
@@ -919,6 +1521,9 @@ impl CompletionProvider {
 mod tests {
     use super::*;
     use crate::parser::Parser;
+    use crate::workspace_index::WorkspaceIndex;
+    use std::sync::Arc;
+    use url::Url;
 
     #[test]
     fn test_variable_completion() {
@@ -976,5 +1581,72 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "print"));
         assert!(completions.iter().any(|c| c.label == "printf"));
+    }
+
+    #[test]
+    fn test_current_package_detection() {
+        let code = r#"package Foo;
+my $x = 1;
+$x
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = CompletionProvider::new(&ast);
+
+        // position at end of file
+        let context = provider.analyze_context(code, code.len());
+        assert_eq!(context.current_package, "Foo");
+    }
+
+    #[test]
+    fn test_package_block_detection() {
+        let code = r#"package Foo {
+    my $x;
+    $x;
+}
+package Bar;
+$"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = CompletionProvider::new(&ast);
+
+        // Inside Foo block
+        let pos_foo = code.find("$x;").unwrap() + 2; // position after $x
+        let ctx_foo = provider.analyze_context(code, pos_foo);
+        assert_eq!(ctx_foo.current_package, "Foo");
+
+        // After block, in Bar package
+        let pos_bar = code.len();
+        let ctx_bar = provider.analyze_context(code, pos_bar);
+        assert_eq!(ctx_bar.current_package, "Bar");
+    }
+
+    #[test]
+    fn test_package_member_completion() {
+        // Create workspace index with a module exporting a function
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyModule.pm").unwrap();
+        let module_code = r#"package MyModule;
+our @EXPORT = qw(exported_sub);
+sub exported_sub { }
+sub internal_sub { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string()).expect("indexing module");
+
+        // Code that triggers package completion
+        let code = "use MyModule;\nMyModule::";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "exported_sub"),
+            "should suggest exported_sub"
+        );
     }
 }

@@ -9,7 +9,7 @@ members = [
     "crates/tree-sitter-perl-c",
     "crates/parser-benchmarks",
     "crates/parser-tests",
-    "xtask",
+    "xtask", "crates/perl-lsp",
 ]
 exclude = [
     "tree-sitter-perl",

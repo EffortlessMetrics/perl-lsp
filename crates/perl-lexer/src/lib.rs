@@ -631,10 +631,12 @@ impl<'a> PerlLexer<'a> {
         }
 
         let start = self.position;
+        let mut text = String::from("<<");
         self.position += 2; // Skip <<
 
         // Check for indented heredoc (~)
         let allow_indent = if self.current_char() == Some('~') {
+            text.push('~');
             self.advance();
             true
         } else {
@@ -644,6 +646,7 @@ impl<'a> PerlLexer<'a> {
         // Skip whitespace
         while let Some(ch) = self.current_char() {
             if ch == ' ' || ch == '\t' {
+                text.push(ch);
                 self.advance();
             } else {
                 break;
@@ -652,6 +655,7 @@ impl<'a> PerlLexer<'a> {
 
         // Optional backslash disables interpolation, treat like single-quoted label
         let _backslashed = if self.current_char() == Some('\\') {
+            text.push('\\');
             self.advance();
             true
         } else {
@@ -659,40 +663,58 @@ impl<'a> PerlLexer<'a> {
         };
 
         // Parse delimiter
-        let delimiter_start = self.position;
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
                 Some('"') if !_backslashed => {
                     // Double-quoted delimiter
+                    text.push('"');
                     self.advance();
-                    let delim_start = self.position;
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
-                        if self.current_char() == Some('"') {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '"' {
+                                text.push('"');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
                             self.advance();
+                        } else {
                             break;
                         }
-                        self.advance();
                     }
-                    self.input[delim_start..self.position - 1].to_string()
+                    delim
                 }
                 Some('\'') if !_backslashed => {
                     // Single-quoted delimiter
+                    text.push('\'');
                     self.advance();
-                    let delim_start = self.position;
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
-                        if self.current_char() == Some('\'') {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '\'' {
+                                text.push('\'');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
                             self.advance();
+                        } else {
                             break;
                         }
-                        self.advance();
                     }
-                    self.input[delim_start..self.position - 1].to_string()
+                    delim
                 }
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
+                    let mut delim = String::new();
                     while self.position < self.input.len() {
                         if let Some(c) = self.current_char() {
                             if is_perl_identifier_continue(c) {
+                                delim.push(c);
+                                text.push(c);
                                 self.advance();
                             } else {
                                 break;
@@ -701,7 +723,7 @@ impl<'a> PerlLexer<'a> {
                             break;
                         }
                     }
-                    self.input[delimiter_start..self.position].to_string()
+                    delim
                 }
                 _ => return None,
             }
@@ -722,7 +744,7 @@ impl<'a> PerlLexer<'a> {
 
         Some(Token {
             token_type: TokenType::HeredocStart,
-            text: Arc::from(&self.input[start..self.position]),
+            text: Arc::from(text),
             start,
             end: self.position,
         })
@@ -888,8 +910,8 @@ impl<'a> PerlLexer<'a> {
 
         match sigil {
             '$' | '@' | '%' | '*' => {
-                // In ExpectOperator mode, * should be treated as multiplication, not a glob sigil
-                if sigil == '*' && self.mode == LexerMode::ExpectOperator {
+                // In ExpectOperator mode, treat % and * as operators rather than sigils
+                if self.mode == LexerMode::ExpectOperator && matches!(sigil, '*' | '%') {
                     return None;
                 }
                 self.advance();
@@ -1162,7 +1184,8 @@ impl<'a> PerlLexer<'a> {
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
     fn is_quote_delim(c: char) -> bool {
-        !c.is_ascii_alphanumeric() // punctuation is OK
+        // Quote delimiters are punctuation, but not whitespace or control characters
+        !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
     }
 
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
@@ -1265,9 +1288,17 @@ impl<'a> PerlLexer<'a> {
                     "sub" => {
                         self.in_prototype = true;
                     }
-                    // Quote operators expect a delimiter next
+                    // Quote operators expect a delimiter next (must be immediately adjacent)
                     "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" | "tr" | "y" => {
-                        if let Some(next) = self.peek_nonspace() {
+                        // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
+                        // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
+                        let next_char = if matches!(text, "m" | "s" | "tr" | "y") {
+                            self.current_char() // Must be immediately adjacent
+                        } else {
+                            self.peek_nonspace() // Can skip whitespace
+                        };
+
+                        if let Some(next) = next_char {
                             if Self::is_quote_delim(next) {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
@@ -2598,5 +2629,43 @@ mod tests {
         lexer.next_token(); // (
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
+    }
+
+    #[test]
+    fn test_percent_and_double_sigil_disambiguation() {
+        // Hash variable
+        let mut lexer = PerlLexer::new("%hash");
+        let token = lexer.next_token().unwrap();
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(ref id) if id.as_ref() == "%hash")
+        );
+
+        // Modulo operator
+        let mut lexer = PerlLexer::new("10 % 3");
+        lexer.next_token(); // 10
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "%"));
+    }
+
+    #[test]
+    fn test_defined_or_and_exponent() {
+        // Defined-or operator
+        let mut lexer = PerlLexer::new("$a // $b");
+        lexer.next_token(); // $a
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
+
+        // Regex after =~ should still parse
+        let mut lexer = PerlLexer::new("$x =~ //");
+        lexer.next_token(); // $x
+        lexer.next_token(); // =~
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+
+        // Exponent operator
+        let mut lexer = PerlLexer::new("2 ** 3");
+        lexer.next_token(); // 2
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
     }
 }

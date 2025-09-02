@@ -6,8 +6,6 @@
 
 pub mod client_caps;
 pub mod env_guard;
-pub mod lsp_client;
-pub mod lsp_harness;
 
 use serde_json::Value;
 use std::time::{Duration, Instant};

@@ -243,6 +243,8 @@ impl SymbolTable {
 /// Extract symbols from an AST
 pub struct SymbolExtractor {
     table: SymbolTable,
+    /// Source code for comment extraction
+    source: String,
 }
 
 impl Default for SymbolExtractor {
@@ -252,9 +254,14 @@ impl Default for SymbolExtractor {
 }
 
 impl SymbolExtractor {
-    /// Create a new symbol extractor
+    /// Create a new symbol extractor without source (no documentation extraction)
     pub fn new() -> Self {
-        SymbolExtractor { table: SymbolTable::new() }
+        SymbolExtractor { table: SymbolTable::new(), source: String::new() }
+    }
+
+    /// Create a symbol extractor with source text for documentation extraction
+    pub fn new_with_source(source: &str) -> Self {
+        SymbolExtractor { table: SymbolTable::new(), source: source.to_string() }
     }
 
     /// Extract symbols from an AST node
@@ -273,11 +280,13 @@ impl SymbolExtractor {
             }
 
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                let doc = self.extract_leading_comment(node.location.start);
                 self.handle_variable_declaration(
                     declarator,
                     variable,
                     attributes,
                     variable.location,
+                    doc,
                 );
                 if let Some(init) = initializer {
                     self.visit_node(init);
@@ -290,8 +299,15 @@ impl SymbolExtractor {
                 attributes,
                 initializer,
             } => {
+                let doc = self.extract_leading_comment(node.location.start);
                 for var in variables {
-                    self.handle_variable_declaration(declarator, var, attributes, var.location);
+                    self.handle_variable_declaration(
+                        declarator,
+                        var,
+                        attributes,
+                        var.location,
+                        doc.clone(),
+                    );
                 }
                 if let Some(init) = initializer {
                     self.visit_node(init);
@@ -317,11 +333,12 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
             }
 
-            NodeKind::Subroutine { name, params: _, attributes, body } => {
+            NodeKind::Subroutine { name, prototype: _, signature: _, attributes, body } => {
                 let sub_name =
                     name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
 
                 if name.is_some() {
+                    let documentation = self.extract_leading_comment(node.location.start);
                     let symbol = Symbol {
                         name: sub_name.clone(),
                         qualified_name: format!("{}::{}", self.table.current_package, sub_name),
@@ -329,7 +346,7 @@ impl SymbolExtractor {
                         location: node.location,
                         scope_id: self.table.current_scope(),
                         declaration: None,
-                        documentation: None, // TODO: Extract from preceding comments
+                        documentation,
                         attributes: attributes.clone(),
                     };
 
@@ -425,7 +442,7 @@ impl SymbolExtractor {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared
-                self.handle_variable_declaration("my", variable, &[], variable.location);
+                self.handle_variable_declaration("my", variable, &[], variable.location, None);
                 self.visit_node(list);
                 self.visit_node(body);
 
@@ -577,7 +594,8 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Method { name, params: _, body } => {
+            NodeKind::Method { name, signature: _, attributes: _, body } => {
+                let documentation = self.extract_leading_comment(node.location.start);
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
@@ -585,7 +603,7 @@ impl SymbolExtractor {
                     location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
-                    documentation: None,
+                    documentation,
                     attributes: vec!["method".to_string()],
                 };
                 self.table.add_symbol(symbol);
@@ -649,6 +667,55 @@ impl SymbolExtractor {
         }
     }
 
+    /// Extract a block of line comments immediately preceding a declaration
+    fn extract_leading_comment(&self, start: usize) -> Option<String> {
+        if self.source.is_empty() || start == 0 {
+            return None;
+        }
+        let mut end = start.min(self.source.len());
+        let bytes = self.source.as_bytes();
+        // Trim all preceding whitespace, including newlines, to find the real end of comments.
+        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+
+        // Ensure we don't break UTF-8 sequences by finding the nearest char boundary
+        while end > 0 && !self.source.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        let prefix = &self.source[..end];
+        let mut lines = prefix.lines().rev();
+        let mut docs = Vec::new();
+        for line in &mut lines {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') {
+                // Optimize: avoid string allocation by using string slice references
+                let content = trimmed.trim_start_matches('#').trim_start();
+                docs.push(content);
+            } else {
+                // Stop at any non-comment line (including empty lines).
+                break;
+            }
+        }
+        if docs.is_empty() {
+            None
+        } else {
+            docs.reverse();
+            // Optimize: pre-calculate capacity to avoid reallocations
+            let total_len: usize =
+                docs.iter().map(|s| s.len()).sum::<usize>() + docs.len().saturating_sub(1);
+            let mut result = String::with_capacity(total_len);
+            for (i, doc) in docs.iter().enumerate() {
+                if i > 0 {
+                    result.push('\n');
+                }
+                result.push_str(doc);
+            }
+            Some(result)
+        }
+    }
+
     /// Handle variable declaration
     fn handle_variable_declaration(
         &mut self,
@@ -656,6 +723,7 @@ impl SymbolExtractor {
         variable: &Node,
         attributes: &[String],
         location: SourceLocation,
+        documentation: Option<String>,
     ) {
         if let NodeKind::Variable { sigil, name } = &variable.kind {
             let kind = match sigil.as_str() {
@@ -676,7 +744,7 @@ impl SymbolExtractor {
                 location,
                 scope_id: self.table.current_scope(),
                 declaration: Some(declarator.to_string()),
-                documentation: None, // TODO: Extract from preceding comments
+                documentation,
                 attributes: attributes.to_vec(),
             };
 
@@ -754,7 +822,7 @@ sub bar {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
 
-        let extractor = SymbolExtractor::new();
+        let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);
 
         // Check package symbol

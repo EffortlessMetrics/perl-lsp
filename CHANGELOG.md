@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Tree-sitter Grammar Enhancement** - Added given/when/default grammar rules for complete switch-style control flow support
+- **Enhanced Control Flow** - Tree-sitter grammar now supports all modern Perl control flow constructs
+- **Comprehensive Corpus Testing** - Added test corpus for given/when/default constructs with edge case coverage
+
+## [v0.8.7] - 2025-09-01
+
+### Added
+- **Comprehensive Comment Documentation Extraction (PR #71)** - Production-ready leading comment parsing with extensive edge case coverage
+- **Enhanced Source Threading Architecture** - Source-aware LSP providers with improved context for all features
+- **20 Comprehensive Test Cases** - Complete test coverage for comment extraction including Unicode, performance, and edge cases
+- **Multi-Package Comment Support** - Correct comment extraction across package boundaries with qualified name resolution
+- **Class Method Documentation** - Support for extracting documentation from class methods and complex Perl constructs
+- **Variable List Documentation** - Shared documentation for variable list declarations (`my ($a, $b, @c, %d)`)
+
+### Improved
+- **Performance Optimization** - Comment extraction optimized to <100µs per iteration with pre-allocated string capacity
+- **Unicode Safety** - Proper UTF-8 character boundary handling for international comments and emojis  
+- **S-Expression Format Compatibility** - Resolved bless parsing regressions with complete AST compatibility
+- **Edge Case Robustness** - Handles empty comments, source boundaries, non-ASCII whitespace, and complex formatting
+- **LSP Functionality** - Improved from 75% to 78% functional with enhanced documentation and symbol intelligence
+- **Whitespace Handling** - Distinguishes between blank lines and whitespace-only lines for accurate comment boundaries
+
+### Fixed
+- **Bless Parsing Regression** - Resolved S-expression format issues affecting blessed object parsing
+- **Comment Boundary Detection** - Precise handling of blank lines vs whitespace-only lines in comment extraction
+- **Complex Formatting Scenarios** - Support for varying indentation, mixed hash styles, and special characters
+
 ## [v0.8.5] - 2025-08-24
 
 ### Added
@@ -625,9 +653,8 @@ The following edge cases still need implementation:
 2. **Subroutine attributes** - `sub bar : lvalue { }`
 3. **Variable attributes** - `my $x :shared`
 4. **Format declarations** - `format STDOUT =`
-5. **Default in given/when** - `default { }` blocks
-6. **Class declarations** - `class Foo { }` (Perl 5.38+)
-7. **Method declarations** - `method bar { }` (Perl 5.38+)
+5. **Class declarations** - `class Foo { }` (Perl 5.38+)
+6. **Method declarations** - `method bar { }` (Perl 5.38+)
 
 ### Test Results
 - **94.5% edge case coverage** - Major improvement from previous 82.8%
