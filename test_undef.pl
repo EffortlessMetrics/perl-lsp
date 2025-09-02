@@ -1,1 +1,0 @@
-($a, undef, $b) = @list

@@ -1,0 +1,114 @@
+{
+  "codeActionProvider": {
+    "codeActionKinds": [
+      "quickfix",
+      "refactor",
+      "refactor.extract",
+      "refactor.inline",
+      "refactor.rewrite"
+    ],
+    "resolveProvider": true
+  },
+  "completionProvider": {
+    "resolveProvider": false,
+    "triggerCharacters": [
+      "$",
+      "@",
+      "%",
+      "->"
+    ]
+  },
+  "definitionProvider": true,
+  "diagnosticProvider": {
+    "identifier": "perl-lsp",
+    "interFileDependencies": false,
+    "workspaceDiagnostics": true
+  },
+  "documentFormattingProvider": true,
+  "documentHighlightProvider": true,
+  "documentLinkProvider": {
+    "resolveProvider": false
+  },
+  "documentOnTypeFormattingProvider": {
+    "firstTriggerCharacter": "}",
+    "moreTriggerCharacter": [
+      ";"
+    ]
+  },
+  "documentRangeFormattingProvider": true,
+  "documentSymbolProvider": true,
+  "executeCommandProvider": {
+    "commands": [
+      "perl.tidy",
+      "perl.critic",
+      "perl.extractVariable",
+      "perl.extractSubroutine"
+    ]
+  },
+  "foldingRangeProvider": true,
+  "hoverProvider": true,
+  "inlayHintProvider": {
+    "resolveProvider": true
+  },
+  "referencesProvider": true,
+  "renameProvider": {
+    "prepareProvider": true
+  },
+  "selectionRangeProvider": true,
+  "semanticTokensProvider": {
+    "full": true,
+    "legend": {
+      "tokenModifiers": [
+        "declaration",
+        "definition",
+        "readonly",
+        "static",
+        "deprecated",
+        "abstract",
+        "async",
+        "modification",
+        "documentation",
+        "defaultLibrary"
+      ],
+      "tokenTypes": [
+        "namespace",
+        "type",
+        "class",
+        "interface",
+        "enum",
+        "enumMember",
+        "typeParameter",
+        "function",
+        "method",
+        "property",
+        "macro",
+        "variable",
+        "parameter",
+        "keyword",
+        "modifier",
+        "comment",
+        "string",
+        "number",
+        "regexp",
+        "operator"
+      ]
+    },
+    "range": false
+  },
+  "signatureHelpProvider": {
+    "retriggerCharacters": [
+      ","
+    ],
+    "triggerCharacters": [
+      "(",
+      ","
+    ]
+  },
+  "textDocumentSync": {
+    "change": 1,
+    "openClose": true
+  },
+  "workspaceSymbolProvider": {
+    "resolveProvider": true
+  }
+}

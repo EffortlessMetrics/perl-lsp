@@ -8,6 +8,7 @@ Thank you for your interest in contributing to the Pure Rust Perl Parser! This d
 - [Development Setup](#development-setup)
 - [Testing Guidelines](#testing-guidelines)
 - [Adding New Features](#adding-new-features)
+- [Incremental Parsing Development](#incremental-parsing-development)
 - [Code Style](#code-style)
 - [Pull Request Process](#pull-request-process)
 
@@ -385,6 +386,191 @@ RUST_LOG=debug perl-lsp --stdio --log
 
 # Use the capabilities demo
 cargo run -p perl-parser --example lsp_capabilities
+```
+
+## Incremental Parsing Development
+
+**Diataxis: How-to Guides** - Step-by-step instructions for working with incremental parsing
+
+### Using Incremental Parsing in Your Application
+
+The incremental parsing system provides high-performance document editing with subtree reuse. Here's how to integrate it:
+
+#### Basic Usage
+
+```rust
+use perl_parser::incremental_document::IncrementalDocument;
+use perl_parser::incremental_edit::IncrementalEdit;
+
+// Create a new incremental document
+let source = r#"
+    my $x = 42;
+    my $y = 100;
+    print $x + $y;
+"#.to_string();
+
+let mut doc = IncrementalDocument::new(source)?;
+
+// Apply an edit (change 42 to 99)
+let edit = IncrementalEdit::new(
+    20,  // start_byte
+    22,  // old_end_byte
+    "99".to_string(), // new_text
+);
+
+doc.apply_edit(edit)?;
+
+// Check performance metrics
+println!("Parse time: {:.2}ms", doc.metrics().last_parse_time_ms);
+println!("Nodes reused: {}", doc.metrics().nodes_reused);
+println!("Nodes reparsed: {}", doc.metrics().nodes_reparsed);
+```
+
+#### Advanced Usage - Multiple Edits
+
+```rust
+use perl_parser::incremental_edit::IncrementalEditSet;
+
+let mut edits = IncrementalEditSet::new();
+
+// Add multiple edits (processed in batch)
+edits.add(IncrementalEdit::new(8, 10, "15".to_string()));
+edits.add(IncrementalEdit::new(19, 21, "25".to_string()));
+
+// Apply all edits atomically
+doc.apply_edits(&edits)?;
+```
+
+#### LSP Integration Pattern
+
+```rust
+use perl_parser::incremental_integration::{DocumentParser, IncrementalConfig};
+
+// Enable incremental parsing in LSP context
+unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1") };
+let config = IncrementalConfig::default();
+
+// Create document parser with incremental support
+let mut parser = DocumentParser::new(initial_source, &config)?;
+
+// Apply LSP text changes
+let lsp_changes = vec![/* ... LSP TextDocumentContentChangeEvent objects ... */];
+parser.apply_changes(&lsp_changes, &config)?;
+```
+
+### Testing Incremental Parsing Features
+
+#### Unit Testing
+
+```rust
+#[test]
+fn test_incremental_single_token() {
+    let source = "my $x = 42;";
+    let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+    
+    let edit = IncrementalEdit::new(8, 10, "99".to_string());
+    doc.apply_edit(edit).unwrap();
+    
+    // Verify performance characteristics
+    assert!(doc.metrics.nodes_reused > 0);
+    assert!(doc.metrics.last_parse_time_ms < 1.0);
+    assert!(doc.text().contains("99"));
+}
+```
+
+#### Integration Testing with Async Harness
+
+```rust
+#[cfg(feature = "incremental")]
+use serial_test::serial;
+
+#[test]
+#[serial]
+fn test_lsp_incremental_editing() {
+    unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1") };
+    
+    let config = IncrementalConfig::default();
+    let mut doc = DocumentParser::new(source, &config).unwrap();
+    
+    let start = std::time::Instant::now();
+    doc.apply_changes(&changes, &config).unwrap();
+    let elapsed = start.elapsed();
+    
+    // Performance assertions
+    assert!(elapsed.as_millis() < 100);
+    
+    unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };
+}
+```
+
+### Performance Optimization Guidelines
+
+#### Cache Effectiveness
+- **Best performance**: Small, localized edits (single token changes)
+- **Good performance**: Function-level modifications with unchanged structure
+- **Moderate performance**: Large structural changes (still faster than full reparse)
+
+#### Memory Management
+- Default cache size: 1000 subtrees (configurable)
+- Automatic LRU eviction prevents unbounded growth
+- Arc<Node> sharing provides zero-copy reuse
+
+#### Debugging Performance Issues
+
+```rust
+// Enable detailed metrics tracking
+let metrics = doc.metrics();
+println!("Cache hit rate: {:.1}%", 
+    (metrics.cache_hits as f64 / (metrics.cache_hits + metrics.cache_misses) as f64) * 100.0
+);
+
+// Identify parse bottlenecks
+if metrics.last_parse_time_ms > 5.0 {
+    println!("Consider full reparse fallback for large edits");
+}
+```
+
+### Benchmark Development
+
+Add incremental parsing benchmarks in `benches/incremental_benchmark.rs`:
+
+```rust
+use criterion::{BatchSize, Criterion, criterion_group};
+
+fn bench_your_scenario(c: &mut Criterion) {
+    let source = "your test source code here";
+    
+    c.bench_function("incremental your_scenario", |b| {
+        b.iter_batched(
+            || IncrementalDocument::new(source.to_string()).unwrap(),
+            |mut doc| {
+                let edit = IncrementalEdit::new(/* your edit parameters */);
+                doc.apply_edit(edit).unwrap();
+                black_box(doc.metrics.nodes_reused);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+criterion_group!(benches, bench_your_scenario);
+```
+
+### Configuration Options
+
+#### Environment Variables
+- `PERL_LSP_INCREMENTAL=1`: Enable incremental parsing in LSP server
+- `PERL_INCREMENTAL_DEBUG=1`: Enable debug logging for cache operations
+- `PERL_INCREMENTAL_CACHE_SIZE=2000`: Override default cache size
+
+#### Runtime Configuration
+```rust
+let config = IncrementalConfig {
+    enabled: true,
+    cache_size: 2000,
+    timeout_ms: 1000, // Fallback timeout
+    ..Default::default()
+};
 ```
 
 ## Code Style
