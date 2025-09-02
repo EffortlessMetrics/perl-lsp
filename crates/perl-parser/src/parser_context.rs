@@ -30,7 +30,7 @@ pub struct ParserContext {
 }
 
 /// Efficient position tracking using line starts cache
-/// 
+///
 /// This implementation leverages the existing LineStartsCache for O(log n) position lookups
 /// instead of O(n) character-by-character advancement. It provides UTF-16 aware position
 /// mapping for LSP compatibility while integrating with the existing position infrastructure.
@@ -350,7 +350,7 @@ mod tests {
         let ctx = ParserContext::new(source);
 
         assert_eq!(ctx.tokens.len(), 1);
-        
+
         let token = &ctx.tokens[0];
         assert_eq!(token.range().start.byte, 0);
         assert_eq!(token.range().start.line, 1);
