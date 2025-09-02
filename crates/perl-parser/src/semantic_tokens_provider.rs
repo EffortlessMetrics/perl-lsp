@@ -2,6 +2,31 @@
 //!
 //! This module provides semantic token information to enable richer
 //! syntax highlighting based on semantic understanding of the code.
+//!
+//! ## Features
+//!
+//! - **Comprehensive token types**: Support for packages, classes, functions, methods,
+//!   variables, parameters, built-ins, constants, and more
+//! - **Advanced error recovery**: Continues processing even with syntax errors
+//! - **Performance optimizations**: Pre-computed line starts and efficient position calculation
+//! - **Unicode support**: Proper handling of UTF-8 text and Unicode identifiers
+//! - **Modifier support**: Distinguishes between declarations, references, modifications
+//! - **Built-in detection**: Recognizes Perl built-in functions and pragmas
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use perl_parser::{Parser, semantic_tokens_provider::SemanticTokensProvider};
+//!
+//! let code = "package MyPkg; my $var = 42; sub func { return $var; }";
+//! let mut parser = Parser::new(code);
+//! 
+//! if let Ok(ast) = parser.parse() {
+//!     let mut provider = SemanticTokensProvider::new(code.to_string());
+//!     let tokens = provider.extract(&ast);
+//!     println!("Generated {} tokens", tokens.len());
+//! }
+//! ```
 
 use crate::ast::{Node, NodeKind};
 use std::collections::HashMap;
@@ -128,31 +153,118 @@ pub struct SemanticTokensProvider {
     source: String,
     /// Cache of variable declarations for scope tracking
     declared_vars: HashMap<String, Vec<(u32, u32)>>, // name -> [(line, col)]
+    /// Pre-computed line starts for faster position calculation
+    line_starts: Vec<usize>,
+    /// Performance metrics
+    pub stats: ProviderStats,
+}
+
+/// Performance statistics for the semantic tokens provider
+#[derive(Debug, Default)]
+pub struct ProviderStats {
+    pub nodes_processed: usize,
+    pub tokens_generated: usize,
+    pub processing_time_ms: u64,
+    pub cache_hits: usize,
+    pub cache_misses: usize,
 }
 
 impl SemanticTokensProvider {
     /// Create a new semantic tokens provider
     pub fn new(source: String) -> Self {
-        Self { source, declared_vars: HashMap::new() }
+        let line_starts = Self::compute_line_starts(&source);
+        Self { 
+            source, 
+            declared_vars: HashMap::new(),
+            line_starts,
+            stats: ProviderStats::default(),
+        }
     }
 
-    /// Extract semantic tokens from the AST
+    /// Pre-compute line start positions for O(1) position lookup
+    fn compute_line_starts(source: &str) -> Vec<usize> {
+        let mut line_starts = vec![0]; // First line starts at 0
+        
+        for (pos, ch) in source.char_indices() {
+            if ch == '\n' {
+                line_starts.push(pos + 1);
+            }
+        }
+        
+        line_starts
+    }
+
+    /// Extract semantic tokens from the AST with error recovery
     pub fn extract(&mut self, ast: &Node) -> Vec<SemanticToken> {
+        let start_time = std::time::Instant::now();
         let mut tokens = Vec::new();
 
+        // Reset stats and caches
+        self.stats = ProviderStats::default();
+        self.declared_vars.clear();
+
+        // Extract tokens with error handling
+        match self.extract_with_recovery(ast, &mut tokens) {
+            Ok(_) => {
+                // Sort tokens by position for proper LSP encoding
+                tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
+                
+                // Update stats
+                self.stats.processing_time_ms = start_time.elapsed().as_millis() as u64;
+                self.stats.tokens_generated = tokens.len();
+                
+                tokens
+            }
+            Err(e) => {
+                eprintln!("Warning: Error during semantic token extraction: {}", e);
+                // Return whatever tokens we managed to extract
+                tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
+                
+                // Update stats even on error
+                self.stats.processing_time_ms = start_time.elapsed().as_millis() as u64;
+                self.stats.tokens_generated = tokens.len();
+                
+                tokens
+            }
+        }
+    }
+
+    /// Extract tokens with error recovery
+    fn extract_with_recovery(&mut self, ast: &Node, tokens: &mut Vec<SemanticToken>) -> Result<(), String> {
         // Handle Program node specially
         if let NodeKind::Program { statements } = &ast.kind {
             for stmt in statements {
-                self.visit_node(stmt, &mut tokens, false);
+                if let Err(e) = self.visit_node_safe(stmt, tokens, false) {
+                    eprintln!("Warning: Failed to process statement: {}", e);
+                    // Continue with next statement
+                }
             }
         } else {
-            self.visit_node(ast, &mut tokens, false);
+            self.visit_node_safe(ast, tokens, false)?;
         }
 
-        // Sort tokens by position
-        tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
+        Ok(())
+    }
 
-        tokens
+    /// Safe node visiting with error handling
+    fn visit_node_safe(
+        &mut self,
+        node: &Node,
+        tokens: &mut Vec<SemanticToken>,
+        is_declaration_context: bool,
+    ) -> Result<(), String> {
+        // Validate node bounds
+        if node.location.start > node.location.end {
+            return Err(format!("Invalid node bounds: {} > {}", node.location.start, node.location.end));
+        }
+
+        if node.location.end > self.source.len() {
+            return Err(format!("Node bounds exceed source length: {} > {}", node.location.end, self.source.len()));
+        }
+
+        // Process the node
+        self.visit_node(node, tokens, is_declaration_context);
+        Ok(())
     }
 
     /// Visit a node and extract semantic tokens
@@ -162,6 +274,8 @@ impl SemanticTokensProvider {
         tokens: &mut Vec<SemanticToken>,
         is_declaration_context: bool,
     ) {
+        // Update statistics
+        self.stats.nodes_processed += 1;
         match &node.kind {
             NodeKind::Package { name, block } => {
                 // Package name is a namespace
@@ -263,16 +377,20 @@ impl SemanticTokensProvider {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                // Check if it's a built-in function
-                let modifiers = if self.is_builtin_function(name) {
-                    vec![SemanticTokenModifier::DefaultLibrary, SemanticTokenModifier::Reference]
+                // Check if it's a built-in function or pragma
+                let (token_type, modifiers) = if self.is_pragma(name) {
+                    (SemanticTokenType::Keyword, vec![SemanticTokenModifier::DefaultLibrary])
+                } else if self.is_builtin_function(name) {
+                    (SemanticTokenType::Function, vec![SemanticTokenModifier::DefaultLibrary, SemanticTokenModifier::Reference])
+                } else if self.is_constant(name) {
+                    (SemanticTokenType::Macro, vec![SemanticTokenModifier::Readonly, SemanticTokenModifier::Reference])
                 } else {
-                    vec![SemanticTokenModifier::Reference]
+                    (SemanticTokenType::Function, vec![SemanticTokenModifier::Reference])
                 };
 
                 self.add_token_from_string(
                     name,
-                    SemanticTokenType::Function,
+                    token_type,
                     modifiers,
                     tokens,
                     node,
@@ -317,6 +435,144 @@ impl SemanticTokensProvider {
                 }
             }
 
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    // Visit both key and value
+                    self.visit_node(key, tokens, false);
+                    self.visit_node(value, tokens, false);
+                }
+            }
+
+            NodeKind::Binary { left, right, .. } => {
+                self.visit_node(left, tokens, false);
+                self.visit_node(right, tokens, false);
+            }
+
+            NodeKind::Unary { operand, .. } => {
+                self.visit_node(operand, tokens, false);
+            }
+
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                self.visit_node(condition, tokens, false);
+                self.visit_node(then_expr, tokens, false);
+                self.visit_node(else_expr, tokens, false);
+            }
+
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                self.visit_node(condition, tokens, false);
+                self.visit_node(then_branch, tokens, false);
+                for (elsif_condition, elsif_body) in elsif_branches {
+                    self.visit_node(elsif_condition, tokens, false);
+                    self.visit_node(elsif_body, tokens, false);
+                }
+                if let Some(else_branch) = else_branch {
+                    self.visit_node(else_branch, tokens, false);
+                }
+            }
+
+            NodeKind::While { condition, body, .. } => {
+                self.visit_node(condition, tokens, false);
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(init) = init {
+                    self.visit_node(init, tokens, false);
+                }
+                if let Some(condition) = condition {
+                    self.visit_node(condition, tokens, false);
+                }
+                if let Some(update) = update {
+                    self.visit_node(update, tokens, false);
+                }
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::Foreach { variable, list, body, .. } => {
+                self.visit_node(variable, tokens, true); // Variable in foreach is implicitly declared
+                self.visit_node(list, tokens, false);
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::Given { expr, body } => {
+                self.visit_node(expr, tokens, false);
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::When { condition, body } => {
+                self.visit_node(condition, tokens, false);
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                self.visit_node(body, tokens, false);
+                for (_, catch_body) in catch_blocks {
+                    self.visit_node(catch_body, tokens, false);
+                }
+                if let Some(finally) = finally_block {
+                    self.visit_node(finally, tokens, false);
+                }
+            }
+
+            NodeKind::Class { name, body } => {
+                // Class name
+                self.add_token_from_string(
+                    name,
+                    SemanticTokenType::Class,
+                    vec![SemanticTokenModifier::Declaration, SemanticTokenModifier::Definition],
+                    tokens,
+                    node,
+                );
+
+                // Class body
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::Method { name, params, body } => {
+                // Method name
+                self.add_token_from_string(
+                    name,
+                    SemanticTokenType::Method,
+                    vec![SemanticTokenModifier::Declaration, SemanticTokenModifier::Definition],
+                    tokens,
+                    node,
+                );
+
+                // Parameters
+                for param in params {
+                    self.visit_node(param, tokens, true);
+                }
+
+                // Body
+                self.visit_node(body, tokens, false);
+            }
+
+            NodeKind::PhaseBlock { block, .. } => {
+                self.visit_node(block, tokens, false);
+            }
+
+            NodeKind::Return { value } => {
+                if let Some(value) = value {
+                    self.visit_node(value, tokens, false);
+                }
+            }
+
+            NodeKind::Match { expr, .. } | NodeKind::Substitution { expr, .. } | NodeKind::Transliteration { expr, .. } => {
+                self.visit_node(expr, tokens, false);
+            }
+
+            NodeKind::IndirectCall { object, args, .. } => {
+                self.visit_node(object, tokens, false);
+                for arg in args {
+                    self.visit_node(arg, tokens, false);
+                }
+            }
+
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                self.visit_node(statement, tokens, false);
+                self.visit_node(condition, tokens, false);
+            }
+
             _ => {
                 // Visit children for other node types
                 self.visit_children(node, tokens, is_declaration_context);
@@ -346,14 +602,19 @@ impl SemanticTokensProvider {
             name,
             "print"
                 | "say"
+                | "printf"
+                | "sprintf"
                 | "open"
                 | "close"
                 | "read"
                 | "write"
+                | "readline"
+                | "getline"
                 | "push"
                 | "pop"
                 | "shift"
                 | "unshift"
+                | "splice"
                 | "grep"
                 | "map"
                 | "sort"
@@ -366,15 +627,109 @@ impl SemanticTokensProvider {
                 | "chop"
                 | "lc"
                 | "uc"
+                | "lcfirst"
+                | "ucfirst"
                 | "index"
                 | "rindex"
                 | "die"
                 | "warn"
+                | "carp"
+                | "croak"
+                | "confess"
+                | "cluck"
                 | "eval"
                 | "require"
                 | "use"
                 | "package"
+                | "defined"
+                | "exists"
+                | "delete"
+                | "keys"
+                | "values"
+                | "each"
+                | "scalar"
+                | "ref"
+                | "blessed"
+                | "isa"
+                | "can"
+                | "UNIVERSAL"
+                | "bless"
+                | "tie"
+                | "tied"
+                | "untie"
+                | "caller"
+                | "wantarray"
+                | "return"
+                | "goto"
+                | "last"
+                | "next"
+                | "redo"
+                | "exit"
+                | "exec"
+                | "system"
+                | "fork"
+                | "wait"
+                | "waitpid"
+                | "kill"
+                | "sleep"
+                | "alarm"
+                | "time"
+                | "localtime"
+                | "gmtime"
+                | "mktime"
+                | "times"
+                | "stat"
+                | "lstat"
+                | "filetest"
+                | "glob"
+                | "unlink"
+                | "rename"
+                | "link"
+                | "symlink"
+                | "readlink"
+                | "mkdir"
+                | "rmdir"
+                | "opendir"
+                | "readdir"
+                | "closedir"
+                | "seekdir"
+                | "telldir"
+                | "rewinddir"
+                | "chmod"
+                | "chown"
+                | "chroot"
+                | "umask"
+                | "rand"
+                | "srand"
+                | "int"
+                | "hex"
+                | "oct"
+                | "abs"
+                | "atan2"
+                | "cos"
+                | "sin"
+                | "exp"
+                | "log"
+                | "sqrt"
         )
+    }
+
+    /// Check if a name is a pragma
+    fn is_pragma(&self, name: &str) -> bool {
+        matches!(
+            name,
+            "strict" | "warnings" | "utf8" | "feature" | "autodie" | "constant" 
+            | "base" | "parent" | "lib" | "vars" | "subs" | "integer" | "bytes"
+            | "locale" | "encoding" | "open" | "charnames" | "diagnostics"
+            | "sigtrap" | "sort" | "threads" | "threads::shared" | "version"
+        )
+    }
+
+    /// Check if a name looks like a constant
+    fn is_constant(&self, name: &str) -> bool {
+        // Constants are typically ALL_CAPS or start with uppercase
+        name.chars().all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit())
+            && name.chars().any(|c| c.is_ascii_uppercase())
     }
 
     /// Add a semantic token
@@ -391,33 +746,76 @@ impl SemanticTokensProvider {
         tokens.push(SemanticToken { line, start_char, length, token_type, modifiers });
     }
 
-    /// Get the position of a node
+    /// Get the position of a node with optimized line lookup
     fn get_position(&self, node: &Node) -> (u32, u32) {
         let byte_offset = node.location.start;
-        let mut line = 0;
-        let mut col = 0;
+        
+        // Handle boundary cases
+        if byte_offset >= self.source.len() {
+            return (0, 0);
+        }
 
-        for (i, ch) in self.source.char_indices() {
-            if i >= byte_offset {
-                break;
+        // Binary search to find the line containing this offset
+        let line = match self.line_starts.binary_search(&byte_offset) {
+            Ok(line) => line,
+            Err(line) => line.saturating_sub(1),
+        };
+
+        // Calculate column position from line start
+        let line_start = self.line_starts.get(line).copied().unwrap_or(0);
+        let col = if line_start <= byte_offset {
+            // Count characters from line start to byte offset
+            let slice = &self.source[line_start..byte_offset];
+            slice.chars().count()
+        } else {
+            0
+        };
+
+        (line as u32, col as u32)
+    }
+
+    /// Get the length of a node in characters with Unicode support
+    fn get_length(&self, node: &Node) -> u32 {
+        let start = node.location.start;
+        let end = node.location.end.min(self.source.len());
+
+        if start >= end {
+            return 0;
+        }
+
+        // Safe byte slicing with UTF-8 boundary validation
+        match self.source.get(start..end) {
+            Some(slice) => slice.chars().count() as u32,
+            None => {
+                // Fallback: find valid UTF-8 boundaries
+                let valid_start = self.find_utf8_boundary(start, true);
+                let valid_end = self.find_utf8_boundary(end, false);
+                
+                if valid_start < valid_end {
+                    self.source[valid_start..valid_end].chars().count() as u32
+                } else {
+                    0
+                }
             }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
+        }
+    }
+
+    /// Find the nearest UTF-8 character boundary
+    fn find_utf8_boundary(&self, pos: usize, search_backward: bool) -> usize {
+        let bytes = self.source.as_bytes();
+        let mut search_pos = pos.min(bytes.len());
+
+        if search_backward {
+            while search_pos > 0 && !self.source.is_char_boundary(search_pos) {
+                search_pos -= 1;
+            }
+        } else {
+            while search_pos < bytes.len() && !self.source.is_char_boundary(search_pos) {
+                search_pos += 1;
             }
         }
 
-        (line, col)
-    }
-
-    /// Get the length of a node in characters
-    fn get_length(&self, node: &Node) -> u32 {
-        let start = node.location.start;
-        let end = node.location.end;
-
-        self.source[start..end].chars().count() as u32
+        search_pos
     }
 
     /// Visit all children generically
