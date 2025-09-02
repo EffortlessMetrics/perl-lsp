@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser-pest"
-rust-version = "1.89"
+rust-version = "1.87"
 version = "0.8.6"
 edition = "2024"
 description = "Pest-based Perl parser (v2, experimental/legacy); use `perl-parser` (v3) for production"
