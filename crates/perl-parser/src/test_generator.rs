@@ -34,6 +34,10 @@ pub struct TestGeneratorOptions {
     pub data_driven: bool,
     /// Generate performance tests
     pub perf_tests: bool,
+    /// Expected return values for generated tests
+    pub expected_values: HashMap<String, String>,
+    /// Performance thresholds in seconds for benchmarks
+    pub perf_thresholds: HashMap<String, f64>,
 }
 
 impl Default for TestGeneratorOptions {
@@ -44,6 +48,8 @@ impl Default for TestGeneratorOptions {
             use_mocks: true,
             data_driven: true,
             perf_tests: false,
+            expected_values: HashMap::new(),
+            perf_thresholds: HashMap::new(),
         }
     }
 }
@@ -167,24 +173,24 @@ impl TestGenerator {
         code.push_str("use Test::More;\n\n");
         
         code.push_str(&format!("subtest '{}' => sub {{\n", name));
-        
+
         if let Some(params) = params {
-            // Generate test with parameters
             let args = self.generate_sample_args(params.len());
             code.push_str(&format!("    my $result = {}({});\n", name, args));
-            code.push_str("    ok(defined $result, 'Function returns defined value');\n");
-            
-            // Add type checks based on function name heuristics
-            if name.starts_with("is_") || name.starts_with("has_") {
-                code.push_str("    ok($result == 0 || $result == 1, 'Returns boolean');\n");
-            } else if name.starts_with("get_") || name.starts_with("fetch_") {
-                code.push_str("    # TODO: Add specific assertions for return value\n");
-            }
         } else {
             code.push_str(&format!("    my $result = {}();\n", name));
+        }
+
+        if let Some(expected) = self.options.expected_values.get(name) {
+            code.push_str(&format!("    is($result, {}, 'Returns expected value');\n", expected));
+        } else {
             code.push_str("    ok(defined $result, 'Function returns defined value');\n");
         }
-        
+
+        if name.starts_with("is_") || name.starts_with("has_") {
+            code.push_str("    ok($result == 0 || $result == 1, 'Returns boolean');\n");
+        }
+
         code.push_str("};\n");
         code
     }
@@ -383,19 +389,26 @@ impl TestGenerator {
     fn generate_perf_test(&self, sub: &SubroutineInfo, _source: &str) -> TestCase {
         let test_name = format!("test_{}_performance", sub.name);
         let description = format!("Performance test for {}", sub.name);
-        
+
         let code = match self.framework {
             TestFramework::TestMore => {
-                format!(
-                    "use Test::More;\n\
-                     use Benchmark qw(timethis);\n\n\
-                     subtest '{} performance' => sub {{\n    \
-                     my $result = timethis(1000, sub {{ {}() }});\n    \
-                     ok($result, 'Performance benchmark completed');\n    \
-                     # TODO: Add specific performance assertions\n\
-                     }};\n",
-                    sub.name, sub.name
-                )
+                let mut snippet = String::new();
+                snippet.push_str("use Test::More;\n");
+                snippet.push_str("use Benchmark qw(timeit);\n\n");
+                snippet.push_str(&format!("subtest '{} performance' => sub {{\n", sub.name));
+                snippet.push_str(&format!("    my $result = timeit(1000, sub {{ {}() }});\n", sub.name));
+                if let Some(threshold) = self.options.perf_thresholds.get(&sub.name) {
+                    snippet.push_str(&format!(
+                        "    cmp_ok($result->real, '<', {}, 'Executes under threshold');\n",
+                        threshold
+                    ));
+                } else {
+                    snippet.push_str(
+                        "    ok($result->real >= 0, 'Execution time recorded');\n",
+                    );
+                }
+                snippet.push_str("};\n");
+                snippet
             }
             _ => String::new(),
         };
