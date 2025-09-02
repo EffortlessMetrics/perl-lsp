@@ -562,7 +562,11 @@ impl LspServer {
             // GA contract: not supported in v0.8.3
             // PR 3: Wire workspace/symbol to use the index
             "workspace/symbol" => {
-                early_cancel_or!(self, id, self.handle_workspace_symbols_v2(request.params))
+                #[cfg(feature = "workspace")]
+                let result = self.handle_workspace_symbols_v2(request.params);
+                #[cfg(not(feature = "workspace"))]
+                let result = self.handle_workspace_symbols(request.params);
+                early_cancel_or!(self, id, result)
             }
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
@@ -1455,10 +1459,18 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
+                    #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.content,
                         self.workspace_index.clone(),
+                    );
+                    
+                    #[cfg(not(feature = "workspace"))]
+                    let provider = CompletionProvider::new_with_index_and_source(
+                        ast,
+                        &doc.content,
+                        None,
                     );
 
                     let mut base_completions =
@@ -2897,7 +2909,11 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
+                    #[cfg(feature = "workspace")]
                     let provider = ImplementationProvider::new(self.workspace_index.clone());
+                    
+                    #[cfg(not(feature = "workspace"))]
+                    let provider = ImplementationProvider::new(None);
 
                     // Convert documents to HashMap<String, String> for provider
                     let doc_map: HashMap<String, String> =
@@ -4900,6 +4916,7 @@ impl LspServer {
     }
 
     /// Handle workspace/symbol request v2 - uses workspace index
+    #[cfg(feature = "workspace")]
     fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
