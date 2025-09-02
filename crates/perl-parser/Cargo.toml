@@ -33,8 +33,11 @@ url = "2.5"
 rustc-hash = "2.1.0"
 md5 = "0.7"
 phf = { version = "0.11", features = ["macros"] }
-nix = { version = "0.29", features = ["signal"] }
 walkdir = "2.4.0"
+
+# Unix-only dependency for signal handling
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["signal"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
