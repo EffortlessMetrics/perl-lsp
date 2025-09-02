@@ -85,7 +85,7 @@ impl CompletionContext {
                 && scope.location.start <= position
                 && position <= scope.location.end
             {
-                if scope_start.map_or(true, |s| scope.location.start >= s) {
+                if scope_start.is_none_or(|s| scope.location.start >= s) {
                     scope_start = Some(scope.location.start);
                 }
             }
@@ -478,14 +478,17 @@ impl CompletionProvider {
             if let Some(start) = line_prefix.rfind(['"', '\'']) {
                 // Find the end of the string to check for dangerous characters
                 let quote_char = source.chars().nth(start).unwrap();
-                let string_end = source[start + 1..].find(quote_char).map(|i| start + 1 + i).unwrap_or(source.len());
+                let string_end = source[start + 1..]
+                    .find(quote_char)
+                    .map(|i| start + 1 + i)
+                    .unwrap_or(source.len());
                 let full_string_content = &source[start + 1..string_end];
-                
+
                 // Security check: reject strings with null bytes or other dangerous characters
                 if full_string_content.contains('\0') {
                     return completions; // Return early without file completions
                 }
-                
+
                 let path_prefix = &line_prefix[start + 1..];
                 if path_prefix.contains('/')
                     || path_prefix

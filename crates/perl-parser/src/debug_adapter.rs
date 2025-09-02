@@ -13,7 +13,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use lazy_static::lazy_static;
+#[cfg(unix)]
 use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
 
@@ -164,16 +166,26 @@ impl DebugAdapter {
         let (tx, rx) = channel::<DapMessage>();
         self.event_sender = Some(tx.clone());
 
-        // Start event handler thread
+        // Start event handler thread with enhanced error handling
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                if let Ok(json) = serde_json::to_string(&msg) {
-                    let content_length = json.len();
-                    let output = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
-                    print!("{}", output);
-                    io::stdout().flush().unwrap();
+                match serde_json::to_string(&msg) {
+                    Ok(json) => {
+                        let content_length = json.len();
+                        let output = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
+                        print!("{}", output);
+                        if let Err(e) = io::stdout().flush() {
+                            eprintln!("Failed to flush stdout in event handler: {}", e);
+                            // Continue trying to process more events
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to serialize DAP message: {} - {:#?}", e, msg);
+                        // Continue processing other messages
+                    }
                 }
             }
+            eprintln!("Event handler thread terminating - channel closed");
         });
 
         // Read messages from stdin with proper DAP protocol handling
@@ -465,7 +477,7 @@ impl DebugAdapter {
         }
     }
 
-    /// Start thread to read debugger output
+    /// Start thread to read debugger output with enhanced error recovery
     fn start_output_reader(&self) {
         let session = self.session.clone();
         let seq = self.seq.clone();
@@ -479,7 +491,25 @@ impl DebugAdapter {
             };
 
             let Some(stdout) = stdout else {
-                eprintln!("No stdout handle available for Perl debugger");
+                eprintln!(
+                    "No stdout handle available for Perl debugger - output reader thread exiting"
+                );
+                // Send termination event
+                if let Some(ref sender) = sender {
+                    let mut seq_lock = match seq.lock() {
+                        Ok(lock) => lock,
+                        Err(poisoned) => {
+                            eprintln!("Sequence lock poisoned, recovering");
+                            poisoned.into_inner()
+                        }
+                    };
+                    *seq_lock += 1;
+                    let _ = sender.send(DapMessage::Event {
+                        seq: *seq_lock,
+                        event: "terminated".to_string(),
+                        body: Some(json!({"reason": "no_stdout"})),
+                    });
+                }
                 return;
             };
 
@@ -487,11 +517,20 @@ impl DebugAdapter {
             let mut line = String::new();
 
             lazy_static! {
-                // More robust regex patterns for Perl debugger output
+                // Enhanced regex patterns for more robust Perl debugger output parsing
                 static ref CONTEXT_RE: Regex = Regex::new(
-                    r"^(?:(?P<func>\S+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?P<file2>[^:)]+):(?P<line2>\d+):)"
+                    r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)"
                 ).unwrap();
-                static ref PROMPT_RE: Regex = Regex::new(r"^\s*DB<\d*>\s*$").unwrap();
+                static ref PROMPT_RE: Regex = Regex::new(r"^\s*DB<?\d*>?\s*$").unwrap();
+                static ref STACK_FRAME_RE: Regex = Regex::new(
+                    r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)"
+                ).unwrap();
+                static ref VARIABLE_RE: Regex = Regex::new(
+                    r"^\s*(?P<name>[\$\@\%][\w:]+)\s*=\s*(?P<value>.*?)$"
+                ).unwrap();
+                static ref ERROR_RE: Regex = Regex::new(
+                    r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$"
+                ).unwrap();
             }
 
             let mut current_file = String::new();
@@ -510,42 +549,123 @@ impl DebugAdapter {
                         let text = line.trim_end().to_string();
                         eprintln!("Debugger output: {}", text); // Debug logging
 
-                        // Send all output to client
+                        // Send all output to client with error handling
                         if let Some(ref sender) = sender {
-                            let mut seq_lock = seq.lock().unwrap();
-                            *seq_lock += 1;
-                            let _ = sender.send(DapMessage::Event {
-                                seq: *seq_lock,
-                                event: "output".to_string(),
-                                body: Some(json!({
-                                    "category": "stdout",
-                                    "output": format!("{}\n", text)
-                                })),
-                            });
+                            match seq.lock() {
+                                Ok(mut seq_lock) => {
+                                    *seq_lock += 1;
+                                    if sender
+                                        .send(DapMessage::Event {
+                                            seq: *seq_lock,
+                                            event: "output".to_string(),
+                                            body: Some(json!({
+                                                "category": "stdout",
+                                                "output": format!("{}\n", text)
+                                            })),
+                                        })
+                                        .is_err()
+                                    {
+                                        eprintln!(
+                                            "Failed to send output event - client may have disconnected"
+                                        );
+                                        break; // Exit the loop if client is gone
+                                    }
+                                }
+                                Err(poisoned) => {
+                                    eprintln!(
+                                        "Sequence lock poisoned in output reader, attempting recovery"
+                                    );
+                                    let mut seq_lock = poisoned.into_inner();
+                                    *seq_lock += 1;
+                                    let _ = sender.send(DapMessage::Event {
+                                        seq: *seq_lock,
+                                        event: "output".to_string(),
+                                        body: Some(json!({
+                                            "category": "stdout",
+                                            "output": format!("{}\n", text)
+                                        })),
+                                    });
+                                }
+                            }
                         }
 
-                        // Parse context information
+                        // Enhanced context information parsing with multiple patterns
+                        let mut context_updated = false;
+
+                        // Try main context pattern
                         if let Some(caps) = CONTEXT_RE.captures(&text) {
                             if let Some(func) = caps.name("func") {
                                 current_func = func.as_str().to_string();
+                                context_updated = true;
                             }
                             if let Some(file) = caps.name("file").or_else(|| caps.name("file2")) {
                                 current_file = file.as_str().to_string();
+                                context_updated = true;
                             }
                             if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2"))
                             {
                                 current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                                context_updated = true;
                             }
+                        }
+
+                        // Try stack frame pattern as fallback
+                        if !context_updated {
+                            if let Some(caps) = STACK_FRAME_RE.captures(&text) {
+                                if let Some(func) = caps.name("func") {
+                                    current_func = func.as_str().to_string();
+                                }
+                                if let Some(file) = caps.name("file") {
+                                    current_file = file.as_str().to_string();
+                                }
+                                if let Some(line_num) = caps.name("line") {
+                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                                }
+                                context_updated = true;
+                            }
+                        }
+
+                        // Check for errors that might provide location info
+                        if !context_updated {
+                            if let Some(caps) = ERROR_RE.captures(&text) {
+                                if let Some(file) = caps.name("file") {
+                                    current_file = file.as_str().to_string();
+                                }
+                                if let Some(line_num) = caps.name("line") {
+                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                                }
+                                context_updated = true;
+
+                                // Send error event to client
+                                if let Some(ref sender) = sender {
+                                    let mut seq_lock = seq.lock().unwrap();
+                                    *seq_lock += 1;
+                                    let _ = sender.send(DapMessage::Event {
+                                        seq: *seq_lock,
+                                        event: "output".to_string(),
+                                        body: Some(json!({
+                                            "category": "stderr",
+                                            "output": format!("Error: {}\n", text)
+                                        })),
+                                    });
+                                }
+                            }
+                        }
+
+                        if context_updated {
                             continue;
                         }
 
-                        // Detect debugger prompt (stopped state)
-                        if PROMPT_RE.is_match(&text) {
+                        // Detect debugger prompt (stopped state) with enhanced pattern matching
+                        if PROMPT_RE.is_match(&text)
+                            || text.trim().starts_with("DB<")
+                            || text.trim().starts_with("  DB<")
+                        {
                             _debugger_ready = true;
                             let thread_id = {
                                 let mut guard = session.lock().unwrap();
                                 if let Some(ref mut s) = *guard {
-                                    // Only create stack frame if we have valid context
+                                    // Create stack frame with enhanced context validation
                                     if !current_file.is_empty() && current_line > 0 {
                                         let frame = StackFrame {
                                             id: 1,
@@ -555,11 +675,33 @@ impl DebugAdapter {
                                                 current_func.clone()
                                             },
                                             source: Source {
-                                                name: Some(current_file.clone()),
+                                                name: Some(
+                                                    std::path::Path::new(&current_file)
+                                                        .file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or(&current_file)
+                                                        .to_string(),
+                                                ),
                                                 path: current_file.clone(),
                                                 source_reference: None,
                                             },
                                             line: current_line,
+                                            column: 1,
+                                            end_line: None,
+                                            end_column: None,
+                                        };
+                                        s.stack_frames = vec![frame];
+                                    } else {
+                                        // Provide a fallback frame for when we don't have perfect context
+                                        let frame = StackFrame {
+                                            id: 1,
+                                            name: "main".to_string(),
+                                            source: Source {
+                                                name: Some("<unknown>".to_string()),
+                                                path: "<unknown>".to_string(),
+                                                source_reference: None,
+                                            },
+                                            line: 1,
                                             column: 1,
                                             end_line: None,
                                             end_column: None,
@@ -573,24 +715,77 @@ impl DebugAdapter {
                                 }
                             };
 
-                            // Send stopped event
+                            // Send stopped event with robust error handling
                             if let Some(ref sender) = sender {
-                                let mut seq_lock = seq.lock().unwrap();
-                                *seq_lock += 1;
-                                let _ = sender.send(DapMessage::Event {
-                                    seq: *seq_lock,
-                                    event: "stopped".to_string(),
-                                    body: Some(json!({
-                                        "reason": "step",
-                                        "threadId": thread_id,
-                                        "allThreadsStopped": true
-                                    })),
-                                });
+                                match seq.lock() {
+                                    Ok(mut seq_lock) => {
+                                        *seq_lock += 1;
+                                        if sender
+                                            .send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "stopped".to_string(),
+                                                body: Some(json!({
+                                                    "reason": "step",
+                                                    "threadId": thread_id,
+                                                    "allThreadsStopped": true
+                                                })),
+                                            })
+                                            .is_err()
+                                        {
+                                            eprintln!(
+                                                "Failed to send stopped event - client disconnected"
+                                            );
+                                            return; // Exit thread
+                                        }
+                                    }
+                                    Err(poisoned) => {
+                                        eprintln!(
+                                            "Sequence lock poisoned when sending stopped event, recovering"
+                                        );
+                                        let mut seq_lock = poisoned.into_inner();
+                                        *seq_lock += 1;
+                                        let _ = sender.send(DapMessage::Event {
+                                            seq: *seq_lock,
+                                            event: "stopped".to_string(),
+                                            body: Some(json!({
+                                                "reason": "step",
+                                                "threadId": thread_id,
+                                                "allThreadsStopped": true
+                                            })),
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
                     Err(e) => {
                         eprintln!("Error reading from debugger: {}", e);
+                        // Send termination event before exiting
+                        if let Some(ref sender) = sender {
+                            match seq.lock() {
+                                Ok(mut seq_lock) => {
+                                    *seq_lock += 1;
+                                    let _ = sender.send(DapMessage::Event {
+                                        seq: *seq_lock,
+                                        event: "terminated".to_string(),
+                                        body: Some(
+                                            json!({"reason": "read_error", "error": e.to_string()}),
+                                        ),
+                                    });
+                                }
+                                Err(poisoned) => {
+                                    let mut seq_lock = poisoned.into_inner();
+                                    *seq_lock += 1;
+                                    let _ = sender.send(DapMessage::Event {
+                                        seq: *seq_lock,
+                                        event: "terminated".to_string(),
+                                        body: Some(
+                                            json!({"reason": "read_error", "error": e.to_string()}),
+                                        ),
+                                    });
+                                }
+                            }
+                        }
                         break;
                     }
                 }
@@ -1041,17 +1236,8 @@ impl DebugAdapter {
     /// Handle pause request
     fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         let success = if let Some(ref session) = *self.session.lock().unwrap() {
-            let pid = session.process.id() as i32;
-            match signal::kill(Pid::from_raw(pid), Signal::SIGINT) {
-                Ok(()) => {
-                    eprintln!("Sent SIGINT to process {}", pid);
-                    true
-                }
-                Err(e) => {
-                    eprintln!("Failed to send SIGINT to process {}: {}", pid, e);
-                    false
-                }
-            }
+            let pid = session.process.id();
+            self.send_interrupt_signal(pid)
         } else {
             eprintln!("No active debug session to pause");
             false
@@ -1064,6 +1250,65 @@ impl DebugAdapter {
             command: "pause".to_string(),
             body: None,
             message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
+        }
+    }
+
+    /// Send interrupt signal to process (cross-platform)
+    fn send_interrupt_signal(&self, pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            let pid = pid as i32;
+            match signal::kill(Pid::from_raw(pid), Signal::SIGINT) {
+                Ok(()) => {
+                    eprintln!("Sent SIGINT to process {}", pid);
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to send SIGINT to process {}: {}", pid, e);
+                    false
+                }
+            }
+        }
+        #[cfg(windows)]
+        {
+            // On Windows, we use TerminateProcess or send Ctrl+C event
+            // For Perl debugger, we can try sending input directly
+            if let Some(ref mut session) = *self.session.lock().unwrap() {
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    // Send interrupt character (Ctrl+C equivalent in Perl debugger)
+                    match stdin.write_all(b"\x03\n") {
+                        Ok(()) => {
+                            let _ = stdin.flush();
+                            eprintln!("Sent interrupt signal to Perl debugger on process {}", pid);
+                            true
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to send interrupt to process {}: {}", pid, e);
+                            // Fallback: try to kill the process
+                            match session.process.kill() {
+                                Ok(()) => {
+                                    eprintln!("Terminated process {} as fallback", pid);
+                                    true
+                                }
+                                Err(kill_e) => {
+                                    eprintln!("Failed to terminate process {}: {}", pid, kill_e);
+                                    false
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    eprintln!("No stdin handle for process {}", pid);
+                    false
+                }
+            } else {
+                false
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            eprintln!("Interrupt signal not supported on this platform");
+            false
         }
     }
 
