@@ -339,22 +339,21 @@ fn test_no_symlink_following() {
 
     // Create a symlink to a file outside the directory
     let target_file = "/etc/hosts";
-    if Path::new(target_file).exists() {
-        if symlink(target_file, temp_dir.path().join("dangerous_link")).is_ok() {
-            let code = "\"dangerous\"";
-            let mut parser = Parser::new(code);
-            let ast = parser.parse().unwrap();
-            let provider = CompletionProvider::new_with_index(&ast, None);
-            let pos = code.find("dangerous").unwrap() + "dangerous".len();
-            let completions = provider.get_completions(code, pos);
+    if Path::new(target_file).exists()
+        && symlink(target_file, temp_dir.path().join("dangerous_link")).is_ok() {
+        let code = "\"dangerous\"";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = CompletionProvider::new_with_index(&ast, None);
+        let pos = code.find("dangerous").unwrap() + "dangerous".len();
+        let completions = provider.get_completions(code, pos);
 
-            // Should not follow symlinks (walkdir configured with follow_links(false))
-            // The symlink itself might appear but shouldn't be traversed
-            let has_dangerous = completions.iter().any(|c| c.label.contains("dangerous"));
-            if has_dangerous {
-                // If the symlink appears, it should be treated as a regular file, not followed
-                assert!(completions.iter().all(|c| !c.label.contains("hosts")));
-            }
+        // Should not follow symlinks (walkdir configured with follow_links(false))
+        // The symlink itself might appear but shouldn't be traversed
+        let has_dangerous = completions.iter().any(|c| c.label.contains("dangerous"));
+        if has_dangerous {
+            // If the symlink appears, it should be treated as a regular file, not followed
+            assert!(completions.iter().all(|c| !c.label.contains("hosts")));
         }
     }
 

@@ -179,7 +179,7 @@ fn test_dap_stack_trace_edge_cases() {
     let mut adapter = DebugAdapter::new();
 
     // Test stack trace with various thread IDs and scenarios
-    let test_cases = vec![
+    let test_cases = [
         Some(json!({"threadId": 1, "startFrame": 0, "levels": 10})),
         Some(json!({"threadId": 1, "startFrame": 5, "levels": 5})),
         Some(json!({"threadId": 999})), // Invalid thread
