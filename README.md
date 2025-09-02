@@ -24,7 +24,18 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.7
+## 📦 Latest Release: v0.8.7+ (In Development)
+
+### v0.8.7+ - Enhanced Parser Compatibility and LSP Improvements 🔧
+- 🚀 **Document Highlight Enhancement**: Improved variable occurrence tracking with comprehensive expression statement support for better IDE highlighting
+- 🔧 **S-Expression Format Fixes**: Enhanced tree-sitter compatibility with proper node formats:
+  - Program nodes use (source_file) format for tree-sitter compatibility
+  - Variable nodes use proper structure: (scalar (varname)), (array (varname))
+  - Function call expressions use tree-sitter naming: function_call_expression
+  - Number nodes simplified to (number) format without value embedding
+- 🎯 **Anonymous Subroutine Parsing**: Enhanced AST structure with automatic expression statement wrapping while maintaining backward compatibility
+- 📈 **Improved Corpus Test Compatibility**: Better S-expression generation for downstream tree-sitter integration
+- 🔒 **Code Quality**: Applied clippy suggestions for improved code quality and maintainability
 
 ### v0.8.7 - Enhanced Comment Documentation Extraction with Source Threading 📚
 - 🚀 **Comprehensive Comment Documentation**: Production-ready leading comment parsing with 20 comprehensive test cases covering all edge scenarios
@@ -230,6 +241,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | Signature Help                      |   ✅   | 150+ built-ins                              |
 | Go to Definition                    |   ✅   | Workspace-aware via index                   |
 | Find References                     |   ✅   | Workspace-aware via index                   |
+| Document Highlights                 |   ✅   | Enhanced variable occurrence tracking       |
 | Document Symbols                    |   ✅   | Outline with hierarchy                      |
 | Folding Ranges                      |   ✅   | AST + text fallback                         |
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
