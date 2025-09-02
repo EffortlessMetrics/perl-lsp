@@ -166,10 +166,8 @@ impl<'a> Parser<'a> {
                         // Wrap anonymous subroutines in expression statements
                         let location = sub_node.location;
                         Node::new(
-                            NodeKind::ExpressionStatement { 
-                                expression: Box::new(sub_node) 
-                            },
-                            location
+                            NodeKind::ExpressionStatement { expression: Box::new(sub_node) },
+                            location,
                         )
                     } else {
                         // Named subroutines are statements by themselves
@@ -179,7 +177,7 @@ impl<'a> Parser<'a> {
                     // Shouldn't happen, but return as-is
                     sub_node
                 })
-            },
+            }
             TokenKind::Class => self.parse_class(),
             TokenKind::Method => self.parse_method(),
 

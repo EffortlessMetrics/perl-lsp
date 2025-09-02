@@ -4517,13 +4517,13 @@ impl LspServer {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
         let mut prev_was_cr = false;
-        
+
         for (byte_idx, ch) in content.char_indices() {
             // Check if we've reached the target position
             if cur_line == line && col_utf16 == character {
                 return byte_idx;
             }
-            
+
             // Handle line endings and character counting
             match ch {
                 '\n' => {
@@ -4546,15 +4546,15 @@ impl LspServer {
                     }
                 }
             }
-            
+
             prev_was_cr = ch == '\r';
         }
-        
+
         // Handle end of file position
         if cur_line == line && col_utf16 == character {
             return content.len();
         }
-        
+
         // Clamp to end of buffer
         content.len()
     }
