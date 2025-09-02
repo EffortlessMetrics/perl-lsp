@@ -20,7 +20,7 @@
 //!
 //! let code = "package MyPkg; my $var = 42; sub func { return $var; }";
 //! let mut parser = Parser::new(code);
-//! 
+//!
 //! if let Ok(ast) = parser.parse() {
 //!     let mut provider = SemanticTokensProvider::new(code.to_string());
 //!     let tokens = provider.extract(&ast);
@@ -173,24 +173,19 @@ impl SemanticTokensProvider {
     /// Create a new semantic tokens provider
     pub fn new(source: String) -> Self {
         let line_starts = Self::compute_line_starts(&source);
-        Self { 
-            source, 
-            declared_vars: HashMap::new(),
-            line_starts,
-            stats: ProviderStats::default(),
-        }
+        Self { source, declared_vars: HashMap::new(), line_starts, stats: ProviderStats::default() }
     }
 
     /// Pre-compute line start positions for O(1) position lookup
     fn compute_line_starts(source: &str) -> Vec<usize> {
         let mut line_starts = vec![0]; // First line starts at 0
-        
+
         for (pos, ch) in source.char_indices() {
             if ch == '\n' {
                 line_starts.push(pos + 1);
             }
         }
-        
+
         line_starts
     }
 
@@ -208,29 +203,33 @@ impl SemanticTokensProvider {
             Ok(_) => {
                 // Sort tokens by position for proper LSP encoding
                 tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
-                
+
                 // Update stats
                 self.stats.processing_time_ms = start_time.elapsed().as_millis() as u64;
                 self.stats.tokens_generated = tokens.len();
-                
+
                 tokens
             }
             Err(e) => {
                 eprintln!("Warning: Error during semantic token extraction: {}", e);
                 // Return whatever tokens we managed to extract
                 tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
-                
+
                 // Update stats even on error
                 self.stats.processing_time_ms = start_time.elapsed().as_millis() as u64;
                 self.stats.tokens_generated = tokens.len();
-                
+
                 tokens
             }
         }
     }
 
     /// Extract tokens with error recovery
-    fn extract_with_recovery(&mut self, ast: &Node, tokens: &mut Vec<SemanticToken>) -> Result<(), String> {
+    fn extract_with_recovery(
+        &mut self,
+        ast: &Node,
+        tokens: &mut Vec<SemanticToken>,
+    ) -> Result<(), String> {
         // Handle Program node specially
         if let NodeKind::Program { statements } = &ast.kind {
             for stmt in statements {
@@ -255,11 +254,18 @@ impl SemanticTokensProvider {
     ) -> Result<(), String> {
         // Validate node bounds
         if node.location.start > node.location.end {
-            return Err(format!("Invalid node bounds: {} > {}", node.location.start, node.location.end));
+            return Err(format!(
+                "Invalid node bounds: {} > {}",
+                node.location.start, node.location.end
+            ));
         }
 
         if node.location.end > self.source.len() {
-            return Err(format!("Node bounds exceed source length: {} > {}", node.location.end, self.source.len()));
+            return Err(format!(
+                "Node bounds exceed source length: {} > {}",
+                node.location.end,
+                self.source.len()
+            ));
         }
 
         // Process the node
@@ -381,20 +387,23 @@ impl SemanticTokensProvider {
                 let (token_type, modifiers) = if self.is_pragma(name) {
                     (SemanticTokenType::Keyword, vec![SemanticTokenModifier::DefaultLibrary])
                 } else if self.is_builtin_function(name) {
-                    (SemanticTokenType::Function, vec![SemanticTokenModifier::DefaultLibrary, SemanticTokenModifier::Reference])
+                    (
+                        SemanticTokenType::Function,
+                        vec![
+                            SemanticTokenModifier::DefaultLibrary,
+                            SemanticTokenModifier::Reference,
+                        ],
+                    )
                 } else if self.is_constant(name) {
-                    (SemanticTokenType::Macro, vec![SemanticTokenModifier::Readonly, SemanticTokenModifier::Reference])
+                    (
+                        SemanticTokenType::Macro,
+                        vec![SemanticTokenModifier::Readonly, SemanticTokenModifier::Reference],
+                    )
                 } else {
                     (SemanticTokenType::Function, vec![SemanticTokenModifier::Reference])
                 };
 
-                self.add_token_from_string(
-                    name,
-                    token_type,
-                    modifiers,
-                    tokens,
-                    node,
-                );
+                self.add_token_from_string(name, token_type, modifiers, tokens, node);
 
                 // Arguments
                 for arg in args {
@@ -557,7 +566,9 @@ impl SemanticTokensProvider {
                 }
             }
 
-            NodeKind::Match { expr, .. } | NodeKind::Substitution { expr, .. } | NodeKind::Transliteration { expr, .. } => {
+            NodeKind::Match { expr, .. }
+            | NodeKind::Substitution { expr, .. }
+            | NodeKind::Transliteration { expr, .. } => {
                 self.visit_node(expr, tokens, false);
             }
 
@@ -718,10 +729,29 @@ impl SemanticTokensProvider {
     fn is_pragma(&self, name: &str) -> bool {
         matches!(
             name,
-            "strict" | "warnings" | "utf8" | "feature" | "autodie" | "constant" 
-            | "base" | "parent" | "lib" | "vars" | "subs" | "integer" | "bytes"
-            | "locale" | "encoding" | "open" | "charnames" | "diagnostics"
-            | "sigtrap" | "sort" | "threads" | "threads::shared" | "version"
+            "strict"
+                | "warnings"
+                | "utf8"
+                | "feature"
+                | "autodie"
+                | "constant"
+                | "base"
+                | "parent"
+                | "lib"
+                | "vars"
+                | "subs"
+                | "integer"
+                | "bytes"
+                | "locale"
+                | "encoding"
+                | "open"
+                | "charnames"
+                | "diagnostics"
+                | "sigtrap"
+                | "sort"
+                | "threads"
+                | "threads::shared"
+                | "version"
         )
     }
 
@@ -749,7 +779,7 @@ impl SemanticTokensProvider {
     /// Get the position of a node with optimized line lookup
     fn get_position(&self, node: &Node) -> (u32, u32) {
         let byte_offset = node.location.start;
-        
+
         // Handle boundary cases
         if byte_offset >= self.source.len() {
             return (0, 0);
@@ -790,7 +820,7 @@ impl SemanticTokensProvider {
                 // Fallback: find valid UTF-8 boundaries
                 let valid_start = self.find_utf8_boundary(start, true);
                 let valid_end = self.find_utf8_boundary(end, false);
-                
+
                 if valid_start < valid_end {
                     self.source[valid_start..valid_end].chars().count() as u32
                 } else {
