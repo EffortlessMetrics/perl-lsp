@@ -236,7 +236,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | Capability                          | Status | Notes                                      |
 |-------------------------------------|:------:|--------------------------------------------|
 | Diagnostics                         |   ✅   | Production-stable hash key context detection; industry-leading accuracy |
-| Completion                          |   ✅   | Variables, 150+ built-ins, keywords        |
+| Completion                          |   ✅   | Variables, 150+ built-ins, keywords, **file paths** |
 | Hover                               |   ✅   | Variables + built-ins                       |
 | Signature Help                      |   ✅   | 150+ built-ins                              |
 | Go to Definition                    |   ✅   | Workspace-aware via index                   |

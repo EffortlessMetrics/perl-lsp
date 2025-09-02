@@ -77,7 +77,7 @@ This repository contains **four published crates** forming a complete Perl parsi
 - Kept for migration/comparison
 
 ### LSP Server (`perl-lsp` binary) ✅ **PRODUCTION READY**
-- **~75% of LSP features actually work** (all advertised capabilities are fully functional, major accuracy improvements in v0.8.7 with production-stable hash context detection)
+- **~78% of LSP features actually work** (all advertised capabilities are fully functional, major accuracy improvements in v0.8.7 with production-stable hash context detection and comprehensive file path completion)
 - **Full Rope-based document management** for efficient text operations and UTF-16/UTF-8 position conversion
 - **Fully Working Features (v0.8.7 - Production-Stable Hash Key Context Detection)**: 
   - ✅ **Advanced syntax checking and diagnostics** with breakthrough hash key context detection:
@@ -1136,7 +1136,7 @@ print "♥";       # Unicode in strings (always worked)
 - **Parser Coverage**: ~100% of Perl syntax (100% of comprehensive edge cases)
 - **Parser Performance**: 4-19x faster than v1 (simple: ~1.1 µs, medium: ~50-150 µs)
 - **Parser Status**: Production ready, feature complete
-- **LSP Status**: ✅ ~70% functional (all advertised features work)
+- **LSP Status**: ✅ ~78% functional (all advertised features work, including production-ready file path completion)
 - **Recent improvements (v0.8.8)**:
   - ✅ **Enhanced Variable Resolution Patterns** - comprehensive support for complex Perl variable access patterns
     - Hash access resolution: `$hash{key}` → `%hash` (reduces false undefined variable warnings)

@@ -5191,7 +5191,7 @@ mod tests {
         let ast = result.unwrap();
         assert_eq!(
             ast.to_sexp(),
-            r#"(source_file (expression_statement (array (string) (string) (string))))"#
+            r#"(source_file (array (string "one") (string "two") (string "three")))"#
         );
 
         // Test qw with brackets
@@ -5199,30 +5199,21 @@ mod tests {
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(
-            ast.to_sexp(),
-            r#"(source_file (expression_statement (array (string) (string))))"#
-        );
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "foo") (string "bar")))"#);
 
         // Test qw with non-paired delimiters
         let mut parser = Parser::new("qw/alpha beta/");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(
-            ast.to_sexp(),
-            r#"(source_file (expression_statement (array (string) (string))))"#
-        );
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "alpha") (string "beta")))"#);
 
         // Test qw with exclamation marks
         let mut parser = Parser::new("qw!hello world!");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(
-            ast.to_sexp(),
-            r#"(source_file (expression_statement (array (string) (string))))"#
-        );
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "hello") (string "world")))"#);
     }
 
     #[test]
