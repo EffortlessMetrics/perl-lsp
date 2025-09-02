@@ -164,6 +164,7 @@ impl DocumentHighlightProvider {
                 Some(vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()])
             }
             NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
+            NodeKind::ExpressionStatement { expression } => Some(vec![expression.as_ref()]),
             _ => None,
         }
     }
