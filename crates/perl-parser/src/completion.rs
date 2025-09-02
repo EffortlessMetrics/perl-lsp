@@ -8,6 +8,7 @@ use crate::ast::Node;
 use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
 use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 /// Type of completion item
@@ -473,8 +474,33 @@ impl CompletionProvider {
             self.add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
             // String interpolation or file path
-            if context.prefix.contains('/') {
-                self.add_file_completions(&mut completions, &context);
+            let line_prefix = &source[..context.position];
+            if let Some(start) = line_prefix.rfind(['"', '\'']) {
+                // Find the end of the string to check for dangerous characters
+                let quote_char = source.chars().nth(start).unwrap();
+                let string_end = source[start + 1..].find(quote_char).map(|i| start + 1 + i).unwrap_or(source.len());
+                let full_string_content = &source[start + 1..string_end];
+                
+                // Security check: reject strings with null bytes or other dangerous characters
+                if full_string_content.contains('\0') {
+                    return completions; // Return early without file completions
+                }
+                
+                let path_prefix = &line_prefix[start + 1..];
+                if path_prefix.contains('/')
+                    || path_prefix
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == '-')
+                {
+                    let mut file_context = context.clone();
+                    file_context.prefix = path_prefix.to_string();
+                    file_context.prefix_start = start + 1;
+                    self.add_file_completions_with_cancellation(
+                        &mut completions,
+                        &file_context,
+                        is_cancelled,
+                    );
+                }
             }
         } else {
             // General completion: keywords, functions, variables
@@ -1058,15 +1084,300 @@ impl CompletionProvider {
         None
     }
 
-    /// Add file path completions
-    #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
+    /// Add file path completions with comprehensive security and performance safeguards
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
+    #[allow(dead_code)] // Backward compatibility wrapper, may be used by external code
     fn add_file_completions(
         &self,
-        _completions: &mut Vec<CompletionItem>,
-        _context: &CompletionContext,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
     ) {
-        // TODO: Implement file path completion
-        // This would require filesystem access
+        self.add_file_completions_with_cancellation(completions, context, &|| false);
+    }
+
+    /// Add file path completions with cancellation support
+    fn add_file_completions_with_cancellation(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        is_cancelled: &dyn Fn() -> bool,
+    ) {
+        use walkdir::WalkDir;
+
+        // Early cancellation check
+        if is_cancelled() {
+            return;
+        }
+
+        let prefix = context.prefix.as_str().trim();
+
+        // Security: Reject dangerous prefixes (but allow empty for current directory completion)
+        if prefix.len() > 1024 {
+            return;
+        }
+
+        // Security: Sanitize and validate the input path
+        let safe_prefix = match self.sanitize_path(prefix) {
+            Some(path) => path,
+            None => return, // Path was deemed unsafe
+        };
+
+        // Split into directory and filename components
+        let (dir_part, file_part) = self.split_path_components(&safe_prefix);
+
+        // Security: Ensure directory is safe to traverse
+        let base_dir = match self.resolve_safe_directory(&dir_part) {
+            Some(dir) => dir,
+            None => return, // Directory traversal not allowed
+        };
+
+        // Performance: Limit the scope of filesystem operations
+        let max_results = 50; // Limit number of completions
+        let max_depth = 1; // Only traverse immediate directory
+        let max_entries = 200; // Limit total entries examined
+
+        let mut result_count = 0;
+        let mut entries_examined = 0;
+
+        // Use walkdir for safe, controlled filesystem traversal
+        for entry in WalkDir::new(&base_dir)
+            .max_depth(max_depth)
+            .follow_links(false) // Security: don't follow symlinks
+            .into_iter()
+            .filter_entry(|e| {
+                // Security: Skip hidden files and certain patterns
+                !self.is_hidden_or_forbidden(e)
+            })
+        {
+            // Cancellation check for responsiveness
+            if is_cancelled() {
+                break;
+            }
+
+            // Performance: Limit entries examined
+            entries_examined += 1;
+            if entries_examined > max_entries {
+                break;
+            }
+
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue, // Skip entries we can't read
+            };
+
+            // Skip the base directory itself
+            if entry.path() == base_dir {
+                continue;
+            }
+
+            let file_name = match entry.file_name().to_str() {
+                Some(name) => name,
+                None => continue, // Skip non-UTF8 filenames
+            };
+
+            // Filter by file part prefix
+            if !file_name.starts_with(&file_part) {
+                continue;
+            }
+
+            // Security: Additional filename validation
+            if !self.is_safe_filename(file_name) {
+                continue;
+            }
+
+            // Build the completion path
+            let completion_path =
+                self.build_completion_path(&dir_part, file_name, entry.file_type().is_dir());
+
+            let (detail, documentation) = self.get_file_completion_metadata(&entry);
+
+            completions.push(CompletionItem {
+                label: completion_path.clone(),
+                kind: CompletionItemKind::File,
+                detail: Some(detail),
+                documentation,
+                insert_text: Some(completion_path.clone()),
+                sort_text: Some(format!("1_{}", completion_path)),
+                filter_text: Some(completion_path.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+            });
+
+            result_count += 1;
+            if result_count >= max_results {
+                break;
+            }
+        }
+    }
+
+    /// Sanitize and validate a file path for security
+    fn sanitize_path(&self, path: &str) -> Option<String> {
+        // Handle empty path (current directory completion)
+        if path.is_empty() {
+            return Some(String::new());
+        }
+
+        // Security checks
+        if path.contains('\0') {
+            return None; // Null bytes not allowed
+        }
+
+        // Check for path traversal attempts
+        let path_obj = Path::new(path);
+        for component in path_obj.components() {
+            match component {
+                Component::ParentDir => return None, // No .. allowed
+                Component::RootDir if path != "/" => return None, // Absolute paths generally not allowed
+                Component::Prefix(_) => return None, // Windows drive letters not allowed
+                _ => {}
+            }
+        }
+
+        // Additional dangerous pattern checks
+        if path.contains("../") || path.contains("..\\") || path.starts_with('/') && path != "/" {
+            return None;
+        }
+
+        // Normalize path separators for cross-platform compatibility
+        Some(path.replace('\\', "/"))
+    }
+
+    /// Split path into directory and filename components safely
+    fn split_path_components(&self, path: &str) -> (String, String) {
+        match path.rsplit_once('/') {
+            Some((dir, file)) if !dir.is_empty() => (dir.to_string(), file.to_string()),
+            _ => (".".to_string(), path.to_string()),
+        }
+    }
+
+    /// Resolve and validate a directory path for safe traversal
+    fn resolve_safe_directory(&self, dir_part: &str) -> Option<PathBuf> {
+        let path = Path::new(dir_part);
+
+        // Security: Only allow relative paths and current directory
+        if path.is_absolute() && dir_part != "/" {
+            return None;
+        }
+
+        // For current directory, just return it directly
+        if dir_part == "." {
+            return Some(Path::new(".").to_path_buf());
+        }
+
+        // Convert to canonical path to resolve any remaining issues
+        match path.canonicalize() {
+            Ok(canonical) => {
+                // For tests and scenarios where cwd has changed, be more permissive
+                Some(canonical)
+            }
+            Err(_) => {
+                // If canonicalization fails, try the original path if it exists and is safe
+                if path.exists() && path.is_dir() { Some(path.to_path_buf()) } else { None }
+            }
+        }
+    }
+
+    /// Check if a directory entry should be filtered out for security
+    fn is_hidden_or_forbidden(&self, entry: &walkdir::DirEntry) -> bool {
+        let file_name = entry.file_name().to_string_lossy();
+
+        // Skip hidden files (Unix convention)
+        if file_name.starts_with('.') && file_name.len() > 1 {
+            return true;
+        }
+
+        // Skip certain system directories and files
+        matches!(
+            file_name.as_ref(),
+            "node_modules"
+                | ".git"
+                | ".svn"
+                | ".hg"
+                | "target"
+                | "build"
+                | ".cargo"
+                | ".rustup"
+                | "System Volume Information"
+                | "$RECYCLE.BIN"
+                | "__pycache__"
+                | ".pytest_cache"
+                | ".mypy_cache"
+        )
+    }
+
+    /// Validate filename for safety
+    fn is_safe_filename(&self, filename: &str) -> bool {
+        // Basic safety checks
+        if filename.is_empty() || filename.len() > 255 {
+            return false;
+        }
+
+        // Check for null bytes or other control characters
+        if filename.contains('\0') || filename.chars().any(|c| c.is_control()) {
+            return false;
+        }
+
+        // Check for Windows reserved names (even on Unix for cross-platform safety)
+        let name_upper = filename.to_uppercase();
+        let reserved = [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+
+        for reserved_name in &reserved {
+            if name_upper == *reserved_name
+                || name_upper.starts_with(&format!("{}.", reserved_name))
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Build the completion path string
+    fn build_completion_path(&self, dir_part: &str, filename: &str, is_dir: bool) -> String {
+        let mut path = if dir_part == "." {
+            filename.to_string()
+        } else {
+            format!("{}/{}", dir_part.trim_end_matches('/'), filename)
+        };
+
+        // Add trailing slash for directories
+        if is_dir {
+            path.push('/');
+        }
+
+        path
+    }
+
+    /// Get metadata for file completion item
+    fn get_file_completion_metadata(&self, entry: &walkdir::DirEntry) -> (String, Option<String>) {
+        let file_type = entry.file_type();
+
+        if file_type.is_dir() {
+            ("directory".to_string(), Some("Directory".to_string()))
+        } else if file_type.is_file() {
+            // Try to provide helpful information about file type
+            let extension = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or("");
+
+            let file_type_desc = match extension.to_lowercase().as_str() {
+                "pl" | "pm" | "t" => "Perl file",
+                "rs" => "Rust source file",
+                "js" => "JavaScript file",
+                "py" => "Python file",
+                "txt" => "Text file",
+                "md" => "Markdown file",
+                "json" => "JSON file",
+                "yaml" | "yml" => "YAML file",
+                "toml" => "TOML file",
+                _ => "file",
+            };
+
+            (file_type_desc.to_string(), None)
+        } else {
+            ("file".to_string(), None)
+        }
     }
 
     /// Add all variables without sigils (for interpolation contexts)
