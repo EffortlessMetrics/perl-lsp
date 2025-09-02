@@ -177,10 +177,17 @@ close($fh);
 
     // Should have multiple token types represented
     if token_type_counts.len() >= 5 {
-        println!("✅ Found {} different token types: {:?}", token_type_counts.len(), token_type_counts.keys().collect::<Vec<_>>());
+        println!(
+            "✅ Found {} different token types: {:?}",
+            token_type_counts.len(),
+            token_type_counts.keys().collect::<Vec<_>>()
+        );
     } else {
-        println!("⚠️ Found fewer token types than expected: {} (expected >= 5): {:?}", 
-                token_type_counts.len(), token_type_counts);
+        println!(
+            "⚠️ Found fewer token types than expected: {} (expected >= 5): {:?}",
+            token_type_counts.len(),
+            token_type_counts
+        );
     }
 
     // Verify we have namespace tokens (packages)
