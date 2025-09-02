@@ -44,11 +44,11 @@ print "x=$x\n";
     loop {
         match rx.recv_timeout(Duration::from_secs(2)) {
             Ok(msg) => {
-                if let DapMessage::Event { ref event, .. } = msg {
-                    if event == "initialized" {
-                        eprintln!("Received initialized event");
-                        break;
-                    }
+                if let DapMessage::Event { ref event, .. } = msg
+                    && event == "initialized"
+                {
+                    eprintln!("Received initialized event");
+                    break;
                 }
             }
             Err(_) => {
