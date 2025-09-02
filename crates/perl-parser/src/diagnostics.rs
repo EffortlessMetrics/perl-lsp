@@ -54,7 +54,7 @@ pub struct DiagnosticsProvider {
 impl DiagnosticsProvider {
     /// Create a new diagnostics provider
     pub fn new(ast: &Node, source: String) -> Self {
-        let extractor = SymbolExtractor::new();
+        let extractor = SymbolExtractor::new_with_source(&source);
         let symbol_table = extractor.extract(ast);
         let scope_analyzer = ScopeAnalyzer::new();
         let error_classifier = ErrorClassifier::new();

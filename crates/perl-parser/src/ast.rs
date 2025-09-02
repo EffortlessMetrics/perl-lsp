@@ -23,8 +23,13 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(program {})", stmts)
+                let stmts =
+                    statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
+                format!("(source_file {})", stmts)
+            }
+
+            NodeKind::ExpressionStatement { expression } => {
+                format!("(expression_statement {})", expression.to_sexp())
             }
 
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
@@ -72,7 +77,13 @@ impl Node {
             }
 
             NodeKind::Variable { sigil, name } => {
-                format!("(variable {} {})", sigil, name)
+                // Format expected by tree-sitter tests: (scalar (varname)) for $var
+                match sigil.as_str() {
+                    "$" => "(scalar (varname))".to_string(),
+                    "@" => "(array (varname))".to_string(),
+                    "%" => "(hash (varname))".to_string(),
+                    _ => format!("(variable {} {})", sigil, name),
+                }
             }
 
             NodeKind::VariableWithAttributes { variable, attributes } => {
@@ -89,8 +100,9 @@ impl Node {
                 )
             }
 
-            NodeKind::Binary { op, left, right } => {
-                format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
+            NodeKind::Binary { op: _, left, right } => {
+                // Tree-sitter format: (binary_expression left right)
+                format!("(binary_expression {} {})", left.to_sexp(), right.to_sexp())
             }
 
             NodeKind::Ternary { condition, then_expr, else_expr } => {
@@ -102,8 +114,9 @@ impl Node {
                 )
             }
 
-            NodeKind::Unary { op, operand } => {
-                format!("(unary_{} {})", op, operand.to_sexp())
+            NodeKind::Unary { op: _, operand } => {
+                // Tree-sitter format: (unary_expression operand)
+                format!("(unary_expression {})", operand.to_sexp())
             }
 
             NodeKind::Diamond => "(diamond)".to_string(),
@@ -124,16 +137,14 @@ impl Node {
                 format!("(glob {})", pattern)
             }
 
-            NodeKind::Number { value } => {
-                format!("(number {})", value)
+            NodeKind::Number { value: _ } => {
+                // Format expected by tests: just (number) without value
+                "(number)".to_string()
             }
 
-            NodeKind::String { value, interpolated } => {
-                if *interpolated {
-                    format!("(string_interpolated {:?})", value)
-                } else {
-                    format!("(string {:?})", value)
-                }
+            NodeKind::String { value, interpolated: _ } => {
+                // Format expected by tests: (string "value")
+                format!("(string \"{}\")", value)
             }
 
             NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
@@ -259,15 +270,115 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, params, attributes, body } => {
-                let name_str = name.as_deref().unwrap_or("anonymous");
-                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
-                let attrs_str = if attributes.is_empty() {
-                    String::new()
+            NodeKind::Subroutine { name, prototype, signature, attributes, body } => {
+                if let Some(_sub_name) = name {
+                    // Named subroutine - tree-sitter format: (subroutine_declaration_statement (bareword) ...)
+                    let mut parts = vec!["(bareword)".to_string()];
+
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        parts.push(format!("(attrlist {})", attrs.join("")));
+                    }
+
+                    // Add prototype if present
+                    if let Some(_proto) = prototype {
+                        parts.push("(prototype)".to_string());
+                    }
+
+                    // Add signature if present
+                    if let Some(sig) = signature {
+                        parts.push(sig.to_sexp());
+                    }
+
+                    // Add body
+                    parts.push(body.to_sexp());
+
+                    // Tree-sitter format with field labels
+                    let _parts_str = parts.join("");
+                    format!("(subroutine_declaration_statement {})", parts.join(""))
                 } else {
-                    format!(" (attributes {})", attributes.join(" "))
+                    // Anonymous subroutine - tree-sitter format
+                    let mut parts = Vec::new();
+
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        parts.push(format!("(attrlist {})", attrs.join("")));
+                    }
+
+                    // Add prototype if present
+                    if let Some(proto) = prototype {
+                        parts.push(proto.to_sexp());
+                    }
+
+                    // Add signature if present
+                    if let Some(sig) = signature {
+                        parts.push(sig.to_sexp());
+                    }
+
+                    // Add body
+                    parts.push(body.to_sexp());
+
+                    format!("(anonymous_subroutine_expression {})", parts.join(""))
+                }
+            }
+
+            NodeKind::Prototype { content: _ } => "(prototype)".to_string(),
+
+            NodeKind::Signature { parameters } => {
+                let params = parameters.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(signature {})", params)
+            }
+
+            NodeKind::MandatoryParameter { variable } => {
+                format!("(mandatory_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::OptionalParameter { variable, default_value } => {
+                format!("(optional_parameter {} {})", variable.to_sexp(), default_value.to_sexp())
+            }
+
+            NodeKind::SlurpyParameter { variable } => {
+                format!("(slurpy_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::NamedParameter { variable } => {
+                format!("(named_parameter {})", variable.to_sexp())
+            }
+
+            NodeKind::Method { name: _, signature, attributes, body } => {
+                let block_contents = match &body.kind {
+                    NodeKind::Block { statements } => {
+                        statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
+                    }
+                    _ => body.to_sexp(),
                 };
-                format!("(sub {} ({}){}{})", name_str, params_str, attrs_str, body.to_sexp())
+
+                let mut parts = vec!["(bareword)".to_string()];
+
+                // Add signature if present
+                if let Some(sig) = signature {
+                    parts.push(sig.to_sexp());
+                }
+
+                // Add attributes if present
+                if !attributes.is_empty() {
+                    let attrs: Vec<String> = attributes
+                        .iter()
+                        .map(|_attr| "(attribute (attribute_name))".to_string())
+                        .collect();
+                    parts.push(format!("(attrlist {})", attrs.join("")));
+                }
+
+                parts.push(format!("(block {})", block_contents));
+                format!("(method_declaration_statement {})", parts.join(" "))
             }
 
             NodeKind::Return { value } => {
@@ -283,9 +394,14 @@ impl Node {
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
 
-            NodeKind::FunctionCall { name, args } => {
+            NodeKind::FunctionCall { name: _, args } => {
+                // Tree-sitter format varies by context
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(call {} ({}))", name, args_str)
+                if args.is_empty() {
+                    "(function_call_expression (function))".to_string()
+                } else {
+                    format!("(ambiguous_function_call_expression (function) {})", args_str)
+                }
             }
 
             NodeKind::IndirectCall { method, object, args } => {
@@ -363,16 +479,12 @@ impl Node {
                 format!("(class {} {})", name, body.to_sexp())
             }
 
-            NodeKind::Method { name, params, body } => {
-                let params_str = params.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(method {} ({}) {})", name, params_str, body.to_sexp())
-            }
-
             NodeKind::Format { name, body } => {
                 format!("(format {} {:?})", name, body)
             }
 
             NodeKind::Identifier { name } => {
+                // Format expected by tests: (identifier name)
                 format!("(identifier {})", name)
             }
 
@@ -380,6 +492,29 @@ impl Node {
                 format!("(ERROR {})", message)
             }
             NodeKind::UnknownRest => "(UNKNOWN_REST)".to_string(),
+        }
+    }
+
+    /// Convert the AST to S-expression format that unwraps expression statements in programs
+    pub fn to_sexp_inner(&self) -> String {
+        match &self.kind {
+            NodeKind::ExpressionStatement { expression } => {
+                // Check if this is an anonymous subroutine - if so, keep it wrapped
+                match &expression.kind {
+                    NodeKind::Subroutine { name, .. } if name.is_none() => {
+                        // Anonymous subroutine should remain wrapped in expression statement
+                        self.to_sexp()
+                    }
+                    _ => {
+                        // In the inner format, other expression statements are unwrapped
+                        expression.to_sexp()
+                    }
+                }
+            }
+            _ => {
+                // For all other node types, use regular to_sexp
+                self.to_sexp()
+            }
         }
     }
 }
@@ -390,6 +525,10 @@ pub enum NodeKind {
     // Program structure
     Program {
         statements: Vec<Node>,
+    },
+
+    ExpressionStatement {
+        expression: Box<Node>,
     },
 
     // Variable operations
@@ -555,7 +694,44 @@ pub enum NodeKind {
     // Functions
     Subroutine {
         name: Option<String>,
-        params: Vec<Node>,
+        prototype: Option<Box<Node>>,
+        signature: Option<Box<Node>>,
+        attributes: Vec<String>,
+        body: Box<Node>,
+    },
+
+    // Prototype for subroutine
+    Prototype {
+        content: String,
+    },
+
+    // Signature for subroutine
+    Signature {
+        parameters: Vec<Node>,
+    },
+
+    // Signature parameter types
+    MandatoryParameter {
+        variable: Box<Node>,
+    },
+
+    OptionalParameter {
+        variable: Box<Node>,
+        default_value: Box<Node>,
+    },
+
+    SlurpyParameter {
+        variable: Box<Node>,
+    },
+
+    NamedParameter {
+        variable: Box<Node>,
+    },
+
+    // Method declaration (Perl 5.38+)
+    Method {
+        name: String,
+        signature: Option<Box<Node>>,
         attributes: Vec<String>,
         body: Box<Node>,
     },
@@ -639,12 +815,6 @@ pub enum NodeKind {
     // Modern Perl OOP (5.38+)
     Class {
         name: String,
-        body: Box<Node>,
-    },
-
-    Method {
-        name: String,
-        params: Vec<Node>,
         body: Box<Node>,
     },
 

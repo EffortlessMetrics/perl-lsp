@@ -1,5 +1,7 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
+use perl_parser::incremental_document::IncrementalDocument;
+use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use std::hint::black_box;
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
@@ -114,5 +116,50 @@ print "$x $y $z\n";
     });
 }
 
-criterion_group!(benches, bench_incremental_small_edit, bench_full_reparse, bench_multiple_edits);
+fn bench_incremental_document_single_edit(c: &mut Criterion) {
+    let source = "my $x = 42; my $y = 100; print $x + $y;";
+    let start = source.find("42").unwrap();
+    let end = start + 2;
+
+    c.bench_function("incremental_document single edit", |b| {
+        b.iter_batched(
+            || IncrementalDocument::new(source.to_string()).unwrap(),
+            |mut doc| {
+                let edit = IncrementalEdit::new(start, end, "43".to_string());
+                doc.apply_edit(edit).unwrap();
+                black_box(doc.metrics.nodes_reused);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
+    let source = "sub calc { my $a = 10; my $b = 20; $a + $b }";
+    let pos_a = source.find("10").unwrap();
+    let pos_b = source.find("20").unwrap();
+
+    c.bench_function("incremental_document multiple edits", |b| {
+        b.iter_batched(
+            || IncrementalDocument::new(source.to_string()).unwrap(),
+            |mut doc| {
+                let mut edits = IncrementalEditSet::new();
+                edits.add(IncrementalEdit::new(pos_a, pos_a + 2, "15".to_string()));
+                edits.add(IncrementalEdit::new(pos_b, pos_b + 2, "25".to_string()));
+                doc.apply_edits(&edits).unwrap();
+                black_box(doc.metrics.nodes_reused);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_incremental_small_edit,
+    bench_full_reparse,
+    bench_multiple_edits,
+    bench_incremental_document_single_edit,
+    bench_incremental_document_multiple_edits,
+);
 criterion_main!(benches);

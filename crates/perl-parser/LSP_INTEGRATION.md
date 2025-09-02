@@ -4,13 +4,30 @@ This guide explains how to use the Perl Language Server with various editors.
 
 ## Overview
 
-The v3 Perl parser now includes a full Language Server Protocol (LSP) implementation that provides:
+The v3 Perl parser includes a full Language Server Protocol (LSP) implementation that provides:
 
 - **Syntax checking** - Real-time error detection
 - **Code completion** - Context-aware suggestions
 - **Hover information** - Quick info about symbols
 - **Code actions** - Quick fixes and refactoring
 - **Diagnostics** - Linting and warnings
+
+## Testing Architecture (v0.8.6)
+
+The LSP server includes a robust async test harness for reliable testing:
+
+### Async LSP Test Harness
+- **Thread-safe communication** via mpsc channels
+- **Timeout mechanisms** to prevent hanging tests
+- **Real JSON-RPC protocol testing** (not mocked)
+- **Background server processing** to avoid blocking
+- **Notification handling** for diagnostics and server events
+
+### Test Infrastructure Benefits
+- Tests actual protocol compliance and message format
+- Validates timeout behavior for slow operations
+- Ensures thread safety in concurrent editor environments
+- Provides reliable regression testing for LSP features
 
 ## Building the LSP Server
 

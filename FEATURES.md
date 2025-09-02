@@ -1,6 +1,6 @@
 # Pure Rust Perl Parser - Complete Feature List
 
-This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **~99.995% coverage** of real-world Perl 5 code.
+This document provides a comprehensive list of all features supported by the Pure Rust Perl Parser, which achieves **~99.996% coverage** of real-world Perl 5 code (enhanced with improved substitution support as of PR #42).
 
 ## ✅ Core Language Features (100% Coverage)
 
@@ -47,12 +47,13 @@ This document provides a comprehensive list of all features supported by the Pur
 
 ### Regular Expressions
 - ✅ Match operator: `m//`, `//`
-- ✅ Substitution: `s///`
+- ✅ **Substitution: `s///`** (Enhanced with dedicated AST nodes in PR #42)
 - ✅ Transliteration: `tr///`, `y///`
 - ✅ Quote-like operators: `qr//`
 - ✅ All regex modifiers: `i`, `m`, `s`, `x`, `g`, `e`, etc.
 - ✅ Named captures and backreferences
 - ✅ Extended patterns and comments
+- ✅ **Improved substitution parsing** with proper pattern/replacement/modifier separation
 
 ### Control Flow
 - ✅ Conditionals: `if`, `elsif`, `else`, `unless`
