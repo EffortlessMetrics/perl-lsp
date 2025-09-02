@@ -340,7 +340,8 @@ fn test_no_symlink_following() {
     // Create a symlink to a file outside the directory
     let target_file = "/etc/hosts";
     if Path::new(target_file).exists()
-        && symlink(target_file, temp_dir.path().join("dangerous_link")).is_ok() {
+        && symlink(target_file, temp_dir.path().join("dangerous_link")).is_ok()
+    {
         let code = "\"dangerous\"";
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
