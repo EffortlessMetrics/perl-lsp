@@ -158,7 +158,28 @@ impl<'a> Parser<'a> {
             TokenKind::Try => self.parse_try(),
 
             // Subroutines and modern OOP
-            TokenKind::Sub => self.parse_subroutine(),
+            TokenKind::Sub => {
+                let sub_node = self.parse_subroutine()?;
+                // Check if this is an anonymous subroutine
+                Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
+                    if name.is_none() {
+                        // Wrap anonymous subroutines in expression statements
+                        let location = sub_node.location;
+                        Node::new(
+                            NodeKind::ExpressionStatement { 
+                                expression: Box::new(sub_node) 
+                            },
+                            location
+                        )
+                    } else {
+                        // Named subroutines are statements by themselves
+                        sub_node
+                    }
+                } else {
+                    // Shouldn't happen, but return as-is
+                    sub_node
+                })
+            },
             TokenKind::Class => self.parse_class(),
             TokenKind::Method => self.parse_method(),
 

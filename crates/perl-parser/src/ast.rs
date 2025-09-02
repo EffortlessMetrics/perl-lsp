@@ -25,7 +25,7 @@ impl Node {
             NodeKind::Program { statements } => {
                 let stmts =
                     statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
-                format!("(program {})", stmts)
+                format!("(source_file {})", stmts)
             }
 
             NodeKind::ExpressionStatement { expression } => {
@@ -77,8 +77,13 @@ impl Node {
             }
 
             NodeKind::Variable { sigil, name } => {
-                // Format expected by tests: (variable sigil name)
-                format!("(variable {} {})", sigil, name)
+                // Format expected by tree-sitter tests: (scalar (varname)) for $var
+                match sigil.as_str() {
+                    "$" => "(scalar (varname))".to_string(),
+                    "@" => "(array (varname))".to_string(),
+                    "%" => "(hash (varname))".to_string(),
+                    _ => format!("(variable {} {})", sigil, name),
+                }
             }
 
             NodeKind::VariableWithAttributes { variable, attributes } => {
@@ -132,9 +137,9 @@ impl Node {
                 format!("(glob {})", pattern)
             }
 
-            NodeKind::Number { value } => {
-                // Format expected by tests: (number value)
-                format!("(number {})", value)
+            NodeKind::Number { value: _ } => {
+                // Format expected by tests: just (number) without value
+                "(number)".to_string()
             }
 
             NodeKind::String { value, interpolated: _ } => {
@@ -266,32 +271,47 @@ impl Node {
             }
 
             NodeKind::Subroutine { name, prototype, signature, attributes, body } => {
-                // Extract block contents to avoid double-nesting
-                let block_contents = match &body.kind {
-                    NodeKind::Block { statements } => {
-                        statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
+                if let Some(_sub_name) = name {
+                    // Named subroutine - tree-sitter format: (subroutine_declaration_statement (bareword) ...)
+                    let mut parts = vec!["(bareword)".to_string()];
+
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        parts.push(format!("(attrlist {})", attrs.join("")));
                     }
-                    _ => body.to_sexp(), // fallback if body is not a Block
-                };
 
-                if let Some(sub_name) = name {
-                    // Named subroutine - format expected by tests: (sub name ()(block ...))
-                    let mut parts = vec![];
-
-                    // Add prototype if present (otherwise empty parens)
+                    // Add prototype if present
                     if let Some(_proto) = prototype {
-                        parts.push("()".to_string()); // Simplified for tests
-                    } else {
-                        parts.push("()".to_string());
+                        parts.push("(prototype)".to_string());
+                    }
+
+                    // Add signature if present
+                    if let Some(sig) = signature {
+                        parts.push(sig.to_sexp());
                     }
 
                     // Add body
-                    parts.push(format!("(block {})", block_contents));
+                    parts.push(body.to_sexp());
 
-                    format!("(sub {} {})", sub_name, parts.join(""))
+                    // Tree-sitter format with field labels
+                    let _parts_str = parts.join("");
+                    format!("(subroutine_declaration_statement {})", parts.join(""))
                 } else {
-                    // Anonymous subroutine needs to be wrapped in expression_statement
+                    // Anonymous subroutine - tree-sitter format
                     let mut parts = Vec::new();
+
+                    // Add attributes if present
+                    if !attributes.is_empty() {
+                        let attrs: Vec<String> = attributes
+                            .iter()
+                            .map(|_attr| "(attribute (attribute_name))".to_string())
+                            .collect();
+                        parts.push(format!("(attrlist {})", attrs.join("")));
+                    }
 
                     // Add prototype if present
                     if let Some(proto) = prototype {
@@ -303,28 +323,10 @@ impl Node {
                         parts.push(sig.to_sexp());
                     }
 
-                    // Add attributes if present
-                    if !attributes.is_empty() {
-                        let attrs: Vec<String> = attributes
-                            .iter()
-                            .map(|_attr| "(attribute (attribute_name))".to_string())
-                            .collect();
-                        parts.push(format!("(attrlist {})", attrs.join("")));
-                    }
-
                     // Add body
-                    parts.push(format!("(block {})", block_contents));
+                    parts.push(body.to_sexp());
 
-                    let inner_parts = if parts.is_empty() {
-                        format!("(block {})", block_contents)
-                    } else {
-                        parts.join(" ").to_string()
-                    };
-
-                    format!(
-                        "(expression_statement (anonymous_subroutine_expression {}))",
-                        inner_parts
-                    )
+                    format!("(anonymous_subroutine_expression {})", parts.join(""))
                 }
             }
 
@@ -392,13 +394,13 @@ impl Node {
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
 
-            NodeKind::FunctionCall { name, args } => {
-                // Format expected by tests: (call function_name (arg1 arg2 ...))
+            NodeKind::FunctionCall { name: _, args } => {
+                // Tree-sitter format varies by context
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 if args.is_empty() {
-                    format!("(call {} ())", name)
+                    "(function_call_expression (function))".to_string()
                 } else {
-                    format!("(call {} ({}))", name, args_str)
+                    format!("(ambiguous_function_call_expression (function) {})", args_str)
                 }
             }
 
@@ -497,8 +499,17 @@ impl Node {
     pub fn to_sexp_inner(&self) -> String {
         match &self.kind {
             NodeKind::ExpressionStatement { expression } => {
-                // In the inner format, expression statements are unwrapped
-                expression.to_sexp()
+                // Check if this is an anonymous subroutine - if so, keep it wrapped
+                match &expression.kind {
+                    NodeKind::Subroutine { name, .. } if name.is_none() => {
+                        // Anonymous subroutine should remain wrapped in expression statement
+                        self.to_sexp()
+                    }
+                    _ => {
+                        // In the inner format, other expression statements are unwrapped
+                        expression.to_sexp()
+                    }
+                }
             }
             _ => {
                 // For all other node types, use regular to_sexp
