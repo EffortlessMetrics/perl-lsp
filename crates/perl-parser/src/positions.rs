@@ -52,6 +52,17 @@ impl LineStartsCache {
     pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32) {
         let offset = offset.min(text.len());
 
+        // Ensure offset is on a UTF-8 character boundary
+        let offset = if offset < text.len() {
+            let mut offset = offset;
+            while offset > 0 && !text.is_char_boundary(offset) {
+                offset -= 1;
+            }
+            offset
+        } else {
+            text.len()
+        };
+
         // Binary search for the line
         let line = match self.line_starts.binary_search(&offset) {
             Ok(idx) => idx,
