@@ -11,6 +11,7 @@
 ## Honest Assessment of LSP Functionality
 
 While the `perl-parser` crate includes LSP infrastructure for many features, **about 78% of LSP features now work** (up from 75% in v0.8.7 baseline). Major v0.8.7 PR #71 improvements include **comprehensive comment documentation extraction** with 20 test cases, **enhanced source threading architecture**, and **S-expression format compatibility** fixes. This document provides an honest assessment of what you can actually expect to work, including **performance-optimized comment extraction** and **production-ready documentation features**.
+
 ## ✅ Actually Working Features (~78%)
 
 These features have been tested and provide real, useful functionality:
@@ -44,10 +45,18 @@ These features have been tested and provide real, useful functionality:
 - **NEW**: Multi-line comment extraction with Unicode safety and performance optimization (<100µs)
 - **NEW**: Support for complex formatting scenarios (multiple packages, mixed hash styles, class methods)
 - Perl built-in functions (150+ signatures)
-- Keywords (my, sub, if, etc.)
+- Keywords (my, sub, if, etc.) with snippet expansion
+- **NEW in v0.8.7**: File path completion in string literals
 - **Real-time updates** during typing with subtree reuse
-- **Limitations**: No package members, no imports, no file paths
-- **Status**: ~68% functional with major documentation improvements and comprehensive edge case coverage
+- **Limitations**: Limited package members, no imports
+- **Status**: ~75% functional with major documentation improvements and comprehensive edge case coverage
+
+#### File Path Completion (NEW v0.8.7)
+- **Context-aware activation**: Inside string literals (`"path/file"`)
+- **Security**: Path traversal prevention, null byte detection, safe filename validation
+- **Performance**: 50 max results, controlled filesystem traversal, cancellation support
+- **File type detection**: Perl, Rust, JavaScript, Python, Markdown, JSON, YAML, TOML files
+- **Testing**: Comprehensive test suite with security validation
 
 ### 3. **Go to Definition** (Single File Only)
 - Jump to variable declarations
