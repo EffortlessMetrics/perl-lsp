@@ -17,11 +17,19 @@ This repository contains **four published crates** forming a complete Perl parsi
 - **4-19x faster** than legacy implementations (1-150 µs parsing)
 - **True incremental parsing** with Rope-based document management and subtree reuse for <1ms LSP updates
 - **Production-ready Rope integration** for UTF-16/UTF-8 position conversion and line ending support
+- **Enhanced token position tracking** - O(log n) performance with LSP-compliant UTF-16 position mapping (PR #53)
 - **Enhanced comment documentation extraction** - comprehensive leading comment parsing with UTF-8 safety and performance optimization (PR #71)
 - **Source-aware symbol analysis** - full source text threading through LSP features for better context and documentation
 - Tree-sitter compatible output
 - Includes LSP server binary (`perl-lsp`) with full Rope-based document state
-- **v0.8.7 improvements** (PR #71 - Enhanced Comment Documentation):
+- **v0.8.7 improvements** (Combined PR #53 Token Position Tracking + PR #71 Comment Documentation):
+  - **O(log n) position mapping** - replaced placeholder tracking with production-ready implementation using LineStartsCache
+  - **LSP-compliant UTF-16 position tracking** - accurate line/column tracking with Unicode and CRLF support
+  - **Enhanced parser context** - production-grade position tracking throughout token stream processing  
+  - **Multi-line token support** - accurate position tracking for tokens spanning multiple lines (strings, comments)
+  - **Performance optimization** - efficient binary search-based position lookups for real-time LSP editing
+  - **Unicode-safe position calculation** - proper handling of multi-byte characters and emoji in position mapping
+  - **Comprehensive position test coverage** - 9 new position tracking tests covering edge cases (CRLF, UTF-16, multiline)
   - **Comprehensive comment documentation extraction** - production-ready leading comment parsing with extensive test coverage (20 tests)
   - **Enhanced source threading architecture** - source-aware LSP providers with improved context for all features
   - **S-expression format compatibility** - resolved bless parsing regressions with complete AST compatibility
@@ -783,11 +791,20 @@ my $test4 = "../etc/passwd";      # Should NOT provide completions (security)
    - Dynamic delimiter detection and recovery
    - Clear diagnostics for unparseable constructs
 
-5. **Testing Strategy**
+5. **Enhanced Position Tracking** (**Diataxis: Explanation**) (v0.8.7+)
+   - **O(log n) Position Mapping**: Efficient binary search-based position lookups using LineStartsCache
+   - **LSP-Compliant UTF-16 Support**: Accurate character counting for multi-byte Unicode characters and emoji
+   - **Multi-line Token Support**: Proper position tracking for tokens spanning multiple lines (strings, comments, heredocs)
+   - **Line Ending Agnostic**: Handles CRLF, LF, and CR line endings consistently across platforms
+   - **Production-Ready Integration**: Seamless integration with parser context and LSP server for real-time editing
+   - **Comprehensive Testing**: 8 specialized test cases covering Unicode, CRLF, multiline strings, and edge cases
+
+6. **Testing Strategy**
    - Grammar tests for each Perl construct
    - Edge case tests with property testing
    - Performance benchmarks
    - Integration tests for S-expression output
+   - Position tracking validation tests
 
    - Encoding-aware lexing for mid-file encoding changes
    - Tree-sitter compatible error nodes and diagnostics
@@ -840,6 +857,55 @@ Always run benchmarks after changes to ensure no regressions:
 ```bash
 cargo bench
 cargo xtask compare
+```
+
+### Position Tracking Development (**Diataxis: How-to**) (v0.8.7+)
+
+The enhanced position tracking system provides accurate line/column mapping for LSP compliance:
+
+#### **Using PositionTracker in Parser Context**:
+```rust
+use crate::parser_context::ParserContext;
+
+// Create parser with automatic position tracking
+let ctx = ParserContext::new(source);
+
+// Access accurate token positions
+let token = ctx.current_token().unwrap();
+let range = token.range();
+println!("Token at line {}, column {}", range.start.line, range.start.column);
+```
+
+#### **Testing Position Tracking** (**Diataxis: Tutorial**):
+```bash
+# Run position tracking tests
+cargo test -p perl-parser --test parser_context -- test_multiline_positions
+cargo test -p perl-parser --test parser_context -- test_utf16_position_mapping
+cargo test -p perl-parser --test parser_context -- test_crlf_line_endings
+
+# Test with specific edge cases
+cargo test -p perl-parser parser_context_tests::test_multiline_string_token_positions
+```
+
+#### **Position Tracking API Reference** (**Diataxis: Reference**):
+```rust
+// Core PositionTracker methods
+impl PositionTracker {
+    /// Create from source text with line start caching
+    pub fn new(source: String) -> Self;
+    
+    /// Convert byte offset to Position with UTF-16 support  
+    pub fn byte_to_position(&self, byte_offset: usize) -> Position;
+}
+
+// LineStartsCache for O(log n) lookups
+impl LineStartsCache {
+    /// Build cache with CRLF/LF/CR line ending support
+    pub fn new(text: &str) -> Self;
+    
+    /// Convert byte offset to (line, utf16_column)
+    pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32);
+}
 ```
 
 ## Pure Rust Parser Details

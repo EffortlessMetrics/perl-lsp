@@ -4466,25 +4466,46 @@ impl LspServer {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
+        let mut chars = content.chars().peekable();
 
-        for ch in content.chars() {
+        while let Some(ch) = chars.next() {
             if byte_pos >= offset {
                 break;
             }
 
             match ch {
-                '\r' => { /* ignore; CRLF will be handled on '\n' */ }
+                '\r' => {
+                    // Peek ahead to see if this is CRLF
+                    if chars.peek() == Some(&'\n') {
+                        // This is CRLF - treat as single line ending
+                        if byte_pos + 1 >= offset {
+                            // Offset is at the \r - treat as end of current line
+                            break;
+                        }
+                        // Skip both \r and \n
+                        chars.next(); // consume the \n
+                        line += 1;
+                        col_utf16 = 0;
+                        byte_pos += 2; // \r + \n
+                    } else {
+                        // Solo \r - treat as line ending
+                        line += 1;
+                        col_utf16 = 0;
+                        byte_pos += ch.len_utf8();
+                    }
+                }
                 '\n' => {
+                    // LF (could be standalone or part of CRLF, but CRLF is handled above)
                     line += 1;
                     col_utf16 = 0;
+                    byte_pos += ch.len_utf8();
                 }
                 _ => {
-                    // Count UTF-16 code units (surrogate pairs count as 2)
+                    // Regular character
                     col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                    byte_pos += ch.len_utf8();
                 }
             }
-
-            byte_pos += ch.len_utf8();
         }
 
         (line, col_utf16)
@@ -4495,49 +4516,45 @@ impl LspServer {
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
-        let mut byte_pos = 0usize;
-
-        for ch in content.chars() {
-            if cur_line == line {
-                match ch {
-                    '\n' => {
-                        // End of target line - clamp to EOL
-                        return byte_pos.min(content.len());
-                    }
-                    '\r' => {
-                        // ignore CR; CRLF handled on '\n'
-                    }
-                    _ => {
-                        let w = if ch.len_utf16() == 2 { 2 } else { 1 };
-                        if col_utf16 + w > character {
-                            // Character position is in the middle of this char
-                            return byte_pos;
-                        }
-                        if col_utf16 + w == character {
-                            // Caret is after this char
-                            return byte_pos + ch.len_utf8();
-                        }
-                        col_utf16 += w;
-                    }
-                }
+        let mut prev_was_cr = false;
+        
+        for (byte_idx, ch) in content.char_indices() {
+            // Check if we've reached the target position
+            if cur_line == line && col_utf16 == character {
+                return byte_idx;
             }
-
+            
+            // Handle line endings and character counting
             match ch {
                 '\n' => {
-                    cur_line += 1;
-                    if cur_line > line {
-                        // We've gone past the target line
-                        return byte_pos;
+                    if !prev_was_cr {
+                        // Standalone \n
+                        cur_line += 1;
+                        col_utf16 = 0;
                     }
+                    // If prev_was_cr, this \n is part of CRLF and we already incremented the line
+                }
+                '\r' => {
+                    // Always increment line on \r (whether solo or part of CRLF)
+                    cur_line += 1;
                     col_utf16 = 0;
                 }
-                '\r' => { /* ignore */ }
-                _ => {}
+                _ => {
+                    // Regular character - only count UTF-16 units on target line
+                    if cur_line == line {
+                        col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                    }
+                }
             }
-
-            byte_pos += ch.len_utf8();
+            
+            prev_was_cr = ch == '\r';
         }
-
+        
+        // Handle end of file position
+        if cur_line == line && col_utf16 == character {
+            return content.len();
+        }
+        
         // Clamp to end of buffer
         content.len()
     }

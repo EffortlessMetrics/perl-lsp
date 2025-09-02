@@ -1,1 +1,0 @@
-Some::Long::Class::Name->method();
