@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.6
+# LSP Actual Status - v0.8.7
 
 ## LSP GA Contract
 
@@ -10,9 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 70% of LSP features now work** (up from 65% in v0.8.5). This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 70% in v0.8.6). This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~70%)
+## ✅ Actually Working Features (~75%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -23,12 +23,20 @@ These features have been tested and provide real, useful functionality:
 - Missing pragma suggestions (strict/warnings)
 - **Status**: Fully functional
 
-### 2. **Basic Code Completion**
+### 2. **Enhanced Code Completion** 
 - Variables in current scope
-- Perl built-in functions
-- Keywords (my, sub, if, etc.)
-- **Limitations**: No package members, no imports, no file paths
-- **Status**: ~60% functional
+- Perl built-in functions (150+ with signatures)
+- Keywords (my, sub, if, etc.) with snippet expansion
+- **NEW in v0.8.7**: File path completion in string literals
+- **Limitations**: Limited package members, no imports
+- **Status**: ~75% functional
+
+#### File Path Completion (NEW v0.8.7)
+- **Context-aware activation**: Inside string literals (`"path/file"`)
+- **Security**: Path traversal prevention, null byte detection, safe filename validation
+- **Performance**: 50 max results, controlled filesystem traversal, cancellation support
+- **File type detection**: Perl, Rust, JavaScript, Python, Markdown, JSON, YAML, TOML files
+- **Testing**: Comprehensive test suite with security validation
 
 ### 3. **Go to Definition** (Single File Only)
 - Jump to variable declarations
