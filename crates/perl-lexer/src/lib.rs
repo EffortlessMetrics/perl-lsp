@@ -910,8 +910,8 @@ impl<'a> PerlLexer<'a> {
 
         match sigil {
             '$' | '@' | '%' | '*' => {
-                // In ExpectOperator mode, * should be treated as multiplication, not a glob sigil
-                if sigil == '*' && self.mode == LexerMode::ExpectOperator {
+                // In ExpectOperator mode, treat % and * as operators rather than sigils
+                if self.mode == LexerMode::ExpectOperator && matches!(sigil, '*' | '%') {
                     return None;
                 }
                 self.advance();
@@ -2629,5 +2629,43 @@ mod tests {
         lexer.next_token(); // (
         let token = lexer.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::RegexMatch);
+    }
+
+    #[test]
+    fn test_percent_and_double_sigil_disambiguation() {
+        // Hash variable
+        let mut lexer = PerlLexer::new("%hash");
+        let token = lexer.next_token().unwrap();
+        assert!(
+            matches!(token.token_type, TokenType::Identifier(ref id) if id.as_ref() == "%hash")
+        );
+
+        // Modulo operator
+        let mut lexer = PerlLexer::new("10 % 3");
+        lexer.next_token(); // 10
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "%"));
+    }
+
+    #[test]
+    fn test_defined_or_and_exponent() {
+        // Defined-or operator
+        let mut lexer = PerlLexer::new("$a // $b");
+        lexer.next_token(); // $a
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
+
+        // Regex after =~ should still parse
+        let mut lexer = PerlLexer::new("$x =~ //");
+        lexer.next_token(); // $x
+        lexer.next_token(); // =~
+        let token = lexer.next_token().unwrap();
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+
+        // Exponent operator
+        let mut lexer = PerlLexer::new("2 ** 3");
+        lexer.next_token(); // 2
+        let token = lexer.next_token().unwrap();
+        assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
     }
 }
