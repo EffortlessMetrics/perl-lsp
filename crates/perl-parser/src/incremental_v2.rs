@@ -17,7 +17,7 @@ use std::collections::HashMap;
 pub struct IncrementalMetrics {
     pub parse_time_micros: u128,
     pub nodes_reused: usize,
-    pub nodes_reparsed: usize, 
+    pub nodes_reparsed: usize,
     pub cache_hit_ratio: f64,
     pub edit_count: usize,
 }
@@ -26,22 +26,22 @@ impl IncrementalMetrics {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn efficiency_percentage(&self) -> f64 {
         if self.nodes_reused + self.nodes_reparsed == 0 {
             return 0.0;
         }
         self.nodes_reused as f64 / (self.nodes_reused + self.nodes_reparsed) as f64 * 100.0
     }
-    
+
     pub fn is_sub_millisecond(&self) -> bool {
         self.parse_time_micros < 1000
     }
-    
+
     pub fn performance_category(&self) -> &'static str {
         match self.parse_time_micros {
             0..=100 => "Excellent (<100µs)",
-            101..=500 => "Very Good (<500µs)", 
+            101..=500 => "Very Good (<500µs)",
             501..=1000 => "Good (<1ms)",
             1001..=5000 => "Acceptable (<5ms)",
             _ => "Needs Optimization (>5ms)",
@@ -618,12 +618,12 @@ impl IncrementalParserV2 {
     pub fn get_metrics(&self) -> &IncrementalMetrics {
         &self.metrics
     }
-    
+
     /// Reset performance metrics
     pub fn reset_metrics(&mut self) {
         self.metrics = IncrementalMetrics::new();
     }
-    
+
     fn calculate_content_delta(&self, node: &Node) -> isize {
         // Calculate how much the content of this node changed by examining
         // edits that fall within the node's original range.
@@ -897,47 +897,56 @@ mod tests {
         assert_eq!(parser.reparsed_nodes, 0);
     }
 
-    #[test] 
+    #[test]
     fn test_performance_timing_detailed() {
         let mut parser = IncrementalParserV2::new();
-        
+
         // Initial parse with timing
         let source1 = "my $x = 42;";
         let start = Instant::now();
         let _tree1 = parser.parse(source1).unwrap();
         let initial_parse_time = start.elapsed();
-        
+
         println!("Initial parse time: {:?}", initial_parse_time);
         println!("Initial nodes reparsed: {}", parser.reparsed_nodes);
-        
+
         // Apply incremental edit with detailed timing
         parser.edit(Edit::new(
-            8, 10, 12, // "42" -> "4242" 
+            8,
+            10,
+            12, // "42" -> "4242"
             Position::new(8, 1, 9),
             Position::new(10, 1, 11),
             Position::new(12, 1, 13),
         ));
-        
+
         let source2 = "my $x = 4242;";
         let start = Instant::now();
         let _tree2 = parser.parse(source2).unwrap();
         let incremental_parse_time = start.elapsed();
-        
+
         println!("Incremental parse time: {:?}", incremental_parse_time);
-        println!("Incremental nodes reused: {}, reparsed: {}", parser.reused_nodes, parser.reparsed_nodes);
-        
+        println!(
+            "Incremental nodes reused: {}, reparsed: {}",
+            parser.reused_nodes, parser.reparsed_nodes
+        );
+
         // Performance assertions - sub-millisecond claim verification
-        assert!(incremental_parse_time.as_micros() < 1000, 
-            "Incremental parse time should be <1ms, got {:?}", incremental_parse_time);
-        
+        assert!(
+            incremental_parse_time.as_micros() < 1000,
+            "Incremental parse time should be <1ms, got {:?}",
+            incremental_parse_time
+        );
+
         // Verify efficiency - should reuse most nodes
         assert!(parser.reused_nodes >= 3, "Should reuse at least 3 nodes");
         assert_eq!(parser.reparsed_nodes, 1, "Should only reparse the changed Number node");
-        
+
         // Performance ratio check - for very small examples, overhead may exceed benefits
-        let speedup = initial_parse_time.as_nanos() as f64 / incremental_parse_time.as_nanos() as f64;
+        let speedup =
+            initial_parse_time.as_nanos() as f64 / incremental_parse_time.as_nanos() as f64;
         println!("Performance improvement: {:.2}x faster", speedup);
-        
+
         // For micro-benchmarks, we focus on correctness and reasonable performance rather than speedup
         // The real benefits show up with larger documents where node reuse matters more
         if speedup >= 1.5 {
@@ -956,11 +965,15 @@ mod tests {
         let start = Instant::now();
         let _tree1 = parser.parse(source1).unwrap();
         let initial_time = start.elapsed();
-        
+
         // Initial parse counts all nodes: Program + VarDecl + Variable + Number = 4
         // But semicolon is not counted as a separate node
         assert_eq!(parser.reparsed_nodes, 4); // Program, VarDecl, Variable, Number
-        println!("Initial parse: {}µs, {} nodes parsed", initial_time.as_micros(), parser.reparsed_nodes);
+        println!(
+            "Initial parse: {}µs, {} nodes parsed",
+            initial_time.as_micros(),
+            parser.reparsed_nodes
+        );
 
         // Change the number value
         parser.edit(Edit::new(
@@ -979,15 +992,22 @@ mod tests {
 
         println!(
             "Incremental parse: {}µs, reused_nodes = {}, reparsed_nodes = {}",
-            incremental_time.as_micros(), parser.reused_nodes, parser.reparsed_nodes
+            incremental_time.as_micros(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
         );
         assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable can be reused
         assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
-        
+
         // Performance validation
         assert!(incremental_time.as_micros() < 500, "Incremental update should be <500µs");
-        let efficiency = parser.reused_nodes as f64 / (parser.reused_nodes + parser.reparsed_nodes) as f64;
-        assert!(efficiency >= 0.75, "Node reuse efficiency should be ≥75%, got {:.1}%", efficiency * 100.0);
+        let efficiency =
+            parser.reused_nodes as f64 / (parser.reused_nodes + parser.reparsed_nodes) as f64;
+        assert!(
+            efficiency >= 0.75,
+            "Node reuse efficiency should be ≥75%, got {:.1}%",
+            efficiency * 100.0
+        );
 
         // Verify the tree is correct
         if let NodeKind::Program { statements } = &tree2.kind {
@@ -1011,8 +1031,12 @@ mod tests {
         parser.parse(source1).unwrap();
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
-        
-        println!("Initial parse (multi-statement): {}µs, {} nodes", initial_time.as_micros(), initial_nodes);
+
+        println!(
+            "Initial parse (multi-statement): {}µs, {} nodes",
+            initial_time.as_micros(),
+            initial_nodes
+        );
 
         // Change both values
         parser.edit(Edit::new(
@@ -1040,16 +1064,22 @@ mod tests {
 
         println!(
             "Multiple edits: {}µs, reused_nodes = {}, reparsed_nodes = {}",
-            incremental_time.as_micros(), parser.reused_nodes, parser.reparsed_nodes
+            incremental_time.as_micros(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
         );
         assert_eq!(parser.reused_nodes, 5); // Program, decls and vars reused
         assert_eq!(parser.reparsed_nodes, 2); // Only the numbers reparsed
-        
+
         // Performance validation for multiple edits
         assert!(incremental_time.as_micros() < 1000, "Multiple edits should be <1ms");
         let total_nodes = parser.reused_nodes + parser.reparsed_nodes;
         let reuse_ratio = parser.reused_nodes as f64 / total_nodes as f64;
-        assert!(reuse_ratio >= 0.7, "Multi-edit reuse ratio should be ≥70%, got {:.1}%", reuse_ratio * 100.0);
+        assert!(
+            reuse_ratio >= 0.7,
+            "Multi-edit reuse ratio should be ≥70%, got {:.1}%",
+            reuse_ratio * 100.0
+        );
 
         // Verify both values were updated correctly
         if let NodeKind::Program { statements } = &tree.kind {
@@ -1207,7 +1237,7 @@ mod tests {
         let start = Instant::now();
         let result = parser.parse(source2);
         let parse_time = start.elapsed();
-        
+
         println!("Empty source parse time: {}µs", parse_time.as_micros());
 
         // Should handle gracefully and either succeed or fail cleanly
@@ -1223,15 +1253,15 @@ mod tests {
                 println!("Empty source parsing failed gracefully (expected)");
             }
         }
-        
+
         // Performance should still be reasonable even for empty source handling
         assert!(parse_time.as_millis() < 100, "Empty source handling should be fast");
     }
 
-    #[test] 
+    #[test]
     fn test_complex_nested_structure_edits() {
         let mut parser = IncrementalParserV2::new();
-        
+
         // Complex nested Perl structure
         let source1 = r#"
 if ($condition) {
@@ -1243,14 +1273,18 @@ if ($condition) {
     process($nested);
 }
 "#;
-        
+
         let start = Instant::now();
         parser.parse(source1).unwrap();
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
-        
-        println!("Complex structure initial parse: {}µs, {} nodes", initial_time.as_micros(), initial_nodes);
-        
+
+        println!(
+            "Complex structure initial parse: {}µs, {} nodes",
+            initial_time.as_micros(),
+            initial_nodes
+        );
+
         // Edit nested value - should be challenging for incremental parser
         let value_start = source1.find("42").unwrap();
         parser.edit(Edit::new(
@@ -1261,18 +1295,22 @@ if ($condition) {
             Position::new(value_start + 2, 1, 3),
             Position::new(value_start + 4, 1, 5),
         ));
-        
+
         let source2 = source1.replace("42", "9999");
         let start = Instant::now();
         let _tree = parser.parse(&source2).unwrap();
         let incremental_time = start.elapsed();
-        
-        println!("Complex nested edit: {}µs, reused={}, reparsed={}", 
-            incremental_time.as_micros(), parser.reused_nodes, parser.reparsed_nodes);
-        
+
+        println!(
+            "Complex nested edit: {}µs, reused={}, reparsed={}",
+            incremental_time.as_micros(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
+        );
+
         // Even with complex nesting, should have reasonable performance
         assert!(incremental_time.as_millis() < 10, "Complex nested edit should be <10ms");
-        
+
         // Should still achieve some node reuse
         if parser.reused_nodes > 0 {
             println!("Successfully reused {} nodes in complex structure", parser.reused_nodes);
@@ -1280,24 +1318,28 @@ if ($condition) {
             println!("Complex structure caused full reparse (acceptable for edge cases)");
         }
     }
-    
+
     #[test]
     fn test_large_document_performance() {
         let mut parser = IncrementalParserV2::new();
-        
+
         // Generate a larger Perl document
         let mut large_source = String::new();
         for i in 0..100 {
             large_source.push_str(&format!("my $var{} = {};\n", i, i * 10));
         }
-        
+
         let start = Instant::now();
         parser.parse(&large_source).unwrap();
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
-        
-        println!("Large document initial parse: {}ms, {} nodes", initial_time.as_millis(), initial_nodes);
-        
+
+        println!(
+            "Large document initial parse: {}ms, {} nodes",
+            initial_time.as_millis(),
+            initial_nodes
+        );
+
         // Edit in the middle of the document
         let edit_pos = large_source.find("my $var50 = 500").unwrap() + 13;
         parser.edit(Edit::new(
@@ -1308,39 +1350,45 @@ if ($condition) {
             Position::new(edit_pos + 3, 1, 4),
             Position::new(edit_pos + 3, 1, 4),
         ));
-        
+
         let source2 = large_source.replace("500", "999");
         let start = Instant::now();
         let _tree = parser.parse(&source2).unwrap();
         let incremental_time = start.elapsed();
-        
-        println!("Large document incremental: {}ms, reused={}, reparsed={}", 
-            incremental_time.as_millis(), parser.reused_nodes, parser.reparsed_nodes);
-        
+
+        println!(
+            "Large document incremental: {}ms, reused={}, reparsed={}",
+            incremental_time.as_millis(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
+        );
+
         // Large document performance targets
         assert!(incremental_time.as_millis() < 50, "Large document incremental should be <50ms");
-        
+
         // Should achieve significant node reuse on large documents
         if parser.reused_nodes > 0 {
-            let reuse_percentage = parser.reused_nodes as f64 / (parser.reused_nodes + parser.reparsed_nodes) as f64 * 100.0;
+            let reuse_percentage = parser.reused_nodes as f64
+                / (parser.reused_nodes + parser.reparsed_nodes) as f64
+                * 100.0;
             println!("Large document reuse rate: {:.1}%", reuse_percentage);
             assert!(reuse_percentage > 50.0, "Large document should reuse >50% of nodes");
         }
     }
-    
-    #[test] 
+
+    #[test]
     fn test_unicode_heavy_incremental_parsing() {
         let mut parser = IncrementalParserV2::new();
-        
+
         // Unicode-heavy source with emojis and international characters
         let source1 = "my $🌟variable = '你好世界'; # Comment with emoji 🚀\nmy $café = 'résumé';";
-        
+
         let start = Instant::now();
         parser.parse(source1).unwrap();
         let initial_time = start.elapsed();
-        
+
         println!("Unicode document initial parse: {}µs", initial_time.as_micros());
-        
+
         // Edit the unicode string content
         let edit_start = source1.find("你好世界").unwrap();
         let edit_end = edit_start + "你好世界".len();
@@ -1352,29 +1400,33 @@ if ($condition) {
             Position::new(edit_end, 1, 2),
             Position::new(edit_start + "再见".len(), 1, 2),
         ));
-        
+
         let source2 = source1.replace("你好世界", "再见");
         let start = Instant::now();
         let _tree = parser.parse(&source2).unwrap();
         let incremental_time = start.elapsed();
-        
-        println!("Unicode incremental edit: {}µs, reused={}, reparsed={}", 
-            incremental_time.as_micros(), parser.reused_nodes, parser.reparsed_nodes);
-        
+
+        println!(
+            "Unicode incremental edit: {}µs, reused={}, reparsed={}",
+            incremental_time.as_micros(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
+        );
+
         // Unicode handling should not significantly impact performance
         assert!(incremental_time.as_millis() < 5, "Unicode incremental parsing should be <5ms");
         assert!(parser.reused_nodes > 0 || parser.reparsed_nodes > 0, "Should parse successfully");
     }
-    
+
     #[test]
     fn test_edit_near_ast_node_boundaries() {
         let mut parser = IncrementalParserV2::new();
-        
-        // Source with clear AST node boundaries  
+
+        // Source with clear AST node boundaries
         let source1 = "sub func { my $x = 123; return $x * 2; }";
-        
+
         parser.parse(source1).unwrap();
-        
+
         // Edit right at the boundary between number and semicolon
         let number_end = source1.find("123").unwrap() + 3;
         parser.edit(Edit::new(
@@ -1385,78 +1437,103 @@ if ($condition) {
             Position::new(number_end, 1, 2),
             Position::new(number_end + 1, 1, 3),
         ));
-        
+
         let source2 = source1.replace("123", "12456");
         let start = Instant::now();
         let _tree = parser.parse(&source2).unwrap();
         let boundary_edit_time = start.elapsed();
-        
-        println!("Boundary edit time: {}µs, reused={}, reparsed={}", 
-            boundary_edit_time.as_micros(), parser.reused_nodes, parser.reparsed_nodes);
-        
+
+        println!(
+            "Boundary edit time: {}µs, reused={}, reparsed={}",
+            boundary_edit_time.as_micros(),
+            parser.reused_nodes,
+            parser.reparsed_nodes
+        );
+
         // Boundary edits are tricky but should still be efficient
         assert!(boundary_edit_time.as_millis() < 5, "AST boundary edit should be <5ms");
         assert!(parser.reparsed_nodes >= 1, "Should reparse at least the modified node");
     }
-    
+
     #[test]
     fn test_performance_regression_detection() {
         let mut parser = IncrementalParserV2::new();
-        
+
         // Baseline performance measurement
         let source = "my $baseline = 42; my $test = 'hello';";
         let mut parse_times = Vec::new();
-        
+
         // Multiple runs for statistical significance
         for i in 0..10 {
             let start = Instant::now();
             parser.parse(source).unwrap();
             let time = start.elapsed();
             parse_times.push(time.as_micros());
-            
+
             // Edit for next iteration
             parser.edit(Edit::new(
-                15, 17, 19, // Edit position
+                15,
+                17,
+                19, // Edit position
                 Position::new(15, 1, 16),
-                Position::new(17, 1, 18), 
+                Position::new(17, 1, 18),
                 Position::new(19, 1, 20),
             ));
-            
+
             // Alternate source for variations
             let test_source = if i % 2 == 0 {
                 "my $baseline = 99; my $test = 'hello';"
             } else {
                 "my $baseline = 42; my $test = 'hello';"
             };
-            
+
             let start = Instant::now();
             parser.parse(test_source).unwrap();
             let incremental_time = start.elapsed();
-            
-            println!("Run {}: initial={}µs, incremental={}µs, reused={}, reparsed={}",
-                i + 1, time.as_micros(), incremental_time.as_micros(),
-                parser.reused_nodes, parser.reparsed_nodes);
-            
+
+            println!(
+                "Run {}: initial={}µs, incremental={}µs, reused={}, reparsed={}",
+                i + 1,
+                time.as_micros(),
+                incremental_time.as_micros(),
+                parser.reused_nodes,
+                parser.reparsed_nodes
+            );
+
             // Performance regression detection
-            assert!(incremental_time.as_millis() < 10, 
-                "Run {} performance regression detected: {}ms", i + 1, incremental_time.as_millis());
+            assert!(
+                incremental_time.as_millis() < 10,
+                "Run {} performance regression detected: {}ms",
+                i + 1,
+                incremental_time.as_millis()
+            );
         }
-        
+
         // Statistical analysis
         let avg_time = parse_times.iter().sum::<u128>() / parse_times.len() as u128;
         let max_time = *parse_times.iter().max().unwrap();
         let min_time = *parse_times.iter().min().unwrap();
-        
-        println!("Performance statistics: avg={}µs, min={}µs, max={}µs", avg_time, min_time, max_time);
-        
+
+        println!(
+            "Performance statistics: avg={}µs, min={}µs, max={}µs",
+            avg_time, min_time, max_time
+        );
+
         // Consistency check - allow reasonable variation for micro-benchmarks
         // In development environments, timing can vary significantly due to system load
         let variation_factor = max_time as f64 / avg_time as f64;
         if variation_factor > 10.0 {
             // Only fail for extreme outliers that indicate real problems
-            assert!(false, "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)", max_time, avg_time, variation_factor);
+            assert!(
+                false,
+                "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
+                max_time, avg_time, variation_factor
+            );
         } else if variation_factor > 5.0 {
-            println!("⚠️ High performance variation detected: max={}µs, avg={}µs ({}x variation) - may indicate system load", max_time, avg_time, variation_factor);
+            println!(
+                "⚠️ High performance variation detected: max={}µs, avg={}µs ({}x variation) - may indicate system load",
+                max_time, avg_time, variation_factor
+            );
         }
     }
 }

@@ -3,7 +3,7 @@
 //! Provides helper functions and structures for comprehensive testing of
 //! incremental parsing functionality with detailed performance metrics.
 
-use perl_parser::incremental_v2::{IncrementalParserV2, IncrementalMetrics};
+use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
 use perl_parser::{edit::Edit, position::Position};
 use std::time::{Duration, Instant};
 
@@ -13,13 +13,13 @@ pub struct IncrementalTestUtils;
 impl IncrementalTestUtils {
     /// Create a performance edit that changes a value in the source
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
-        let pos = source.find(old_value)
-            .expect(&format!("Could not find '{}' in source", old_value));
+        let pos =
+            source.find(old_value).expect(&format!("Could not find '{}' in source", old_value));
         let end_pos = pos + old_value.len();
         let new_end = pos + new_value.len();
-        
+
         let new_source = source.replace(old_value, new_value);
-        
+
         let edit = Edit::new(
             pos,
             end_pos,
@@ -28,7 +28,7 @@ impl IncrementalTestUtils {
             Position::new(end_pos, 1, end_pos + 1),
             Position::new(new_end, 1, new_end + 1),
         );
-        
+
         (new_source, edit)
     }
 
@@ -41,12 +41,12 @@ impl IncrementalTestUtils {
     ) -> IncrementalParseResult {
         // Apply edit
         parser.edit(edit);
-        
+
         // Time the incremental parse
         let start = Instant::now();
         let result = parser.parse(new_source);
         let parse_time = start.elapsed();
-        
+
         IncrementalParseResult {
             parse_time,
             success: result.is_ok(),
@@ -69,23 +69,24 @@ impl IncrementalTestUtils {
     {
         let mut results = Vec::new();
         let mut initial_times = Vec::new();
-        
+
         println!("\n🧪 Running performance test: {}", name);
         println!("Iterations: {}", iterations);
-        
+
         for i in 0..iterations {
             let mut parser = IncrementalParserV2::new();
-            
+
             // Initial parse timing
             let start = Instant::now();
             parser.parse(initial_source).unwrap();
             let initial_time = start.elapsed();
             initial_times.push(initial_time);
-            
+
             // Generate edit and measure incremental parse
             let (new_source, edit) = edit_generator(initial_source);
-            let result = Self::measure_incremental_parse(&mut parser, initial_source, edit, &new_source);
-            
+            let result =
+                Self::measure_incremental_parse(&mut parser, initial_source, edit, &new_source);
+
             println!(
                 "  Run {:>2}: init={:>5}µs, incr={:>5}µs, reused={:>2}, reparsed={:>2}, eff={:>5.1}%",
                 i + 1,
@@ -95,10 +96,10 @@ impl IncrementalTestUtils {
                 result.nodes_reparsed,
                 result.efficiency_percentage()
             );
-            
+
             results.push(result);
         }
-        
+
         Self::analyze_performance_results(name, results, initial_times)
     }
 
@@ -108,16 +109,19 @@ impl IncrementalTestUtils {
         results: Vec<IncrementalParseResult>,
         initial_times: Vec<Duration>,
     ) -> PerformanceTestResult {
-        let incremental_times: Vec<u128> = results.iter().map(|r| r.parse_time.as_micros()).collect();
+        let incremental_times: Vec<u128> =
+            results.iter().map(|r| r.parse_time.as_micros()).collect();
         let initial_times_micros: Vec<u128> = initial_times.iter().map(|t| t.as_micros()).collect();
-        
+
         // Statistical calculations
-        let avg_incremental = incremental_times.iter().sum::<u128>() / incremental_times.len() as u128;
-        let avg_initial = initial_times_micros.iter().sum::<u128>() / initial_times_micros.len() as u128;
-        
+        let avg_incremental =
+            incremental_times.iter().sum::<u128>() / incremental_times.len() as u128;
+        let avg_initial =
+            initial_times_micros.iter().sum::<u128>() / initial_times_micros.len() as u128;
+
         let min_incremental = *incremental_times.iter().min().unwrap();
         let max_incremental = *incremental_times.iter().max().unwrap();
-        
+
         let median_incremental = {
             let mut sorted = incremental_times.clone();
             sorted.sort();
@@ -127,7 +131,7 @@ impl IncrementalTestUtils {
                 sorted[sorted.len() / 2]
             }
         };
-        
+
         // Node reuse statistics
         let total_reused: usize = results.iter().map(|r| r.nodes_reused).sum();
         let total_reparsed: usize = results.iter().map(|r| r.nodes_reparsed).sum();
@@ -136,19 +140,21 @@ impl IncrementalTestUtils {
         } else {
             0.0
         };
-        
+
         // Performance metrics
         let speedup_ratio = avg_initial as f64 / avg_incremental as f64;
         let sub_ms_count = incremental_times.iter().filter(|&&t| t < 1000).count();
         let sub_ms_rate = sub_ms_count as f64 / incremental_times.len() as f64;
-        
+
         // Consistency analysis (coefficient of variation)
-        let variance = incremental_times.iter()
+        let variance = incremental_times
+            .iter()
             .map(|&t| (t as f64 - avg_incremental as f64).powi(2))
-            .sum::<f64>() / incremental_times.len() as f64;
+            .sum::<f64>()
+            / incremental_times.len() as f64;
         let std_dev = variance.sqrt();
         let coefficient_of_variation = std_dev / avg_incremental as f64;
-        
+
         PerformanceTestResult {
             test_name: name.to_string(),
             iterations: results.len(),
@@ -162,7 +168,8 @@ impl IncrementalTestUtils {
             avg_efficiency_percentage: avg_efficiency,
             coefficient_of_variation,
             std_deviation_micros: std_dev as u128,
-            success_rate: results.iter().filter(|r| r.success).count() as f64 / results.len() as f64,
+            success_rate: results.iter().filter(|r| r.success).count() as f64
+                / results.len() as f64,
             individual_results: results,
         }
     }
@@ -174,7 +181,7 @@ impl IncrementalTestUtils {
     ) -> ValidationReport {
         let mut violations = Vec::new();
         let mut warnings = Vec::new();
-        
+
         // Sub-millisecond requirement
         if result.avg_incremental_micros >= criteria.max_avg_micros {
             violations.push(format!(
@@ -182,7 +189,7 @@ impl IncrementalTestUtils {
                 result.avg_incremental_micros, criteria.max_avg_micros
             ));
         }
-        
+
         // Efficiency requirement
         if result.avg_efficiency_percentage < criteria.min_efficiency_percentage {
             violations.push(format!(
@@ -190,7 +197,7 @@ impl IncrementalTestUtils {
                 result.avg_efficiency_percentage, criteria.min_efficiency_percentage
             ));
         }
-        
+
         // Speedup requirement
         if result.speedup_ratio < criteria.min_speedup_ratio {
             violations.push(format!(
@@ -198,7 +205,7 @@ impl IncrementalTestUtils {
                 result.speedup_ratio, criteria.min_speedup_ratio
             ));
         }
-        
+
         // Consistency requirement
         if result.coefficient_of_variation > criteria.max_coefficient_of_variation {
             warnings.push(format!(
@@ -206,15 +213,16 @@ impl IncrementalTestUtils {
                 result.coefficient_of_variation, criteria.max_coefficient_of_variation
             ));
         }
-        
+
         // Success rate requirement
         if result.success_rate < criteria.min_success_rate {
             violations.push(format!(
                 "Success rate {:.1}% below minimum {:.1}%",
-                result.success_rate * 100.0, criteria.min_success_rate * 100.0
+                result.success_rate * 100.0,
+                criteria.min_success_rate * 100.0
             ));
         }
-        
+
         // Sub-millisecond rate warning
         if result.sub_millisecond_rate < 0.8 {
             warnings.push(format!(
@@ -222,12 +230,8 @@ impl IncrementalTestUtils {
                 result.sub_millisecond_rate * 100.0
             ));
         }
-        
-        ValidationReport {
-            passed: violations.is_empty(),
-            violations,
-            warnings,
-        }
+
+        ValidationReport { passed: violations.is_empty(), violations, warnings }
     }
 
     /// Generate detailed performance report
@@ -237,18 +241,21 @@ impl IncrementalTestUtils {
         println!("📈 Timing Statistics:");
         println!("  Average Incremental: {}µs", result.avg_incremental_micros);
         println!("  Median Incremental:  {}µs", result.median_incremental_micros);
-        println!("  Range: {}µs - {}µs", result.min_incremental_micros, result.max_incremental_micros);
+        println!(
+            "  Range: {}µs - {}µs",
+            result.min_incremental_micros, result.max_incremental_micros
+        );
         println!("  Standard Deviation: {}µs", result.std_deviation_micros);
         println!("  Coefficient of Variation: {:.3}", result.coefficient_of_variation);
-        
+
         println!("\n⚡ Performance Metrics:");
         println!("  Speedup Ratio: {:.2}x faster", result.speedup_ratio);
         println!("  Sub-millisecond Rate: {:.1}%", result.sub_millisecond_rate * 100.0);
         println!("  Success Rate: {:.1}%", result.success_rate * 100.0);
-        
+
         println!("\n🔄 Node Reuse Statistics:");
         println!("  Average Efficiency: {:.1}%", result.avg_efficiency_percentage);
-        
+
         let category = match result.avg_incremental_micros {
             0..=100 => "🟢 Excellent (<100µs)",
             101..=500 => "🟡 Very Good (<500µs)",
@@ -263,22 +270,22 @@ impl IncrementalTestUtils {
     /// Create standard performance criteria for incremental parsing
     pub fn standard_criteria() -> PerformanceCriteria {
         PerformanceCriteria {
-            max_avg_micros: 1000,         // <1ms average
-            min_efficiency_percentage: 70.0,  // ≥70% node reuse
-            min_speedup_ratio: 2.0,       // ≥2x faster than full parse
+            max_avg_micros: 1000,              // <1ms average
+            min_efficiency_percentage: 70.0,   // ≥70% node reuse
+            min_speedup_ratio: 2.0,            // ≥2x faster than full parse
             max_coefficient_of_variation: 0.5, // Consistent performance
-            min_success_rate: 0.95,       // ≥95% successful parses
+            min_success_rate: 0.95,            // ≥95% successful parses
         }
     }
 
     /// Create relaxed criteria for complex scenarios
     pub fn relaxed_criteria() -> PerformanceCriteria {
         PerformanceCriteria {
-            max_avg_micros: 5000,         // <5ms average
-            min_efficiency_percentage: 50.0,  // ≥50% node reuse
-            min_speedup_ratio: 1.5,       // ≥1.5x faster than full parse
+            max_avg_micros: 5000,              // <5ms average
+            min_efficiency_percentage: 50.0,   // ≥50% node reuse
+            min_speedup_ratio: 1.5,            // ≥1.5x faster than full parse
             max_coefficient_of_variation: 1.0, // Allow more variation
-            min_success_rate: 0.90,       // ≥90% successful parses
+            min_success_rate: 0.90,            // ≥90% successful parses
         }
     }
 }
@@ -350,7 +357,7 @@ impl ValidationReport {
                 println!("  🚫 {}", violation);
             }
         }
-        
+
         if !self.warnings.is_empty() {
             println!("⚠️  Performance warnings:");
             for warning in &self.warnings {
@@ -366,28 +373,26 @@ macro_rules! perf_test {
     ($name:expr, $source:expr, $edit_fn:expr) => {
         perf_test!($name, $source, $edit_fn, 10)
     };
-    ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {
-        {
-            use crate::support::incremental_test_utils::IncrementalTestUtils;
-            
-            let result = IncrementalTestUtils::performance_test_with_stats(
-                $name,
-                $source, 
-                $edit_fn,
-                $iterations
-            );
-            
-            IncrementalTestUtils::print_performance_summary(&result);
-            
-            // Apply standard validation criteria
-            let criteria = IncrementalTestUtils::standard_criteria();
-            let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
-            validation.print_report();
-            
-            assert!(validation.passed, "Performance test '{}' failed validation", $name);
-            result
-        }
-    };
+    ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {{
+        use crate::support::incremental_test_utils::IncrementalTestUtils;
+
+        let result = IncrementalTestUtils::performance_test_with_stats(
+            $name,
+            $source,
+            $edit_fn,
+            $iterations,
+        );
+
+        IncrementalTestUtils::print_performance_summary(&result);
+
+        // Apply standard validation criteria
+        let criteria = IncrementalTestUtils::standard_criteria();
+        let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
+        validation.print_report();
+
+        assert!(validation.passed, "Performance test '{}' failed validation", $name);
+        result
+    }};
 }
 
 /// Macro for relaxed performance testing (complex scenarios)
@@ -396,26 +401,24 @@ macro_rules! perf_test_relaxed {
     ($name:expr, $source:expr, $edit_fn:expr) => {
         perf_test_relaxed!($name, $source, $edit_fn, 10)
     };
-    ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {
-        {
-            use crate::support::incremental_test_utils::IncrementalTestUtils;
-            
-            let result = IncrementalTestUtils::performance_test_with_stats(
-                $name,
-                $source, 
-                $edit_fn,
-                $iterations
-            );
-            
-            IncrementalTestUtils::print_performance_summary(&result);
-            
-            // Apply relaxed validation criteria
-            let criteria = IncrementalTestUtils::relaxed_criteria();
-            let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
-            validation.print_report();
-            
-            assert!(validation.passed, "Performance test '{}' failed validation", $name);
-            result
-        }
-    };
+    ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {{
+        use crate::support::incremental_test_utils::IncrementalTestUtils;
+
+        let result = IncrementalTestUtils::performance_test_with_stats(
+            $name,
+            $source,
+            $edit_fn,
+            $iterations,
+        );
+
+        IncrementalTestUtils::print_performance_summary(&result);
+
+        // Apply relaxed validation criteria
+        let criteria = IncrementalTestUtils::relaxed_criteria();
+        let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
+        validation.print_report();
+
+        assert!(validation.passed, "Performance test '{}' failed validation", $name);
+        result
+    }};
 }
