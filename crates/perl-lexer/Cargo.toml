@@ -1,6 +1,6 @@
 [package]
 name = "perl-lexer"
-version = "0.8.7"
+version = "0.8.8"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]

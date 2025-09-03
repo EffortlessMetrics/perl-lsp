@@ -1,7 +1,7 @@
 [package]
 name = "perl-parser-pest"
 rust-version = "1.89"
-version = "0.8.7"
+version = "0.8.8"
 edition = "2024"
 description = "Pest-based Perl parser (v2, experimental/legacy); use `perl-parser` (v3) for production"
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,7 @@ keywords = ["perl", "parser", "pest", "legacy", "v2"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
-perl-lexer = { version = "0.8.7" }
+perl-lexer = { version = "0.8.8" }
 tree-sitter = "0.25.8"
 tree-sitter-perl = { path = "../tree-sitter-perl-rs", features = ["pure-rust", "test-utils"], default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
