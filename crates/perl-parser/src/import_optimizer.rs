@@ -1,87 +1,154 @@
-//! Import optimization for Perl modules (stub implementation)
+//! Import optimization for Perl modules
 //!
-//! This module analyzes import statements and usage to optimize imports.
-//! Currently a stub implementation to demonstrate the architecture.
+//! This module analyzes import statements and usage to optimize imports by:
+//! - Detecting unused imports and symbols
+//! - Finding duplicate import statements
+//! - Consolidating imports to reduce clutter
+//! - Generating optimized import statements
+//!
+//! ## Example
+//!
+//! ```rust
+//! use perl_parser::import_optimizer::ImportOptimizer;
+//! use std::path::Path;
+//!
+//! let optimizer = ImportOptimizer::new();
+//! let analysis = optimizer.analyze_file(Path::new("script.pl"))?;
+//! let optimized_imports = optimizer.generate_optimized_imports(&analysis);
+//! println!("{}", optimized_imports);
+//! # Ok::<(), String>(())
+//! ```
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// Result of import analysis
+/// Result of import analysis containing all detected issues and suggestions
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImportAnalysis {
+    /// Import statements with unused symbols
     pub unused_imports: Vec<UnusedImport>,
+    /// Symbols that are used but not imported (currently empty - future enhancement)
     pub missing_imports: Vec<MissingImport>,
+    /// Modules that are imported multiple times
     pub duplicate_imports: Vec<DuplicateImport>,
+    /// Suggestions for organizing imports (currently empty - future enhancement)
     pub organization_suggestions: Vec<OrganizationSuggestion>,
     /// All imports discovered in the file
     pub imports: Vec<ImportEntry>,
 }
 
+/// An import statement containing unused symbols
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnusedImport {
+    /// Module name
     pub module: String,
+    /// List of unused symbols from this import
     pub symbols: Vec<String>,
+    /// Line number where this import statement appears (1-indexed)
     pub line: usize,
+    /// Reason why symbols are considered unused
     pub reason: String,
 }
 
+/// A symbol that is used but not imported (future enhancement)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MissingImport {
+    /// Module name that should be imported
     pub module: String,
+    /// List of symbols that need to be imported
     pub symbols: Vec<String>,
+    /// Suggested line number to insert the import
     pub suggested_location: usize,
+    /// Confidence level of the suggestion (0.0 to 1.0)
     pub confidence: f32,
 }
 
+/// A module that is imported multiple times
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuplicateImport {
+    /// Module name that is duplicated
     pub module: String,
+    /// Line numbers where this module is imported (1-indexed)
     pub lines: Vec<usize>,
+    /// Whether these imports can be safely merged
     pub can_merge: bool,
 }
 
+/// A suggestion for improving import organization (future enhancement)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrganizationSuggestion {
+    /// Human-readable description of the suggestion
     pub description: String,
+    /// Priority level of this suggestion
     pub priority: SuggestionPriority,
 }
 
-/// Single import statement discovered during analysis
+/// A single import statement discovered during analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportEntry {
+    /// Module name
     pub module: String,
+    /// List of imported symbols (empty for bare imports)
     pub symbols: Vec<String>,
+    /// Line number where this import appears (1-indexed)
     pub line: usize,
 }
 
+/// Priority level for organization suggestions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SuggestionPriority {
+    /// High priority - should be addressed immediately
     High,
+    /// Medium priority - should be addressed when convenient
     Medium,
+    /// Low priority - can be addressed later
     Low,
 }
 
-/// Import optimizer
+/// Import optimizer for analyzing and optimizing Perl import statements
+///
+/// The optimizer currently supports:
+/// - Parsing basic `use Module qw(symbols)` statements
+/// - Detecting unused imported symbols
+/// - Finding duplicate imports that can be merged
+/// - Generating consolidated import statements
 pub struct ImportOptimizer;
 
 impl ImportOptimizer {
+    /// Create a new import optimizer instance
     pub fn new() -> Self {
         Self
     }
 
-    /// Analyze imports in a file. This is a very small-scale parser that
-    /// understands a subset of `use` statements of the form
-    /// `use Module qw(sym1 sym2);` and tracks symbol usage.
+    /// Analyze imports in a Perl file and detect issues
+    ///
+    /// This method:
+    /// - Parses basic `use Module qw(symbols)` statements using regex
+    /// - Detects unused symbols by checking if they appear in the code
+    /// - Identifies duplicate imports of the same module
+    /// - Returns a comprehensive analysis with all findings
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - Path to the Perl file to analyze
+    ///
+    /// # Returns
+    ///
+    /// Returns `ImportAnalysis` with detected issues or an error string if the file cannot be read.
+    ///
+    /// # Limitations
+    ///
+    /// - Only supports simple qw() syntax
+    /// - Does not handle complex import patterns
+    /// - Symbol usage detection is basic regex matching
     pub fn analyze_file(&self, file_path: &Path) -> Result<ImportAnalysis, String> {
-        let content = std::fs::read_to_string(file_path)
-            .map_err(|e| e.to_string())?;
+        let content = std::fs::read_to_string(file_path).map_err(|e| e.to_string())?;
 
         // Regex for basic `use` statement parsing
-        let re_use =
-            Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;")
-                .map_err(|e| e.to_string())?;
+        let re_use = Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;")
+            .map_err(|e| e.to_string())?;
 
         let mut imports = Vec::new();
         for (idx, line) in content.lines().enumerate() {
@@ -98,21 +165,14 @@ impl ImportOptimizer {
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>()
                 };
-                imports.push(ImportEntry {
-                    module,
-                    symbols,
-                    line: idx + 1,
-                });
+                imports.push(ImportEntry { module, symbols, line: idx + 1 });
             }
         }
 
         // Build map for duplicate detection
         let mut module_to_lines: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         for imp in &imports {
-            module_to_lines
-                .entry(imp.module.clone())
-                .or_default()
-                .push(imp.line);
+            module_to_lines.entry(imp.module.clone()).or_default().push(imp.line);
         }
         let duplicate_imports = module_to_lines
             .iter()
@@ -161,8 +221,29 @@ impl ImportOptimizer {
         })
     }
 
-    /// Generate optimized import statements by consolidating duplicate
-    /// imports and removing unused symbols.
+    /// Generate optimized import statements based on analysis results
+    ///
+    /// This method:
+    /// - Consolidates duplicate imports into single statements
+    /// - Removes unused symbols from import lists
+    /// - Skips entirely unused imports
+    /// - Returns properly formatted import statements sorted by module name
+    ///
+    /// # Arguments
+    ///
+    /// * `analysis` - The analysis results from `analyze_file()`
+    ///
+    /// # Returns
+    ///
+    /// A string containing optimized import statements, one per line.
+    /// Modules are sorted alphabetically for consistency.
+    ///
+    /// # Example Output
+    ///
+    /// ```text
+    /// use Bar qw(x);
+    /// use Foo qw(a);
+    /// ```
     pub fn generate_optimized_imports(&self, analysis: &ImportAnalysis) -> String {
         // Map module -> set of used symbols
         let mut modules: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -184,17 +265,14 @@ impl ImportOptimizer {
                 continue;
             }
 
-            modules
-                .entry(imp.module.clone())
-                .or_default()
-                .extend(symbols.into_iter());
+            modules.entry(imp.module.clone()).or_default().extend(symbols.into_iter());
         }
 
         // Build final import statements sorted by module name
         let mut result = String::new();
         for (module, symbols) in modules {
             if symbols.is_empty() {
-                result.push_str(&format!("use {};&\n", module));
+                result.push_str(&format!("use {};\n", module));
             } else {
                 let sym_vec: Vec<_> = symbols.into_iter().collect();
                 result.push_str(&format!("use {} qw({});\n", module, sym_vec.join(" ")));

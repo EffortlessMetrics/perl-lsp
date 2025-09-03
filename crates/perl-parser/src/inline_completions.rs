@@ -41,24 +41,24 @@ impl InlineCompletionProvider {
         character: u32,
     ) -> InlineCompletionList {
         let lines: Vec<&str> = text.lines().collect();
-        
+
         if let Some(current_line) = lines.get(line as usize) {
             let prefix = &current_line[..character.min(current_line.len() as u32) as usize];
-            
+
             // Get completions based on context
             let items = self.get_completions_for_context(prefix, current_line);
-            
-            return InlineCompletionList {
-                items,
-            };
+
+            return InlineCompletionList { items };
         }
 
-        InlineCompletionList {
-            items: vec![],
-        }
+        InlineCompletionList { items: vec![] }
     }
 
-    fn get_completions_for_context(&self, prefix: &str, full_line: &str) -> Vec<InlineCompletionItem> {
+    fn get_completions_for_context(
+        &self,
+        prefix: &str,
+        full_line: &str,
+    ) -> Vec<InlineCompletionItem> {
         let mut items = Vec::new();
 
         // Rule 1: After `->` suggest `new()`
@@ -80,7 +80,7 @@ impl InlineCompletionProvider {
                 range: None,
                 command: None,
             });
-            
+
             items.push(InlineCompletionItem {
                 insert_text: "warnings;".into(),
                 filter_text: Some("warnings".into()),
@@ -255,8 +255,7 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let completions = provider.get_inline_completions("sub hello {", 0, 9);
         // Should not suggest brace when one exists
-        assert!(completions.items.is_empty() || 
-                !completions.items[0].insert_text.contains('{'));
+        assert!(completions.items.is_empty() || !completions.items[0].insert_text.contains('{'));
     }
 
     #[test]

@@ -141,8 +141,8 @@ pub mod incremental_simple;
 pub mod incremental_v2;
 pub mod index;
 pub mod inlay_hints;
-pub mod inline_completions;
 pub mod inlay_hints_provider;
+pub mod inline_completions;
 pub mod line_index;
 pub mod linked_editing;
 pub mod lsp_document_link;
@@ -233,6 +233,10 @@ pub use diagnostics::{
 pub use document_links::compute_links;
 pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
 pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+pub use import_optimizer::{
+    DuplicateImport, ImportAnalysis, ImportEntry, ImportOptimizer, MissingImport,
+    OrganizationSuggestion, SuggestionPriority, UnusedImport,
+};
 pub use inlay_hints::{parameter_hints, trivial_type_hints};
 pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
 pub use on_type_formatting::compute_on_type_edit;
