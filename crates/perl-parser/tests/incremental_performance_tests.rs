@@ -1,11 +1,11 @@
 //! Comprehensive incremental parsing performance tests
-//! 
+//!
 //! This module validates the sub-millisecond performance claims and provides
 //! detailed benchmarking infrastructure for incremental parsing functionality.
 
 #[cfg(feature = "incremental")]
 mod incremental_performance_tests {
-    use perl_parser::incremental_v2::{IncrementalParserV2, IncrementalMetrics};
+    use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
     use perl_parser::{edit::Edit, position::Position};
     use std::time::{Duration, Instant};
 
@@ -37,30 +37,30 @@ mod incremental_performance_tests {
             F: Fn(&str) -> (String, Edit),
         {
             println!("\n=== Performance Test: {} ===", name);
-            
+
             let mut reports = Vec::new();
-            
+
             for i in 0..iterations {
                 // Reset parser state
                 self.parser = IncrementalParserV2::new();
-                
+
                 // Initial parse with timing
                 let start = Instant::now();
                 self.parser.parse(initial_source).unwrap();
                 let initial_time = start.elapsed();
                 self.baseline_times.push(initial_time);
-                
+
                 // Apply edit and reparse with timing
                 let (new_source, edit) = edit_fn(initial_source);
                 self.parser.edit(edit);
-                
+
                 let start = Instant::now();
                 let _tree = self.parser.parse(&new_source).unwrap();
                 let incremental_time = start.elapsed();
                 self.incremental_times.push(incremental_time);
-                
+
                 let metrics = self.parser.get_metrics().clone();
-                
+
                 println!(
                     "Run {}: initial={:>6}µs, incremental={:>6}µs, reused={:>2}, reparsed={:>2}, efficiency={:>5.1}%",
                     i + 1,
@@ -70,7 +70,7 @@ mod incremental_performance_tests {
                     self.parser.reparsed_nodes,
                     metrics.efficiency_percentage()
                 );
-                
+
                 reports.push(SingleTestReport {
                     initial_time_micros: initial_time.as_micros(),
                     incremental_time_micros: incremental_time.as_micros(),
@@ -79,29 +79,32 @@ mod incremental_performance_tests {
                     metrics: metrics,
                 });
             }
-            
+
             let report = self.analyze_results(name, reports);
             self.print_performance_report(&report);
             report
         }
 
         fn analyze_results(&self, name: &str, reports: Vec<SingleTestReport>) -> PerformanceReport {
-            let incremental_times: Vec<u128> = reports.iter().map(|r| r.incremental_time_micros).collect();
+            let incremental_times: Vec<u128> =
+                reports.iter().map(|r| r.incremental_time_micros).collect();
             let initial_times: Vec<u128> = reports.iter().map(|r| r.initial_time_micros).collect();
-            
-            let avg_incremental = incremental_times.iter().sum::<u128>() / incremental_times.len() as u128;
+
+            let avg_incremental =
+                incremental_times.iter().sum::<u128>() / incremental_times.len() as u128;
             let avg_initial = initial_times.iter().sum::<u128>() / initial_times.len() as u128;
-            
+
             let min_incremental = *incremental_times.iter().min().unwrap();
             let max_incremental = *incremental_times.iter().max().unwrap();
-            
+
             let avg_reused = reports.iter().map(|r| r.nodes_reused).sum::<usize>() / reports.len();
-            let avg_reparsed = reports.iter().map(|r| r.nodes_reparsed).sum::<usize>() / reports.len();
-            
+            let avg_reparsed =
+                reports.iter().map(|r| r.nodes_reparsed).sum::<usize>() / reports.len();
+
             let avg_efficiency = avg_reused as f64 / (avg_reused + avg_reparsed) as f64 * 100.0;
-            
+
             let speedup = avg_initial as f64 / avg_incremental as f64;
-            
+
             PerformanceReport {
                 test_name: name.to_string(),
                 iterations: reports.len(),
@@ -113,7 +116,9 @@ mod incremental_performance_tests {
                 avg_nodes_reparsed: avg_reparsed,
                 avg_efficiency_percentage: avg_efficiency,
                 speedup_ratio: speedup,
-                sub_millisecond_rate: incremental_times.iter().filter(|&&t| t < 1000).count() as f64 / incremental_times.len() as f64,
+                sub_millisecond_rate: incremental_times.iter().filter(|&&t| t < 1000).count()
+                    as f64
+                    / incremental_times.len() as f64,
                 individual_reports: reports,
             }
         }
@@ -122,12 +127,18 @@ mod incremental_performance_tests {
             println!("\n--- Performance Report: {} ---", report.test_name);
             println!("Iterations: {}", report.iterations);
             println!("Avg Incremental: {}µs", report.avg_incremental_micros);
-            println!("Min/Max Incremental: {}µs / {}µs", report.min_incremental_micros, report.max_incremental_micros);
+            println!(
+                "Min/Max Incremental: {}µs / {}µs",
+                report.min_incremental_micros, report.max_incremental_micros
+            );
             println!("Speedup: {:.2}x faster than initial parse", report.speedup_ratio);
-            println!("Node Reuse: avg {:.1} reused, {:.1} reparsed", report.avg_nodes_reused, report.avg_nodes_reparsed);
+            println!(
+                "Node Reuse: avg {:.1} reused, {:.1} reparsed",
+                report.avg_nodes_reused, report.avg_nodes_reparsed
+            );
             println!("Efficiency: {:.1}%", report.avg_efficiency_percentage);
             println!("Sub-millisecond rate: {:.1}%", report.sub_millisecond_rate * 100.0);
-            
+
             // Performance category classification
             let category = match report.avg_incremental_micros {
                 0..=100 => "Excellent (<100µs)",
@@ -196,7 +207,8 @@ mod incremental_performance_tests {
         }
 
         pub fn assert_consistency(&self) {
-            let variation_factor = self.max_incremental_micros as f64 / self.avg_incremental_micros as f64;
+            let variation_factor =
+                self.max_incremental_micros as f64 / self.avg_incremental_micros as f64;
             assert!(
                 variation_factor <= 3.0,
                 "Performance variation too high: max {}µs vs avg {}µs (factor: {:.1}) for test '{}'",
@@ -230,7 +242,8 @@ if ($condition) {
     };
     process($nested->{key2});
 }
-"#.to_string()
+"#
+            .to_string()
         }
 
         pub fn large_document(size: usize) -> String {
@@ -250,7 +263,8 @@ if ($condition) {
             for i in 0..20 {
                 source.push_str(&format!(
                     "sub func{} {{ my $param = $_[0]; return $param * {}; }}\n",
-                    i, i + 1
+                    i,
+                    i + 1
                 ));
             }
             source
@@ -262,7 +276,7 @@ if ($condition) {
     #[test]
     fn test_simple_value_edit_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         let report = harness.run_performance_test(
             "Simple Value Edit",
             TestSourceGenerator::simple_variable(),
@@ -287,9 +301,12 @@ if ($condition) {
         report.assert_efficiency(70.0);
         // For micro-benchmarks, speedup is often limited by overhead, focus on correctness
         if report.speedup_ratio >= 1.5 {
-            report.assert_speedup(1.5);  // Relaxed requirement for tiny examples
+            report.assert_speedup(1.5); // Relaxed requirement for tiny examples
         } else {
-            println!("⚠️ Micro-benchmark: {:.1}x speedup (overhead expected for tiny examples)", report.speedup_ratio);
+            println!(
+                "⚠️ Micro-benchmark: {:.1}x speedup (overhead expected for tiny examples)",
+                report.speedup_ratio
+            );
         }
         report.assert_consistency();
     }
@@ -297,7 +314,7 @@ if ($condition) {
     #[test]
     fn test_multi_statement_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         let source = TestSourceGenerator::multi_statement();
         let report = harness.run_performance_test(
             "Multi-statement Edit",
@@ -327,7 +344,7 @@ if ($condition) {
     #[test]
     fn test_complex_nested_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         let source = TestSourceGenerator::complex_nested();
         let report = harness.run_performance_test(
             "Complex Nested Structure",
@@ -356,7 +373,7 @@ if ($condition) {
     #[test]
     fn test_large_document_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         let source = TestSourceGenerator::large_document(100);
         let report = harness.run_performance_test(
             "Large Document (100 statements)",
@@ -388,7 +405,7 @@ if ($condition) {
     #[test]
     fn test_unicode_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         let source = TestSourceGenerator::unicode_heavy();
         let report = harness.run_performance_test(
             "Unicode Heavy",
@@ -418,10 +435,10 @@ if ($condition) {
     #[test]
     fn test_performance_regression_detection() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         // Run the same test multiple times to detect performance regressions
         let mut all_reports = Vec::new();
-        
+
         for batch in 0..3 {
             let report = harness.run_performance_test(
                 &format!("Regression Detection Batch {}", batch + 1),
@@ -442,18 +459,19 @@ if ($condition) {
                 },
                 5,
             );
-            
+
             all_reports.push(report);
         }
-        
+
         // Analyze for regression across batches
-        let batch_averages: Vec<u128> = all_reports.iter().map(|r| r.avg_incremental_micros).collect();
+        let batch_averages: Vec<u128> =
+            all_reports.iter().map(|r| r.avg_incremental_micros).collect();
         let overall_avg = batch_averages.iter().sum::<u128>() / batch_averages.len() as u128;
-        
+
         println!("\n=== Regression Analysis ===");
         for (i, avg) in batch_averages.iter().enumerate() {
             println!("Batch {}: {}µs", i + 1, avg);
-            
+
             // No batch should be more than 2x slower than the average
             assert!(
                 *avg < overall_avg * 2,
@@ -463,7 +481,7 @@ if ($condition) {
                 overall_avg
             );
         }
-        
+
         println!("Overall average: {}µs", overall_avg);
         println!("✓ No significant performance regression detected");
     }
@@ -471,7 +489,7 @@ if ($condition) {
     #[test]
     fn test_edge_case_performance() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         // Test performance at AST node boundaries
         let source = "sub func { my $x = 123; return $x * 2; }";
         let report = harness.run_performance_test(
@@ -501,24 +519,24 @@ if ($condition) {
     #[test]
     fn test_concurrent_edit_simulation() {
         let mut harness = PerformanceTestHarness::new();
-        
+
         // Simulate rapid consecutive edits like in real editor usage
         let source = "my $a = 1; my $b = 2; my $c = 3;";
-        
+
         // Multiple rapid edits
         let mut parser = IncrementalParserV2::new();
         parser.parse(source).unwrap();
-        
+
         let edits = vec![
-            (8, 9, "10".to_string()), // Change "1" to "10"
-            (19, 20, "20".to_string()), // Change "2" to "20"  
+            (8, 9, "10".to_string()),   // Change "1" to "10"
+            (19, 20, "20".to_string()), // Change "2" to "20"
             (30, 31, "30".to_string()), // Change "3" to "30"
         ];
-        
+
         let mut total_time = Duration::ZERO;
         let mut total_reused = 0;
         let mut total_reparsed = 0;
-        
+
         for (i, (pos, end_pos, new_text)) in edits.iter().enumerate() {
             parser.edit(Edit::new(
                 *pos,
@@ -528,22 +546,22 @@ if ($condition) {
                 Position::new(*end_pos, 1, 2),
                 Position::new(pos + new_text.len(), 1, (1 + new_text.len()) as u32),
             ));
-            
+
             let modified_source = match i {
                 0 => "my $a = 10; my $b = 2; my $c = 3;",
                 1 => "my $a = 10; my $b = 20; my $c = 3;",
                 2 => "my $a = 10; my $b = 20; my $c = 30;",
                 _ => unreachable!(),
             };
-            
+
             let start = Instant::now();
             parser.parse(modified_source).unwrap();
             let parse_time = start.elapsed();
-            
+
             total_time += parse_time;
             total_reused += parser.reused_nodes;
             total_reparsed += parser.reparsed_nodes;
-            
+
             println!(
                 "Concurrent edit {}: {}µs, reused={}, reparsed={}",
                 i + 1,
@@ -551,7 +569,7 @@ if ($condition) {
                 parser.reused_nodes,
                 parser.reparsed_nodes
             );
-            
+
             // Each individual edit should still be fast
             assert!(
                 parse_time.as_micros() < 2000,
@@ -560,10 +578,10 @@ if ($condition) {
                 parse_time.as_micros()
             );
         }
-        
+
         println!("Total concurrent edit time: {}µs", total_time.as_micros());
         println!("Total reused/reparsed: {}/{}", total_reused, total_reparsed);
-        
+
         // Overall concurrent performance should be reasonable
         assert!(total_time.as_millis() < 10, "Total concurrent edit time should be <10ms");
     }
