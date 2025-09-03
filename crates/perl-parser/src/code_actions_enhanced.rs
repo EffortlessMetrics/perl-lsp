@@ -84,6 +84,9 @@ impl EnhancedCodeActionsProvider {
                     self.collect_actions_for_range(stmt, range, actions);
                 }
             }
+            NodeKind::ExpressionStatement { expression } => {
+                self.collect_actions_for_range(expression, range, actions);
+            }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.collect_actions_for_range(condition, range, actions);
                 self.collect_actions_for_range(then_branch, range, actions);
