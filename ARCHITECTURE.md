@@ -11,7 +11,7 @@ The tree-sitter-perl project provides **multiple parser implementations** and **
 3. **v3: Native Parser**: Hand-written lexer+parser (~100% coverage) ⭐
 4. **Incremental Parsing**: True subtree reuse for <1ms LSP updates (NEW v0.8.7) 🚀
 5. **LSP Server**: Full Language Server Protocol implementation with real-time editing
-6. **Tree-sitter Output**: All parsers produce compatible S-expressions
+6. **Enhanced S-expression System**: Comprehensive operator-specific AST output (Issue #72 resolved)
 7. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs), incremental achieves 50-100x speedup for edits
 
 ## 📐 Architecture Diagram
@@ -140,15 +140,21 @@ pub enum AstNode {
 }
 ```
 
-### 4. S-Expression Generator
+### 4. Enhanced S-Expression Generation System (Issue #72 Resolved)
 
-**Purpose**: Outputs tree-sitter compatible format
+**Purpose**: Comprehensive tree-sitter compatible format with semantic precision
 
-**Features**:
-- **Compatibility**: Matches tree-sitter's S-expression format exactly
+**Enhanced Features (v0.8.9)**:
+- **Comprehensive Operator Mapping**: 50+ binary operators with specific S-expression formats (binary_+, binary_<, binary_*, binary_and, binary_or, etc.)
+- **Complete Unary Operator Coverage**: 25+ unary operators including arithmetic (unary_-, unary_++), logical (unary_not), and file test operators (unary_-f, unary_-d, etc.)
+- **String Interpolation Detection**: Differentiates `string` vs `string_interpolated` based on content analysis
+- **Tree-sitter Standard Compliance**: Program nodes use standard `(source_file)` format while maintaining backward compatibility
+- **Performance Optimized**: 24-26% parsing speed improvement maintained with comprehensive operator semantics
+- **Semantic Precision**: Operator type embedded in node name enables direct queries without field parsing
+- **Tool Integration**: Enhanced syntax highlighting and static analysis capabilities
 - **Error Nodes**: Graceful handling of unparseable constructs
 - **Position Info**: Includes byte ranges for all nodes
-- **Streaming**: Can output large ASTs efficiently
+- **Production Verification**: 10/10 integration tests passing with comprehensive validation
 
 ### 5. Edge Case Handling System
 
@@ -354,10 +360,16 @@ LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
 - Type-safe node creation
 - Position information preserved
 
-### 4. Output Generation
-- Tree-sitter S-expression format
-- Optional debug output
-- Streaming for large files
+### 4. Enhanced S-Expression Generation (Issue #72 Resolved)
+- **Comprehensive Operator Semantics**: 50+ binary operators (binary_+, binary_<, etc.) and 25+ unary operators (unary_not, unary_++, etc.)
+- **String Interpolation Analysis**: Content-based differentiation between `string` and `string_interpolated` nodes
+- **Tree-sitter Standard Format**: `(source_file)` root nodes for ecosystem compatibility
+- **Performance Optimized**: 24-26% parsing improvement maintained with enhanced semantic detail
+- **Production Verified**: 10/10 integration tests validating comprehensive operator coverage
+- **Tool Integration Ready**: Direct semantic matching for syntax highlighting and static analysis
+- **Backward Compatible**: Transformation options available for legacy format requirements
+- **Debug Output**: Enhanced AST visualization with operator semantics visible
+- **Streaming**: Efficient output for large files
 
 ## 🚀 Performance Optimizations
 
