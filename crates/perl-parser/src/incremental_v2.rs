@@ -156,7 +156,9 @@ impl IncrementalParserV2 {
 
     fn try_incremental_parse(&mut self, source: &str, last_tree: &IncrementalTree) -> Option<Node> {
         // Check for simple value edits first
-        if self.is_simple_value_edit(last_tree) {
+        let is_simple = self.is_simple_value_edit(last_tree);
+        println!("DEBUG try_incremental_parse: is_simple_value_edit = {}", is_simple);
+        if is_simple {
             return self.incremental_parse_simple(source, last_tree);
         }
 
@@ -166,67 +168,90 @@ impl IncrementalParserV2 {
         }
 
         // For complex structural changes, fall back to full parse
+        println!("DEBUG try_incremental_parse: falling back to None");
         None
     }
 
     fn is_simple_value_edit(&self, tree: &IncrementalTree) -> bool {
         // Don't attempt incremental parsing for too many edits at once
         if self.pending_edits.edits.len() > 10 {
+            println!("DEBUG is_simple_value_edit: too many edits: {}", self.pending_edits.edits.len());
             return false;
         }
+
+        println!("DEBUG is_simple_value_edit: checking {} edits", self.pending_edits.edits.len());
 
         // Track cumulative shift so we can map each edit back to the
         // coordinates in the original source code represented by `tree`.
         let mut cumulative_shift: isize = 0;
 
-        for edit in &self.pending_edits.edits {
+        for (i, edit) in self.pending_edits.edits.iter().enumerate() {
             let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
             let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+
+            println!("DEBUG edit {}: start_byte={}, old_end_byte={}, new_end_byte={}", i, edit.start_byte, edit.old_end_byte, edit.new_end_byte);
+            println!("DEBUG edit {}: original_start={}, original_end={}", i, original_start, original_end);
 
             let affected_node = tree.find_containing_node(original_start, original_end);
 
             match affected_node {
-                Some(node) => match &node.kind {
-                    // Support string and numeric literals
-                    NodeKind::Number { .. } | NodeKind::String { .. } => {
-                        // Ensure the edit stays within the literal node bounds
-                        if original_start >= node.location.start
-                            && original_end <= node.location.end
-                        {
-                            cumulative_shift += edit.byte_shift();
-                            continue;
-                        } else {
-                            return false;
+                Some(node) => {
+                    println!("DEBUG edit {}: found containing node: {:?} at {}..{}", i, node.kind, node.location.start, node.location.end);
+                    match &node.kind {
+                        // Support string and numeric literals
+                        NodeKind::Number { .. } | NodeKind::String { .. } => {
+                            // Ensure the edit stays within the literal node bounds
+                            if original_start >= node.location.start
+                                && original_end <= node.location.end
+                            {
+                                cumulative_shift += edit.byte_shift();
+                                println!("DEBUG edit {}: Number/String within bounds, continuing", i);
+                                continue;
+                            } else {
+                                println!("DEBUG edit {}: Number/String outside bounds", i);
+                                return false;
+                            }
+                        }
+                        // Support simple identifier edits (variable names)
+                        NodeKind::Variable { .. } => {
+                            if original_start >= node.location.start
+                                && original_end <= node.location.end
+                            {
+                                cumulative_shift += edit.byte_shift();
+                                println!("DEBUG edit {}: Variable within bounds, continuing", i);
+                                continue;
+                            } else {
+                                println!("DEBUG edit {}: Variable outside bounds", i);
+                                return false;
+                            }
+                        }
+                        // Support identifier edits (identifiers can often be treated like simple values)
+                        NodeKind::Identifier { .. } => {
+                            if original_start >= node.location.start
+                                && original_end <= node.location.end
+                            {
+                                cumulative_shift += edit.byte_shift();
+                                println!("DEBUG edit {}: Identifier within bounds, continuing", i);
+                                continue;
+                            } else {
+                                println!("DEBUG edit {}: Identifier outside bounds", i);
+                                return false;
+                            }
+                        }
+                        _ => {
+                            println!("DEBUG edit {}: Not a simple value: {:?}", i, node.kind);
+                            return false; // Not a simple value
                         }
                     }
-                    // Support simple identifier edits (variable names)
-                    NodeKind::Variable { .. } => {
-                        if original_start >= node.location.start
-                            && original_end <= node.location.end
-                        {
-                            cumulative_shift += edit.byte_shift();
-                            continue;
-                        } else {
-                            return false;
-                        }
-                    }
-                    // Support identifier edits (identifiers can often be treated like simple values)
-                    NodeKind::Identifier { .. } => {
-                        if original_start >= node.location.start
-                            && original_end <= node.location.end
-                        {
-                            cumulative_shift += edit.byte_shift();
-                            continue;
-                        } else {
-                            return false;
-                        }
-                    }
-                    _ => return false, // Not a simple value
                 },
-                None => return false, // No containing node found
+                None => {
+                    println!("DEBUG edit {}: No containing node found", i);
+                    return false; // No containing node found
+                }
             }
         }
 
+        println!("DEBUG is_simple_value_edit: returning true");
         true
     }
 
@@ -281,22 +306,32 @@ impl IncrementalParserV2 {
         source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
+        println!("DEBUG incremental_parse_simple: starting");
+        
         // Validate that the source is long enough for our edits
         if source.is_empty() {
+            println!("DEBUG incremental_parse_simple: source is empty, returning None");
             return None;
         }
 
         // Reuse the previous tree by cloning nodes and applying the edits.
         let new_root = self.clone_and_update_node(&last_tree.root, source, &last_tree.source);
+        
+        println!("DEBUG incremental_parse_simple: created new_root");
 
         // Validate that the new tree makes sense
         if !self.validate_incremental_result(&new_root, source) {
+            println!("DEBUG incremental_parse_simple: validation failed, returning None");
             return None;
         }
+
+        println!("DEBUG incremental_parse_simple: validation passed");
 
         // After producing the new tree, analyse how many nodes were reused
         // versus reparsed for metrics.
         self.count_reuse_potential(&last_tree.root, &new_root);
+
+        println!("DEBUG incremental_parse_simple: after count_reuse_potential, reused={}, reparsed={}", self.reused_nodes, self.reparsed_nodes);
 
         Some(new_root)
     }
@@ -324,9 +359,12 @@ impl IncrementalParserV2 {
         // Check if this node is affected by any edit
         let affected = self.is_node_affected(node);
 
+        println!("DEBUG clone_and_update_node: {:?} at {}..{}, shift={}, affected={}", node.kind, node.location.start, node.location.end, shift, affected);
+
         if affected {
-            // This node is affected - reparse just this part
+            // This node is affected - handle based on node type
             match &node.kind {
+                // Direct value nodes - extract new value from source
                 NodeKind::Number { .. } => {
                     // Extract the new value from source
                     let new_start = (node.location.start as isize + shift) as usize;
@@ -334,13 +372,19 @@ impl IncrementalParserV2 {
                         (node.location.end as isize + shift + self.calculate_content_delta(node))
                             as usize;
 
+                    println!("DEBUG clone_and_update_node: Number node, new_start={}, new_end={}", new_start, new_end);
+
                     if new_start < new_source.len() && new_end <= new_source.len() {
                         let new_value = &new_source[new_start..new_end];
+
+                        println!("DEBUG clone_and_update_node: Number updated from source: '{}'", new_value);
 
                         return Node::new(
                             NodeKind::Number { value: new_value.to_string() },
                             SourceLocation { start: new_start, end: new_end },
                         );
+                    } else {
+                        println!("DEBUG clone_and_update_node: Number bounds check failed, new_start={}, new_end={}, source_len={}", new_start, new_end, new_source.len());
                     }
                 }
                 NodeKind::String { interpolated, .. } => {
@@ -361,11 +405,50 @@ impl IncrementalParserV2 {
                         );
                     }
                 }
-                _ => {}
+                // Container nodes - recursively process children
+                NodeKind::Program { statements } => {
+                    println!("DEBUG clone_and_update_node: Program node - recursing into children");
+                    let new_statements = statements
+                        .iter()
+                        .map(|stmt| self.clone_and_update_node(stmt, new_source, _old_source))
+                        .collect();
+                    let new_location = SourceLocation {
+                        start: (node.location.start as isize + shift) as usize,
+                        end: (node.location.end as isize + shift) as usize,
+                    };
+                    return Node::new(
+                        NodeKind::Program { statements: new_statements },
+                        new_location,
+                    );
+                }
+                NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                    println!("DEBUG clone_and_update_node: VariableDeclaration node - recursing into children");
+                    let new_variable = Box::new(self.clone_and_update_node(variable, new_source, _old_source));
+                    let new_initializer = initializer
+                        .as_ref()
+                        .map(|init| Box::new(self.clone_and_update_node(init, new_source, _old_source)));
+                    let new_location = SourceLocation {
+                        start: (node.location.start as isize + shift) as usize,
+                        end: (node.location.end as isize + shift) as usize,
+                    };
+                    return Node::new(
+                        NodeKind::VariableDeclaration {
+                            declarator: declarator.clone(),
+                            variable: new_variable,
+                            attributes: attributes.clone(),
+                            initializer: new_initializer,
+                        },
+                        new_location,
+                    );
+                }
+                _ => {
+                    println!("DEBUG clone_and_update_node: Affected node type not handled: {:?}", node.kind);
+                }
             }
         }
 
         // Node is not affected or cannot be updated - clone with shifted positions
+        println!("DEBUG clone_and_update_node: falling through to clone_with_shifted_positions");
         self.clone_with_shifted_positions(node, shift)
     }
 
@@ -471,52 +554,69 @@ impl IncrementalParserV2 {
 
     fn count_reuse_potential(&mut self, old_root: &Node, new_root: &Node) {
         // Compare trees and count which nodes could have been reused
+        println!("DEBUG count_reuse_potential: analyzing old vs new tree");
         let (reused, reparsed) = self.analyze_reuse(old_root, new_root);
+        println!("DEBUG count_reuse_potential: got reused={}, reparsed={}", reused, reparsed);
         self.reused_nodes = reused;
         self.reparsed_nodes = reparsed;
     }
 
     fn analyze_reuse(&self, old_node: &Node, new_node: &Node) -> (usize, usize) {
+        println!("DEBUG analyze_reuse: comparing {:?} vs {:?}", old_node.kind, new_node.kind);
+        
         // Check if nodes are structurally equivalent
         match (&old_node.kind, &new_node.kind) {
             (
                 NodeKind::Program { statements: old_stmts },
                 NodeKind::Program { statements: new_stmts },
             ) => {
+                println!("DEBUG analyze_reuse: Program node with {} old stmts, {} new stmts", old_stmts.len(), new_stmts.len());
                 let mut reused = 1; // Program node itself
                 let mut reparsed = 0;
 
-                for (old_stmt, new_stmt) in old_stmts.iter().zip(new_stmts.iter()) {
+                for (i, (old_stmt, new_stmt)) in old_stmts.iter().zip(new_stmts.iter()).enumerate() {
+                    println!("DEBUG analyze_reuse: analyzing statement {}", i);
                     let (r, p) = self.analyze_reuse(old_stmt, new_stmt);
+                    println!("DEBUG analyze_reuse: statement {} -> reused={}, reparsed={}", i, r, p);
                     reused += r;
                     reparsed += p;
                 }
 
+                println!("DEBUG analyze_reuse: Program total -> reused={}, reparsed={}", reused, reparsed);
                 (reused, reparsed)
             }
             (
                 NodeKind::VariableDeclaration { variable: old_var, initializer: old_init, .. },
                 NodeKind::VariableDeclaration { variable: new_var, initializer: new_init, .. },
             ) => {
+                println!("DEBUG analyze_reuse: VariableDeclaration");
                 let mut reused = 1; // VarDecl itself
                 let mut reparsed = 0;
 
+                println!("DEBUG analyze_reuse: analyzing variable");
                 let (r, p) = self.analyze_reuse(old_var, new_var);
+                println!("DEBUG analyze_reuse: variable -> reused={}, reparsed={}", r, p);
                 reused += r;
                 reparsed += p;
 
                 if let (Some(old_i), Some(new_i)) = (old_init, new_init) {
+                    println!("DEBUG analyze_reuse: analyzing initializer");
                     let (r, p) = self.analyze_reuse(old_i, new_i);
+                    println!("DEBUG analyze_reuse: initializer -> reused={}, reparsed={}", r, p);
                     reused += r;
                     reparsed += p;
                 }
 
+                println!("DEBUG analyze_reuse: VariableDeclaration total -> reused={}, reparsed={}", reused, reparsed);
                 (reused, reparsed)
             }
             (NodeKind::Number { value: old_val }, NodeKind::Number { value: new_val }) => {
+                println!("DEBUG analyze_reuse: Number '{}' vs '{}'", old_val, new_val);
                 if old_val != new_val {
+                    println!("DEBUG analyze_reuse: Number values differ -> (0, 1)");
                     (0, 1) // Value changed - reparsed
                 } else {
+                    println!("DEBUG analyze_reuse: Number values same -> (1, 0)");
                     (1, 0) // Value same - could have been reused
                 }
             }
@@ -524,16 +624,22 @@ impl IncrementalParserV2 {
                 NodeKind::Variable { sigil: old_s, name: old_n },
                 NodeKind::Variable { sigil: new_s, name: new_n },
             ) => {
+                println!("DEBUG analyze_reuse: Variable '{}{}' vs '{}{}'", old_s, old_n, new_s, new_n);
                 if old_s == new_s && old_n == new_n {
+                    println!("DEBUG analyze_reuse: Variable same -> (1, 0)");
                     (1, 0) // Reused
                 } else {
+                    println!("DEBUG analyze_reuse: Variable different -> (0, 1)");
                     (0, 1) // Reparsed
                 }
             }
             _ => {
+                println!("DEBUG analyze_reuse: fallback case");
                 if self.nodes_match(old_node, new_node) {
+                    println!("DEBUG analyze_reuse: nodes match -> (1, 0)");
                     (1, 0)
                 } else {
+                    println!("DEBUG analyze_reuse: nodes differ -> (0, 1)");
                     (0, 1)
                 }
             }
@@ -639,6 +745,7 @@ mod tests {
         let source2 = "my $x = 4242;";
         let tree2 = parser.parse(source2).unwrap();
 
+        println!("DEBUG test_incremental_value_change: reused_nodes = {}, reparsed_nodes = {}", parser.reused_nodes, parser.reparsed_nodes);
         assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable
         assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
 
@@ -684,6 +791,7 @@ mod tests {
         let source2 = "my $x = 100;\nmy $y = 200;";
         let tree = parser.parse(source2).unwrap();
 
+        println!("DEBUG test_multiple_value_changes: reused_nodes = {}, reparsed_nodes = {}", parser.reused_nodes, parser.reparsed_nodes);
         assert_eq!(parser.reused_nodes, 5); // Program, decls and vars reused
         assert_eq!(parser.reparsed_nodes, 2); // Only the numbers reparsed
 
@@ -798,6 +906,7 @@ mod tests {
         let tree = parser.parse(source2).unwrap();
 
         // Should reuse most of the tree
+        println!("DEBUG test_string_edit: reused_nodes = {}, reparsed_nodes = {}", parser.reused_nodes, parser.reparsed_nodes);
         assert_eq!(parser.reused_nodes, 3); // Program, VarDecl, Variable
         assert_eq!(parser.reparsed_nodes, 1); // Only String
 
