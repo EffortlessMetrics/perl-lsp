@@ -71,6 +71,7 @@ This repository contains **four published crates** forming a complete Perl parsi
   - ✅ **Pull diagnostics** - LSP 3.17 support (v0.8.5)
   - ✅ **Type hierarchy** - class/role relationships (v0.8.5)
   - ✅ **Execute command** - Perl::Critic, perltidy, refactorings (v0.8.5)
+  - ✅ **Import optimization** - unused import detection, duplicate consolidation (NEW)
 - **Partial Implementations** (not advertised):
   - ⚠️ Code lens (~20% functional)
   - ⚠️ Call hierarchy (~15% functional)
@@ -166,6 +167,9 @@ cargo test --features pure-rust
 # Run LSP tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 
+# Run import optimizer tests
+cargo test -p perl-parser --test import_optimizer_tests
+
 > **Heads-up for wrappers:** Don't pass shell redirections like `2>&1` as argv.
 > If you need them, run through a real shell (`bash -lc '…'`) or wire stdio directly.
 ```
@@ -188,6 +192,18 @@ cargo run -p perl-parser --example test_more_edge_cases
 
 # Test LSP capabilities demo
 cargo run -p perl-parser --example lsp_capabilities
+
+# Test import optimizer (from library usage)
+# Example: Analyze a Perl file for import issues
+```rust
+use perl_parser::import_optimizer::ImportOptimizer;
+use std::path::Path;
+
+let optimizer = ImportOptimizer::new();
+let analysis = optimizer.analyze_file(Path::new("script.pl"))?;
+let optimized_imports = optimizer.generate_optimized_imports(&analysis);
+println!("{}", optimized_imports);
+```
 ```
 
 ### LSP Development
@@ -258,7 +274,7 @@ npx tree-sitter generate
 When implementing new LSP features, follow this structure:
 
 1. **Core Implementation** (`/crates/perl-parser/src/`)
-   - Add feature module (e.g., `completion.rs`, `code_actions.rs`)
+   - Add feature module (e.g., `completion.rs`, `code_actions.rs`, `import_optimizer.rs`)
    - Implement provider struct with main logic
    - Add to `lib.rs` exports
 
@@ -287,6 +303,12 @@ The refactoring system has two layers:
    - Import organization
    - Smart naming and formatting preservation
 
+3. **Import Optimization** (`import_optimizer.rs`)
+   - Unused import detection with regex-based usage analysis
+   - Duplicate import consolidation across multiple lines  
+   - Missing import detection for Module::symbol references
+   - Optimized import generation with alphabetical sorting
+
 To add a new refactoring:
 ```rust
 // In code_actions_enhanced.rs
@@ -295,6 +317,24 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
     // 2. Generate new code
     // 3. Return CodeAction with TextEdits
 }
+```
+
+**Import Optimizer Usage:**
+```rust
+use perl_parser::import_optimizer::ImportOptimizer;
+use std::path::Path;
+
+let optimizer = ImportOptimizer::new();
+let analysis = optimizer.analyze_file(Path::new("script.pl"))?;
+
+// Check for unused imports
+for unused in &analysis.unused_imports {
+    println!("Module {} has unused symbols: {:?}", unused.module, unused.symbols);
+}
+
+// Generate optimized imports
+let optimized = optimizer.generate_optimized_imports(&analysis);
+println!("Optimized imports:\n{}", optimized);
 ```
 
 ### Testing LSP Features
@@ -616,6 +656,7 @@ To extend the Pest grammar:
 | Tree-sitter compatible | ✅ | ✅ | ✅ |
 | Active development | ❌ | ✅ | ✅ |
 | Edge case tests | Limited | 95% | 100% |
+| Import optimization | ❌ | ❌ | ✅ |
 
 See KNOWN_LIMITATIONS.md for complete details.
 

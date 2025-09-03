@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Import Optimization** - Comprehensive analysis and optimization of Perl import statements
+  - Unused import detection with regex-based usage analysis
+  - Duplicate import consolidation across multiple lines  
+  - Missing import detection for Module::symbol references (planned)
+  - Optimized import generation with alphabetical sorting
+  - Complete test coverage with 9 comprehensive test cases
+
 ## [v0.8.5] - 2025-08-24
 
 ### Added

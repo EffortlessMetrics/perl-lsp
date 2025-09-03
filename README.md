@@ -27,7 +27,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 ## 📦 Latest Release: v0.8.4
 
 ### v0.8.4 - LSP Feature Complete Release 🚀
-- ✨ **9 New LSP Features**: Workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
+- ✨ **10 New LSP Features**: Workspace symbols, rename, code actions, import optimization, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
 - 📈 **60% LSP Functionality**: Up from 35% in v0.8.3 - all advertised features fully working
 - 🎯 **Contract-Driven Testing**: Every capability backed by acceptance tests
 - 🔒 **Feature Flag Control**: `lsp-ga-lock` for conservative releases
@@ -203,6 +203,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
 | **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
 | **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
+| **Import Optimization**             |   ✅   | NEW – unused/duplicate import analysis      |
 | **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
 | **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
