@@ -10,9 +10,9 @@
 
 ## Honest Assessment of LSP Functionality
 
-While the `perl-parser` crate includes LSP infrastructure for many features, **about 70% of LSP features now work** (up from 65% in v0.8.5). This document provides an honest assessment of what you can actually expect to work.
+While the `perl-parser` crate includes LSP infrastructure for many features, **about 75% of LSP features now work** (up from 70% in v0.8.6). This document provides an honest assessment of what you can actually expect to work.
 
-## ✅ Actually Working Features (~70%)
+## ✅ Actually Working Features (~75%)
 
 These features have been tested and provide real, useful functionality:
 
@@ -142,6 +142,13 @@ These features have been tested and provide real, useful functionality:
 - Navigate to subclasses
 - Discover method overrides
 - **Status**: ~70% functional (preview)
+
+### 23. **Import Optimization** (NEW)
+- Unused import detection with regex-based usage analysis
+- Duplicate import consolidation across multiple lines
+- Missing import detection for Module::symbol references (planned)
+- Optimized import generation with alphabetical sorting
+- **Status**: Fully functional (library API, LSP integration planned)
 
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
