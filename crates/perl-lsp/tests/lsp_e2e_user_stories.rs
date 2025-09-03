@@ -1013,6 +1013,9 @@ sub authenticate_user {
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
             # Compare hashed password
+            # NOTE: SHA256 is better than plaintext, but for production use:
+            # - Use bcrypt/scrypt/Argon2 with salt for better security
+            # - Add timing attack protection (constant-time comparison)
             if ($user->{password_hash} eq sha256_hex($password)) {
                 return $user;
             }
@@ -1024,9 +1027,10 @@ sub authenticate_user {
 
 sub load_users {
     # TODO: Load from database instead of file
+    # Pre-computed hashes for demonstration (in real app, these would come from secure storage)
     return [
-        { name => 'admin', password_hash => sha256_hex('admin123') },
-        { name => 'user', password_hash => sha256_hex('pass456') },
+        { name => 'admin', password_hash => '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9' },
+        { name => 'user', password_hash => '1d4598d1949b47f7f211134b639ec32238ce73086a83c2f745713b3f12f817e5' },
     ];
 }
 
@@ -1034,7 +1038,14 @@ sub load_users {
 sub reset_password {
     my ($username, $new_password) = @_;
 
-    # Missing validation
+    # TODO: Add proper validation
+    # - Minimum password length (8+ chars)
+    # - Password complexity requirements
+    # - Rate limiting for password resets
+    # - Audit logging for security events
+    return 0 unless defined $username && defined $new_password;
+    return 0 if length($new_password) < 8;  # Basic length check
+
     my $users = load_users();
 
     foreach my $user (@$users) {
