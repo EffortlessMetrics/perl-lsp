@@ -644,6 +644,11 @@ impl SymbolExtractor {
                 }
             }
 
+            NodeKind::ExpressionStatement { expression } => {
+                // Visit the inner expression to extract symbols
+                self.visit_node(expression);
+            }
+
             // Leaf nodes - no children to visit
             NodeKind::Number { .. }
             | NodeKind::Heredoc { .. }
