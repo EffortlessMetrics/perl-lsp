@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Production-grade command-line options (`--health`, `--features-json`, `--version`)
   - Improved maintainability and independent versioning capabilities
   - Enhanced testing architecture with dedicated LSP integration test suite
+- **Import Optimization** - Comprehensive analysis and optimization of Perl import statements
+  - Unused import detection with regex-based usage analysis
+  - Duplicate import consolidation across multiple lines  
+  - Missing import detection for Module::symbol references (planned)
+  - Optimized import generation with alphabetical sorting
+  - Complete test coverage with 9 comprehensive test cases
 - **Built-in Function Parsing Enhancement** - Fixed 15 test failures in builtin_empty_blocks_test.rs
 - **Architectural Quality Improvements** - Zero clippy warnings, consistent formatting across all crates
 
@@ -91,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bless Parsing Regression** - Resolved S-expression format issues affecting blessed object parsing
 - **Comment Boundary Detection** - Precise handling of blank lines vs whitespace-only lines in comment extraction
 - **Complex Formatting Scenarios** - Support for varying indentation, mixed hash styles, and special characters
+>>>>>>> origin/master
 
 ## [v0.8.5] - 2025-08-24
 
