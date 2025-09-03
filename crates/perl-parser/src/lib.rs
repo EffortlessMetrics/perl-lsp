@@ -233,6 +233,10 @@ pub use diagnostics::{
 pub use document_links::compute_links;
 pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
 pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+pub use import_optimizer::{
+    DuplicateImport, ImportAnalysis, ImportEntry, ImportOptimizer, MissingImport,
+    OrganizationSuggestion, SuggestionPriority, UnusedImport,
+};
 pub use inlay_hints::{parameter_hints, trivial_type_hints};
 pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
 pub use on_type_formatting::compute_on_type_edit;

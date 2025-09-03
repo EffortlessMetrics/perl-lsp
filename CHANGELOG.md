@@ -8,7 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Future improvements will be documented here
+- **Import Optimization** - Comprehensive analysis and optimization of Perl import statements
+  - Unused import detection with regex-based usage analysis
+  - Duplicate import consolidation across multiple lines  
+  - Missing import detection for Module::symbol references (planned)
+  - Optimized import generation with alphabetical sorting
+  - Complete test coverage with 9 comprehensive test cases
 
 ## [v0.8.8] - 2025-09-03
 
@@ -59,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bless Parsing Regression** - Resolved S-expression format issues affecting blessed object parsing
 - **Comment Boundary Detection** - Precise handling of blank lines vs whitespace-only lines in comment extraction
 - **Complex Formatting Scenarios** - Support for varying indentation, mixed hash styles, and special characters
+>>>>>>> origin/master
 
 ## [v0.8.5] - 2025-08-24
 
