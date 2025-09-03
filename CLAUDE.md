@@ -76,6 +76,104 @@ This repository contains **four published crates** forming a complete Perl parsi
 - Marked as legacy - use perl-parser instead
 - Kept for migration/comparison
 
+## Incremental Parsing with Rope-based Document Management (v0.8.7) 🚀
+
+The native parser includes **production-ready incremental parsing** with **Rope-based document management** for efficient real-time LSP editing:
+
+### Architecture (**Diataxis: Explanation**)
+- **IncrementalDocument**: High-performance document state with subtree caching and Rope integration
+- **Rope-based Text Management**: Efficient UTF-16/UTF-8 position conversion using `ropey` crate
+- **Subtree Reuse**: Container nodes reuse unchanged AST subtrees from cache  
+- **Metrics Tracking**: Detailed performance metrics (reused vs reparsed nodes)
+- **Content-based Caching**: Hash-based subtree matching for common patterns
+- **Position-based Caching**: Range-based subtree matching with precise Rope position tracking
+
+### Rope Integration (**Diataxis: Reference**)
+The perl-parser crate includes comprehensive Rope support for document management:
+
+**Core Rope Modules**:
+- **`textdoc.rs`**: UTF-16 aware text document handling with `ropey::Rope`
+- **`position_mapper.rs`**: Centralized position mapping (CRLF/LF/CR line endings, UTF-16 code units, byte offsets)
+- **`incremental_integration.rs`**: Bridge between LSP server and incremental parsing with Rope
+- **`incremental_handler_v2.rs`**: Enhanced incremental document updates using Rope
+
+**Position Conversion Features**:
+```rust
+// UTF-16/UTF-8 position conversion
+use crate::textdoc::{Doc, PosEnc, lsp_pos_to_byte, byte_to_lsp_pos};
+use ropey::Rope;
+
+// Create document with Rope
+let mut doc = Doc { rope: Rope::from_str(content), version };
+
+// Convert LSP positions (UTF-16) to byte offsets 
+let byte_offset = lsp_pos_to_byte(&doc.rope, pos, PosEnc::Utf16);
+
+// Convert byte offsets to LSP positions
+let lsp_pos = byte_to_lsp_pos(&doc.rope, byte_offset, PosEnc::Utf16);
+```
+
+**Line Ending Support**:
+- **CRLF handling**: Proper Windows line ending support
+- **Mixed line endings**: Robust detection and handling of mixed CRLF/LF/CR
+- **UTF-16 emoji support**: Correct positioning with Unicode characters requiring surrogate pairs
+
+### Performance Targets (**Diataxis: Reference**)
+- **<1ms updates** for small edits (single token changes) with Rope optimization
+- **<2ms updates** for moderate edits (function-level changes) with subtree reuse
+- **Cache hit ratios** of 70-90% for typical editing scenarios
+- **Memory efficient** with LRU cache eviction, Arc<Node> sharing, and Rope's piece table architecture
+
+### Incremental Parsing API (**Diataxis: Tutorial**)
+```rust
+// Create incremental document with Rope support
+let mut doc = IncrementalDocument::new(source)?;
+
+// Apply single edit (automatically uses Rope for position tracking)
+let edit = IncrementalEdit::new(start_byte, end_byte, new_text);
+doc.apply_edit(edit)?;
+
+// Apply multiple edits in batch (Rope handles position adjustments)
+let mut edits = IncrementalEditSet::new();
+edits.add(edit1);
+edits.add(edit2);
+doc.apply_edits(&edits)?;
+
+// Performance metrics with Rope-optimized parsing
+println!("Parse time: {:.2}ms", doc.metrics.last_parse_time_ms);
+println!("Nodes reused: {}", doc.metrics.nodes_reused);
+println!("Nodes reparsed: {}", doc.metrics.nodes_reparsed);
+```
+
+### LSP Integration (**Diataxis: How-to**)
+- **Document Management**: LSP server uses Rope for all document state (`textdoc::Doc`)
+- **Position Conversion**: Automatic UTF-16 ↔ UTF-8 conversion via `position_mapper::PositionMapper`
+- **Incremental Updates**: Enable via `PERL_LSP_INCREMENTAL=1` environment variable
+- **Change Application**: Efficient change processing using `textdoc::apply_changes()`
+- **Fallback Mechanisms**: Graceful degradation to full parsing when incremental parsing fails
+- **Testing**: Comprehensive integration tests with async LSP harness and Rope-based position validation
+
+### Development Guidelines (**Diataxis: How-to**)
+**Where to Make Rope Improvements**:
+- **Production Code**: `/crates/perl-parser/src/` - All Rope enhancements should target this crate
+- **Key Modules**: `textdoc.rs`, `position_mapper.rs`, `incremental_*.rs` modules
+- **NOT Internal Test Harnesses**: Avoid modifying `/crates/tree-sitter-perl-rs/` or other internal test code
+
+**Rope Testing Commands**:
+```bash
+# Test Rope-based position mapping
+cargo test -p perl-parser position_mapper
+
+# Test incremental parsing with Rope integration  
+cargo test -p perl-parser incremental_integration_test
+
+# Test UTF-16 position conversion with multibyte characters
+cargo test -p perl-parser multibyte_edit_test
+
+# Test LSP document changes with Rope
+cargo test -p perl-lsp lsp_comprehensive_e2e_test
+```
+
 ### LSP Server (`perl-lsp` binary) ✅ **PRODUCTION READY**
 - **~78% of LSP features actually work** (all advertised capabilities are fully functional, major accuracy improvements in v0.8.7 with production-stable hash context detection and comprehensive file path completion)
 - **Full Rope-based document management** for efficient text operations and UTF-16/UTF-8 position conversion
@@ -206,8 +304,14 @@ cargo build -p perl-parser-pest --release  # Legacy
 # Build the lexer and parser
 cargo build -p perl-lexer -p perl-parser
 
+# Build with incremental parsing support
+cargo build -p perl-parser --features incremental
+
 # Build in release mode
 cargo build -p perl-lexer -p perl-parser --release
+
+# Build with incremental parsing in release mode
+cargo build -p perl-parser --features incremental --release
 
 # Build everything
 cargo build --all
@@ -249,6 +353,15 @@ cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integ
 
 # Run incremental parsing tests
 cargo test -p perl-parser --test incremental_integration_test
+
+# Run all incremental parsing tests with feature flag
+cargo test -p perl-parser --features incremental
+
+# Run IncrementalParserV2 tests specifically
+cargo test -p perl-parser incremental_v2::tests
+
+# Run incremental performance tests
+cargo test -p perl-parser --test incremental_perf_test
 
 # Benchmark incremental parsing performance
 cargo bench incremental
@@ -302,6 +415,12 @@ cargo test -p perl-parser lsp
 
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+
+# Run with incremental parsing enabled (production-ready feature)
+PERL_LSP_INCREMENTAL=1 perl-lsp --stdio
+
+# Test incremental parsing with LSP protocol
+PERL_LSP_INCREMENTAL=1 perl-lsp --stdio < test_requests.jsonrpc
 
 # Run with a test file
 perl-lsp --stdio < test_requests.jsonrpc
@@ -559,6 +678,55 @@ cargo test -p perl-parser lsp_comprehensive_e2e_test
 
 # Run all LSP tests with async harness (48+ tests)
 cargo test -p perl-lsp
+```
+
+### Enhanced Position Tracking Development (**Diataxis: How-to**) (v0.8.7+)
+
+The enhanced position tracking system provides accurate line/column mapping for LSP compliance:
+
+#### **Using PositionTracker in Parser Context**:
+```rust
+use crate::parser_context::ParserContext;
+
+// Create parser with automatic position tracking
+let ctx = ParserContext::new(source);
+
+// Access accurate token positions
+let token = ctx.current_token().unwrap();
+let range = token.range();
+println!("Token at line {}, column {}", range.start.line, range.start.column);
+```
+
+#### **Testing Position Tracking** (**Diataxis: Tutorial**):
+```bash
+# Run position tracking tests
+cargo test -p perl-parser --test parser_context -- test_multiline_positions
+cargo test -p perl-parser --test parser_context -- test_utf16_position_mapping
+cargo test -p perl-parser --test parser_context -- test_crlf_line_endings
+
+# Test with specific edge cases
+cargo test -p perl-parser parser_context_tests::test_multiline_string_token_positions
+```
+
+#### **Position Tracking API Reference** (**Diataxis: Reference**):
+```rust
+// Core PositionTracker methods
+impl PositionTracker {
+    /// Create from source text with line start caching
+    pub fn new(source: String) -> Self;
+    
+    /// Convert byte offset to Position with UTF-16 support  
+    pub fn byte_to_position(&self, byte_offset: usize) -> Position;
+}
+
+// LineStartsCache for O(log n) lookups
+impl LineStartsCache {
+    /// Build cache with CRLF/LF/CR line ending support
+    pub fn new(text: &str) -> Self;
+    
+    /// Convert byte offset to (line, utf16_column)
+    pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32);
+}
 ```
 
 ### Error Recovery and Fallback Mechanisms
