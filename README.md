@@ -9,16 +9,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **Production-Ready Perl Parsing Ecosystem - Four specialized crates for parsing, corpus testing, and IDE support**
+> **Production-Ready Perl Parsing Ecosystem - Five specialized crates for parsing, corpus testing, and IDE support**
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
 ### 📦 Published Crates (v0.8.9)
 
-1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
-2. **perl-lexer** - Context-aware tokenizer for Perl syntax
-3. **perl-corpus** - Comprehensive test corpus and property testing
-4. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
+1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and LSP provider logic  
+2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
+3. **perl-lexer** - Context-aware tokenizer for Perl syntax
+4. **perl-corpus** - Comprehensive test corpus and property testing
+5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
 
@@ -193,8 +194,8 @@ Download pre-built binaries from the [latest release](https://github.com/Effortl
 
 #### Option 5: Build from Source
 ```bash
-# Install via cargo
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+# Install perl-lsp from dedicated crate
+cargo install perl-lsp
 
 # Or build locally
 git clone https://github.com/EffortlessSteven/tree-sitter-perl
@@ -270,8 +271,8 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 #### Install & Run
 
 ```bash
-# LSP server
-cargo install perl-parser --bin perl-lsp
+# LSP server (standalone crate)
+cargo install perl-lsp
 
 # run in your editor
 perl-lsp --stdio
@@ -755,8 +756,8 @@ println!("AST: {:?}", ast);
 ### Command Line Interface
 
 ```bash
-# Install the LSP server (includes parser)
-cargo install perl-parser --bin perl-lsp
+# Install the LSP server (standalone binary)
+cargo install perl-lsp
 
 # Parse a file (via LSP diagnostics)
 perl-lsp --check script.pl

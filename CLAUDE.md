@@ -7,9 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains **four published crates** forming a complete Perl parsing ecosystem:
+This repository contains **five published crates** forming a complete Perl parsing ecosystem:
 
-### Published Crates (v0.8.8 GA)
+### Published Crates (v0.8.9 GA)
 
 #### 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
 - Native recursive descent parser with operator precedence
@@ -21,7 +21,7 @@ This repository contains **four published crates** forming a complete Perl parsi
 - **Enhanced comment documentation extraction** - comprehensive leading comment parsing with UTF-8 safety and performance optimization (PR #71)
 - **Source-aware symbol analysis** - full source text threading through LSP features for better context and documentation
 - Tree-sitter compatible output
-- Includes LSP server binary (`perl-lsp`) with full Rope-based document state
+- **LSP server implementation** - core LSP server logic used by perl-lsp binary
 
 #### 2. **perl-lexer** (`/crates/perl-lexer/`)
 - Context-aware tokenizer
@@ -37,7 +37,17 @@ This repository contains **four published crates** forming a complete Perl parsi
 - Used for parser validation
 - Feature: `ci-fast` for conditional test execution
 
-#### 4. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
+#### 4. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
+- **Standalone Language Server binary** - production-ready LSP server for Perl
+- **Clean separation** from parser logic for improved maintainability
+- **Production-grade command-line interface** with comprehensive options
+- **Enhanced modularity** - focused solely on LSP protocol implementation
+- **Easy installation** - dedicated crate for LSP binary distribution
+- **Editor integration** - works with VSCode, Neovim, Emacs, and all LSP-compatible editors
+- **Advanced CLI features** - health checks, feature discovery, version reporting
+- **Built on perl-parser** - leverages all parser capabilities through clean API
+
+#### 5. **perl-parser-pest** (`/crates/perl-parser-pest/`) ⚠️ **LEGACY**
 - Pest-based parser (v2 implementation)
 - ~99.995% Perl 5 coverage
 - Marked as legacy - use perl-parser instead
@@ -140,6 +150,77 @@ cargo test -p perl-parser multibyte_edit_test
 # Test LSP document changes with Rope
 cargo test -p perl-lsp lsp_comprehensive_e2e_test
 ```
+
+## LSP Crate Separation Architecture (v0.8.9) 🏗️ **ARCHITECTURAL ENHANCEMENT**
+
+### Rationale and Benefits (**Diataxis: Explanation**)
+
+The comprehensive LSP crate separation in v0.8.9 represents a major architectural improvement that provides clear separation of concerns between parsing logic and LSP protocol implementation:
+
+**Architectural Principles**:
+- **Single Responsibility**: Each crate has a focused, well-defined purpose
+- **Clean Interfaces**: Clear API boundaries between parser and LSP functionality
+- **Independent Versioning**: LSP server can evolve independently from parser core
+- **Reduced Coupling**: LSP protocol changes don't impact parser internals
+- **Enhanced Testability**: Isolated testing of LSP features and parser logic
+
+**Production Benefits**:
+- **Improved Maintainability**: Easier to understand, modify, and extend each component
+- **Better Distribution**: Users can install only what they need (parser library vs LSP binary)
+- **Enhanced Modularity**: Clear separation enables better code organization
+- **Reduced Build Times**: Selective compilation of components reduces build overhead
+- **Cleaner Dependencies**: Each crate manages only its necessary dependencies
+
+### Crate Responsibilities (**Diataxis: Reference**)
+
+**perl-parser crate** (`/crates/perl-parser/`):
+- **Core parser implementation** - AST generation, syntax analysis
+- **LSP provider logic** - completion, hover, diagnostics, etc.
+- **Text processing utilities** - Rope integration, position mapping
+- **Incremental parsing** - document state management, cache handling
+- **Library API** - stable interface for external consumers
+
+**perl-lsp crate** (`/crates/perl-lsp/`):
+- **LSP protocol implementation** - JSON-RPC communication, request handling
+- **Command-line interface** - argument parsing, logging, health checks
+- **Server lifecycle management** - initialization, shutdown, error handling
+- **Editor integration** - protocol compliance, feature advertisement
+- **Binary distribution** - production-ready executable for end users
+
+### Migration Guide (**Diataxis: How-to**)
+
+**For End Users**:
+```bash
+# Old approach (deprecated)
+cargo install perl-parser --features lsp
+
+# New approach (recommended)
+cargo install perl-lsp
+```
+
+**For Library Consumers**:
+```rust
+// Parser functionality remains in perl-parser
+use perl_parser::{Parser, LspServer, CompletionProvider};
+
+// LSP binary logic is now in perl-lsp crate
+// (most users don't need to import this directly)
+```
+
+**For Contributors**:
+- **Parser improvements** → `/crates/perl-parser/src/`
+- **LSP protocol features** → `/crates/perl-parser/src/` (provider logic)
+- **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
+- **Integration tests** → `/crates/perl-lsp/tests/` (E2E LSP tests)
+
+### Quality Improvements (**Diataxis: Reference**)
+
+The crate separation delivered immediate quality benefits:
+- **Zero clippy warnings** across both crates
+- **Consistent formatting** with shared workspace lints
+- **Enhanced test coverage** with dedicated LSP integration tests
+- **Improved error handling** with focused error types per crate
+- **Better documentation** with crate-specific examples and guides
 
 ## Enhanced Workspace Navigation and PR Workflow Integration (v0.8.9) ⭐ **PRODUCTION READY**
 
@@ -342,6 +423,107 @@ impl CallHierarchyProvider {
 - Works with VSCode, Neovim, Emacs, Sublime, and any LSP-compatible editor
 - **See `LSP_ACTUAL_STATUS.md` for complete feature status**
 
+### Tutorial: Using the Standalone perl-lsp Binary (**Diataxis: Tutorial**)
+
+The separated perl-lsp crate provides a production-ready LSP server with comprehensive CLI features:
+
+#### **Step 1: Installation**
+```bash
+# Method 1: Install from crates.io (recommended)
+cargo install perl-lsp
+
+# Method 2: Install from source
+git clone https://github.com/EffortlessSteven/tree-sitter-perl-rs
+cd tree-sitter-perl-rs
+cargo install --path crates/perl-lsp
+
+# Method 3: Build without installing
+cargo build -p perl-lsp --release
+# Binary will be at target/release/perl-lsp
+```
+
+#### **Step 2: Basic Usage**
+```bash
+# Run LSP server (default stdio mode for editors)
+perl-lsp --stdio
+
+# Run with debug logging (helpful for troubleshooting)
+perl-lsp --stdio --log
+
+# Quick health check (verify installation)
+perl-lsp --health
+# Output: ok 0.8.9
+
+# Show version and build information
+perl-lsp --version
+# Output: perl-lsp 0.8.9
+#         Git tag: v0.8.9
+#         Perl Language Server using perl-parser v3
+```
+
+#### **Step 3: Editor Integration**
+
+**VSCode Integration**:
+1. Install a generic LSP extension or Perl-specific extension
+2. Configure the language server:
+```json
+{
+    "perl.languageServer": {
+        "command": "perl-lsp",
+        "args": ["--stdio"],
+        "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", ".git"]
+    }
+}
+```
+
+**Neovim Integration** (with nvim-lspconfig):
+```lua
+require'lspconfig'.perl_lsp = {
+  default_config = {
+    cmd = {'perl-lsp', '--stdio'},
+    filetypes = {'perl'},
+    root_dir = require'lspconfig'.util.find_git_ancestor,
+  },
+}
+require'lspconfig'.perl_lsp.setup{}
+```
+
+#### **Step 4: Advanced Features**
+
+**Feature Discovery**:
+```bash
+# Export complete feature catalog as JSON
+perl-lsp --features-json
+# Outputs comprehensive capability matrix for integration
+```
+
+**Production Debugging**:
+```bash
+# Run with detailed logging for troubleshooting
+perl-lsp --stdio --log 2> perl-lsp.log
+# Monitor perl-lsp.log for diagnostic information
+```
+
+**Health Monitoring**:
+```bash
+# Automated health checks in scripts
+if perl-lsp --health > /dev/null 2>&1; then
+    echo "perl-lsp is ready"
+else
+    echo "perl-lsp installation issue"
+    exit 1
+fi
+```
+
+#### **Step 5: Workspace Features**
+
+The perl-lsp binary automatically provides:
+- **Cross-file navigation** - Go to definition across modules
+- **Workspace-wide symbol search** - Find functions/variables project-wide
+- **Incremental parsing** - Real-time syntax checking as you type
+- **File path completion** - Auto-complete file paths in strings
+- **Enterprise security** - Path traversal prevention, safe file operations
+
 ## Default Build Configuration
 
 The project includes `.cargo/config.toml` which automatically configures:
@@ -356,7 +538,7 @@ The project includes `.cargo/config.toml` which automatically configures:
 
 ### Build Commands
 
-#### LSP Server
+#### LSP Server (perl-lsp crate)
 ```bash
 # Quick install (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
@@ -365,15 +547,21 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/m
 brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
-# Build from source
+# Build perl-lsp binary from dedicated crate
 cargo build -p perl-lsp --release
 
-# Install globally
+# Install perl-lsp binary globally from separated crate
 cargo install --path crates/perl-lsp
 
-# Run the LSP server
-perl-lsp --stdio  # For editor integration
-perl-lsp --stdio --log  # With debug logging
+# Install perl-lsp from crates.io (production binary)
+cargo install perl-lsp
+
+# Run the LSP server with enhanced CLI options
+perl-lsp --stdio              # For editor integration (default)
+perl-lsp --stdio --log        # With debug logging
+perl-lsp --health             # Quick health check
+perl-lsp --version            # Show version and build info
+perl-lsp --features-json      # Export feature catalog as JSON
 ```
 
 #### DAP Server (Debug Adapter)
@@ -391,15 +579,17 @@ perl-dap --stdio  # Standard DAP transport
 #### Published Crates
 ```bash
 # Install from crates.io
-cargo install perl-lsp                     # LSP server
-cargo add perl-parser                      # As library dependency
-cargo add perl-corpus --dev                # For testing
+cargo install perl-lsp                     # Standalone LSP server binary
+cargo add perl-parser                      # Core parser library
+cargo add perl-lexer                       # Tokenizer library  
+cargo add perl-corpus --dev                # Testing corpus
 
-# Build from source
-cargo build -p perl-parser --release
-cargo build -p perl-lexer --release
-cargo build -p perl-corpus --release
-cargo build -p perl-parser-pest --release  # Legacy
+# Build all production crates from source
+cargo build -p perl-lsp --release          # Standalone LSP binary
+cargo build -p perl-parser --release       # Core parser library
+cargo build -p perl-lexer --release        # Tokenizer
+cargo build -p perl-corpus --release       # Test corpus
+cargo build -p perl-parser-pest --release  # Legacy (maintenance only)
 ```
 
 #### Native Parser (Recommended)
@@ -686,27 +876,36 @@ cargo test -p perl-parser symbol_documentation_tests::bless_with_comment_documen
 cargo test -p perl-parser symbol_documentation_tests::performance_benchmark_comment_extraction -- --nocapture
 ```
 
-### Adding New LSP Features
+### Adding New LSP Features (Updated for Crate Separation)
 
-When implementing new LSP features, follow this structure:
+With the new perl-lsp crate separation, implementing new LSP features follows a clean architectural pattern:
 
-1. **Core Implementation** (`/crates/perl-parser/src/`)
-   - Add feature module (e.g., `completion.rs`, `code_actions.rs`)
-   - Implement provider struct with main logic
+#### **Provider Implementation** (`/crates/perl-parser/src/`)
+1. **Add feature provider** (e.g., `completion.rs`, `code_actions.rs`)
+   - Implement provider struct with core logic
    - **Use source-aware constructors** for enhanced documentation support
-   - Add to `lib.rs` exports
+   - Focus on language analysis, not protocol details
+   - Add to `lib.rs` exports for public API
 
-2. **LSP Server Integration** (`lsp_server.rs`)
+#### **LSP Server Integration** (`/crates/perl-parser/src/lsp_server.rs`)
+2. **Add request handler** 
    - Add handler method (e.g., `handle_completion`)
    - **Thread source text** through provider constructors using `doc.content`
    - Wire up in main request dispatcher
-   - Handle request/response formatting
+   - Handle request/response formatting and protocol compliance
 
-3. **Testing**
-   - Unit tests in the module itself
-   - Integration tests in `/tests/lsp_*_tests.rs`
-   - **Symbol documentation tests** for comment extraction features
-   - User story tests for real-world scenarios
+#### **Binary Interface** (`/crates/perl-lsp/src/`)
+3. **CLI enhancement (if needed)**
+   - Update command-line options for new features
+   - Add feature discovery support (`--features-json`)
+   - Ensure proper error handling and logging
+
+#### **Testing Strategy**
+4. **Multi-level testing**
+   - **Unit tests**: Provider logic in `/crates/perl-parser/tests/`
+   - **LSP integration tests**: Protocol compliance in `/crates/perl-lsp/tests/`  
+   - **Symbol documentation tests**: Comment extraction features
+   - **E2E user story tests**: Real-world scenarios with async LSP harness
 
 ### Code Actions and Refactoring
 
@@ -733,7 +932,7 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
 }
 ```
 
-### Testing LSP Features
+### Testing LSP Features (Separated Crate Architecture)
 
 #### Test Infrastructure (v0.8.6)
 The project includes a robust test infrastructure with async LSP harness and production-grade assertion helpers:
@@ -1106,15 +1305,17 @@ my $test4 = "../etc/passwd";      # Should NOT provide completions (security)
 ## Development Guidelines
 
 ### Choosing a Crate (**Diataxis: How-to**)
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
-2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate - includes full Rope-based document management  
-3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
-4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
+1. **For Perl Parsing Libraries**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
+2. **For IDE/Editor Integration**: Install `perl-lsp` - dedicated LSP server binary with clean CLI interface
+3. **For Application Development**: Add `perl-parser` as dependency, install `perl-lsp` binary for development
+4. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite  
+5. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
 
 ### Development Locations (**Diataxis: Reference**)
-- **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **Lexer**: `/crates/perl-lexer/` - tokenization improvements
-- **Test Corpus**: `/crates/perl-corpus/` - test case additions
+- **Core Parser**: `/crates/perl-parser/` - parser logic, LSP providers, Rope implementation
+- **LSP Binary**: `/crates/perl-lsp/` - standalone LSP server, CLI interface, protocol handling
+- **Lexer**: `/crates/perl-lexer/` - tokenization improvements, Unicode support
+- **Test Corpus**: `/crates/perl-corpus/` - test case additions, corpus validation
 - **Legacy**: `/crates/perl-parser-pest/` - maintenance only (contains outdated Rope usage)
 
 ### Rope Development Guidelines (**Diataxis: How-to**)
