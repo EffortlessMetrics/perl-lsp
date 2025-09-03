@@ -385,7 +385,23 @@ impl Node {
 
             NodeKind::FunctionCall { name, args } => {
                 // Special handling for functions that should use call format in tree-sitter tests
-                if matches!(name.as_str(), "bless" | "shift" | "unshift" | "push" | "pop") {
+                if matches!(
+                    name.as_str(),
+                    "bless"
+                        | "shift"
+                        | "unshift"
+                        | "push"
+                        | "pop"
+                        | "map"
+                        | "sort"
+                        | "grep"
+                        | "keys"
+                        | "values"
+                        | "each"
+                        | "defined"
+                        | "scalar"
+                        | "ref"
+                ) {
                     let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                     if args.is_empty() {
                         format!("(call {} ())", name)
