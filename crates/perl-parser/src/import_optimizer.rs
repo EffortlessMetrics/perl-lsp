@@ -21,7 +21,7 @@
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 /// Result of import analysis containing all detected issues and suggestions
@@ -117,6 +117,7 @@ pub enum SuggestionPriority {
 pub struct ImportOptimizer;
 
 /// Check if a module is a pragma (affects compilation, no exports)
+#[allow(dead_code)]
 fn is_pragma_module(module: &str) -> bool {
     matches!(
         module,
@@ -143,6 +144,7 @@ fn is_pragma_module(module: &str) -> bool {
 }
 
 /// Get known exports for popular Perl modules
+#[allow(dead_code)]
 fn get_known_module_exports(module: &str) -> Vec<&'static str> {
     match module {
         "Data::Dumper" => vec!["Dumper"],
@@ -239,9 +241,16 @@ impl ImportOptimizer {
         // Build content without `use` lines for symbol usage detection
         let non_use_content = content
             .lines()
-            .filter(|line| !line.trim_start().starts_with("use "))
+            .filter(
+                |line| {
+                    !line.trim_start().starts_with("use ") && !line.trim_start().starts_with("#")
+                }, // Exclude comment lines
+            )
             .collect::<Vec<_>>()
-            .join("\n");
+            .join(
+                "
+",
+            );
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
@@ -250,87 +259,124 @@ impl ImportOptimizer {
             for sym in &imp.symbols {
                 let re = Regex::new(&format!(r"\b{}\b", regex::escape(sym)))
                     .map_err(|e| e.to_string())?;
+
+                // Check if symbol is used in non-use content
                 if !re.is_match(&non_use_content) {
                     unused_symbols.push(sym.clone());
                 }
             }
+
+            // Create unused import entry if there are unused symbols
             if !unused_symbols.is_empty() {
                 unused_imports.push(UnusedImport {
                     module: imp.module.clone(),
                     symbols: unused_symbols,
                     line: imp.line,
-                    reason: "unused".to_string(),
+                    reason: "Symbols not used in code".to_string(),
                 });
             }
         }
 
+        // TODO: Implement missing import detection
+        let missing_imports = Vec::new();
+
+        // TODO: Implement organization suggestions
+        let organization_suggestions = Vec::new();
+
         Ok(ImportAnalysis {
-            unused_imports,
-            missing_imports: vec![],
-            duplicate_imports,
-            organization_suggestions: vec![],
             imports,
+            unused_imports,
+            missing_imports,
+            duplicate_imports,
+            organization_suggestions,
         })
     }
 
-    /// Generate optimized import statements based on analysis results
+    /// Generate optimized import statements from analysis results
     ///
-    /// This method:
-    /// - Consolidates duplicate imports into single statements
-    /// - Removes unused symbols from import lists
-    /// - Skips entirely unused imports
-    /// - Returns properly formatted import statements sorted by module name
+    /// This method takes the results of import analysis and generates
+    /// a cleaned up version of the imports with:
+    /// - Unused symbols removed
+    /// - Missing imports added
+    /// - Duplicates consolidated
+    /// - Alphabetical ordering
     ///
     /// # Arguments
     ///
-    /// * `analysis` - The analysis results from `analyze_file()`
+    /// * `analysis` - The import analysis results
     ///
     /// # Returns
     ///
-    /// A string containing optimized import statements, one per line.
-    /// Modules are sorted alphabetically for consistency.
-    ///
-    /// # Example Output
-    ///
-    /// ```text
-    /// use Bar qw(x);
-    /// use Foo qw(a);
-    /// ```
+    /// A string containing the optimized import statements, one per line
     pub fn generate_optimized_imports(&self, analysis: &ImportAnalysis) -> String {
-        // Map module -> set of used symbols
-        let mut modules: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut optimized_imports = Vec::new();
 
-        for imp in &analysis.imports {
-            // Determine which symbols are unused for this particular line
-            let unused = analysis
-                .unused_imports
+        // Create a map to track which modules we want to keep and their symbols
+        let mut module_symbols: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+        // Get a list of all unused symbols per module
+        let mut unused_by_module: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for unused in &analysis.unused_imports {
+            unused_by_module
+                .entry(unused.module.clone())
+                .or_default()
+                .extend(unused.symbols.clone());
+        }
+
+        // Process existing imports, consolidating duplicates and removing unused symbols
+        for import in &analysis.imports {
+            // Keep only symbols that are not unused
+            let kept_symbols: Vec<String> = import
+                .symbols
                 .iter()
-                .find(|u| u.module == imp.module && u.line == imp.line);
+                .filter(|sym| {
+                    if let Some(unused_symbols) = unused_by_module.get(&import.module) {
+                        !unused_symbols.contains(sym)
+                    } else {
+                        true // Keep all symbols if no unused symbols found for this module
+                    }
+                })
+                .cloned()
+                .collect();
 
-            let mut symbols = imp.symbols.clone();
-            if let Some(u) = unused {
-                symbols.retain(|s| !u.symbols.contains(s));
-            }
+            // Add to module_symbols map (this automatically consolidates duplicates)
+            let entry = module_symbols.entry(import.module.clone()).or_default();
+            entry.extend(kept_symbols);
 
-            if symbols.is_empty() && unused.is_some() {
-                // Entire import unused – skip
-                continue;
-            }
-
-            modules.entry(imp.module.clone()).or_default().extend(symbols.into_iter());
+            // Remove duplicates and sort for consistency
+            entry.sort();
+            entry.dedup();
         }
 
-        // Build final import statements sorted by module name
-        let mut result = String::new();
-        for (module, symbols) in modules {
-            if symbols.is_empty() {
-                result.push_str(&format!("use {};\n", module));
-            } else {
-                let sym_vec: Vec<_> = symbols.into_iter().collect();
-                result.push_str(&format!("use {} qw({});\n", module, sym_vec.join(" ")));
-            }
+        // Add missing imports
+        for missing in &analysis.missing_imports {
+            let entry = module_symbols.entry(missing.module.clone()).or_default();
+            entry.extend(missing.symbols.clone());
+            entry.sort();
+            entry.dedup();
         }
-        result
+
+        // Generate import statements - only include modules that have symbols to import
+        // or are bare imports (originally had empty symbols)
+        for (module, symbols) in &module_symbols {
+            // Check if this was originally a bare import by seeing if any original import had empty symbols
+            let was_bare_import =
+                analysis.imports.iter().any(|imp| imp.module == *module && imp.symbols.is_empty());
+
+            if symbols.is_empty() && was_bare_import {
+                // Bare import (like 'use strict;')
+                optimized_imports.push(format!("use {};", module));
+            } else if !symbols.is_empty() {
+                // Import with symbols
+                let symbol_list = symbols.join(" ");
+                optimized_imports.push(format!("use {} qw({});", module, symbol_list));
+            }
+            // Skip modules with no symbols that weren't originally bare imports (all symbols were unused)
+        }
+
+        // Sort alphabetically for consistency
+        optimized_imports.sort();
+        optimized_imports.join("\n")
     }
 }
 
@@ -479,9 +525,9 @@ print "First: " . first { $_ > 3 } @nums;
 
         let analysis = ImportAnalysis {
             imports: vec![
-                ImportStatement { module: "strict".to_string(), symbols: vec![], line: 1 },
-                ImportStatement { module: "warnings".to_string(), symbols: vec![], line: 2 },
-                ImportStatement {
+                ImportEntry { module: "strict".to_string(), symbols: vec![], line: 1 },
+                ImportEntry { module: "warnings".to_string(), symbols: vec![], line: 2 },
+                ImportEntry {
                     module: "List::Util".to_string(),
                     symbols: vec!["first".to_string(), "max".to_string(), "unused".to_string()],
                     line: 3,

@@ -148,11 +148,18 @@ These features have been tested and provide real, useful functionality:
 - Lexical (`my`) rename is currently per-file with scope fences
 - **Status**: ~85% functional
 
-### 12. **Code Actions** (NEW in v0.8.4)
+### 12. **Code Actions** (ENHANCED in v0.8.4, Import Optimization NEW)
 - Add missing `use strict` and `use warnings`
 - Quick fixes for common issues
 - Run perltidy (when available)
-- **Status**: ~70% functional
+- **NEW**: **Import Optimization** - Comprehensive analysis and optimization of Perl import statements:
+  - **Unused Import Detection**: Regex-based usage analysis identifies import statements that are never used in the code
+  - **Duplicate Import Consolidation**: Merges multiple import lines from the same module into single optimized statements
+  - **Missing Import Detection**: Identifies Module::symbol references that require additional import statements (planned)
+  - **Optimized Import Generation**: Alphabetical sorting and clean formatting of import statements
+  - **Complete Test Coverage**: 9 comprehensive test cases validating all optimization scenarios
+  - **API**: Full `ImportOptimizer` struct with `analyze_file()` and `generate_optimized_imports()` methods
+- **Status**: ~80% functional with new import optimization capabilities
 
 ### 13. **Semantic Tokens** (NEW in v0.8.4)
 - Enhanced syntax highlighting

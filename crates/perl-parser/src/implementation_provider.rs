@@ -5,6 +5,7 @@
 //! - Overridden methods in derived classes
 
 use crate::ast::{Node, NodeKind};
+use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
 use lsp_types::{LocationLink, Position, Range};
@@ -43,6 +44,10 @@ impl ImplementationProvider {
             Some(ImplementationTarget::Method { package, method }) => {
                 self.find_method_implementations(&package, &method, documents)
             }
+            Some(ImplementationTarget::BlessedType(name)) => {
+                // For blessed types, find package implementations
+                self.find_package_implementations(&name, documents)
+            }
             None => Vec::new(),
         }
     }
@@ -56,7 +61,7 @@ impl ImplementationProvider {
         let mut results = Vec::new();
 
         // Build inheritance index from all documents
-        let hierarchy_provider = TypeHierarchyProvider::new();
+        let _hierarchy_provider = TypeHierarchyProvider::new();
 
         for (uri, content) in documents {
             // Parse document

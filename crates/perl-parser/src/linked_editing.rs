@@ -5,10 +5,6 @@ use lsp_types::{LinkedEditingRanges, Position, Range};
 const OPEN: &[char] = &['(', '[', '{', '<', '\'', '"'];
 const CLOSE: &[char] = &[')', ']', '}', '>', '\'', '"'];
 
-fn is_pair(a: char, b: char) -> bool {
-    matches!((a, b), ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('\'', '\'') | ('"', '"'))
-}
-
 fn char_at(text: &str, byte: usize) -> Option<char> {
     text[byte..].chars().next()
 }
