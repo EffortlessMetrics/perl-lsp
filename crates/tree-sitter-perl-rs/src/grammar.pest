@@ -391,7 +391,9 @@ postfix_dereference = {
         "&*" |           // Code dereference
         "**" |           // Glob dereference
         "@" ~ array_access |  // Array slice
-        "@" ~ hash_access     // Hash slice
+        "@" ~ hash_access |   // Hash slice
+        array_access |         // Direct array access
+        hash_access            // Direct hash access
     )
 }
 

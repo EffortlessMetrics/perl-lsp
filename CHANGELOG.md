@@ -633,9 +633,8 @@ The following edge cases still need implementation:
 2. **Subroutine attributes** - `sub bar : lvalue { }`
 3. **Variable attributes** - `my $x :shared`
 4. **Format declarations** - `format STDOUT =`
-5. **Default in given/when** - `default { }` blocks
-6. **Class declarations** - `class Foo { }` (Perl 5.38+)
-7. **Method declarations** - `method bar { }` (Perl 5.38+)
+5. **Class declarations** - `class Foo { }` (Perl 5.38+)
+6. **Method declarations** - `method bar { }` (Perl 5.38+)
 
 ### Test Results
 - **94.5% edge case coverage** - Major improvement from previous 82.8%

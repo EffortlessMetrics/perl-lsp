@@ -147,7 +147,16 @@ pub fn from_perl_lexer_token(token: &crate::perl_lexer::Token) -> Token {
                     TokenType::Identifier
                 }
             }
+            PLTokenType::Keyword(_) => TokenType::Identifier, // Treat keywords as identifiers for parsing
             PLTokenType::Number(_) => TokenType::Number,
+            PLTokenType::QuoteSingle => TokenType::SingleQuotedString,
+            PLTokenType::QuoteDouble => TokenType::DoubleQuotedString,
+            PLTokenType::QuoteWords => TokenType::DoubleQuotedString, // qw() arrays
+            PLTokenType::QuoteCommand => TokenType::BacktickString,
+            PLTokenType::QuoteRegex => TokenType::RegexMatch,
+            PLTokenType::InterpolatedString(_) => TokenType::DoubleQuotedString,
+            PLTokenType::Version(_) => TokenType::Number, // Treat version strings as numbers
+            PLTokenType::Pod => TokenType::Comment,       // Treat POD as comments
             PLTokenType::Operator(op) => match op.as_ref() {
                 "+" => TokenType::Plus,
                 "-" => TokenType::Minus,
@@ -210,7 +219,6 @@ pub fn from_perl_lexer_token(token: &crate::perl_lexer::Token) -> Token {
             PLTokenType::Newline => TokenType::Whitespace,
             PLTokenType::EOF => TokenType::EOF,
             PLTokenType::Error(msg) => TokenType::Error(msg.to_string()),
-            _ => TokenType::Error("Unhandled token type".to_string()),
         }
     };
 

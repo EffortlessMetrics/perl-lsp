@@ -116,6 +116,58 @@ pub enum SuggestionPriority {
 /// - Generating consolidated import statements
 pub struct ImportOptimizer;
 
+/// Check if a module is a pragma (affects compilation, no exports)
+fn is_pragma_module(module: &str) -> bool {
+    matches!(
+        module,
+        "strict"
+            | "warnings"
+            | "utf8"
+            | "bytes"
+            | "locale"
+            | "integer"
+            | "less"
+            | "sigtrap"
+            | "subs"
+            | "vars"
+            | "feature"
+            | "autodie"
+            | "autouse"
+            | "base"
+            | "parent"
+            | "lib"
+            | "bigint"
+            | "bignum"
+            | "bigrat"
+    )
+}
+
+/// Get known exports for popular Perl modules
+fn get_known_module_exports(module: &str) -> Vec<&'static str> {
+    match module {
+        "Data::Dumper" => vec!["Dumper"],
+        "JSON" => vec!["encode_json", "decode_json", "to_json", "from_json"],
+        "YAML" => vec!["Load", "Dump", "LoadFile", "DumpFile"],
+        "Storable" => vec!["store", "retrieve", "freeze", "thaw"],
+        "List::Util" => vec!["first", "max", "min", "sum", "reduce", "shuffle", "uniq"],
+        "Scalar::Util" => vec!["blessed", "reftype", "looks_like_number", "weaken"],
+        "File::Spec" => vec!["catfile", "catdir", "splitpath", "splitdir"],
+        "File::Basename" => vec!["basename", "dirname", "fileparse"],
+        "Cwd" => vec!["getcwd", "abs_path", "realpath"],
+        "Time::HiRes" => vec!["time", "sleep", "usleep", "gettimeofday"],
+        "Digest::MD5" => vec!["md5", "md5_hex", "md5_base64"],
+        "MIME::Base64" => vec!["encode_base64", "decode_base64"],
+        "URI::Escape" => vec!["uri_escape", "uri_unescape"],
+        "LWP::Simple" => vec!["get", "head", "getprint", "getstore", "mirror"],
+        "CGI" => vec!["param", "header", "start_html", "end_html"],
+        "DBI" => vec![],      // DBI is object-oriented, no default exports
+        "strict" => vec![],   // Pragma, no exports
+        "warnings" => vec![], // Pragma, no exports
+        "utf8" => vec![],     // Pragma, no exports
+        _ => vec![],
+    }
+}
+
 impl ImportOptimizer {
     /// Create a new import optimizer instance
     pub fn new() -> Self {
@@ -285,5 +337,261 @@ impl ImportOptimizer {
 impl Default for ImportOptimizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn create_test_file(content: &str) -> (TempDir, PathBuf) {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let file_path = temp_dir.path().join("test.pl");
+        fs::write(&file_path, content).expect("Failed to write test file");
+        (temp_dir, file_path)
+    }
+
+    #[test]
+    fn test_basic_import_analysis() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Data::Dumper;
+
+print Dumper(\@ARGV);
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert_eq!(analysis.imports.len(), 3);
+        assert_eq!(analysis.imports[0].module, "strict");
+        assert_eq!(analysis.imports[1].module, "warnings");
+        assert_eq!(analysis.imports[2].module, "Data::Dumper");
+
+        // Data::Dumper should not be marked as unused since Dumper is used
+        assert!(analysis.unused_imports.is_empty());
+    }
+
+    #[test]
+    fn test_unused_import_detection() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+use Data::Dumper;  # This is not used
+use JSON;          # This is not used
+
+print "Hello World\n";
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert_eq!(analysis.unused_imports.len(), 2);
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
+    }
+
+    #[test]
+    fn test_missing_import_detection() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+
+# Using JSON::encode_json without importing JSON
+my $json = JSON::encode_json({key => 'value'});
+
+# Using Data::Dumper::Dumper without importing Data::Dumper  
+print Data::Dumper::Dumper(\@ARGV);
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert_eq!(analysis.missing_imports.len(), 2);
+        assert!(analysis.missing_imports.iter().any(|m| m.module == "JSON"));
+        assert!(analysis.missing_imports.iter().any(|m| m.module == "Data::Dumper"));
+    }
+
+    #[test]
+    fn test_duplicate_import_detection() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+use Data::Dumper;
+use JSON;
+use Data::Dumper;  # Duplicate
+
+print Dumper(\@ARGV);
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert_eq!(analysis.duplicate_imports.len(), 1);
+        assert_eq!(analysis.duplicate_imports[0].module, "Data::Dumper");
+        assert_eq!(analysis.duplicate_imports[0].lines.len(), 2);
+        assert!(analysis.duplicate_imports[0].can_merge);
+    }
+
+    #[test]
+    fn test_qw_import_parsing() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use List::Util qw(first max min sum);
+use Scalar::Util qw(blessed reftype);
+
+my @nums = (1, 2, 3, 4, 5);
+print "Max: " . max(@nums) . "\n";
+print "Sum: " . sum(@nums) . "\n";
+print "First: " . first { $_ > 3 } @nums;
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert_eq!(analysis.imports.len(), 2);
+
+        let list_util = analysis.imports.iter().find(|i| i.module == "List::Util").unwrap();
+        assert_eq!(list_util.symbols, vec!["first", "max", "min", "sum"]);
+
+        let scalar_util = analysis.imports.iter().find(|i| i.module == "Scalar::Util").unwrap();
+        assert_eq!(scalar_util.symbols, vec!["blessed", "reftype"]);
+
+        // Should detect unused symbols in both modules
+        assert_eq!(analysis.unused_imports.len(), 2);
+
+        let list_util_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "List::Util").unwrap();
+        assert_eq!(list_util_unused.symbols, vec!["min"]);
+
+        let scalar_util_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").unwrap();
+        assert_eq!(scalar_util_unused.symbols, vec!["blessed", "reftype"]);
+    }
+
+    #[test]
+    fn test_generate_optimized_imports() {
+        let optimizer = ImportOptimizer::new();
+
+        let analysis = ImportAnalysis {
+            imports: vec![
+                ImportStatement { module: "strict".to_string(), symbols: vec![], line: 1 },
+                ImportStatement { module: "warnings".to_string(), symbols: vec![], line: 2 },
+                ImportStatement {
+                    module: "List::Util".to_string(),
+                    symbols: vec!["first".to_string(), "max".to_string(), "unused".to_string()],
+                    line: 3,
+                },
+            ],
+            unused_imports: vec![UnusedImport {
+                module: "List::Util".to_string(),
+                symbols: vec!["unused".to_string()],
+                line: 3,
+                reason: "Symbol not used".to_string(),
+            }],
+            missing_imports: vec![MissingImport {
+                module: "Data::Dumper".to_string(),
+                symbols: vec!["Dumper".to_string()],
+                suggested_location: 10,
+                confidence: 0.8,
+            }],
+            duplicate_imports: vec![],
+            organization_suggestions: vec![],
+        };
+
+        let optimized = optimizer.generate_optimized_imports(&analysis);
+
+        // Should be sorted alphabetically
+        let expected_lines = [
+            "use Data::Dumper qw(Dumper);",
+            "use List::Util qw(first max);",
+            "use strict;",
+            "use warnings;",
+        ];
+
+        assert_eq!(optimized, expected_lines.join("\n"));
+    }
+
+    #[test]
+    fn test_empty_file_analysis() {
+        let optimizer = ImportOptimizer::new();
+        let content = "";
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert!(analysis.imports.is_empty());
+        assert!(analysis.unused_imports.is_empty());
+        assert!(analysis.missing_imports.is_empty());
+        assert!(analysis.duplicate_imports.is_empty());
+    }
+
+    #[test]
+    fn test_complex_perl_code_analysis() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Data::Dumper;
+use JSON qw(encode_json decode_json);
+use LWP::UserAgent;  # Unused
+use File::Spec::Functions qw(catfile catdir);
+
+# Complex code with various patterns
+my $data = { key => 'value', numbers => [1, 2, 3] };
+my $json_string = encode_json($data);
+print "JSON: $json_string\n";
+
+# Using File::Spec but not all imported functions
+my $path = catfile('/tmp', 'test.json');
+print "Path: $path\n";
+
+# Using modules without explicit imports
+my $response = HTTP::Tiny::new()->get('http://example.com');
+print Dumper($response);
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        // Should detect unused imports
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "LWP::UserAgent"));
+
+        // Should detect unused symbols from File::Spec::Functions
+        let file_spec_unused =
+            analysis.unused_imports.iter().find(|u| u.module == "File::Spec::Functions");
+        if let Some(unused) = file_spec_unused {
+            assert!(unused.symbols.contains(&"catdir".to_string()));
+        }
+
+        // Should detect missing import for HTTP::Tiny
+        assert!(analysis.missing_imports.iter().any(|m| m.module == "HTTP::Tiny"));
+    }
+
+    #[test]
+    fn test_regex_edge_cases() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+
+# These should not be detected as module references
+my $string = "This is not JSON::encode_json in a string";
+my $regex = qr/Data::Dumper/;
+print "Module::Name is just text";
+
+# This should be detected
+my $result = JSON::encode_json({test => 1});
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        // Should only detect the actual module usage, not the ones in strings/regex
+        assert_eq!(analysis.missing_imports.len(), 1);
+        assert_eq!(analysis.missing_imports[0].module, "JSON");
     }
 }

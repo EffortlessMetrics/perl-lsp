@@ -28,6 +28,12 @@ pub struct InlineCompletionList {
 
 pub struct InlineCompletionProvider;
 
+impl Default for InlineCompletionProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InlineCompletionProvider {
     pub fn new() -> Self {
         Self

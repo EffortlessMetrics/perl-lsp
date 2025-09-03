@@ -50,11 +50,11 @@ const ERR_INVALID_PARAMS: i32 = -32602;
 // LSP 3.17 standard error codes:
 // -32802 ServerCancelled (preferred for server-side cancellations)
 // -32801 ContentModified (document changed; redo request)
-// -32800 RequestCancelled (client-side; rarely distinguishable; we use -32802)
+// -32800 RequestCancelled (client-side; we use this for $/cancelRequest)
+#[allow(dead_code)]
 const ERR_SERVER_CANCELLED: i32 = -32802; // Server cancelled the request (LSP 3.17)
 const ERR_CONTENT_MODIFIED: i32 = -32801; // Content modified, operation obsolete
-#[allow(dead_code)]
-const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled (kept for reference)
+const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled via $/cancelRequest
 
 /// Helper to create a cancelled response
 fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
@@ -63,7 +63,7 @@ fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
         id: Some(id.clone()),
         result: None,
         error: Some(JsonRpcError {
-            code: ERR_SERVER_CANCELLED,
+            code: ERR_REQUEST_CANCELLED,
             message: "Request cancelled".into(),
             data: None,
         }),
@@ -385,7 +385,20 @@ impl LspServer {
         if let Some(content_length) = headers.get("Content-Length") {
             if let Ok(length) = content_length.parse::<usize>() {
                 let mut content = vec![0u8; length];
-                reader.read_exact(&mut content)?;
+                let mut bytes_read = 0;
+
+                // Read content in chunks to handle partial reads
+                while bytes_read < length {
+                    let bytes_to_read = length - bytes_read;
+                    let mut chunk = vec![0u8; bytes_to_read];
+                    match reader.read(&mut chunk)? {
+                        0 => return Ok(None), // Unexpected EOF
+                        n => {
+                            content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
+                            bytes_read += n;
+                        }
+                    }
+                }
 
                 // Parse JSON-RPC request
                 if let Ok(request) = serde_json::from_slice(&content) {
@@ -549,7 +562,11 @@ impl LspServer {
             // GA contract: not supported in v0.8.3
             // PR 3: Wire workspace/symbol to use the index
             "workspace/symbol" => {
-                early_cancel_or!(self, id, self.handle_workspace_symbols_v2(request.params))
+                #[cfg(feature = "workspace")]
+                let result = self.handle_workspace_symbols_v2(request.params);
+                #[cfg(not(feature = "workspace"))]
+                let result = self.handle_workspace_symbols(request.params);
+                early_cancel_or!(self, id, result)
             }
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
@@ -964,6 +981,11 @@ impl LspServer {
         }
 
         Ok(())
+    }
+
+    /// Convenience wrapper to open a document from tests
+    pub fn did_open(&self, params: Value) -> Result<(), JsonRpcError> {
+        self.handle_did_open(Some(params))
     }
 
     /// Handle didChange notification
@@ -1437,7 +1459,17 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let provider = CompletionProvider::new(ast);
+                    #[cfg(feature = "workspace")]
+                    let provider = CompletionProvider::new_with_index_and_source(
+                        ast,
+                        &doc.content,
+                        self.workspace_index.clone(),
+                    );
+
+                    #[cfg(not(feature = "workspace"))]
+                    let provider =
+                        CompletionProvider::new_with_index_and_source(ast, &doc.content, None);
+
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.content, offset, Some(uri));
 
@@ -1544,6 +1576,7 @@ impl LspServer {
                             filter_text: None,
                             documentation: None,
                             additional_edits: Vec::new(),
+                            text_edit_range: None, // Workspace completions don't need precise text edit
                         });
                     }
                 }
@@ -2194,11 +2227,12 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { params: sub_params, body, .. } = &sub_node.kind {
-            if !sub_params.is_empty() {
-                // Extract parameter names from the params node
-                for param in sub_params {
-                    self.extract_params(param, &mut params);
+        if let NodeKind::Subroutine { signature: sub_signature, body, .. } = &sub_node.kind {
+            if let Some(sig) = sub_signature {
+                if let NodeKind::Signature { parameters } = &sig.kind {
+                    for param in parameters {
+                        self.extract_params(param, &mut params);
+                    }
                 }
             } else {
                 // Look for my (...) = @_; pattern in the body
@@ -2872,6 +2906,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
+                    #[cfg(feature = "workspace")]
                     let provider = ImplementationProvider::new(self.workspace_index.clone());
 
                     // Convert documents to HashMap<String, String> for provider
@@ -3749,7 +3784,7 @@ impl LspServer {
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
                             let documents = self.documents.lock().unwrap();
-                            if let Some(doc) = self.get_document(&documents, uri) {
+                            if self.get_document(&documents, uri).is_some() {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
                                     let text = format!("{}\n", pragma);
@@ -3966,7 +4001,7 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
-                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
                     let symbol_table = extractor.extract(ast);
 
                     // Convert to DocumentSymbol format
@@ -4441,25 +4476,46 @@ impl LspServer {
         let mut line = 0u32;
         let mut col_utf16 = 0u32;
         let mut byte_pos = 0usize;
+        let mut chars = content.chars().peekable();
 
-        for ch in content.chars() {
+        while let Some(ch) = chars.next() {
             if byte_pos >= offset {
                 break;
             }
 
             match ch {
-                '\r' => { /* ignore; CRLF will be handled on '\n' */ }
+                '\r' => {
+                    // Peek ahead to see if this is CRLF
+                    if chars.peek() == Some(&'\n') {
+                        // This is CRLF - treat as single line ending
+                        if byte_pos + 1 >= offset {
+                            // Offset is at the \r - treat as end of current line
+                            break;
+                        }
+                        // Skip both \r and \n
+                        chars.next(); // consume the \n
+                        line += 1;
+                        col_utf16 = 0;
+                        byte_pos += 2; // \r + \n
+                    } else {
+                        // Solo \r - treat as line ending
+                        line += 1;
+                        col_utf16 = 0;
+                        byte_pos += ch.len_utf8();
+                    }
+                }
                 '\n' => {
+                    // LF (could be standalone or part of CRLF, but CRLF is handled above)
                     line += 1;
                     col_utf16 = 0;
+                    byte_pos += ch.len_utf8();
                 }
                 _ => {
-                    // Count UTF-16 code units (surrogate pairs count as 2)
+                    // Regular character
                     col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                    byte_pos += ch.len_utf8();
                 }
             }
-
-            byte_pos += ch.len_utf8();
         }
 
         (line, col_utf16)
@@ -4470,47 +4526,43 @@ impl LspServer {
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
         let mut col_utf16 = 0u32;
-        let mut byte_pos = 0usize;
+        let mut prev_was_cr = false;
 
-        for ch in content.chars() {
-            if cur_line == line {
-                match ch {
-                    '\n' => {
-                        // End of target line - clamp to EOL
-                        return byte_pos.min(content.len());
-                    }
-                    '\r' => {
-                        // ignore CR; CRLF handled on '\n'
-                    }
-                    _ => {
-                        let w = if ch.len_utf16() == 2 { 2 } else { 1 };
-                        if col_utf16 + w > character {
-                            // Character position is in the middle of this char
-                            return byte_pos;
-                        }
-                        if col_utf16 + w == character {
-                            // Caret is after this char
-                            return byte_pos + ch.len_utf8();
-                        }
-                        col_utf16 += w;
-                    }
-                }
+        for (byte_idx, ch) in content.char_indices() {
+            // Check if we've reached the target position
+            if cur_line == line && col_utf16 == character {
+                return byte_idx;
             }
 
+            // Handle line endings and character counting
             match ch {
                 '\n' => {
-                    cur_line += 1;
-                    if cur_line > line {
-                        // We've gone past the target line
-                        return byte_pos;
+                    if !prev_was_cr {
+                        // Standalone \n
+                        cur_line += 1;
+                        col_utf16 = 0;
                     }
+                    // If prev_was_cr, this \n is part of CRLF and we already incremented the line
+                }
+                '\r' => {
+                    // Always increment line on \r (whether solo or part of CRLF)
+                    cur_line += 1;
                     col_utf16 = 0;
                 }
-                '\r' => { /* ignore */ }
-                _ => {}
+                _ => {
+                    // Regular character - only count UTF-16 units on target line
+                    if cur_line == line {
+                        col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                    }
+                }
             }
 
-            byte_pos += ch.len_utf8();
+            prev_was_cr = ch == '\r';
+        }
+
+        // Handle end of file position
+        if cur_line == line && col_utf16 == character {
+            return content.len();
         }
 
         // Clamp to end of buffer
@@ -4622,6 +4674,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4637,6 +4690,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -4649,6 +4703,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4664,6 +4719,7 @@ impl LspServer {
                         additional_edits: vec![],
                         sort_text: None,
                         filter_text: None,
+                        text_edit_range: None,
                     });
                 }
             }
@@ -4680,6 +4736,7 @@ impl LspServer {
                             additional_edits: vec![],
                             sort_text: None,
                             filter_text: None,
+                            text_edit_range: None,
                         });
                     }
                 }
@@ -4853,6 +4910,7 @@ impl LspServer {
     }
 
     /// Handle workspace/symbol request v2 - uses workspace index
+    #[cfg(feature = "workspace")]
     fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
@@ -5151,11 +5209,13 @@ impl LspServer {
 
                 // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.content.lines().collect();
+                // Move regex construction outside loop
+                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+
                 for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
 
                     // Find scalar variables using regex
-                    let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();
@@ -7661,7 +7721,7 @@ impl LspServer {
             if let Some(doc) = doc_opt {
                 if let Some(ast) = &doc.ast {
                     // Find the symbol in the AST to get more accurate information
-                    let extractor = crate::symbol::SymbolExtractor::new();
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
                     let symbol_table = extractor.extract(ast);
 
                     // Find matching symbol
@@ -7676,7 +7736,9 @@ impl LspServer {
                                     .line_starts
                                     .offset_to_position(&doc.content, sym.location.end);
 
-                                let mut resolved = symbol.clone();
+                                // Start with the provided symbol JSON so we can add
+                                // additional details without panicking if fields are missing
+                                let mut resolved = json!(symbol);
 
                                 // Add detail based on symbol kind
                                 let detail = match sym.kind {

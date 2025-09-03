@@ -6,6 +6,7 @@
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::perl_lexer::PerlLexer;
+use crate::regex_parser::RegexParser;
 use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
 use std::sync::Arc;
 
@@ -1078,23 +1079,65 @@ impl<'a> ParserV2<'a> {
 
     fn parse_regex(&mut self) -> Result<Node, ParseError> {
         let token = self.advance();
-        // Extract pattern and modifiers from token
-        let pattern = token.text.clone();
-        let modifiers = Arc::from("");
+        let text = token.text.as_ref();
+
+        // Try to parse with RegexParser, but fall back to original behavior on failure
+        let (pattern, modifiers) = if text.starts_with('m')
+            && text.chars().nth(1).is_some_and(|c| !c.is_ascii_alphanumeric())
+        {
+            // Try parsing m// regex
+            let mut parser = RegexParser::new(text, 1);
+            match parser.parse_match_operator() {
+                Ok(construct) => (Arc::from(construct.pattern), Arc::from(construct.modifiers)),
+                Err(_) => {
+                    // Fall back to original behavior - use whole token as pattern
+                    (token.text.clone(), Arc::from(""))
+                }
+            }
+        } else {
+            // Try parsing bare // regex
+            let mut parser = RegexParser::new(text, 0);
+            match parser.parse_bare_regex() {
+                Ok(construct) => (Arc::from(construct.pattern), Arc::from(construct.modifiers)),
+                Err(_) => {
+                    // Fall back to original behavior - use whole token as pattern
+                    (token.text.clone(), Arc::from(""))
+                }
+            }
+        };
 
         Ok(Node::new(
-            NodeKind::Regex { pattern, modifiers },
+            NodeKind::Regex { pattern, replacement: None, modifiers },
             SourceLocation { start: token.start, end: token.end },
         ))
     }
 
     fn parse_substitution(&mut self) -> Result<Node, ParseError> {
         let token = self.advance();
-        // For now, treat as a special string
-        Ok(Node::new(
-            NodeKind::String { value: token.text.clone() },
-            SourceLocation { start: token.start, end: token.end },
-        ))
+        let text = token.text.as_ref();
+
+        // Try to parse with RegexParser to extract components
+        let mut parser = RegexParser::new(text, 1);
+        match parser.parse_substitute_operator() {
+            Ok(construct) => {
+                // Successfully parsed - return as Substitution node
+                Ok(Node::new(
+                    NodeKind::Substitution {
+                        pattern: Arc::from(construct.pattern),
+                        replacement: Arc::from(construct.replacement.unwrap_or_default()),
+                        modifiers: Arc::from(construct.modifiers),
+                    },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+            Err(_) => {
+                // Fall back to original behavior - treat as string for backward compatibility
+                Ok(Node::new(
+                    NodeKind::String { value: token.text.clone() },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+        }
     }
 
     fn parse_heredoc(&mut self) -> Result<Node, ParseError> {
@@ -1233,7 +1276,7 @@ impl<'a> ParserV2<'a> {
                 // Collect words until closing delimiter
                 while !self.is_at_end() {
                     if let Some(token) = self.peek() {
-                        if token.text.chars().next() == Some(delim) {
+                        if token.text.starts_with(delim) {
                             self.advance();
                             break;
                         }

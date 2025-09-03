@@ -66,17 +66,24 @@ impl WorkingParser {
 
         // Variable declarations
         if self.match_keyword("my") {
-            return self.parse_variable_declaration();
+            let decl = self.parse_variable_declaration()?;
+            // Consume semicolon if present
+            self.match_token(&TokenType::Semicolon);
+            return Ok(decl);
         }
 
         // Control flow
         if self.match_keyword("if") {
-            return self.parse_if_statement();
+            let stmt = self.parse_if_statement()?;
+            // No semicolon needed for control structures
+            return Ok(stmt);
         }
 
         // Function definition
         if self.match_keyword("sub") {
-            return self.parse_function();
+            let func = self.parse_function()?;
+            // No semicolon needed for function definitions
+            return Ok(func);
         }
 
         // Expression statement

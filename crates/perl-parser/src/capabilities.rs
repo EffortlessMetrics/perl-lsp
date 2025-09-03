@@ -110,7 +110,7 @@ impl BuildFlags {
             document_links: true,
             selection_ranges: true,
             on_type_formatting: true,
-            code_lens: true,         // Now implemented
+            code_lens: false,        // Only ~20% functional → don't advertise
             call_hierarchy: false,   // Partial implementation
             type_hierarchy: false,   // Not implemented
             linked_editing: true,    // Implemented for paired delimiters
