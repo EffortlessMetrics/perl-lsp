@@ -938,6 +938,9 @@ impl IndexVisitor {
                     self.visit_node(stmt, file_index);
                 }
             }
+            NodeKind::ExpressionStatement { expression } => {
+                self.visit_node(expression, file_index);
+            }
             // Expression nodes
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand, file_index);
