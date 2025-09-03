@@ -16,12 +16,18 @@ mod bless_parsing_tests {
 
     #[test]
     fn test_bless_empty_hash_with_class() {
-        parse_and_check("bless {}, $class", "(source_file (call bless ((hash ) (variable $ class))))");
+        parse_and_check(
+            "bless {}, $class",
+            "(source_file (call bless ((hash ) (variable $ class))))",
+        );
     }
 
     #[test]
     fn test_bless_with_string_literal() {
-        parse_and_check("bless {}, 'Foo'", "(source_file (call bless ((hash ) (string \"'Foo'\"))))");
+        parse_and_check(
+            "bless {}, 'Foo'",
+            "(source_file (call bless ((hash ) (string \"'Foo'\"))))",
+        );
     }
 
     #[test]
