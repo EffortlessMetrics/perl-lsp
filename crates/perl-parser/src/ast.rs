@@ -95,9 +95,10 @@ impl Node {
                 )
             }
 
-            NodeKind::Binary { op: _, left, right } => {
-                // Tree-sitter format: (binary_expression left right)
-                format!("(binary_expression {} {})", left.to_sexp(), right.to_sexp())
+            NodeKind::Binary { op, left, right } => {
+                // Tree-sitter format: (binary_op left right)
+                let op_name = format_binary_operator(op);
+                format!("({} {} {})", op_name, left.to_sexp(), right.to_sexp())
             }
 
             NodeKind::Ternary { condition, then_expr, else_expr } => {
@@ -109,9 +110,10 @@ impl Node {
                 )
             }
 
-            NodeKind::Unary { op: _, operand } => {
-                // Tree-sitter format: (unary_expression operand)
-                format!("(unary_expression {})", operand.to_sexp())
+            NodeKind::Unary { op, operand } => {
+                // Tree-sitter format: (unary_op operand)
+                let op_name = format_unary_operator(op);
+                format!("({} {})", op_name, operand.to_sexp())
             }
 
             NodeKind::Diamond => "(diamond)".to_string(),
@@ -137,9 +139,13 @@ impl Node {
                 format!("(number {})", value)
             }
 
-            NodeKind::String { value, interpolated: _ } => {
-                // Format expected by tests: (string "value")
-                format!("(string \"{}\")", value)
+            NodeKind::String { value, interpolated } => {
+                // Format based on interpolation status
+                if *interpolated {
+                    format!("(string_interpolated \"{}\")", value)
+                } else {
+                    format!("(string \"{}\")", value)
+                }
             }
 
             NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
@@ -390,6 +396,12 @@ impl Node {
                     "bless"
                         | "shift"
                         | "unshift"
+                        | "open"
+                        | "die"
+                        | "warn"
+                        | "print"
+                        | "printf"
+                        | "say"
                         | "push"
                         | "pop"
                         | "map"
@@ -850,6 +862,164 @@ pub enum NodeKind {
 
     // Lexer budget exceeded - preserves earlier AST
     UnknownRest,
+}
+
+/// Format unary operator for S-expression output
+fn format_unary_operator(op: &str) -> String {
+    match op {
+        // Arithmetic unary operators
+        "+" => "unary_+".to_string(),
+        "-" => "unary_-".to_string(),
+
+        // Logical unary operators
+        "!" => "unary_not".to_string(),
+        "not" => "unary_not".to_string(),
+
+        // Bitwise complement
+        "~" => "unary_complement".to_string(),
+
+        // Reference operator
+        "\\" => "unary_ref".to_string(),
+
+        // Postfix operators
+        "++" => "unary_++".to_string(),
+        "--" => "unary_--".to_string(),
+
+        // File test operators
+        "-f" => "unary_-f".to_string(),
+        "-d" => "unary_-d".to_string(),
+        "-e" => "unary_-e".to_string(),
+        "-r" => "unary_-r".to_string(),
+        "-w" => "unary_-w".to_string(),
+        "-x" => "unary_-x".to_string(),
+        "-o" => "unary_-o".to_string(),
+        "-R" => "unary_-R".to_string(),
+        "-W" => "unary_-W".to_string(),
+        "-X" => "unary_-X".to_string(),
+        "-O" => "unary_-O".to_string(),
+        "-s" => "unary_-s".to_string(),
+        "-p" => "unary_-p".to_string(),
+        "-S" => "unary_-S".to_string(),
+        "-b" => "unary_-b".to_string(),
+        "-c" => "unary_-c".to_string(),
+        "-t" => "unary_-t".to_string(),
+        "-u" => "unary_-u".to_string(),
+        "-g" => "unary_-g".to_string(),
+        "-k" => "unary_-k".to_string(),
+        "-T" => "unary_-T".to_string(),
+        "-B" => "unary_-B".to_string(),
+        "-M" => "unary_-M".to_string(),
+        "-A" => "unary_-A".to_string(),
+        "-C" => "unary_-C".to_string(),
+        "-l" => "unary_-l".to_string(),
+        "-z" => "unary_-z".to_string(),
+
+        // Postfix dereferencing
+        "->@*" => "unary_->@*".to_string(),
+        "->%*" => "unary_->%*".to_string(),
+        "->$*" => "unary_->$*".to_string(),
+        "->&*" => "unary_->&*".to_string(),
+        "->**" => "unary_->**".to_string(),
+
+        // Defined operator
+        "defined" => "unary_defined".to_string(),
+
+        // Default case for unknown operators
+        _ => format!("unary_{}", op.replace(' ', "_")),
+    }
+}
+
+/// Format binary operator for S-expression output
+fn format_binary_operator(op: &str) -> String {
+    match op {
+        // Arithmetic operators
+        "+" => "binary_+".to_string(),
+        "-" => "binary_-".to_string(),
+        "*" => "binary_*".to_string(),
+        "/" => "binary_/".to_string(),
+        "%" => "binary_%".to_string(),
+        "**" => "binary_**".to_string(),
+
+        // Comparison operators
+        "==" => "binary_==".to_string(),
+        "!=" => "binary_!=".to_string(),
+        "<" => "binary_<".to_string(),
+        ">" => "binary_>".to_string(),
+        "<=" => "binary_<=".to_string(),
+        ">=" => "binary_>=".to_string(),
+        "<=>" => "binary_<=>".to_string(),
+
+        // String comparison
+        "eq" => "binary_eq".to_string(),
+        "ne" => "binary_ne".to_string(),
+        "lt" => "binary_lt".to_string(),
+        "le" => "binary_le".to_string(),
+        "gt" => "binary_gt".to_string(),
+        "ge" => "binary_ge".to_string(),
+        "cmp" => "binary_cmp".to_string(),
+
+        // Logical operators
+        "&&" => "binary_&&".to_string(),
+        "||" => "binary_||".to_string(),
+        "and" => "binary_and".to_string(),
+        "or" => "binary_or".to_string(),
+        "xor" => "binary_xor".to_string(),
+
+        // Bitwise operators
+        "&" => "binary_&".to_string(),
+        "|" => "binary_|".to_string(),
+        "^" => "binary_^".to_string(),
+        "<<" => "binary_<<".to_string(),
+        ">>" => "binary_>>".to_string(),
+
+        // Pattern matching
+        "=~" => "binary_=~".to_string(),
+        "!~" => "binary_!~".to_string(),
+
+        // Smart match
+        "~~" => "binary_~~".to_string(),
+
+        // Concatenation
+        "." => "binary_.".to_string(),
+
+        // Range operators
+        ".." => "binary_..".to_string(),
+        "..." => "binary_...".to_string(),
+
+        // Type checking
+        "isa" => "binary_isa".to_string(),
+
+        // Assignment operators
+        "=" => "binary_=".to_string(),
+        "+=" => "binary_+=".to_string(),
+        "-=" => "binary_-=".to_string(),
+        "*=" => "binary_*=".to_string(),
+        "/=" => "binary_/=".to_string(),
+        "%=" => "binary_%=".to_string(),
+        "**=" => "binary_**=".to_string(),
+        ".=" => "binary_.=".to_string(),
+        "&=" => "binary_&=".to_string(),
+        "|=" => "binary_|=".to_string(),
+        "^=" => "binary_^=".to_string(),
+        "<<=" => "binary_<<=".to_string(),
+        ">>=" => "binary_>>=".to_string(),
+        "&&=" => "binary_&&=".to_string(),
+        "||=" => "binary_||=".to_string(),
+        "//=" => "binary_//=".to_string(),
+
+        // Defined-or operator
+        "//" => "binary_//".to_string(),
+
+        // Method calls and dereferencing
+        "->" => "binary_->".to_string(),
+
+        // Hash/array access
+        "{}" => "binary_{}".to_string(),
+        "[]" => "binary_[]".to_string(),
+
+        // Default case for unknown operators
+        _ => format!("binary_{}", op.replace(' ', "_")),
+    }
 }
 
 /// Source location information
