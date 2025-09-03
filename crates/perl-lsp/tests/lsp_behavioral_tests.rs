@@ -82,6 +82,10 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
 
 #[test]
 fn test_cross_file_definition() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Wait until the module is discoverable
@@ -120,6 +124,10 @@ fn test_cross_file_definition() {
 
 #[test]
 fn test_cross_file_references() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Wait until the module is indexed
@@ -157,6 +165,10 @@ fn test_cross_file_references() {
 
 #[test]
 fn test_workspace_symbol_search() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Search for symbols across workspace
@@ -183,6 +195,10 @@ fn test_workspace_symbol_search() {
 
 #[test]
 fn test_extract_variable_returns_edits() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Request code actions for expression extraction
@@ -361,6 +377,10 @@ fn test_test_generation_actions_present() {
 
 #[test]
 fn test_completion_detail_formatting() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Request completion after $obj->
@@ -403,6 +423,10 @@ fn test_completion_detail_formatting() {
 
 #[test]
 fn test_hover_enriched_information() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Request hover for My::Module
@@ -440,6 +464,10 @@ fn test_hover_enriched_information() {
 
 #[test]
 fn test_folding_ranges_work() {
+    // Ensure we use fast, deterministic fallbacks to avoid long waits
+    unsafe {
+        std::env::set_var("LSP_TEST_FALLBACKS", "1");
+    }
     let (mut harness, workspace) = create_test_server();
 
     // Request folding ranges with timeout

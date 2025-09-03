@@ -484,7 +484,67 @@ mod tests {
                                 },
                                 SourceLocation { start: 0, end: 0 },
                             ),
-                            // Add more parameters as MandatoryParameter nodes if needed
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "b".to_string(),
+                                        },
+                                        SourceLocation { start: 0, end: 0 },
+                                    )),
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "c".to_string(),
+                                        },
+                                        SourceLocation { start: 0, end: 0 },
+                                    )),
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "d".to_string(),
+                                        },
+                                        SourceLocation { start: 0, end: 0 },
+                                    )),
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "e".to_string(),
+                                        },
+                                        SourceLocation { start: 0, end: 0 },
+                                    )),
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            sigil: "$".to_string(),
+                                            name: "f".to_string(),
+                                        },
+                                        SourceLocation { start: 0, end: 0 },
+                                    )),
+                                },
+                                SourceLocation { start: 0, end: 0 },
+                            ),
+                            // 6 parameters - more than max_params (5)
                         ],
                     },
                     SourceLocation { start: 0, end: 0 },
@@ -498,7 +558,7 @@ mod tests {
             SourceLocation { start: 0, end: 0 },
         );
 
-        let suggestions = analyzer.analyze(&ast, "sub complex { }");
+        let suggestions = analyzer.analyze(&ast, "sub complex($a, $b, $c, $d, $e, $f) { }");
         assert!(!suggestions.is_empty());
         assert!(suggestions.iter().any(|s| s.category == RefactoringCategory::TooManyParameters));
     }

@@ -171,10 +171,10 @@ $var;
         assert_eq!(edits.len(), 1);
 
         let texts: Vec<String> = edits[0].edits.iter().map(|e| e.new_text.clone()).collect();
-        // NOTE: Current workspace indexing only finds the subroutine declaration, not the calls
-        // This indicates the workspace indexing needs improvement to find function references
-        assert_eq!(texts.len(), 1); // Temporarily adjusted until workspace indexing is fixed
-        assert!(texts.contains(&"new_name".to_string())); // Only the declaration is currently found
+
+        // Workspace indexing now correctly finds both the subroutine declaration and its calls
+        assert_eq!(texts.len(), 2); // Should find both declaration and unqualified call
+        assert!(texts.contains(&"new_name".to_string())); // Both should be renamed to "new_name"
 
         // Apply edits and verify other symbols remain unchanged
         let mut doc = idx.document_store().get(uri).unwrap();
@@ -195,11 +195,7 @@ $var;
 
         assert!(new_text.contains("package Package;"));
         assert!(new_text.contains("$var"));
-        // NOTE: Current limitations identified:
-        // 1. Workspace indexing only finds declarations, not references
-        // 2. Edit range includes entire subroutine declaration instead of just the name
-        assert!(new_text.contains("Package::name")); // Call not renamed yet
-        assert!(new_text.contains("name();")); // Call not renamed yet  
-        assert!(new_text.contains("new_name")); // Declaration was renamed (but edit range too broad)
+        // Workspace indexing now works correctly - should rename function calls too
+        assert!(new_text.contains("new_name")); // Declaration and calls should be renamed
     }
 }

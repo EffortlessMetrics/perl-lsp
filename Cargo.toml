@@ -6,13 +6,13 @@ members = [
     "crates/perl-corpus",
     "crates/perl-parser-pest",
     "crates/tree-sitter-perl-rs",
-    "crates/tree-sitter-perl-c",
     "crates/parser-benchmarks",
     "crates/parser-tests",
     "xtask", "crates/perl-lsp",
 ]
 exclude = [
     "tree-sitter-perl",
+    "tree-sitter-perl-c",  # Exclude due to libclang dependency issues
 ]
 
 [workspace.dependencies]

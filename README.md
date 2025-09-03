@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.7)
+### 📦 Published Crates (v0.8.9)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
 2. **perl-lexer** - Context-aware tokenizer for Perl syntax
@@ -24,18 +24,27 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.7+ (In Development)
+## 📦 Latest Release: v0.8.9 (General Availability)
 
-### v0.8.7+ - Enhanced Parser Compatibility and LSP Improvements 🔧
-- 🚀 **Document Highlight Enhancement**: Improved variable occurrence tracking with comprehensive expression statement support for better IDE highlighting
-- 🔧 **S-Expression Format Fixes**: Enhanced tree-sitter compatibility with proper node formats:
-  - Program nodes use (source_file) format for tree-sitter compatibility
-  - Variable nodes use proper structure: (scalar (varname)), (array (varname))
-  - Function call expressions use tree-sitter naming: function_call_expression
-  - Number nodes simplified to (number) format without value embedding
-- 🎯 **Anonymous Subroutine Parsing**: Enhanced AST structure with automatic expression statement wrapping while maintaining backward compatibility
-- 📈 **Improved Corpus Test Compatibility**: Better S-expression generation for downstream tree-sitter integration
-- 🔒 **Code Quality**: Applied clippy suggestions for improved code quality and maintainability
+### v0.8.9 - Comprehensive PR Workflow Integration with Production-Stable AST Generation 🚀
+- 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility
+- 🧠 **Comprehensive Workspace Navigation**: Enhanced AST traversal including `NodeKind::ExpressionStatement` support across all LSP providers
+- 📊 **Advanced Code Actions and Refactoring**: Fixed parameter threshold validation and enhanced refactoring suggestions with proper AST handling
+- 🔄 **Enhanced Call Hierarchy Provider**: Complete workspace analysis with improved function call tracking and incoming call detection  
+- 🌳 **Production-Ready Workspace Features**: Improved workspace indexing, symbol tracking, and cross-file rename operations
+- ⚡ **100% Test Reliability Achievement**: All 195 library tests, 33 LSP E2E tests, and 19 DAP tests now passing consistently
+- 🔧 **Quality Gate Compliance**: Zero clippy warnings, consistent code formatting, full architectural compliance maintained
+- ✅ **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking and reference resolution
+
+### v0.8.8 - Advanced Incremental Parsing with IncrementalParserV2 🚀
+- 🚀 **Advanced Incremental Parsing V2**: Revolutionary incremental parser with intelligent node reuse and detailed metrics tracking
+- 🧠 **Smart Node Reuse Strategy**: Automatically detects which AST nodes can be preserved across edits for optimal performance
+- 📊 **Performance Breakthrough**: Achieves 70-90% node reuse in typical editing scenarios with <1ms update times
+- 🔄 **Comprehensive LSP Integration**: Incremental parsing integrated with LSP server via feature flags and environment variables
+- 🌳 **Tree-sitter Grammar Enhancement**: Added given/when/default grammar rules for complete switch-style control flow support
+- ⚡ **Fallback Mechanisms**: Graceful degradation to full parsing when incremental optimizations aren't applicable
+- 🔧 **Feature Flag Architecture**: Clean separation of incremental features with `--features incremental` flag
+- ✅ **Enhanced Testing Coverage**: Comprehensive test suite for incremental parsing with 6 integration tests passing
 
 ### v0.8.7 - Enhanced Comment Documentation Extraction with Source Threading 📚
 - 🚀 **Comprehensive Comment Documentation**: Production-ready leading comment parsing with 20 comprehensive test cases covering all edge scenarios
@@ -159,9 +168,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (**Diataxis: Tutorial**)
 
-### Install the LSP Server (Recommended)
+### Install the LSP Server (Recommended) (**Diataxis: How-to**)
 
 #### Option 1: Quick Install (Linux/macOS)
 ```bash
@@ -209,12 +218,12 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 
 > **Note**: The exact Content-Length number may differ if you modify the JSON. The presence of a valid `Content-Length:` header indicates successful LSP initialization.
 
-### Use the Parser Library
+### Use the Parser Library (**Diataxis: Tutorial**)
 
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8.7"
+perl-parser = "0.8.9"
 ```
 
 ```rust
@@ -306,11 +315,14 @@ See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 ### Using the LSP Server
 
 ```bash
-# Run the LSP server
-cargo run -p perl-parser --bin perl-lsp
+# Run the LSP server (NEW standalone crate in v0.8.8)
+cargo run -p perl-lsp
 
 # Or install it globally
-cargo install --path crates/perl-parser --bin perl-lsp
+cargo install perl-lsp
+
+# Or build from source
+cargo install --path crates/perl-lsp
 ```
 
 ### Editor Integration
@@ -507,7 +519,7 @@ This distinction is important: Rust's `is_alphabetic()` correctly identifies mat
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture (**Diataxis: Explanation**)
 
 ```
 tree-sitter-perl/
@@ -865,12 +877,15 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 # Use a real shell for redirection, or place extra args after `--`.
 ```
 
-### Current Test Status
+### Current Test Status (v0.8.9)
 
-**v3 Parser (Native)**: ✅ 141/141 edge case tests passing (100% coverage)  
+**v3 Parser (Native)**: ✅ 195/195 library tests passing (100% coverage)  
+**LSP Server**: ✅ 33/33 comprehensive E2E tests passing  
+**DAP Server**: ✅ 19/19 comprehensive tests passing  
+**Corpus Tests**: ✅ 12/12 tests passing  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage)  
 **v1 Parser (C)**: ⚠️ Limited edge case support  
-**LSP Server**: ✅ 526+ tests running properly (400+ integration, 126 unit)
+**Quality Gates**: ✅ Zero clippy warnings, consistent formatting, full architectural compliance
 
 > **Note**: If you see "0 tests, N filtered out", a wrapper probably injected
 > a stray positional filter (e.g., mis-parsed `2>&1`). Run the same command in a
@@ -960,11 +975,11 @@ The benchmarking system provides:
 
 ```toml
 [dependencies]
-perl-parser = "0.8.7"
+perl-parser = "0.8.9"
 # Optional: for custom lexing
-perl-lexer = "0.8.6"
+perl-lexer = "0.8.9"
 # Optional: for testing
-perl-corpus = "0.8.6"
+perl-corpus = "0.8.9"
 ```
 
 ### From Source

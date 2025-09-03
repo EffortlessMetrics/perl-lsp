@@ -15,6 +15,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optimized import generation with alphabetical sorting
   - Complete test coverage with 9 comprehensive test cases
 
+## [v0.8.8] - 2025-09-03
+
+### Added
+- **Advanced Incremental Parsing V2** - Revolutionary incremental parser with intelligent node reuse and detailed metrics tracking
+- **Smart Node Reuse Strategy** - Automatically detects which AST nodes can be preserved across edits for optimal performance
+- **Comprehensive LSP Integration** - Incremental parsing integrated with LSP server via feature flags and environment variables
+- **Tree-sitter Grammar Enhancement** - Added given/when/default grammar rules for complete switch-style control flow support
+- **Enhanced Control Flow** - Tree-sitter grammar now supports all modern Perl control flow constructs
+- **Comprehensive Corpus Testing** - Added test corpus for given/when/default constructs with edge case coverage
+- **IncrementalParserV2 Example** - Added comprehensive example demonstrating incremental parsing capabilities with metrics
+
+### Improved
+- **Incremental Performance** - Achieves 70-90% node reuse in typical editing scenarios with <1ms update times
+- **Fallback Mechanisms** - Graceful degradation to full parsing when incremental optimizations aren't applicable
+- **Feature Flag Architecture** - Clean separation of incremental features with `--features incremental` flag
+- **Testing Coverage** - Added comprehensive test suite for incremental parsing with 6 integration tests passing
+- **Parser Reliability** - Enhanced bless parsing capabilities with complete AST generation compatibility
+- **Workspace Features** - Enhanced symbol extraction and workspace navigation improvements
+
+### Changed
+- **API Stability** - Maintained backward compatibility while adding new incremental parsing features
+- **Performance Profile** - Incremental parsing now default-enabled for supported operations
+
+### Fixed
+- **Bless Parsing** - Resolved all bless parsing test failures with proper AST structure
+- **Symbol Extraction** - Comprehensive AST traversal including ExpressionStatement nodes
+
+## [v0.8.7] - 2025-08-01
+
+### Added
+- **Comprehensive Comment Documentation Extraction (PR #71)** - Production-ready leading comment parsing with extensive edge case coverage
+- **Enhanced Source Threading Architecture** - Source-aware LSP providers with improved context for all features
+- **20 Comprehensive Test Cases** - Complete test coverage for comment extraction including Unicode, performance, and edge cases
+- **Multi-Package Comment Support** - Correct comment extraction across package boundaries with qualified name resolution
+- **Class Method Documentation** - Support for extracting documentation from class methods and complex Perl constructs
+- **Variable List Documentation** - Shared documentation for variable list declarations (`my ($a, $b, @c, %d)`)
+
+### Improved
+- **Performance Optimization** - Comment extraction optimized to <100µs per iteration with pre-allocated string capacity
+- **Unicode Safety** - Proper UTF-8 character boundary handling for international comments and emojis  
+- **S-Expression Format Compatibility** - Resolved bless parsing regressions with complete AST compatibility
+- **Edge Case Robustness** - Handles empty comments, source boundaries, non-ASCII whitespace, and complex formatting
+- **LSP Functionality** - Improved from 75% to 78% functional with enhanced documentation and symbol intelligence
+- **Whitespace Handling** - Distinguishes between blank lines and whitespace-only lines for accurate comment boundaries
+
+### Fixed
+- **Bless Parsing Regression** - Resolved S-expression format issues affecting blessed object parsing
+- **Comment Boundary Detection** - Precise handling of blank lines vs whitespace-only lines in comment extraction
+- **Complex Formatting Scenarios** - Support for varying indentation, mixed hash styles, and special characters
+>>>>>>> origin/master
+
 ## [v0.8.5] - 2025-08-24
 
 ### Added

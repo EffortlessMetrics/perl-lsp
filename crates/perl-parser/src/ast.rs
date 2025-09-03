@@ -25,7 +25,7 @@ impl Node {
             NodeKind::Program { statements } => {
                 let stmts =
                     statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
-                format!("(program {})", stmts)
+                format!("(source_file {})", stmts)
             }
 
             NodeKind::ExpressionStatement { expression } => {
