@@ -419,7 +419,7 @@ impl WorkspaceRefactor {
         for doc in self._index.document_store().all_documents() {
             let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
 
-            let analysis = optimizer.analyze_file(&path)?;
+            let analysis = optimizer.analyze_content(&doc.text)?;
             let optimized = optimizer.generate_optimized_imports(&analysis);
 
             if optimized.is_empty() {
@@ -996,6 +996,26 @@ use Data::Dumper; # Duplicate
         let result = refactor.inline_variable("$var", &paths[0], (0, 0));
         // Should fail because the found line "my $var;" doesn't have an initializer after =
         assert!(matches!(result, Err(RefactorError::ParseError(_))));
+    }
+
+    #[test]
+    fn test_import_optimization_integration() {
+        // Test the integration between workspace refactor and import optimizer
+        let (index, _paths) = setup_index(vec![
+            ("with_unused.pl", "use strict;\nuse warnings;\nuse Data::Dumper;\nuse JSON qw(encode_json unused_symbol);\n\nmy $json = encode_json({test => 1});"),
+            ("clean.pl", "use strict;\nuse warnings;\nuse Data::Dumper;\n\nprint Dumper({test => 1});"),
+        ]);
+        let refactor = WorkspaceRefactor::new(index);
+
+        let result = refactor.optimize_imports().unwrap();
+
+        // Should only optimize files that have optimizations available
+        // Files with unused imports should get optimized edits
+        assert!(!result.file_edits.is_empty());
+        
+        // Check that we actually have some optimization suggestions
+        let has_optimizations = result.file_edits.iter().any(|edit| !edit.edits.is_empty());
+        assert!(has_optimizations);
     }
 
     // Performance and scalability tests
