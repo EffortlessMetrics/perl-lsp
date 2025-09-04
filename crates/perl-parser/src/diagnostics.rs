@@ -367,6 +367,9 @@ impl DiagnosticsProvider {
                     self.walk_node(arg, func);
                 }
             }
+            NodeKind::ExpressionStatement { expression } => {
+                self.walk_node(expression, func);
+            }
             _ => {} // Other nodes don't have children or are handled differently
         }
     }

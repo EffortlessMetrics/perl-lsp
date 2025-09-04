@@ -28,14 +28,14 @@ mod incremental_comprehensive_tests {
         validation.print_report();
 
         // Validate specific performance requirements for simple edits
-        assert!(result.avg_incremental_micros < 1000, "Simple edits should be <1ms");
+        assert!(result.avg_incremental_micros < 500, "Simple edits should be <500µs");
         assert!(
-            result.avg_efficiency_percentage >= 70.0,
-            "Simple edits should have ≥70% efficiency"
+            result.avg_efficiency_percentage >= 75.0,
+            "Simple edits should have ≥75% efficiency"
         );
         assert!(
-            result.sub_millisecond_rate >= 0.6,
-            "≥60% of simple edits should be sub-millisecond"
+            result.sub_millisecond_rate >= 0.8,
+            "≥80% of simple edits should be sub-millisecond"
         );
     }
 
@@ -69,10 +69,10 @@ mod incremental_comprehensive_tests {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // Multi-statement should still be fast but may have lower reuse rates
-        assert!(result.avg_incremental_micros < 2000, "Multi-statement edits should be <2ms");
+        assert!(result.avg_incremental_micros < 1000, "Multi-statement edits should be <1ms");
         assert!(
-            result.avg_efficiency_percentage >= 50.0,
-            "Multi-statement should have ≥50% efficiency"
+            result.avg_efficiency_percentage >= 60.0,
+            "Multi-statement should have ≥60% efficiency"
         );
     }
 

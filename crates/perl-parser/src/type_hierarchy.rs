@@ -352,6 +352,7 @@ impl TypeHierarchyProvider {
             NodeKind::Class { body, .. } => Some(vec![body.as_ref()]),
             NodeKind::Subroutine { body, .. } => Some(vec![body.as_ref()]),
             NodeKind::Assignment { lhs, rhs, .. } => Some(vec![lhs.as_ref(), rhs.as_ref()]),
+            NodeKind::ExpressionStatement { expression } => Some(vec![expression.as_ref()]),
             _ => None,
         }
     }
