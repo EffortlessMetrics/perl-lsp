@@ -9,9 +9,9 @@ use crate::workspace_index::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::fmt;
 
 /// Errors that can occur during workspace refactoring operations
 #[derive(Debug, Clone)]
@@ -112,7 +112,7 @@ pub struct RefactorResult {
 /// # use std::path::Path;
 /// let index = WorkspaceIndex::new();
 /// let refactor = WorkspaceRefactor::new(index);
-/// 
+///
 /// // Rename a variable across all files
 /// let result = refactor.rename_symbol("$old_name", "$new_name", Path::new("file.pl"), (0, 0));
 /// ```
@@ -160,7 +160,7 @@ impl WorkspaceRefactor {
     /// # use std::path::Path;
     /// let index = WorkspaceIndex::new();
     /// let refactor = WorkspaceRefactor::new(index);
-    /// 
+    ///
     /// let result = refactor.rename_symbol("$old_var", "$new_var", Path::new("file.pl"), (0, 0))?;
     /// println!("Rename will affect {} files", result.file_edits.len());
     /// # Ok::<(), perl_parser::workspace_refactor::RefactorError>(())
@@ -208,27 +208,27 @@ impl WorkspaceRefactor {
         if locations.is_empty() {
             // Fallback naive search with performance optimizations
             let _old_name_bytes = old_name.as_bytes();
-            
+
             for doc in store.all_documents() {
                 // Pre-check if the document even contains the target string to avoid unnecessary work
                 if !doc.text.contains(old_name) {
                     continue;
                 }
-                
+
                 let mut idx = doc.line_index.clone();
                 let mut pos = 0;
                 let _text_bytes = doc.text.as_bytes();
-                
+
                 // Use faster byte-based searching with matches iterator
                 while let Some(found) = doc.text[pos..].find(old_name) {
                     let start = pos + found;
                     let end = start + old_name.len();
-                    
+
                     // Early bounds checking to avoid invalid positions
                     if start >= doc.text.len() || end > doc.text.len() {
                         break;
                     }
-                    
+
                     let (start_line, start_col) = idx.offset_to_position(start);
                     let (end_line, end_col) = idx.offset_to_position(end);
                     locations.push(crate::workspace_index::Location {
@@ -239,13 +239,13 @@ impl WorkspaceRefactor {
                         },
                     });
                     pos = end;
-                    
+
                     // Limit the number of matches to prevent runaway performance issues
                     if locations.len() >= 1000 {
                         break;
                     }
                 }
-                
+
                 // If we've found matches in this document and it's getting large, we can break early
                 // This is a heuristic to balance completeness with performance
                 if locations.len() >= 500 {
@@ -319,7 +319,7 @@ impl WorkspaceRefactor {
     /// # use std::path::Path;
     /// let index = WorkspaceIndex::new();
     /// let refactor = WorkspaceRefactor::new(index);
-    /// 
+    ///
     /// let result = refactor.extract_module(
     ///     Path::new("large_file.pl"),
     ///     50, 100,  // Extract lines 50-100
@@ -339,26 +339,27 @@ impl WorkspaceRefactor {
             return Err(RefactorError::InvalidInput("Module name cannot be empty".to_string()));
         }
         if start_line > end_line {
-            return Err(RefactorError::InvalidInput("Start line cannot be after end line".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Start line cannot be after end line".to_string(),
+            ));
         }
 
         let uri = fs_path_to_uri(file_path).map_err(|e| {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
         let store = self._index.document_store();
-        let doc = store.get(&uri).ok_or_else(|| {
-            RefactorError::DocumentNotIndexed(file_path.display().to_string())
-        })?;
+        let doc = store
+            .get(&uri)
+            .ok_or_else(|| RefactorError::DocumentNotIndexed(file_path.display().to_string()))?;
         let mut idx = doc.line_index.clone();
 
         // Determine byte offsets for lines
-        let start_off =
-            idx.position_to_offset(start_line as u32 - 1, 0).ok_or_else(|| {
-                RefactorError::InvalidPosition {
-                    file: file_path.display().to_string(),
-                    details: format!("Invalid start line: {}", start_line),
-                }
-            })?;
+        let start_off = idx.position_to_offset(start_line as u32 - 1, 0).ok_or_else(|| {
+            RefactorError::InvalidPosition {
+                file: file_path.display().to_string(),
+                details: format!("Invalid start line: {}", start_line),
+            }
+        })?;
         let end_off = idx.position_to_offset(end_line as u32, 0).unwrap_or(doc.text.len());
 
         let extracted = doc.text[start_off..end_off].to_string();
@@ -413,7 +414,7 @@ impl WorkspaceRefactor {
     /// # use perl_parser::workspace_index::WorkspaceIndex;
     /// let index = WorkspaceIndex::new();
     /// let refactor = WorkspaceRefactor::new(index);
-    /// 
+    ///
     /// let result = refactor.optimize_imports()?;
     /// println!("Optimized imports in {} files", result.file_edits.len());
     /// # Ok::<(), perl_parser::workspace_refactor::RefactorError>(())
@@ -452,8 +453,7 @@ impl WorkspaceRefactor {
                     details: format!("Invalid start line offset: {}", start_line),
                 }
             })?;
-            let end_off =
-                idx.position_to_offset(end_line as u32 + 1, 0).unwrap_or(doc.text.len());
+            let end_off = idx.position_to_offset(end_line as u32 + 1, 0).unwrap_or(doc.text.len());
 
             let mut deps_vec: Vec<String> = deps.into_iter().collect();
             deps_vec.sort();
@@ -468,7 +468,10 @@ impl WorkspaceRefactor {
 
             edits.push(FileEdit {
                 file_path: uri_to_fs_path(&doc.uri).ok_or_else(|| {
-                    RefactorError::UriConversion(format!("Failed to convert URI to path: {}", doc.uri))
+                    RefactorError::UriConversion(format!(
+                        "Failed to convert URI to path: {}",
+                        doc.uri
+                    ))
                 })?,
                 edits: vec![TextEdit { start: start_off, end: end_off, new_text: new_block }],
             });
@@ -510,7 +513,7 @@ impl WorkspaceRefactor {
     /// # use std::path::Path;
     /// let index = WorkspaceIndex::new();
     /// let refactor = WorkspaceRefactor::new(index);
-    /// 
+    ///
     /// let result = refactor.move_subroutine(
     ///     "utility_function",
     ///     Path::new("main.pl"),
@@ -529,25 +532,26 @@ impl WorkspaceRefactor {
             return Err(RefactorError::InvalidInput("Subroutine name cannot be empty".to_string()));
         }
         if to_module.is_empty() {
-            return Err(RefactorError::InvalidInput("Target module name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Target module name cannot be empty".to_string(),
+            ));
         }
 
         let uri = fs_path_to_uri(from_file).map_err(|e| {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
         let symbols = self._index.file_symbols(&uri);
-        let sym = symbols
-            .into_iter()
-            .find(|s| s.name == sub_name)
-            .ok_or_else(|| RefactorError::SymbolNotFound {
+        let sym = symbols.into_iter().find(|s| s.name == sub_name).ok_or_else(|| {
+            RefactorError::SymbolNotFound {
                 symbol: sub_name.to_string(),
                 file: from_file.display().to_string(),
-            })?;
+            }
+        })?;
 
         let store = self._index.document_store();
-        let doc = store.get(&uri).ok_or_else(|| {
-            RefactorError::DocumentNotIndexed(from_file.display().to_string())
-        })?;
+        let doc = store
+            .get(&uri)
+            .ok_or_else(|| RefactorError::DocumentNotIndexed(from_file.display().to_string()))?;
         let mut idx = doc.line_index.clone();
         let start_off = idx
             .position_to_offset(sym.range.start.line, sym.range.start.character)
@@ -636,7 +640,7 @@ impl WorkspaceRefactor {
     /// # use std::path::Path;
     /// let index = WorkspaceIndex::new();
     /// let refactor = WorkspaceRefactor::new(index);
-    /// 
+    ///
     /// // Inline a temporary variable like: my $temp = some_function(); print $temp;
     /// let result = refactor.inline_variable("$temp", Path::new("file.pl"), (0, 0))?;
     /// # Ok::<(), perl_parser::workspace_refactor::RefactorError>(())
@@ -664,9 +668,9 @@ impl WorkspaceRefactor {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
         let store = self._index.document_store();
-        let doc = store.get(&uri).ok_or_else(|| {
-            RefactorError::DocumentNotIndexed(file_path.display().to_string())
-        })?;
+        let doc = store
+            .get(&uri)
+            .ok_or_else(|| RefactorError::DocumentNotIndexed(file_path.display().to_string()))?;
         let mut idx = doc.line_index.clone();
 
         // Naively find definition line (variable declaration with "my")
@@ -691,11 +695,12 @@ impl WorkspaceRefactor {
             .split('=')
             .nth(1)
             .map(|s| s.trim().trim_end_matches(';'))
-            .ok_or_else(|| RefactorError::ParseError(format!(
-                "Variable '{}' has no initializer in line: {}",
-                var_name,
-                def_line
-            )))?
+            .ok_or_else(|| {
+                RefactorError::ParseError(format!(
+                    "Variable '{}' has no initializer in line: {}",
+                    var_name, def_line
+                ))
+            })?
             .to_string();
 
         let mut edits_map: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
@@ -799,19 +804,19 @@ mod tests {
     fn test_rename_symbol_validation_errors() {
         let (index, paths) = setup_index(vec![("a.pl", "my $foo = 1;")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         // Empty old name
         assert!(matches!(
             refactor.rename_symbol("", "$bar", &paths[0], (0, 0)),
             Err(RefactorError::InvalidInput(_))
         ));
-        
+
         // Empty new name
         assert!(matches!(
             refactor.rename_symbol("$foo", "", &paths[0], (0, 0)),
             Err(RefactorError::InvalidInput(_))
         ));
-        
+
         // Identical names
         assert!(matches!(
             refactor.rename_symbol("$foo", "$foo", &paths[0], (0, 0)),
@@ -823,13 +828,13 @@ mod tests {
     fn test_extract_module_validation_errors() {
         let (index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         // Empty module name
         assert!(matches!(
             refactor.extract_module(&paths[0], 1, 2, ""),
             Err(RefactorError::InvalidInput(_))
         ));
-        
+
         // Invalid line range
         assert!(matches!(
             refactor.extract_module(&paths[0], 5, 2, "Test"),
@@ -841,13 +846,13 @@ mod tests {
     fn test_move_subroutine_validation_errors() {
         let (index, paths) = setup_index(vec![("a.pl", "sub foo { 1 }")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         // Empty subroutine name
         assert!(matches!(
             refactor.move_subroutine("", &paths[0], "Utils"),
             Err(RefactorError::InvalidInput(_))
         ));
-        
+
         // Empty target module
         assert!(matches!(
             refactor.move_subroutine("foo", &paths[0], ""),
@@ -859,7 +864,7 @@ mod tests {
     fn test_inline_variable_validation_errors() {
         let (index, paths) = setup_index(vec![("a.pl", "my $x = 42;")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         // Empty variable name
         assert!(matches!(
             refactor.inline_variable("", &paths[0], (0, 0)),
@@ -875,12 +880,12 @@ mod tests {
             ("unicode2.pl", "use utf8; my $données = 42; print $données;"), // French accents
         ]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         // Rename Unicode variable
         let result = refactor.rename_symbol("$♥", "$love", &paths[0], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
         assert!(result.description.contains("♥"));
-        
+
         // Rename variable with accents
         let result = refactor.rename_symbol("$données", "$data", &paths[1], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
@@ -891,13 +896,13 @@ mod tests {
     fn test_extract_module_unicode_content() {
         let (index, paths) = setup_index(vec![(
             "unicode_content.pl",
-            "# コメント in Japanese\nmy $message = \"你好世界\";\nprint $message;\n# More 中文 content\n"
+            "# コメント in Japanese\nmy $message = \"你好世界\";\nprint $message;\n# More 中文 content\n",
         )]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.extract_module(&paths[0], 2, 3, "UnicodeUtils").unwrap();
         assert_eq!(result.file_edits.len(), 2); // Original + new module
-        
+
         // Check that the extracted content contains Unicode
         let new_module_edit = &result.file_edits[1];
         assert!(new_module_edit.edits[0].new_text.contains("你好世界"));
@@ -907,13 +912,13 @@ mod tests {
     fn test_inline_variable_unicode_expressions() {
         let (index, paths) = setup_index(vec![(
             "unicode_expr.pl",
-            "my $表达式 = \"测试表达式\";\nmy $result = $表达式 . \"suffix\";\nprint $result;\n"
+            "my $表达式 = \"测试表达式\";\nmy $result = $表达式 . \"suffix\";\nprint $result;\n",
         )]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.inline_variable("$表达式", &paths[0], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
-        
+
         // Check that the replacement contains the Unicode string literal
         let edits = &result.file_edits[0].edits;
         assert!(edits.iter().any(|edit| edit.new_text.contains("测试表达式")));
@@ -934,13 +939,13 @@ $var1 =~ s/old/new/g;
 for my $item (@{[$var1, $var2]}) {
     print $item;
 }
-"#
+"#,
         )]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.rename_symbol("$var1", "$renamed_var", &paths[0], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
-        
+
         // Should find multiple occurrences in different contexts
         let edits = &result.file_edits[0].edits;
         assert!(edits.len() > 3); // Should find multiple instances
@@ -965,13 +970,13 @@ sub main_func {
     my $result = utility_func($data);
     print $result;
 }
-"#
+"#,
         )]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.extract_module(&paths[0], 6, 9, "Utils").unwrap();
         assert_eq!(result.file_edits.len(), 2);
-        
+
         // Check that extracted content includes the subroutine
         let new_module_edit = &result.file_edits[1];
         assert!(new_module_edit.edits[0].new_text.contains("sub utility_func"));
@@ -981,7 +986,9 @@ sub main_func {
     #[test]
     fn test_optimize_imports_complex_scenarios() {
         let (index, _paths) = setup_index(vec![
-            ("complex_imports.pl", r#"
+            (
+                "complex_imports.pl",
+                r#"
 use strict;
 use warnings;
 use utf8;
@@ -990,17 +997,18 @@ use Data::Dumper qw(Dumper);
 use List::Util;
 use List::Util qw(first);
 use Data::Dumper; # Duplicate
-"#),
+"#,
+            ),
             ("minimal_imports.pl", "use strict;\nuse warnings;"),
             ("no_imports.pl", "print 'Hello World';"),
         ]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.optimize_imports().unwrap();
-        
+
         // Should optimize the complex file, skip minimal (no duplicates), skip no imports
         assert!(result.file_edits.len() <= 3);
-        
+
         // Check that we don't create empty edits for files with no imports
         for file_edit in &result.file_edits {
             assert!(!file_edit.edits.is_empty());
@@ -1011,19 +1019,17 @@ use Data::Dumper; # Duplicate
     fn test_move_subroutine_not_found() {
         let (index, paths) = setup_index(vec![("empty.pl", "# No subroutines here")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.move_subroutine("nonexistent", &paths[0], "Target");
         assert!(matches!(result, Err(RefactorError::SymbolNotFound { .. })));
     }
 
     #[test]
     fn test_inline_variable_no_initializer() {
-        let (index, paths) = setup_index(vec![(
-            "no_init.pl",
-            "my $var;\n$var = 42;\nprint $var;\n"
-        )]);
+        let (index, paths) =
+            setup_index(vec![("no_init.pl", "my $var;\n$var = 42;\nprint $var;\n")]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.inline_variable("$var", &paths[0], (0, 0));
         // Should fail because the found line "my $var;" doesn't have an initializer after =
         assert!(matches!(result, Err(RefactorError::ParseError(_))));
@@ -1038,13 +1044,13 @@ use Data::Dumper; # Duplicate
         for i in 0..100 {
             large_content.push_str(&format!("print \"Line {}: $target\\n\";\n", i));
         }
-        
+
         let (index, paths) = setup_index(vec![("large.pl", &large_content)]);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.rename_symbol("$target", "$renamed", &paths[0], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
-        
+
         // Should handle all occurrences
         let edits = &result.file_edits[0].edits;
         assert!(edits.len() >= 100); // At least one per line
@@ -1052,17 +1058,18 @@ use Data::Dumper; # Duplicate
 
     #[test]
     fn test_multiple_files_workspace() {
-        let files = (0..10).map(|i| {
-            (format!("file_{}.pl", i), format!("my $shared = {}; print $shared;\n", i))
-        }).collect::<Vec<_>>();
-        
-        let files_refs: Vec<_> = files.iter().map(|(name, content)| (name.as_str(), content.as_str())).collect();
+        let files = (0..10)
+            .map(|i| (format!("file_{}.pl", i), format!("my $shared = {}; print $shared;\n", i)))
+            .collect::<Vec<_>>();
+
+        let files_refs: Vec<_> =
+            files.iter().map(|(name, content)| (name.as_str(), content.as_str())).collect();
         let (index, paths) = setup_index(files_refs);
         let refactor = WorkspaceRefactor::new(index);
-        
+
         let result = refactor.rename_symbol("$shared", "$common", &paths[0], (0, 0)).unwrap();
         assert!(!result.file_edits.is_empty());
-        
+
         // Should potentially affect multiple files if fallback search is used
         assert!(!result.description.is_empty());
     }
