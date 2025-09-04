@@ -403,9 +403,8 @@ impl ScopeAnalyzer {
                 };
 
                 for param in &params_to_check {
-                    if let NodeKind::Variable { sigil, name } = &param.kind {
-                        let full_name = format!("{}{}", sigil, name);
-
+                    let full_name = self.extract_variable_name(param);
+                    if !full_name.is_empty() {
                         // Check for duplicate parameters
                         if !param_names.insert(full_name.clone()) {
                             issues.push(ScopeIssue {
@@ -444,10 +443,11 @@ impl ScopeAnalyzer {
                 if let Some(sig) = signature {
                     if let NodeKind::Signature { parameters } = &sig.kind {
                         for param in parameters {
-                            if let NodeKind::Variable { sigil, name } = &param.kind {
-                                let full_name = format!("{}{}", sigil, name);
+                            let full_name = self.extract_variable_name(param);
+                            if !full_name.is_empty() {
                                 // Skip parameters starting with underscore (intentionally unused)
-                                if name.starts_with('_') {
+                                let name_part = &full_name[1..]; // Remove sigil
+                                if name_part.starts_with('_') {
                                     continue;
                                 }
                                 if let Some(var) = sub_scope.lookup_variable(&full_name) {
@@ -510,6 +510,7 @@ impl ScopeAnalyzer {
     fn extract_variable_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
+            NodeKind::MandatoryParameter { variable } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
                 if elements.len() == 1 {

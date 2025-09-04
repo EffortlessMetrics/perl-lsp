@@ -1,6 +1,8 @@
 // Quick test of incremental parsing functionality
+#[cfg(feature = "incremental")]
 use perl_parser::{edit::Edit, incremental_v2::IncrementalParserV2, position::Position};
 
+#[cfg(feature = "incremental")]
 fn main() {
     println!("Testing incremental parser V2...");
 
@@ -46,4 +48,11 @@ fn main() {
         }
         Err(e) => println!("Initial parse error: {:?}", e),
     }
+}
+
+#[cfg(not(feature = "incremental"))]
+fn main() {
+    println!("Incremental parsing feature is not enabled.");
+    println!("To test incremental parsing, run with:");
+    println!("cargo run --example test_incremental_v2 --features incremental");
 }

@@ -800,6 +800,7 @@ impl<'a> DeclarationProvider<'a> {
             NodeKind::Foreach { variable, list, body, .. } => {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
+            NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
             _ => vec![],
         }
     }
@@ -898,6 +899,7 @@ pub fn get_node_children(node: &Node) -> Vec<&Node> {
         NodeKind::Subroutine { body, .. } => {
             vec![body.as_ref()]
         }
+        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
         _ => vec![],
     }
 }
