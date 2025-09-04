@@ -930,6 +930,7 @@ See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 - [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
 - [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
 - [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
+- [Workspace Test Report](WORKSPACE_TEST_REPORT.md) - Current workspace configuration status and build reliability
 
 ---
 
