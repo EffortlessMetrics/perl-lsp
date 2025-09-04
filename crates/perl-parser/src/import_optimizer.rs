@@ -199,7 +199,31 @@ impl ImportOptimizer {
     /// - Symbol usage detection is basic regex matching
     pub fn analyze_file(&self, file_path: &Path) -> Result<ImportAnalysis, String> {
         let content = std::fs::read_to_string(file_path).map_err(|e| e.to_string())?;
+        self.analyze_content(&content)
+    }
 
+    /// Analyze imports in Perl content and detect issues
+    ///
+    /// This method:
+    /// - Parses basic `use Module qw(symbols)` statements using regex
+    /// - Detects unused symbols by checking if they appear in the code
+    /// - Identifies duplicate imports of the same module
+    /// - Returns a comprehensive analysis with all findings
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The Perl source code content to analyze
+    ///
+    /// # Returns
+    ///
+    /// Returns `ImportAnalysis` with detected issues or an error string if analysis fails.
+    ///
+    /// # Limitations
+    ///
+    /// - Only supports simple qw() syntax
+    /// - Does not handle complex import patterns
+    /// - Symbol usage detection is basic regex matching
+    pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
         // Regex for basic `use` statement parsing
         let re_use = Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;")
             .map_err(|e| e.to_string())?;
@@ -285,15 +309,36 @@ impl ImportOptimizer {
                 );
 
                 if !is_pragma {
-                    // For bare imports (without qw()), be conservative and only flag as unused
-                    // if we can definitively prove the module isn't used. Many modules have
-                    // side effects or are used in ways not easily detectable by regex.
-                    
-                    // For now, we'll be very conservative and not flag bare imports as unused
-                    // unless there's clear evidence they're not needed. This reduces false positives.
-                    
-                    // TODO: Implement more sophisticated analysis for bare imports
-                    // that can detect side effects and implicit usage patterns
+                    // For bare imports (without qw()), check if the module or any of its known exports are used
+                    let known_exports = get_known_module_exports(&imp.module);
+                    let mut is_used = false;
+
+                    // First check if the module is directly referenced (e.g., Module::function)
+                    let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
+                    let module_re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
+                    if module_re.is_match(&non_use_content) {
+                        is_used = true;
+                    }
+
+                    // Then check if any known exports are used
+                    if !is_used && !known_exports.is_empty() {
+                        for export in &known_exports {
+                            let export_pattern = format!(r"\b{}\b", regex::escape(export));
+                            let export_re =
+                                Regex::new(&export_pattern).map_err(|e| e.to_string())?;
+                            if export_re.is_match(&non_use_content) {
+                                is_used = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // For modules without known exports, be conservative and don't mark as unused
+                    // unless we can definitively prove they're not used
+                    if !is_used && !known_exports.is_empty() {
+                        // Only mark as unused if we have known exports and none are used
+                        unused_symbols.push("(bare import)".to_string());
+                    }
                 }
             }
 
@@ -649,6 +694,31 @@ print Dumper($response);
 
         // Should detect missing import for HTTP::Tiny
         assert!(analysis.missing_imports.iter().any(|m| m.module == "HTTP::Tiny"));
+    }
+
+    #[test]
+    fn test_bare_import_with_exports_detection() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+use Data::Dumper;  # Used
+use JSON;          # Unused - has exports but none are used
+use SomeUnknownModule;  # Conservative - not marked as unused
+
+print Dumper(\@ARGV);
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        // Data::Dumper should not be unused (Dumper is used)
+        assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
+        
+        // JSON should be unused (has known exports but none are used)
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
+        
+        // SomeUnknownModule should not be marked as unused (conservative approach)
+        assert!(!analysis.unused_imports.iter().any(|u| u.module == "SomeUnknownModule"));
     }
 
     #[test]
