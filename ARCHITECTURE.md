@@ -9,9 +9,10 @@ The tree-sitter-perl project provides **multiple parser implementations** and **
 1. **v1: C-based Parser**: Original tree-sitter implementation (~95% coverage)
 2. **v2: Pest Parser**: Pure Rust with PEG grammar (~99.995% coverage)
 3. **v3: Native Parser**: Hand-written lexer+parser (~100% coverage) ⭐
-4. **LSP Server**: Full Language Server Protocol implementation
-5. **Tree-sitter Output**: All parsers produce compatible S-expressions
-6. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs)
+4. **LSP Server**: Full Language Server Protocol implementation with workspace refactoring
+5. **WorkspaceRefactor**: Enterprise-grade cross-file refactoring operations (NEW v0.8.9)
+6. **Tree-sitter Output**: All parsers produce compatible S-expressions
+7. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs)
 
 ## 📐 Architecture Diagram
 
@@ -181,6 +182,38 @@ LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
 - **ReferencesProvider**: Find all references
 - **SignatureHelpProvider**: Parameter hints
 - **SemanticTokensProvider**: Enhanced highlighting
+- **WorkspaceRefactor**: Cross-file refactoring operations (NEW in v0.8.9)
+
+#### Workspace Refactoring Architecture (NEW in v0.8.9)
+**Purpose**: Enterprise-grade cross-file refactoring capabilities
+
+**Architecture**:
+```
+WorkspaceIndex ←→ WorkspaceRefactor ←→ RefactorResult
+       ↓                   ↓                ↓
+Document Store      Operation Types     FileEdit[]
+       ↓                   ↓                ↓
+   Text Content      Symbol Analysis    TextEdit[]
+```
+
+**Key Components**:
+- **WorkspaceRefactor**: Main refactoring provider with operation methods
+- **RefactorResult**: Structured result format with file edits and warnings
+- **RefactorError**: Comprehensive error handling with detailed categorization
+- **FileEdit/TextEdit**: Precise text editing instructions with byte-level positioning
+
+**Supported Operations**:
+- **Symbol Renaming**: Cross-file variable/function renaming with validation
+- **Module Extraction**: Extract code sections into new Perl modules
+- **Import Optimization**: Workspace-wide import statement optimization
+- **Subroutine Movement**: Move functions between modules with cleanup
+- **Variable Inlining**: Replace variables with their initializer expressions
+
+**Safety Features**:
+- **Input Validation**: Empty names, identical names, invalid ranges
+- **Unicode Safety**: Full international character support with boundary checking
+- **Performance Limits**: 1000 match limit, 500 file limit for large codebases
+- **Error Recovery**: Graceful handling of invalid positions and missing symbols
 
 ## 🔍 Parser Pipeline
 
