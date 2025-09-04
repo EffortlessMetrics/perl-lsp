@@ -8,10 +8,14 @@ use perl_parser::{edit::Edit, position::Position};
 use std::time::{Duration, Instant};
 
 /// Comprehensive performance measurement utilities for incremental parsing
+///
+/// Provides static methods for testing incremental parsing performance
+/// with comprehensive statistical analysis and validation.
 pub struct IncrementalTestUtils;
 
 impl IncrementalTestUtils {
     /// Create a performance edit that changes a value in the source
+    #[allow(dead_code)]
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
         let pos =
             source.find(old_value).expect(&format!("Could not find '{}' in source", old_value));
@@ -33,6 +37,7 @@ impl IncrementalTestUtils {
     }
 
     /// Measure the performance of a single incremental parse operation
+    #[allow(dead_code)]
     pub fn measure_incremental_parse(
         parser: &mut IncrementalParserV2,
         source: &str,
@@ -58,6 +63,7 @@ impl IncrementalTestUtils {
     }
 
     /// Run a performance test with multiple iterations and statistical analysis
+    #[allow(dead_code)]
     pub fn performance_test_with_stats<F>(
         name: &str,
         initial_source: &str,
