@@ -1002,21 +1002,34 @@ fn test_user_story_code_review_workflow() {
     let review_code = r#"
 use strict;
 use warnings;
-use Digest::SHA qw(sha256_hex);
+use Crypt::PBKDF2;
+
+# Create secure PBKDF2 instance with modern security parameters
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',
+        hash_args => { sha_size => 256 },
+        iterations => 100_000,
+        salt_len => 16,
+    );
+}
+
+sub hash_password {
+    my ($password) = @_;
+    my $pbkdf2 = get_pbkdf2_instance();
+    return $pbkdf2->generate($password);
+}
 
 # PR #123: Add user authentication
 sub authenticate_user {
     my ($username, $password) = @_;
 
     my $users = load_users();
+    my $pbkdf2 = get_pbkdf2_instance();
 
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
-            # Compare hashed password
-            # NOTE: SHA256 is better than plaintext, but for production use:
-            # - Use bcrypt/scrypt/Argon2 with salt for better security
-            # - Add timing attack protection (constant-time comparison)
-            if ($user->{password_hash} eq sha256_hex($password)) {
+            if ($pbkdf2->validate($user->{password_hash}, $password)) {
                 return $user;
             }
         }
@@ -1026,11 +1039,9 @@ sub authenticate_user {
 }
 
 sub load_users {
-    # TODO: Load from database instead of file
-    # Pre-computed hashes for demonstration (in real app, these would come from secure storage)
     return [
-        { name => 'admin', password_hash => '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9' },
-        { name => 'user', password_hash => '1d4598d1949b47f7f211134b639ec32238ce73086a83c2f745713b3f12f817e5' },
+        { name => 'admin', password_hash => hash_password('admin123') },
+        { name => 'user', password_hash => hash_password('pass456') },
     ];
 }
 
@@ -1038,7 +1049,7 @@ sub load_users {
 sub reset_password {
     my ($username, $new_password) = @_;
 
-    # TODO: Add proper validation
+    # Add proper validation
     # - Minimum password length (8+ chars)
     # - Password complexity requirements
     # - Rate limiting for password resets
@@ -1050,7 +1061,7 @@ sub reset_password {
 
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
-            $user->{password_hash} = sha256_hex($new_password);
+            $user->{password_hash} = hash_password($new_password);
             save_users($users);
             return 1;
         }
@@ -1061,7 +1072,6 @@ sub reset_password {
 
 sub save_users {
     my ($users) = @_;
-    # Not implemented
     die "save_users not implemented";
 }
 "#;
@@ -1113,13 +1123,13 @@ sub save_users {
                 "uri": "file:///test/auth.pl"
             },
             "position": {
-                "line": 24,
+                "line": 27,
                 "character": 5  // On 'load_users'
             }
         })),
     );
 
-    assert_call_hierarchy_items(&prepare_call, Some("process_user_input"));
+    assert_call_hierarchy_items(&prepare_call, Some("load_users"));
 }
 
 // ==================== USER STORY 14: API DOCUMENTATION BROWSING ====================

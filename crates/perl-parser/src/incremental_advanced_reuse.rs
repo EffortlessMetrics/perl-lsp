@@ -819,7 +819,7 @@ impl ReuseAnalysisResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SourceLocation, ast::Node, position::Position};
+    use crate::{SourceLocation, ast::Node};
 
     #[test]
     fn test_advanced_reuse_analyzer_creation() {

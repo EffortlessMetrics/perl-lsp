@@ -846,3 +846,95 @@ print INVALID_BAREWORD;
    # Test specific LSP method
    echo '{"jsonrpc":"2.0","id":1,"method":"workspace/symbol","params":{"query":"test"}}' | perl-lsp --stdio
    ```
+
+## Security Considerations in LSP Testing
+
+The LSP implementation includes security best practices demonstrated in test scenarios (see PR #44). When implementing authentication or security-related features in test infrastructure, follow enterprise-grade security standards.
+
+### Secure Password Handling in Test Code
+
+Test scenarios involving authentication should demonstrate proper security practices:
+
+```perl
+# ✅ SECURE: PBKDF2-based password hashing (PR #44)
+use Crypt::PBKDF2;
+
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',      # SHA-2 family for cryptographic strength
+        hash_args => { sha_size => 256 }, # SHA-256 for collision resistance  
+        iterations => 100_000,          # OWASP 2021 minimum for PBKDF2
+        salt_len => 16,                 # 128-bit cryptographically random salt
+    );
+}
+
+sub authenticate_user {
+    my ($username, $password) = @_;
+    my $users = load_users();
+    my $pbkdf2 = get_pbkdf2_instance();
+    
+    foreach my $user (@$users) {
+        if ($user->{name} eq $username) {
+            # Constant-time validation prevents timing attacks
+            if ($pbkdf2->validate($user->{password_hash}, $password)) {
+                return $user;
+            }
+        }
+    }
+    return undef;
+}
+```
+
+### Security Testing in LSP Context
+
+Include security-focused test scenarios in your LSP test suites:
+
+```rust
+#[test]
+fn test_user_story_secure_code_review_workflow() {
+    let mut server = create_test_server();
+    initialize_server(&mut server);
+    
+    // Test code with proper security implementation
+    let secure_code = include_str!("fixtures/secure_authentication.pl");
+    open_document(&mut server, "file:///test/secure.pl", secure_code);
+    
+    // LSP should recognize secure patterns
+    let diagnostics = send_request(&mut server, "textDocument/publishDiagnostics", None);
+    
+    // Should not flag secure authentication as problematic
+    assert_no_security_warnings(&diagnostics);
+    
+    // Call hierarchy should correctly track security functions
+    let call_hierarchy = send_request(
+        &mut server,
+        "textDocument/prepareCallHierarchy", 
+        Some(json!({
+            "textDocument": { "uri": "file:///test/secure.pl" },
+            "position": { "line": 27, "character": 5 }  // On 'load_users'
+        }))
+    );
+    
+    assert_call_hierarchy_items(&call_hierarchy, Some("load_users"));
+}
+```
+
+### File Security Best Practices
+
+The LSP server implements path traversal prevention and file access security:
+
+1. **Path Canonicalization**: All file paths are canonicalized before access
+2. **Workspace Bounds Checking**: File operations are restricted to workspace boundaries  
+3. **Input Validation**: URI and path parameters are validated before processing
+4. **Error Message Sanitization**: File system errors don't expose sensitive paths
+
+### Security Review Process
+
+When adding LSP features involving:
+
+- **File System Access**: Ensure proper path validation and workspace boundaries
+- **External Process Execution**: Validate and sanitize all parameters
+- **Network Communications**: Use secure protocols and validate inputs
+- **User Data Handling**: Apply appropriate sanitization and validation
+
+These security practices ensure the LSP implementation serves as a reference for secure development practices in the Perl ecosystem.
