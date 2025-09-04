@@ -16,7 +16,7 @@ anyhow = "1.0.98"
 indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }
+# tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }  # Commented: excluded from workspace
 perl-parser = { workspace = true }
 tree-sitter = { workspace = true }
 regex = "1.11.1"
