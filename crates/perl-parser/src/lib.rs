@@ -130,6 +130,8 @@ pub mod document_store;
 pub mod folding;
 pub mod import_optimizer;
 #[cfg(feature = "incremental")]
+pub mod incremental_advanced_reuse;
+#[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]
 pub mod incremental_handler_v2;

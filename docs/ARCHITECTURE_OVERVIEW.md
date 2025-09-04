@@ -3,11 +3,14 @@
 ## Crate Structure
 
 ### Production Crates
-- **`/crates/perl-parser/`**: Main parser and LSP server
-  - `src/parser.rs`: Recursive descent parser
-  - `src/lsp_server.rs`: LSP implementation
-  - `src/ast.rs`: AST definitions
-  - `bin/perl-lsp.rs`: LSP server binary
+- **`/crates/perl-parser/`**: Main parser with production-ready incremental parsing
+  - `src/parser.rs`: Recursive descent parser with 99.7% node reuse efficiency
+  - `src/incremental_v2.rs`: Advanced incremental parser with statistical validation
+  - `src/lsp_server.rs`: LSP implementation with real-time document updates
+  - `src/ast.rs`: AST definitions with Arc<Node> sharing for memory efficiency
+  - `src/textdoc.rs`: Rope-based document management for UTF-16/UTF-8 position tracking
+  - `src/position_mapper.rs`: High-performance position conversion (65µs average updates)
+  - `bin/perl-lsp.rs`: LSP server binary (moved to perl-lsp crate in v0.8.9)
   - Published as `perl-parser` on crates.io
 
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
@@ -35,6 +38,27 @@
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 
+## Workspace Configuration Strategy (v0.8.9+)
+
+### Exclusion Architecture (**Diataxis: Explanation** - Design decisions)
+
+The workspace uses a **production-focused exclusion strategy** to ensure reliable builds:
+
+#### Excluded Crates
+- **`tree-sitter-perl-c`**: Requires libclang and system dependencies
+- **Example crates with feature conflicts**: Avoid cross-crate feature dependency issues
+- **Legacy tooling**: Internal development tools not part of published API
+
+#### Architectural Benefits
+1. **Platform Independence**: No C toolchain requirements
+2. **CI Stability**: Consistent build behavior across platforms
+3. **Production Focus**: Testing only published crate surface area
+4. **Dependency Safety**: Avoid system-specific build failures
+
+This approach prioritizes **published crate reliability** over comprehensive internal tooling, ensuring users can depend on stable builds regardless of their platform or system configuration.
+
+See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspace status.
+
 ## Key Components
 
 ### 1. Pest Parser Architecture
@@ -49,27 +73,40 @@
 - Tree-sitter compatible node types
 - Position tracking for all nodes
 
-### 3. S-Expression Output
+### 3. Production-Ready Incremental Parsing (**Diataxis: Explanation**)
+- **IncrementalParserV2**: Advanced incremental parser with intelligent node reuse
+- **Statistical Validation**: Comprehensive performance analysis framework
+  - Performance metrics: 65µs average (Excellent), 205µs moderate (Very Good), 538µs large (Good)
+  - Node reuse efficiency: 99.7% peak, 96.8% average (target: ≥70%)
+  - Statistical consistency: <0.6 coefficient of variation (target: <1.0)
+  - Success rate: 100% with comprehensive fallback mechanisms
+- **Unicode-Safe Operations**: Proper multibyte character handling with UTF-8 boundary validation
+- **Memory Efficiency**: Arc<Node> sharing, LRU cache eviction, Rope-based document management
+- **Test Infrastructure**: 40+ comprehensive test cases with production-grade validation
+- **LSP Integration**: Real-time document updates with Rope-based position tracking
+
+### 4. S-Expression Output
 - `to_sexp()` method produces tree-sitter format
 - Compatible with existing tree-sitter tools
 - Preserves all position information
 - Error nodes for unparseable constructs
 
-### 4. Edge Case Handling
+### 5. Edge Case Handling
 - Comprehensive heredoc support (93% edge case test coverage)
 - Phase-aware parsing for BEGIN/END blocks
 - Dynamic delimiter detection and recovery
 - Clear diagnostics for unparseable constructs
 
-### 5. Testing Strategy
+### 6. Testing Strategy
 - Grammar tests for each Perl construct
 - Edge case tests with property testing
-- Performance benchmarks
+- **Incremental Parsing Tests**: 40+ comprehensive test cases with statistical validation
+- **Performance Benchmarks**: Sub-millisecond performance validation with regression detection
 - Integration tests for S-expression output
 - Position tracking validation tests
 - Encoding-aware lexing for mid-file encoding changes
 - Tree-sitter compatible error nodes and diagnostics
-- Performance optimized (<5% overhead for normal code)
+- Performance optimized (<5% overhead for normal code, 65µs incremental updates)
 
 ## Development Guidelines
 

@@ -669,6 +669,116 @@ perf: optimize string interpolation parsing
 - [ ] Commit messages follow conventions
 - [ ] PR description explains the changes
 
+## Security Best Practices
+
+This project demonstrates enterprise-grade security practices in its test infrastructure and encourages secure coding throughout. PR #44 introduces PBKDF2-based password hashing as a reference implementation.
+
+### Secure Authentication Implementation
+
+When implementing authentication systems in test code or examples, follow these security principles:
+
+#### Password Hashing with PBKDF2
+
+```perl
+use Crypt::PBKDF2;
+
+# Create secure PBKDF2 instance with modern security parameters
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',      # Use SHA-2 family
+        hash_args => { sha_size => 256 }, # SHA-256 for strong security
+        iterations => 100_000,          # 100k iterations (OWASP 2021 minimum)
+        salt_len => 16,                 # 16-byte cryptographically random salt
+    );
+}
+
+sub hash_password {
+    my ($password) = @_;
+    my $pbkdf2 = get_pbkdf2_instance();
+    return $pbkdf2->generate($password);  # Returns salt + hash
+}
+
+sub authenticate_user {
+    my ($username, $password) = @_;
+    
+    my $users = load_users();
+    my $pbkdf2 = get_pbkdf2_instance();
+    
+    foreach my $user (@$users) {
+        if ($user->{name} eq $username) {
+            # Use constant-time comparison via PBKDF2 validation
+            if ($pbkdf2->validate($user->{password_hash}, $password)) {
+                return $user;
+            }
+        }
+    }
+    
+    return undef;  # Authentication failed
+}
+```
+
+#### Security Features Demonstrated
+
+1. **Strong Key Derivation**: PBKDF2 with 100,000 iterations meets OWASP 2021 standards
+2. **Cryptographic Hashing**: SHA-256 provides collision resistance  
+3. **Random Salt Generation**: 16-byte salts prevent rainbow table attacks
+4. **Constant-Time Validation**: Prevents timing-based side-channel attacks
+5. **No Plain Text Storage**: Passwords are immediately hashed and never stored in clear text
+
+### Defensive Coding Practices
+
+When contributing to this project:
+
+1. **Input Validation**: Always validate and sanitize user input
+2. **Path Traversal Prevention**: Use canonical paths and validate file access
+3. **Memory Safety**: Leverage Rust's ownership system to prevent buffer overflows
+4. **Error Handling**: Don't expose sensitive information in error messages
+5. **Dependency Security**: Regularly audit dependencies for known vulnerabilities
+
+### Security Testing
+
+Include security-focused tests when adding authentication or file handling features:
+
+```rust
+#[test]
+fn test_secure_password_handling() {
+    // Test that passwords are properly hashed
+    let password = "test_password_123";
+    let hash1 = hash_password(password);
+    let hash2 = hash_password(password);
+    
+    // Same password should produce different hashes (due to random salt)
+    assert_ne!(hash1, hash2);
+    
+    // But validation should work for both
+    assert!(validate_password(password, &hash1));
+    assert!(validate_password(password, &hash2));
+}
+
+#[test] 
+fn test_timing_attack_resistance() {
+    // Ensure authentication time is consistent regardless of user existence
+    let start_valid = std::time::Instant::now();
+    authenticate_user("existing_user", "wrong_password");
+    let time_valid = start_valid.elapsed();
+    
+    let start_invalid = std::time::Instant::now();
+    authenticate_user("nonexistent_user", "any_password");
+    let time_invalid = start_invalid.elapsed();
+    
+    // Times should be similar (within reasonable variance)
+    let ratio = time_valid.as_nanos() as f64 / time_invalid.as_nanos() as f64;
+    assert!(ratio > 0.5 && ratio < 2.0, "Potential timing attack vector");
+}
+```
+
+### Security Review Process
+
+- All authentication-related code changes require security review
+- Test implementations should serve as security best practice examples
+- Document security assumptions and threat models in code comments
+- Report security issues responsibly through GitHub's private reporting feature
+
 ## Getting Help
 
 - **Issues**: Check existing issues or create a new one

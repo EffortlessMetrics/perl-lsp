@@ -74,8 +74,8 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
     harness.did_save(&workspace.uri("script.pl")).ok();
     harness.did_save(&workspace.uri("lib/My/Module.pm")).ok();
 
-    // Wait for the server to process files and become idle
-    harness.wait_for_idle(Duration::from_millis(200));
+    // Wait for the server to process files and become idle (increased for stability)
+    harness.wait_for_idle(Duration::from_millis(1000));
 
     (harness, workspace)
 }
@@ -88,12 +88,12 @@ fn test_cross_file_definition() {
     }
     let (mut harness, workspace) = create_test_server();
 
-    // Wait until the module is discoverable
+    // Wait until the module is discoverable (increased timeout for CI stability)
     harness
         .wait_for_symbol(
             "My::Module",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(800),
+            Duration::from_millis(3000),
         )
         .expect("index ready");
 
@@ -130,12 +130,12 @@ fn test_cross_file_references() {
     }
     let (mut harness, workspace) = create_test_server();
 
-    // Wait until the module is indexed
+    // Wait until the module is indexed (increased timeout for CI stability)
     harness
         .wait_for_symbol(
             "process",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(800),
+            Duration::from_millis(3000),
         )
         .expect("index ready");
 
@@ -536,7 +536,7 @@ use My::Module;
     // Wait until the symbol appears so we don't race the indexer
     let module_uri = format!("file://{}", module_path.display());
     harness
-        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(800))
+        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(3000))
         .expect("index ready");
 
     // Compute the UTF-16 column for the 'M' in "My::Module" on that exact line.

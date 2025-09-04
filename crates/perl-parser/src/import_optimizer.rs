@@ -278,6 +278,7 @@ impl ImportOptimizer {
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
+        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
         for imp in &imports {
             let mut unused_symbols = Vec::new();
 
@@ -318,6 +319,23 @@ impl ImportOptimizer {
                     let module_re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
                     if module_re.is_match(&non_use_content) {
                         is_used = true;
+                    }
+
+                    // Also check for qualified function calls like Module::function
+                    if !is_used {
+                        let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
+                        let qualified_re =
+                            Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
+                        if qualified_re.is_match(&non_use_content) {
+                            is_used = true;
+                        }
+                    }
+
+                    // Special handling for Data::Dumper - check for Dumper function usage
+                    if !is_used && imp.module == "Data::Dumper" {
+                        if dumper_re.is_match(&non_use_content) {
+                            is_used = true;
+                        }
                     }
 
                     // Then check if any known exports are used
@@ -713,10 +731,10 @@ print Dumper(\@ARGV);
 
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
-        
+
         // JSON should be unused (has known exports but none are used)
         assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
-        
+
         // SomeUnknownModule should not be marked as unused (conservative approach)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "SomeUnknownModule"));
     }

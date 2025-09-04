@@ -22,21 +22,21 @@ use serde_json::Value;
 
 /// Assert hover response has text content
 pub fn assert_hover_has_text(v: &Option<Value>) {
-    if let Some(hover) = v {
-        if !hover.is_null() {
-            let obj = hover.as_object().expect("hover should be object");
-            assert!(obj.contains_key("contents"), "hover must have contents field");
+    if let Some(hover) = v
+        && !hover.is_null()
+    {
+        let obj = hover.as_object().expect("hover should be object");
+        assert!(obj.contains_key("contents"), "hover must have contents field");
 
-            let contents = &obj["contents"];
-            let has_text = contents.is_string()
-                || contents.get("value").and_then(|s| s.as_str()).is_some()
-                || contents.get("kind").is_some();
-            assert!(has_text, "hover must include text/markdown content");
+        let contents = &obj["contents"];
+        let has_text = contents.is_string()
+            || contents.get("value").and_then(|s| s.as_str()).is_some()
+            || contents.get("kind").is_some();
+        assert!(has_text, "hover must include text/markdown content");
 
-            // Optional: check range if present
-            if let Some(range) = obj.get("range") {
-                assert_range_valid(range, "hover range");
-            }
+        // Optional: check range if present
+        if let Some(range) = obj.get("range") {
+            assert_range_valid(range, "hover range");
         }
     }
 }
