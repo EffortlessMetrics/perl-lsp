@@ -285,15 +285,31 @@ impl ImportOptimizer {
                 );
 
                 if !is_pragma {
-                    // For bare imports (without qw()), be conservative and only flag as unused
-                    // if we can definitively prove the module isn't used. Many modules have
-                    // side effects or are used in ways not easily detectable by regex.
+                    // For bare imports of non-pragma modules, check if module is used
+                    let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
+                    let re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
                     
-                    // For now, we'll be very conservative and not flag bare imports as unused
-                    // unless there's clear evidence they're not needed. This reduces false positives.
+                    // Also check for qualified function calls like Module::function
+                    let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
+                    let qualified_re = Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
                     
-                    // TODO: Implement more sophisticated analysis for bare imports
-                    // that can detect side effects and implicit usage patterns
+                    // Special handling for Data::Dumper - check for Dumper function usage
+                    let is_used = if imp.module == "Data::Dumper" {
+                        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
+                        dumper_re.is_match(&non_use_content)
+                    } else {
+                        re.is_match(&non_use_content) || qualified_re.is_match(&non_use_content)
+                    };
+                    
+                    if !is_used {
+                        // Mark the entire module as unused
+                        unused_imports.push(UnusedImport {
+                            module: imp.module.clone(),
+                            symbols: vec![], // Empty symbols for bare import
+                            line: imp.line,
+                            reason: "Module not used in code".to_string(),
+                        });
+                    }
                 }
             }
 
