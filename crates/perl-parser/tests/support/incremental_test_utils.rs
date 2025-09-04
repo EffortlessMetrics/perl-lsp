@@ -17,8 +17,9 @@ impl IncrementalTestUtils {
     /// Create a performance edit that changes a value in the source
     #[allow(dead_code)]
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
-        let pos =
-            source.find(old_value).expect(&format!("Could not find '{}' in source", old_value));
+        let pos = source
+            .find(old_value)
+            .unwrap_or_else(|| panic!("Could not find '{}' in source", old_value));
         let end_pos = pos + old_value.len();
         let new_end = pos + new_value.len();
 
@@ -40,7 +41,7 @@ impl IncrementalTestUtils {
     #[allow(dead_code)]
     pub fn measure_incremental_parse(
         parser: &mut IncrementalParserV2,
-        source: &str,
+        _source: &str,
         edit: Edit,
         new_source: &str,
     ) -> IncrementalParseResult {
@@ -181,6 +182,7 @@ impl IncrementalTestUtils {
     }
 
     /// Validate performance against specific criteria
+    #[allow(dead_code)]
     pub fn validate_performance_criteria(
         result: &PerformanceTestResult,
         criteria: &PerformanceCriteria,
@@ -241,6 +243,7 @@ impl IncrementalTestUtils {
     }
 
     /// Generate detailed performance report
+    #[allow(dead_code)]
     pub fn print_performance_summary(result: &PerformanceTestResult) {
         println!("\n📊 Performance Test Summary: {}", result.test_name);
         println!("═════════════════════════════════════════════");
@@ -274,6 +277,7 @@ impl IncrementalTestUtils {
     }
 
     /// Create standard performance criteria for incremental parsing
+    #[allow(dead_code)]
     pub fn standard_criteria() -> PerformanceCriteria {
         PerformanceCriteria {
             max_avg_micros: 1000,              // <1ms average
@@ -285,6 +289,7 @@ impl IncrementalTestUtils {
     }
 
     /// Create relaxed criteria for complex scenarios
+    #[allow(dead_code)]
     pub fn relaxed_criteria() -> PerformanceCriteria {
         PerformanceCriteria {
             max_avg_micros: 5000,              // <5ms average
@@ -298,6 +303,7 @@ impl IncrementalTestUtils {
 
 /// Results of a single incremental parse operation
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct IncrementalParseResult {
     pub parse_time: Duration,
     pub success: bool,
@@ -318,6 +324,7 @@ impl IncrementalParseResult {
 
 /// Comprehensive performance test results with statistical analysis
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PerformanceTestResult {
     pub test_name: String,
     pub iterations: usize,
@@ -337,6 +344,7 @@ pub struct PerformanceTestResult {
 
 /// Performance criteria for validation
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PerformanceCriteria {
     pub max_avg_micros: u128,
     pub min_efficiency_percentage: f64,
@@ -347,6 +355,7 @@ pub struct PerformanceCriteria {
 
 /// Validation report for performance criteria
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValidationReport {
     pub passed: bool,
     pub violations: Vec<String>,
@@ -354,6 +363,7 @@ pub struct ValidationReport {
 }
 
 impl ValidationReport {
+    #[allow(dead_code)]
     pub fn print_report(&self) {
         if self.passed {
             println!("✅ Performance validation PASSED");
@@ -380,7 +390,7 @@ macro_rules! perf_test {
         perf_test!($name, $source, $edit_fn, 10)
     };
     ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {{
-        use crate::support::incremental_test_utils::IncrementalTestUtils;
+        use $crate::support::incremental_test_utils::IncrementalTestUtils;
 
         let result = IncrementalTestUtils::performance_test_with_stats(
             $name,
@@ -408,7 +418,7 @@ macro_rules! perf_test_relaxed {
         perf_test_relaxed!($name, $source, $edit_fn, 10)
     };
     ($name:expr, $source:expr, $edit_fn:expr, $iterations:expr) => {{
-        use crate::support::incremental_test_utils::IncrementalTestUtils;
+        use $crate::support::incremental_test_utils::IncrementalTestUtils;
 
         let result = IncrementalTestUtils::performance_test_with_stats(
             $name,

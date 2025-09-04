@@ -247,7 +247,7 @@ if ($condition) {
         // Initial parse
         parser.parse(source).unwrap();
 
-        let edits = vec![("1", "10"), ("2", "20"), ("3", "30")];
+        let edits = [("1", "10"), ("2", "20"), ("3", "30")];
 
         let mut cumulative_time = 0u128;
         let mut all_efficient = true;
