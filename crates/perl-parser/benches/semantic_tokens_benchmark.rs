@@ -1,5 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use perl_parser::{Parser, semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens}};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use perl_parser::{
+    Parser,
+    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+};
 
 fn benchmark_semantic_tokens_small(c: &mut Criterion) {
     let code = r#"
@@ -201,10 +204,10 @@ sub func { return $var; }
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    
+
     // Test new thread-safe implementation
     let provider = SemanticTokensProvider::new(code.to_string());
-    
+
     c.bench_function("semantic_tokens_new_implementation", |b| {
         b.iter(|| {
             let tokens = provider.extract(black_box(&ast));
@@ -215,28 +218,26 @@ sub func { return $var; }
 
     // Compare with direct old-style collection (simulate the old approach)
     use perl_parser::semantic_tokens::collect_semantic_tokens;
-    
+
     c.bench_function("semantic_tokens_old_style_collection", |b| {
         b.iter(|| {
-            let tokens = collect_semantic_tokens(
-                black_box(&ast), 
-                code,
-                &|offset| {
-                    // Simple byte-to-position conversion for benchmarking
-                    let mut line = 0u32;
-                    let mut char = 0u32;
-                    for (i, ch) in code.char_indices() {
-                        if i >= offset { break; }
-                        if ch == '\n' { 
-                            line += 1; 
-                            char = 0; 
-                        } else { 
-                            char += 1; 
-                        }
+            let tokens = collect_semantic_tokens(black_box(&ast), code, &|offset| {
+                // Simple byte-to-position conversion for benchmarking
+                let mut line = 0u32;
+                let mut char = 0u32;
+                for (i, ch) in code.char_indices() {
+                    if i >= offset {
+                        break;
                     }
-                    (line, char)
+                    if ch == '\n' {
+                        line += 1;
+                        char = 0;
+                    } else {
+                        char += 1;
+                    }
                 }
-            );
+                (line, char)
+            });
             black_box(tokens)
         });
     });
