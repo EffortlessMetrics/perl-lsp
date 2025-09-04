@@ -11,7 +11,7 @@ fn main() {
     println!("Parsing: {}", source1);
 
     match parser.parse(source1) {
-        Ok(tree) => {
+        Ok(_tree) => {
             println!("Initial parse successful!");
             println!("Reparsed nodes: {}", parser.reparsed_nodes);
             println!("Reused nodes: {}", parser.reused_nodes);
