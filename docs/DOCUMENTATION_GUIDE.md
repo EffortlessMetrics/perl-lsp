@@ -30,20 +30,21 @@ This guide helps you find the right documentation for your needs, organized usin
 9. **[LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md)** - Comprehensive LSP feature status with validation results
 10. **[CLAUDE.md](../CLAUDE.md)** - Development commands, crate architecture, and performance targets
 11. **[STABILITY.md](STABILITY.md)** - API stability guarantees and versioning policy
-12. **[CHANGELOG.md](../CHANGELOG.md)** - Complete version history and feature tracking
+12. **[WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md)** - Current workspace configuration status and build reliability
+13. **[CHANGELOG.md](../CHANGELOG.md)** - Complete version history and feature tracking
 
 ### **Explanations** (Understanding-oriented) 🧠
 
-13. **[ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)** - System design and component relationships
-14. **[INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)** - Performance architecture and design decisions
-15. **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management system explained
-16. **[EDGE_CASES.md](EDGE_CASES.md)** - Why Perl parsing edge cases are challenging
+14. **[ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)** - System design and component relationships
+15. **[INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)** - Performance architecture and design decisions
+16. **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management system explained
+17. **[EDGE_CASES.md](EDGE_CASES.md)** - Why Perl parsing edge cases are challenging
 
 ### For Contributors
 
-17. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines (How-to)
-18. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)  
-19. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
+18. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines (How-to)
+19. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)  
+20. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
 
 ## Specialized Documentation
 
