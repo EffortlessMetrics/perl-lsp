@@ -236,6 +236,173 @@ fn handle_incremental_feature(&mut self, params: FeatureParams) -> Result<Respon
 }
 ```
 
+### Pattern 4: Workspace Refactoring Features (NEW v0.8.9)
+
+For comprehensive cross-file refactoring operations:
+
+```rust
+// Workspace refactoring pattern implementation
+use crate::workspace_refactor::{WorkspaceRefactor, RefactorResult, RefactorError};
+use crate::workspace_index::WorkspaceIndex;
+
+struct WorkspaceRefactorProvider {
+    index: WorkspaceIndex,
+    refactor: WorkspaceRefactor,
+}
+
+impl WorkspaceRefactorProvider {
+    fn new(index: WorkspaceIndex) -> Self {
+        let refactor = WorkspaceRefactor::new(index.clone());
+        Self { index, refactor }
+    }
+    
+    // Cross-file symbol renaming
+    fn handle_rename_symbol(
+        &self, 
+        old_name: &str, 
+        new_name: &str,
+        file_path: &Path,
+        position: (usize, usize)
+    ) -> Result<RefactorResult, RefactorError> {
+        // Input validation
+        self.validate_symbol_names(old_name, new_name)?;
+        
+        // Perform workspace-wide rename
+        let result = self.refactor.rename_symbol(old_name, new_name, file_path, position)?;
+        
+        // Log operation for audit trail
+        self.log_refactor_operation(&result);
+        
+        Ok(result)
+    }
+    
+    // Module extraction with validation
+    fn handle_extract_module(
+        &self,
+        file_path: &Path,
+        start_line: usize,
+        end_line: usize,
+        module_name: &str
+    ) -> Result<RefactorResult, RefactorError> {
+        // Pre-validation
+        self.validate_extraction_params(file_path, start_line, end_line, module_name)?;
+        
+        // Check for dependencies that might break
+        let dependencies = self.analyze_extraction_dependencies(file_path, start_line, end_line)?;
+        
+        // Perform extraction
+        let mut result = self.refactor.extract_module(file_path, start_line, end_line, module_name)?;
+        
+        // Add warnings for potential issues
+        if !dependencies.is_empty() {
+            result.warnings.push(format!(
+                "Extracted code has {} dependencies that may need manual adjustment", 
+                dependencies.len()
+            ));
+        }
+        
+        Ok(result)
+    }
+    
+    // Error handling and validation helpers
+    fn validate_symbol_names(&self, old_name: &str, new_name: &str) -> Result<(), RefactorError> {
+        if old_name.is_empty() || new_name.is_empty() {
+            return Err(RefactorError::InvalidInput("Symbol names cannot be empty".to_string()));
+        }
+        if old_name == new_name {
+            return Err(RefactorError::InvalidInput("Old and new names are identical".to_string()));
+        }
+        Ok(())
+    }
+    
+    fn validate_extraction_params(
+        &self, 
+        file_path: &Path, 
+        start_line: usize, 
+        end_line: usize, 
+        module_name: &str
+    ) -> Result<(), RefactorError> {
+        if module_name.is_empty() {
+            return Err(RefactorError::InvalidInput("Module name cannot be empty".to_string()));
+        }
+        if start_line > end_line {
+            return Err(RefactorError::InvalidInput("Invalid line range".to_string()));
+        }
+        
+        // Check if file exists in workspace
+        let uri = fs_path_to_uri(file_path)?;
+        if !self.index.document_store().has_document(&uri) {
+            return Err(RefactorError::DocumentNotIndexed(file_path.display().to_string()));
+        }
+        
+        Ok(())
+    }
+}
+
+// LSP integration for workspace refactoring
+impl LspServer {
+    fn handle_workspace_rename_symbol(&self, params: Value) -> Result<Option<Value>, JsonRpcError> {
+        let old_name = params["old_name"].as_str().unwrap();
+        let new_name = params["new_name"].as_str().unwrap();
+        let file_path = Path::new(params["file_path"].as_str().unwrap());
+        let position = (0, 0); // Extract from params in real implementation
+        
+        match self.workspace_refactor.handle_rename_symbol(old_name, new_name, file_path, position) {
+            Ok(result) => {
+                // Convert to LSP WorkspaceEdit format
+                let workspace_edit = self.convert_refactor_result_to_lsp(result)?;
+                Ok(Some(json!(workspace_edit)))
+            }
+            Err(e) => {
+                error!("Workspace refactoring failed: {}", e);
+                Err(JsonRpcError::new(
+                    ErrorCode::InternalError.into(),
+                    format!("Refactoring failed: {}", e)
+                ))
+            }
+        }
+    }
+    
+    // Convert RefactorResult to LSP WorkspaceEdit
+    fn convert_refactor_result_to_lsp(&self, result: RefactorResult) -> Result<Value, JsonRpcError> {
+        let mut changes = serde_json::Map::new();
+        
+        for file_edit in result.file_edits {
+            let uri = fs_path_to_uri(&file_edit.file_path)?;
+            let mut edits = Vec::new();
+            
+            for text_edit in file_edit.edits {
+                // Convert byte positions to LSP positions
+                let start_pos = self.byte_to_lsp_position(&uri, text_edit.start)?;
+                let end_pos = self.byte_to_lsp_position(&uri, text_edit.end)?;
+                
+                edits.push(json!({
+                    "range": {
+                        "start": start_pos,
+                        "end": end_pos
+                    },
+                    "newText": text_edit.new_text
+                }));
+            }
+            
+            changes.insert(uri, json!(edits));
+        }
+        
+        Ok(json!({
+            "changes": changes
+        }))
+    }
+}
+```
+
+**Key Implementation Notes**:
+
+1. **Error Handling**: Comprehensive validation at multiple levels
+2. **Performance**: Built-in limits and early termination for large operations
+3. **Safety**: Unicode-aware with proper boundary checking
+4. **Integration**: Clean conversion between internal types and LSP format
+5. **Extensibility**: Easy to add new refactoring operations
+
 ## Complex Feature Examples
 
 ### Semantic Tokens Implementation
