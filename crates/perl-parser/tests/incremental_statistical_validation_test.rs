@@ -10,7 +10,7 @@ mod support;
 use crate::support::incremental_test_utils::IncrementalTestUtils;
 use perl_parser::incremental_v2::IncrementalParserV2;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Statistical analysis framework for performance validation
 struct StatisticalAnalyzer {
@@ -175,13 +175,13 @@ impl PerformanceStatistics {
         }
 
         // P95 performance check
-        if let Some(&p95) = self.percentiles.get(&95) {
-            if p95 > criteria.max_p95_micros {
-                violations.push(format!(
-                    "P95 performance {:.1}µs exceeds limit {:.1}µs",
-                    p95, criteria.max_p95_micros
-                ));
-            }
+        if let Some(&p95) = self.percentiles.get(&95)
+            && p95 > criteria.max_p95_micros
+        {
+            violations.push(format!(
+                "P95 performance {:.1}µs exceeds limit {:.1}µs",
+                p95, criteria.max_p95_micros
+            ));
         }
 
         ValidationResult { passed: violations.is_empty(), violations, warnings }
@@ -431,7 +431,7 @@ fn test_regression_detection_across_sessions() {
             }
 
             let current_stats = analyzer.calculate_statistics();
-            let baseline = baseline_stats.get(&name.to_string()).unwrap();
+            let baseline = baseline_stats.get(name).unwrap();
 
             // Regression detection
             let mean_regression = current_stats.mean / baseline.mean;
