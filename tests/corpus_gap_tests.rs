@@ -119,6 +119,12 @@ mod corpus_gap_tests {
         test_corpus_file("legacy_syntax.pl")
             .expect("Legacy syntax test failed");
     }
+
+    #[test]
+    fn test_given_when_default() {
+        test_corpus_file("given_when_default.pl")
+            .expect("given/when/default test failed");
+    }
     
     // LSP-specific tests
     #[test]

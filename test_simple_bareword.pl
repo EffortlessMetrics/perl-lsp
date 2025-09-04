@@ -1,1 +1,0 @@
-my $x = Foo::Bar->new();

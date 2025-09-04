@@ -6,12 +6,14 @@ on:
     paths:
       - 'crates/perl-parser/**'
       - 'crates/perl-lexer/**'
+      - 'crates/perl-lsp/**'
       - '.github/workflows/lsp-tests.yml'
   pull_request:
     branches: [ master, main ]
     paths:
       - 'crates/perl-parser/**'
       - 'crates/perl-lexer/**'
+      - 'crates/perl-lsp/**'
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,15 +73,15 @@ jobs:
     
     - name: Run LSP tests
       run: |
-        cargo test -p perl-parser --test lsp_user_story_test
-        cargo test -p perl-parser --test lsp_builtin_functions_test
-        cargo test -p perl-parser --test lsp_edge_cases_test
-        cargo test -p perl-parser --test lsp_multi_file_test
-        cargo test -p perl-parser --test lsp_testing_integration_test
-        cargo test -p perl-parser --test lsp_refactoring_test
-        cargo test -p perl-parser --test lsp_performance_test
-        cargo test -p perl-parser --test lsp_formatting_test
-        cargo test -p perl-parser --test lsp_master_integration_test
+        cargo test -p perl-lsp --test lsp_user_story_test
+        cargo test -p perl-lsp --test lsp_builtin_functions_test
+        cargo test -p perl-lsp --test lsp_edge_cases_test
+        cargo test -p perl-lsp --test lsp_multi_file_test
+        cargo test -p perl-lsp --test lsp_testing_integration_test
+        cargo test -p perl-lsp --test lsp_refactoring_test
+        cargo test -p perl-lsp --test lsp_performance_test
+        cargo test -p perl-lsp --test lsp_formatting_test
+        cargo test -p perl-lsp --test lsp_master_integration_test
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
@@ -90,7 +92,11 @@ jobs:
       run: cargo test --all --verbose
     
     - name: Build release binary
-      run: cargo build -p perl-parser --bin perl-lsp --release
+      run: cargo build -p perl-lsp --release
+    
+    - name: LSP health check
+      run: target/release/perl-lsp --health
+      if: matrix.os == 'ubuntu-latest'
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3

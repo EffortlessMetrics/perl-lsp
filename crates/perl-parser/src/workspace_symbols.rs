@@ -76,8 +76,8 @@ impl WorkspaceSymbolsProvider {
     }
 
     /// Index a document's symbols
-    pub fn index_document(&mut self, uri: &str, ast: &Node, _source: &str) {
-        let extractor = SymbolExtractor::new();
+    pub fn index_document(&mut self, uri: &str, ast: &Node, source: &str) {
+        let extractor = SymbolExtractor::new_with_source(source);
         let table = extractor.extract(ast);
 
         let mut symbols = Vec::new();

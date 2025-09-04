@@ -57,7 +57,7 @@ pub struct RenameProvider {
 impl RenameProvider {
     /// Create a new rename provider
     pub fn new(ast: &Node, source: String) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+        let symbol_table = SymbolExtractor::new_with_source(&source).extract(ast);
 
         RenameProvider { symbol_table, source }
     }
