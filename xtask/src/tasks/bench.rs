@@ -111,41 +111,31 @@ fn run_c_benchmarks() -> Result<CBenchmarkResult> {
     let test_code = fs::read_to_string("test/benchmark_simple.pl")
         .context("Failed to read test Perl source for C benchmark")?;
 
-    let output = cmd(
-        "node",
-        &["tree-sitter-perl/test/benchmark.js"],
-    )
-    .env("TEST_CODE", test_code)
-    .env("ITERATIONS", "100")
-    .read()
-    .context("Failed to run C benchmark harness")?;
+    let output = cmd("node", &["tree-sitter-perl/test/benchmark.js"])
+        .env("TEST_CODE", test_code)
+        .env("ITERATIONS", "100")
+        .read()
+        .context("Failed to run C benchmark harness")?;
 
-    let result: CBenchmarkResult = serde_json::from_str(&output)
-        .context("Failed to parse C benchmark output")?;
+    let result: CBenchmarkResult =
+        serde_json::from_str(&output).context("Failed to parse C benchmark output")?;
     Ok(result)
 }
 
 /// Extract the mean time from the latest Criterion benchmark output
 fn extract_rust_mean() -> Result<f64> {
-    for entry in WalkDir::new("target/criterion")
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new("target/criterion").into_iter().filter_map(|e| e.ok()) {
         if entry.file_name() == "estimates.json" {
             let data = fs::read_to_string(entry.path())?;
             let json: serde_json::Value = serde_json::from_str(&data)?;
-            if let Some(mean) = json
-                .get("mean")
-                .and_then(|m| m.get("point_estimate"))
-                .and_then(|v| v.as_f64())
+            if let Some(mean) =
+                json.get("mean").and_then(|m| m.get("point_estimate")).and_then(|v| v.as_f64())
             {
                 return Ok(mean);
             }
         }
     }
-    Err(color_eyre::eyre::eyre!(
-        "No Criterion benchmark estimates found"
-    ))
+    Err(color_eyre::eyre::eyre!("No Criterion benchmark estimates found"))
 }
 
 /// Comparison between C and Rust benchmark results
@@ -159,11 +149,7 @@ struct BenchmarkComparison {
 /// Compare benchmark results and calculate relative performance
 fn compare_implementations(rust_avg: f64, c_avg: f64) -> BenchmarkComparison {
     let speedup = c_avg / rust_avg;
-    BenchmarkComparison {
-        rust_avg,
-        c_avg,
-        speedup,
-    }
+    BenchmarkComparison { rust_avg, c_avg, speedup }
 }
 
 /// Detect simple regressions based on a 10% slowdown threshold
@@ -184,4 +170,3 @@ fn generate_report(comparison: &BenchmarkComparison) -> String {
         comparison.rust_avg, comparison.c_avg, comparison.speedup
     )
 }
-

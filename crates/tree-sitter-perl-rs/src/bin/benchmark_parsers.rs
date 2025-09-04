@@ -11,11 +11,11 @@
 //! - Scalability analysis
 //! - Regression detection
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 use tree_sitter_perl::PureRustParser;
 use walkdir::WalkDir;
 
@@ -101,24 +101,19 @@ struct BenchmarkRunner {
 
 impl BenchmarkRunner {
     fn new(config: BenchmarkConfig) -> Self {
-        Self {
-            config,
-            parser: PureRustParser::new(),
-        }
+        Self { config, parser: PureRustParser::new() }
     }
 
     fn discover_test_files(&self) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
         let mut test_files = Vec::new();
-        
+
         for test_path in &self.config.test_files {
             let path = Path::new(test_path);
-            
+
             if path.is_file() {
                 let content = fs::read_to_string(path)?;
-                let name = path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unknown")
-                    .to_string();
+                let name =
+                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
                 test_files.push((name, content));
             } else if path.is_dir() {
                 // Walk directory for .pl files
@@ -126,7 +121,9 @@ impl BenchmarkRunner {
                     if let Some(ext) = entry.path().extension() {
                         if ext == "pl" || ext == "pm" || ext == "t" {
                             if let Ok(content) = fs::read_to_string(entry.path()) {
-                                let name = entry.path().file_stem()
+                                let name = entry
+                                    .path()
+                                    .file_stem()
                                     .and_then(|s| s.to_str())
                                     .unwrap_or("unknown")
                                     .to_string();
@@ -137,49 +134,51 @@ impl BenchmarkRunner {
                 }
             }
         }
-        
+
         if test_files.is_empty() {
             return Err("No test files found".into());
         }
-        
+
         println!("Found {} test files", test_files.len());
         Ok(test_files)
     }
 
     fn benchmark_test(&mut self, name: &str, content: &str) -> TestResult {
         println!("Benchmarking test: {} ({} bytes)", name, content.len());
-        
+
         // Warmup runs
         for _ in 0..self.config.warmup_iterations {
             let _ = self.parser.parse(content, None);
         }
-        
+
         // Actual benchmark runs
         let mut durations = Vec::with_capacity(self.config.iterations);
         let mut success_count = 0;
-        
+
         for _ in 0..self.config.iterations {
             let start = Instant::now();
             let result = self.parser.parse(content, None);
             let duration = start.elapsed();
-            
+
             durations.push(duration.as_nanos() as u64);
-            
+
             if result.is_some() {
                 success_count += 1;
             }
         }
-        
+
         // Calculate statistics
         let mean = durations.iter().sum::<u64>() as f64 / durations.len() as f64;
-        let variance = durations.iter()
+        let variance = durations
+            .iter()
             .map(|&d| {
                 let diff = d as f64 - mean;
                 diff * diff
             })
-            .sum::<f64>() / durations.len() as f64;
+            .sum::<f64>()
+            / durations.len() as f64;
         let std_dev = variance.sqrt();
-        
+
         let mut sorted_durations = durations.clone();
         sorted_durations.sort_unstable();
         let median = if sorted_durations.len() % 2 == 0 {
@@ -188,15 +187,12 @@ impl BenchmarkRunner {
         } else {
             sorted_durations[sorted_durations.len() / 2] as f64
         };
-        
+
         // Estimate tokens per second (rough approximation)
         let estimated_tokens = content.split_whitespace().count() as f64;
-        let tokens_per_second = if mean > 0.0 {
-            Some(estimated_tokens / (mean / 1_000_000_000.0))
-        } else {
-            None
-        };
-        
+        let tokens_per_second =
+            if mean > 0.0 { Some(estimated_tokens / (mean / 1_000_000_000.0)) } else { None };
+
         TestResult {
             name: name.to_string(),
             file_size: content.len(),
@@ -213,9 +209,12 @@ impl BenchmarkRunner {
         }
     }
 
-    fn categorize_performance(&self, results: &HashMap<String, TestResult>) -> HashMap<String, Vec<String>> {
+    fn categorize_performance(
+        &self,
+        results: &HashMap<String, TestResult>,
+    ) -> HashMap<String, Vec<String>> {
         let mut categories: HashMap<String, Vec<String>> = HashMap::new();
-        
+
         for (name, result) in results {
             // Size-based categories
             let size_category = match result.file_size {
@@ -223,32 +222,30 @@ impl BenchmarkRunner {
                 1001..=10000 => "medium_files",
                 _ => "large_files",
             };
-            categories.entry(size_category.to_string())
-                .or_default()
-                .push(name.clone());
-            
+            categories.entry(size_category.to_string()).or_default().push(name.clone());
+
             // Performance-based categories
             let perf_category = match result.mean_duration_ns as u64 {
-                0..=1_000_000 => "fast_parsing", // <1ms
+                0..=1_000_000 => "fast_parsing",              // <1ms
                 1_000_001..=10_000_000 => "moderate_parsing", // 1-10ms
-                _ => "slow_parsing", // >10ms
+                _ => "slow_parsing",                          // >10ms
             };
-            categories.entry(perf_category.to_string())
-                .or_default()
-                .push(name.clone());
-            
+            categories.entry(perf_category.to_string()).or_default().push(name.clone());
+
             // Success rate categories
             if result.success_rate < 1.0 {
-                categories.entry("error_recovery".to_string())
-                    .or_default()
-                    .push(name.clone());
+                categories.entry("error_recovery".to_string()).or_default().push(name.clone());
             }
         }
-        
+
         categories
     }
 
-    fn generate_summary(&self, results: &HashMap<String, TestResult>, total_runtime: Duration) -> BenchmarkSummary {
+    fn generate_summary(
+        &self,
+        results: &HashMap<String, TestResult>,
+        total_runtime: Duration,
+    ) -> BenchmarkSummary {
         if results.is_empty() {
             return BenchmarkSummary {
                 overall_mean_ns: 0.0,
@@ -260,34 +257,37 @@ impl BenchmarkRunner {
                 performance_categories: HashMap::new(),
             };
         }
-        
+
         let mean_durations: Vec<f64> = results.values().map(|r| r.mean_duration_ns).collect();
         let overall_mean = mean_durations.iter().sum::<f64>() / mean_durations.len() as f64;
-        
-        let variance = mean_durations.iter()
+
+        let variance = mean_durations
+            .iter()
             .map(|&d| {
                 let diff = d - overall_mean;
                 diff * diff
             })
-            .sum::<f64>() / mean_durations.len() as f64;
+            .sum::<f64>()
+            / mean_durations.len() as f64;
         let overall_std_dev = variance.sqrt();
-        
-        let fastest_test = results.iter()
+
+        let fastest_test = results
+            .iter()
             .min_by(|a, b| a.1.mean_duration_ns.partial_cmp(&b.1.mean_duration_ns).unwrap())
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| "unknown".to_string());
-        
-        let slowest_test = results.iter()
+
+        let slowest_test = results
+            .iter()
             .max_by(|a, b| a.1.mean_duration_ns.partial_cmp(&b.1.mean_duration_ns).unwrap())
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| "unknown".to_string());
-        
-        let overall_success_rate = results.values()
-            .map(|r| r.success_rate)
-            .sum::<f64>() / results.len() as f64;
-        
+
+        let overall_success_rate =
+            results.values().map(|r| r.success_rate).sum::<f64>() / results.len() as f64;
+
         let performance_categories = self.categorize_performance(results);
-        
+
         BenchmarkSummary {
             overall_mean_ns: overall_mean,
             overall_std_dev_ns: overall_std_dev,
@@ -302,20 +302,20 @@ impl BenchmarkRunner {
     fn run(&mut self) -> Result<BenchmarkResults, Box<dyn std::error::Error>> {
         let start_time = Instant::now();
         println!("Starting Rust parser benchmarks...");
-        
+
         let test_files = self.discover_test_files()?;
         let mut results = HashMap::new();
         let mut total_iterations = 0;
-        
+
         for (name, content) in test_files {
             let result = self.benchmark_test(&name, &content);
             total_iterations += result.iterations;
             results.insert(name, result);
         }
-        
+
         let total_runtime = start_time.elapsed();
         let summary = self.generate_summary(&results, total_runtime);
-        
+
         let benchmark_results = BenchmarkResults {
             metadata: BenchmarkMetadata {
                 generated_at: std::time::SystemTime::now()
@@ -324,7 +324,8 @@ impl BenchmarkRunner {
                     .as_secs()
                     .to_string(),
                 parser_version: env!("CARGO_PKG_VERSION").to_string(),
-                rust_version: std::env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".to_string()),
+                rust_version: std::env::var("RUSTC_VERSION")
+                    .unwrap_or_else(|_| "unknown".to_string()),
                 total_tests: results.len(),
                 total_iterations,
                 configuration: self.config.clone(),
@@ -332,22 +333,28 @@ impl BenchmarkRunner {
             tests: results,
             summary,
         };
-        
+
         // Save results to JSON file
         let json_output = serde_json::to_string_pretty(&benchmark_results)?;
         fs::write(&self.config.output_path, json_output)?;
-        
+
         println!("\nBenchmark Results Summary:");
         println!("  Total tests: {}", benchmark_results.metadata.total_tests);
         println!("  Total iterations: {}", benchmark_results.metadata.total_iterations);
-        println!("  Overall mean: {:.2} ms", benchmark_results.summary.overall_mean_ns / 1_000_000.0);
-        println!("  Overall std dev: {:.2} ms", benchmark_results.summary.overall_std_dev_ns / 1_000_000.0);
+        println!(
+            "  Overall mean: {:.2} ms",
+            benchmark_results.summary.overall_mean_ns / 1_000_000.0
+        );
+        println!(
+            "  Overall std dev: {:.2} ms",
+            benchmark_results.summary.overall_std_dev_ns / 1_000_000.0
+        );
         println!("  Success rate: {:.1}%", benchmark_results.summary.success_rate * 100.0);
         println!("  Runtime: {:.2} seconds", benchmark_results.summary.total_runtime_seconds);
         println!("  Fastest test: {}", benchmark_results.summary.fastest_test);
         println!("  Slowest test: {}", benchmark_results.summary.slowest_test);
         println!("  Results saved to: {}", self.config.output_path);
-        
+
         Ok(benchmark_results)
     }
 }
@@ -360,7 +367,7 @@ fn load_config() -> BenchmarkConfig {
             return config;
         }
     }
-    
+
     println!("Using default configuration");
     BenchmarkConfig::default()
 }

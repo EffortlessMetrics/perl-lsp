@@ -4,11 +4,11 @@
 //! It follows the same interface and output format as the main benchmark runner
 //! for compatibility with the C vs Rust comparison workflow.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
 /// Configuration for benchmark runs - matches main benchmark_parsers.rs
@@ -76,10 +76,7 @@ impl Default for BenchmarkConfig {
         Self {
             iterations: 100,
             warmup_iterations: 10,
-            test_files: vec![
-                "test/benchmark_simple.pl".to_string(),
-                "test/corpus".to_string(),
-            ],
+            test_files: vec!["test/benchmark_simple.pl".to_string(), "test/corpus".to_string()],
             output_path: "benchmark_results_pest.json".to_string(),
             detailed_stats: true,
             memory_tracking: false,
@@ -90,8 +87,10 @@ impl Default for BenchmarkConfig {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Pest-based parser benchmark runner");
     println!("Note: This is a stub implementation for the legacy Pest parser");
-    println!("The main benchmarking should use the native Rust parser in tree-sitter-perl-rs crate");
-    
+    println!(
+        "The main benchmarking should use the native Rust parser in tree-sitter-perl-rs crate"
+    );
+
     // Create a basic stub result for compatibility
     let config = BenchmarkConfig::default();
     let stub_result = BenchmarkResults {
@@ -119,10 +118,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             performance_categories: HashMap::new(),
         },
     };
-    
+
     let json_output = serde_json::to_string_pretty(&stub_result)?;
     fs::write(&config.output_path, json_output)?;
-    
+
     println!("Stub results saved to: {}", config.output_path);
     Ok(())
 }

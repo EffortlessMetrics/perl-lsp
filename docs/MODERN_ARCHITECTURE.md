@@ -158,6 +158,37 @@ This architecture enables scientific comparison between three implementations:
 
 *Estimated based on architectural efficiency
 
+### Comprehensive Benchmark Framework (v0.8.9) ⭐ **NEW**
+
+The project now includes an enterprise-grade cross-language benchmark framework that provides systematic performance validation:
+
+**Framework Components:**
+- **Rust Benchmark Runner** - Statistical analysis with confidence intervals  
+- **C Benchmark Harness** - Node.js-based benchmarking for C implementation
+- **Statistical Comparison Generator** - Python-based analysis with performance gates
+- **Integration Layer** - Orchestrates complete benchmark workflow
+
+**Performance Validation Features:**
+- **Statistical Significance Testing** - Confidence intervals and regression detection
+- **Configurable Performance Gates** - 5% parse time, 20% memory regression thresholds  
+- **Automated CI/CD Integration** - Fail builds on performance regressions
+- **Comprehensive Reporting** - Markdown and JSON outputs with detailed analysis
+
+**Usage Example:**
+```bash
+# Run complete cross-language benchmark suite
+cargo xtask bench
+
+# Generate statistical comparison with custom thresholds  
+python3 scripts/generate_comparison.py \
+  --c-results c_benchmark.json \
+  --rust-results rust_benchmark.json \
+  --parse-threshold 3.0 \
+  --memory-threshold 15.0
+```
+
+This framework enables data-driven performance optimization and ensures no performance regressions across implementations (**Diataxis: How-to**).
+
 ## Integration Points
 
 ### For Tree-sitter Compatibility
