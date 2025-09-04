@@ -1141,6 +1141,55 @@ Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Perfo
 }
 ```
 
+## 🔐 Security Best Practices
+
+This project demonstrates enterprise-grade security practices in its test infrastructure and serves as a reference for secure Perl development.
+
+### Secure Authentication Implementation (PR #44)
+
+The codebase includes production-ready PBKDF2-based password hashing implementation:
+
+```perl
+use Crypt::PBKDF2;
+
+# OWASP 2021 compliant configuration
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',      # SHA-2 family  
+        hash_args => { sha_size => 256 }, # SHA-256 for collision resistance
+        iterations => 100_000,          # 100k iterations (OWASP minimum)
+        salt_len => 16,                 # 128-bit cryptographically random salt
+    );
+}
+```
+
+### Security Features Demonstrated
+
+✅ **Strong Key Derivation** - PBKDF2 with 100,000 iterations  
+✅ **Cryptographic Hashing** - SHA-256 provides collision resistance  
+✅ **Random Salt Generation** - 16-byte salts prevent rainbow table attacks  
+✅ **Constant-Time Validation** - Prevents timing-based side-channel attacks  
+✅ **No Plain Text Storage** - Passwords immediately hashed and never stored in clear text  
+
+### Defensive Development Practices
+
+- **Input Validation**: All user inputs validated and sanitized
+- **Path Traversal Prevention**: File operations use canonical paths with workspace boundaries
+- **Memory Safety**: Rust's ownership system prevents buffer overflows
+- **Error Handling**: Secure error messages without sensitive information exposure
+- **Dependency Security**: Regular dependency auditing for known vulnerabilities
+
+### Security Testing
+
+The test infrastructure includes comprehensive security-focused test scenarios that serve as implementation references for:
+
+- Secure authentication patterns with timing attack resistance
+- Input validation and parameter sanitization  
+- File access security with path traversal prevention
+- Error message security without information disclosure
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#security-best-practices) and [docs/LSP_IMPLEMENTATION_GUIDE.md](docs/LSP_IMPLEMENTATION_GUIDE.md#security-considerations-in-lsp-testing) for detailed security implementation guidance.
+
 ---
 
 ## 📄 License
