@@ -25,7 +25,15 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.9 (General Availability)
+## 📦 Latest Release: v0.8.9+ (General Availability)
+
+### Post-v0.8.9 Enhancements - Import Optimization and Scope Analysis Improvements ⚡
+- 🔧 **Enhanced Import Optimization**: Smart bare import analysis with reduced false positives for pragma modules
+- 🧠 **Advanced Scope Analysis**: MandatoryParameter support with proper variable name extraction from parameter nodes  
+- 📊 **Enhanced Test Coverage**: 41 scope analyzer tests passing (up from 38) with comprehensive parameter handling
+- 🔍 **Improved AST Traversal**: Enhanced ExpressionStatement support across all LSP providers
+- ⚡ **Module Stability**: Fixed incremental parsing module imports and enhanced code formatting consistency
+- ✅ **Quality Maintenance**: Zero clippy warnings maintained, consistent architectural compliance
 
 ### v0.8.9 - Comprehensive PR Workflow Integration with Production-Stable AST Generation 🚀
 - 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility

@@ -1,15 +1,16 @@
-# Workspace Navigation Guide (v0.8.9)
+# Workspace Navigation Guide (v0.8.9+)
 
 ## Overview
 
-The v0.8.9 release introduces production-stable workspace navigation with comprehensive AST traversal enhancements and PR workflow integration capabilities.
+The v0.8.9+ releases introduce production-stable workspace navigation with comprehensive AST traversal enhancements, import optimization improvements, and enhanced scope analysis capabilities.
 
 ## Enhanced AST Traversal Patterns
 
 - **ExpressionStatement Support**: All LSP providers now properly traverse `NodeKind::ExpressionStatement` nodes for complete symbol coverage
+- **MandatoryParameter Integration**: Enhanced scope analyzer with proper variable name extraction from `NodeKind::MandatoryParameter` nodes
 - **Tree-sitter Standard AST Format**: Program nodes now use standard (source_file) format while maintaining backward compatibility  
-- **Comprehensive Node Coverage**: Enhanced workspace indexing covers all Perl syntax constructs across the entire codebase
-- **Production-Stable Symbol Tracking**: Improved symbol resolution with enhanced cross-file reference tracking
+- **Comprehensive Node Coverage**: Enhanced workspace indexing covers all Perl syntax constructs across the entire codebase including parameter declarations
+- **Production-Stable Symbol Tracking**: Improved symbol resolution with enhanced cross-file reference tracking and parameter scope analysis
 
 ## Advanced Code Actions and Refactoring
 
@@ -109,10 +110,11 @@ cargo test -p perl-parser tdd_basic
 
 ## Performance and Quality Metrics
 
-- **100% Test Coverage**: All 195 library tests, 33 LSP E2E tests, and 19 DAP tests passing
+- **Enhanced Test Coverage**: 41 scope analyzer tests passing (up from 38) with MandatoryParameter support
+- **Import Optimization**: 8 comprehensive test cases passing with enhanced bare import handling
 - **Zero Quality Issues**: No clippy warnings, consistent code formatting maintained
-- **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking and reference resolution
-- **Production-Ready Reliability**: Comprehensive validation across all supported Perl constructs
+- **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking, reference resolution, and parameter analysis
+- **Production-Ready Reliability**: Comprehensive validation across all supported Perl constructs including advanced parameter patterns
 
 ## Enhanced API Documentation
 

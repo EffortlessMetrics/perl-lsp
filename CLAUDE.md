@@ -651,13 +651,17 @@ cargo test -p perl-parser tdd_basic
 
 ### Scope Analyzer Testing
 ```bash
-# Run all scope analyzer tests (38 comprehensive tests)
+# Run all scope analyzer tests (41 comprehensive tests with MandatoryParameter support)
 cargo test -p perl-parser --test scope_analyzer_tests
 
 # Test enhanced variable resolution patterns
 cargo test -p perl-parser scope_analyzer_tests::test_hash_access_variable_resolution
 cargo test -p perl-parser scope_analyzer_tests::test_array_access_variable_resolution
 cargo test -p perl-parser scope_analyzer_tests::test_complex_variable_patterns
+
+# Test enhanced parameter handling and MandatoryParameter support  
+cargo test -p perl-parser scope_analyzer_tests::test_parameter_extraction
+cargo test -p perl-parser scope_analyzer_tests::test_subroutine_parameter_analysis
 
 # Test hash key context detection
 cargo test -p perl-parser scope_analyzer_tests::test_hash_key_context_detection
@@ -799,10 +803,13 @@ The import optimization system provides comprehensive analysis and optimization 
 - **ImportOptimizer**: Core analysis engine with regex-based usage detection
 - **ImportAnalysis**: Structured analysis results with unused, duplicate, and missing import tracking
 - **OptimizedImportGeneration**: Alphabetical sorting and clean formatting with duplicate consolidation
-- **Complete Test Coverage**: 9 comprehensive test cases covering all optimization scenarios
+- **Enhanced Bare Import Handling**: Conservative analysis for bare imports to reduce false positives
+- **Complete Test Coverage**: 8 comprehensive test cases covering all optimization scenarios including bare import edge cases
 
 **Features** (**Diataxis: Reference**):
 - **Unused Import Detection**: Regex-based usage analysis identifies import statements never used in code
+- **Smart Bare Import Analysis**: Conservative handling of bare imports (without qw()) to avoid flagging modules with side effects or implicit usage
+- **Pragma Module Recognition**: Automatic exclusion of pragma modules (strict, warnings, utf8, etc.) from unused detection
 - **Duplicate Import Consolidation**: Merges multiple import lines from same module into single optimized statements  
 - **Missing Import Detection**: Identifies Module::symbol references requiring additional imports (planned)
 - **Optimized Import Generation**: Alphabetical sorting and clean formatting of import statements
@@ -858,13 +865,18 @@ println!("Optimized imports:\n{}", optimized);
 
 **How-to Guide: Testing Import Optimization** (**Diataxis: How-to**):
 ```bash
-# Run all import optimizer tests
+# Run all import optimizer tests (8 comprehensive scenarios)
 cargo test -p perl-parser --test import_optimizer_tests
 
 # Test specific optimization scenarios
-cargo test -p perl-parser import_optimizer_tests::test_unused_import_detection
-cargo test -p perl-parser import_optimizer_tests::test_duplicate_consolidation
-cargo test -p perl-parser import_optimizer_tests::test_optimized_generation
+cargo test -p perl-parser import_optimizer_tests::handles_bare_imports_without_symbols
+cargo test -p perl-parser import_optimizer_tests::handles_entirely_unused_imports
+cargo test -p perl-parser import_optimizer_tests::detects_unused_and_duplicate_imports
+cargo test -p perl-parser import_optimizer_tests::handles_complex_symbol_names_and_delimiters
+
+# Test bare import handling and false positive reduction
+cargo test -p perl-parser import_optimizer_tests::handles_mixed_imports_and_usage
+cargo test -p perl-parser import_optimizer_tests::preserves_order_in_optimized_output
 
 # Integration testing with LSP code actions
 cargo test -p perl-parser --test lsp_code_actions_tests -- import_optimization
@@ -1020,6 +1032,10 @@ The LSP server includes robust fallback mechanisms for handling incomplete or sy
 4. **Diagnostics with Production-Stable Enhanced Scope Analysis** (v0.8.7+)
    - **Advanced Variable Resolution** with production-proven hash key context detection
    - **Enhanced Variable Resolution Patterns**: Hash access (`$hash{key}` → `%hash`), array access (`$array[idx]` → `@array`)  
+   - **MandatoryParameter Support**: Enhanced AST traversal for subroutine parameters with comprehensive parameter analysis
+     - Proper variable name extraction from `NodeKind::MandatoryParameter` nodes
+     - Parameter scope analysis including parameter shadowing detection
+     - Integration with enhanced scope resolution patterns
    - **Hash Key Context Detection** - Industry-leading undefined variable detection under `use strict` with comprehensive hash key awareness:
      - Hash subscripts: `$hash{bareword_key}` - no false warnings, O(depth) performance
      - Hash literals: `{ key => value, another_key => value2 }` - keys properly recognized in all contexts
@@ -1030,7 +1046,7 @@ The LSP server includes robust fallback mechanisms for handling incomplete or sy
    - Missing pragma suggestions (strict/warnings)
    - Context-aware bareword detection in hash keys
    - Works with partial ASTs from error recovery
-   - **38 comprehensive test cases** covering all resolution patterns and edge cases
+   - **41 comprehensive test cases** covering all resolution patterns, parameter handling, and edge cases
 
 These fallbacks ensure the LSP remains functional during active development when code is temporarily invalid.
 
