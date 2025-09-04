@@ -143,26 +143,28 @@ pub fn collect_semantic_tokens(
 }
 
 /// Thread-safe token encoding from raw position data
-fn encode_raw_tokens_to_deltas(mut raw_tokens: Vec<(u32, u32, u32, u32, u32)>) -> Vec<EncodedToken> {
+fn encode_raw_tokens_to_deltas(
+    mut raw_tokens: Vec<(u32, u32, u32, u32, u32)>,
+) -> Vec<EncodedToken> {
     // Sort by position (line, then character)
     raw_tokens.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-    
+
     let mut out: Vec<EncodedToken> = Vec::new();
     let mut prev_line = 0u32;
     let mut prev_char = 0u32;
-    
+
     for (line, char, len, kind, mods) in raw_tokens {
         let (dline, dchar) = if line == prev_line {
             (0, char.saturating_sub(prev_char))
         } else {
             (line.saturating_sub(prev_line), char)
         };
-        
+
         out.push([dline, dchar, len, kind, mods]);
         prev_line = line;
         prev_char = char;
     }
-    
+
     out
 }
 

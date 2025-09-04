@@ -1,5 +1,8 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use perl_parser::{Parser, semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens}};
+use criterion::{Criterion, criterion_group, criterion_main};
+use perl_parser::{
+    Parser,
+    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+};
 use std::hint::black_box;
 
 fn benchmark_semantic_tokens_small(c: &mut Criterion) {
@@ -59,9 +62,5 @@ sub func1 { return $var; }
     });
 }
 
-criterion_group!(
-    benches,
-    benchmark_semantic_tokens_small,
-    benchmark_semantic_tokens_thread_safety
-);
+criterion_group!(benches, benchmark_semantic_tokens_small, benchmark_semantic_tokens_thread_safety);
 criterion_main!(benches);

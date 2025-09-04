@@ -149,10 +149,7 @@ struct TokenCollector<'a> {
 
 impl<'a> TokenCollector<'a> {
     fn new(source: &'a str) -> Self {
-        Self {
-            source,
-            declared_vars: HashMap::new(),
-        }
+        Self { source, declared_vars: HashMap::new() }
     }
 
     fn collect(&mut self, ast: &Node) -> Vec<SemanticToken> {
@@ -470,7 +467,7 @@ pub fn encode_semantic_tokens(tokens: &[SemanticToken]) -> Vec<u32> {
     // Pre-sort tokens by position to ensure consistent output
     let mut sorted_tokens = tokens.to_vec();
     sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
-    
+
     let mut encoded = Vec::with_capacity(sorted_tokens.len() * 5);
     let mut prev_line = 0u32;
     let mut prev_start = 0u32;
@@ -484,10 +481,9 @@ pub fn encode_semantic_tokens(tokens: &[SemanticToken]) -> Vec<u32> {
         };
 
         // Encode token type index
-        let token_type_index = SemanticTokenType::all()
-            .iter()
-            .position(|&t| t == token.token_type)
-            .unwrap_or(0) as u32;
+        let token_type_index =
+            SemanticTokenType::all().iter().position(|&t| t == token.token_type).unwrap_or(0)
+                as u32;
 
         // Encode modifiers as bit flags
         let mut modifier_bits = 0u32;
@@ -595,18 +591,18 @@ package Test;
 my $var = 42;
 sub func { return $var; }
 "#;
-        
+
         let provider = SemanticTokensProvider::new(code.to_string());
         let ast = crate::Parser::new(code).parse().unwrap();
-        
+
         // Multiple calls should produce identical results
         let tokens1 = provider.extract(&ast);
         let tokens2 = provider.extract(&ast);
         let tokens3 = provider.extract(&ast);
-        
+
         assert_eq!(tokens1.len(), tokens2.len());
         assert_eq!(tokens2.len(), tokens3.len());
-        
+
         // Check that all tokens are identical
         for ((t1, t2), t3) in tokens1.iter().zip(&tokens2).zip(&tokens3) {
             assert_eq!(t1.line, t2.line);
@@ -614,7 +610,7 @@ sub func { return $var; }
             assert_eq!(t1.length, t2.length);
             assert_eq!(t1.token_type, t2.token_type);
             assert_eq!(t1.modifiers, t2.modifiers);
-            
+
             assert_eq!(t2.line, t3.line);
             assert_eq!(t2.start_char, t3.start_char);
             assert_eq!(t2.length, t3.length);
@@ -646,27 +642,29 @@ sub function_two {
 function_one($var1);
 function_two();
 "#;
-        
+
         let provider = SemanticTokensProvider::new(code.to_string());
         let ast = crate::Parser::new(code).parse().unwrap();
-        
+
         // Measure time for semantic token extraction
         let start = std::time::Instant::now();
-        
+
         for _ in 0..100 {
             let tokens = provider.extract(&ast);
             let _encoded = encode_semantic_tokens(&tokens);
         }
-        
+
         let duration = start.elapsed();
         let avg_time = duration / 100;
-        
+
         println!("Average time for semantic tokens generation: {:?}", avg_time);
-        
+
         // Target: <100µs per operation
-        assert!(avg_time.as_micros() < 100, 
-               "Semantic token generation took {}µs, expected <100µs", 
-               avg_time.as_micros());
+        assert!(
+            avg_time.as_micros() < 100,
+            "Semantic token generation took {}µs, expected <100µs",
+            avg_time.as_micros()
+        );
     }
 
     #[test]
@@ -676,17 +674,17 @@ package LoadTest;
 my $shared = 'test';
 sub process { return $shared; }
 "#;
-        
+
         let provider = SemanticTokensProvider::new(code.to_string());
         let ast = crate::Parser::new(code).parse().unwrap();
-        
+
         // Simulate concurrent usage
         let mut results = Vec::new();
         for _ in 0..50 {
             let tokens = provider.extract(&ast);
             results.push(tokens);
         }
-        
+
         // All results should be identical
         let first = &results[0];
         for tokens in &results[1..] {
