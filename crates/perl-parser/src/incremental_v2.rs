@@ -2065,8 +2065,7 @@ if ($condition) {
         let variation_factor = max_time as f64 / avg_time as f64;
         if variation_factor > 10.0 {
             // Only fail for extreme outliers that indicate real problems
-            assert!(
-                false,
+            panic!(
                 "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
                 max_time, avg_time, variation_factor
             );
