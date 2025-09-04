@@ -38,6 +38,27 @@
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 
+## Workspace Configuration Strategy (v0.8.9+)
+
+### Exclusion Architecture (**Diataxis: Explanation** - Design decisions)
+
+The workspace uses a **production-focused exclusion strategy** to ensure reliable builds:
+
+#### Excluded Crates
+- **`tree-sitter-perl-c`**: Requires libclang and system dependencies
+- **Example crates with feature conflicts**: Avoid cross-crate feature dependency issues
+- **Legacy tooling**: Internal development tools not part of published API
+
+#### Architectural Benefits
+1. **Platform Independence**: No C toolchain requirements
+2. **CI Stability**: Consistent build behavior across platforms
+3. **Production Focus**: Testing only published crate surface area
+4. **Dependency Safety**: Avoid system-specific build failures
+
+This approach prioritizes **published crate reliability** over comprehensive internal tooling, ensuring users can depend on stable builds regardless of their platform or system configuration.
+
+See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspace status.
+
 ## Key Components
 
 ### 1. Pest Parser Architecture
