@@ -24,9 +24,9 @@ impl IncrementalTestUtils {
             pos,
             end_pos,
             new_end,
-            Position::new(pos, 1, pos + 1),
-            Position::new(end_pos, 1, end_pos + 1),
-            Position::new(new_end, 1, new_end + 1),
+            Position::new(pos, 1, (pos + 1) as u32),
+            Position::new(end_pos, 1, (end_pos + 1) as u32),
+            Position::new(new_end, 1, (new_end + 1) as u32),
         );
 
         (new_source, edit)
