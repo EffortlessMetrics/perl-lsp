@@ -1000,9 +1000,19 @@ use strict;
 use warnings;
 use Crypt::PBKDF2;
 
+# Create secure PBKDF2 instance with modern security parameters
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',
+        hash_args => { sha_size => 256 },
+        iterations => 100_000,
+        salt_len => 16,
+    );
+}
+
 sub hash_password {
     my ($password) = @_;
-    my $pbkdf2 = Crypt::PBKDF2->new();
+    my $pbkdf2 = get_pbkdf2_instance();
     return $pbkdf2->generate($password);
 }
 
@@ -1011,7 +1021,7 @@ sub authenticate_user {
     my ($username, $password) = @_;
 
     my $users = load_users();
-    my $pbkdf2 = Crypt::PBKDF2->new();
+    my $pbkdf2 = get_pbkdf2_instance();
 
     foreach my $user (@$users) {
         if ($user->{name} eq $username) {
@@ -1101,13 +1111,13 @@ sub save_users {
                 "uri": "file:///test/auth.pl"
             },
             "position": {
-                "line": 39,
+                "line": 36,
                 "character": 5  // On 'load_users'
             }
         })),
     );
 
-    assert_call_hierarchy_items(&prepare_call, Some("process_user_input"));
+    assert_call_hierarchy_items(&prepare_call, Some("load_users"));
 }
 
 // ==================== USER STORY 14: API DOCUMENTATION BROWSING ====================
