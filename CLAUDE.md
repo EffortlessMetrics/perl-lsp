@@ -163,11 +163,75 @@ perl-lsp --stdio --log                 # Debug LSP server
 - ✅ Advanced code actions with parameter threshold validation
 - ✅ Statistical performance testing infrastructure
 
+## Security Development Guidelines (PR #44)
+
+This project demonstrates **enterprise-grade security practices** in its test infrastructure. All contributors should follow these security development standards:
+
+### Secure Authentication Implementation
+
+When implementing authentication systems (including test scenarios), use production-grade security:
+
+```perl
+use Crypt::PBKDF2;
+
+# OWASP 2021 compliant PBKDF2 configuration
+sub get_pbkdf2_instance {
+    return Crypt::PBKDF2->new(
+        hash_class => 'HMACSHA2',      # SHA-2 family for cryptographic strength
+        hash_args => { sha_size => 256 }, # SHA-256 for collision resistance
+        iterations => 100_000,          # 100k iterations (OWASP 2021 minimum)
+        salt_len => 16,                 # 128-bit cryptographically random salt
+    );
+}
+
+sub authenticate_user {
+    my ($username, $password) = @_;
+    my $users = load_users();
+    my $pbkdf2 = get_pbkdf2_instance();
+    
+    foreach my $user (@$users) {
+        if ($user->{name} eq $username) {
+            # Constant-time validation prevents timing attacks
+            if ($pbkdf2->validate($user->{password_hash}, $password)) {
+                return $user;
+            }
+        }
+    }
+    return undef;  # Authentication failed
+}
+```
+
+### Security Requirements
+
+✅ **Cryptographic Standards**: Use OWASP 2021 compliant algorithms and parameters  
+✅ **Timing Attack Prevention**: Implement constant-time comparisons for authentication  
+✅ **No Plaintext Storage**: Hash all passwords immediately, never store in clear text  
+✅ **Secure Salt Generation**: Use cryptographically secure random salts (≥16 bytes)  
+✅ **Input Validation**: Sanitize and validate all user inputs  
+✅ **Path Security**: Use canonical paths with workspace boundary validation  
+
+### Security Testing Requirements
+
+All security-related code must include comprehensive tests:
+
+- **Authentication Security**: Test password hashing, validation, and timing consistency
+- **Input Validation**: Verify proper sanitization and boundary checking
+- **File Access Security**: Test path traversal prevention and workspace boundaries
+- **Error Message Security**: Ensure no sensitive information disclosure
+
+### Security Review Process
+
+- All authentication/security code changes require security review
+- Test implementations serve as security best practice examples  
+- Document security assumptions and threat models in code comments
+- Use the security implementation in PR #44 as the reference standard
+
 ## Contributing
 
 1. **Parser improvements** → `/crates/perl-parser/src/`
 2. **LSP features** → `/crates/perl-parser/src/` (provider logic)
 3. **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
 4. **Testing** → Use existing comprehensive test infrastructure
+5. **Security features** → Follow PR #44 PBKDF2 implementation standards
 
 Run `cargo xtask check --all` before committing. All tests must pass with zero warnings.
