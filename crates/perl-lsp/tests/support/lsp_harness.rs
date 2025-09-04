@@ -268,7 +268,7 @@ impl LspHarness {
             let res = self.request_with_timeout(
                 "workspace/symbol",
                 serde_json::json!({ "query": query }),
-                Duration::from_millis(250),
+                Duration::from_millis(1000),
             );
             if let Ok(v) = res {
                 if let Some(arr) = v.as_array() {
