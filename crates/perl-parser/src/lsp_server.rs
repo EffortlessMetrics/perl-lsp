@@ -5714,7 +5714,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let mut provider = SemanticTokensProvider::new(doc.content.clone());
+                    let provider = SemanticTokensProvider::new(doc.content.clone());
                     let tokens = provider.extract(ast);
                     let encoded = encode_semantic_tokens(&tokens);
 
@@ -5751,7 +5751,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let mut provider = SemanticTokensProvider::new(doc.content.clone());
+                    let provider = SemanticTokensProvider::new(doc.content.clone());
                     let all_tokens = provider.extract(ast);
 
                     // Filter tokens to the requested range

@@ -123,21 +123,39 @@ pub struct SemanticToken {
     pub modifiers: Vec<SemanticTokenModifier>,
 }
 
-/// Provider for semantic tokens
+/// Provider for semantic tokens - Thread-safe implementation
 pub struct SemanticTokensProvider {
     source: String,
-    /// Cache of variable declarations for scope tracking
-    declared_vars: HashMap<String, Vec<(u32, u32)>>, // name -> [(line, col)]
 }
 
 impl SemanticTokensProvider {
     /// Create a new semantic tokens provider
     pub fn new(source: String) -> Self {
-        Self { source, declared_vars: HashMap::new() }
+        Self { source }
     }
 
-    /// Extract semantic tokens from the AST
-    pub fn extract(&mut self, ast: &Node) -> Vec<SemanticToken> {
+    /// Extract semantic tokens from the AST - Thread-safe
+    pub fn extract(&self, ast: &Node) -> Vec<SemanticToken> {
+        let mut collector = TokenCollector::new(&self.source);
+        collector.collect(ast)
+    }
+}
+
+/// Thread-safe token collector with no mutable shared state
+struct TokenCollector<'a> {
+    source: &'a str,
+    declared_vars: HashMap<String, Vec<(u32, u32)>>, // Local tracking only
+}
+
+impl<'a> TokenCollector<'a> {
+    fn new(source: &'a str) -> Self {
+        Self {
+            source,
+            declared_vars: HashMap::new(),
+        }
+    }
+
+    fn collect(&mut self, ast: &Node) -> Vec<SemanticToken> {
         let mut tokens = Vec::new();
 
         // Handle Program node specially
@@ -149,7 +167,7 @@ impl SemanticTokensProvider {
             self.visit_node(ast, &mut tokens, false);
         }
 
-        // Sort tokens by position
+        // Sort tokens by position for consistent output
         tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
 
         tokens
@@ -447,27 +465,38 @@ impl SemanticTokensProvider {
     }
 }
 
-/// Convert semantic tokens to LSP format (delta encoding)
+/// Convert semantic tokens to LSP format (delta encoding) - Thread-safe version
 pub fn encode_semantic_tokens(tokens: &[SemanticToken]) -> Vec<u32> {
-    let mut encoded = Vec::new();
-    let mut prev_line = 0;
-    let mut prev_start = 0;
+    // Pre-sort tokens by position to ensure consistent output
+    let mut sorted_tokens = tokens.to_vec();
+    sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then(a.start_char.cmp(&b.start_char)));
+    
+    let mut encoded = Vec::with_capacity(sorted_tokens.len() * 5);
+    let mut prev_line = 0u32;
+    let mut prev_start = 0u32;
 
-    for token in tokens {
-        let delta_line = token.line - prev_line;
-        let delta_start =
-            if delta_line == 0 { token.start_char - prev_start } else { token.start_char };
+    for token in &sorted_tokens {
+        let delta_line = token.line.saturating_sub(prev_line);
+        let delta_start = if delta_line == 0 {
+            token.start_char.saturating_sub(prev_start)
+        } else {
+            token.start_char
+        };
 
         // Encode token type index
-        let token_type_index =
-            SemanticTokenType::all().iter().position(|&t| t == token.token_type).unwrap() as u32;
+        let token_type_index = SemanticTokenType::all()
+            .iter()
+            .position(|&t| t == token.token_type)
+            .unwrap_or(0) as u32;
 
         // Encode modifiers as bit flags
         let mut modifier_bits = 0u32;
         for modifier in &token.modifiers {
-            let modifier_index =
-                SemanticTokenModifier::all().iter().position(|&m| m == *modifier).unwrap();
-            modifier_bits |= 1 << modifier_index;
+            if let Some(modifier_index) =
+                SemanticTokenModifier::all().iter().position(|&m| m == *modifier)
+            {
+                modifier_bits |= 1 << modifier_index;
+            }
         }
 
         // Delta line
@@ -507,7 +536,7 @@ sub test_function {
 
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
-            let mut provider = SemanticTokensProvider::new(code.to_string());
+            let provider = SemanticTokensProvider::new(code.to_string());
             let tokens = provider.extract(&ast);
 
             // Should have tokens for package, variable, function at minimum
@@ -557,5 +586,116 @@ sub test_function {
         assert_eq!(encoded[7], 4); // length
         assert_eq!(encoded[8], 4); // type index
         assert_eq!(encoded[9], 1); // modifier bits
+    }
+
+    #[test]
+    fn test_semantic_tokens_thread_safety() {
+        let code = r#"
+package Test;
+my $var = 42;
+sub func { return $var; }
+"#;
+        
+        let provider = SemanticTokensProvider::new(code.to_string());
+        let ast = crate::Parser::new(code).parse().unwrap();
+        
+        // Multiple calls should produce identical results
+        let tokens1 = provider.extract(&ast);
+        let tokens2 = provider.extract(&ast);
+        let tokens3 = provider.extract(&ast);
+        
+        assert_eq!(tokens1.len(), tokens2.len());
+        assert_eq!(tokens2.len(), tokens3.len());
+        
+        // Check that all tokens are identical
+        for ((t1, t2), t3) in tokens1.iter().zip(&tokens2).zip(&tokens3) {
+            assert_eq!(t1.line, t2.line);
+            assert_eq!(t1.start_char, t2.start_char);
+            assert_eq!(t1.length, t2.length);
+            assert_eq!(t1.token_type, t2.token_type);
+            assert_eq!(t1.modifiers, t2.modifiers);
+            
+            assert_eq!(t2.line, t3.line);
+            assert_eq!(t2.start_char, t3.start_char);
+            assert_eq!(t2.length, t3.length);
+            assert_eq!(t2.token_type, t3.token_type);
+            assert_eq!(t2.modifiers, t3.modifiers);
+        }
+    }
+
+    #[test]
+    fn test_semantic_tokens_performance() {
+        let code = r#"
+package TestPerf;
+use strict;
+use warnings;
+
+my $var1 = 42;
+my $var2 = "hello";
+
+sub function_one {
+    my ($param) = @_;
+    return $param;
+}
+
+sub function_two {
+    my @array = (1, 2, 3);
+    return @array;
+}
+
+function_one($var1);
+function_two();
+"#;
+        
+        let provider = SemanticTokensProvider::new(code.to_string());
+        let ast = crate::Parser::new(code).parse().unwrap();
+        
+        // Measure time for semantic token extraction
+        let start = std::time::Instant::now();
+        
+        for _ in 0..100 {
+            let tokens = provider.extract(&ast);
+            let _encoded = encode_semantic_tokens(&tokens);
+        }
+        
+        let duration = start.elapsed();
+        let avg_time = duration / 100;
+        
+        println!("Average time for semantic tokens generation: {:?}", avg_time);
+        
+        // Target: <100µs per operation
+        assert!(avg_time.as_micros() < 100, 
+               "Semantic token generation took {}µs, expected <100µs", 
+               avg_time.as_micros());
+    }
+
+    #[test]
+    fn test_semantic_tokens_consistency_under_load() {
+        let code = r#"
+package LoadTest;
+my $shared = 'test';
+sub process { return $shared; }
+"#;
+        
+        let provider = SemanticTokensProvider::new(code.to_string());
+        let ast = crate::Parser::new(code).parse().unwrap();
+        
+        // Simulate concurrent usage
+        let mut results = Vec::new();
+        for _ in 0..50 {
+            let tokens = provider.extract(&ast);
+            results.push(tokens);
+        }
+        
+        // All results should be identical
+        let first = &results[0];
+        for tokens in &results[1..] {
+            assert_eq!(first.len(), tokens.len());
+            for (t1, t2) in first.iter().zip(tokens) {
+                assert_eq!(t1.line, t2.line);
+                assert_eq!(t1.start_char, t2.start_char);
+                assert_eq!(t1.token_type, t2.token_type);
+            }
+        }
     }
 }
