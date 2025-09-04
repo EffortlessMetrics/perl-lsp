@@ -1,5 +1,6 @@
 [alias]
 xtask = "run --package xtask --"
+t2 = "test -- --test-threads=2"
 
 # Build configuration
 [build]

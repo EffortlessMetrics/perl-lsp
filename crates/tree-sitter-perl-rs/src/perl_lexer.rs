@@ -652,18 +652,22 @@ impl<'a> PerlLexer<'a> {
     fn scan_match_regex(&mut self) -> Option<Token> {
         let start = self.position;
 
-        // Skip 'm' if present
-        if self.peek_str("m") {
-            self.position += 1;
-        }
+        // Check if we have 'm' followed by a delimiter without advancing position yet
+        let has_m_prefix = self.peek_str("m");
+        let delimiter_pos = if has_m_prefix { self.position + 1 } else { self.position };
 
         // Get delimiter
-        if self.position >= self.input.len() {
+        if delimiter_pos >= self.input.len() {
             return None;
         }
-        let delimiter = self.input.as_bytes()[self.position] as char;
+        let delimiter = self.input.as_bytes()[delimiter_pos] as char;
         if !Self::is_regex_delimiter(delimiter) {
             return None;
+        }
+
+        // Now that we've confirmed this is a valid regex pattern, advance position
+        if has_m_prefix {
+            self.position += 1;
         }
         self.position += 1;
 
@@ -709,7 +713,18 @@ impl<'a> PerlLexer<'a> {
         })
     }
 
-    /// Scan a substitution (s///)
+    /// Scan a substitution operator (s///)
+    ///
+    /// Handles various delimiter forms:
+    /// - s/pattern/replacement/flags (standard form)
+    /// - s{pattern}{replacement}flags (braced form)
+    /// - s(pattern)(replacement)flags (parenthesized form)
+    /// - s[pattern][replacement]flags (bracketed form)
+    /// - s<pattern><replacement>flags (angle bracket form)
+    /// - s#pattern#replacement#flags (custom delimiter form)
+    ///
+    /// For paired delimiters (like braces), properly handles nesting depth
+    /// to correctly parse patterns like s{a{b}c}{d{e}f}.
     fn scan_substitution(&mut self) -> Option<Token> {
         let start = self.position;
 
@@ -754,13 +769,24 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // For bracketed delimiters, skip whitespace and find next delimiter
+        // For bracketed delimiters, skip whitespace and find next opening delimiter
         if delimiter != closing {
             self.skip_whitespace();
+            // Expect the second opening delimiter (e.g., the second '{' in s{pattern}{replacement})
             if self.position < self.input.len()
                 && self.input.as_bytes()[self.position] as char == delimiter
             {
                 self.position += 1;
+            } else {
+                // If we don't find the expected second delimiter, this is an error
+                return Some(Token {
+                    token_type: TokenType::Error(Arc::from(
+                        "Expected opening delimiter for replacement in substitution",
+                    )),
+                    text: Arc::from(self.safe_slice(start, self.position)),
+                    start,
+                    end: self.position,
+                });
             }
         }
 
@@ -1186,46 +1212,45 @@ impl<'a> PerlLexer<'a> {
 
         // If this is not an ASCII character (high bit set), handle it as Unicode
         if ch > 127 {
-            if let Some(unicode_ch) = self.input[self.position..].chars().next() {
-                if self.is_unicode_identifier_start(unicode_ch) {
-                    // Parse Unicode identifier
-                    let char_len = unicode_ch.len_utf8();
-                    self.position += char_len;
+            if let Some(unicode_ch) = self.input[self.position..].chars().next()
+                && self.is_unicode_identifier_start(unicode_ch)
+            {
+                // Parse Unicode identifier
+                let char_len = unicode_ch.len_utf8();
+                self.position += char_len;
 
-                    // Continue scanning identifier
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.input[self.position..].chars().next() {
-                            if self.is_unicode_identifier_continue(ch) {
-                                self.position += ch.len_utf8();
-                            } else if ch == ':' && self.position + ch.len_utf8() < self.input.len()
+                // Continue scanning identifier
+                while self.position < self.input.len() {
+                    if let Some(ch) = self.input[self.position..].chars().next() {
+                        if self.is_unicode_identifier_continue(ch) {
+                            self.position += ch.len_utf8();
+                        } else if ch == ':' && self.position + ch.len_utf8() < self.input.len() {
+                            // Check for :: in package names
+                            let next_pos = self.position + ch.len_utf8();
+                            if next_pos < self.input.len()
+                                && self.input.as_bytes()[next_pos] == b':'
                             {
-                                // Check for :: in package names
-                                let next_pos = self.position + ch.len_utf8();
-                                if next_pos < self.input.len()
-                                    && self.input.as_bytes()[next_pos] == b':'
-                                {
-                                    self.position += 2;
-                                } else {
-                                    break;
-                                }
+                                self.position += 2;
                             } else {
                                 break;
                             }
                         } else {
                             break;
                         }
+                    } else {
+                        break;
                     }
-
-                    let text = self.safe_slice(start, self.position);
-                    let token = Token {
-                        token_type: TokenType::Identifier(Arc::from(text)),
-                        text: Arc::from(text),
-                        start,
-                        end: self.position,
-                    };
-                    self.update_mode(&token.token_type);
-                    return Some(token);
                 }
+
+                let text = self.safe_slice(start, self.position);
+                let token = Token {
+                    token_type: TokenType::Identifier(Arc::from(text)),
+                    text: Arc::from(text),
+                    start,
+                    end: self.position,
+                };
+                self.update_mode(&token.token_type);
+                return Some(token);
             }
             // If not a valid identifier start, generate error token
             if let Some(unicode_ch) = self.input[self.position..].chars().next() {
@@ -1248,7 +1273,7 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Check for regex-like constructs first
-        if ch == b'/'
+        if (ch == b'/'
             || (self.mode == LexerMode::ExpectTerm
                 && (self.peek_str("s/")
                     || self.peek_str("s{")
@@ -1257,12 +1282,11 @@ impl<'a> PerlLexer<'a> {
                     || self.peek_str("tr/")
                     || self.peek_str("y/")
                     || self.peek_str("qr/")
-                    || self.peek_str("qr{")))
+                    || self.peek_str("qr{"))))
+            && let Some(token) = self.scan_regex_like()
         {
-            if let Some(token) = self.scan_regex_like() {
-                self.update_mode(&token.token_type);
-                return Some(token);
-            }
+            self.update_mode(&token.token_type);
+            return Some(token);
         }
 
         // Check for quote operators
@@ -1670,7 +1694,7 @@ impl<'a> PerlLexer<'a> {
                                 // Check if it's a single char like $^A or extended like ${^TAINT}
                                 if self.position < self.input.len() {
                                     let ch = self.input.as_bytes()[self.position];
-                                    if matches!(ch, b'A'..=b'Z') {
+                                    if ch.is_ascii_uppercase() {
                                         self.position += 1;
                                     }
                                 }
@@ -1796,50 +1820,24 @@ impl<'a> PerlLexer<'a> {
                 // Check for regex operators first
                 if self.position < self.input.len() {
                     let ch = self.input.as_bytes()[self.position] as char;
-                    if ch == 's' && self.position + 1 < self.input.len() {
+                    if (matches!(ch, 's' | 'm' | 'y') && self.position + 1 < self.input.len()) {
                         let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
+                        if Self::is_regex_delimiter(next)
+                            && let Some(token) = self.scan_regex_like()
+                        {
+                            self.update_mode(&token.token_type);
+                            return Some(token);
                         }
-                    } else if ch == 'm' && self.position + 1 < self.input.len() {
-                        let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
-                        }
-                    } else if ch == 'y' && self.position + 1 < self.input.len() {
-                        let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
-                        }
-                    } else if ch == 't' && self.position + 2 < self.input.len() {
-                        if self.input.as_bytes()[self.position + 1] == b'r' {
-                            let next = self.input.as_bytes()[self.position + 2] as char;
-                            if Self::is_regex_delimiter(next) {
-                                if let Some(token) = self.scan_regex_like() {
-                                    self.update_mode(&token.token_type);
-                                    return Some(token);
-                                }
-                            }
-                        }
-                    } else if ch == 'q'
+                    } else if (ch == 't' || ch == 'q')
                         && self.position + 2 < self.input.len()
                         && self.input.as_bytes()[self.position + 1] == b'r'
                     {
                         let next = self.input.as_bytes()[self.position + 2] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
+                        if Self::is_regex_delimiter(next)
+                            && let Some(token) = self.scan_regex_like()
+                        {
+                            self.update_mode(&token.token_type);
+                            return Some(token);
                         }
                     }
                 }
@@ -1939,7 +1937,7 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 };
                 self.update_mode(&token.token_type);
-                return Some(token);
+                Some(token)
             }
             b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' | b'\\' => {
                 // Check for number starting with decimal point
@@ -2010,37 +2008,12 @@ impl<'a> PerlLexer<'a> {
                             }
                         }
                         // File test operators
-                        (b'-', ch2)
-                            if matches!(
-                                ch2,
-                                b'r' | b'w'
-                                    | b'x'
-                                    | b'o'
-                                    | b'R'
-                                    | b'W'
-                                    | b'X'
-                                    | b'O'
-                                    | b'e'
-                                    | b'z'
-                                    | b's'
-                                    | b'f'
-                                    | b'd'
-                                    | b'l'
-                                    | b'p'
-                                    | b'S'
-                                    | b'b'
-                                    | b'c'
-                                    | b't'
-                                    | b'u'
-                                    | b'g'
-                                    | b'k'
-                                    | b'T'
-                                    | b'B'
-                                    | b'M'
-                                    | b'A'
-                                    | b'C'
-                            ) =>
-                        {
+                        (
+                            b'-',
+                            b'r' | b'w' | b'x' | b'o' | b'R' | b'W' | b'X' | b'O' | b'e' | b'z'
+                            | b's' | b'f' | b'd' | b'l' | b'p' | b'S' | b'b' | b'c' | b't' | b'u'
+                            | b'g' | b'k' | b'T' | b'B' | b'M' | b'A' | b'C',
+                        ) => {
                             self.position += 1;
                         }
                         (b'<', b'=') | (b'>', b'=') | (b'!', b'=') | (b'=', b'=') => {

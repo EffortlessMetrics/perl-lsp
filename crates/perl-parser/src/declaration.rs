@@ -767,9 +767,11 @@ impl<'a> DeclarationProvider<'a> {
                 }
                 children
             }
-            NodeKind::Subroutine { params, body, .. } => {
+            NodeKind::Subroutine { signature, body, .. } => {
                 let mut children = vec![body.as_ref()];
-                children.extend(params.iter());
+                if let Some(sig) = signature {
+                    children.push(sig.as_ref());
+                }
                 children
             }
             NodeKind::FunctionCall { args, .. } => args.iter().collect(),
@@ -798,6 +800,7 @@ impl<'a> DeclarationProvider<'a> {
             NodeKind::Foreach { variable, list, body, .. } => {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
+            NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
             _ => vec![],
         }
     }
@@ -896,6 +899,7 @@ pub fn get_node_children(node: &Node) -> Vec<&Node> {
         NodeKind::Subroutine { body, .. } => {
             vec![body.as_ref()]
         }
+        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
         _ => vec![],
     }
 }

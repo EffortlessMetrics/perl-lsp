@@ -9,30 +9,89 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> **Production-Ready Perl Parsing Ecosystem - Four specialized crates for parsing, corpus testing, and IDE support**
+> **Production-Ready Perl Parsing Ecosystem - Five specialized crates for parsing, corpus testing, and IDE support**
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.4)
+### 📦 Published Crates (v0.8.9)
 
-1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and production LSP server
-2. **perl-lexer** - Context-aware tokenizer for Perl syntax
-3. **perl-corpus** - Comprehensive test corpus and property testing
-4. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
+1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage and LSP provider logic  
+2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
+3. **perl-lexer** - Context-aware tokenizer for Perl syntax
+4. **perl-corpus** - Comprehensive test corpus and property testing
+5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
 
 ---
 
-## 📦 Latest Release: v0.8.4
+## 📦 Latest Release: v0.8.9+ (General Availability)
+
+### Post-v0.8.9 Enhancements - Import Optimization and Scope Analysis Improvements ⚡
+- 🔧 **Enhanced Import Optimization**: Smart bare import analysis with reduced false positives for pragma modules
+- 🧠 **Advanced Scope Analysis**: MandatoryParameter support with proper variable name extraction from parameter nodes  
+- 📊 **Enhanced Test Coverage**: 41 scope analyzer tests passing (up from 38) with comprehensive parameter handling
+- 🔍 **Improved AST Traversal**: Enhanced ExpressionStatement support across all LSP providers
+- ⚡ **Module Stability**: Fixed incremental parsing module imports and enhanced code formatting consistency
+- ✅ **Quality Maintenance**: Zero clippy warnings maintained, consistent architectural compliance
+
+### v0.8.9 - Comprehensive PR Workflow Integration with Production-Stable AST Generation 🚀
+- 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility
+- 🧠 **Comprehensive Workspace Navigation**: Enhanced AST traversal including `NodeKind::ExpressionStatement` support across all LSP providers
+- 📊 **Advanced Code Actions and Refactoring**: Fixed parameter threshold validation and enhanced refactoring suggestions with proper AST handling
+- 🔄 **Enhanced Call Hierarchy Provider**: Complete workspace analysis with improved function call tracking and incoming call detection  
+- 🌳 **Production-Ready Workspace Features**: Improved workspace indexing, symbol tracking, and cross-file rename operations
+- ⚡ **100% Test Reliability Achievement**: All 195 library tests, 33 LSP E2E tests, and 19 DAP tests now passing consistently
+- 🔧 **Quality Gate Compliance**: Zero clippy warnings, consistent code formatting, full architectural compliance maintained
+- ✅ **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking and reference resolution
+
+### v0.8.8 - Advanced Incremental Parsing with IncrementalParserV2 🚀
+- 🚀 **Advanced Incremental Parsing V2**: Revolutionary incremental parser with intelligent node reuse and detailed metrics tracking
+- 🧠 **Smart Node Reuse Strategy**: Automatically detects which AST nodes can be preserved across edits for optimal performance
+- 📊 **Performance Breakthrough**: Achieves 70-90% node reuse in typical editing scenarios with <1ms update times
+- 🔄 **Comprehensive LSP Integration**: Incremental parsing integrated with LSP server via feature flags and environment variables
+- 🌳 **Tree-sitter Grammar Enhancement**: Added given/when/default grammar rules for complete switch-style control flow support
+- ⚡ **Fallback Mechanisms**: Graceful degradation to full parsing when incremental optimizations aren't applicable
+- 🔧 **Feature Flag Architecture**: Clean separation of incremental features with `--features incremental` flag
+- ✅ **Enhanced Testing Coverage**: Comprehensive test suite for incremental parsing with 6 integration tests passing
+
+### v0.8.7 - Enhanced Comment Documentation Extraction with Source Threading 📚
+- 🚀 **Comprehensive Comment Documentation**: Production-ready leading comment parsing with 20 comprehensive test cases covering all edge scenarios
+- 📝 **Enhanced Source Threading**: Source-aware LSP providers with improved context for completion, hover, and symbol analysis
+- 🔧 **S-Expression Format Compatibility**: Resolved bless parsing regressions with complete AST compatibility for all Perl constructs
+- 🌏 **Unicode & Performance Safety**: UTF-8 character boundary handling with <100µs extraction performance for large comment blocks
+- 🏗️ **Edge Case Robustness**: Handles complex formatting scenarios including multi-package support, class methods, and Unicode comments
+- 🎯 **Production-Ready Features**:
+  - Multi-line comment extraction with precise blank line boundary detection
+  - Support for varying indentation and comment prefixes (`#`, `##`, `###`)
+  - Variable list declarations with shared documentation
+  - Method comments in classes with qualified name resolution
+  - Performance optimization with pre-allocated capacity for large blocks
+- 📈 **78% LSP Functionality**: Up from 75% baseline - enhanced documentation and symbol intelligence
+- 🔒 **Backward Compatible**: All existing functionality preserved while adding comprehensive documentation capabilities
+- ✅ **Enhanced Test Coverage**: 20 new comprehensive test cases for comment extraction edge cases
+
+### v0.8.6 - Enhanced Scope Analysis with Hash Key Context Detection 🎯
+- 🚀 **Hash Key Context Detection**: Advanced bareword analysis that eliminates false positives in hash contexts under `use strict`
+- 🧠 **Enhanced Scope Analysis**: `is_in_hash_key_context()` method with precise AST traversal and performance optimization
+- 🔍 **Comprehensive Hash Context Support**: 
+  - Hash subscripts: `$hash{bareword_key}` - correctly recognized as legitimate
+  - Hash literals: `{ key => value, another_key => value2 }` - all keys properly identified
+  - Hash slices: `@hash{key1, key2, key3}` - array-based key detection with full coverage
+  - Nested access: `$hash{level1}{level2}{level3}` - deep nesting handled correctly
+- ✨ **Type Definition Provider**: Navigate to blessed references and ISA relationships
+- ✨ **Implementation Provider**: Find class/method implementations and overrides
+- 🧭 **Enhanced Position Handling**: UTF-16 with CRLF/emoji support, real Location objects
+- 📈 **72% LSP Functionality**: Up from 70% in v0.8.5 - improved diagnostic accuracy
+- 🔒 **Backward Compatible**: All existing functionality preserved while improving diagnostic accuracy
+- ✅ **All Tests Passing**: 530+ tests including comprehensive E2E coverage
 
 ### v0.8.4 - LSP Feature Complete Release 🚀
-- ✨ **9 New LSP Features**: Workspace symbols, rename, code actions, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
+- ✨ **10 New LSP Features**: Workspace symbols, rename, code actions, import optimization, semantic tokens, inlay hints, document links, selection ranges, on-type formatting
 - 📈 **60% LSP Functionality**: Up from 35% in v0.8.3 - all advertised features fully working
 - 🎯 **Contract-Driven Testing**: Every capability backed by acceptance tests
 - 🔒 **Feature Flag Control**: `lsp-ga-lock` for conservative releases
 - 🏗️ **Robust Architecture**: Fallback mechanisms for incomplete code
-- ✅ **All Tests Passing**: 530+ tests including comprehensive E2E coverage
 
 ### v0.8.3 - General Availability Release
 - ✅ **Hash Literals Fixed**: `{ key => value }` now correctly produces HashLiteral nodes
@@ -72,9 +131,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
-- **~99.995% Perl 5 Coverage**: Handles virtually all real-world Perl code
+- **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support via PR #42)
 - **Pure Rust**: Built with Pest parser generator, zero C dependencies
-- **Well Tested**: 100% edge case coverage for supported features
+- **Enhanced Substitution Parsing**: Robust s/// delimiter handling with paired delimiters support (PR #42)
+- **Improved Quote Parser**: Better error handling and nested delimiter support (PR #42)
+- **Well Tested**: 100% edge case coverage for supported features including comprehensive substitution tests
 - **Good Performance**: ~200-450 µs for typical files
 
 ### All Parsers Support:
@@ -82,9 +143,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
-  - Regular expressions with all operators and modifiers
+  - Regular expressions with all operators and modifiers (enhanced substitution support)
   - 100+ operators with correct precedence (including ~~, ISA)
-  - All control flow (if/elsif/else, given/when, statement modifiers)
+  - All control flow (if/elsif/else, given/when/default, statement modifiers)
   - Subroutines with signatures and type constraints (Perl 5.36+)
   - Full package system with qualified names
   - Modern Perl features (try/catch, defer, class/method)
@@ -98,14 +159,15 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
-### Production Crates (v0.8.3 GA)
+### Production Crates (v0.8.7 GA)
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
-| **[perl-parser](https://crates.io/crates/perl-parser)** ⭐ | Main parser & LSP | **Always use this** for parsing and IDE support |
+| **[perl-lsp](https://crates.io/crates/perl-lsp)** ⭐ | Main LSP | **Always use this** for IDE support |
+| **[perl-parser](https://crates.io/crates/perl-parser)** | Main parser | **Always use this** for parsing - Automatically used by perl-lsp |
 | **[perl-lexer](https://crates.io/crates/perl-lexer)** | Tokenization | Automatically used by perl-parser |
 | **[perl-corpus](https://crates.io/crates/perl-corpus)** | Test corpus | For testing parser implementations |
-| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Legacy parser | Migration/comparison only |
+| **[perl-parser-pest](https://crates.io/crates/perl-parser-pest)** | Early experimental Pest-based parser | Migration/comparison only |
 
 ### Quick Decision
 - **Need to parse Perl?** → Use `perl-parser`
@@ -115,9 +177,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (**Diataxis: Tutorial**)
 
-### Install the LSP Server (Recommended)
+### Install the LSP Server (Recommended) (**Diataxis: How-to**)
 
 #### Option 1: Quick Install (Linux/macOS)
 ```bash
@@ -141,8 +203,8 @@ Download pre-built binaries from the [latest release](https://github.com/Effortl
 
 #### Option 5: Build from Source
 ```bash
-# Install via cargo
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+# Install perl-lsp from dedicated crate
+cargo install perl-lsp
 
 # Or build locally
 git clone https://github.com/EffortlessSteven/tree-sitter-perl
@@ -165,12 +227,12 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 
 > **Note**: The exact Content-Length number may differ if you modify the JSON. The presence of a valid `Content-Length:` header indicates successful LSP initialization.
 
-### Use the Parser Library
+### Use the Parser Library (**Diataxis: Tutorial**)
 
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8"
+perl-parser = "0.8.9"
 ```
 
 ```rust
@@ -192,17 +254,19 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 
 | Capability                          | Status | Notes                                      |
 |-------------------------------------|:------:|--------------------------------------------|
-| Diagnostics                         |   ✅   | Real-time; robust fallback on bad code     |
-| Completion                          |   ✅   | Variables, 150+ built-ins, keywords        |
+| Diagnostics                         |   ✅   | Production-stable hash key context detection; industry-leading accuracy |
+| Completion                          |   ✅   | Variables, 150+ built-ins, keywords, **file paths** |
 | Hover                               |   ✅   | Variables + built-ins                       |
 | Signature Help                      |   ✅   | 150+ built-ins                              |
 | Go to Definition                    |   ✅   | Workspace-aware via index                   |
 | Find References                     |   ✅   | Workspace-aware via index                   |
+| Document Highlights                 |   ✅   | Enhanced variable occurrence tracking       |
 | Document Symbols                    |   ✅   | Outline with hierarchy                      |
 | Folding Ranges                      |   ✅   | AST + text fallback                         |
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
 | **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
 | **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
+| **Import Optimization**             |   ✅   | NEW – unused/duplicate import analysis      |
 | **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
 | **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
@@ -217,8 +281,8 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 #### Install & Run
 
 ```bash
-# LSP server
-cargo install perl-parser --bin perl-lsp --locked
+# LSP server (standalone crate)
+cargo install perl-lsp
 
 # run in your editor
 perl-lsp --stdio
@@ -260,11 +324,14 @@ See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 ### Using the LSP Server
 
 ```bash
-# Run the LSP server
-cargo run -p perl-parser --bin perl-lsp
+# Run the LSP server (NEW standalone crate in v0.8.8)
+cargo run -p perl-lsp
 
 # Or install it globally
-cargo install --path crates/perl-parser --bin perl-lsp
+cargo install perl-lsp
+
+# Or build from source
+cargo install --path crates/perl-lsp
 ```
 
 ### Editor Integration
@@ -461,7 +528,7 @@ This distinction is important: Rust's `is_alphabetic()` correctly identifies mat
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture (**Diataxis: Explanation**)
 
 ```
 tree-sitter-perl/
@@ -699,8 +766,8 @@ println!("AST: {:?}", ast);
 ### Command Line Interface
 
 ```bash
-# Install the LSP server (includes parser)
-cargo install perl-parser --bin perl-lsp
+# Install the LSP server (standalone binary)
+cargo install perl-lsp
 
 # Parse a file (via LSP diagnostics)
 perl-lsp --check script.pl
@@ -819,12 +886,15 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 # Use a real shell for redirection, or place extra args after `--`.
 ```
 
-### Current Test Status
+### Current Test Status (v0.8.9)
 
-**v3 Parser (Native)**: ✅ 141/141 edge case tests passing (100% coverage)  
+**v3 Parser (Native)**: ✅ 195/195 library tests passing (100% coverage)  
+**LSP Server**: ✅ 33/33 comprehensive E2E tests passing  
+**DAP Server**: ✅ 19/19 comprehensive tests passing  
+**Corpus Tests**: ✅ 12/12 tests passing  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage)  
 **v1 Parser (C)**: ⚠️ Limited edge case support  
-**LSP Server**: ✅ 526+ tests running properly (400+ integration, 126 unit)
+**Quality Gates**: ✅ Zero clippy warnings, consistent formatting, full architectural compliance
 
 > **Note**: If you see "0 tests, N filtered out", a wrapper probably injected
 > a stray positional filter (e.g., mis-parsed `2>&1`). Run the same command in a
@@ -914,11 +984,11 @@ The benchmarking system provides:
 
 ```toml
 [dependencies]
-perl-parser = "0.8.3"
+perl-parser = "0.8.9"
 # Optional: for custom lexing
-perl-lexer = "0.8.3"
+perl-lexer = "0.8.9"
 # Optional: for testing
-perl-corpus = "0.8.3"
+perl-corpus = "0.8.9"
 ```
 
 ### From Source

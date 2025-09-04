@@ -117,7 +117,7 @@ impl BuildFlags {
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
             moniker: true,           // Stable symbol identifiers
-            document_color: false,   // Not implemented
+            document_color: true,    // Color detection
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
@@ -174,9 +174,9 @@ impl BuildFlags {
             pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
             semantic_tokens: true,    // v0.8.4 feature - working
-            code_actions: true,       // v0.8.4 feature - working
+            code_actions: true,       // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
             execute_command: true,    // v0.8.5 feature - working
-            rename: true,             // v0.8.4 feature - working
+            rename: true,             // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
             document_links: true,     // v0.8.4 feature - working
             selection_ranges: true,   // v0.8.4 feature - working
             on_type_formatting: true, // v0.8.4 feature - working

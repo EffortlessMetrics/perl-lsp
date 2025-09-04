@@ -15,6 +15,7 @@ pub enum ScannerType {
     C,
     Rust,
     Both,
+    V3,
 }
 
 #[derive(Clone, clap::ValueEnum)]

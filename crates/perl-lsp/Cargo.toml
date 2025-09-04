@@ -1,0 +1,68 @@
+[package]
+name = "perl-lsp"
+version = "0.8.8"
+edition = "2024"
+rust-version = "1.89"
+authors = ["Tree-sitter Perl Contributors"]
+description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+readme = "README.md"
+documentation = "https://docs.rs/perl-lsp"
+keywords = ["perl", "lsp", "language-server", "ide"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+perl-parser = { path = "../perl-parser", version = "0.8.8" }
+lsp-types = "0.97.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.142"
+url = "2.5"
+rustc-hash = "2.1.0"
+anyhow = "1.0"
+thiserror = "2.0.12"
+regex = "1.11.1"
+lazy_static = "1.5.0"
+md5 = "0.7"
+phf = { version = "0.11", features = ["macros"] }
+nix = { version = "0.29", features = ["signal"] }
+
+# Core dependencies for position mapping
+ropey = { version = "1.6.1" }
+
+[lints]
+workspace = true
+
+[features]
+default = ["workspace"]  # Enable workspace indexing by default for cross-file features
+workspace = []  # Workspace-wide indexing for cross-file features
+test-compat = []  # Enables compatibility shim for old test API
+# When enabled, advertise *only* the conservative GA set (for emergency point releases).
+lsp-ga-lock = []
+experimental-features = []  # Experimental LSP features for testing
+
+# Aspirational features for tests that should eventually pass
+constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)
+qw-variants = []  # Support for all qw delimiter variants
+package-qualified = []  # Package-qualified subroutine resolution
+error-classifier-v2 = []  # Next generation error classification
+lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
+expose_lsp_test_api = []  # Expose test helpers for integration tests
+
+[dev-dependencies]
+assert_cmd = "2"
+insta = { version = "1", features = ["yaml"] }
+predicates = "3"
+pretty_assertions = "1.4.1"
+serial_test = "3.0"
+tempfile = "3.8"
+proptest = "1"
+perl-corpus = { version = "0.8.8" }
+which = "6"
