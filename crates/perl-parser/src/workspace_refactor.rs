@@ -1002,8 +1002,14 @@ use Data::Dumper; # Duplicate
     fn test_import_optimization_integration() {
         // Test the integration between workspace refactor and import optimizer
         let (index, _paths) = setup_index(vec![
-            ("with_unused.pl", "use strict;\nuse warnings;\nuse Data::Dumper;\nuse JSON qw(encode_json unused_symbol);\n\nmy $json = encode_json({test => 1});"),
-            ("clean.pl", "use strict;\nuse warnings;\nuse Data::Dumper;\n\nprint Dumper({test => 1});"),
+            (
+                "with_unused.pl",
+                "use strict;\nuse warnings;\nuse Data::Dumper;\nuse JSON qw(encode_json unused_symbol);\n\nmy $json = encode_json({test => 1});",
+            ),
+            (
+                "clean.pl",
+                "use strict;\nuse warnings;\nuse Data::Dumper;\n\nprint Dumper({test => 1});",
+            ),
         ]);
         let refactor = WorkspaceRefactor::new(index);
 
@@ -1012,7 +1018,7 @@ use Data::Dumper; # Duplicate
         // Should only optimize files that have optimizations available
         // Files with unused imports should get optimized edits
         assert!(!result.file_edits.is_empty());
-        
+
         // Check that we actually have some optimization suggestions
         let has_optimizations = result.file_edits.iter().any(|edit| !edit.edits.is_empty());
         assert!(has_optimizations);

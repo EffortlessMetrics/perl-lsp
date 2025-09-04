@@ -66,10 +66,33 @@ cargo build -p perl-parser --features incremental --release
 cargo build --all
 ```
 
+## Workspace Configuration (v0.8.9+)
+
+The workspace uses an exclusion strategy to ensure reliable builds across all platforms:
+
+```bash
+# Workspace tests (production crates only)
+cargo test  # Tests perl-parser, perl-lsp, perl-lexer, perl-corpus
+
+# Check workspace configuration
+cargo check  # Should build cleanly without system dependencies
+
+# Workspace status report (see WORKSPACE_TEST_REPORT.md)
+# - Excludes tree-sitter-perl-c (requires libclang/system dependencies)
+# - Excludes example crates with feature conflicts 
+# - Focuses on published crate stability
+```
+
+### Workspace Architecture Benefits
+- **Clean Builds**: No system dependency failures (libclang, parser.c)
+- **CI Stability**: Consistent test results across platforms
+- **Production Focus**: Tests only published crate APIs
+- **Platform Independence**: Works without tree-sitter C toolchain
+
 ## Test Commands
 
 ```bash
-# Run all tests
+# Run all workspace tests
 cargo xtask test
 
 # Run corpus tests (main integration tests)
