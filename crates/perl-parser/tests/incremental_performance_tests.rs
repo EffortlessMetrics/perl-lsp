@@ -76,7 +76,7 @@ mod incremental_performance_tests {
                     incremental_time_micros: incremental_time.as_micros(),
                     nodes_reused: self.parser.reused_nodes,
                     nodes_reparsed: self.parser.reparsed_nodes,
-                    metrics: metrics,
+                    metrics,
                 });
             }
 
@@ -152,6 +152,7 @@ mod incremental_performance_tests {
     }
 
     #[derive(Debug, Clone)]
+    #[allow(dead_code)]
     pub struct SingleTestReport {
         pub initial_time_micros: u128,
         pub incremental_time_micros: u128,
@@ -161,6 +162,7 @@ mod incremental_performance_tests {
     }
 
     #[derive(Debug, Clone)]
+    #[allow(dead_code)]
     pub struct PerformanceReport {
         pub test_name: String,
         pub iterations: usize,
@@ -177,6 +179,7 @@ mod incremental_performance_tests {
     }
 
     impl PerformanceReport {
+        #[allow(dead_code)]
         pub fn assert_sub_millisecond(&self) {
             assert!(
                 self.avg_incremental_micros < 1000,
@@ -196,6 +199,7 @@ mod incremental_performance_tests {
             );
         }
 
+        #[allow(dead_code)]
         pub fn assert_speedup(&self, min_speedup: f64) {
             assert!(
                 self.speedup_ratio >= min_speedup,
@@ -258,6 +262,7 @@ if ($condition) {
             "my $🌟variable = '你好世界'; # Comment with emoji 🚀\nmy $café = 'résumé';".to_string()
         }
 
+        #[allow(dead_code)]
         pub fn subroutine_heavy() -> String {
             let mut source = String::new();
             for i in 0..20 {
@@ -542,7 +547,7 @@ if ($condition) {
 
     #[test]
     fn test_concurrent_edit_simulation() {
-        let mut harness = PerformanceTestHarness::new();
+        let _harness = PerformanceTestHarness::new();
 
         // Simulate rapid consecutive edits like in real editor usage
         let source = "my $a = 1; my $b = 2; my $c = 3;";
@@ -551,7 +556,7 @@ if ($condition) {
         let mut parser = IncrementalParserV2::new();
         parser.parse(source).unwrap();
 
-        let edits = vec![
+        let edits = [
             (8, 9, "10".to_string()),   // Change "1" to "10"
             (19, 20, "20".to_string()), // Change "2" to "20"
             (30, 31, "30".to_string()), // Change "3" to "30"
