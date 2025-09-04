@@ -254,6 +254,7 @@ impl ImportOptimizer {
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
+        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
         for imp in &imports {
             let mut unused_symbols = Vec::new();
 
@@ -288,19 +289,18 @@ impl ImportOptimizer {
                     // For bare imports of non-pragma modules, check if module is used
                     let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
                     let re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
-                    
+
                     // Also check for qualified function calls like Module::function
                     let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
                     let qualified_re = Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
-                    
+
                     // Special handling for Data::Dumper - check for Dumper function usage
                     let is_used = if imp.module == "Data::Dumper" {
-                        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
                         dumper_re.is_match(&non_use_content)
                     } else {
                         re.is_match(&non_use_content) || qualified_re.is_match(&non_use_content)
                     };
-                    
+
                     if !is_used {
                         // Mark the entire module as unused
                         unused_imports.push(UnusedImport {
