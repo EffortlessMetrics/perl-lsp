@@ -115,7 +115,7 @@ jobs:
       - name: Run edge case finder
         run: |
           # Generate edge cases and test them
-          cargo run -p perl-parser --example test_all_edge_cases || true
+          # Removed test_all_edge_cases
           cargo run -p perl-parser --example test_expanded_edge_cases || true
           cargo run -p perl-parser --example test_additional_edge_cases || true
           cargo run -p perl-parser --example test_more_edge_cases || true

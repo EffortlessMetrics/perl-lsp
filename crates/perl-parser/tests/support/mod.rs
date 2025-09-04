@@ -6,8 +6,9 @@
 
 pub mod client_caps;
 pub mod env_guard;
-pub mod lsp_client;
-pub mod lsp_harness;
+
+#[cfg(feature = "incremental")]
+pub mod incremental_test_utils;
 
 use serde_json::Value;
 use std::time::{Duration, Instant};

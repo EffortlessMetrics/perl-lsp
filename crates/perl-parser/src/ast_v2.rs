@@ -121,7 +121,7 @@ impl NodeKind {
         match self {
             Program { statements } => {
                 let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(program {})", stmts)
+                format!("(source_file {})", stmts)
             }
 
             Block { statements } => {

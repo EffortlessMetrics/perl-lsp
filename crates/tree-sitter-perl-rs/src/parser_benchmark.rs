@@ -168,7 +168,7 @@ impl ParserBenchmark {
 #[macro_export]
 macro_rules! bench_parsers {
     ($suite:expr, $input:expr, $iterations:expr) => {{
-        use crate::parser_benchmark::{ParserBenchmark, ParserImpl};
+        use $crate::parser_benchmark::{ParserBenchmark, ParserImpl};
 
         let input = $input;
         let iterations = $iterations;

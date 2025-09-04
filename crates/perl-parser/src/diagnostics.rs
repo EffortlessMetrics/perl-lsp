@@ -54,7 +54,7 @@ pub struct DiagnosticsProvider {
 impl DiagnosticsProvider {
     /// Create a new diagnostics provider
     pub fn new(ast: &Node, source: String) -> Self {
-        let extractor = SymbolExtractor::new();
+        let extractor = SymbolExtractor::new_with_source(&source);
         let symbol_table = extractor.extract(ast);
         let scope_analyzer = ScopeAnalyzer::new();
         let error_classifier = ErrorClassifier::new();
@@ -366,6 +366,9 @@ impl DiagnosticsProvider {
                 for arg in args {
                     self.walk_node(arg, func);
                 }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                self.walk_node(expression, func);
             }
             _ => {} // Other nodes don't have children or are handled differently
         }

@@ -62,7 +62,7 @@ fn test_or_and_precedence() {
 
     let sexp = ast.to_sexp();
     // The top level should be 'or'
-    assert!(sexp.starts_with("(program (binary_or"));
+    assert!(sexp.starts_with("(source_file (binary_or"));
     // The left side of 'or' should be an 'and' expression
     assert!(sexp.contains("(binary_and (assignment_assign"));
 }

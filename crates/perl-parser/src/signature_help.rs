@@ -52,7 +52,12 @@ pub struct SignatureHelpProvider {
 impl SignatureHelpProvider {
     /// Create a new signature help provider
     pub fn new(ast: &Node) -> Self {
-        let symbol_table = SymbolExtractor::new().extract(ast);
+        Self::new_with_source(ast, "")
+    }
+
+    /// Create a new signature help provider with source
+    pub fn new_with_source(ast: &Node, source: &str) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let builtin_signatures = create_builtin_signatures();
 
         SignatureHelpProvider { symbol_table, builtin_signatures }
@@ -162,11 +167,11 @@ impl SignatureHelpProvider {
         // Check built-in functions
         if let Some(builtin) = self.builtin_signatures.get(function_name) {
             for sig_str in &builtin.signatures {
-                let params = self.parse_builtin_parameters(sig_str);
+                let _params = self.parse_builtin_parameters(sig_str);
                 signatures.push(SignatureInfo {
                     label: sig_str.to_string(),
                     documentation: Some(builtin.documentation.to_string()),
-                    parameters: params,
+                    parameters: Vec::new(), // TODO: Extract from signature node
                     active_parameter: None,
                 });
             }
@@ -258,7 +263,7 @@ impl SignatureHelpProvider {
         SignatureInfo {
             label,
             documentation: symbol.documentation.clone(),
-            parameters: params,
+            parameters: Vec::new(), // TODO: Extract from signature node
             active_parameter: None,
         }
     }

@@ -6,6 +6,7 @@ package-lock.json
 # Debug and build artifacts
 /debug_parse/
 /target/
+/target-tests/
 *.a
 *.dylib
 *.so

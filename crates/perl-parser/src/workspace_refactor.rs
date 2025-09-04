@@ -4,11 +4,13 @@
 //! including symbol renaming, module extraction, import optimization, and code movement.
 //! All operations are designed to be safe, reversible, and provide detailed feedback.
 
+use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
 };
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -53,6 +55,11 @@ impl fmt::Display for RefactorError {
 }
 
 impl std::error::Error for RefactorError {}
+
+// Move regex outside loop to avoid recompilation
+lazy_static::lazy_static! {
+    static ref IMPORT_BLOCK_RE: Regex = Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+").unwrap();
+}
 
 /// A file edit as part of a refactoring operation
 ///
@@ -394,91 +401,47 @@ impl WorkspaceRefactor {
 
     /// Optimize imports across the entire workspace
     ///
-    /// Analyzes all files in the workspace and optimizes their import statements by:
+    /// Uses the ImportOptimizer to analyze all files and optimize their import statements by:
+    /// - Detecting unused imports with smart bare import analysis
     /// - Removing duplicate imports from the same module
     /// - Sorting imports alphabetically
     /// - Consolidating multiple imports from the same module
-    /// - Maintaining a clean, consistent import section
+    /// - Conservative handling of pragma modules and bare imports
     ///
     /// # Returns
     /// * `Ok(RefactorResult)` - Contains all file edits to optimize imports
-    /// * `Err(RefactorError)` - If file operations encounter issues
-    ///
-    /// # Errors
-    /// * `RefactorError::UriConversion` - If file path/URI conversion fails
-    /// * `RefactorError::InvalidPosition` - If import line positions are invalid
-    ///
-    /// # Examples
-    /// ```rust
-    /// # use perl_parser::workspace_refactor::WorkspaceRefactor;
-    /// # use perl_parser::workspace_index::WorkspaceIndex;
-    /// let index = WorkspaceIndex::new();
-    /// let refactor = WorkspaceRefactor::new(index);
-    ///
-    /// let result = refactor.optimize_imports()?;
-    /// println!("Optimized imports in {} files", result.file_edits.len());
-    /// # Ok::<(), perl_parser::workspace_refactor::RefactorError>(())
-    /// ```
-    pub fn optimize_imports(&self) -> Result<RefactorResult, RefactorError> {
-        let store = self._index.document_store();
-        let mut edits: Vec<FileEdit> = Vec::new();
+    /// * `Err(String)` - If import analysis encounters issues
+    pub fn optimize_imports(&self) -> Result<RefactorResult, String> {
+        let optimizer = ImportOptimizer::new();
+        let mut file_edits = Vec::new();
 
-        for doc in store.all_documents() {
-            let deps = self._index.file_dependencies(&doc.uri);
-            if deps.is_empty() {
+        // Iterate over all open documents in the workspace
+        for doc in self._index.document_store().all_documents() {
+            let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
+
+            let analysis = optimizer.analyze_file(&path)?;
+            let optimized = optimizer.generate_optimized_imports(&analysis);
+
+            if optimized.is_empty() {
                 continue;
             }
 
-            // Collect existing use lines
-            let lines: Vec<&str> = doc.text.lines().collect();
-            let mut use_lines: Vec<usize> = Vec::new();
-            for (i, line) in lines.iter().enumerate() {
-                if line.trim_start().starts_with("use ") {
-                    use_lines.push(i);
-                }
-            }
+            // Replace the existing import block at the top of the file
+            let import_block_re = &*IMPORT_BLOCK_RE;
+            let (start, end) = if let Some(m) = import_block_re.find(&doc.text) {
+                (m.start(), m.end())
+            } else {
+                (0, 0)
+            };
 
-            if use_lines.is_empty() {
-                continue;
-            }
-
-            let start_line = *use_lines.first().unwrap();
-            let end_line = *use_lines.last().unwrap();
-            let mut idx = doc.line_index.clone();
-            let start_off = idx.position_to_offset(start_line as u32, 0).ok_or_else(|| {
-                RefactorError::InvalidPosition {
-                    file: uri_to_fs_path(&doc.uri)
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| doc.uri.clone()),
-                    details: format!("Invalid start line offset: {}", start_line),
-                }
-            })?;
-            let end_off = idx.position_to_offset(end_line as u32 + 1, 0).unwrap_or(doc.text.len());
-
-            let mut deps_vec: Vec<String> = deps.into_iter().collect();
-            deps_vec.sort();
-            let mut unique = Vec::new();
-            let mut seen = HashSet::new();
-            for d in deps_vec {
-                if seen.insert(d.clone()) {
-                    unique.push(format!("use {};", d));
-                }
-            }
-            let new_block = unique.join("\n") + "\n";
-
-            edits.push(FileEdit {
-                file_path: uri_to_fs_path(&doc.uri).ok_or_else(|| {
-                    RefactorError::UriConversion(format!(
-                        "Failed to convert URI to path: {}",
-                        doc.uri
-                    ))
-                })?,
-                edits: vec![TextEdit { start: start_off, end: end_off, new_text: new_block }],
+            file_edits.push(FileEdit {
+                file_path: path.clone(),
+                edits: vec![TextEdit { start, end, new_text: format!("{}\n", optimized) }],
             });
         }
 
         Ok(RefactorResult {
-            file_edits: edits,
+            file_edits,
             description: "Optimize imports across workspace".to_string(),
             warnings: vec![],
         })

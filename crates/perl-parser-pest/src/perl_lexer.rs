@@ -1939,7 +1939,7 @@ impl<'a> PerlLexer<'a> {
                     end: self.position,
                 };
                 self.update_mode(&token.token_type);
-                return Some(token);
+                Some(token)
             }
             b'+' | b'-' | b'&' | b'|' | b'^' | b'~' | b'!' | b'>' | b'.' | b'\\' => {
                 // Check for number starting with decimal point
