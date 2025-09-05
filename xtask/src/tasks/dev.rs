@@ -3,7 +3,7 @@
 use color_eyre::eyre::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
-use std::sync::mpsc::channel;
+use std::sync::{Arc, mpsc::channel};
 use std::thread;
 
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
@@ -24,15 +24,15 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
     spinner.set_message(format!("Starting development server on {addr}"));
 
     // Helper to start the HTTP server
-    fn start_server(addr: &str) -> color_eyre::Result<Server> {
-        Ok(Server::http(addr)?)
+    fn start_server(addr: &str) -> color_eyre::Result<Arc<Server>> {
+        Ok(Arc::new(Server::http(addr).map_err(|e| color_eyre::eyre::eyre!(e))?))
     }
 
     let mut server = start_server(&addr)?;
     spinner.finish_with_message(format!("✅ Development server started on http://{addr}"));
 
     // Handle requests on a separate thread so we can optionally watch for changes.
-    let serve = |srv: Server| {
+    let serve = |srv: Arc<Server>| {
         thread::spawn(move || {
             for request in srv.incoming_requests() {
                 let _ = request.respond(Response::from_string("tree-sitter-perl dev server"));
@@ -47,7 +47,7 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
         watcher.watch(Path::new("crates"), RecursiveMode::Recursive)?;
 
         loop {
-            let handle = serve(server.try_clone()?);
+            let handle = serve(server.clone());
 
             match rx.recv() {
                 Ok(event) => {
@@ -66,7 +66,7 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
         }
     } else {
         // If not watching, just serve indefinitely.
-        let handle = serve(server.try_clone()?);
+        let handle = serve(server.clone());
         handle.join().map_err(|e| color_eyre::eyre::eyre!("server thread error: {:?}", e))?;
         Ok(())
     }
