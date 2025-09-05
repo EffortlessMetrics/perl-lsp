@@ -1,9 +1,8 @@
 //! Development server task implementation
 
 use color_eyre::eyre::{Context, Result};
-use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::process::Child;
+use std::process::{Child, Command};
 
 pub fn run(watch: bool, port: u16) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
@@ -69,8 +68,8 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
 
 fn spawn_server(port: u16) -> Result<Child> {
     let port_arg = port.to_string();
-    let child = cmd("python", &["-m", "http.server", &port_arg])
-        .start()
-        .context("Failed to spawn development server")?;
-    Ok(child)
+    Command::new("python")
+        .args(["-m", "http.server", &port_arg])
+        .spawn()
+        .context("Failed to spawn development server")
 }
