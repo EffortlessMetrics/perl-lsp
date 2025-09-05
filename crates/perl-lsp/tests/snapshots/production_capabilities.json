@@ -9,6 +9,7 @@
     ],
     "resolveProvider": true
   },
+  "colorProvider": true,
   "completionProvider": {
     "resolveProvider": false,
     "triggerCharacters": [
