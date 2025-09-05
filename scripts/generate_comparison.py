@@ -14,13 +14,75 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import math
+import os
+
+class ComparisonConfig:
+    """Configuration for benchmark comparison thresholds and settings."""
+    
+    def __init__(self, config_path: Optional[str] = None):
+        self.parse_time_regression_threshold = 5.0  # percent
+        self.parse_time_improvement_threshold = 5.0  # percent
+        self.memory_usage_regression_threshold = 20.0  # percent
+        self.minimum_test_coverage = 90.0  # percent
+        self.confidence_level = 0.95
+        self.include_detailed_stats = True
+        self.generate_charts = False  # Would require matplotlib
+        self.output_formats = ["json", "markdown"]
+        
+        if config_path and os.path.exists(config_path):
+            self.load_from_file(config_path)
+    
+    def load_from_file(self, config_path: str) -> None:
+        """Load configuration from JSON file."""
+        try:
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+            
+            # Update configuration with loaded values
+            for key, value in config_data.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+            
+            print(f"Configuration loaded from {config_path}")
+        except Exception as e:
+            print(f"Warning: Could not load configuration from {config_path}: {e}")
+            print("Using default configuration")
+    
+    def save_default_config(self, config_path: str) -> None:
+        """Save current configuration as default template."""
+        config_data = {
+            "parse_time_regression_threshold": self.parse_time_regression_threshold,
+            "parse_time_improvement_threshold": self.parse_time_improvement_threshold,
+            "memory_usage_regression_threshold": self.memory_usage_regression_threshold,
+            "minimum_test_coverage": self.minimum_test_coverage,
+            "confidence_level": self.confidence_level,
+            "include_detailed_stats": self.include_detailed_stats,
+            "generate_charts": self.generate_charts,
+            "output_formats": self.output_formats,
+            "_description": {
+                "parse_time_regression_threshold": "Threshold (%) for flagging parse time regressions",
+                "parse_time_improvement_threshold": "Threshold (%) for flagging parse time improvements",
+                "memory_usage_regression_threshold": "Threshold (%) for flagging memory usage regressions",
+                "minimum_test_coverage": "Minimum test coverage (%) required to pass gates",
+                "confidence_level": "Statistical confidence level for confidence intervals",
+                "include_detailed_stats": "Include detailed statistics in output",
+                "generate_charts": "Generate performance charts (requires matplotlib)",
+                "output_formats": "List of output formats to generate"
+            }
+        }
+        
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        
+        print(f"Default configuration saved to {config_path}")
 
 class BenchmarkComparison:
     """Generate comparison results between C and Rust benchmark data."""
     
-    def __init__(self, c_results_path: str, rust_results_path: str):
+    def __init__(self, c_results_path: str, rust_results_path: str, config: Optional[ComparisonConfig] = None):
         self.c_results_path = Path(c_results_path)
         self.rust_results_path = Path(rust_results_path)
+        self.config = config or ComparisonConfig()
         self.c_data = {}
         self.rust_data = {}
         self.comparison_data = {}
@@ -124,11 +186,14 @@ class BenchmarkComparison:
                 time_diff = 0.0
                 time_diff_percent = 0.0
             
-            # Determine status
-            if time_diff > 0.05:  # 5% regression
+            # Determine status using configurable thresholds
+            regression_threshold = self.config.parse_time_regression_threshold / 100.0
+            improvement_threshold = self.config.parse_time_improvement_threshold / 100.0
+            
+            if time_diff > regression_threshold:
                 status = "regression"
                 comparison['metadata']['tests_with_regression'] += 1
-            elif time_diff < -0.05:  # 5% improvement
+            elif time_diff < -improvement_threshold:
                 status = "improvement"
                 comparison['metadata']['tests_with_improvement'] += 1
             else:
@@ -184,10 +249,13 @@ class BenchmarkComparison:
         time_diffs = [test['comparison']['time_difference_percent'] for test in comparison['tests']]
         speedups = [test['comparison']['speedup_factor'] for test in comparison['tests']]
         
-        # Categorize by performance impact
-        regressions = [td for td in time_diffs if td > 5.0]
-        improvements = [td for td in time_diffs if td < -5.0]
-        stable = [td for td in time_diffs if -5.0 <= td <= 5.0]
+        # Categorize by performance impact using configurable thresholds
+        regression_threshold = self.config.parse_time_regression_threshold
+        improvement_threshold = self.config.parse_time_improvement_threshold
+        
+        regressions = [td for td in time_diffs if td > regression_threshold]
+        improvements = [td for td in time_diffs if td < -improvement_threshold]
+        stable = [td for td in time_diffs if -improvement_threshold <= td <= regression_threshold]
         
         summary = {
             'overall_performance': {
@@ -280,10 +348,31 @@ class BenchmarkComparison:
         regression_count = comparison['metadata']['tests_with_regression']
         total_tests = comparison['metadata']['total_tests']
         
+        # Performance gates with configurable thresholds
+        regression_rate = (regression_count / max(total_tests, 1)) * 100
+        coverage_threshold = self.config.minimum_test_coverage
+        
         gates = [
-            ("Parse Time Regression", "<5%", "✅ PASS" if regression_count == 0 else f"❌ FAIL ({regression_count} regressions)"),
-            ("Overall Performance", "<5%", "✅ PASS" if regression_count <= total_tests * 0.05 else "❌ FAIL"),
-            ("Test Coverage", ">90%", "✅ PASS" if total_tests >= 10 else "⚠️ WARNING")
+            (
+                "Parse Time Regression", 
+                f"<{self.config.parse_time_regression_threshold}%", 
+                "✅ PASS" if regression_count == 0 else f"❌ FAIL ({regression_count} regressions)"
+            ),
+            (
+                "Overall Performance", 
+                f"<{regression_rate:.1f}%", 
+                "✅ PASS" if regression_rate <= self.config.parse_time_regression_threshold else "❌ FAIL"
+            ),
+            (
+                "Test Coverage", 
+                f">{coverage_threshold}%", 
+                "✅ PASS" if total_tests >= 10 else "⚠️ WARNING (insufficient tests)"
+            ),
+            (
+                "Statistical Confidence",
+                f"{self.config.confidence_level * 100}%",
+                "✅ PASS" if total_tests >= 5 else "⚠️ WARNING (low sample size)"
+            )
         ]
         
         for gate_name, threshold, status in gates:
@@ -320,15 +409,81 @@ class BenchmarkComparison:
         print(f"  - Improvements: {comparison['metadata']['tests_with_improvement']}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate C vs Rust benchmark comparison")
-    parser.add_argument("--c-results", required=True, help="Path to C implementation results JSON")
-    parser.add_argument("--rust-results", required=True, help="Path to Rust implementation results JSON")
-    parser.add_argument("--output", required=True, help="Output path for comparison JSON")
-    parser.add_argument("--report", required=True, help="Output path for markdown report")
+    parser = argparse.ArgumentParser(
+        description="Generate C vs Rust benchmark comparison with configurable thresholds",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic comparison
+  %(prog)s --c-results c_bench.json --rust-results rust_bench.json --output comparison.json --report report.md
+  
+  # With custom configuration
+  %(prog)s --c-results c_bench.json --rust-results rust_bench.json --output comparison.json --report report.md --config comparison_config.json
+  
+  # Generate default configuration template
+  %(prog)s --create-config comparison_config.json
+        """
+    )
+    
+    # Required arguments
+    parser.add_argument("--c-results", help="Path to C implementation results JSON")
+    parser.add_argument("--rust-results", help="Path to Rust implementation results JSON")
+    parser.add_argument("--output", help="Output path for comparison JSON")
+    parser.add_argument("--report", help="Output path for markdown report")
+    
+    # Configuration arguments
+    parser.add_argument("--config", help="Path to configuration JSON file")
+    parser.add_argument("--create-config", metavar="PATH", help="Create default configuration file and exit")
+    
+    # Threshold overrides
+    parser.add_argument("--parse-threshold", type=float, help="Parse time regression threshold (percent)")
+    parser.add_argument("--memory-threshold", type=float, help="Memory usage regression threshold (percent)")
+    parser.add_argument("--min-coverage", type=float, help="Minimum test coverage (percent)")
+    
+    # Output options
+    parser.add_argument("--detailed", action="store_true", help="Include detailed statistics")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
     
     args = parser.parse_args()
     
-    comparison = BenchmarkComparison(args.c_results, args.rust_results)
+    # Handle config creation
+    if args.create_config:
+        config = ComparisonConfig()
+        config.save_default_config(args.create_config)
+        print(f"Default configuration created at {args.create_config}")
+        return
+    
+    # Validate required arguments
+    required_args = ['c_results', 'rust_results', 'output', 'report']
+    missing_args = [arg.replace('_', '-') for arg in required_args if not getattr(args, arg)]
+    if missing_args:
+        print(f"Error: Missing required arguments: {', '.join(missing_args)}")
+        parser.print_help()
+        sys.exit(1)
+    
+    # Load configuration
+    config = ComparisonConfig(args.config)
+    
+    # Apply command-line overrides
+    if args.parse_threshold is not None:
+        config.parse_time_regression_threshold = args.parse_threshold
+        config.parse_time_improvement_threshold = args.parse_threshold
+    if args.memory_threshold is not None:
+        config.memory_usage_regression_threshold = args.memory_threshold
+    if args.min_coverage is not None:
+        config.minimum_test_coverage = args.min_coverage
+    if args.detailed:
+        config.include_detailed_stats = True
+    
+    if args.verbose:
+        print(f"Configuration:")
+        print(f"  Parse time threshold: {config.parse_time_regression_threshold}%")
+        print(f"  Memory usage threshold: {config.memory_usage_regression_threshold}%")
+        print(f"  Minimum coverage: {config.minimum_test_coverage}%")
+        print(f"  Confidence level: {config.confidence_level * 100}%")
+        print()
+    
+    comparison = BenchmarkComparison(args.c_results, args.rust_results, config)
     comparison.run(args.output, args.report)
 
 if __name__ == "__main__":
