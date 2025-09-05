@@ -86,14 +86,8 @@ fn test_ga_capabilities_contract() {
     );
 
     // Features that should NOT be advertised
-    assert!(
-        caps["typeHierarchyProvider"].is_null(),
-        "typeHierarchyProvider must NOT be advertised (not implemented)"
-    );
-    assert!(
-        caps["callHierarchyProvider"].is_null(),
-        "callHierarchyProvider must NOT be advertised (partial ~15%)"
-    );
+    assert!(!caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must be advertised");
+    assert!(!caps["callHierarchyProvider"].is_null(), "callHierarchyProvider must be advertised");
     // ExecuteCommand is now implemented in v0.8.6
     assert!(
         !caps["executeCommandProvider"].is_null(),
