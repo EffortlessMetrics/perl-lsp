@@ -29,11 +29,11 @@ use std::path::Path;
 pub struct ImportAnalysis {
     /// Import statements with unused symbols
     pub unused_imports: Vec<UnusedImport>,
-    /// Symbols that are used but not imported (currently empty - future enhancement)
+    /// Symbols that are used but not imported
     pub missing_imports: Vec<MissingImport>,
     /// Modules that are imported multiple times
     pub duplicate_imports: Vec<DuplicateImport>,
-    /// Suggestions for organizing imports (currently empty - future enhancement)
+    /// Suggestions for organizing imports
     pub organization_suggestions: Vec<OrganizationSuggestion>,
     /// All imports discovered in the file
     pub imports: Vec<ImportEntry>,
@@ -52,7 +52,7 @@ pub struct UnusedImport {
     pub reason: String,
 }
 
-/// A symbol that is used but not imported (future enhancement)
+/// A symbol that is used but not imported
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MissingImport {
     /// Module name that should be imported
@@ -76,7 +76,7 @@ pub struct DuplicateImport {
     pub can_merge: bool,
 }
 
-/// A suggestion for improving import organization (future enhancement)
+/// A suggestion for improving import organization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrganizationSuggestion {
     /// Human-readable description of the suggestion
@@ -117,7 +117,6 @@ pub enum SuggestionPriority {
 pub struct ImportOptimizer;
 
 /// Check if a module is a pragma (affects compilation, no exports)
-#[allow(dead_code)]
 fn is_pragma_module(module: &str) -> bool {
     matches!(
         module,
@@ -144,7 +143,6 @@ fn is_pragma_module(module: &str) -> bool {
 }
 
 /// Get known exports for popular Perl modules
-#[allow(dead_code)]
 fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
     match module {
         "Data::Dumper" => Some(vec!["Dumper"]),
@@ -401,12 +399,18 @@ impl ImportOptimizer {
 
             usage_map.entry(module).or_default().push(symbol);
         }
+        let last_import_line = imports.iter().map(|i| i.line).max().unwrap_or(0);
         let missing_imports = usage_map
             .into_iter()
             .map(|(module, mut symbols)| {
                 symbols.sort();
                 symbols.dedup();
-                MissingImport { module, symbols, suggested_location: 1, confidence: 0.8 }
+                MissingImport {
+                    module,
+                    symbols,
+                    suggested_location: last_import_line + 1,
+                    confidence: 0.8,
+                }
             })
             .collect::<Vec<_>>();
 
@@ -631,6 +635,9 @@ print Data::Dumper::Dumper(\@ARGV);
         assert_eq!(analysis.missing_imports.len(), 2);
         assert!(analysis.missing_imports.iter().any(|m| m.module == "JSON"));
         assert!(analysis.missing_imports.iter().any(|m| m.module == "Data::Dumper"));
+        for m in &analysis.missing_imports {
+            assert_eq!(m.suggested_location, 3);
+        }
     }
 
     #[test]
@@ -667,24 +674,18 @@ use Data::Dumper;  # duplicate
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        assert!(
-            analysis
-                .organization_suggestions
-                .iter()
-                .any(|s| s.description.contains("Sort import statements"))
-        );
-        assert!(
-            analysis
-                .organization_suggestions
-                .iter()
-                .any(|s| s.description.contains("Remove duplicate imports"))
-        );
-        assert!(
-            analysis
-                .organization_suggestions
-                .iter()
-                .any(|s| s.description.contains("Sort and deduplicate symbols"))
-        );
+        assert!(analysis
+            .organization_suggestions
+            .iter()
+            .any(|s| s.description.contains("Sort import statements")));
+        assert!(analysis
+            .organization_suggestions
+            .iter()
+            .any(|s| s.description.contains("Remove duplicate imports")));
+        assert!(analysis
+            .organization_suggestions
+            .iter()
+            .any(|s| s.description.contains("Sort and deduplicate symbols")));
     }
 
     #[test]
