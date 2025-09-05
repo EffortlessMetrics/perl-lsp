@@ -23,3 +23,6 @@ regex = "1.11.1"
 serde_yaml = "0.9"
 bindgen = "0.72.0"
 peak_alloc = "0.3"
+
+[dev-dependencies]
+tempfile = "3.8"
