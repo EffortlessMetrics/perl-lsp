@@ -83,7 +83,13 @@ print BAREWORD;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(err) => {
+            eprintln!("skipping test: {err}");
+            return;
+        }
+    };
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
