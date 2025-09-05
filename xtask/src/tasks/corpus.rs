@@ -172,10 +172,26 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             }
         }
         Some(ScannerType::Both) => {
-            // TODO: Test both scanners and compare results
-            // For now, use the C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Parse with both C and Rust scanners and compare outputs
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_sexp = c_tree.root_node().to_sexp();
+            let c_norm = normalize_sexp(&c_sexp);
+
+            let mut rust_parser = tree_sitter_perl::PureRustPerlParser::new();
+            let rust_sexp = match rust_parser.parse(&test_case.source) {
+                Ok(ast) => rust_parser.to_sexp(&ast),
+                Err(e) => format!("(ERROR {})", e),
+            };
+            let rust_norm = normalize_sexp(&rust_sexp);
+
+            if c_norm != rust_norm {
+                println!("\n❌ Scanner outputs differ: {}", test_case.name);
+                println!("C scanner : {}", c_norm);
+                println!("Rust scanner: {}", rust_norm);
+            }
+
+            // Return Rust output for expected comparison since both should match
+            rust_sexp
         }
         None => {
             // Default to V3 parser for this branch
@@ -246,9 +262,56 @@ fn diagnose_parse_differences(
             }
         }
         Some(ScannerType::Both) => {
-            // Default to C scanner for now
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Compare C scanner output against Rust scanner output
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_sexp = c_tree.root_node().to_sexp();
+
+            let mut rust_parser = tree_sitter_perl::PureRustPerlParser::new();
+            let rust_sexp = match rust_parser.parse(&test_case.source) {
+                Ok(ast) => rust_parser.to_sexp(&ast),
+                Err(e) => format!("(ERROR {})", e),
+            };
+
+            // Use C output as expected and Rust output as actual
+            let expected = normalize_sexp(&c_sexp);
+            let actual = normalize_sexp(&rust_sexp);
+
+            println!("\n📊 COMPARISON:");
+            println!("C scanner S-expression:");
+            println!("{}", expected);
+            println!("\nRust scanner S-expression:");
+            println!("{}", actual);
+
+            // Analyze structural differences between the two outputs
+            println!("\n🔍 STRUCTURAL ANALYSIS:");
+            let expected_nodes = count_nodes(&expected);
+            let actual_nodes = count_nodes(&actual);
+            println!("C nodes: {}", expected_nodes);
+            println!("Rust nodes: {}", actual_nodes);
+
+            let missing_nodes = find_missing_nodes(&expected, &actual);
+            if !missing_nodes.is_empty() {
+                println!("❌ Nodes missing in Rust output:");
+                for node in missing_nodes {
+                    println!("  - {}", node);
+                }
+            }
+
+            let extra_nodes = find_extra_nodes(&expected, &actual);
+            if !extra_nodes.is_empty() {
+                println!("➕ Extra nodes in Rust output:");
+                for node in extra_nodes {
+                    println!("  - {}", node);
+                }
+            }
+
+            if actual == expected {
+                println!("✅ Scanner outputs match");
+            } else {
+                println!("❌ Scanner outputs differ");
+            }
+
+            return Ok(());
         }
         None => {
             // Default to V3 parser for this branch
