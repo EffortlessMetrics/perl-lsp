@@ -1,4 +1,4 @@
-# Crate Architecture Guide (v0.8.9 GA)
+# Crate Architecture Guide (v0.8.8 GA)
 
 ## Published Crates (Workspace Members)
 
@@ -24,7 +24,7 @@
   - `src/incremental_integration.rs`: LSP integration bridge
   - `src/incremental_handler_v2.rs`: Document change processing
 
-### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.9)
+### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
 - **Purpose**: Clean LSP server implementation separated from parser logic
 - **Key Features**:
   - Standalone Language Server binary with production-grade CLI
@@ -57,7 +57,7 @@
 - **Purpose**: Pest-based parser (v2 implementation), marked as legacy
 - **Status**: Published but marked as legacy, use `perl-parser` instead
 
-## Benchmark Framework (v0.8.9) ⭐ **NEW**
+## Benchmark Framework (v0.8.8) ⭐ **NEW**
 
 ### `/crates/tree-sitter-perl-rs/src/bin/benchmark_parsers.rs`
 - **Purpose**: Comprehensive Rust benchmark runner
@@ -168,7 +168,7 @@
 
 ### Development Locations
 - **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.9)
+- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.8)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 - **Legacy (Excluded)**: `/crates/perl-parser-pest/` - maintenance only, excluded from workspace

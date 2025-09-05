@@ -1,6 +1,8 @@
-# Commands Reference
+# Commands Reference (*Diataxis: Reference* - Complete command specifications)
 
-## Build Commands
+*This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.*
+
+## Installation Commands (*Diataxis: How-to Guide* - Step-by-step installation)
 
 ### LSP Server
 ```bash
@@ -33,6 +35,8 @@ cargo install --path crates/perl-parser --bin perl-dap
 # Run the DAP server (for VSCode integration)
 perl-dap --stdio  # Standard DAP transport
 ```
+
+## Build Commands (*Diataxis: How-to Guide* - Development builds)
 
 ### Published Crates
 ```bash
