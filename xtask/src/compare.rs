@@ -397,4 +397,4 @@ fn print_summary(report: &serde_json::Value) {
     println!("✅ Success Rate - C: {}/{} ({}%), Rust: {}/{} ({}%)",
         c_success, total, (c_success as f64 / total as f64 * 100.0) as i32,
         rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32);
-} 
+}

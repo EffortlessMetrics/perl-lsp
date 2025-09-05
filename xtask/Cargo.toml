@@ -17,8 +17,9 @@ indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
 # tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }  # Commented: excluded from workspace
-perl-parser = { workspace = true }
-tree-sitter = { workspace = true }
+perl-parser = { path = "../crates/perl-parser" }
+tree-sitter = "0.25.8"
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 regex = "1.11.1"
 serde_yaml = "0.9"
 bindgen = "0.72.0"
@@ -26,3 +27,7 @@ peak_alloc = "0.3"
 
 [dev-dependencies]
 tempfile = "3.8"
+
+[patch.crates-io]
+perl-parser = { path = "../crates/perl-parser" }
+perl-lexer = { path = "../crates/perl-lexer" }

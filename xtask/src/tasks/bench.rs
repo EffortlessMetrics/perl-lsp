@@ -165,8 +165,8 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
 /// Result from running the C benchmark harness
 #[derive(Debug, Deserialize)]
 struct CBenchmarkResult {
-    duration: u64,
-    iterations: u64,
+    _duration: u64,
+    _iterations: u64,
     average: f64,
 }
 
