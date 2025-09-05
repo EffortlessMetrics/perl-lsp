@@ -1844,12 +1844,11 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
-                name_span: None,
+                name_span: None, // TODO: Set proper name span
                 prototype: None,
                 signature: None,
                 attributes: vec![],
                 body: Box::new(block),
-                name_span: None, // TODO: Set proper name span
             },
             SourceLocation { start, end },
         ))
