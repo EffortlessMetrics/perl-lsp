@@ -27,7 +27,7 @@ use clap::{Arg, Command, ArgAction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tree_sitter_perl::PureRustParser;
@@ -272,7 +272,7 @@ impl BenchmarkRunner {
 
         // Warmup runs
         for _ in 0..self.config.warmup_iterations {
-            let _ = self.parser.parse(content, None);
+            let _ = self.parser.parse(content);
         }
 
         // Actual benchmark runs
@@ -281,12 +281,12 @@ impl BenchmarkRunner {
 
         for _ in 0..self.config.iterations {
             let start = Instant::now();
-            let result = self.parser.parse(content, None);
+            let result = self.parser.parse(content);
             let duration = start.elapsed();
 
             durations.push(duration.as_nanos() as u64);
 
-            if result.is_some() {
+            if result.is_ok() {
                 success_count += 1;
             }
         }
@@ -605,11 +605,11 @@ fn main() -> Result<(), BenchmarkError> {
     if raw_args.len() > 1 {
         match raw_args[1].as_str() {
             "--help" | "-h" => {
-                let args = parse_args(); // This will handle help and exit
+                parse_args(); // This will handle help and exit
                 return Ok(());
             },
             "--version" | "-V" => {
-                let args = parse_args(); // This will handle version and exit
+                parse_args(); // This will handle version and exit
                 return Ok(());
             },
             _ => {}
