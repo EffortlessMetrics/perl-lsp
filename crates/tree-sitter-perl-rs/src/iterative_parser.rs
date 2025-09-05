@@ -6,6 +6,7 @@
 use crate::pure_rust_parser::{AstNode, PureRustPerlParser, Rule};
 use pest::iterators::Pair;
 use std::sync::Arc;
+use std::{error::Error, fmt};
 
 /// State for iterative AST building
 #[derive(Debug)]
@@ -31,6 +32,23 @@ enum ProcessResult<'a> {
     /// Need to process children first
     PushStates(Vec<BuildState<'a>>),
 }
+
+#[derive(Debug)]
+enum IterativeParserError {
+    UnexpectedWaitingForChildren,
+}
+
+impl fmt::Display for IterativeParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IterativeParserError::UnexpectedWaitingForChildren => {
+                write!(f, "WaitingForChildren should be handled in main loop")
+            }
+        }
+    }
+}
+
+impl Error for IterativeParserError {}
 
 impl PureRustPerlParser {
     /// Iterative version of build_node that uses explicit stack instead of recursion
@@ -201,8 +219,8 @@ impl PureRustPerlParser {
 
             BuildState::WaitingForChildren { .. } => {
                 // This state is handled in the main loop, not here
-                // This should never be reached, but we need to handle it for completeness
-                panic!("WaitingForChildren should be handled in main loop")
+                // If encountered, return a descriptive error
+                Err(Box::new(IterativeParserError::UnexpectedWaitingForChildren))
             }
 
             BuildState::BuildFromChildren { rule, children, original_str } => {
@@ -376,6 +394,22 @@ mod tests {
                 panic!("Iterative parser failed with error: {}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_unexpected_waiting_state_error() {
+        let mut parser = PureRustPerlParser::new();
+        let state = BuildState::WaitingForChildren {
+            rule: Rule::program,
+            processed_children: vec![],
+            remaining_children: vec![],
+            original_str: "",
+        };
+        let result = parser.process_state(state);
+        assert!(matches!(
+            result,
+            Err(e) if e.downcast_ref::<IterativeParserError>().is_some()
+        ));
     }
 
     #[test]
