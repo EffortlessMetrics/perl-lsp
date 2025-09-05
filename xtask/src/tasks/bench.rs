@@ -335,16 +335,45 @@ mod tests {
 
     // Integration test would require mocking cargo bench, which is complex
     // So we focus on unit tests for the validation logic
-    #[test] 
-    fn test_benchmark_with_mock_command() {
-        // This would require substantial mocking infrastructure
-        // For now, we test the validation logic which is the main improvement
-        // In a real scenario, we might use a test framework like mockall
-        
-        // Test that we can at least call the validation function
-        let temp_dir = tempfile::tempdir().unwrap();
-        let output_path = temp_dir.path().join("benchmark_results.txt");
-        
-        assert!(validate_output_path(&output_path).is_ok());
+    #[test]
+    fn test_benchmark_saves_output() -> Result<()> {
+        use assert_cmd::Command;
+
+        // Create a temporary cargo project with a simple benchmark
+        let temp_dir = TempDir::new()?;
+        let cargo_toml = temp_dir.path().join("Cargo.toml");
+        fs::write(
+            &cargo_toml,
+            "[package]\nname = \"bench_test\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[bench]]\nname = \"dummy\"\nharness = false\n",
+        )?;
+        let benches_dir = temp_dir.path().join("benches");
+        fs::create_dir(&benches_dir)?;
+        fs::write(
+            benches_dir.join("dummy.rs"),
+            "fn main() { println!(\"dummy bench ran\"); }",
+        )?;
+
+        // Path where benchmark results should be written
+        let output_path = temp_dir.path().join("bench_output.txt");
+
+        // Run the xtask bench command and verify it succeeds
+        Command::cargo_bin("xtask")?
+            .current_dir(temp_dir.path())
+            .args([
+                "bench",
+                "--name",
+                "dummy",
+                "--save",
+                "--output",
+                output_path.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+
+        // Ensure the output file was created and contains bench output
+        let contents = fs::read_to_string(&output_path)?;
+        assert!(contents.contains("dummy bench ran"));
+
+        Ok(())
     }
 }
