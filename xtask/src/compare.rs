@@ -1,8 +1,9 @@
 use clap::Args;
+use procfs::process::Process;
+use serde_json::json;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Instant;
-use serde_json::json;
 
 #[derive(Args)]
 pub struct CompareArgs {
@@ -34,10 +35,7 @@ pub fn run_compare(args: CompareArgs) -> Result<(), Box<dyn std::error::Error>> 
     let test_cases = if args.test_cases == "corpus" {
         get_corpus_files()?
     } else {
-        args.test_cases
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect()
+        args.test_cases.split(',').map(|s| s.trim().to_string()).collect()
     };
 
     println!("📁 Found {} test cases", test_cases.len());
@@ -108,7 +106,7 @@ fn test_implementation(
         println!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case);
 
         let test_result = run_single_test(impl_type, test_case, iterations)?;
-        
+
         if let Some(result) = test_result {
             total_time += result["avg_time"].as_f64().unwrap_or(0.0);
             total_memory += result["avg_memory"].as_f64().unwrap_or(0.0);
@@ -137,14 +135,15 @@ fn run_single_test(
     iterations: usize,
 ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error>> {
     let test_content = std::fs::read_to_string(test_case)?;
-    
+
     let mut times = Vec::new();
-    let mut memories = Vec::new();
+    let mut memories: Vec<u64> = Vec::new();
     let mut success = false;
 
     for _ in 0..iterations {
+        let mem_before = current_memory_usage()?;
         let start = Instant::now();
-        
+
         let result = match impl_type {
             "c" => test_c_implementation(&test_content),
             "rust" => test_rust_implementation(&test_content),
@@ -152,11 +151,13 @@ fn run_single_test(
         };
 
         let elapsed = start.elapsed().as_micros() as f64;
-        
+        let mem_after = current_memory_usage()?;
+
         match result {
             Ok(_) => {
                 times.push(elapsed);
-                memories.push(0.0); // TODO: Add memory measurement
+                let usage = mem_after.saturating_sub(mem_before);
+                memories.push(usage);
                 success = true;
             }
             Err(e) => {
@@ -181,6 +182,16 @@ fn run_single_test(
         times[times.len() / 2]
     };
 
+    memories.sort();
+    let avg_memory = memories.iter().sum::<u64>() as f64 / memories.len() as f64;
+    let min_memory = memories[0] as f64;
+    let max_memory = memories[memories.len() - 1] as f64;
+    let median_memory = if memories.len() % 2 == 0 {
+        (memories[memories.len() / 2 - 1] + memories[memories.len() / 2]) as f64 / 2.0
+    } else {
+        memories[memories.len() / 2] as f64
+    };
+
     Ok(Some(json!({
         "iterations": iterations,
         "successful_iterations": times.len(),
@@ -188,15 +199,26 @@ fn run_single_test(
         "min_time": min_time,
         "max_time": max_time,
         "median_time": median_time,
-        "avg_memory": 0.0, // TODO: Add memory measurement
+        "avg_memory": avg_memory,
+        "min_memory": min_memory,
+        "max_memory": max_memory,
+        "median_memory": median_memory,
         "file_size": test_content.len()
     })))
+}
+
+fn current_memory_usage() -> Result<u64, Box<dyn std::error::Error>> {
+    let pid = std::process::id() as i32;
+    let process = Process::new(pid)?;
+    let statm = process.statm()?;
+    let page_size = procfs::page_size()? as u64;
+    Ok(statm.resident * page_size)
 }
 
 fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Change to C implementation directory
     let c_dir = PathBuf::from("tree-sitter-perl");
-    
+
     // Create a temporary test file
     let temp_file = std::env::temp_dir().join("test_perl_c.tmp");
     std::fs::write(&temp_file, content)?;
@@ -212,8 +234,11 @@ fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>
     let _ = std::fs::remove_file(temp_file);
 
     if !output.status.success() {
-        return Err(format!("C implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)).into());
+        return Err(format!(
+            "C implementation test failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
 
     Ok(())
@@ -222,7 +247,7 @@ fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>
 fn test_rust_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Change to Rust implementation directory
     let rust_dir = PathBuf::from("crates/tree-sitter-perl-rs");
-    
+
     // Create a temporary test file
     let temp_file = std::env::temp_dir().join("test_perl_rust.tmp");
     std::fs::write(&temp_file, content)?;
@@ -238,8 +263,11 @@ fn test_rust_implementation(content: &str) -> Result<(), Box<dyn std::error::Err
     let _ = std::fs::remove_file(temp_file);
 
     if !output.status.success() {
-        return Err(format!("Rust implementation test failed: {}", 
-            String::from_utf8_lossy(&output.stderr)).into());
+        return Err(format!(
+            "Rust implementation test failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
 
     Ok(())
@@ -263,20 +291,24 @@ fn generate_comparison_report(
     // Calculate performance differences
     let c_summary = &c_results["summary"];
     let rust_summary = &rust_results["summary"];
+    let c_avg_time = c_summary["avg_time_per_test"].as_f64().unwrap_or(0.0);
+    let rust_avg_time = rust_summary["avg_time_per_test"].as_f64().unwrap_or(0.0);
+    let c_avg_mem = c_summary["avg_memory_per_test"].as_f64().unwrap_or(0.0);
+    let rust_avg_mem = rust_summary["avg_memory_per_test"].as_f64().unwrap_or(0.0);
 
-    let c_avg_time = c_summary["avg_time"].as_f64().unwrap_or(0.0);
-    let rust_avg_time = rust_summary["avg_time"].as_f64().unwrap_or(0.0);
+    let time_diff =
+        if c_avg_time > 0.0 { ((rust_avg_time - c_avg_time) / c_avg_time) * 100.0 } else { 0.0 };
 
-    let time_diff = if c_avg_time > 0.0 {
-        ((rust_avg_time - c_avg_time) / c_avg_time) * 100.0
-    } else {
-        0.0
-    };
+    let mem_diff =
+        if c_avg_mem > 0.0 { ((rust_avg_mem - c_avg_mem) / c_avg_mem) * 100.0 } else { 0.0 };
 
     report["comparison"] = json!({
         "time_difference_percent": time_diff,
         "rust_faster": time_diff < 0.0,
         "performance_ratio": if c_avg_time > 0.0 { rust_avg_time / c_avg_time } else { 1.0 },
+        "memory_difference_percent": mem_diff,
+        "rust_more_memory": mem_diff > 0.0,
+        "memory_ratio": if c_avg_mem > 0.0 { rust_avg_mem / c_avg_mem } else { 1.0 },
         "success_rate": {
             "c": c_summary["successful_tests"].as_u64().unwrap_or(0),
             "rust": rust_summary["successful_tests"].as_u64().unwrap_or(0),
@@ -287,7 +319,9 @@ fn generate_comparison_report(
     Ok(report)
 }
 
-fn generate_markdown_report(report: &serde_json::Value) -> Result<String, Box<dyn std::error::Error>> {
+fn generate_markdown_report(
+    report: &serde_json::Value,
+) -> Result<String, Box<dyn std::error::Error>> {
     let timestamp = report["timestamp"].as_str().unwrap_or("Unknown");
     let comparison = &report["comparison"];
     let c_results = &report["implementations"]["c"];
@@ -298,37 +332,71 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String, Box<dy
 
     // Summary
     markdown.push_str("## Summary\n\n");
-    
+
     let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    
-    markdown.push_str(&format!("- **Performance:** Rust implementation is {:.1}% {} than C implementation\n", 
-        time_diff.abs(), if rust_faster { "faster" } else { "slower" }));
-    
+
+    markdown.push_str(&format!(
+        "- **Performance:** Rust implementation is {:.1}% {} than C implementation\n",
+        time_diff.abs(),
+        if rust_faster { "faster" } else { "slower" }
+    ));
+
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
     let rust_success = comparison["success_rate"]["rust"].as_u64().unwrap_or(0);
     let total = comparison["success_rate"]["total"].as_u64().unwrap_or(0);
-    
-    markdown.push_str(&format!("- **Success Rate:** C: {}/{} ({}%), Rust: {}/{} ({}%)\n",
-        c_success, total, (c_success as f64 / total as f64 * 100.0) as i32,
-        rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32));
+
+    markdown.push_str(&format!(
+        "- **Success Rate:** C: {}/{} ({}%), Rust: {}/{} ({}%)\n",
+        c_success,
+        total,
+        (c_success as f64 / total as f64 * 100.0) as i32,
+        rust_success,
+        total,
+        (rust_success as f64 / total as f64 * 100.0) as i32
+    ));
+
+    let mem_diff = comparison["memory_difference_percent"].as_f64().unwrap_or(0.0);
+    let rust_more_mem = comparison["rust_more_memory"].as_bool().unwrap_or(false);
+    markdown.push_str(&format!(
+        "- **Memory Usage:** Rust uses {:.1}% {} memory than C\n",
+        mem_diff.abs(),
+        if rust_more_mem { "more" } else { "less" }
+    ));
 
     // Detailed Results
     markdown.push_str("\n## Detailed Results\n\n");
-    
-    let c_avg_time = c_results["summary"]["avg_time"].as_f64().unwrap_or(0.0);
-    let rust_avg_time = rust_results["summary"]["avg_time"].as_f64().unwrap_or(0.0);
-    
+
+    let c_avg_time = c_results["summary"]["avg_time_per_test"].as_f64().unwrap_or(0.0);
+    let rust_avg_time = rust_results["summary"]["avg_time_per_test"].as_f64().unwrap_or(0.0);
+    let c_avg_mem = c_results["summary"]["avg_memory_per_test"].as_f64().unwrap_or(0.0);
+    let rust_avg_mem = rust_results["summary"]["avg_memory_per_test"].as_f64().unwrap_or(0.0);
+
     markdown.push_str("| Metric | C Implementation | Rust Implementation | Difference |\n");
     markdown.push_str("|--------|------------------|---------------------|------------|\n");
-    markdown.push_str(&format!("| Avg Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
-        c_avg_time, rust_avg_time, time_diff));
-    
+    markdown.push_str(&format!(
+        "| Avg Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
+        c_avg_time, rust_avg_time, time_diff
+    ));
+
     let c_total_time = c_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
     let rust_total_time = rust_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
-    markdown.push_str(&format!("| Total Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
-        c_total_time, rust_total_time, 
-        if c_total_time > 0.0 { ((rust_total_time - c_total_time) / c_total_time) * 100.0 } else { 0.0 }));
+    markdown.push_str(&format!(
+        "| Total Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
+        c_total_time,
+        rust_total_time,
+        if c_total_time > 0.0 {
+            ((rust_total_time - c_total_time) / c_total_time) * 100.0
+        } else {
+            0.0
+        }
+    ));
+
+    let mem_diff = comparison["memory_difference_percent"].as_f64().unwrap_or(0.0);
+    markdown.push_str(&format!(
+        "| Avg Memory (bytes) | {:.2} | {:.2} | {:.1}% |\n",
+        c_avg_mem, rust_avg_mem, mem_diff
+    ));
 
     markdown.push_str("\n## Test Case Results\n\n");
     markdown.push_str("| Test Case | C Time (μs) | Rust Time (μs) | Difference |\n");
@@ -338,14 +406,15 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String, Box<dy
         let test_case_str = test_case.as_str().unwrap_or("Unknown");
         let c_result = &c_results["test_cases"][test_case_str];
         let rust_result = &rust_results["test_cases"][test_case_str];
-        
-        if let (Some(c_time), Some(rust_time)) = (
-            c_result["avg_time"].as_f64(),
-            rust_result["avg_time"].as_f64()
-        ) {
+
+        if let (Some(c_time), Some(rust_time)) =
+            (c_result["avg_time"].as_f64(), rust_result["avg_time"].as_f64())
+        {
             let diff = if c_time > 0.0 { ((rust_time - c_time) / c_time) * 100.0 } else { 0.0 };
-            markdown.push_str(&format!("| {} | {:.2} | {:.2} | {:.1}% |\n",
-                test_case_str, c_time, rust_time, diff));
+            markdown.push_str(&format!(
+                "| {} | {:.2} | {:.2} | {:.1}% |\n",
+                test_case_str, c_time, rust_time, diff
+            ));
         }
     }
 
@@ -356,17 +425,26 @@ fn print_summary(report: &serde_json::Value) {
     let comparison = &report["comparison"];
     let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    
+
     println!("\n📈 Comparison Summary");
     println!("===================");
-    println!("🦀 Rust is {:.1}% {} than C", 
-        time_diff.abs(), if rust_faster { "faster" } else { "slower" });
-    
+    println!(
+        "🦀 Rust is {:.1}% {} than C",
+        time_diff.abs(),
+        if rust_faster { "faster" } else { "slower" }
+    );
+
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
     let rust_success = comparison["success_rate"]["rust"].as_u64().unwrap_or(0);
     let total = comparison["success_rate"]["total"].as_u64().unwrap_or(0);
-    
-    println!("✅ Success Rate - C: {}/{} ({}%), Rust: {}/{} ({}%)",
-        c_success, total, (c_success as f64 / total as f64 * 100.0) as i32,
-        rust_success, total, (rust_success as f64 / total as f64 * 100.0) as i32);
-} 
+
+    println!(
+        "✅ Success Rate - C: {}/{} ({}%), Rust: {}/{} ({}%)",
+        c_success,
+        total,
+        (c_success as f64 / total as f64 * 100.0) as i32,
+        rust_success,
+        total,
+        (rust_success as f64 / total as f64 * 100.0) as i32
+    );
+}
