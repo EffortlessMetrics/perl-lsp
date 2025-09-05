@@ -31,6 +31,7 @@ pub struct Doc {
 /// 
 /// LSP uses UTF-16 code units for positions, while Rust strings are UTF-8.
 /// This enum determines how position conversions are performed.
+#[derive(Clone, Copy)]
 pub enum PosEnc {
     /// UTF-16 encoding (LSP standard) - counts UTF-16 code units
     Utf16,
@@ -133,7 +134,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
 /// # Returns
 /// Tuple of (start_byte, end_byte) clamped to rope bounds
 pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
-    let s = lsp_pos_to_byte(rope, range.start, enc.clone());
+    let s = lsp_pos_to_byte(rope, range.start, enc);
     let e = lsp_pos_to_byte(rope, range.end, enc);
     (s.min(rope.len_bytes()), e.min(rope.len_bytes()))
 }
@@ -157,7 +158,7 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], enc: PosEnc) {
     for ch in changes {
         if let Some(r) = &ch.range {
-            let (s, e) = range_to_bytes(&doc.rope, r, enc.clone());
+            let (s, e) = range_to_bytes(&doc.rope, r, enc);
             if s <= doc.rope.len_bytes() && e <= doc.rope.len_bytes() && s <= e {
                 doc.rope.remove(s..e);
                 doc.rope.insert(s, &ch.text);
@@ -170,11 +171,3 @@ pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], 
 }
 
 // Make PosEnc Clone
-impl Clone for PosEnc {
-    fn clone(&self) -> Self {
-        match self {
-            PosEnc::Utf16 => PosEnc::Utf16,
-            PosEnc::Utf8 => PosEnc::Utf8,
-        }
-    }
-}
