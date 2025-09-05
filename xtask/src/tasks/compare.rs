@@ -82,25 +82,10 @@ where
     // Perform the operation
     let result = operation();
 
-    // Get memory usage, fallback to 0.0 if measurement fails
+    // Get memory usage after the operation completes
     let memory_mb = PEAK_ALLOC.peak_usage_as_mb() as f64;
 
-    // For subprocess operations, we'll report a simulated value based on file size
-    // This is a temporary workaround until we implement proper subprocess monitoring
     (result, memory_mb)
-}
-
-/// Estimate memory usage based on file size and parsing complexity
-fn estimate_subprocess_memory(file_path: &str) -> f64 {
-    if let Ok(metadata) = std::fs::metadata(file_path) {
-        let file_size_kb = metadata.len() as f64 / 1024.0;
-        // Rough estimate: parser uses ~5-10x file size in memory for small files
-        // Add a base overhead of ~0.5MB for the process itself
-        let estimated_mb = (file_size_kb * 8.0 / 1024.0) + 0.5;
-        estimated_mb.max(0.1) // Minimum 0.1MB even for tiny files
-    } else {
-        0.5 // Default estimate for missing files
-    }
 }
 
 pub fn run(
@@ -328,7 +313,7 @@ fn run_single_test(
     let mut parse_error = false;
 
     for _ in 0..iterations {
-        let (test_result, _process_memory) = measure_memory_usage(|| match impl_type {
+        let (test_result, memory) = measure_memory_usage(|| match impl_type {
             "c" => test_c_implementation(test_case),
             "rust" => test_rust_implementation(test_case),
             _ => Err(color_eyre::eyre::eyre!("Unknown implementation type")),
@@ -342,9 +327,6 @@ fn run_single_test(
                 (false, 0.0)
             }
         };
-
-        // Use estimated memory for subprocess operations
-        let memory = estimate_subprocess_memory(test_case);
 
         times.push(elapsed);
         memories.push(memory);
