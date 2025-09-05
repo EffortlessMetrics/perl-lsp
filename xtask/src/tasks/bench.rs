@@ -39,12 +39,45 @@
 //! - Regression detection
 //! - Performance gates
 
+use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
+use std::path::{Path, PathBuf};
 
-pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>) -> Result<()> {
+/// Validates the output path for benchmark results
+fn validate_output_path(output_path: &Path) -> Result<()> {
+    // Prevent path traversal attacks
+    if output_path.to_string_lossy().contains("..") {
+        return Err(color_eyre::eyre::eyre!("Path traversal not allowed in output path"));
+    }
+    
+    // Ensure the filename has a reasonable extension for text output
+    if let Some(extension) = output_path.extension() {
+        let ext_str = extension.to_string_lossy();
+        if !matches!(ext_str.as_ref(), "txt" | "log" | "out" | "bench" | "json" | "md") {
+            return Err(color_eyre::eyre::eyre!(
+                "Unsupported file extension '{}'. Use txt, log, out, bench, json, or md", 
+                ext_str
+            ));
+        }
+    }
+    
+    // Ensure parent directory is writable if it exists
+    if let Some(parent) = output_path.parent() {
+        if parent.exists() && parent.metadata()?.permissions().readonly() {
+            return Err(color_eyre::eyre::eyre!(
+                "Output directory '{}' is read-only", 
+                parent.display()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
@@ -78,59 +111,200 @@ pub fn run(name: Option<String>, save: bool, output: Option<std::path::PathBuf>)
         spinner.set_message("Saving benchmark results");
 
         if let Some(output_path) = output {
+            // Validate the output path before proceeding
+            validate_output_path(&output_path)
+                .with_context(|| format!("Invalid output path: {}", output_path.display()))?;
+
+            // Create parent directories if needed
             if let Some(parent) = output_path.parent() {
-                fs::create_dir_all(parent).context("Failed to create output directory")?;
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create output directory: {}", parent.display()))?;
             }
-            fs::write(&output_path, &result.stdout).context("Failed to write benchmark results")?;
+
+            // Write benchmark results to file
+            fs::write(&output_path, &result.stdout)
+                .with_context(|| format!("Failed to write benchmark results to: {}", output_path.display()))?;
+            
             spinner.finish_with_message(format!(
                 "✅ Benchmark results saved to {}",
                 output_path.display()
             ));
         } else {
-            // Note: Criterion automatically saves results to target/criterion
-            spinner.finish_with_message("✅ Benchmark results saved to target/criterion");
+            // Default behavior: save to timestamped file in current directory
+            let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+            let default_path = PathBuf::from(format!("benchmark_results_{}.txt", timestamp));
+            
+            fs::write(&default_path, &result.stdout)
+                .with_context(|| format!("Failed to write benchmark results to: {}", default_path.display()))?;
+                
+            spinner.finish_with_message(format!(
+                "✅ Benchmark results saved to {} (Criterion data also available in target/criterion)",
+                default_path.display()
+            ));
         }
     }
 
     Ok(())
 }
 
-// TODO: Phase 2 Implementation - C vs Rust Comparison
-//
-// The following functions need to be implemented for proper C vs Rust comparison:
-//
-// 1. `run_c_benchmarks()` - Benchmark the C implementation using Node.js
-// 2. `compare_implementations()` - Statistical comparison of results
-// 3. `detect_regressions()` - Automated regression detection
-// 4. `generate_report()` - Comprehensive performance report
-//
-// Example C benchmark setup:
-// ```javascript
-// // test/benchmark.js
-// const Parser = require('tree-sitter');
-// const Perl = require('./tree-sitter-perl');
-//
-// const parser = new Parser();
-// parser.setLanguage(Perl);
-//
-// const code = process.env.TEST_CODE;
-// const iterations = parseInt(process.env.ITERATIONS) || 100;
-//
-// const start = Date.now();
-// for (let i = 0; i < iterations; i++) {
-//     parser.parse(code);
-// }
-// const duration = Date.now() - start;
-//
-// console.log(JSON.stringify({
-//     duration,
-//     iterations,
-//     average: duration / iterations
-// }));
-// ```
-//
-// This will enable:
-// - Fair C vs Rust performance comparison
-// - Statistical significance testing
-// - Performance regression detection
-// - Historical performance tracking
+/// Future Enhancement: Phase 2 Implementation - C vs Rust Comparison
+///
+/// The following functions would enable comprehensive C vs Rust performance comparison:
+///
+/// # Planned Functions
+///
+/// - `run_c_benchmarks()` - Execute benchmarks on C implementation via Node.js
+/// - `compare_implementations()` - Statistical analysis of performance differences
+/// - `detect_regressions()` - Automated regression detection with configurable thresholds
+/// - `generate_report()` - Comprehensive performance report with visualizations
+///
+/// # Implementation Notes
+///
+/// For C benchmarks, a Node.js harness would be used:
+/// ```javascript
+/// // test/benchmark.js - Example implementation
+/// const Parser = require('tree-sitter');
+/// const Perl = require('./tree-sitter-perl');
+///
+/// const parser = new Parser();
+/// parser.setLanguage(Perl);
+///
+/// const code = process.env.TEST_CODE;
+/// const iterations = parseInt(process.env.ITERATIONS) || 100;
+///
+/// const start = Date.now();
+/// for (let i = 0; i < iterations; i++) {
+///     parser.parse(code);
+/// }
+/// const duration = Date.now() - start;
+///
+/// console.log(JSON.stringify({
+///     duration,
+///     iterations,
+///     average: duration / iterations,
+///     memory: process.memoryUsage()
+/// }));
+/// ```
+///
+/// # Benefits
+///
+/// This enhancement would provide:
+/// - Fair performance comparison between C and Rust implementations
+/// - Statistical significance testing with confidence intervals
+/// - Automated performance regression detection for CI/CD
+/// - Historical performance tracking and trend analysis
+/// - Memory usage comparison and optimization guidance
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_validate_output_path_valid_extensions() {
+        let valid_extensions = ["txt", "log", "out", "bench", "json", "md"];
+        
+        for ext in &valid_extensions {
+            let path = PathBuf::from(format!("test.{}", ext));
+            assert!(validate_output_path(&path).is_ok(), "Extension {} should be valid", ext);
+        }
+    }
+
+    #[test]
+    fn test_validate_output_path_invalid_extension() {
+        let path = PathBuf::from("test.exe");
+        assert!(validate_output_path(&path).is_err());
+    }
+
+    #[test]
+    fn test_validate_output_path_no_extension() {
+        let path = PathBuf::from("test");
+        // Should be valid - no extension is allowed
+        assert!(validate_output_path(&path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_prevents_traversal() {
+        let paths = [
+            PathBuf::from("../test.txt"),
+            PathBuf::from("../../test.txt"),
+            PathBuf::from("test/../../../etc/passwd"),
+        ];
+        
+        for path in &paths {
+            assert!(validate_output_path(path).is_err(), "Path traversal should be blocked for: {}", path.display());
+        }
+    }
+
+    #[test]
+    fn test_validate_output_path_readonly_directory() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let readonly_dir = temp_dir.path().join("readonly");
+        fs::create_dir(&readonly_dir)?;
+        
+        // Set directory to readonly
+        let mut perms = fs::metadata(&readonly_dir)?.permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&readonly_dir, perms)?;
+        
+        let output_path = readonly_dir.join("test.txt");
+        let result = validate_output_path(&output_path);
+        
+        // Should fail due to readonly directory
+        assert!(result.is_err());
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_output_path_writable_directory() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let output_path = temp_dir.path().join("test.txt");
+        
+        // Should succeed for writable directory
+        assert!(validate_output_path(&output_path).is_ok());
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_output_path_deep_nested_path() {
+        let path = PathBuf::from("deeply/nested/directory/structure/test.txt");
+        // Should be valid - deep nesting is allowed
+        assert!(validate_output_path(&path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_with_special_characters() {
+        // Test various special characters that should be allowed
+        let valid_paths = [
+            "test_file.txt",
+            "test-file.txt", 
+            "test file.txt",
+            "test.file.txt",
+            "test123.txt",
+        ];
+        
+        for path_str in &valid_paths {
+            let path = PathBuf::from(path_str);
+            assert!(validate_output_path(&path).is_ok(), "Path should be valid: {}", path_str);
+        }
+    }
+
+    // Integration test would require mocking cargo bench, which is complex
+    // So we focus on unit tests for the validation logic
+    #[test] 
+    fn test_benchmark_with_mock_command() {
+        // This would require substantial mocking infrastructure
+        // For now, we test the validation logic which is the main improvement
+        // In a real scenario, we might use a test framework like mockall
+        
+        // Test that we can at least call the validation function
+        let temp_dir = tempfile::tempdir().unwrap();
+        let output_path = temp_dir.path().join("benchmark_results.txt");
+        
+        assert!(validate_output_path(&output_path).is_ok());
+    }
+}

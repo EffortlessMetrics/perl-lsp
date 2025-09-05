@@ -21,3 +21,6 @@ perl-parser = { workspace = true }
 tree-sitter = { workspace = true }
 regex = "1.11.1"
 serde_yaml = "0.9"
+
+[dev-dependencies]
+tempfile = "3.8"
