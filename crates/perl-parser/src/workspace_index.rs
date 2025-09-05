@@ -868,7 +868,7 @@ impl IndexVisitor {
                 });
             }
 
-            NodeKind::Method { name, body, params } => {
+            NodeKind::Method { name, body, signature, .. } => {
                 let method_name = name.clone();
                 let qualified_name = if let Some(ref pkg) = self.current_package {
                     format!("{}::{}", pkg, method_name)
@@ -888,8 +888,12 @@ impl IndexVisitor {
                 });
 
                 // Visit params
-                for param in params {
-                    self.visit_node(param, file_index);
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            self.visit_node(param, file_index);
+                        }
+                    }
                 }
 
                 // Visit body
@@ -933,6 +937,9 @@ impl IndexVisitor {
                 for stmt in statements {
                     self.visit_node(stmt, file_index);
                 }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                self.visit_node(expression, file_index);
             }
             // Expression nodes
             NodeKind::Unary { operand, .. } => {

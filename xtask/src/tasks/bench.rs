@@ -43,8 +43,10 @@ use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
+use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 /// Validates the output path for benchmark results
 fn validate_output_path(output_path: &Path) -> Result<()> {
@@ -144,56 +146,94 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
         }
     }
 
+    // Phase 2: C vs Rust comparison flow (optional - only if files exist)
+    if std::path::Path::new("test/benchmark_simple.pl").exists() && 
+       std::path::Path::new("tree-sitter-perl/test/benchmark.js").exists() {
+        let c_result = run_c_benchmarks()?;
+        let rust_mean = extract_rust_mean()?;
+        let comparison = compare_implementations(rust_mean, c_result.average);
+        detect_regressions(&comparison)?;
+        let report = generate_report(&comparison);
+        println!("{}", report);
+    } else {
+        println!("⚠️  C benchmark files not found - skipping C vs Rust comparison");
+    }
+
     Ok(())
 }
 
-/// Future Enhancement: Phase 2 Implementation - C vs Rust Comparison
-///
-/// The following functions would enable comprehensive C vs Rust performance comparison:
-///
-/// # Planned Functions
-///
-/// - `run_c_benchmarks()` - Execute benchmarks on C implementation via Node.js
-/// - `compare_implementations()` - Statistical analysis of performance differences
-/// - `detect_regressions()` - Automated regression detection with configurable thresholds
-/// - `generate_report()` - Comprehensive performance report with visualizations
-///
-/// # Implementation Notes
-///
-/// For C benchmarks, a Node.js harness would be used:
-/// ```javascript
-/// // test/benchmark.js - Example implementation
-/// const Parser = require('tree-sitter');
-/// const Perl = require('./tree-sitter-perl');
-///
-/// const parser = new Parser();
-/// parser.setLanguage(Perl);
-///
-/// const code = process.env.TEST_CODE;
-/// const iterations = parseInt(process.env.ITERATIONS) || 100;
-///
-/// const start = Date.now();
-/// for (let i = 0; i < iterations; i++) {
-///     parser.parse(code);
-/// }
-/// const duration = Date.now() - start;
-///
-/// console.log(JSON.stringify({
-///     duration,
-///     iterations,
-///     average: duration / iterations,
-///     memory: process.memoryUsage()
-/// }));
-/// ```
-///
-/// # Benefits
-///
-/// This enhancement would provide:
-/// - Fair performance comparison between C and Rust implementations
-/// - Statistical significance testing with confidence intervals
-/// - Automated performance regression detection for CI/CD
-/// - Historical performance tracking and trend analysis
-/// - Memory usage comparison and optimization guidance
+/// Result from running the C benchmark harness
+#[derive(Debug, Deserialize)]
+struct CBenchmarkResult {
+    duration: u64,
+    iterations: u64,
+    average: f64,
+}
+
+/// Run the Node.js C implementation benchmark and return timing results
+fn run_c_benchmarks() -> Result<CBenchmarkResult> {
+    let test_code = fs::read_to_string("test/benchmark_simple.pl")
+        .context("Failed to read test Perl source for C benchmark")?;
+
+    let output = cmd("node", &["tree-sitter-perl/test/benchmark.js"])
+        .env("TEST_CODE", test_code)
+        .env("ITERATIONS", "100")
+        .read()
+        .context("Failed to run C benchmark harness")?;
+
+    let result: CBenchmarkResult =
+        serde_json::from_str(&output).context("Failed to parse C benchmark output")?;
+    Ok(result)
+}
+
+/// Extract the mean time from the latest Criterion benchmark output
+fn extract_rust_mean() -> Result<f64> {
+    for entry in WalkDir::new("target/criterion").into_iter().filter_map(|e| e.ok()) {
+        if entry.file_name() == "estimates.json" {
+            let data = fs::read_to_string(entry.path())?;
+            let json: serde_json::Value = serde_json::from_str(&data)?;
+            if let Some(mean) =
+                json.get("mean").and_then(|m| m.get("point_estimate")).and_then(|v| v.as_f64())
+            {
+                return Ok(mean);
+            }
+        }
+    }
+    Err(color_eyre::eyre::eyre!("No Criterion benchmark estimates found"))
+}
+
+/// Comparison between C and Rust benchmark results
+#[derive(Debug)]
+struct BenchmarkComparison {
+    rust_avg: f64,
+    c_avg: f64,
+    speedup: f64,
+}
+
+/// Compare benchmark results and calculate relative performance
+fn compare_implementations(rust_avg: f64, c_avg: f64) -> BenchmarkComparison {
+    let speedup = c_avg / rust_avg;
+    BenchmarkComparison { rust_avg, c_avg, speedup }
+}
+
+/// Detect simple regressions based on a 10% slowdown threshold
+fn detect_regressions(comparison: &BenchmarkComparison) -> Result<()> {
+    if comparison.speedup < 0.9 {
+        eprintln!(
+            "⚠️  Potential regression: Rust average {:.2}ns vs C average {:.2}ns",
+            comparison.rust_avg, comparison.c_avg
+        );
+    }
+    Ok(())
+}
+
+/// Generate a human readable benchmark report
+fn generate_report(comparison: &BenchmarkComparison) -> String {
+    format!(
+        "Rust avg: {:.2} ns\nC avg: {:.2} ns\nRust is {:.2}x faster than C",
+        comparison.rust_avg, comparison.c_avg, comparison.speedup
+    )
+}
 
 #[cfg(test)]
 mod tests {

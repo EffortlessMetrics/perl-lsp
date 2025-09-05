@@ -130,6 +130,8 @@ pub mod document_store;
 pub mod folding;
 pub mod import_optimizer;
 #[cfg(feature = "incremental")]
+pub mod incremental_advanced_reuse;
+#[cfg(feature = "incremental")]
 pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]
 pub mod incremental_handler_v2;
@@ -233,6 +235,10 @@ pub use diagnostics::{
 pub use document_links::compute_links;
 pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
 pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+pub use import_optimizer::{
+    DuplicateImport, ImportAnalysis, ImportEntry, ImportOptimizer, MissingImport,
+    OrganizationSuggestion, SuggestionPriority, UnusedImport,
+};
 pub use inlay_hints::{parameter_hints, trivial_type_hints};
 pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
 pub use on_type_formatting::compute_on_type_edit;
@@ -313,12 +319,33 @@ mod tests {
 
             let ast = result.unwrap();
             if let NodeKind::Program { statements } = &ast.kind {
-                assert!(!statements.is_empty());
-                if let NodeKind::Binary { op, .. } = &statements[0].kind {
-                    assert_eq!(op, expected_op);
+                assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
+
+                // Find the binary node, which might be wrapped in an ExpressionStatement
+                let binary_node = match &statements[0].kind {
+                    NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                        NodeKind::Binary { op, left, right } => Some((op, left, right)),
+                        _ => None,
+                    },
+                    NodeKind::Binary { op, left, right } => Some((op, left, right)),
+                    _ => None,
+                };
+
+                if let Some((op, left, right)) = binary_node {
+                    assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
+
+                    // Additional diagnostic information
+                    println!("Parsing: {}", code);
+                    println!("Left node: {:?}", left);
+                    println!("Right node: {:?}", right);
                 } else {
-                    panic!("Expected Binary operator for: {}", code);
+                    panic!(
+                        "Expected Binary operator for: {}. Found: {:?}",
+                        code, statements[0].kind
+                    );
                 }
+            } else {
+                panic!("Expected Program node, found: {:?}", ast.kind);
             }
         }
     }

@@ -75,15 +75,15 @@ impl CallHierarchyProvider {
     fn find_callable_at_position(&self, node: &Node, offset: usize) -> Option<CallHierarchyItem> {
         if offset >= node.location.start && offset <= node.location.end {
             match &node.kind {
-                NodeKind::Subroutine { name, params, .. } => {
+                NodeKind::Subroutine { name, prototype: _, signature, .. } => {
                     if let Some(name_str) = name {
                         let range = self.node_to_range(node);
                         let selection_range = range.clone(); // TODO: Calculate name range
 
-                        let detail = if params.is_empty() {
-                            None
+                        let detail = if signature.is_some() {
+                            Some("(signature)".to_string())
                         } else {
-                            Some(format!("({} params)", params.len()))
+                            None
                         };
 
                         return Some(CallHierarchyItem {
@@ -276,6 +276,11 @@ impl CallHierarchyProvider {
                     }
                 }
             }
+            NodeKind::ExpressionStatement { expression } => {
+                if let Some(result) = f(expression) {
+                    return Some(result);
+                }
+            }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
@@ -336,10 +341,14 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Subroutine { params, body, .. } => {
-                for param in params {
-                    if let Some(result) = f(param) {
-                        return Some(result);
+            NodeKind::Subroutine { signature, body, .. } => {
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            if let Some(result) = f(param) {
+                                return Some(result);
+                            }
+                        }
                     }
                 }
                 if let Some(result) = f(body) {

@@ -35,6 +35,14 @@ pub fn extract_regex_parts(text: &str) -> (String, String) {
 }
 
 /// Extract pattern, replacement, and modifiers from a substitution token
+///
+/// This function parses substitution operators like s/pattern/replacement/flags
+/// and handles various delimiter forms including:
+/// - Non-paired delimiters: s/pattern/replacement/ (same delimiter for all parts)
+/// - Paired delimiters: s{pattern}{replacement} (different open/close delimiters)
+///
+/// For paired delimiters, properly handles nested delimiters within the pattern
+/// or replacement parts. Returns (pattern, replacement, modifiers) as strings.
 pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // Skip 's' prefix
     let content = text.strip_prefix('s').unwrap_or(text);
@@ -51,24 +59,20 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
-    // For non-paired, add delimiter back since extract_delimited_content expects it
+    let rest2_owned;
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
+        // For paired delimiters like s{pattern}{replacement}, we expect another opening delimiter
         if trimmed.starts_with(delimiter) {
+            // Keep the delimiter - don't strip it here since extract_delimited_content expects it
             trimmed
         } else {
-            // Paired delimiter missing, return what we have
-            return (pattern, String::new(), extract_modifiers(rest1));
+            // If no second delimiter found, the replacement is empty
+            ""
         }
     } else {
-        // For non-paired delimiters, we need to add the delimiter back
-        // since extract_delimited_content expects it to start with delimiter
-        if rest1.is_empty() {
-            rest1
-        } else {
-            // Create a new string with delimiter prepended for proper parsing
-            &format!("{}{}", delimiter, rest1)
-        }
+        rest2_owned = format!("{}{}", delimiter, rest1);
+        &rest2_owned
     };
 
     // Parse second body (replacement)

@@ -183,8 +183,12 @@ enum Commands {
 
     /// Generate bindings
     Bindings {
-        /// Output directory for bindings
-        #[arg(long, default_value = "crates/tree-sitter-perl/src/bindings")]
+        /// Header file to generate bindings from
+        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        header: PathBuf,
+
+        /// Output file for bindings
+        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/bindings.rs")]
         output: PathBuf,
     },
 
@@ -316,6 +320,9 @@ enum Commands {
         #[command(subcommand)]
         command: FeaturesCommand,
     },
+
+    /// Validate memory profiling functionality
+    ValidateMemoryProfiler,
 }
 
 #[derive(Subcommand)]
@@ -368,7 +375,7 @@ fn main() -> Result<()> {
         }
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
-        Commands::Bindings { output } => bindings::run(output),
+        Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
@@ -399,5 +406,6 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
+        Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
     }
 }

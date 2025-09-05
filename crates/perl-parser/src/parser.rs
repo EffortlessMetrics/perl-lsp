@@ -143,9 +143,8 @@ impl<'a> Parser<'a> {
             }
 
             // Variable declarations
-            TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
-                self.parse_variable_declaration()
-            }
+            TokenKind::My | TokenKind::Our | TokenKind::State => self.parse_variable_declaration(),
+            TokenKind::Local => self.parse_local_statement(),
 
             // Control flow
             TokenKind::If => self.parse_if_statement(),
@@ -159,7 +158,26 @@ impl<'a> Parser<'a> {
             TokenKind::Try => self.parse_try(),
 
             // Subroutines and modern OOP
-            TokenKind::Sub => self.parse_subroutine(),
+            TokenKind::Sub => {
+                let sub_node = self.parse_subroutine()?;
+                // Check if this is an anonymous subroutine
+                Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
+                    if name.is_none() {
+                        // Wrap anonymous subroutines in expression statements
+                        let location = sub_node.location;
+                        Node::new(
+                            NodeKind::ExpressionStatement { expression: Box::new(sub_node) },
+                            location,
+                        )
+                    } else {
+                        // Named subroutines are statements by themselves
+                        sub_node
+                    }
+                } else {
+                    // Shouldn't happen, but return as-is
+                    sub_node
+                })
+            }
             TokenKind::Class => self.parse_class(),
             TokenKind::Method => self.parse_method(),
 
@@ -438,7 +456,15 @@ impl<'a> Parser<'a> {
             Ok(node)
         } else {
             // Single variable declaration
-            let variable = self.parse_variable()?;
+            // For 'local', we need to parse lvalue expressions (not just simple variables)
+            // because local can take complex forms like local $ENV{PATH}
+            let variable = if declarator == "local" {
+                // For local, parse a general lvalue expression
+                self.parse_assignment()?
+            } else {
+                // For my/our/state, parse a simple variable
+                self.parse_variable()?
+            };
 
             // Parse optional attributes
             let mut attributes = Vec::new();
@@ -469,6 +495,35 @@ impl<'a> Parser<'a> {
             );
             Ok(node)
         }
+    }
+
+    /// Parse local statement (can localize any lvalue, not just simple variables)
+    fn parse_local_statement(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let declarator_token = self.consume_token()?; // consume 'local'
+        let declarator = declarator_token.text.clone();
+
+        // Parse the lvalue expression that's being localized
+        let variable = Box::new(self.parse_expression()?);
+
+        let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+            self.tokens.next()?; // consume =
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+
+        let end = self.previous_position();
+        let node = Node::new(
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes: Vec::new(),
+                initializer,
+            },
+            SourceLocation { start, end },
+        );
+        Ok(node)
     }
 
     /// Parse a variable ($foo, @bar, %baz)
@@ -1110,26 +1165,34 @@ impl<'a> Parser<'a> {
         }
 
         // Parse optional prototype or signature after attributes
-        let (params, _prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
+        let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
-                let proto = self.parse_prototype()?;
-                // Store prototype as an attribute
-                attributes.push(format!("prototype({})", proto));
-                (Vec::new(), Some(proto))
+                let proto_content = self.parse_prototype()?;
+                let proto_node = Node::new(
+                    NodeKind::Prototype { content: proto_content },
+                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                );
+                (Some(Box::new(proto_node)), None)
             } else {
-                (self.parse_signature()?, None)
+                // Parse as signature
+                let params = self.parse_signature()?;
+                let sig_node = Node::new(
+                    NodeKind::Signature { parameters: params },
+                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                );
+                (None, Some(Box::new(sig_node)))
             }
         } else {
-            (Vec::new(), None)
+            (None, None)
         };
 
         let body = self.parse_block()?;
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Subroutine { name, params, attributes, body: Box::new(body) },
+            NodeKind::Subroutine { name, prototype, signature, attributes, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -1157,17 +1220,21 @@ impl<'a> Parser<'a> {
         let name = name_token.text.clone();
 
         // Parse optional signature
-        let params = if self.peek_kind() == Some(TokenKind::LeftParen) {
-            self.parse_signature()?
+        let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            let params = self.parse_signature()?;
+            Some(Box::new(Node::new(
+                NodeKind::Signature { parameters: params },
+                SourceLocation { start: self.current_position(), end: self.current_position() },
+            )))
         } else {
-            Vec::new()
+            None
         };
 
         let body = self.parse_block()?;
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Method { name, params, body: Box::new(body) },
+            NodeKind::Method { name, signature, attributes: Vec::new(), body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -1249,7 +1316,7 @@ impl<'a> Parser<'a> {
         };
 
         // Check for type constraint (Type $var)
-        let type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
+        let _type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
             // Look ahead to see if this is a type constraint
             let token = self.tokens.peek()?;
             if !token.text.starts_with('$')
@@ -1284,33 +1351,21 @@ impl<'a> Parser<'a> {
             variable.location.end
         };
 
-        // Create a parameter node
-        // For now, we'll use the Variable node with additional context
-        // In a full implementation, we might want a dedicated Parameter node kind
-        if named || type_constraint.is_some() || default_value.is_some() {
-            // We need to wrap this in a more complex structure
-            // For now, let's use a Block node to hold the parameter info
-            let mut statements = vec![variable];
+        // Check if variable is slurpy (@args or %hash)
+        let is_slurpy = matches!(&variable.kind, NodeKind::Variable { sigil, .. } if sigil == "@" || sigil == "%");
 
-            // Add type constraint as an identifier if present
-            if let Some(tc) = type_constraint {
-                let tc_node = Node::new(
-                    NodeKind::Identifier { name: tc },
-                    SourceLocation { start, end: start },
-                );
-                statements.insert(0, tc_node);
-            }
-
-            // Add default value if present
-            if let Some(default) = default_value {
-                statements.push(*default);
-            }
-
-            Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        // Create the appropriate parameter node type
+        let param_kind = if named {
+            NodeKind::NamedParameter { variable: Box::new(variable) }
+        } else if is_slurpy {
+            NodeKind::SlurpyParameter { variable: Box::new(variable) }
+        } else if let Some(default) = default_value {
+            NodeKind::OptionalParameter { variable: Box::new(variable), default_value: default }
         } else {
-            // Simple parameter, just return the variable
-            Ok(variable)
-        }
+            NodeKind::MandatoryParameter { variable: Box::new(variable) }
+        };
+
+        Ok(Node::new(param_kind, SourceLocation { start, end }))
     }
 
     /// Parse package declaration
@@ -1769,7 +1824,8 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
-                params: vec![],
+                prototype: None,
+                signature: None,
                 attributes: vec![],
                 body: Box::new(block),
             },
@@ -2131,6 +2187,8 @@ impl<'a> Parser<'a> {
 
     /// Parse expression statement
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+
         // Check for special blocks like AUTOLOAD and DESTROY
         if let Ok(token) = self.tokens.peek() {
             if matches!(token.text.as_str(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
@@ -2151,7 +2209,13 @@ impl<'a> Parser<'a> {
 
         // Statement modifiers are handled at the statement level in parse_statement()
 
-        Ok(expr)
+        let end = self.previous_position();
+
+        // Wrap the expression in an ExpressionStatement node
+        Ok(Node::new(
+            NodeKind::ExpressionStatement { expression: Box::new(expr) },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
@@ -2757,60 +2821,30 @@ impl<'a> Parser<'a> {
                                 },
                                 SourceLocation { start, end },
                             );
-                        } else if let NodeKind::Regex { pattern, modifiers } = &right.kind {
-                            // Create a Match node
-                            expr = Node::new(
-                                NodeKind::Match {
-                                    expr: Box::new(expr),
-                                    pattern: pattern.clone(),
-                                    modifiers: modifiers.clone(),
-                                },
-                                SourceLocation { start, end },
-                            );
-                        } else if let NodeKind::Regex { pattern, .. } = &right.kind {
-                            if pattern.starts_with("s/")
-                                || pattern.starts_with("s|")
-                                || pattern.starts_with("s{")
-                                || pattern.starts_with("s[")
-                            {
-                                // Parse as substitution
-                                let parts = quote_parser::extract_substitution_parts(pattern);
+                        } else if let NodeKind::Regex { pattern, replacement, modifiers } =
+                            &right.kind
+                        {
+                            if let Some(replacement) = replacement {
+                                let pat = if pattern.len() >= 2 {
+                                    pattern[1..pattern.len() - 1].to_string()
+                                } else {
+                                    pattern.clone()
+                                };
                                 expr = Node::new(
                                     NodeKind::Substitution {
                                         expr: Box::new(expr),
-                                        pattern: parts.0,
-                                        replacement: parts.1,
-                                        modifiers: parts.2,
-                                    },
-                                    SourceLocation { start, end },
-                                );
-                            } else if pattern.starts_with("tr/")
-                                || pattern.starts_with("y/")
-                                || pattern.starts_with("tr{")
-                                || pattern.starts_with("y{")
-                                || pattern.starts_with("tr[")
-                                || pattern.starts_with("y[")
-                            {
-                                // Parse as transliteration
-                                let parts = quote_parser::extract_transliteration_parts(pattern);
-                                expr = Node::new(
-                                    NodeKind::Transliteration {
-                                        expr: Box::new(expr),
-                                        search: parts.0,
-                                        replace: parts.1,
-                                        modifiers: parts.2,
+                                        pattern: pat,
+                                        replacement: replacement.clone(),
+                                        modifiers: modifiers.clone(),
                                     },
                                     SourceLocation { start, end },
                                 );
                             } else {
-                                // Regular match - extract modifiers
-                                let (pattern_with_delims, modifiers) =
-                                    quote_parser::extract_regex_parts(pattern);
                                 expr = Node::new(
                                     NodeKind::Match {
                                         expr: Box::new(expr),
-                                        pattern: pattern_with_delims,
-                                        modifiers,
+                                        pattern: pattern.clone(),
+                                        modifiers: modifiers.clone(),
                                     },
                                     SourceLocation { start, end },
                                 );
@@ -3771,7 +3805,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let end = self.previous_position();
+        let mut end = self.previous_position();
 
         // Create appropriate node based on operator
         match op {
@@ -3808,9 +3842,25 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
+                let mut modifiers = String::new();
+                while let Ok(token) = self.tokens.peek() {
+                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
+                        let ch = token.text.chars().next().unwrap();
+                        if ch.is_ascii_alphabetic() {
+                            modifiers.push(ch);
+                            self.tokens.next()?;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                end = self.previous_position();
                 Ok(Node::new(
                     NodeKind::Regex {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
+                        replacement: None,
                         modifiers,
                     },
                     SourceLocation { start, end },
@@ -3825,9 +3875,25 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
+                let mut modifiers = String::new();
+                while let Ok(token) = self.tokens.peek() {
+                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
+                        let ch = token.text.chars().next().unwrap();
+                        if ch.is_ascii_alphabetic() {
+                            modifiers.push(ch);
+                            self.tokens.next()?;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                end = self.previous_position();
                 Ok(Node::new(
                     NodeKind::Regex {
-                        pattern: format!("m{}{}{}", opening_delim, content, closing_delim),
+                        pattern: format!("{}{}{}", opening_delim, content, closing_delim),
+                        replacement: None,
                         modifiers,
                     },
                     SourceLocation { start, end },
@@ -3924,6 +3990,17 @@ impl<'a> Parser<'a> {
                 | "untie"
                 | "scalar"
                 | "wantarray"
+                // Math functions
+                | "abs"
+                | "atan2"
+                | "cos"
+                | "sin"
+                | "exp"
+                | "log"
+                | "sqrt"
+                | "rand"
+                | "srand"
+                | "int"
         )
     }
 
@@ -3955,7 +4032,7 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 let (pattern, modifiers) = quote_parser::extract_regex_parts(&token.text);
                 Ok(Node::new(
-                    NodeKind::Regex { pattern, modifiers },
+                    NodeKind::Regex { pattern, replacement: None, modifiers },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -4415,7 +4492,8 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-            args.push(self.parse_expression()?);
+            // Use parse_assignment instead of parse_expression to avoid comma operator handling
+            args.push(self.parse_assignment()?);
 
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?;
@@ -5113,7 +5191,7 @@ mod tests {
         let ast = result.unwrap();
         assert_eq!(
             ast.to_sexp(),
-            r#"(program (array (string "one") (string "two") (string "three")))"#
+            r#"(source_file (array (string "one") (string "two") (string "three")))"#
         );
 
         // Test qw with brackets
@@ -5121,21 +5199,21 @@ mod tests {
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "foo") (string "bar")))"#);
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "foo") (string "bar")))"#);
 
         // Test qw with non-paired delimiters
         let mut parser = Parser::new("qw/alpha beta/");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "alpha") (string "beta")))"#);
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "alpha") (string "beta")))"#);
 
         // Test qw with exclamation marks
         let mut parser = Parser::new("qw!hello world!");
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
-        assert_eq!(ast.to_sexp(), r#"(program (array (string "hello") (string "world")))"#);
+        assert_eq!(ast.to_sexp(), r#"(source_file (array (string "hello") (string "world")))"#);
     }
 
     #[test]
@@ -5148,7 +5226,7 @@ mod tests {
         // Statement context: block with hash inside
         let sexp = ast.to_sexp();
         assert!(
-            sexp.contains("(block (hash"),
+            sexp.contains("(block (expression_statement (hash"),
             "Statement context should have block containing hash, got: {}",
             sexp
         );

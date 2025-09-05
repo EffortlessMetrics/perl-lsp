@@ -1,1 +1,0 @@
-sub bar : lvalue { }
