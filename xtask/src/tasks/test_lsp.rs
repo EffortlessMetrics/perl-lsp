@@ -5,6 +5,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_parser::semantic_tokens_provider::SemanticTokenType;
+use serde_json::json;
+
 /// Run LSP feature tests
 pub fn run(create_only: bool, test: Option<String>, cleanup: bool) -> Result<()> {
     println!("🧪 Testing Perl Language Server v0.6.0 features...");
@@ -246,20 +250,110 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
 }
 
 /// Test syntax highlighting
-fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
+fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
 
-    // Check if LSP server is available
-    let output = Command::new("perl-lsp").arg("--version").output();
+    // Read test file
+    let file_path = test_dir.join("test_features.pl");
+    let text = fs::read_to_string(&file_path)?;
+    let uri = format!("file://{}", file_path.canonicalize()?.display());
 
-    match output {
-        Ok(_) => println!("   ✓ LSP server is available"),
-        Err(_) => println!("   ⚠ LSP server not found. Run: cargo install --path crates/perl-lsp"),
+    // Initialize in-process LSP server
+    let mut srv = LspServer::new();
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
+    };
+    srv.handle_request(init);
+
+    // Open the document
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })),
+    };
+    srv.handle_request(open);
+
+    // Request semantic tokens
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "textDocument/semanticTokens/full".into(),
+        params: Some(json!({"textDocument": {"uri": uri}})),
+    };
+    let res = srv.handle_request(req).expect("semantic tokens response");
+    let data = res.result.unwrap()["data"].as_array().unwrap();
+
+    // Decode delta-encoded tokens into absolute positions
+    let mut tokens = Vec::new();
+    let mut line = 0u32;
+    let mut col = 0u32;
+    for chunk in data.chunks(5) {
+        let dl = chunk[0].as_u64().unwrap() as u32;
+        let ds = chunk[1].as_u64().unwrap() as u32;
+        let len = chunk[2].as_u64().unwrap() as u32;
+        let typ = chunk[3].as_u64().unwrap() as u32;
+        line += dl;
+        if dl == 0 {
+            col += ds;
+        } else {
+            col = ds;
+        }
+        tokens.push((line, col, len, typ));
     }
 
-    // TODO: Add actual syntax highlighting test
-    println!("   ℹ Open test_features.pl in VSCode to verify semantic tokens");
+    let token_types = SemanticTokenType::all();
+    let func_idx = token_types
+        .iter()
+        .position(|t| *t == SemanticTokenType::Function)
+        .unwrap() as u32;
+    let var_idx = token_types
+        .iter()
+        .position(|t| *t == SemanticTokenType::Variable)
+        .unwrap() as u32;
 
+    // Helper to compute line/col from byte index
+    fn find_pos(text: &str, pat: &str) -> (u32, u32) {
+        let idx = text.find(pat).expect("pattern found");
+        let mut line = 0u32;
+        let mut col = 0u32;
+        for ch in text[..idx].chars() {
+            if ch == '\n' {
+                line += 1;
+                col = 0;
+            } else {
+                col += 1;
+            }
+        }
+        (line, col)
+    }
+
+    let check_token = |name: &str, expected_idx: u32| {
+        let (line, col) = find_pos(&text, name);
+        let len = name.len() as u32;
+        tokens.iter().any(|t| t.0 == line && t.1 == col && t.2 == len && t.3 == expected_idx)
+    };
+
+    assert!(
+        check_token("process_data", func_idx),
+        "expected function token for process_data"
+    );
+    assert!(
+        check_token("$result", var_idx),
+        "expected variable token for $result"
+    );
+
+    println!("   ✓ Semantic tokens verified");
     Ok(())
 }
 
