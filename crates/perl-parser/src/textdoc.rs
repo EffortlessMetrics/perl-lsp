@@ -15,7 +15,7 @@ use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
 use ropey::Rope;
 
 /// Document state using Rope for efficient text operations
-/// 
+///
 /// The `Doc` struct stores document content in a Rope data structure,
 /// providing O(log n) performance for edits while maintaining UTF-8/UTF-16
 /// position mapping capabilities for LSP compliance.
@@ -28,7 +28,7 @@ pub struct Doc {
 }
 
 /// Position encoding format for LSP compatibility
-/// 
+///
 /// LSP uses UTF-16 code units for positions, while Rust strings are UTF-8.
 /// This enum determines how position conversions are performed.
 #[derive(Clone, Copy)]
@@ -40,16 +40,16 @@ pub enum PosEnc {
 }
 
 /// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
-/// 
+///
 /// This function handles the conversion from LSP Position (line, character)
 /// to a byte offset in the Rope, accounting for UTF-16 vs UTF-8 encoding
 /// differences. Unicode characters like emojis are handled correctly.
-/// 
+///
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `pos` - LSP position with 0-based line and character indices
 /// * `enc` - Whether to interpret character positions as UTF-16 or UTF-8
-/// 
+///
 /// # Returns
 /// Byte offset clamped to valid rope boundaries
 pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
@@ -84,16 +84,16 @@ pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
 }
 
 /// Convert byte offset to LSP position with UTF-16/UTF-8 encoding support
-/// 
+///
 /// This function performs the reverse conversion from a byte offset in the Rope
 /// back to an LSP Position, ensuring proper character counting for the specified
 /// encoding format.
-/// 
+///
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `byte` - Byte offset to convert (will be clamped to rope bounds)
 /// * `enc` - Whether to count characters as UTF-16 or UTF-8
-/// 
+///
 /// # Returns
 /// LSP Position with 0-based line and character indices
 pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
@@ -122,15 +122,15 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
 }
 
 /// Convert LSP range to byte offset pair
-/// 
+///
 /// Converts both start and end positions of an LSP Range to byte offsets
 /// for efficient rope operations.
-/// 
+///
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `range` - LSP range with start and end positions
 /// * `enc` - Position encoding format
-/// 
+///
 /// # Returns
 /// Tuple of (start_byte, end_byte) clamped to rope bounds
 pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
@@ -140,16 +140,16 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 }
 
 /// Apply incremental LSP text changes to a Rope-backed document
-/// 
+///
 /// Processes an array of LSP TextDocumentContentChangeEvent objects,
 /// applying them to the document's rope in sequence. Supports both
 /// full document replacement and ranged incremental edits.
-/// 
+///
 /// # Arguments
 /// * `doc` - Mutable document to modify
 /// * `changes` - Array of LSP change events to apply
 /// * `enc` - Position encoding for interpreting ranges
-/// 
+///
 /// # Behavior
 /// - Changes without ranges replace the entire document
 /// - Changes with ranges perform incremental edits at specified positions

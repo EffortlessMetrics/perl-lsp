@@ -214,31 +214,31 @@ impl SignatureHelpProvider {
 
     /// Build signature from a symbol
     /// Build signature information from a symbol
-    /// 
+    ///
     /// # Technical Implementation Guidance
-    /// 
+    ///
     /// ## Prototype Parsing Strategy
     /// - Handle multiple prototype definition styles
     ///   1. `:prototype($$@)` attribute
     ///   2. Inline prototype: `sub foo($$@)`
     ///   3. Implicit generic signatures
-    /// 
+    ///
     /// ## Parameter Type Inference
     /// - Infer parameter types from sigils
     ///   - `$`: Scalar
     ///   - `@`: Array (slurpy)
     ///   - `%`: Hash (slurpy)
     ///   - `&`: Code reference
-    /// 
+    ///
     /// ## Signature Enrichment
     /// - Extract documentation from symbol attributes
     /// - Generate sensible parameter labels
     /// - Support optional parameters
-    /// 
+    ///
     /// ## Performance Considerations
     /// - O(n) parsing complexity with prototype
     /// - Fallback to generic signature if no specific info
-    /// 
+    ///
     /// ## LSP Integration Points
     /// - Provides detailed function signature metadata
     /// - Supports semantic token generation
@@ -248,15 +248,14 @@ impl SignatureHelpProvider {
         let mut params = Vec::new();
 
         // Extended prototype parsing
-        let prototype = symbol.attributes
+        let prototype = symbol
+            .attributes
             .iter()
-            .find_map(|attr| {
-                attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")"))
-            });
+            .find_map(|attr| attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")")));
 
         if let Some(proto) = prototype {
             label.push_str(proto);
-            
+
             // Sophisticated prototype parsing
             for (i, ch) in proto.chars().enumerate() {
                 match ch {
