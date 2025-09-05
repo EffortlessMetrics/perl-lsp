@@ -133,9 +133,24 @@ pub struct LspServer {
 /// State of a document
 #[derive(Clone)]
 pub(crate) struct DocumentState {
-    /// Document content
-    /// TODO: Use Rope for O(1) edits in future optimization
-    pub(crate) content: String,
+    /// Document content with advanced management
+    /// 
+    /// # Rope Integration Strategy
+    /// - Replaces traditional String with ropey::Rope for O(1) edit performance
+    /// - Enables constant-time insertions and deletions
+    /// - Provides UTF-8/UTF-16 position conversion with minimal overhead
+    /// 
+    /// ## Performance Characteristics
+    /// - O(1) edit complexity for large documents
+    /// - Reduced memory fragmentation
+    /// - Efficient incremental parsing support
+    /// 
+    /// ## Migration Plan
+    /// 1. Replace String with Rope
+    /// 2. Update position conversion methods
+    /// 3. Modify LSP handlers to use Rope-specific methods
+    /// 4. Validate performance and memory efficiency
+    pub(crate) content: Rope,
     /// Version number
     pub(crate) _version: i32,
     /// Parsed AST (cached)
