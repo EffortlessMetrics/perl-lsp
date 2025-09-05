@@ -57,8 +57,7 @@ fn test_lsp_initialization() {
         }
         other => panic!("unexpected workspaceSymbolProvider: {:?}", other),
     }
-    // codeLensProvider is not advertised in v0.8.3 GA
-    // assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
+    assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
 }
 
 #[test]

@@ -181,7 +181,7 @@ When adding a new LSP feature:
 | Formatting | ✅ | `formatting.rs` |
 | Workspace Symbols | ❌ | To implement |
 | Semantic Tokens | ❌ | To implement |
-| Code Lens | ❌ | To implement |
+| Code Lens | ✅ | `code_lens_provider.rs` |
 | Call Hierarchy | ❌ | To implement |
 | Folding Range | ❌ | To implement |
 | Inlay Hints | ❌ | To implement |

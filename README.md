@@ -274,7 +274,7 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
 | **Selection Ranges**                |   ✅   | NEW – parent-chain expansion                |
 | **On-Type Formatting**              |   ✅   | NEW – `{`, `}`, `;`, `\n` predictable       |
-| Code Lens                           |   ⚠️   | Partial; not advertised                     |
+| Code Lens                           |   ✅   | Reference counts and run/test lenses         |
 | Call/Type Hierarchy                 |   ⚠️/❌ | Partial / not implemented                   |
 | Execute Command                     |   ❌   | Not wired                                   |
 

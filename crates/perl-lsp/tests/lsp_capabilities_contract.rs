@@ -64,10 +64,12 @@ fn test_ga_capabilities_contract() {
     );
     assert!(!caps["inlayHintProvider"].is_null(), "inlayHintProvider must be advertised (v0.8.4)");
 
-    // Assert what SHOULD NOT be advertised (partial implementations)
-    assert!(
-        caps["codeLensProvider"].is_null(),
-        "codeLensProvider must NOT be advertised (partial ~20% functional)"
+    // Assert new features that SHOULD be advertised
+    assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+    assert_eq!(
+        caps["codeLensProvider"]["resolveProvider"],
+        json!(true),
+        "codeLensProvider.resolveProvider must be true"
     );
     // v0.8.4 NEW features that ARE implemented
     assert!(

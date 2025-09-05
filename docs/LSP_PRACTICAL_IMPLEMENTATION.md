@@ -293,9 +293,8 @@ The extension will automatically use new features when the server advertises the
 Based on user value:
 
 1. **Semantic Tokens** - Better syntax highlighting
-2. **Code Lens** - Inline actions (run test, X references)
-3. **Call Hierarchy** - Incoming/outgoing calls
-4. **Folding Ranges** - Code folding
-5. **Inlay Hints** - Parameter names, types
+2. **Call Hierarchy** - Incoming/outgoing calls
+3. **Folding Ranges** - Code folding
+4. **Inlay Hints** - Parameter names, types
 
 Each follows the same pattern shown above!

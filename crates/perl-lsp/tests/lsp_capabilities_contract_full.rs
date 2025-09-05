@@ -74,8 +74,13 @@ fn full_capabilities_match_contract() {
     assert_eq!(diag["interFileDependencies"], json!(false));
     assert_eq!(diag["workspaceDiagnostics"], json!(true));
 
-    // Must NOT be advertised until fully supported
-    assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
+    // Code lens should now be advertised
+    assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+    assert_eq!(
+        caps["codeLensProvider"]["resolveProvider"],
+        json!(true),
+        "codeLensProvider.resolveProvider must be true"
+    );
     // ExecuteCommand is now implemented in v0.8.6
     assert!(
         !caps["executeCommandProvider"].is_null(),

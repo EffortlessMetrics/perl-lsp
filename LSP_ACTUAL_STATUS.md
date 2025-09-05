@@ -223,6 +223,11 @@ These features have been extensively tested and provide real, production-ready f
 - Optimized import generation with alphabetical sorting
 - **Status**: ~90% functional with enterprise-grade safety
 
+### 26. **Code Lens** (NEW in v0.8.9)
+- Inline reference counts for packages and subroutines
+- Run Test and Run Script lenses
+- **Status**: Fully functional with resolve support
+
 ### 24. **Enhanced Workspace Navigation** (MAJOR IMPROVEMENT in v0.8.9)
 - **Enhanced AST Traversal**: Comprehensive support for `NodeKind::ExpressionStatement` across all providers
 - **Tree-sitter Standard AST Format**: Program nodes now use standard (source_file) format with backward compatibility
@@ -230,7 +235,6 @@ These features have been extensively tested and provide real, production-ready f
 - **Enhanced Call Hierarchy Provider**: Complete workspace analysis with improved function call tracking
 - **Production-Ready Workspace Features**: Improved workspace indexing, symbol tracking, and cross-file operations
 - **Status**: Fully functional (100% test reliability achieved)
->>>>>>> master
 
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
@@ -264,10 +268,6 @@ These features have been extensively tested and provide real, production-ready f
 
 ### ❌ NOT Advertised in v0.8.9 (Not Implemented)
 
-#### Code Lens
-- **Status:** Partial (not advertised).
-- **Notes:** Early provider exists (run/debug links scaffolding), but no stable contract and no cross-feature integration. Not surfaced until stable & tested.
-
 #### Call/Type Hierarchy
 - **Status:** Partial/Not implemented (not advertised).
 - **Notes:** Some internal scaffolding for type/call graphs exists but not connected to the LSP layer. Will surface after end-to-end correctness and tests.
@@ -279,11 +279,6 @@ These features have been extensively tested and provide real, production-ready f
 ## ⚠️ Partially Implemented (Not Advertised)
 
 These features have partial implementations but are not advertised due to significant limitations:
-
-### 1. **Code Lens**
-- Run/Debug links partially implemented
-- Test discovery not connected
-- **Status**: ~20% functional
 
 ### 2. **Call Hierarchy**
 - Basic structure exists
@@ -329,7 +324,6 @@ These features exist in the code but return empty results or don't work:
 
 ### 7. **Advanced Features**
 - Call Hierarchy: Returns empty
-- Code Lens: Returns empty
 - Inlay Hints: Partially works for hash literals only
 - **Status**: <10% functional
 
