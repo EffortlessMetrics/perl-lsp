@@ -1,0 +1,21 @@
+# Python dependencies for benchmark comparison and analysis tools
+# Install with: pip install -r requirements.txt
+
+# Core dependencies (required)
+# No external dependencies needed - uses only Python standard library
+
+# Optional dependencies for enhanced features
+matplotlib>=3.5.0        # For performance chart generation (optional)
+numpy>=1.21.0           # For advanced statistical analysis (optional)
+scipy>=1.7.0            # For statistical significance testing (optional)
+pandas>=1.3.0           # For advanced data manipulation (optional)
+
+# Development dependencies
+pytest>=6.0.0           # For running unit tests
+pytest-cov>=3.0.0       # For test coverage analysis
+black>=22.0.0           # For code formatting
+flake8>=4.0.0           # For code linting
+
+# Documentation dependencies  
+sphinx>=4.0.0           # For generating documentation
+sphinx-rtd-theme>=1.0.0 # For ReadTheDocs theme
