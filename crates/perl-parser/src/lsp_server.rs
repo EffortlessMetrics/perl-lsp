@@ -156,18 +156,32 @@ pub(crate) struct DocumentState {
     /// This cached copy enables efficient access for parsing and analysis
     /// subsystems that operate on `&str`. Updated lazily when rope changes.
     pub(crate) text: String,
-    /// Version number
+    
+    /// LSP document version number for synchronization
     pub(crate) _version: i32,
-    /// Parsed AST (cached)
+    
+    /// Cached parsed AST for semantic analysis
+    /// 
+    /// Rebuilt when document content changes, providing fast access to
+    /// structured representation for LSP features like hover and completion.
     pub(crate) ast: Option<std::sync::Arc<crate::ast::Node>>,
-    /// Parse errors
+    
+    /// Parse errors from last AST generation attempt
     pub(crate) parse_errors: Vec<crate::error::ParseError>,
-    /// Parent map for O(1) scope traversal (built once per AST)
-    /// Uses FxHashMap for faster pointer hashing
+    
+    /// Parent map for O(1) scope traversal during semantic analysis
+    /// 
+    /// Built once per AST generation, uses FxHashMap for faster pointer hashing
+    /// enabling efficient parent lookups during symbol resolution.
     pub(crate) parent_map: ParentMap,
-    /// Line starts cache for O(log n) position conversion
+    
+    /// Line starts cache for O(log n) LSP position conversion
+    /// 
+    /// Enables fast conversion between byte offsets (rope operations) and
+    /// line/column positions (LSP protocol) with UTF-16 encoding support.
     pub(crate) line_starts: LineStartsCache,
-    /// Generation counter for latest-wins race condition prevention
+    
+    /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
 }
 
