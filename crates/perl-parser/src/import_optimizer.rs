@@ -278,7 +278,6 @@ impl ImportOptimizer {
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
-        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
         for imp in &imports {
             let mut unused_symbols = Vec::new();
 
@@ -294,70 +293,9 @@ impl ImportOptimizer {
                     }
                 }
             } else {
-                // Skip pragma modules like strict, warnings, etc.
-                let is_pragma = matches!(
-                    imp.module.as_str(),
-                    "strict"
-                        | "warnings"
-                        | "utf8"
-                        | "bytes"
-                        | "integer"
-                        | "locale"
-                        | "overload"
-                        | "sigtrap"
-                        | "subs"
-                        | "vars"
-                );
-
-                if !is_pragma {
-                    // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let known_exports = get_known_module_exports(&imp.module);
-                    let mut is_used = false;
-
-                    // First check if the module is directly referenced (e.g., Module::function)
-                    let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
-                    let module_re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
-                    if module_re.is_match(&non_use_content) {
-                        is_used = true;
-                    }
-
-                    // Also check for qualified function calls like Module::function
-                    if !is_used {
-                        let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
-                        let qualified_re =
-                            Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
-                        if qualified_re.is_match(&non_use_content) {
-                            is_used = true;
-                        }
-                    }
-
-                    // Special handling for Data::Dumper - check for Dumper function usage
-                    if !is_used && imp.module == "Data::Dumper" {
-                        if dumper_re.is_match(&non_use_content) {
-                            is_used = true;
-                        }
-                    }
-
-                    // Then check if any known exports are used
-                    if !is_used && !known_exports.is_empty() {
-                        for export in &known_exports {
-                            let export_pattern = format!(r"\b{}\b", regex::escape(export));
-                            let export_re =
-                                Regex::new(&export_pattern).map_err(|e| e.to_string())?;
-                            if export_re.is_match(&non_use_content) {
-                                is_used = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // For modules without known exports, be conservative and don't mark as unused
-                    // unless we can definitively prove they're not used
-                    if !is_used && !known_exports.is_empty() {
-                        // Only mark as unused if we have known exports and none are used
-                        unused_symbols.push("(bare import)".to_string());
-                    }
-                }
+                // Bare imports are assumed to have side effects (pragmas or other)
+                // and are not analyzed for usage. They will never be marked as unused.
+                continue;
             }
 
             // Create unused import entry if there are unused symbols
@@ -531,9 +469,9 @@ print "Hello World\n";
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        assert_eq!(analysis.unused_imports.len(), 2);
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
+        // Bare imports without explicit symbols are assumed to have side effects,
+        // so they are not reported as unused even if their exports aren't referenced.
+        assert!(analysis.unused_imports.is_empty());
     }
 
     #[test]
@@ -732,11 +670,9 @@ print Dumper(\@ARGV);
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
 
-        // JSON should be unused (has known exports but none are used)
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
-
-        // SomeUnknownModule should not be marked as unused (conservative approach)
-        assert!(!analysis.unused_imports.iter().any(|u| u.module == "SomeUnknownModule"));
+        // JSON and SomeUnknownModule are treated as having potential side effects,
+        // so neither is flagged as unused.
+        assert!(analysis.unused_imports.is_empty());
     }
 
     #[test]
