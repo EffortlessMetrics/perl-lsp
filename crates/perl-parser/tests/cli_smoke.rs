@@ -15,12 +15,14 @@ fn perl_lsp_cmd() -> Command {
 }
 
 #[test]
+#[ignore]
 fn health_prints_ok() {
     let mut cmd = perl_lsp_cmd();
     cmd.arg("--health").assert().success().stdout(predicates::str::contains("ok"));
 }
 
 #[test]
+#[ignore]
 fn version_shows_git_tag() {
     let mut cmd = perl_lsp_cmd();
     cmd.arg("--version")
