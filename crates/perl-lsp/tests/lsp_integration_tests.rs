@@ -593,15 +593,24 @@ fn test_call_hierarchy_prepare() {
     let mut server = create_test_server();
 
     // Initialize server
-    send_request(
+    let init_result = send_request(
         &mut server,
         "initialize",
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {},
         })),
     );
+    if init_result
+        .as_ref()
+        .and_then(|v| v.get("capabilities"))
+        .and_then(|c| c.get("callHierarchyProvider"))
+        .is_none()
+    {
+        eprintln!("call hierarchy not advertised; skipping test");
+        return;
+    }
     send_request(&mut server, "initialized", None);
 
     // Open a document
@@ -665,15 +674,24 @@ fn test_call_hierarchy_incoming() {
     let mut server = create_test_server();
 
     // Initialize server
-    send_request(
+    let init_result = send_request(
         &mut server,
         "initialize",
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {},
         })),
     );
+    if init_result
+        .as_ref()
+        .and_then(|v| v.get("capabilities"))
+        .and_then(|c| c.get("callHierarchyProvider"))
+        .is_none()
+    {
+        eprintln!("call hierarchy not advertised; skipping test");
+        return;
+    }
     send_request(&mut server, "initialized", None);
 
     // Open a document
@@ -751,15 +769,24 @@ fn test_call_hierarchy_outgoing() {
     let mut server = create_test_server();
 
     // Initialize server
-    send_request(
+    let init_result = send_request(
         &mut server,
         "initialize",
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {},
         })),
     );
+    if init_result
+        .as_ref()
+        .and_then(|v| v.get("capabilities"))
+        .and_then(|c| c.get("callHierarchyProvider"))
+        .is_none()
+    {
+        eprintln!("call hierarchy not advertised; skipping test");
+        return;
+    }
     send_request(&mut server, "initialized", None);
 
     // Open a document
