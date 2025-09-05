@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Comprehensive PR Workflow Integration with Production-Stable AST Generation  
+**Latest Release**: v0.8.8 GA - Comprehensive PR Workflow Integration with Production-Stable AST Generation  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA)
+### Published Crates (v0.8.8 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -123,7 +123,7 @@ perl-lsp --stdio --log                  # Debug LSP server
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 
 ### Specialized Guides
-- **[LSP Crate Separation](docs/LSP_CRATE_SEPARATION_GUIDE.md)** - v0.8.9 architectural improvements
+- **[LSP Crate Separation](docs/LSP_CRATE_SEPARATION_GUIDE.md)** - v0.8.8 architectural improvements
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
 - **[Source Threading](docs/SOURCE_THREADING_GUIDE.md)** - Comment documentation extraction
@@ -142,7 +142,7 @@ perl-lsp --stdio --log                  # Debug LSP server
 | Statistical Consistency | <1.0 CV | 0.6 CV | ✅ Excellent |
 | Incremental Success Rate | ≥95% | 100% | ✅ Perfect |
 
-## Current Status (v0.8.9)
+## Current Status (v0.8.8)
 
 ✅ **Production Ready**:
 - 100% test pass rate across all components
@@ -159,7 +159,7 @@ perl-lsp --stdio --log                  # Debug LSP server
 - ✅ File path completion with enterprise security
 - ✅ Debug Adapter Protocol (DAP) support
 
-**Recent Enhancements (v0.8.9)**:
+**Recent Enhancements (v0.8.8)**:
 - ✅ Comprehensive S-expression generation with 50+ operators
 - ✅ Enhanced AST traversal including ExpressionStatement support
 - ✅ Production-ready workspace indexing and cross-file analysis

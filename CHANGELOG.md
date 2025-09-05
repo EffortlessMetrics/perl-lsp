@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Post-v0.8.9 Validation Enhancements
+## [Unreleased] - Post-v0.8.8 Validation Enhancements
 
 ### Added - **Post-Validation Enterprise Features**
 - **Comprehensive Security Validation (PR #44)** - Enterprise-grade security patterns with production-ready implementation:
@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testing Coverage** - 235+ tests passing across production crates with enhanced reliability
 - **Documentation** - Updated installation guides, tutorials, and architectural explanations
 
-## [v0.8.9] - 2025-09-03
+## [v0.8.8] - 2025-09-03
 
 ### Added  
 - **Comprehensive PR Workflow Integration** - Production-stable AST generation and enhanced workspace navigation
