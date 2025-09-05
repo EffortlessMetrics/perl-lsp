@@ -59,12 +59,12 @@ fn semantic_tokens_expected_ranges() {
     // Expected tokens after overlap removal (LSP specification compliant)
     // The longer "sub foo { $x }" function token takes precedence over "sub" keyword
     let expected_non_overlapping = [
-        (0, 0, 2, 7),   // my - keyword (index 7)
-        (0, 3, 2, 4),   // $x - variable (index 4) 
-        (0, 6, 1, 12),  // = - operator (index 12)
-        (0, 8, 1, 10),  // 1 - number (index 10)
-        (1, 0, 14, 2),  // sub foo { $x } - function (index 2) - longer token preferred
-        (2, 0, 5, 2),   // foo(); - function (index 2)
+        (0, 0, 2, 7),  // my - keyword (index 7)
+        (0, 3, 2, 4),  // $x - variable (index 4)
+        (0, 6, 1, 12), // = - operator (index 12)
+        (0, 8, 1, 10), // 1 - number (index 10)
+        (1, 0, 14, 2), // sub foo { $x } - function (index 2) - longer token preferred
+        (2, 0, 5, 2),  // foo(); - function (index 2)
     ];
 
     assert_eq!(tokens.len(), expected_non_overlapping.len(), "semantic token count mismatch");
