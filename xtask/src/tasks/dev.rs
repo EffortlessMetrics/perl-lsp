@@ -5,7 +5,7 @@ use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::process::Child;
 
-pub fn run(_watch: bool, port: u16) -> Result<()> {
+pub fn run(watch: bool, port: u16) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
@@ -24,7 +24,7 @@ pub fn run(_watch: bool, port: u16) -> Result<()> {
         }
     };
 
-    if _watch {
+    if watch {
         use notify::{RecursiveMode, Watcher};
         use std::path::Path;
         use std::sync::mpsc::channel;
