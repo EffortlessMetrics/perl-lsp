@@ -9,7 +9,7 @@ mod support;
 
 use crate::support::incremental_test_utils::IncrementalTestUtils;
 use perl_parser::incremental_v2::IncrementalParserV2;
-//use perl_parser::{edit::Edit, position::Position};
+// Removed unused imports: edit::Edit, position::Position
 use std::time::Instant;
 
 /// Test incremental parsing with deeply nested structures
