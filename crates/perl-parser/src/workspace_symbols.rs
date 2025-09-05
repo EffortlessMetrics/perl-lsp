@@ -83,13 +83,16 @@ impl WorkspaceSymbolsProvider {
         let mut symbols = Vec::new();
 
         // Extract symbols from the symbol table
-        for (name, symbol_list) in &table.symbols {
+        for symbol_list in table.symbols.values() {
             for symbol in symbol_list {
+                let container =
+                    symbol.qualified_name.rsplit_once("::").map(|(pkg, _)| pkg.to_string());
+
                 symbols.push(SymbolInfo {
-                    name: name.clone(),
+                    name: symbol.name.clone(),
                     kind: symbol.kind,
                     location: symbol.location,
-                    container: None, // TODO: Track containing package/class
+                    container,
                 });
             }
         }
@@ -363,24 +366,35 @@ sub baz {
 
         provider.index_document("file:///test.pl", &ast, source);
 
+        // Verify container information is indexed
+        let all_symbols = provider.get_all_symbols();
+        let pkg = all_symbols.iter().find(|s| s.name == "MyPackage").unwrap();
+        assert!(pkg.container_name.is_none());
+        let foo = all_symbols.iter().find(|s| s.name == "foo").unwrap();
+        assert_eq!(foo.container_name.as_deref(), Some("MyPackage"));
+
         // Test exact match
         let results = provider.search("foo", &source_map);
         assert_eq!(results.len(), 2); // foo and foobar
         assert_eq!(results[0].name, "foo"); // Exact match first
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
 
         // Test prefix match
         let results = provider.search("fo", &source_map);
         assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|s| s.container_name.as_deref() == Some("MyPackage")));
 
         // Test contains match
         let results = provider.search("bar", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
 
         // Test fuzzy match
         let results = provider.search("fb", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
     }
 
     #[test]
