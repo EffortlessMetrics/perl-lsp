@@ -1192,7 +1192,14 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Subroutine { name, prototype, signature, attributes, body: Box::new(body) },
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body: Box::new(body),
+                name_span: None, // TODO: Set proper span when available
+            },
             SourceLocation { start, end },
         ))
     }
@@ -1440,7 +1447,14 @@ impl<'a> Parser<'a> {
         };
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Package { name, block }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Package {
+                name,
+                block,
+                name_span: SourceLocation { start, end }, // Use full span for now
+            },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse use statement
@@ -1828,6 +1842,7 @@ impl<'a> Parser<'a> {
                 signature: None,
                 attributes: vec![],
                 body: Box::new(block),
+                name_span: None, // TODO: Set proper name span
             },
             SourceLocation { start, end },
         ))

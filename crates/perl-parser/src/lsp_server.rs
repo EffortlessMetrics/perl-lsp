@@ -42,7 +42,6 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
-use ropey::Rope;
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -132,12 +131,12 @@ pub struct LspServer {
 }
 
 /// Document state with Rope-based content management for efficient LSP operations
-/// 
+///
 /// This structure maintains both a Rope for efficient edits and a cached String
 /// representation for compatibility with subsystems that expect `&str`. The dual
 /// representation ensures optimal performance for both incremental edits (Rope)
 /// and parsing/analysis operations (String).
-/// 
+///
 /// ## Performance Characteristics
 /// - **Rope operations**: O(log n) for insertions, deletions, and slicing
 /// - **String operations**: O(1) access for parsing and analysis
@@ -146,41 +145,41 @@ pub struct LspServer {
 #[derive(Clone)]
 pub(crate) struct DocumentState {
     /// Rope-backed document content providing O(log n) edit performance
-    /// 
+    ///
     /// The rope is the authoritative source for document content and supports
     /// efficient incremental updates from LSP TextDocumentContentChangeEvents.
     pub(crate) rope: ropey::Rope,
-    
+
     /// Cached string representation synchronized with rope content
-    /// 
+    ///
     /// This cached copy enables efficient access for parsing and analysis
     /// subsystems that operate on `&str`. Updated lazily when rope changes.
     pub(crate) text: String,
-    
+
     /// LSP document version number for synchronization
     pub(crate) _version: i32,
-    
+
     /// Cached parsed AST for semantic analysis
-    /// 
+    ///
     /// Rebuilt when document content changes, providing fast access to
     /// structured representation for LSP features like hover and completion.
     pub(crate) ast: Option<std::sync::Arc<crate::ast::Node>>,
-    
+
     /// Parse errors from last AST generation attempt
     pub(crate) parse_errors: Vec<crate::error::ParseError>,
-    
+
     /// Parent map for O(1) scope traversal during semantic analysis
-    /// 
+    ///
     /// Built once per AST generation, uses FxHashMap for faster pointer hashing
     /// enabling efficient parent lookups during symbol resolution.
     pub(crate) parent_map: ParentMap,
-    
+
     /// Line starts cache for O(log n) LSP position conversion
-    /// 
+    ///
     /// Enables fast conversion between byte offsets (rope operations) and
     /// line/column positions (LSP protocol) with UTF-16 encoding support.
     pub(crate) line_starts: LineStartsCache,
-    
+
     /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
 }
@@ -1173,8 +1172,7 @@ impl LspServer {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                let mut diagnostics =
-                    provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                 // Add Perl::Critic built-in analysis
                 let built_in_analyzer = BuiltInAnalyzer::new();
@@ -1323,8 +1321,7 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics
@@ -1913,8 +1910,7 @@ impl LspServer {
                     let mut code_actions: Vec<Value> = Vec::new();
 
                     // Check if source lacks strict/warnings
-                    if !doc.text.contains("use strict") || !doc.text.contains("use warnings")
-                    {
+                    if !doc.text.contains("use strict") || !doc.text.contains("use warnings") {
                         let mut changes = HashMap::new();
                         // Find first non-shebang line
                         let insert_pos = if doc.text.starts_with("#!") {
@@ -3632,8 +3628,7 @@ impl LspServer {
                             || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_'))
                     {
                         // Find the token bounds
-                        let (start_offset, end_offset) =
-                            self.get_token_bounds(&doc.text, offset);
+                        let (start_offset, end_offset) = self.get_token_bounds(&doc.text, offset);
                         let (start_line, start_char) = self.offset_to_pos16(doc, start_offset);
                         let (end_line, end_char) = self.offset_to_pos16(doc, end_offset);
 
@@ -4183,8 +4178,7 @@ impl LspServer {
                 let mut lsp_ranges = Vec::new();
 
                 // Add text-based data section folding
-                if let Some(marker_offset) = crate::util::find_data_marker_byte_lexed(&doc.text)
-                {
+                if let Some(marker_offset) = crate::util::find_data_marker_byte_lexed(&doc.text) {
                     let marker_line = self.offset_to_line(&doc.text, marker_offset);
                     let total_lines = doc.text.lines().count();
 
@@ -7423,8 +7417,7 @@ impl LspServer {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Generate a result ID based on content
                     let result_id = format!("{:x}", md5::compute(&doc.text));
@@ -7687,9 +7680,8 @@ impl LspServer {
                                 let start_pos = doc
                                     .line_starts
                                     .offset_to_position(&doc.text, sym.location.start);
-                                let end_pos = doc
-                                    .line_starts
-                                    .offset_to_position(&doc.text, sym.location.end);
+                                let end_pos =
+                                    doc.line_starts.offset_to_position(&doc.text, sym.location.end);
 
                                 // Start with the provided symbol JSON so we can add
                                 // additional details without panicking if fields are missing

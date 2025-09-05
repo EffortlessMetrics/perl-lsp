@@ -1,15 +1,15 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
-use perl_parser::textdoc::{Doc, PosEnc, apply_changes, lsp_pos_to_byte, byte_to_lsp_pos};
+use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+use perl_parser::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;
-use lsp_types::{TextDocumentContentChangeEvent, Position, Range};
+use std::hint::black_box;
 
 /// Benchmark Rope vs String for large document operations
 fn benchmark_rope_vs_string_insertions(c: &mut Criterion) {
     let large_content = "x".repeat(50_000);
-    
+
     let mut group = c.benchmark_group("document_insertions");
-    
+
     // Benchmark Rope insertions
     group.bench_function("rope_insertion", |b| {
         b.iter(|| {
@@ -18,7 +18,7 @@ fn benchmark_rope_vs_string_insertions(c: &mut Criterion) {
             black_box(rope)
         })
     });
-    
+
     // Benchmark String insertions
     group.bench_function("string_insertion", |b| {
         b.iter(|| {
@@ -27,7 +27,7 @@ fn benchmark_rope_vs_string_insertions(c: &mut Criterion) {
             black_box(content)
         })
     });
-    
+
     group.finish();
 }
 
@@ -42,11 +42,11 @@ fn benchmark_position_conversions(c: &mut Criterion) {
             content.push_str(&format!("# Line {}: Short\n", i));
         }
     }
-    
+
     let rope = Rope::from_str(&content);
-    
+
     let mut group = c.benchmark_group("position_conversions");
-    
+
     // Benchmark UTF-16 position to byte conversion
     group.bench_function("utf16_pos_to_byte", |b| {
         b.iter(|| {
@@ -54,14 +54,12 @@ fn benchmark_position_conversions(c: &mut Criterion) {
             black_box(lsp_pos_to_byte(&rope, pos, PosEnc::Utf16))
         })
     });
-    
+
     // Benchmark byte to UTF-16 position conversion
     group.bench_function("byte_to_utf16_pos", |b| {
-        b.iter(|| {
-            black_box(byte_to_lsp_pos(&rope, black_box(25_000), PosEnc::Utf16))
-        })
+        b.iter(|| black_box(byte_to_lsp_pos(&rope, black_box(25_000), PosEnc::Utf16)))
     });
-    
+
     // Benchmark UTF-8 position to byte conversion (faster path)
     group.bench_function("utf8_pos_to_byte", |b| {
         b.iter(|| {
@@ -69,7 +67,7 @@ fn benchmark_position_conversions(c: &mut Criterion) {
             black_box(lsp_pos_to_byte(&rope, pos, PosEnc::Utf8))
         })
     });
-    
+
     group.finish();
 }
 
@@ -79,14 +77,14 @@ fn benchmark_incremental_edits(c: &mut Criterion) {
     for i in 0..1000 {
         content.push_str(&format!("# Line {}: Some content here\n", i));
     }
-    
+
     let mut group = c.benchmark_group("incremental_edits");
-    
+
     // Benchmark multiple small edits (common LSP scenario)
     group.bench_function("multiple_small_edits", |b| {
         b.iter(|| {
             let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
-            
+
             let edits = vec![
                 TextDocumentContentChangeEvent {
                     range: Some(Range::new(Position::new(100, 0), Position::new(100, 0))),
@@ -104,29 +102,29 @@ fn benchmark_incremental_edits(c: &mut Criterion) {
                     text: "# Inserted line 2\n".to_string(),
                 },
             ];
-            
+
             apply_changes(&mut doc, &edits, PosEnc::Utf16);
             black_box(doc)
         })
     });
-    
+
     // Benchmark single large edit
     group.bench_function("single_large_edit", |b| {
         b.iter(|| {
             let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
-            
+
             let large_text = "# ".repeat(5000) + "Large insertion\n";
             let edit = TextDocumentContentChangeEvent {
                 range: Some(Range::new(Position::new(500, 0), Position::new(500, 0))),
                 range_length: None,
                 text: large_text,
             };
-            
+
             apply_changes(&mut doc, &[edit], PosEnc::Utf16);
             black_box(doc)
         })
     });
-    
+
     group.finish();
 }
 
@@ -136,11 +134,11 @@ fn benchmark_rope_navigation(c: &mut Criterion) {
     for i in 0..2000 {
         content.push_str(&format!("Line {}: This line contains some text for benchmarking navigation operations in large documents\n", i));
     }
-    
+
     let rope = Rope::from_str(&content);
-    
+
     let mut group = c.benchmark_group("rope_navigation");
-    
+
     // Benchmark line-based operations
     group.bench_function("line_operations", |b| {
         b.iter(|| {
@@ -150,7 +148,7 @@ fn benchmark_rope_navigation(c: &mut Criterion) {
             black_box((line, line_len))
         })
     });
-    
+
     // Benchmark character-based operations
     group.bench_function("char_operations", |b| {
         b.iter(|| {
@@ -160,7 +158,7 @@ fn benchmark_rope_navigation(c: &mut Criterion) {
             black_box((byte_idx, back_to_char))
         })
     });
-    
+
     // Benchmark slicing operations
     group.bench_function("slice_operations", |b| {
         b.iter(|| {
@@ -171,7 +169,7 @@ fn benchmark_rope_navigation(c: &mut Criterion) {
             black_box(slice_str)
         })
     });
-    
+
     group.finish();
 }
 

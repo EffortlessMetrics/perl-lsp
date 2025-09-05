@@ -443,6 +443,7 @@ mod tests {
                         prototype: None,
                         signature: None,
                         attributes: vec![],
+                        name_span: None,
                         body: Box::new(Node::new(
                             NodeKind::Block { statements: vec![] },
                             SourceLocation { start: 0, end: 0 },
@@ -469,6 +470,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("complex".to_string()),
                 prototype: None,
+                name_span: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature {
                         parameters: vec![

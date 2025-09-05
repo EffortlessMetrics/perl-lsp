@@ -1,6 +1,6 @@
-use perl_parser::textdoc::{Doc, PosEnc, apply_changes, lsp_pos_to_byte, byte_to_lsp_pos};
+use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+use perl_parser::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;
-use lsp_types::{TextDocumentContentChangeEvent, Position, Range};
 use std::time::Instant;
 
 /// Ensure that applying edits on large files remains efficient and accurate
@@ -23,13 +23,14 @@ fn large_file_edit() {
 fn large_file_incremental_edits() {
     // Create a large file with simple ASCII content
     let mut content = String::new();
-    for i in 0..100 {  // Smaller size for reliability
+    for i in 0..100 {
+        // Smaller size for reliability
         content.push_str(&format!("# Line {}: Hello World\n", i));
     }
-    
+
     let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
     let original_len = doc.rope.len_bytes();
-    
+
     // Test simple incremental edits with safe positions
     let edits = vec![
         // Insert at beginning
@@ -45,19 +46,23 @@ fn large_file_incremental_edits() {
             text: "# Inserted line\n".to_string(),
         },
     ];
-    
+
     let start_time = Instant::now();
     apply_changes(&mut doc, &edits, PosEnc::Utf16);
     let edit_duration = start_time.elapsed();
-    
+
     // Performance assertion - edits should complete quickly even on large files
-    assert!(edit_duration.as_millis() < 50, "Large file edits took {} ms, expected < 50ms", edit_duration.as_millis());
-    
+    assert!(
+        edit_duration.as_millis() < 50,
+        "Large file edits took {} ms, expected < 50ms",
+        edit_duration.as_millis()
+    );
+
     // Verify content changes
     let final_content = doc.rope.to_string();
     assert!(final_content.starts_with("#!/usr/bin/perl\n"));
     assert!(final_content.contains("# Inserted line"));
-    
+
     // Length should be original + added content
     assert!(doc.rope.len_bytes() > original_len);
 }
@@ -71,9 +76,9 @@ fn large_file_utf16_position_accuracy() {
         // Mix ASCII, emojis, and multi-byte Unicode
         content.push_str(&format!("Line {}: Test 🎉 café naïve résumé 中文 🌟\n", i));
     }
-    
+
     let rope = Rope::from_str(&content);
-    
+
     // Test position conversion round-trip at various points
     let test_positions = vec![
         Position::new(0, 0),    // Start of file
@@ -81,19 +86,24 @@ fn large_file_utf16_position_accuracy() {
         Position::new(250, 20), // Middle of file
         Position::new(499, 30), // Near end
     ];
-    
+
     for pos in test_positions {
         let byte_offset = lsp_pos_to_byte(&rope, pos, PosEnc::Utf16);
         let converted_back = byte_to_lsp_pos(&rope, byte_offset, PosEnc::Utf16);
-        
+
         // Position conversion should be accurate within the line
         // (character position might differ due to Unicode width, but should be consistent)
         assert_eq!(pos.line, converted_back.line, "Line mismatch at position {:?}", pos);
-        
+
         // Character position should be within reasonable bounds
         let char_diff = converted_back.character.abs_diff(pos.character);
-        assert!(char_diff <= 5, "Character position drift too large: {} vs {} (diff: {})", 
-                pos.character, converted_back.character, char_diff);
+        assert!(
+            char_diff <= 5,
+            "Character position drift too large: {} vs {} (diff: {})",
+            pos.character,
+            converted_back.character,
+            char_diff
+        );
     }
 }
 
@@ -101,25 +111,29 @@ fn large_file_utf16_position_accuracy() {
 #[test]
 fn rope_vs_string_performance() {
     let large_content = "x".repeat(50_000) + "\n" + &"y".repeat(50_000);
-    
+
     // Test Rope insertion performance
     let start = Instant::now();
     let mut rope = Rope::from_str(&large_content);
     rope.insert(50_000, " INSERTED ");
     let rope_duration = start.elapsed();
-    
+
     // Test String insertion performance (slower expected)
     let start = Instant::now();
     let mut string_content = large_content.clone();
     string_content.insert_str(50_000, " INSERTED ");
     let string_duration = start.elapsed();
-    
+
     // Rope should be significantly faster for large insertions
     println!("Rope edit: {:?}, String edit: {:?}", rope_duration, string_duration);
-    
+
     // Verify content is the same
     assert_eq!(rope.to_string(), string_content);
-    
+
     // Performance assertion - Rope should handle large edits efficiently
-    assert!(rope_duration.as_millis() < 10, "Rope insertion took {} ms, expected < 10ms", rope_duration.as_millis());
+    assert!(
+        rope_duration.as_millis() < 10,
+        "Rope insertion took {} ms, expected < 10ms",
+        rope_duration.as_millis()
+    );
 }
