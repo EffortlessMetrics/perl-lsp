@@ -557,16 +557,11 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
                 for test_case in test_cases {
                     match run_corpus_test_case(&test_case, &scanner) {
                         Ok(outcome) => {
-                            if outcome.scanner_mismatch {
-                                results.add_mismatch(format!("{}: {}", file_name, test_case.name));
-                            }
-                            
                             if outcome.passed {
                                 results.add_passed();
                             } else {
                                 results.add_failed(format!("{}: {}", file_name, test_case.name));
 
-                                // Run diagnostic on first failing test if requested
                                 if diagnose && !diagnostic_run {
                                     if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
                                         println!("Diagnostic error: {}", e);
@@ -574,6 +569,11 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
                                     diagnostic_run = true;
                                 }
                             }
+
+                            if outcome.scanner_mismatch {
+                                results.add_mismatch(format!("{}: {}", file_name, test_case.name));
+                            }
+                        }
                         }
                         Err(e) => {
                             results.add_failed(format!(
@@ -595,8 +595,12 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     // Print summary
     results.print_summary();
 
-    if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
+    if results.failed > 0 || results.mismatched > 0 {
+        Err(color_eyre::eyre::eyre!(
+            "{} corpus tests failed, {} scanner mismatches",
+            results.failed,
+            results.mismatched
+        ))
     } else {
         Ok(())
     }
