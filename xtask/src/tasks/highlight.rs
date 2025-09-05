@@ -3,9 +3,11 @@
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
+use tree_sitter::{Query, QueryCursor};
 
 /// Highlight expectation from test file comments
 #[derive(Clone, Debug)]
@@ -155,17 +157,49 @@ fn parse_highlight_expectation(line: &str, _line_num: usize) -> Option<Highlight
 
 /// Run a single highlight test case
 fn run_highlight_test_case(
-    _test_case: &HighlightTestCase,
+    test_case: &HighlightTestCase,
     _scanner: &Option<ScannerType>,
 ) -> Result<bool> {
-    // TODO: Implement actual highlight testing using tree-sitter-perl
-    // For now, this is a placeholder that always passes
-    // The real implementation would:
-    // 1. Parse the source code using tree-sitter-perl
-    // 2. Apply the highlight query from queries/highlights.scm
-    // 3. Compare the actual highlights with the expected ones
+    // Parse the source using tree-sitter-perl
+    let mut parser = tree_sitter_perl::create_ts_parser();
+    let tree = parser
+        .parse(&test_case.source, None)
+        .ok_or_else(|| color_eyre::eyre::eyre!("failed to parse source"))?;
 
-    Ok(true)
+    // Apply the highlight query
+    const HIGHLIGHT_QUERY: &str = include_str!("../../../queries/highlights.scm");
+    let query = Query::new(&tree_sitter_perl::language(), HIGHLIGHT_QUERY)
+        .with_context(|| "failed to compile highlight query")?;
+
+    let mut cursor = QueryCursor::new();
+    let mut actual_scopes = HashSet::new();
+    for m in cursor.matches(&query, tree.root_node(), test_case.source.as_bytes()) {
+        for c in m.captures {
+            let name = &query.capture_names()[c.index as usize];
+            actual_scopes.insert(name.clone());
+        }
+    }
+
+    // Collect expected scopes
+    let expected_scopes: HashSet<String> =
+        test_case.expectations.iter().map(|e| e.expected_scope.clone()).collect();
+
+    // Compare expected and actual scopes
+    let missing: Vec<_> = expected_scopes.difference(&actual_scopes).cloned().collect();
+    let unexpected: Vec<_> = actual_scopes.difference(&expected_scopes).cloned().collect();
+
+    if missing.is_empty() && unexpected.is_empty() {
+        Ok(true)
+    } else {
+        let mut msg = String::new();
+        if !missing.is_empty() {
+            msg.push_str(&format!("Missing scopes: {:?}. ", missing));
+        }
+        if !unexpected.is_empty() {
+            msg.push_str(&format!("Unexpected scopes: {:?}.", unexpected));
+        }
+        Err(color_eyre::eyre::eyre!(msg))
+    }
 }
 
 pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
