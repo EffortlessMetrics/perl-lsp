@@ -1,4 +1,5 @@
 use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
+use serial_test::serial;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -35,6 +36,7 @@ fn create_test_directory() -> TempDir {
 }
 
 #[test]
+#[serial]
 fn test_basic_file_completion() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -59,6 +61,7 @@ fn test_basic_file_completion() {
 }
 
 #[test]
+#[serial]
 fn test_directory_traversal() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -79,6 +82,7 @@ fn test_directory_traversal() {
 }
 
 #[test]
+#[serial]
 fn test_security_path_traversal_blocked() {
     let code = "\"../../../etc/passwd\"";
     let mut parser = Parser::new(code);
@@ -92,6 +96,7 @@ fn test_security_path_traversal_blocked() {
 }
 
 #[test]
+#[serial]
 fn test_security_absolute_paths_blocked() {
     let code = "\"/etc/passwd\"";
     let mut parser = Parser::new(code);
@@ -105,6 +110,7 @@ fn test_security_absolute_paths_blocked() {
 }
 
 #[test]
+#[serial]
 fn test_security_null_bytes_blocked() {
     let code = "\"test\0\"";
     let mut parser = Parser::new(code);
@@ -118,6 +124,7 @@ fn test_security_null_bytes_blocked() {
 }
 
 #[test]
+#[serial]
 fn test_hidden_files_filtered() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -139,6 +146,7 @@ fn test_hidden_files_filtered() {
 }
 
 #[test]
+#[serial]
 fn test_file_type_detection() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -161,6 +169,7 @@ fn test_file_type_detection() {
 }
 
 #[test]
+#[serial]
 fn test_directory_completion_with_slash() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -183,6 +192,7 @@ fn test_directory_completion_with_slash() {
 }
 
 #[test]
+#[serial]
 fn test_empty_prefix_completion() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -204,6 +214,7 @@ fn test_empty_prefix_completion() {
 }
 
 #[test]
+#[serial]
 fn test_performance_limits() {
     let temp_dir = TempDir::new().unwrap();
     let old_cwd = std::env::current_dir().unwrap();
@@ -229,6 +240,7 @@ fn test_performance_limits() {
 }
 
 #[test]
+#[serial]
 fn test_cancellation_support() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -258,6 +270,7 @@ fn test_cancellation_support() {
 }
 
 #[test]
+#[serial]
 fn test_cross_platform_path_handling() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -279,6 +292,7 @@ fn test_cross_platform_path_handling() {
 }
 
 #[test]
+#[serial]
 fn test_max_path_length_protection() {
     let very_long_path = "a/".repeat(500) + "test";
     let code = format!("\"{}\"", very_long_path);
@@ -293,6 +307,7 @@ fn test_max_path_length_protection() {
 }
 
 #[test]
+#[serial]
 fn test_windows_reserved_names_blocked() {
     let temp_dir = TempDir::new().unwrap();
     let old_cwd = std::env::current_dir().unwrap();
@@ -316,6 +331,7 @@ fn test_windows_reserved_names_blocked() {
 }
 
 #[test]
+#[serial]
 fn test_completion_text_edit_range() {
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();
@@ -341,6 +357,7 @@ fn test_completion_text_edit_range() {
 }
 
 #[test]
+#[serial]
 fn test_no_symlink_following() {
     use std::os::unix::fs::symlink;
 
