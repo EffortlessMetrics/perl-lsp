@@ -401,7 +401,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine { name, prototype: _, signature, attributes, body } => {
+            NodeKind::Subroutine { name, prototype: _, signature, attributes, body, .. } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
                         location: node.location,
@@ -481,7 +481,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Package { name, block } => {
+            NodeKind::Package { name, block, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Namespace,

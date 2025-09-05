@@ -1091,11 +1091,10 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'sub'
 
-        let name = match self.peek_kind() {
+        let (name, name_span) = match self.peek_kind() {
             // Regular identifier
-            Some(TokenKind::Identifier) => Some(self.tokens.next()?.text.clone()),
-            // Keywords that can be used as subroutine names
-            Some(TokenKind::Method)
+            Some(TokenKind::Identifier)
+            | Some(TokenKind::Method)
             | Some(TokenKind::Class)
             | Some(TokenKind::Try)
             | Some(TokenKind::Catch)
@@ -1104,9 +1103,15 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::When)
             | Some(TokenKind::Default)
             | Some(TokenKind::Continue)
-            | Some(TokenKind::Format) => Some(self.tokens.next()?.text.clone()),
+            | Some(TokenKind::Format) => {
+                let token = self.tokens.next()?;
+                (
+                    Some(token.text.clone()),
+                    Some(SourceLocation { start: token.start, end: token.end }),
+                )
+            }
             // No name - anonymous subroutine
-            _ => None,
+            _ => (None, None),
         };
 
         // Parse optional attributes first (they come before signature in modern Perl)
@@ -1192,7 +1197,14 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Subroutine { name, prototype, signature, attributes, body: Box::new(body) },
+            NodeKind::Subroutine {
+                name,
+                name_span,
+                prototype,
+                signature,
+                attributes,
+                body: Box::new(body),
+            },
             SourceLocation { start, end },
         ))
     }
@@ -1374,22 +1386,30 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'package'
 
         // Parse package name (can include ::)
-        let mut name = self.expect(TokenKind::Identifier)?.text.clone();
+        let first = self.expect(TokenKind::Identifier)?;
+        let mut name = first.text.clone();
+        let name_start = first.start;
+        let mut name_end = first.end;
 
         // Handle :: in package names
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.tokens.next()?; // consume ::
+            let dc = self.tokens.next()?; // consume ::
+            name_end = dc.end;
             name.push_str("::");
 
             // Check if there's an identifier after ::
             // If not, it's a trailing :: which is valid in Perl
             if self.peek_kind() == Some(TokenKind::Identifier) {
-                name.push_str(&self.tokens.next()?.text);
+                let id = self.tokens.next()?;
+                name_end = id.end;
+                name.push_str(&id.text);
             } else {
                 // Trailing :: is valid, just break
                 break;
             }
         }
+
+        let name_span = SourceLocation { start: name_start, end: name_end };
 
         // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
@@ -1440,7 +1460,7 @@ impl<'a> Parser<'a> {
         };
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Package { name, block }, SourceLocation { start, end }))
+        Ok(Node::new(NodeKind::Package { name, name_span, block }, SourceLocation { start, end }))
     }
 
     /// Parse use statement
@@ -1824,6 +1844,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
+                name_span: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

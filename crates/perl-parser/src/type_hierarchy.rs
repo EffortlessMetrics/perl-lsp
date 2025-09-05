@@ -89,7 +89,7 @@ impl TypeHierarchyProvider {
         current_package: &mut String,
     ) {
         match &node.kind {
-            NodeKind::Package { name, block } => {
+            NodeKind::Package { name, block, .. } => {
                 if block.is_some() {
                     // Block form: package Foo { ... }
                     // Save current package, process block, restore
