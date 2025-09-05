@@ -271,7 +271,7 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body } => {
+            NodeKind::Subroutine { name, prototype, signature, attributes, body, .. } => {
                 if let Some(sub_name) = name {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
@@ -464,7 +464,7 @@ impl Node {
                 )
             }
 
-            NodeKind::Package { name, block } => {
+            NodeKind::Package { name, block, .. } => {
                 if let Some(blk) = block {
                     format!("(package {} {})", name, blk.to_sexp())
                 } else {
@@ -721,6 +721,7 @@ pub enum NodeKind {
     // Functions
     Subroutine {
         name: Option<String>,
+        name_span: Option<SourceLocation>,
         prototype: Option<Box<Node>>,
         signature: Option<Box<Node>>,
         attributes: Vec<String>,
@@ -814,6 +815,7 @@ pub enum NodeKind {
     // Package system
     Package {
         name: String,
+        name_span: SourceLocation,
         block: Option<Box<Node>>,
     },
 

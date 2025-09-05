@@ -178,7 +178,7 @@ impl<'a> TokenCollector<'a> {
         is_declaration_context: bool,
     ) {
         match &node.kind {
-            NodeKind::Package { name, block } => {
+            NodeKind::Package { name, block, .. } => {
                 // Package name is a namespace
                 self.add_token_from_string(
                     name,
