@@ -282,6 +282,33 @@ cargo bench -p perl-corpus              # Corpus validation performance
 
 # Performance validation
 cargo test -p perl-parser --test incremental_perf_test  # Incremental parsing performance
+
+# ENHANCED: Comprehensive C vs Rust benchmark comparison framework ⭐ **NEW v0.8.9**
+# Run complete cross-language benchmark suite with statistical analysis
+cargo xtask bench                       # Complete benchmark workflow with C vs Rust comparison
+
+# Individual benchmark components
+cargo run -p tree-sitter-perl-rs --bin benchmark_parsers --features pure-rust  # Rust parser benchmarks
+cd tree-sitter-perl && node test/benchmark.js  # C implementation benchmarks
+
+# Generate statistical comparison report with configurable thresholds
+python3 scripts/generate_comparison.py \
+  --c-results c_benchmark.json \
+  --rust-results rust_benchmark.json \
+  --output comparison.json \
+  --report comparison_report.md
+
+# Custom performance gates (5% parse time, 20% memory defaults)
+python3 scripts/generate_comparison.py \
+  --parse-threshold 3.0 \
+  --memory-threshold 15.0 \
+  --verbose
+
+# Setup benchmark environment with all dependencies
+bash scripts/setup_benchmark.sh
+
+# Run benchmark validation tests (12 comprehensive test cases)
+python3 -m pytest scripts/test_comparison.py -v
 ```
 
 ### Code Quality
@@ -796,8 +823,39 @@ my $test4 = "../etc/passwd";      # Should NOT provide completions (security)
   - `tests/`: Perl test files
   - Published as `perl-corpus` on crates.io
 
+#### Benchmark Framework (v0.8.9) ⭐ **NEW**
+- **`/crates/tree-sitter-perl-rs/src/bin/benchmark_parsers.rs`**: Comprehensive Rust benchmark runner
+  - Statistical analysis with confidence intervals
+  - JSON output compatible with comparison tools
+  - Memory usage tracking and performance categorization
+  - Configurable iterations and warmup cycles
+
+- **`/tree-sitter-perl/test/benchmark.js`**: C implementation benchmark harness  
+  - Node.js-based benchmarking for C parser
+  - Standardized JSON output format compatible with comparison framework
+  - Environment variable configuration support
+
+- **`/scripts/generate_comparison.py`**: Statistical comparison generator (**Diataxis: Reference**)
+  - Cross-language performance analysis (C vs Rust)
+  - Configurable regression thresholds (5% parse time, 20% memory defaults)
+  - Performance gates with statistical significance testing
+  - Markdown and JSON report generation with confidence intervals
+
+- **`/scripts/setup_benchmark.sh`**: Automated benchmark environment setup (**Diataxis: Tutorial**)
+  - Dependency installation for Python analysis framework
+  - Environment validation and configuration
+  - Complete setup automation for cross-language benchmarking
+
+- **`/scripts/test_comparison.py`**: Comprehensive benchmark framework test suite
+  - 12 test cases covering statistical analysis, configuration, and error handling
+  - Validates regression detection and performance gate functionality
+  - Unit tests for comparison metrics and threshold validation
+
+- **`/requirements.txt`**: Python dependencies for benchmark analysis
+  - Statistical analysis libraries and testing framework dependencies
+
 #### Excluded Crates (System Dependencies)
-- **`/crates/perl-parser-pest/`**: Legacy Pest parser (bindgen dependency)
+- **`/crates/perl-parser-pest/`**: Legacy Pest parser
   - `src/grammar.pest`: PEG grammar
   - `src/lib.rs`: Parser implementation  
   - Published as `perl-parser-pest` on crates.io (marked legacy)
@@ -916,8 +974,182 @@ cargo bench -p perl-parser              # Main parser benchmarks
 
 # Performance validation testing
 cargo test -p perl-parser --test incremental_perf_test  # Incremental parsing performance
->>>>>>> codex/evaluate-actual-performance-against-goals
 ```
+
+### Comprehensive Benchmark Framework (**Diataxis: How-to**) (v0.8.9)
+
+The project includes an enterprise-grade cross-language benchmark framework for systematic performance analysis and regression detection.
+
+#### Framework Architecture (**Diataxis: Explanation**)
+
+The benchmark framework consists of four integrated components:
+
+1. **Rust Benchmark Runner** (`benchmark_parsers.rs`)
+   - Comprehensive statistical analysis with confidence intervals
+   - Configurable iterations and warmup cycles (default: 100 iterations, 10 warmup)
+   - Memory usage tracking and performance categorization
+   - JSON output compatible with comparison tools
+
+2. **C Benchmark Harness** (`benchmark.js`)
+   - Node.js-based benchmarking for legacy C implementation
+   - Standardized JSON output format for cross-language comparison
+   - Environment variable configuration for test customization
+
+3. **Statistical Comparison Generator** (`generate_comparison.py`)
+   - Advanced statistical analysis with configurable regression thresholds
+   - Performance gates with customizable limits (5% parse time, 20% memory defaults)
+   - Comprehensive reporting in Markdown and JSON formats
+   - Confidence interval calculations and significance testing
+
+4. **Integration Layer** (`xtask/src/tasks/bench.rs`)
+   - Orchestrates complete benchmark workflow
+   - Automated regression detection and CI/CD integration
+   - Consolidated reporting across all implementations
+
+#### Quick Start Tutorial (**Diataxis: Tutorial**)
+
+**Step 1: Setup Benchmark Environment**
+```bash
+# Install Python dependencies and validate environment
+bash scripts/setup_benchmark.sh
+
+# Verify installation with test suite
+python3 -m pytest scripts/test_comparison.py -v  # 12 comprehensive tests
+```
+
+**Step 2: Run Individual Benchmarks**
+```bash
+# Generate Rust benchmark results
+cargo run -p tree-sitter-perl-rs --bin benchmark_parsers --features pure-rust
+
+# Generate C benchmark results (requires tree-sitter-perl C library)
+cd tree-sitter-perl
+TEST_CODE="$(cat ../test/benchmark_simple.pl)" ITERATIONS=100 node test/benchmark.js > ../c_benchmark.json
+cd ..
+```
+
+**Step 3: Generate Comparison Report**
+```bash
+# Basic comparison with default thresholds
+python3 scripts/generate_comparison.py \
+  --c-results c_benchmark.json \
+  --rust-results benchmark_results.json \
+  --output comparison.json \
+  --report comparison_report.md
+
+# View results
+cat comparison_report.md  # Detailed performance analysis
+```
+
+#### Advanced Configuration (**Diataxis: How-to**)
+
+**Rust Benchmark Configuration** - Create `benchmark_config.json`:
+```json
+{
+  "iterations": 200,
+  "warmup_iterations": 20,
+  "test_files": [
+    "test/benchmark_simple.pl",
+    "test/corpus"
+  ],
+  "output_path": "benchmark_results.json",
+  "detailed_stats": true,
+  "memory_tracking": false
+}
+```
+
+**Performance Gates Configuration** - Create `comparison_config.json`:
+```json
+{
+  "parse_time_regression_threshold": 3.0,
+  "memory_usage_regression_threshold": 15.0,
+  "minimum_test_coverage": 95.0,
+  "confidence_level": 0.99,
+  "include_detailed_stats": true
+}
+```
+
+**Custom Performance Gates**:
+```bash
+# Strict performance validation (3% parse time, 15% memory thresholds)
+python3 scripts/generate_comparison.py \
+  --c-results c_benchmark.json \
+  --rust-results benchmark_results.json \
+  --parse-threshold 3.0 \
+  --memory-threshold 15.0 \
+  --verbose
+
+# Lenient validation for experimental changes
+python3 scripts/generate_comparison.py \
+  --parse-threshold 10.0 \
+  --memory-threshold 30.0 \
+  --config experimental_config.json
+```
+
+#### Performance Gate Reference (**Diataxis: Reference**)
+
+| Gate Type | Default Threshold | Purpose | Action |
+|-----------|------------------|---------|---------|
+| **Parse Time Regression** | 5% slowdown | Detect performance regressions | FAIL CI build |
+| **Parse Time Improvement** | 5% speedup | Flag performance improvements | Report gain |
+| **Memory Usage Regression** | 20% increase | Monitor memory efficiency | WARN/FAIL |
+| **Test Coverage** | 90% minimum | Ensure statistical validity | WARN low coverage |
+| **Statistical Confidence** | 95% confidence | Validate significance | WARN insufficient data |
+
+#### Integration with CI/CD (**Diataxis: How-to**)
+
+**GitHub Actions Example**:
+```yaml
+- name: Setup Benchmark Environment
+  run: bash scripts/setup_benchmark.sh
+
+- name: Run Cross-Language Benchmarks  
+  run: cargo xtask bench --save
+
+- name: Validate Performance Gates
+  run: |
+    if grep -q "❌ FAIL" benchmark_report.md; then
+      echo "Performance regression detected"
+      exit 1
+    fi
+    echo "All performance gates passed"
+```
+
+**Local Development Workflow**:
+```bash
+# Before making changes - establish baseline
+cargo xtask bench --save --output baseline_results.json
+
+# After changes - detect regressions
+cargo xtask bench --save --output new_results.json
+python3 scripts/generate_comparison.py \
+  --c-results baseline_results.json \
+  --rust-results new_results.json \
+  --report regression_analysis.md
+```
+
+#### Framework Testing and Validation
+
+**Comprehensive Test Suite** (12 test cases):
+```bash
+# Run all framework validation tests
+python3 -m pytest scripts/test_comparison.py -v
+
+# Test specific functionality
+python3 -m pytest scripts/test_comparison.py::test_regression_detection -v
+python3 -m pytest scripts/test_comparison.py::test_confidence_intervals -v
+python3 -m pytest scripts/test_comparison.py::test_performance_gates -v
+```
+
+**Test Coverage Areas**:
+- Statistical analysis accuracy and confidence intervals
+- Regression detection with various threshold configurations  
+- Performance gate validation and edge cases
+- JSON/Markdown output format verification
+- Configuration loading and error handling
+- Memory usage tracking and categorization
+
+This framework ensures systematic performance monitoring and provides early detection of regressions across both C and Rust implementations with enterprise-grade statistical validation.
 
 ## Documentation
 
@@ -1042,4 +1274,68 @@ All security-related code must include comprehensive tests:
 4. **Testing** → Use existing comprehensive test infrastructure
 5. **Security features** → Follow PR #44 PBKDF2 implementation standards
 
+<<<<<<< HEAD
 Run `cargo xtask check --all` before committing. All tests must pass with zero warnings.
+=======
+The codebase maintains high quality standards with continuous improvements:
+
+### Recent Improvements (2025-02)
+
+#### Testing & Quality (v0.7.4)
+- **Fixed all tautological test assertions** - Replaced 27+ always-passing assertions with meaningful checks
+- **Created centralized test infrastructure** - Added `tests/support/mod.rs` with production-grade assertion helpers
+- **Achieved 100% LSP E2E test coverage** - All 33 comprehensive tests passing (includes 25 E2E + 8 user story tests)
+- **Cleaned up all dead code** - Removed 159+ lines of obsolete code, properly marked intentionally unused stubs
+- **Zero compilation warnings** in core library (only test helper warnings remain, intentionally preserved)
+
+#### LSP Features (v0.7.3)
+- **Achieved 100% LSP test coverage** (25/25 comprehensive E2E tests passing)
+- **Added robust error recovery** with fallback mechanisms for incomplete code
+- **Implemented undefined variable detection** under `use strict` with scope analysis
+- **Enhanced signature help** to work with incomplete/invalid code
+- **Added text-based folding** for unparseable files
+
+#### Code Quality (v0.7.2)
+- **Reduced clippy warnings by 61%** (from 133 to 52 in perl-parser)
+- **Eliminated 45+ unnecessary clone operations** on Copy types for better performance
+- **Fixed all recursive function warnings** with proper annotations
+- **Improved Rust idioms** throughout the codebase
+- **Memory optimizations** from avoiding unnecessary allocations
+
+### Coding Standards
+- Run `cargo clippy` before committing changes
+- Use `cargo fmt` for consistent formatting
+- Prefer `.first()` over `.get(0)` for accessing first element
+- Use `.push(char)` instead of `.push_str("x")` for single characters
+- Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
+- Avoid unnecessary `.clone()` on types that implement Copy
+- Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
+
+## Documentation (**Diataxis Framework Applied**)
+
+### Architecture and Implementation Guides
+- **[Modern Architecture](docs/MODERN_ARCHITECTURE.md)** - Two-crate architecture with performance benchmarking (**Diataxis: Explanation**)
+- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Technical guide for LSP feature development (**Diataxis: How-to**)  
+- **[Stability Guarantees](docs/STABILITY.md)** - API stability commitments and versioning policy (**Diataxis: Reference**)
+- **[Edge Cases](docs/EDGE_CASES.md)** - Comprehensive edge case handling documentation (**Diataxis: Reference**)
+
+### Performance and Benchmarking ⭐ **NEW v0.8.9**
+- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Comprehensive cross-language performance analysis (**Diataxis: Tutorial + How-to**)
+  - Statistical comparison between C and Rust implementations
+  - Configurable performance gates (5% parse time, 20% memory defaults)
+  - Enterprise-grade regression detection and CI/CD integration
+  - Complete setup automation and 12 comprehensive test cases
+
+### Development and Debugging  
+- **[Debugging Guide](docs/DEBUGGING.md)** - DAP integration and VSCode debugging setup (**Diataxis: Tutorial**)
+- **[Parser Comparison](docs/PARSER_COMPARISON.md)** - Performance analysis across implementations (**Diataxis: Reference**)
+
+### Feature Implementation Status
+- **[LSP Documentation](docs/LSP_DOCUMENTATION.md)** - Complete LSP feature matrix and implementation status (**Diataxis: Reference**)
+- **[Incremental Parsing Progress](docs/INCREMENTAL_PARSING_PROGRESS.md)** - Production-ready incremental parsing implementation (**Diataxis: How-to**)
+
+The documentation follows the **Diataxis framework** for clear organization:
+- **Tutorial**: Learning-oriented, hands-on guidance for getting started
+- **How-to**: Problem-oriented, step-by-step solutions for specific tasks  
+- **Reference**: Information-oriented, comprehensive specifications and API docs
+- **Explanation**: Understanding-oriented, design decisions and architectural concepts
