@@ -2,24 +2,72 @@
 
 use color_eyre::eyre::Result;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::path::Path;
+use std::sync::mpsc::channel;
+use std::thread;
 
-pub fn run(_watch: bool, port: u16) -> Result<()> {
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use tiny_http::{Response, Server};
+
+/// Run the development server.
+///
+/// * `watch` - If true, watches the repository for changes and restarts
+///   the server on modification.
+/// * `port` - The port to bind the HTTP server to.
+pub fn run(watch: bool, port: u16) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
     );
 
-    spinner.set_message("Starting development server");
+    let addr = format!("127.0.0.1:{port}");
+    spinner.set_message(format!("Starting development server on {addr}"));
 
-    // TODO: Implement development server
-    // This would typically involve:
-    // 1. Starting a local server for testing
-    // 2. Setting up file watching if requested
-    // 3. Providing live reload capabilities
+    // Helper to start the HTTP server
+    fn start_server(addr: &str) -> color_eyre::Result<Server> {
+        Ok(Server::http(addr)?)
+    }
 
-    spinner.finish_with_message(format!(
-        "✅ Development server started on port {} (placeholder)",
-        port
-    ));
-    Ok(())
+    let mut server = start_server(&addr)?;
+    spinner.finish_with_message(format!("✅ Development server started on http://{addr}"));
+
+    // Handle requests on a separate thread so we can optionally watch for changes.
+    let serve = |srv: Server| {
+        thread::spawn(move || {
+            for request in srv.incoming_requests() {
+                let _ = request.respond(Response::from_string("tree-sitter-perl dev server"));
+            }
+        })
+    };
+
+    if watch {
+        // Setup file watcher
+        let (tx, rx) = channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+        watcher.watch(Path::new("crates"), RecursiveMode::Recursive)?;
+
+        loop {
+            let handle = serve(server.try_clone()?);
+
+            match rx.recv() {
+                Ok(event) => {
+                    spinner.println(format!("🔄 File change detected: {:?}. Restarting...", event));
+                    // Stop serving and restart
+                    server.unblock();
+                    let _ = handle.join();
+                    server = start_server(&addr)?;
+                }
+                Err(err) => {
+                    server.unblock();
+                    let _ = handle.join();
+                    return Err(err.into());
+                }
+            }
+        }
+    } else {
+        // If not watching, just serve indefinitely.
+        let handle = serve(server.try_clone()?);
+        handle.join().map_err(|e| color_eyre::eyre::eyre!("server thread error: {:?}", e))?;
+        Ok(())
+    }
 }
