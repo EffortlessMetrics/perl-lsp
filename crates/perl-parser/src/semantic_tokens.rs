@@ -138,8 +138,53 @@ pub fn collect_semantic_tokens(
         true
     });
 
-    // 3) Sort by position and encode with deltas (thread-safe)
-    encode_raw_tokens_to_deltas(raw_tokens)
+    // 3) Remove overlapping tokens (LSP specification compliance)
+    let dedup_tokens = remove_overlapping_tokens(raw_tokens);
+    
+    // 4) Sort by position and encode with deltas (thread-safe)
+    encode_raw_tokens_to_deltas(dedup_tokens)
+}
+
+/// Remove overlapping tokens to comply with LSP specification
+/// Prefers tokens with higher specificity (AST over lexer) and longer spans
+fn remove_overlapping_tokens(
+    mut raw_tokens: Vec<(u32, u32, u32, u32, u32)>,
+) -> Vec<(u32, u32, u32, u32, u32)> {
+    if raw_tokens.is_empty() {
+        return raw_tokens;
+    }
+    
+    // Sort by position (line, then character), then by length (longer first for same position)
+    raw_tokens.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(a.1.cmp(&b.1))
+            .then(b.2.cmp(&a.2)) // Longer tokens first (reverse order)
+    });
+    
+    let mut result = Vec::new();
+    
+    for token in raw_tokens {
+        let (line, char, len, _kind, _mods) = token;
+        let end_char = char + len;
+        
+        // Check if this token overlaps with any already accepted token
+        let overlaps = result.iter().any(|&(existing_line, existing_char, existing_len, _, _)| {
+            if line != existing_line {
+                return false; // Different lines, no overlap
+            }
+            
+            let existing_end = existing_char + existing_len;
+            
+            // Check for overlap: token starts before existing ends AND token ends after existing starts
+            !(end_char <= existing_char || char >= existing_end)
+        });
+        
+        if !overlaps {
+            result.push(token);
+        }
+    }
+    
+    result
 }
 
 /// Thread-safe token encoding from raw position data

@@ -37,8 +37,8 @@ fn semantic_tokens_expected_ranges() {
         tokens.push((line, col, len, token_type));
     }
 
-    // Legend used by the server (see semantic_tokens.rs)
-    let legend = [
+    // Legend used by the server (see semantic_tokens.rs) - kept for reference
+    let _legend = [
         "namespace",
         "class",
         "function",
@@ -56,22 +56,21 @@ fn semantic_tokens_expected_ranges() {
         "macro",
     ];
 
-    // Expected tokens for the sample document
-    let expected = [
-        (0, 0, 2, "keyword"),   // my
-        (0, 3, 2, "variable"),  // $x
-        (0, 6, 1, "operator"),  // =
-        (0, 8, 1, "number"),    // 1
-        (1, 0, 3, "keyword"),   // sub
-        (1, 0, 14, "function"), // sub foo { $x }
-        (2, 0, 5, "function"),  // foo();
+    // Expected tokens after overlap removal (LSP specification compliant)
+    // The longer "sub foo { $x }" function token takes precedence over "sub" keyword
+    let expected_non_overlapping = [
+        (0, 0, 2, 7),   // my - keyword (index 7)
+        (0, 3, 2, 4),   // $x - variable (index 4) 
+        (0, 6, 1, 12),  // = - operator (index 12)
+        (0, 8, 1, 10),  // 1 - number (index 10)
+        (1, 0, 14, 2),  // sub foo { $x } - function (index 2) - longer token preferred
+        (2, 0, 5, 2),   // foo(); - function (index 2)
     ];
 
-    assert_eq!(tokens.len(), expected.len(), "semantic token count mismatch");
+    assert_eq!(tokens.len(), expected_non_overlapping.len(), "semantic token count mismatch");
 
-    for (i, &(l, c, len, kind)) in expected.iter().enumerate() {
-        let idx = legend.iter().position(|&k| k == kind).unwrap();
-        assert_eq!(tokens[i], (l, c, len, idx), "token {} mismatch", i);
+    for (i, &expected_token) in expected_non_overlapping.iter().enumerate() {
+        assert_eq!(tokens[i], expected_token, "token {} mismatch", i);
     }
 
     client.shutdown();
