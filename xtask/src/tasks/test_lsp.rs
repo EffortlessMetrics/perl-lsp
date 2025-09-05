@@ -292,7 +292,8 @@ fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
     let res = srv.handle_request(req).expect("semantic tokens response");
-    let data = res.result.unwrap()["data"].as_array().unwrap();
+    let result = res.result.unwrap();
+    let data = result["data"].as_array().unwrap();
 
     // Decode delta-encoded tokens into absolute positions
     let mut tokens = Vec::new();
@@ -313,14 +314,10 @@ fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
     }
 
     let token_types = SemanticTokenType::all();
-    let func_idx = token_types
-        .iter()
-        .position(|t| *t == SemanticTokenType::Function)
-        .unwrap() as u32;
-    let var_idx = token_types
-        .iter()
-        .position(|t| *t == SemanticTokenType::Variable)
-        .unwrap() as u32;
+    let func_idx =
+        token_types.iter().position(|t| *t == SemanticTokenType::Function).unwrap() as u32;
+    let var_idx =
+        token_types.iter().position(|t| *t == SemanticTokenType::Variable).unwrap() as u32;
 
     // Helper to compute line/col from byte index
     fn find_pos(text: &str, pat: &str) -> (u32, u32) {
@@ -344,14 +341,8 @@ fn test_syntax_highlighting(test_dir: &Path) -> Result<()> {
         tokens.iter().any(|t| t.0 == line && t.1 == col && t.2 == len && t.3 == expected_idx)
     };
 
-    assert!(
-        check_token("process_data", func_idx),
-        "expected function token for process_data"
-    );
-    assert!(
-        check_token("$result", var_idx),
-        "expected variable token for $result"
-    );
+    assert!(check_token("process_data", func_idx), "expected function token for process_data");
+    assert!(check_token("$result", var_idx), "expected variable token for $result");
 
     println!("   ✓ Semantic tokens verified");
     Ok(())
