@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use tree_sitter::{Query, QueryCursor};
+use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 /// Highlight expectation from test file comments
 #[derive(Clone, Debug)]
@@ -173,10 +173,11 @@ fn run_highlight_test_case(
 
     let mut cursor = QueryCursor::new();
     let mut actual_scopes = HashSet::new();
-    for m in cursor.matches(&query, tree.root_node(), test_case.source.as_bytes()) {
+    let mut matches = cursor.matches(&query, tree.root_node(), test_case.source.as_bytes());
+    while let Some(m) = matches.next() {
         for c in m.captures {
-            let name = &query.capture_names()[c.index as usize];
-            actual_scopes.insert(name.clone());
+            let name = query.capture_names()[c.index as usize].to_string();
+            actual_scopes.insert(name);
         }
     }
 

@@ -5,15 +5,15 @@ members = [
     "crates/perl-parser",
     "crates/perl-corpus",
     "crates/perl-lsp",
+    "crates/tree-sitter-perl-rs",
+    "xtask",
 ]
 exclude = [
     "tree-sitter-perl",
     "tree-sitter-perl-c",  # Excluded: requires libclang-dev system package for bindgen (legacy C parser)
     "crates/perl-parser-pest",  # Excluded: legacy Pest parser with bindgen dependency
-    "crates/tree-sitter-perl-rs",  # Excluded: internal testing crate with bindgen dependency
     "crates/parser-benchmarks",  # Excluded: benchmarking crate with potential dependencies
     "crates/parser-tests",  # Excluded: test harness with potential dependencies
-    "xtask",  # Excluded: depends on excluded tree-sitter-perl crate
 ]
 
 [workspace.dependencies]
