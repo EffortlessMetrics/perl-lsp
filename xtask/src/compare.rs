@@ -137,7 +137,7 @@ fn run_single_test(
     let test_content = std::fs::read_to_string(test_case)?;
 
     let mut times = Vec::new();
-    let mut memories = Vec::new();
+    let mut memories: Vec<u64> = Vec::new();
     let mut success = false;
 
     for _ in 0..iterations {
@@ -156,7 +156,7 @@ fn run_single_test(
         match result {
             Ok(_) => {
                 times.push(elapsed);
-                let usage = (mem_after - mem_before).max(0.0);
+                let usage = mem_after.saturating_sub(mem_before);
                 memories.push(usage);
                 success = true;
             }
@@ -182,14 +182,14 @@ fn run_single_test(
         times[times.len() / 2]
     };
 
-    memories.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let avg_memory = memories.iter().sum::<f64>() / memories.len() as f64;
-    let min_memory = memories[0];
-    let max_memory = memories[memories.len() - 1];
+    memories.sort();
+    let avg_memory = memories.iter().sum::<u64>() as f64 / memories.len() as f64;
+    let min_memory = memories[0] as f64;
+    let max_memory = memories[memories.len() - 1] as f64;
     let median_memory = if memories.len() % 2 == 0 {
-        (memories[memories.len() / 2 - 1] + memories[memories.len() / 2]) / 2.0
+        (memories[memories.len() / 2 - 1] + memories[memories.len() / 2]) as f64 / 2.0
     } else {
-        memories[memories.len() / 2]
+        memories[memories.len() / 2] as f64
     };
 
     Ok(Some(json!({
@@ -207,12 +207,12 @@ fn run_single_test(
     })))
 }
 
-fn current_memory_usage() -> Result<f64, Box<dyn std::error::Error>> {
+fn current_memory_usage() -> Result<u64, Box<dyn std::error::Error>> {
     let pid = std::process::id() as i32;
     let process = Process::new(pid)?;
     let statm = process.statm()?;
-    let page_size = procfs::page_size()? as f64;
-    Ok(statm.resident as f64 * page_size)
+    let page_size = procfs::page_size()? as u64;
+    Ok(statm.resident * page_size)
 }
 
 fn test_c_implementation(content: &str) -> Result<(), Box<dyn std::error::Error>> {
