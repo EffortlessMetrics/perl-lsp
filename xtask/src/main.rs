@@ -145,6 +145,7 @@ enum Commands {
     },
 
     /// Run corpus tests
+    #[cfg(feature = "parser-tasks")]
     Corpus {
         /// Path to corpus directory
         #[arg(long, default_value = "c/test/corpus")]
@@ -182,6 +183,7 @@ enum Commands {
     },
 
     /// Generate bindings
+    #[cfg(feature = "parser-tasks")]
     Bindings {
         /// Header file to generate bindings from
         #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
@@ -258,6 +260,7 @@ enum Commands {
     },
 
     /// Run three-way parser comparison
+    #[cfg(feature = "parser-tasks")]
     CompareThree {
         /// Show detailed output
         #[arg(long)]
@@ -370,11 +373,13 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
+        #[cfg(feature = "parser-tasks")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
         }
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
+        #[cfg(feature = "parser-tasks")]
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::ParseRust { source, sexp, ast, bench } => {
@@ -392,6 +397,7 @@ fn main() -> Result<()> {
             )
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }

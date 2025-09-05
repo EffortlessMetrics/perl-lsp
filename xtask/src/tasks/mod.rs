@@ -1,13 +1,16 @@
 //! Task implementations for xtask automation
 
 pub mod bench;
+#[cfg(feature = "parser-tasks")]
 pub mod bindings;
 pub mod build;
 pub mod bump_version;
 pub mod check;
 pub mod clean;
 pub mod compare;
+#[cfg(feature = "parser-tasks")]
 pub mod compare_parsers;
+#[cfg(feature = "parser-tasks")]
 pub mod corpus;
 pub mod dev;
 pub mod doc;
