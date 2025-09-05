@@ -172,10 +172,24 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             }
         }
         Some(ScannerType::Both) => {
-            // TODO: Test both scanners and compare results
-            // For now, use the C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Parse using both C and V3 scanners and compare results
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_sexp = normalize_sexp(&c_tree.root_node().to_sexp());
+
+            let mut v3_parser = perl_parser::Parser::new(&test_case.source);
+            let v3_sexp = match v3_parser.parse() {
+                Ok(ast) => normalize_sexp(&ast.to_sexp()),
+                Err(e) => format!("(ERROR {})", e),
+            };
+
+            if c_sexp == v3_sexp {
+                return Ok(c_sexp == normalize_sexp(test_case.expected.trim()));
+            }
+
+            println!("\n❌ Test failed: {}", test_case.name);
+            println!("C scanner output:\n{}", c_sexp);
+            println!("V3 scanner output:\n{}", v3_sexp);
+            return Ok(false);
         }
         None => {
             // Default to V3 parser for this branch
@@ -216,51 +230,71 @@ fn diagnose_parse_differences(
     println!("{}", test_case.source.trim());
     println!("```");
 
-    // Parse with current parser
+    // Parse with current parser(s)
+    if let Some(ScannerType::Both) = scanner {
+        let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+        let c_sexp = normalize_sexp(&c_tree.root_node().to_sexp());
+
+        let mut v3_parser = perl_parser::Parser::new(&test_case.source);
+        let v3_sexp = match v3_parser.parse() {
+            Ok(ast) => normalize_sexp(&ast.to_sexp()),
+            Err(e) => format!("(ERROR {})", e),
+        };
+
+        println!("\n📊 C scanner S-expression:\n{}", c_sexp);
+        println!("\n📊 V3 scanner S-expression:\n{}", v3_sexp);
+
+        println!("\n🔍 STRUCTURAL ANALYSIS:");
+        let c_nodes = count_nodes(&c_sexp);
+        let v3_nodes = count_nodes(&v3_sexp);
+        println!("C scanner nodes: {}", c_nodes);
+        println!("V3 scanner nodes: {}", v3_nodes);
+
+        let missing = find_missing_nodes(&c_sexp, &v3_sexp);
+        if !missing.is_empty() {
+            println!("❌ Nodes missing in V3 output:");
+            for node in missing {
+                println!("  - {}", node);
+            }
+        }
+
+        let extra = find_extra_nodes(&c_sexp, &v3_sexp);
+        if !extra.is_empty() {
+            println!("➕ Extra nodes in V3 output:");
+            for node in extra {
+                println!("  - {}", node);
+            }
+        }
+
+        if c_sexp == v3_sexp {
+            println!("✅ Parsers produce identical S-expressions");
+        } else {
+            println!("❌ Parsers differ");
+        }
+
+        return Ok(());
+    }
+
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // Use the C-based tree-sitter parser
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
-            // Use the pure-rust parser
             let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
             }
         }
-        Some(ScannerType::V3) => {
-            // Use the perl-parser v3 native parser
+        Some(ScannerType::V3) | None => {
             let mut parser = perl_parser::Parser::new(&test_case.source);
             match parser.parse() {
                 Ok(ast) => ast.to_sexp(),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
             }
         }
-        Some(ScannerType::Both) => {
-            // Default to C scanner for now
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
-        }
-        None => {
-            // Default to V3 parser for this branch
-            let mut parser = perl_parser::Parser::new(&test_case.source);
-            match parser.parse() {
-                Ok(ast) => ast.to_sexp(),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
-            }
-        }
+        Some(ScannerType::Both) => unreachable!(),
     };
 
     let actual = normalize_sexp(&actual_sexp);
@@ -272,17 +306,13 @@ fn diagnose_parse_differences(
     println!("\nActual S-expression:");
     println!("{}", actual);
 
-    // Analyze structural differences
     println!("\n🔍 STRUCTURAL ANALYSIS:");
 
-    // Count nodes in each
     let expected_nodes = count_nodes(&expected);
     let actual_nodes = count_nodes(&actual);
-
     println!("Expected nodes: {}", expected_nodes);
     println!("Actual nodes: {}", actual_nodes);
 
-    // Find missing nodes
     let missing_nodes = find_missing_nodes(&expected, &actual);
     if !missing_nodes.is_empty() {
         println!("❌ Missing nodes in actual output:");
@@ -291,7 +321,6 @@ fn diagnose_parse_differences(
         }
     }
 
-    // Find extra nodes
     let extra_nodes = find_extra_nodes(&expected, &actual);
     if !extra_nodes.is_empty() {
         println!("➕ Extra nodes in actual output:");
@@ -300,7 +329,6 @@ fn diagnose_parse_differences(
         }
     }
 
-    // Check for structural differences
     if actual == expected {
         println!("✅ Parse trees match exactly");
     } else {
