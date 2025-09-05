@@ -16,8 +16,9 @@ anyhow = "1.0.98"
 indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-perl-parser = { workspace = true }
-tree-sitter = { workspace = true }
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["pure-rust", "c-scanner"] }
+perl-parser = { path = "../crates/perl-parser" }
+tree-sitter = "0.25.8"
 regex = "1.11.1"
 serde_yaml = "0.9"
 bindgen = "0.72.0"
