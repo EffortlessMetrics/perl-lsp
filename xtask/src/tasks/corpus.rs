@@ -21,12 +21,21 @@ struct CorpusTestResults {
     total: usize,
     passed: usize,
     failed: usize,
+    mismatched: usize,
     errors: Vec<String>,
+    mismatches: Vec<String>,
 }
 
 impl CorpusTestResults {
     fn new() -> Self {
-        Self { total: 0, passed: 0, failed: 0, errors: Vec::new() }
+        Self {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            mismatched: 0,
+            errors: Vec::new(),
+            mismatches: Vec::new(),
+        }
     }
 
     fn add_passed(&mut self) {
@@ -40,16 +49,29 @@ impl CorpusTestResults {
         self.errors.push(error);
     }
 
+    fn add_mismatch(&mut self, mismatch: String) {
+        self.mismatched += 1;
+        self.mismatches.push(mismatch);
+    }
+
     fn print_summary(&self) {
         println!("\n📊 Corpus Test Summary:");
         println!("   Total: {}", self.total);
         println!("   Passed: {} ✅", self.passed);
         println!("   Failed: {} ❌", self.failed);
+        println!("   Scanner mismatches: {}", self.mismatched);
 
         if !self.errors.is_empty() {
             println!("\n❌ Failed Tests:");
             for error in &self.errors {
                 println!("   {}", error);
+            }
+        }
+
+        if !self.mismatches.is_empty() {
+            println!("\n🔀 Scanner mismatches:");
+            for mismatch in &self.mismatches {
+                println!("   {}", mismatch);
             }
         }
     }
@@ -141,38 +163,38 @@ fn normalize_sexp(s: &str) -> String {
 }
 
 /// Run a single corpus test case
-fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
+struct TestOutcome {
+    passed: bool,
+    scanner_mismatch: bool,
+}
+
+fn run_corpus_test_case(
+    test_case: &CorpusTestCase,
+    scanner: &Option<ScannerType>,
+) -> Result<TestOutcome> {
+    let mut scanner_mismatch = false;
+
     // Parse the source code using tree-sitter-perl
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // Use the C-based tree-sitter parser
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
-            // Use the pure-rust parser
             let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
             }
         }
         Some(ScannerType::V3) => {
-            // Use the perl-parser v3 native parser
             let mut parser = perl_parser::Parser::new(&test_case.source);
             match parser.parse() {
                 Ok(ast) => ast.to_sexp(),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
             }
         }
         Some(ScannerType::Both) => {
-            // Parse with both C and Rust scanners and compare outputs
             let c_tree = tree_sitter_perl::parse(&test_case.source)?;
             let c_sexp = c_tree.root_node().to_sexp();
             let c_norm = normalize_sexp(&c_sexp);
@@ -185,23 +207,19 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             let rust_norm = normalize_sexp(&rust_sexp);
 
             if c_norm != rust_norm {
+                scanner_mismatch = true;
                 println!("\n❌ Scanner outputs differ: {}", test_case.name);
                 println!("C scanner : {}", c_norm);
                 println!("Rust scanner: {}", rust_norm);
             }
 
-            // Return Rust output for expected comparison since both should match
             rust_sexp
         }
         None => {
-            // Default to V3 parser for this branch
             let mut parser = perl_parser::Parser::new(&test_case.source);
             match parser.parse() {
                 Ok(ast) => ast.to_sexp(),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
             }
         }
     };
@@ -209,16 +227,18 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
     let actual = normalize_sexp(&actual_sexp);
     let expected = normalize_sexp(test_case.expected.trim());
 
-    if actual == expected {
-        Ok(true)
+    let passed = if actual == expected {
+        true
     } else {
         println!("\n❌ Test failed: {}", test_case.name);
         println!("Expected:");
         println!("{}", expected);
         println!("Actual:");
         println!("{}", actual);
-        Ok(false)
-    }
+        false
+    };
+
+    Ok(TestOutcome { passed, scanner_mismatch })
 }
 
 /// Diagnostic function to analyze differences between expected and actual S-expressions
@@ -516,18 +536,23 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
             Ok(test_cases) => {
                 for test_case in test_cases {
                     match run_corpus_test_case(&test_case, &scanner) {
-                        Ok(true) => {
-                            results.add_passed();
-                        }
-                        Ok(false) => {
-                            results.add_failed(format!("{}: {}", file_name, test_case.name));
+                        Ok(outcome) => {
+                            if outcome.passed {
+                                results.add_passed();
+                            } else {
+                                results.add_failed(format!("{}: {}", file_name, test_case.name));
 
-                            // Run diagnostic on first failing test if requested
-                            if diagnose && !diagnostic_run {
-                                if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
-                                    println!("Diagnostic error: {}", e);
+                                if diagnose && !diagnostic_run {
+                                    if let Err(e) = diagnose_parse_differences(&test_case, &scanner)
+                                    {
+                                        println!("Diagnostic error: {}", e);
+                                    }
+                                    diagnostic_run = true;
                                 }
-                                diagnostic_run = true;
+                            }
+
+                            if outcome.scanner_mismatch {
+                                results.add_mismatch(format!("{}: {}", file_name, test_case.name));
                             }
                         }
                         Err(e) => {
@@ -550,8 +575,12 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     // Print summary
     results.print_summary();
 
-    if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
+    if results.failed > 0 || results.mismatched > 0 {
+        Err(color_eyre::eyre::eyre!(
+            "{} corpus tests failed, {} scanner mismatches",
+            results.failed,
+            results.mismatched
+        ))
     } else {
         Ok(())
     }
