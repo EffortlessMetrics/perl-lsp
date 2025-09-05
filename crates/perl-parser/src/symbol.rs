@@ -333,7 +333,14 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
             }
 
-            NodeKind::Subroutine { name, prototype: _, signature: _, attributes, body, .. } => {
+            NodeKind::Subroutine {
+                name,
+                prototype: _,
+                signature: _,
+                attributes,
+                body,
+                name_span: _,
+            } => {
                 let sub_name =
                     name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
 
@@ -363,7 +370,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Package { name, block, .. } => {
+            NodeKind::Package { name, block, name_span: _ } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
 

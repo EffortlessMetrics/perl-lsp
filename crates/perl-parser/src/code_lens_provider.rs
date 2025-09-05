@@ -74,7 +74,12 @@ impl CodeLensProvider {
             }
 
             NodeKind::Subroutine {
-                name, prototype: _, signature: _, attributes: _, body, ..
+                name,
+                prototype: _,
+                signature: _,
+                attributes: _,
+                body,
+                name_span: _,
             } => {
                 if let Some(name) = name {
                     // Add "Run Test" lens for test subroutines
@@ -90,7 +95,7 @@ impl CodeLensProvider {
                 self.visit_node(body, lenses);
             }
 
-            NodeKind::Package { name, block, .. } => {
+            NodeKind::Package { name, block, name_span: _ } => {
                 // Add "X references" lens for packages
                 self.add_references_lens(node, name, lenses);
 

@@ -1849,6 +1849,7 @@ impl<'a> Parser<'a> {
                 signature: None,
                 attributes: vec![],
                 body: Box::new(block),
+                name_span: None, // TODO: Set proper name span
             },
             SourceLocation { start, end },
         ))
