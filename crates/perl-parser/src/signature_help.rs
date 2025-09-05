@@ -3,7 +3,7 @@
 //! This module provides parameter hints and documentation for functions
 //! as the user types function calls.
 
-use crate::ast::Node;
+use crate::ast::{Node, NodeKind};
 use crate::builtin_signatures::{
     BuiltinSignature as ImportedBuiltinSignature, create_builtin_signatures,
 };
@@ -45,6 +45,7 @@ pub struct SignatureHelp {
 
 /// Signature help provider
 pub struct SignatureHelpProvider {
+    ast: Node,
     symbol_table: SymbolTable,
     builtin_signatures: HashMap<&'static str, ImportedBuiltinSignature>,
 }
@@ -60,7 +61,7 @@ impl SignatureHelpProvider {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let builtin_signatures = create_builtin_signatures();
 
-        SignatureHelpProvider { symbol_table, builtin_signatures }
+        SignatureHelpProvider { ast: ast.clone(), symbol_table, builtin_signatures }
     }
 
     /// Check if a built-in function exists
@@ -84,13 +85,17 @@ impl SignatureHelpProvider {
         let context = self.find_call_context(source, position)?;
 
         // Get signatures for the function
-        let signatures = self.get_signatures(&context.function_name);
+        let mut signatures = self.get_signatures(&context.function_name);
         if signatures.is_empty() {
             return None;
         }
 
         // Determine active parameter
         let active_parameter = self.calculate_active_parameter(source, &context);
+
+        for sig in &mut signatures {
+            sig.active_parameter = Some(active_parameter);
+        }
 
         Some(SignatureHelp {
             signatures,
@@ -167,11 +172,11 @@ impl SignatureHelpProvider {
         // Check built-in functions
         if let Some(builtin) = self.builtin_signatures.get(function_name) {
             for sig_str in &builtin.signatures {
-                let _params = self.parse_builtin_parameters(sig_str);
+                let params = self.parse_builtin_parameters(sig_str);
                 signatures.push(SignatureInfo {
                     label: sig_str.to_string(),
                     documentation: Some(builtin.documentation.to_string()),
-                    parameters: Vec::new(), // TODO: Extract from signature node
+                    parameters: params,
                     active_parameter: None,
                 });
             }
@@ -188,6 +193,48 @@ impl SignatureHelpProvider {
         }
 
         signatures
+    }
+
+    /// Find a subroutine definition by name in the AST
+    fn find_subroutine_definition<'a>(&'a self, node: &'a Node, name: &str) -> Option<&'a Node> {
+        match &node.kind {
+            NodeKind::Subroutine { name: sub_name, .. } => {
+                if let Some(sub_name) = sub_name {
+                    if sub_name == name {
+                        return Some(node);
+                    }
+                }
+            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(found) = self.find_subroutine_definition(stmt, name) {
+                        return Some(found);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Convert a parameter node into ParameterInfo
+    fn param_info_from_node(&self, node: &Node) -> Option<ParameterInfo> {
+        match &node.kind {
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::OptionalParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => {
+                if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    Some(ParameterInfo { label: format!("{}{}", sigil, name), documentation: None })
+                } else {
+                    None
+                }
+            }
+            NodeKind::Variable { sigil, name } => {
+                Some(ParameterInfo { label: format!("{}{}", sigil, name), documentation: None })
+            }
+            _ => None,
+        }
     }
 
     /// Parse parameters from a built-in function signature
@@ -217,41 +264,60 @@ impl SignatureHelpProvider {
         let mut label = format!("sub {}", symbol.name);
         let mut params = Vec::new();
 
-        // Try to extract parameters from attributes or documentation
-        // In Perl, we might have prototype like: sub foo($$$) or sub foo :prototype($$$)
-        for attr in &symbol.attributes {
-            if attr.starts_with("prototype(") {
-                if let Some(proto) =
-                    attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")"))
-                {
-                    label.push_str(proto);
-                    // Parse prototype
-                    for (i, ch) in proto.chars().enumerate() {
-                        match ch {
-                            '$' => params.push(ParameterInfo {
-                                label: format!("$arg{}", i + 1),
-                                documentation: Some("scalar".to_string()),
-                            }),
-                            '@' => params.push(ParameterInfo {
-                                label: "@args".to_string(),
-                                documentation: Some("array (slurps remaining args)".to_string()),
-                            }),
-                            '%' => params.push(ParameterInfo {
-                                label: "%args".to_string(),
-                                documentation: Some("hash (slurps remaining args)".to_string()),
-                            }),
-                            '&' => params.push(ParameterInfo {
-                                label: "&code".to_string(),
-                                documentation: Some("code reference".to_string()),
-                            }),
-                            _ => {}
+        // Try to extract parameters from the AST signature node
+        if let Some(sub_node) = self.find_subroutine_definition(&self.ast, &symbol.name) {
+            if let NodeKind::Subroutine { signature: Some(sig), .. } = &sub_node.kind {
+                if let NodeKind::Signature { parameters } = &sig.kind {
+                    for param in parameters {
+                        if let Some(info) = self.param_info_from_node(param) {
+                            params.push(info);
                         }
                     }
                 }
             }
         }
 
-        // If no prototype, assume it takes a list
+        // If no signature info, fall back to prototype attributes
+        if params.is_empty() {
+            for attr in &symbol.attributes {
+                if attr.starts_with("prototype(") {
+                    if let Some(proto) =
+                        attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")"))
+                    {
+                        label.push_str(proto);
+                        for (i, ch) in proto.chars().enumerate() {
+                            match ch {
+                                '$' => params.push(ParameterInfo {
+                                    label: format!("$arg{}", i + 1),
+                                    documentation: Some("scalar".to_string()),
+                                }),
+                                '@' => params.push(ParameterInfo {
+                                    label: "@args".to_string(),
+                                    documentation: Some(
+                                        "array (slurps remaining args)".to_string(),
+                                    ),
+                                }),
+                                '%' => params.push(ParameterInfo {
+                                    label: "%args".to_string(),
+                                    documentation: Some("hash (slurps remaining args)".to_string()),
+                                }),
+                                '&' => params.push(ParameterInfo {
+                                    label: "&code".to_string(),
+                                    documentation: Some("code reference".to_string()),
+                                }),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !params.is_empty() && !label.contains('(') {
+            let labels: Vec<String> = params.iter().map(|p| p.label.clone()).collect();
+            label.push_str(&format!("({})", labels.join(", ")));
+        }
+
         if params.is_empty() {
             label.push_str("(...)");
             params.push(ParameterInfo {
@@ -263,7 +329,7 @@ impl SignatureHelpProvider {
         SignatureInfo {
             label,
             documentation: symbol.documentation.clone(),
-            parameters: Vec::new(), // TODO: Extract from signature node
+            parameters: params,
             active_parameter: None,
         }
     }
@@ -318,12 +384,11 @@ mod tests {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position);
-        assert!(help.is_some());
-
-        let help = help.unwrap();
+        let help = provider.get_signature_help(code, position).unwrap();
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(1)); // Second parameter
+        assert_eq!(help.signatures[0].active_parameter, Some(1));
+        assert!(!help.signatures[0].parameters.is_empty());
     }
 
     #[test]
@@ -334,11 +399,10 @@ mod tests {
         let ast = Parser::new("").parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position);
-        assert!(help.is_some());
-
-        let help = help.unwrap();
+        let help = provider.get_signature_help(code, position).unwrap();
         assert_eq!(help.active_parameter, Some(2)); // Third parameter
+        assert_eq!(help.signatures[0].active_parameter, Some(2));
+        assert_eq!(help.signatures[0].parameters[0].label, "EXPR");
     }
 
     #[test]
@@ -349,14 +413,24 @@ mod tests {
         let ast = Parser::new(code).parse().unwrap();
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position);
-        assert!(help.is_some());
-
-        let help = help.unwrap();
+        let help = provider.get_signature_help(code, position).unwrap();
         assert_eq!(help.signatures[0].label, "split /PATTERN/, EXPR, LIMIT");
 
         // The active parameter could be 1 or 2 depending on interpretation
         // Since we're after the comma in split(',', ...), we should be on parameter 2
         assert!(help.active_parameter == Some(1) || help.active_parameter == Some(2));
+        assert_eq!(help.signatures[0].parameters.len() >= 2, true);
+    }
+
+    #[test]
+    fn test_user_defined_signature_parameters() {
+        let code = "sub add($x, $y) { $x + $y }\nadd(1, 2);";
+        let ast = Parser::new(code).parse().unwrap();
+        let provider = SignatureHelpProvider::new(&ast);
+
+        let sigs = provider.get_signatures("add");
+        assert_eq!(sigs[0].parameters.len(), 2);
+        assert_eq!(sigs[0].parameters[0].label, "$x");
+        assert_eq!(sigs[0].parameters[1].label, "$y");
     }
 }
