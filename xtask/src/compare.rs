@@ -1,8 +1,22 @@
 use clap::Args;
+use peak_alloc::PeakAlloc;
+use serde_json::json;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Instant;
-use serde_json::json;
+
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
+fn measure_memory_usage<F, R>(operation: F) -> (R, f64)
+where
+    F: FnOnce() -> R,
+{
+    PEAK_ALLOC.reset_peak_usage();
+    let result = operation();
+    let memory_mb = PEAK_ALLOC.peak_usage_as_mb() as f64;
+    (result, memory_mb)
+}
 
 #[derive(Args)]
 pub struct CompareArgs {
@@ -144,19 +158,19 @@ fn run_single_test(
 
     for _ in 0..iterations {
         let start = Instant::now();
-        
-        let result = match impl_type {
-            "c" => test_c_implementation(&test_content),
-            "rust" => test_rust_implementation(&test_content),
+
+        let (result, memory) = match impl_type {
+            "c" => measure_memory_usage(|| test_c_implementation(&test_content)),
+            "rust" => measure_memory_usage(|| test_rust_implementation(&test_content)),
             _ => return Err("Unknown implementation type".into()),
         };
 
         let elapsed = start.elapsed().as_micros() as f64;
-        
+
         match result {
             Ok(_) => {
                 times.push(elapsed);
-                memories.push(0.0); // TODO: Add memory measurement
+                memories.push(memory);
                 success = true;
             }
             Err(e) => {
@@ -172,6 +186,8 @@ fn run_single_test(
 
     // Calculate statistics
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    memories.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
     let avg_time = times.iter().sum::<f64>() / times.len() as f64;
     let min_time = times[0];
     let max_time = times[times.len() - 1];
@@ -181,6 +197,15 @@ fn run_single_test(
         times[times.len() / 2]
     };
 
+    let avg_memory = memories.iter().sum::<f64>() / memories.len() as f64;
+    let min_memory = memories[0];
+    let max_memory = memories[memories.len() - 1];
+    let median_memory = if memories.len() % 2 == 0 {
+        (memories[memories.len() / 2 - 1] + memories[memories.len() / 2]) / 2.0
+    } else {
+        memories[memories.len() / 2]
+    };
+
     Ok(Some(json!({
         "iterations": iterations,
         "successful_iterations": times.len(),
@@ -188,7 +213,10 @@ fn run_single_test(
         "min_time": min_time,
         "max_time": max_time,
         "median_time": median_time,
-        "avg_memory": 0.0, // TODO: Add memory measurement
+        "avg_memory": avg_memory,
+        "min_memory": min_memory,
+        "max_memory": max_memory,
+        "median_memory": median_memory,
         "file_size": test_content.len()
     })))
 }
