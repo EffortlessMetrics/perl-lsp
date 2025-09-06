@@ -179,12 +179,12 @@ When adding a new LSP feature:
 | Rename | ✅ | `rename.rs` |
 | Code Actions | ✅ | `code_actions.rs` |
 | Formatting | ✅ | `formatting.rs` |
-| Workspace Symbols | ❌ | To implement |
-| Semantic Tokens | ❌ | To implement |
+| Workspace Symbols | ✅ | `workspace_symbols.rs` |
+| Semantic Tokens | ✅ | `semantic_tokens.rs` |
 | Code Lens | ✅ | `code_lens_provider.rs` |
 | Call Hierarchy | ❌ | To implement |
 | Folding Range | ❌ | To implement |
-| Inlay Hints | ❌ | To implement |
+| Inlay Hints | ✅ | `inlay_hints.rs` |
 
 ## Best Practices
 

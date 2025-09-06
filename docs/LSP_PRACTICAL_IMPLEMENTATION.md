@@ -15,6 +15,7 @@ The perl-lsp server already has these features implemented:
 - Document Symbols
 - Rename
 - Signature Help
+- Code Lens
 
 ## Adding a New Feature: Workspace Symbols Example
 
@@ -292,9 +293,9 @@ The extension will automatically use new features when the server advertises the
 
 Based on user value:
 
-1. **Semantic Tokens** - Better syntax highlighting
-2. **Call Hierarchy** - Incoming/outgoing calls
-3. **Folding Ranges** - Code folding
-4. **Inlay Hints** - Parameter names, types
+1. **Call Hierarchy** - Incoming/outgoing calls (partial implementation exists)
+2. **Folding Ranges** - Code folding for better navigation
+3. **Execute Command** - Custom command integration
+4. **Type Hierarchy** - Navigate class inheritance hierarchies
 
 Each follows the same pattern shown above!

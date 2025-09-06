@@ -223,10 +223,13 @@ These features have been extensively tested and provide real, production-ready f
 - Optimized import generation with alphabetical sorting
 - **Status**: ~90% functional with enterprise-grade safety
 
-### 26. **Code Lens** (NEW in v0.8.8+)
-- Inline reference counts for packages and subroutines
-- Run Test and Run Script lenses
-- **Status**: Fully functional with resolve support
+### 26. **Code Lens** (NEW in v0.8.8+, ENABLED v0.8.9+)
+- **Inline reference counts** for packages and subroutines with accurate cross-file analysis
+- **Run Test lenses** for individual test subroutines and test files
+- **Run Script lenses** for executable Perl scripts
+- **Resolve support** for dynamic lens data loading and performance optimization
+- **Production-ready implementation** with comprehensive test coverage
+- **Status**: Fully functional with resolve support enabled by default
 
 ### 27. **Enhanced Workspace Navigation** (MAJOR IMPROVEMENT in v0.8.8)
 - **Enhanced AST Traversal**: Comprehensive support for `NodeKind::ExpressionStatement` across all providers
@@ -265,6 +268,7 @@ These features have been extensively tested and provide real, production-ready f
 - `implementationProvider` - Implementation (NEW in v0.8.6)
 - `workspaceRefactoringProvider` - Cross-file refactoring operations (NEW in v0.8.8)
 - `advancedCodeActionProvider` - Enhanced code actions and refactoring (NEW in v0.8.8)
+- `codeLensProvider` - Code lens with resolve support (ENABLED v0.8.9+)
 
 ### ❌ NOT Advertised in v0.8.8 (Not Implemented)
 
