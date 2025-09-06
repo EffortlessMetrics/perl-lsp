@@ -13,7 +13,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     if let Some(test_name) = test {
         println!("Running specific edge case test: {}", test_name);
         let status = Command::new("cargo")
-            .args(&["test", "--features", features, &test_name, "--", "--nocapture"])
+            .args(["test", "--features", features, &test_name, "--", "--nocapture"])
             .status()
             .context("Failed to run specific edge case test")?;
 
@@ -27,7 +27,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     // Run edge case unit tests
     println!("\n📝 Running edge case tests...");
     let status = Command::new("cargo")
-        .args(&["test", "--features", features, "edge_case_tests", "--", "--nocapture"])
+        .args(["test", "--features", features, "edge_case_tests", "--", "--nocapture"])
         .status()
         .context("Failed to run edge case tests")?;
 
@@ -45,7 +45,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
 
     for test in integration_tests {
         let status = Command::new("cargo")
-            .args(&["test", "--features", features, test, "--", "--nocapture"])
+            .args(["test", "--features", features, test, "--", "--nocapture"])
             .status()
             .context(format!("Failed to run {}", test))?;
 
@@ -58,7 +58,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     if bench {
         println!("\n⚡ Running edge case benchmarks...");
         let status = Command::new("cargo")
-            .args(&["bench", "--features", features, "edge_case_benchmarks"])
+            .args(["bench", "--features", features, "edge_case_benchmarks"])
             .status()
             .context("Failed to run benchmarks")?;
 
@@ -73,7 +73,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
 
     for example in examples {
         let status = Command::new("cargo")
-            .args(&["run", "--features", features, "--example", example])
+            .args(["run", "--features", features, "--example", example])
             .status()
             .context(format!("Failed to run example {}", example))?;
 
@@ -86,7 +86,7 @@ pub fn run(bench: bool, coverage: bool, test: Option<String>) -> Result<()> {
     if coverage {
         println!("\n📊 Generating coverage report...");
         let status = Command::new("cargo")
-            .args(&[
+            .args([
                 "tarpaulin",
                 "--features",
                 features,

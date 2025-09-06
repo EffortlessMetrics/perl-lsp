@@ -64,7 +64,7 @@ use procfs::process::Process;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -78,7 +78,7 @@ where
 {
     // Measure RSS memory before operation using procfs
     let memory_before = get_current_memory_usage().unwrap_or(0.0);
-    
+
     // Also reset peak allocator for local memory tracking
     PEAK_ALLOC.reset_peak_usage();
 
@@ -87,7 +87,7 @@ where
 
     // Measure RSS memory after operation
     let memory_after = get_current_memory_usage().unwrap_or(0.0);
-    
+
     // Get peak allocator usage as fallback
     let peak_memory_mb = PEAK_ALLOC.peak_usage_as_mb() as f64;
 
@@ -234,7 +234,7 @@ fn get_corpus_files() -> Result<Vec<String>> {
     for entry in std::fs::read_dir(&benchmark_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "pl") {
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "pl") {
             files.push(path.to_string_lossy().to_string());
         }
     }
@@ -246,7 +246,7 @@ fn get_corpus_files() -> Result<Vec<String>> {
         for entry in std::fs::read_dir(fuzzed_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "pl") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "pl") {
                 fuzzed_files.push(path.to_string_lossy().to_string());
             }
         }
@@ -328,8 +328,8 @@ fn test_implementation(
         "parse_error_count": parse_error_count,
         "total_time": total_time,
         "total_memory": total_memory,
-        "avg_time_per_test": if test_cases.len() > 0 { total_time / test_cases.len() as f64 } else { 0.0 },
-        "avg_memory_per_test": if test_cases.len() > 0 { total_memory / test_cases.len() as f64 } else { 0.0 }
+        "avg_time_per_test": if !test_cases.is_empty() { total_time / test_cases.len() as f64 } else { 0.0 },
+        "avg_memory_per_test": if !test_cases.is_empty() { total_memory / test_cases.len() as f64 } else { 0.0 }
     });
 
     Ok(results)
@@ -388,11 +388,11 @@ fn run_single_test(
     // Calculate memory statistics
     memories.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let avg_memory = memories.iter().sum::<f64>() / memories.len() as f64;
-    let min_memory = memories.get(0).copied().unwrap_or(0.0);
+    let min_memory = memories.first().copied().unwrap_or(0.0);
     let max_memory = memories.last().copied().unwrap_or(0.0);
-    let median_memory = if memories.len() % 2 == 0 && memories.len() > 0 {
+    let median_memory = if memories.len() % 2 == 0 && !memories.is_empty() {
         (memories[memories.len() / 2 - 1] + memories[memories.len() / 2]) / 2.0
-    } else if memories.len() > 0 {
+    } else if !memories.is_empty() {
         memories[memories.len() / 2]
     } else {
         0.0
@@ -427,11 +427,11 @@ fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
         if line.starts_with("status=") {
             let parts: Vec<_> = line.split_whitespace().collect();
             for part in parts {
-                if part.starts_with("error=") {
-                    has_error = part[6..].parse::<bool>().unwrap_or(false);
+                if let Some(stripped) = part.strip_prefix("error=") {
+                    has_error = stripped.parse::<bool>().unwrap_or(false);
                 }
-                if part.starts_with("duration_us=") {
-                    duration = part[12..].parse::<f64>().unwrap_or(0.0);
+                if let Some(stripped) = part.strip_prefix("duration_us=") {
+                    duration = stripped.parse::<f64>().unwrap_or(0.0);
                 }
             }
         }
@@ -455,11 +455,11 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
         if line.starts_with("status=") {
             let parts: Vec<_> = line.split_whitespace().collect();
             for part in parts {
-                if part.starts_with("error=") {
-                    has_error = part[6..].parse::<bool>().unwrap_or(false);
+                if let Some(stripped) = part.strip_prefix("error=") {
+                    has_error = stripped.parse::<bool>().unwrap_or(false);
                 }
-                if part.starts_with("duration_us=") {
-                    duration = part[12..].parse::<f64>().unwrap_or(0.0);
+                if let Some(stripped) = part.strip_prefix("duration_us=") {
+                    duration = stripped.parse::<f64>().unwrap_or(0.0);
                 }
             }
         }
@@ -532,7 +532,7 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     let c_results = &report["implementations"]["c"];
     let rust_results = &report["implementations"]["rust"];
 
-    let mut markdown = format!("# Tree-sitter Perl Implementation Comparison\n\n");
+    let mut markdown = "# Tree-sitter Perl Implementation Comparison\n\n".to_string();
     markdown.push_str(&format!("**Generated:** {}\n\n", timestamp));
 
     // Summary
@@ -682,7 +682,7 @@ fn print_summary(report: &serde_json::Value) {
 }
 
 fn validate_existing_results(
-    output_dir: &PathBuf,
+    output_dir: &Path,
     check_gates: bool,
     spinner: &ProgressBar,
 ) -> Result<()> {
@@ -699,7 +699,7 @@ fn validate_existing_results(
         serde_json::from_str(&fs::read_to_string(&comparison_results)?)?;
 
     // Basic validation
-    if !comparison_data.get("implementations").is_some() {
+    if comparison_data.get("implementations").is_none() {
         return Err(color_eyre::eyre::eyre!("Invalid comparison results format"));
     }
 
@@ -738,16 +738,12 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     let mut results = serde_json::Map::new();
 
     for line in output_str.lines() {
-        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(event) = data.get("event") {
-                if event == "bench" {
-                    if let (Some(name), Some(measurements)) =
-                        (data.get("name"), data.get("measurements"))
-                    {
-                        results.insert(name.as_str().unwrap().to_string(), measurements.clone());
-                    }
-                }
-            }
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line)
+            && let Some(event) = data.get("event")
+            && event == "bench"
+            && let (Some(name), Some(measurements)) = (data.get("name"), data.get("measurements"))
+        {
+            results.insert(name.as_str().unwrap().to_string(), measurements.clone());
         }
     }
 
@@ -890,10 +886,10 @@ pub fn validate_memory_profiling() -> Result<()> {
             for j in 0..1000 {
                 data.push(format!("test data {}", j));
             }
-            
+
             // Add some computation
             let sum: usize = (0..1000).sum();
-            
+
             // Return the computed result
             (data.len(), sum)
         });
@@ -904,10 +900,10 @@ pub fn validate_memory_profiling() -> Result<()> {
 
     // Test procfs memory measurement directly
     let memory_before = get_current_memory_usage().unwrap_or(0.0);
-    
+
     // Allocate some memory to see if we can measure it
     let _large_vec: Vec<u8> = vec![0; 10_000_000]; // 10MB allocation
-    
+
     let memory_after = get_current_memory_usage().unwrap_or(0.0);
     let memory_delta = memory_after - memory_before;
 
@@ -972,10 +968,10 @@ mod tests {
         // Test with a known file
         let temp_file = "/tmp/test_memory_file.txt";
         std::fs::write(temp_file, "test content").ok();
-        
+
         let estimated = estimate_subprocess_memory(temp_file);
         assert!(estimated > 0.0);
-        
+
         // Clean up
         std::fs::remove_file(temp_file).ok();
     }
@@ -1131,24 +1127,21 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
 
     // Try to display key metrics if comparison results exist
     let comparison_path = output_dir.join("comparison_results.json");
-    if comparison_path.exists() {
-        if let Ok(content) = fs::read_to_string(&comparison_path) {
-            if let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(summary) = comparison.get("summary") {
-                    println!("\n📈 Key Metrics:");
-                    if let Some(overall) = summary.get("overall_performance") {
-                        if let Some(mean_diff) =
-                            overall.get("mean_time_difference_percent").and_then(|v| v.as_f64())
-                        {
-                            println!("  Mean Time Difference: {:.2}%", mean_diff);
-                        }
-                        if let Some(mean_speedup) =
-                            overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
-                        {
-                            println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
-                        }
-                    }
-                }
+    if comparison_path.exists()
+        && let Ok(content) = fs::read_to_string(&comparison_path)
+        && let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(summary) = comparison.get("summary")
+    {
+        println!("\n📈 Key Metrics:");
+        if let Some(overall) = summary.get("overall_performance") {
+            if let Some(mean_diff) =
+                overall.get("mean_time_difference_percent").and_then(|v| v.as_f64())
+            {
+                println!("  Mean Time Difference: {:.2}%", mean_diff);
+            }
+            if let Some(mean_speedup) = overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
+            {
+                println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
             }
         }
     }

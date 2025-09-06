@@ -73,6 +73,7 @@ cargo test
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
 - **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
+- **Advanced Memory Profiling**: Dual-mode memory tracking with procfs RSS measurement and peak_alloc integration for comprehensive performance analysis
 
 ## Architecture
 
@@ -115,6 +116,19 @@ cargo xtask corpus                       # Comprehensive integration
 cargo xtask check --all                 # Format + clippy
 cargo bench                            # Performance benchmarks
 perl-lsp --stdio --log                 # Debug LSP server
+```
+
+### Performance Analysis & Memory Tracking
+```bash
+# Run implementation comparison with memory tracking
+cargo xtask compare --report             # Full comparison with memory metrics
+cargo xtask compare --c-only             # Test C implementation only
+cargo xtask compare --rust-only          # Test Rust implementation only
+cargo xtask compare --validate-only      # Validate existing results
+cargo xtask compare --check-gates        # Check performance gates
+
+# Validate memory profiling functionality
+cargo run --bin xtask -- validate-memory-profiling
 ```
 
 ### Enhanced Workspace Navigation and PR Workflow Integration (v0.8.9) ⭐ **PRODUCTION READY**
@@ -1182,6 +1196,16 @@ This framework ensures systematic performance monitoring and provides early dete
 | Statistical Consistency | <1.0 CV | 0.6 CV | ✅ Excellent |
 | Incremental Success Rate | ≥95% | 100% | ✅ Perfect |
 
+## Memory Performance Targets
+
+| Memory Metric | Target | Implementation | Status |
+|---------------|--------|----------------|--------|
+| Small Files (<1KB) | <1MB peak | Dual-mode tracking | ✅ Monitored |
+| Medium Files (1-10KB) | <5MB peak | procfs RSS + peak_alloc | ✅ Monitored |
+| Large Files (>10KB) | <20MB peak | Statistical analysis | ✅ Monitored |
+| Memory Overhead | <0.5MB baseline | Process RSS tracking | ✅ Validated |
+| Tracking Accuracy | ±10% precision | Fallback mechanisms | ✅ Reliable |
+
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
@@ -1205,6 +1229,11 @@ This framework ensures systematic performance monitoring and provides early dete
 - ✅ Production-ready workspace indexing and cross-file analysis
 - ✅ Advanced code actions with parameter threshold validation
 - ✅ Statistical performance testing infrastructure
+- ✅ **Advanced Memory Tracking Framework** (PR #101)
+  - Dual-mode memory measurement using procfs RSS and peak_alloc integration
+  - Statistical memory analysis with min/max/avg/median calculations
+  - Memory estimation for subprocess operations with size-based heuristics
+  - Comprehensive memory profiling validation with workload simulation
 
 ## Security Development Guidelines (PR #44)
 

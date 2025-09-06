@@ -1,8 +1,9 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{
     Parser,
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
 };
+use std::hint::black_box;
 
 fn benchmark_semantic_tokens_small(c: &mut Criterion) {
     let code = r#"

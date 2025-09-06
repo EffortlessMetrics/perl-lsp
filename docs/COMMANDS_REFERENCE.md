@@ -212,8 +212,15 @@ cargo bench --features pure-rust
 # Run v3 parser benchmarks
 cargo bench -p perl-parser
 
-# Compare all three parsers
-cargo xtask compare
+# Compare all three parsers with memory tracking
+cargo xtask compare --report             # Full comparison with memory metrics and statistical analysis
+cargo xtask compare --c-only             # Test C implementation only with memory tracking
+cargo xtask compare --rust-only          # Test Rust implementation only with memory tracking
+cargo xtask compare --validate-only      # Validate existing results without re-running
+cargo xtask compare --check-gates        # Check performance gates with memory thresholds
+
+# Memory profiling validation
+cargo run --bin xtask -- validate-memory-profiling  # Test dual-mode memory measurement
 ```
 
 ## Code Quality Commands
@@ -288,5 +295,8 @@ npx tree-sitter generate
 
 ### Performance Optimization
 1. Run benchmarks before and after changes
-2. Use `cargo xtask compare` to compare implementations
+2. Use `cargo xtask compare --report` to compare implementations with memory tracking
 3. Check for performance gates: `cargo xtask compare --check-gates`
+4. Validate memory profiling: `cargo run --bin xtask -- validate-memory-profiling`
+5. Monitor memory usage patterns with statistical analysis
+6. Use dual-mode memory measurement (procfs RSS + peak_alloc) for accurate profiling
