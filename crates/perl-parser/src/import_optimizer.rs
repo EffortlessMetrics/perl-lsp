@@ -275,6 +275,9 @@ impl ImportOptimizer {
 ",
             );
 
+        // Pre-compile regex for special Data::Dumper case
+        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
+
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
         for imp in &imports {
