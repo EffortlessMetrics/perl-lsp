@@ -1,4 +1,4 @@
-# Crate Architecture Guide (v0.8.8 GA)
+# Crate Architecture Guide (v0.8.9 GA)
 
 ## Published Crates (Workspace Members)
 
@@ -15,16 +15,19 @@
   - **Cross-file workspace refactoring utilities** - comprehensive WorkspaceRefactor provider for symbol renaming, module extraction, import optimization
   - **Production-ready refactoring operations** - move subroutines between modules, inline variables, extract code sections
   - **Enterprise-grade safety and validation** - comprehensive error handling, input validation, and rollback support
+  - **Precise name span tracking** - Enhanced AST nodes with O(1) position lookups for Subroutine and Package declarations
+  - **Production-stable AST generation** - Comprehensive S-expression generation with 50+ operators and enhanced navigation
 
 - **Key Files**:
-  - `src/parser.rs`: Recursive descent parser
-  - `src/ast.rs`: AST definitions and enhanced workspace navigation
+  - `src/parser.rs`: Recursive descent parser with precise name span calculation
+  - `src/ast.rs`: AST definitions with enhanced navigation and name_span fields
   - `src/textdoc.rs`: Core document management with `ropey::Rope`
   - `src/position_mapper.rs`: UTF-16/UTF-8 position conversion
   - `src/incremental_integration.rs`: LSP integration bridge
   - `src/incremental_handler_v2.rs`: Document change processing
+  - `src/declaration.rs`: Declaration provider with O(1) position lookups
 
-### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
+### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.9)
 - **Purpose**: Clean LSP server implementation separated from parser logic
 - **Key Features**:
   - Standalone Language Server binary with production-grade CLI
@@ -57,7 +60,7 @@
 - **Purpose**: Pest-based parser (v2 implementation), marked as legacy
 - **Status**: Published but marked as legacy, use `perl-parser` instead
 
-## Benchmark Framework (v0.8.8) ⭐ **NEW**
+## Benchmark Framework (v0.8.9) ⭐ **ENHANCED**
 
 ### `/crates/tree-sitter-perl-rs/src/bin/benchmark_parsers.rs`
 - **Purpose**: Comprehensive Rust benchmark runner
