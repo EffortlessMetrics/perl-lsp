@@ -276,6 +276,13 @@ impl Node {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
 
+                    // Add attributes if present (before prototype/signature)
+                    if !attributes.is_empty() {
+                        for attr in attributes {
+                            parts.push(format!(":{}", attr));
+                        }
+                    }
+
                     // Add prototype/signature - use () for empty prototype
                     if let Some(proto) = prototype {
                         parts.push(format!("({})", proto.to_sexp()));
@@ -289,9 +296,12 @@ impl Node {
                     // Add body
                     parts.push(body.to_sexp());
 
-                    // Format: (sub name ()(block ...)) - space between name and (), no space between () and block
-                    if parts.len() == 3 && parts[1] == "()" {
-                        format!("(sub {} {}{})", parts[0], parts[1], parts[2])
+                    // Format: (sub name [attrs...] ()(block ...)) - space between name and (), no space between () and block
+                    if parts.len() >= 3 && parts[parts.len() - 2] == "()" {
+                        let name_and_attrs = parts[0..parts.len() - 2].join(" ");
+                        let proto = &parts[parts.len() - 2];
+                        let body = &parts[parts.len() - 1];
+                        format!("(sub {} {}{})", name_and_attrs, proto, body)
                     } else {
                         format!("(sub {})", parts.join(" "))
                     }

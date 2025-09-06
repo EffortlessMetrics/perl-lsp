@@ -2247,7 +2247,9 @@ impl<'a> Parser<'a> {
                 "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open"
                 | "tie" | "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite"
                 | "truncate" | "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select"
-                | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef" => {
+                | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef"
+                | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
+                | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join" => {
                     let start = token.start;
                     let func_name = token.text.clone();
 
@@ -2301,18 +2303,33 @@ impl<'a> Parser<'a> {
                             }
 
                             // Parse remaining arguments
-                            while self.peek_kind() == Some(TokenKind::Comma) {
-                                self.consume_token()?; // consume comma
+                            // For map/grep/sort, parse list arguments without requiring commas
+                            if matches!(func_name.as_str(), "map" | "grep" | "sort") {
+                                // Parse list arguments until statement boundary
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && !self.is_statement_modifier_keyword()
+                                {
+                                    // Skip optional comma
+                                    if self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?;
+                                    }
+                                    args.push(self.parse_assignment()?);
+                                }
+                            } else {
+                                // For other functions, require commas between arguments
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
 
-                                // Check if we hit a statement modifier
-                                match self.peek_kind() {
-                                    Some(TokenKind::If)
-                                    | Some(TokenKind::Unless)
-                                    | Some(TokenKind::While)
-                                    | Some(TokenKind::Until)
-                                    | Some(TokenKind::For)
-                                    | Some(TokenKind::Foreach) => break,
-                                    _ => args.push(self.parse_assignment()?),
+                                    // Check if we hit a statement modifier
+                                    match self.peek_kind() {
+                                        Some(TokenKind::If)
+                                        | Some(TokenKind::Unless)
+                                        | Some(TokenKind::While)
+                                        | Some(TokenKind::Until)
+                                        | Some(TokenKind::For)
+                                        | Some(TokenKind::Foreach) => break,
+                                        _ => args.push(self.parse_assignment()?),
+                                    }
                                 }
                             }
 
@@ -3614,13 +3631,18 @@ impl<'a> Parser<'a> {
 
                                     args.push(block);
 
-                                    // Parse remaining arguments
-                                    while self.peek_kind() == Some(TokenKind::Comma) {
-                                        self.consume_token()?; // consume comma
+                                    // Parse remaining arguments for map/grep/sort without requiring commas
+                                    // But respect statement boundaries including ] and )
+                                    while !self.is_at_statement_end() {
+                                        // Skip comma if present
+                                        if self.peek_kind() == Some(TokenKind::Comma) {
+                                            self.consume_token()?;
+                                        }
+                                        // Check again after potential comma
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_ternary()?);
                                     }
                                 } else if name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
@@ -3634,11 +3656,11 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_assignment()?);
                                     }
                                 } else {
                                     // Parse the first argument
-                                    args.push(self.parse_comma()?);
+                                    args.push(self.parse_ternary()?);
 
                                     // Parse remaining arguments separated by commas
                                     while self.peek_kind() == Some(TokenKind::Comma) {
@@ -3646,7 +3668,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_ternary()?);
                                     }
                                 }
 
