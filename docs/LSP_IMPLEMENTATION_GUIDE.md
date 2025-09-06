@@ -1233,6 +1233,215 @@ fn test_semantic_tokens_full() {
 }
 ```
 
+## Enhanced Signature Parsing and Parameter Extraction (v0.8.8+) (**Diataxis: Explanation**)
+
+### Overview
+
+PR #98 introduces comprehensive signature parsing enhancements with parameter extraction capabilities that significantly improve the signature help functionality. The implementation provides real-time parameter hints and documentation for both built-in Perl functions and user-defined subroutines with signatures.
+
+### Core Implementation Architecture
+
+#### Signature Information Structure
+
+```rust
+/// Information about a function parameter
+#[derive(Debug, Clone)]
+pub struct ParameterInfo {
+    /// Parameter name (e.g., "$x", "@args", "%opts")
+    pub label: String,
+    /// Optional documentation for the parameter
+    pub documentation: Option<String>,
+}
+
+/// Signature information for a function
+#[derive(Debug, Clone)]
+pub struct SignatureInfo {
+    /// The full signature label (e.g., "sub add($x, $y)")
+    pub label: String,
+    /// Documentation for the function
+    pub documentation: Option<String>,
+    /// Information about each parameter
+    pub parameters: Vec<ParameterInfo>,
+    /// The active parameter index (0-based)
+    pub active_parameter: Option<usize>,
+}
+```
+
+#### Enhanced Parameter Parsing Features
+
+**Built-in Function Support**:
+- Comprehensive parameter extraction from built-in signatures
+- Support for variadic parameters (LIST, EXPR patterns)
+- Active parameter tracking during function call typing
+
+**User-Defined Subroutine Integration**:
+```rust
+// Extract parameters from Perl signature syntax
+fn param_info_from_node(&self, node: &Node) -> Option<ParameterInfo> {
+    match &node.kind {
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::OptionalParameter { variable, .. }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => {
+            if let NodeKind::Variable { sigil, name } = &variable.kind {
+                Some(ParameterInfo { 
+                    label: format!("{}{}", sigil, name), 
+                    documentation: None 
+                })
+            } else {
+                None
+            }
+        }
+        // Handle legacy variable nodes
+        NodeKind::Variable { sigil, name } => {
+            Some(ParameterInfo { 
+                label: format!("{}{}", sigil, name), 
+                documentation: None 
+            })
+        }
+        _ => None,
+    }
+}
+```
+
+**Active Parameter Calculation**:
+```rust
+/// Calculate which parameter is active based on cursor position
+fn calculate_active_parameter(&self, source: &str, context: &CallContext) -> usize {
+    // Handle edge case where cursor is right at the opening paren
+    if context.position <= context.call_start + 1 {
+        return 0;
+    }
+
+    let arg_text = &source[context.call_start + 1..context.position];
+
+    // Handle nested parentheses for accurate comma counting
+    let mut paren_depth: usize = 0;
+    let mut actual_comma_count = 0;
+
+    for ch in arg_text.chars() {
+        match ch {
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            ',' if paren_depth == 0 => actual_comma_count += 1,
+            _ => {}
+        }
+    }
+
+    actual_comma_count
+}
+```
+
+### Call Context Detection
+
+The implementation includes sophisticated function call context detection:
+
+```rust
+/// Context of a function call
+#[derive(Debug)]
+struct CallContext {
+    /// Name of the function being called
+    function_name: String,
+    /// Position of the opening parenthesis
+    call_start: usize,
+    /// Current cursor position
+    position: usize,
+}
+
+fn find_call_context(&self, source: &str, position: usize) -> Option<CallContext> {
+    // Look backwards for function name and opening parenthesis
+    let mut paren_depth: usize = 0;
+    let mut call_start = None;
+    let chars: Vec<(usize, char)> = source.char_indices().collect();
+
+    // Find position in char array and search backwards
+    let pos_idx = chars.iter().position(|(idx, _)| *idx >= position).unwrap_or(chars.len() - 1);
+
+    for i in (0..=pos_idx).rev() {
+        let (idx, ch) = chars[i];
+        match ch {
+            ')' => paren_depth += 1,
+            '(' => {
+                if paren_depth == 0 {
+                    call_start = Some(idx);
+                    break;
+                } else {
+                    paren_depth -= 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let call_start = call_start?;
+    let function_name = self.extract_function_name(&source[..call_start])?;
+    
+    Some(CallContext { function_name, call_start, position })
+}
+```
+
+### Comprehensive Testing
+
+The signature parsing implementation includes extensive test coverage:
+
+```rust
+#[test]
+fn test_user_defined_signature_parameters() {
+    let code = "sub add($x, $y) { $x + $y }\nadd(1, 2);";
+    let ast = Parser::new(code).parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let sigs = provider.get_signatures("add");
+    assert_eq!(sigs[0].parameters.len(), 2);
+    assert_eq!(sigs[0].parameters[0].label, "$x");
+    assert_eq!(sigs[0].parameters[1].label, "$y");
+}
+
+#[test]
+fn test_parameter_counting() {
+    let code = "substr($str, 5, ";
+    let position = code.len() - 1;
+
+    let ast = Parser::new("").parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let help = provider.get_signature_help(code, position).unwrap();
+    assert_eq!(help.active_parameter, Some(2)); // Third parameter
+    assert_eq!(help.signatures[0].active_parameter, Some(2));
+    assert_eq!(help.signatures[0].parameters[0].label, "EXPR");
+}
+
+#[test]
+fn test_nested_calls() {
+    let code = "push(@arr, split(',', $str))";
+    let position = 22; // After the comma in split(',', 
+
+    let ast = Parser::new(code).parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let help = provider.get_signature_help(code, position).unwrap();
+    assert_eq!(help.signatures[0].label, "split /PATTERN/, EXPR, LIMIT");
+    assert!(help.signatures[0].parameters.len() >= 2);
+}
+```
+
+### LSP Integration Benefits
+
+1. **Real-time Parameter Hints**: Active parameter highlighting as users type function calls
+2. **Built-in Function Coverage**: Comprehensive support for Perl's built-in functions
+3. **User-Defined Signatures**: Full integration with modern Perl signature syntax
+4. **Nested Call Support**: Accurate parameter tracking in complex nested function calls
+5. **Performance Optimized**: Efficient parsing with minimal overhead for LSP responsiveness
+
+### Performance Characteristics
+
+- **Call Context Detection**: O(n) where n is characters from cursor to function start
+- **Parameter Parsing**: O(k) where k is number of parameters in signature
+- **Active Parameter Calculation**: O(m) where m is characters in argument list
+- **Memory Usage**: Minimal allocation with efficient string handling
+
+This enhancement significantly improves the developer experience by providing accurate, real-time parameter assistance for both built-in and user-defined functions.
+
 ## How to Implement Enhanced Scope Analysis (v0.8.6)
 
 ### Overview
