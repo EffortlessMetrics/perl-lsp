@@ -1,5 +1,4 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use perl_parser::{
     Parser,
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
@@ -27,24 +26,24 @@ test_function($var);
 
     c.bench_function("semantic_tokens_extract_small", |b| {
         b.iter(|| {
-            let tokens = provider.extract(black_box(&ast));
-            black_box(tokens)
+            let tokens = provider.extract(std::hint::black_box(&ast));
+            std::hint::black_box(tokens)
         });
     });
 
     let tokens = provider.extract(&ast);
     c.bench_function("semantic_tokens_encode_small", |b| {
         b.iter(|| {
-            let encoded = encode_semantic_tokens(black_box(&tokens));
-            black_box(encoded)
+            let encoded = encode_semantic_tokens(std::hint::black_box(&tokens));
+            std::hint::black_box(encoded)
         });
     });
 
     c.bench_function("semantic_tokens_full_pipeline_small", |b| {
         b.iter(|| {
-            let tokens = provider.extract(black_box(&ast));
-            let encoded = encode_semantic_tokens(black_box(&tokens));
-            black_box(encoded)
+            let tokens = provider.extract(std::hint::black_box(&ast));
+            let encoded = encode_semantic_tokens(std::hint::black_box(&tokens));
+            std::hint::black_box(encoded)
         });
     });
 }
@@ -132,24 +131,24 @@ sub create_user {
 
     c.bench_function("semantic_tokens_extract_medium", |b| {
         b.iter(|| {
-            let tokens = provider.extract(black_box(&ast));
-            black_box(tokens)
+            let tokens = provider.extract(std::hint::black_box(&ast));
+            std::hint::black_box(tokens)
         });
     });
 
     let tokens = provider.extract(&ast);
     c.bench_function("semantic_tokens_encode_medium", |b| {
         b.iter(|| {
-            let encoded = encode_semantic_tokens(black_box(&tokens));
-            black_box(encoded)
+            let encoded = encode_semantic_tokens(std::hint::black_box(&tokens));
+            std::hint::black_box(encoded)
         });
     });
 
     c.bench_function("semantic_tokens_full_pipeline_medium", |b| {
         b.iter(|| {
-            let tokens = provider.extract(black_box(&ast));
-            let encoded = encode_semantic_tokens(black_box(&tokens));
-            black_box(encoded)
+            let tokens = provider.extract(std::hint::black_box(&ast));
+            let encoded = encode_semantic_tokens(std::hint::black_box(&tokens));
+            std::hint::black_box(encoded)
         });
     });
 }
@@ -173,25 +172,25 @@ sub func3 { return $shared_var . '3'; }
     c.bench_function("semantic_tokens_concurrent_access", |b| {
         b.iter(|| {
             // Simulate concurrent access by calling extract multiple times
-            let tokens1 = provider.extract(black_box(&ast));
-            let tokens2 = provider.extract(black_box(&ast));
-            let tokens3 = provider.extract(black_box(&ast));
-            black_box((tokens1, tokens2, tokens3))
+            let tokens1 = provider.extract(std::hint::black_box(&ast));
+            let tokens2 = provider.extract(std::hint::black_box(&ast));
+            let tokens3 = provider.extract(std::hint::black_box(&ast));
+            std::hint::black_box((tokens1, tokens2, tokens3))
         });
     });
 
     c.bench_function("semantic_tokens_consistency_check", |b| {
         b.iter(|| {
             // Check that multiple calls produce identical results
-            let tokens1 = provider.extract(black_box(&ast));
-            let tokens2 = provider.extract(black_box(&ast));
+            let tokens1 = provider.extract(std::hint::black_box(&ast));
+            let tokens2 = provider.extract(std::hint::black_box(&ast));
             assert_eq!(tokens1.len(), tokens2.len());
             for (t1, t2) in tokens1.iter().zip(&tokens2) {
                 assert_eq!(t1.line, t2.line);
                 assert_eq!(t1.start_char, t2.start_char);
                 assert_eq!(t1.token_type, t2.token_type);
             }
-            black_box((tokens1, tokens2))
+            std::hint::black_box((tokens1, tokens2))
         });
     });
 }
@@ -211,9 +210,9 @@ sub func { return $var; }
 
     c.bench_function("semantic_tokens_new_implementation", |b| {
         b.iter(|| {
-            let tokens = provider.extract(black_box(&ast));
-            let encoded = encode_semantic_tokens(black_box(&tokens));
-            black_box(encoded)
+            let tokens = provider.extract(std::hint::black_box(&ast));
+            let encoded = encode_semantic_tokens(std::hint::black_box(&tokens));
+            std::hint::black_box(encoded)
         });
     });
 
@@ -222,7 +221,7 @@ sub func { return $var; }
 
     c.bench_function("semantic_tokens_old_style_collection", |b| {
         b.iter(|| {
-            let tokens = collect_semantic_tokens(black_box(&ast), code, &|offset| {
+            let tokens = collect_semantic_tokens(std::hint::black_box(&ast), code, &|offset| {
                 // Simple byte-to-position conversion for benchmarking
                 let mut line = 0u32;
                 let mut char = 0u32;
@@ -239,7 +238,7 @@ sub func { return $var; }
                 }
                 (line, char)
             });
-            black_box(tokens)
+            std::hint::black_box(tokens)
         });
     });
 }

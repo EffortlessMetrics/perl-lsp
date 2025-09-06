@@ -1,6 +1,8 @@
-# Commands Reference
+# Commands Reference (*Diataxis: Reference* - Complete command specifications)
 
-## Build Commands
+*This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.*
+
+## Installation Commands (*Diataxis: How-to Guide* - Step-by-step installation)
 
 ### LSP Server
 ```bash
@@ -33,6 +35,8 @@ cargo install --path crates/perl-parser --bin perl-dap
 # Run the DAP server (for VSCode integration)
 perl-dap --stdio  # Standard DAP transport
 ```
+
+## Build Commands (*Diataxis: How-to Guide* - Development builds)
 
 ### Published Crates
 ```bash
@@ -91,74 +95,64 @@ cargo check  # Should build cleanly without system dependencies
 
 ## Test Commands
 
+### Workspace Testing (v0.8.9)
 ```bash
-# Run all workspace tests
-cargo xtask test
+# Test core published crates (workspace members only)
+cargo test                              # Tests perl-lexer, perl-parser, perl-corpus, perl-lsp
+                                        # Excludes crates with system dependencies
 
-# Run corpus tests (main integration tests)
-cargo xtask corpus
+# Test individual published crates
+cargo test -p perl-parser               # Main parser library tests (195 tests)
+cargo test -p perl-lexer                # Lexer tests (40 tests)  
+cargo test -p perl-corpus               # Corpus tests (12 tests)
+cargo test -p perl-lsp                  # LSP integration tests
 
-# Run corpus tests with diagnostics (shows first failure in detail)
-cargo xtask corpus --diagnose
+# Legacy test commands (require excluded dependencies)
+# cargo xtask test                      # xtask excluded from workspace
+# cargo xtask corpus                    # xtask excluded from workspace
+```
 
-# Run specific test suite
-cargo xtask test --suite unit
-cargo xtask test --suite integration
+### Comprehensive Integration Testing
+```bash
+# LSP E2E tests
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test  # 33 LSP E2E tests
 
-# Run a single test
-cargo test test_name
-
-# Test pure Rust parser
-cargo test --features pure-rust
-
-# Run LSP tests
-cargo test -p perl-parser --test lsp_comprehensive_e2e_test
-
-# Run import optimizer tests
-cargo test -p perl-parser --test import_optimizer_tests
-
-# Run symbol documentation tests (comment extraction)
+# Symbol documentation tests (comment extraction)
 cargo test -p perl-parser --test symbol_documentation_tests
 
-# Run file completion tests
+# File completion tests
 cargo test -p perl-parser --test file_completion_tests
 
-# Run DAP tests
+# DAP tests
 cargo test -p perl-parser --test dap_comprehensive_test
 cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
 
-# Run incremental parsing tests
+# Incremental parsing tests
 cargo test -p perl-parser --test incremental_integration_test --features incremental
-
-# Run all incremental parsing tests with feature flag
 cargo test -p perl-parser --features incremental
+cargo test -p perl-parser incremental_v2::tests            # IncrementalParserV2 tests
 
-# Run IncrementalParserV2 tests specifically
-cargo test -p perl-parser incremental_v2::tests
-
-# Run incremental performance tests
+# Performance and benchmark tests  
 cargo test -p perl-parser --test incremental_perf_test
-
-# Benchmark incremental parsing performance
 cargo bench incremental --features incremental
+```
 
-# CONCURRENCY-CAPPED TEST COMMANDS (recommended for stability)
-# Quick capped test (2 threads)
-cargo t2
+### Enhanced Workspace Navigation Tests (v0.8.9)
+```bash
+# Test comprehensive AST traversal with ExpressionStatement support
+cargo test -p perl-parser --test workspace_comprehensive_traversal_test
 
-# Capped tests with preflight system checks
-./scripts/test-capped.sh
+# Test enhanced code actions and refactoring
+cargo test -p perl-parser code_actions_enhanced
 
-# Capped E2E tests with resource gating
-./scripts/test-e2e-capped.sh
+# Test improved call hierarchy provider
+cargo test -p perl-parser call_hierarchy_provider
 
-# Manual capped test run
-RUST_TEST_THREADS=2 cargo test -- --test-threads=2
+# Test enhanced workspace indexing and symbol resolution
+cargo test -p perl-parser workspace_index workspace_rename
 
-# Container-isolated tests (hard resource limits)
-docker-compose -f docker-compose.test.yml up rust-tests
-docker-compose -f docker-compose.test.yml up rust-e2e-tests
-docker-compose -f docker-compose.test.yml up rust-lsp-tests
+# Test TDD basic functionality enhancements
+cargo test -p perl-parser tdd_basic
 ```
 
 ## Parser Commands
@@ -202,50 +196,81 @@ perl-lsp --stdio < test_requests.jsonrpc
 
 ## Benchmark Commands
 
+### Workspace Benchmarks (v0.8.9)
 ```bash
-# Run all parser benchmarks
-cargo bench
+# Run parser benchmarks (workspace crates)
+cargo bench                             # Benchmarks for published crates
+cargo bench -p perl-parser              # Main parser benchmarks (v3)
 
-# Run v2 parser benchmarks
-cargo bench --features pure-rust
+# Individual crate benchmarks
+cargo bench -p perl-lexer               # Lexer performance tests
+cargo bench -p perl-corpus              # Corpus validation performance
 
-# Run v3 parser benchmarks
-cargo bench -p perl-parser
+# Performance validation
+cargo test -p perl-parser --test incremental_perf_test  # Incremental parsing performance
+```
 
-# Compare all three parsers
-cargo xtask compare
+### Comprehensive C vs Rust Benchmark Framework (v0.8.9)
+```bash
+# Run complete cross-language benchmark suite with statistical analysis
+cargo xtask bench                       # Complete benchmark workflow with C vs Rust comparison
+
+# Individual benchmark components
+cargo run -p tree-sitter-perl-rs --bin benchmark_parsers --features pure-rust  # Rust parser benchmarks
+cd tree-sitter-perl && node test/benchmark.js  # C implementation benchmarks
+
+# Generate statistical comparison report with configurable thresholds
+python3 scripts/generate_comparison.py \
+  --c-results c_benchmark.json \
+  --rust-results rust_benchmark.json \
+  --output comparison.json \
+  --report comparison_report.md
+
+# Custom performance gates (5% parse time, 20% memory defaults)
+python3 scripts/generate_comparison.py \
+  --parse-threshold 3.0 \
+  --memory-threshold 15.0 \
+  --verbose
+
+# Setup benchmark environment with all dependencies
+bash scripts/setup_benchmark.sh
+
+# Run benchmark validation tests (12 comprehensive test cases)
+python3 -m pytest scripts/test_comparison.py -v
 ```
 
 ## Code Quality Commands
 
+### Workspace Quality Checks (v0.8.9)
 ```bash
-# Run all checks (formatting + clippy)
-cargo xtask check --all
+# Run standard Rust quality checks (workspace crates)
+cargo fmt                              # Format workspace code
+cargo clippy --workspace              # Lint workspace crates  
+cargo clippy --workspace --tests      # Lint tests
 
-# Format code
-cargo xtask fmt
+# Individual crate checks
+cargo clippy -p perl-parser           # Lint main parser crate
+cargo clippy -p perl-lsp              # Lint LSP server
+cargo test --doc                      # Documentation tests
 
-# Run clippy
-cargo xtask check --clippy
+# Legacy quality commands (excluded from workspace)
+# cargo xtask check --all             # xtask excluded from workspace
+# cargo xtask fmt                     # xtask excluded from workspace
 ```
 
 ## Edge Case Testing Commands
 
-```bash
-# Run comprehensive edge case tests
-cargo xtask test-edge-cases
+### Workspace Edge Case Tests (v0.8.9)
+```bash  
+# Run comprehensive edge case tests (workspace crates)
+cargo test -p perl-parser               # Includes all edge case coverage
+cargo test -p perl-corpus               # Corpus-based edge case validation
 
-# Run with performance benchmarks
-cargo xtask test-edge-cases --bench
-
-# Generate coverage report
-cargo xtask test-edge-cases --coverage
-
-# Run specific edge case test
-cargo xtask test-edge-cases --test test_dynamic_delimiters
-
-# Run scope analyzer tests specifically
-cargo test -p perl-parser --test scope_analyzer_tests
+# Specific edge case test suites
+cargo test -p perl-parser --test scope_analyzer_tests        # Scope analysis edge cases
+cargo test -p perl-parser edge_case                          # Edge case pattern tests
+cargo test -p perl-parser regex                              # Regex delimiter tests
+cargo test -p perl-parser heredoc                            # Heredoc edge cases
 ```
 
 ## Scope Analyzer Testing
@@ -261,6 +286,49 @@ cargo test -p perl-parser scope_analyzer_tests::test_complex_variable_patterns
 
 # Test hash key context detection
 cargo test -p perl-parser scope_analyzer_tests::test_hash_key_context_detection
+```
+
+## LSP Development Commands
+
+### Testing Comment Documentation
+```bash
+# Test comprehensive comment extraction (20 tests covering all scenarios)
+cargo test -p perl-parser --test symbol_documentation_tests
+
+# Test specific comment patterns and edge cases
+cargo test -p perl-parser symbol_documentation_tests::comment_separated_by_blank_line_is_not_captured
+cargo test -p perl-parser symbol_documentation_tests::comment_with_extra_hashes_and_spaces
+cargo test -p perl-parser symbol_documentation_tests::multi_package_comment_scenarios
+cargo test -p perl-parser symbol_documentation_tests::complex_comment_formatting
+cargo test -p perl-parser symbol_documentation_tests::unicode_in_comments
+cargo test -p perl-parser symbol_documentation_tests::performance_with_large_comment_blocks
+
+# Performance benchmarking (<100µs per iteration target)
+cargo test -p perl-parser symbol_documentation_tests::performance_benchmark_comment_extraction -- --nocapture
+```
+
+### Testing Position Tracking
+```bash
+# Run position tracking tests
+cargo test -p perl-parser --test parser_context -- test_multiline_positions
+cargo test -p perl-parser --test parser_context -- test_utf16_position_mapping
+cargo test -p perl-parser --test parser_context -- test_crlf_line_endings
+
+# Test with specific edge cases
+cargo test -p perl-parser parser_context_tests::test_multiline_string_token_positions
+```
+
+### Testing File Completion
+```bash
+# Run file completion specific tests
+cargo test -p perl-parser --test file_completion_tests
+
+# Test individual scenarios
+cargo test -p perl-parser file_completion_tests::completes_files_in_src_directory
+cargo test -p perl-parser file_completion_tests::basic_security_test_rejects_path_traversal
+
+# Test with various file patterns
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- test_completion
 ```
 
 ## Parser Generation Commands
@@ -287,6 +355,7 @@ npx tree-sitter generate
 3. Use `cargo xtask parse-rust file.pl --ast` to see AST structure
 
 ### Performance Optimization
-1. Run benchmarks before and after changes
-2. Use `cargo xtask compare` to compare implementations
-3. Check for performance gates: `cargo xtask compare --check-gates`
+1. Run benchmarks before and after changes: `cargo bench`
+2. Use comprehensive benchmark framework: `cargo xtask bench`
+3. Check performance gates with statistical analysis: `python3 scripts/generate_comparison.py`
+4. Monitor incremental parsing performance: `cargo test -p perl-parser --test incremental_perf_test`
