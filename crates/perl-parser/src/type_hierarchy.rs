@@ -1,4 +1,5 @@
 use crate::ast::{Node, NodeKind};
+use crate::position_mapper::PositionMapper;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -230,17 +231,20 @@ impl TypeHierarchyProvider {
 
     /// Prepare type hierarchy at position
     pub fn prepare(&self, ast: &Node, code: &str, offset: usize) -> Option<Vec<TypeHierarchyItem>> {
+        let position_mapper = PositionMapper::new(code);
         // Find the node at the position
         let target_node = self.find_node_at_offset(ast, offset)?;
 
         // Check if it's a package or class declaration
         match &target_node.kind {
             NodeKind::Package { name, .. } => {
-                let item = self.create_type_item(name, target_node, code, SymbolKind::Class);
+                let item =
+                    self.create_type_item(name, target_node, &position_mapper, SymbolKind::Class);
                 Some(vec![item])
             }
             NodeKind::Class { name, .. } => {
-                let item = self.create_type_item(name, target_node, code, SymbolKind::Class);
+                let item =
+                    self.create_type_item(name, target_node, &position_mapper, SymbolKind::Class);
                 Some(vec![item])
             }
             NodeKind::Identifier { name } => {
@@ -250,8 +254,8 @@ impl TypeHierarchyProvider {
                         name: name.clone(),
                         kind: SymbolKind::Class,
                         uri: "file:///current".to_string(),
-                        range: self.node_to_range(target_node, code),
-                        selection_range: self.node_to_range(target_node, code),
+                        range: self.node_to_range(target_node, &position_mapper),
+                        selection_range: self.node_to_range(target_node, &position_mapper),
                         detail: Some("Perl Package".to_string()),
                         data: None,
                     };
@@ -367,15 +371,15 @@ impl TypeHierarchyProvider {
         &self,
         name: &str,
         node: &Node,
-        code: &str,
+        position_mapper: &PositionMapper,
         kind: SymbolKind,
     ) -> TypeHierarchyItem {
         TypeHierarchyItem {
             name: name.to_string(),
             kind,
             uri: "file:///current".to_string(),
-            range: self.node_to_range(node, code),
-            selection_range: self.node_to_range(node, code),
+            range: self.node_to_range(node, position_mapper),
+            selection_range: self.node_to_range(node, position_mapper),
             detail: Some(format!(
                 "Perl {}",
                 match kind {
@@ -388,32 +392,20 @@ impl TypeHierarchyProvider {
         }
     }
 
-    fn node_to_range(&self, node: &Node, code: &str) -> Range {
-        let start_pos = self.offset_to_position(node.location.start, code);
-        let end_pos = self.offset_to_position(node.location.end, code);
+    /// Convert node to LSP range using PositionMapper for UTF-16 compliance
+    fn node_to_range(&self, node: &Node, position_mapper: &PositionMapper) -> Range {
+        let start_pos = self.offset_to_position(node.location.start, position_mapper);
+        let end_pos = self.offset_to_position(node.location.end, position_mapper);
         Range {
             start: Position { line: start_pos.0, character: start_pos.1 },
             end: Position { line: end_pos.0, character: end_pos.1 },
         }
     }
 
-    fn offset_to_position(&self, offset: usize, code: &str) -> (u32, u32) {
-        let mut line = 0;
-        let mut col = 0;
-
-        for (i, ch) in code.chars().enumerate() {
-            if i >= offset {
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-        }
-
-        (line, col)
+    /// Convert byte offset to line/character position using PositionMapper for UTF-16 compliance
+    fn offset_to_position(&self, offset: usize, position_mapper: &PositionMapper) -> (u32, u32) {
+        let pos = position_mapper.byte_to_lsp_pos(offset);
+        (pos.line, pos.character)
     }
 }
 

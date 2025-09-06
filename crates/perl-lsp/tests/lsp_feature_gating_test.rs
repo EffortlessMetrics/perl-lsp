@@ -7,13 +7,9 @@ use support::lsp_harness::LspHarness;
 /// Test that disabled features are properly gated
 /// This prevents accidental feature leaks when handlers are registered without guards
 #[test]
-fn test_disabled_features_return_method_not_found() {
-    // Initialize with client caps that would normally enable features
+fn test_type_hierarchy_advertised() {
     let client_caps = json!({
         "textDocument": {
-            "inlayHint": {
-                "dynamicRegistration": false
-            },
             "typeHierarchy": {
                 "dynamicRegistration": false
             }
@@ -24,47 +20,11 @@ fn test_disabled_features_return_method_not_found() {
     let init_result =
         harness.initialize(Some(client_caps)).expect("Failed to initialize LSP server");
 
-    let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())
-        .expect("Failed to deserialize ServerCapabilities");
-
-    // Check that type hierarchy is not advertised (since lsp-types doesn't have it yet)
-    // NOTE: Type hierarchy types are not available in lsp-types 0.97
-    // This test is commented out until we upgrade to a version with TypeHierarchy support
-    /*
-    #[cfg(not(feature = "lsp-type-hierarchy"))]
-    {
-        // Should not be present in capabilities
-        let caps_json = serde_json::to_value(&caps).unwrap();
-        assert!(caps_json.get("typeHierarchyProvider").is_none(),
-            "Type hierarchy should not be advertised without feature flag");
-
-        // Attempting to call it should return method not found
-        let response = harness.request::<request::PrepareTypeHierarchy>(
-            PrepareTypeHierarchyParams {
-                text_document_position_params: TextDocumentPositionParams {
-                    text_document: TextDocumentIdentifier {
-                        uri: url::Url::parse("file:///test.pl").unwrap(),
-                    },
-                    position: Position::new(0, 0),
-                },
-                work_done_progress_params: WorkDoneProgressParams::default(),
-            }
-        );
-
-        match response {
-            Err(e) => {
-                assert_eq!(e.code, -32601, "Should return 'Method not found' error");
-            }
-            Ok(_) => panic!("Type hierarchy should not be available without feature flag"),
-        }
-    }
-    */
-
-    // Just verify that type hierarchy is not advertised in capabilities
-    let caps_json = serde_json::to_value(&caps).unwrap();
+    // Type hierarchy should be advertised now
+    let caps_json = init_result["capabilities"].clone();
     assert!(
-        caps_json.get("typeHierarchyProvider").is_none(),
-        "Type hierarchy should not be advertised (not available in lsp-types 0.97)"
+        caps_json.get("typeHierarchyProvider").is_some(),
+        "Type hierarchy should be advertised"
     );
 }
 
@@ -89,14 +49,11 @@ fn test_non_advertised_features_hidden() {
     let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())
         .expect("Failed to deserialize ServerCapabilities");
 
-    // Call hierarchy is implemented but not advertised
-    assert!(
-        caps.call_hierarchy_provider.is_none(),
-        "Call hierarchy should not be advertised (partial implementation)"
-    );
-
-    // Code lens is now advertised
+    // Code lens is now advertised (v0.8.9)
     assert!(caps.code_lens_provider.is_some(), "Code lens should be advertised");
+
+    // Call hierarchy is fully implemented and should be advertised (v0.8.9)
+    assert!(caps.call_hierarchy_provider.is_some(), "Call hierarchy should be advertised");
 }
 
 /// Test that experimental features can be toggled via feature flags
