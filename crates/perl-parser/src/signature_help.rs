@@ -111,8 +111,14 @@ impl SignatureHelpProvider {
         let mut call_start = None;
         let chars: Vec<(usize, char)> = source.char_indices().collect();
 
+        // Handle empty string
+        if chars.is_empty() {
+            return None;
+        }
+
         // Find our position in the char array
-        let pos_idx = chars.iter().position(|(idx, _)| *idx >= position)?;
+        // Handle the case where position is beyond the end of the string (valid cursor position)
+        let pos_idx = chars.iter().position(|(idx, _)| *idx >= position).unwrap_or(chars.len() - 1);
 
         // Search backwards
         for i in (0..=pos_idx).rev() {
@@ -419,7 +425,7 @@ mod tests {
         // The active parameter could be 1 or 2 depending on interpretation
         // Since we're after the comma in split(',', ...), we should be on parameter 2
         assert!(help.active_parameter == Some(1) || help.active_parameter == Some(2));
-        assert_eq!(help.signatures[0].parameters.len() >= 2, true);
+        assert!(help.signatures[0].parameters.len() >= 2);
     }
 
     #[test]
