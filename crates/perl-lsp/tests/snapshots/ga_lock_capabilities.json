@@ -1,4 +1,5 @@
 {
+  "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
       "quickfix",
@@ -109,6 +110,7 @@
     "change": 1,
     "openClose": true
   },
+  "typeHierarchyProvider": true,
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }
