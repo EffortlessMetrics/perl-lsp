@@ -336,7 +336,9 @@ impl SignatureHelpProvider {
                         }),
                         '%' => params.push(ParameterInfo {
                             label: "%args".to_string(),
-                            documentation: Some("Hash (slurps remaining named arguments)".to_string()),
+                            documentation: Some(
+                                "Hash (slurps remaining named arguments)".to_string(),
+                            ),
                         }),
                         '&' => params.push(ParameterInfo {
                             label: "&code".to_string(),
