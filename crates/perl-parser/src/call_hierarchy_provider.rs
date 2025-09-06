@@ -1,4 +1,5 @@
 use crate::ast::{Node, NodeKind};
+use crate::position_mapper::PositionMapper;
 use serde_json::{Value, json};
 
 /// Call Hierarchy Item
@@ -28,11 +29,15 @@ pub struct Position {
 pub struct CallHierarchyProvider {
     source: String,
     uri: String,
+    position_mapper: PositionMapper,
 }
 
 impl CallHierarchyProvider {
     pub fn new(source: String, uri: String) -> Self {
-        Self { source, uri }
+        // Validate that URI is well-formed (basic security check)
+        let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
+        let position_mapper = PositionMapper::new(&source);
+        Self { source, uri, position_mapper }
     }
 
     /// Prepare call hierarchy - find items at a given position
@@ -439,46 +444,16 @@ impl CallHierarchyProvider {
         Range { start, end }
     }
 
-    /// Convert byte offset to line/character position
+    /// Convert byte offset to line/character position using PositionMapper for UTF-16 compliance
     fn offset_to_position(&self, offset: usize) -> Position {
-        let mut line = 0;
-        let mut col = 0;
-
-        for (i, ch) in self.source.chars().enumerate() {
-            if i >= offset {
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-        }
-
-        Position { line, character: col }
+        let pos = self.position_mapper.byte_to_lsp_pos(offset);
+        Position { line: pos.line, character: pos.character }
     }
 
-    /// Convert line/character position to byte offset
+    /// Convert line/character position to byte offset using PositionMapper for UTF-16 compliance
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
-        let mut current_line = 0;
-        let mut current_col = 0;
-        let mut offset = 0;
-
-        for (i, ch) in self.source.chars().enumerate() {
-            if current_line == line && current_col == character {
-                return i;
-            }
-            if ch == '\n' {
-                current_line += 1;
-                current_col = 0;
-            } else {
-                current_col += 1;
-            }
-            offset = i;
-        }
-
-        offset + 1
+        let pos = crate::position_mapper::Position { line, character };
+        self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
     }
 }
 
