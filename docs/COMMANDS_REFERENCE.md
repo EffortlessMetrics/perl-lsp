@@ -237,6 +237,16 @@ bash scripts/setup_benchmark.sh
 
 # Run benchmark validation tests (12 comprehensive test cases)
 python3 -m pytest scripts/test_comparison.py -v
+
+# Compare all three parsers with memory tracking
+cargo xtask compare --report             # Full comparison with memory metrics and statistical analysis
+cargo xtask compare --c-only             # Test C implementation only with memory tracking
+cargo xtask compare --rust-only          # Test Rust implementation only with memory tracking
+cargo xtask compare --validate-only      # Validate existing results without re-running
+cargo xtask compare --check-gates        # Check performance gates with memory thresholds
+
+# Memory profiling validation
+cargo run --bin xtask -- validate-memory-profiling  # Test dual-mode memory measurement
 ```
 
 ## Code Quality Commands
@@ -357,5 +367,10 @@ npx tree-sitter generate
 ### Performance Optimization
 1. Run benchmarks before and after changes: `cargo bench`
 2. Use comprehensive benchmark framework: `cargo xtask bench`
-3. Check performance gates with statistical analysis: `python3 scripts/generate_comparison.py`
-4. Monitor incremental parsing performance: `cargo test -p perl-parser --test incremental_perf_test`
+3. Use `cargo xtask compare --report` to compare implementations with memory tracking
+4. Check performance gates with statistical analysis: `python3 scripts/generate_comparison.py`
+5. Check for performance gates: `cargo xtask compare --check-gates`
+6. Monitor incremental parsing performance: `cargo test -p perl-parser --test incremental_perf_test`
+7. Validate memory profiling: `cargo run --bin xtask -- validate-memory-profiling`
+8. Monitor memory usage patterns with statistical analysis
+9. Use dual-mode memory measurement (procfs RSS + peak_alloc) for accurate profiling
