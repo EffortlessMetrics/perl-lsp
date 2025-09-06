@@ -43,7 +43,11 @@
       "perl.tidy",
       "perl.critic",
       "perl.extractVariable",
-      "perl.extractSubroutine"
+      "perl.extractSubroutine",
+      "perl.runTests",
+      "perl.runFile",
+      "perl.runTestSub",
+      "perl.debugTests"
     ]
   },
   "foldingRangeProvider": true,
