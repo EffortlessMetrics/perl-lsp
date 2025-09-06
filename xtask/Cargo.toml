@@ -16,10 +16,15 @@ anyhow = "1.0.98"
 indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-# tree-sitter-perl = { workspace = true, features = ["rust-scanner"] }  # Commented: excluded from workspace
-perl-parser = { workspace = true }
-tree-sitter = { workspace = true }
+# Depend directly on local crates since xtask is excluded from the workspace
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["rust-scanner"] }
+perl-parser = { path = "../crates/perl-parser" }
+tree-sitter = "0.25.8"
 regex = "1.11.1"
 serde_yaml = "0.9"
 bindgen = "0.72.0"
 peak_alloc = "0.3"
+difference = "2.0"
+
+[dev-dependencies]
+tempfile = "3.8"

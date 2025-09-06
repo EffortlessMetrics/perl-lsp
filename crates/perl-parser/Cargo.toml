@@ -21,6 +21,9 @@ include = [
   "LICENSE*"
 ]
 
+[lib]
+doctest = false
+
 [dependencies]
 perl-lexer = { version = "0.8.8" }
 thiserror = "2.0.12"

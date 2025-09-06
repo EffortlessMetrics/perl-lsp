@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.9)
+### 📦 Published Crates (v0.8.8)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
@@ -25,7 +25,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.9+ (General Availability) - Post-Validation Enhancements ⚡
+## 📦 Latest Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
 
 ### Recent Post-Validation Improvements - Enterprise-Ready Perl Development Environment
 - 🚀 **Comprehensive Security Validation**: Enterprise-grade security patterns with PBKDF2 authentication implementation (PR #44)
@@ -37,7 +37,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - ⚡ **Architecture Maturity**: Production-ready incremental parsing with 99.7% node reuse efficiency and <1ms update times
 - ✅ **Quality Assurance**: Zero clippy warnings, consistent formatting, and full enterprise-grade compliance maintained
 
-### v0.8.9 - Comprehensive PR Workflow Integration with Production-Stable AST Generation 🚀
+### v0.8.8 - Comprehensive Rope Integration with Production-Stable AST Generation 🚀
 - 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility
 - 🧠 **Comprehensive Workspace Navigation**: Enhanced AST traversal including `NodeKind::ExpressionStatement` support across all LSP providers
 - 📊 **Advanced Code Actions and Refactoring**: Fixed parameter threshold validation and enhanced refactoring suggestions with proper AST handling
@@ -161,7 +161,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
-### Production Crates (v0.8.7 GA)
+### Production Crates (v0.8.8 GA)
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
@@ -179,9 +179,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
-## 🚀 Quick Start (**Diataxis: Tutorial** - Learning-oriented guidance for first-time users)
+## 🚀 Quick Start (*Diataxis: Tutorial* - Learning-oriented guidance for first-time users)
 
-### Install the LSP Server (Recommended) (**Diataxis: How-to** - Problem-solving steps)
+### Install the LSP Server (Recommended) (*Diataxis: How-to Guide* - Step-by-step problem-solving)
 
 #### Option 1: Quick Install (Linux/macOS)
 ```bash
@@ -229,12 +229,12 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 
 > **Note**: The exact Content-Length number may differ if you modify the JSON. The presence of a valid `Content-Length:` header indicates successful LSP initialization.
 
-### Use the Parser Library (**Diataxis: Tutorial**)
+### Use the Parser Library (*Diataxis: Tutorial* - Hands-on learning)
 
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8.9"
+perl-parser = "0.8.8"
 ```
 
 ```rust
@@ -248,7 +248,7 @@ println!("AST: {:?}", ast);
 
 ---
 
-## 🖥️ Language Server Protocol (LSP) Support
+## 🖥️ Language Server Protocol (LSP) Support (*Diataxis: Reference* - Complete LSP specification)
 
 The v3 parser includes a **production-ready Language Server Protocol implementation** for Perl, providing comprehensive IDE features:
 
@@ -323,7 +323,7 @@ Returns an LSP `WorkspaceEdit` with edits in both definition and call sites.
 
 See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 
-### Using the LSP Server
+### Using the LSP Server (*Diataxis: How-to Guide* - Installation and usage steps)
 
 ```bash
 # Run the LSP server (NEW standalone crate in v0.8.8)
@@ -336,7 +336,7 @@ cargo install perl-lsp
 cargo install --path crates/perl-lsp
 ```
 
-### Editor Integration
+### Editor Integration (*Diataxis: How-to Guide* - Editor-specific setup instructions)
 
 #### VS Code
 Install the **Perl Language Server** extension from the marketplace (auto-downloads perl-lsp):
@@ -428,7 +428,7 @@ endif
 
 ---
 
-## 📊 Performance
+## 📊 Performance (*Diataxis: Reference* - Benchmark data and measurements)
 
 ### Parser Performance Comparison - **Validated Results** ✅
 
@@ -536,7 +536,7 @@ This distinction is important: Rust's `is_alphabetic()` correctly identifies mat
 
 ---
 
-## 🏗️ Architecture (**Diataxis: Explanation**)
+## 🏗️ Architecture (*Diataxis: Explanation* - Design concepts and rationale)
 
 ```
 tree-sitter-perl/
@@ -573,7 +573,7 @@ tree-sitter-perl/
 
 ---
 
-## 🔧 Build and Test
+## 🔧 Build and Test (*Diataxis: How-to Guide* - Development workflow steps)
 
 ### Prerequisites
 
@@ -616,10 +616,9 @@ cargo test --features pure-rust
 # Parse a Perl file
 cargo run --features pure-rust --bin parse-rust -- file.pl
 
-# Using xtask automation
-cargo xtask build --features pure-rust
-cargo xtask test --features pure-rust
-cargo xtask parse-rust file.pl --sexp
+# Development commands (workspace configured)
+cargo build --features pure-rust
+cargo test --features pure-rust
 ```
 
 #### Comparing All Parsers
@@ -995,11 +994,11 @@ The benchmarking system provides:
 
 ```toml
 [dependencies]
-perl-parser = "0.8.9"
+perl-parser = "0.8.8"
 # Optional: for custom lexing
-perl-lexer = "0.8.9"
+perl-lexer = "0.8.8"
 # Optional: for testing
-perl-corpus = "0.8.9"
+perl-corpus = "0.8.8"
 ```
 
 ### From Source

@@ -346,13 +346,16 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.execute_command {
+        let mut commands = vec![
+            "perl.tidy".to_string(),
+            "perl.critic".to_string(),
+            "perl.extractVariable".to_string(),
+            "perl.extractSubroutine".to_string(),
+        ];
+        // Advertise executeCommandProvider commands from the execute_command module
+        commands.extend(crate::execute_command::get_supported_commands());
         caps.execute_command_provider = Some(ExecuteCommandOptions {
-            commands: vec![
-                "perl.tidy".to_string(),
-                "perl.critic".to_string(),
-                "perl.extractVariable".to_string(),
-                "perl.extractSubroutine".to_string(),
-            ],
+            commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),
         });
     }

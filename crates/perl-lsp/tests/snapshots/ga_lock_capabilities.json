@@ -50,6 +50,7 @@
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "linkedEditingRangeProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
