@@ -5,6 +5,7 @@ expression: "&snapshot_data"
 ---
 caps:
   - lsp.code_action
+  - lsp.color
   - lsp.completion
   - lsp.definition
   - lsp.document_highlight
