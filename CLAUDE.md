@@ -159,11 +159,12 @@ perl-lsp --stdio --log                  # Debug LSP server
 - Production-stable incremental parsing with statistical validation
 - Enhanced workspace navigation and PR workflow integration
 
-**LSP Features (~85% functional)**:
+**LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
 - ✅ Workspace symbols, rename, code actions
 - ✅ **Thread-safe semantic tokens** (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
+- ✅ **Code Lens** with reference counts, run/test lenses, and resolve support
 - ✅ File path completion with enterprise security
 - ✅ Debug Adapter Protocol (DAP) support
 

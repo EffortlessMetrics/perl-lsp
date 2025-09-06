@@ -192,7 +192,7 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             println!("\n❌ Test failed: {}", test_case.name);
             let diff = Changeset::new(&c_raw, &v3_raw, "\n");
             println!("Diff between C and V3:\n{}", diff);
-            Ok(false)
+            return Ok(false);
         }
         None => {
             // Default to V3 parser for this branch

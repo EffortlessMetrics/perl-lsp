@@ -89,17 +89,14 @@ fn test_non_advertised_features_hidden() {
     let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())
         .expect("Failed to deserialize ServerCapabilities");
 
-    // Code lens and call hierarchy are implemented but not advertised
-    // They should not appear in capabilities
-    assert!(
-        caps.code_lens_provider.is_none(),
-        "Code lens should not be advertised (partial implementation)"
-    );
-
+    // Call hierarchy is implemented but not advertised
     assert!(
         caps.call_hierarchy_provider.is_none(),
         "Call hierarchy should not be advertised (partial implementation)"
     );
+
+    // Code lens is now advertised
+    assert!(caps.code_lens_provider.is_some(), "Code lens should be advertised");
 }
 
 /// Test that experimental features can be toggled via feature flags
