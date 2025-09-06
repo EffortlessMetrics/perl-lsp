@@ -585,7 +585,9 @@ impl<'a> PerlLexer<'a> {
                 b' ' => {
                     // Batch skip spaces for better cache efficiency
                     let start = self.position;
-                    while self.position < self.input_bytes.len() && self.input_bytes[self.position] == b' ' {
+                    while self.position < self.input_bytes.len()
+                        && self.input_bytes[self.position] == b' '
+                    {
                         self.position += 1;
                     }
                     // Continue outer loop if we processed any spaces
@@ -596,7 +598,9 @@ impl<'a> PerlLexer<'a> {
                 b'\t' => {
                     // Batch skip tabs
                     let start = self.position;
-                    while self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'\t' {
+                    while self.position < self.input_bytes.len()
+                        && self.input_bytes[self.position] == b'\t'
+                    {
                         self.position += 1;
                     }
                     if self.position > start {
@@ -639,13 +643,12 @@ impl<'a> PerlLexer<'a> {
                 }
                 _ => {
                     // For non-ASCII whitespace, use char check only when needed
-                    if byte >= 128 {
-                        if let Some(ch) = self.current_char() {
-                            if ch.is_whitespace() {
-                                self.advance();
-                                continue;
-                            }
-                        }
+                    if byte >= 128
+                        && let Some(ch) = self.current_char()
+                        && ch.is_whitespace()
+                    {
+                        self.advance();
+                        continue;
                     }
                     break;
                 }
@@ -818,17 +821,36 @@ impl<'a> PerlLexer<'a> {
         if pos < bytes.len() && bytes[pos] == b'.' {
             // Peek ahead to see what follows the dot
             let has_following_digit = pos + 1 < bytes.len() && bytes[pos + 1].is_ascii_digit();
-            
+
             // Optimized dot consumption logic
             let should_consume_dot = has_following_digit || {
                 pos + 1 >= bytes.len() || {
                     // Use bitwise operations for faster character classification
                     let next_byte = bytes[pos + 1];
                     // Whitespace, delimiters, operators - optimized check
-                    next_byte <= b' ' || matches!(next_byte, 
-                        b';' | b',' | b')' | b'}' | b']' | b'+' | b'-' | b'*' | b'/' | b'%' 
-                        | b'=' | b'<' | b'>' | b'!' | b'&' | b'|' | b'^' | b'~' | b'e' | b'E'
-                    )
+                    next_byte <= b' '
+                        || matches!(
+                            next_byte,
+                            b';' | b','
+                                | b')'
+                                | b'}'
+                                | b']'
+                                | b'+'
+                                | b'-'
+                                | b'*'
+                                | b'/'
+                                | b'%'
+                                | b'='
+                                | b'<'
+                                | b'>'
+                                | b'!'
+                                | b'&'
+                                | b'|'
+                                | b'^'
+                                | b'~'
+                                | b'e'
+                                | b'E'
+                        )
                 }
             };
 
@@ -862,7 +884,7 @@ impl<'a> PerlLexer<'a> {
             if pos == digit_start {
                 pos = exp_start;
             }
-            
+
             self.position = pos;
         }
 
@@ -1514,9 +1536,12 @@ impl<'a> PerlLexer<'a> {
                 // It's division or defined-or operator
                 self.advance();
                 // Check for // or //= using byte-level operations for speed
-                if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'/' {
+                if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'/'
+                {
                     self.position += 1; // consume second / directly
-                    if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'=' {
+                    if self.position < self.input_bytes.len()
+                        && self.input_bytes[self.position] == b'='
+                    {
                         self.position += 1; // consume = directly
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectTerm;
@@ -1820,7 +1845,7 @@ impl<'a> PerlLexer<'a> {
                     // Parse variable - optimized using byte-level checks where possible
                     self.advance();
                     let var_start = self.position;
-                    
+
                     // Fast path for ASCII identifier continuation
                     while self.position < self.input_bytes.len() {
                         let byte = self.input_bytes[self.position];
@@ -2522,41 +2547,74 @@ fn is_compound_operator(first: char, second: char) -> bool {
         // Use lookup table approach for maximum performance
         match (first_byte, second_byte) {
             // Assignment operators
-            (b'+', b'=') | (b'-', b'=') | (b'*', b'=') | (b'/', b'=') | (b'%', b'=') 
-            | (b'&', b'=') | (b'|', b'=') | (b'^', b'=') | (b'.', b'=') => true,
-            
-            // Comparison operators  
+            (b'+', b'=')
+            | (b'-', b'=')
+            | (b'*', b'=')
+            | (b'/', b'=')
+            | (b'%', b'=')
+            | (b'&', b'=')
+            | (b'|', b'=')
+            | (b'^', b'=')
+            | (b'.', b'=') => true,
+
+            // Comparison operators
             (b'<', b'=') | (b'>', b'=') | (b'=', b'=') | (b'!', b'=') => true,
-            
+
             // Pattern operators
             (b'=', b'~') | (b'!', b'~') => true,
-            
+
             // Increment/decrement
             (b'+', b'+') | (b'-', b'-') => true,
-            
+
             // Logical operators
             (b'&', b'&') | (b'|', b'|') => true,
-            
-            // Shift operators  
+
+            // Shift operators
             (b'<', b'<') | (b'>', b'>') => true,
-            
+
             // Other compound operators
-            (b'*', b'*') | (b'/', b'/') | (b'-', b'>') | (b'=', b'>') 
-            | (b'.', b'.') | (b'~', b'~') | (b':', b':') => true,
-            
+            (b'*', b'*')
+            | (b'/', b'/')
+            | (b'-', b'>')
+            | (b'=', b'>')
+            | (b'.', b'.')
+            | (b'~', b'~')
+            | (b':', b':') => true,
+
             _ => false,
         }
     } else {
         // Fallback for non-ASCII (should be rare)
         matches!(
             (first, second),
-            ('+', '=') | ('-', '=') | ('*', '=') | ('/', '=') | ('%', '=')
-            | ('&', '=') | ('|', '=') | ('^', '=') | ('.', '=')
-            | ('<', '=') | ('>', '=') | ('=', '=') | ('!', '=')
-            | ('=', '~') | ('!', '~') | ('+', '+') | ('-', '-')
-            | ('&', '&') | ('|', '|') | ('<', '<') | ('>', '>')
-            | ('*', '*') | ('/', '/') | ('-', '>') | ('=', '>')
-            | ('.', '.') | ('~', '~') | (':', ':')
+            ('+', '=')
+                | ('-', '=')
+                | ('*', '=')
+                | ('/', '=')
+                | ('%', '=')
+                | ('&', '=')
+                | ('|', '=')
+                | ('^', '=')
+                | ('.', '=')
+                | ('<', '=')
+                | ('>', '=')
+                | ('=', '=')
+                | ('!', '=')
+                | ('=', '~')
+                | ('!', '~')
+                | ('+', '+')
+                | ('-', '-')
+                | ('&', '&')
+                | ('|', '|')
+                | ('<', '<')
+                | ('>', '>')
+                | ('*', '*')
+                | ('/', '/')
+                | ('-', '>')
+                | ('=', '>')
+                | ('.', '.')
+                | ('~', '~')
+                | (':', ':')
         )
     }
 }
