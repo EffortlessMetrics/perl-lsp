@@ -6616,7 +6616,7 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
@@ -6625,7 +6625,7 @@ impl LspServer {
                     }
                 }
                 // Debug commands (stub implementation for now)
-                "perl.debugFile" | "perl.debugTests" => {
+                "perl.debugFile" => {
                     eprintln!("Debug command requested: {}", command);
                     // Return a success status - actual DAP integration can be added later
                     return Ok(Some(
