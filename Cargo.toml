@@ -26,7 +26,6 @@ tree-sitter = "0.25.8"
 [patch.crates-io]
 perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
-perl-parser-pest = { path = "crates/perl-parser-pest" }
 perl-corpus = { path = "crates/perl-corpus" }
 
 # Profile for development - slightly optimized for better performance
