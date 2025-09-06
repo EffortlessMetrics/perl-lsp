@@ -442,6 +442,34 @@ pub fn lex_core_spans(src: &str) -> Vec<CoreTok> {
 
 /// Pairwise: would putting nothing between left+right still yield those two tokens?
 pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
+    use perl_lexer::TokenType;
+
+    // Never break around Error tokens - they represent lexer failures and should be left untouched
+    if matches!(left.kind, TokenType::Error(_)) || matches!(right.kind, TokenType::Error(_)) {
+        return false;
+    }
+
+    // Special case: compound tokens that should never be broken
+    // These are tokens that only exist as a unit when in specific contexts
+    // Dollar-brace tokens like ${, @{, %{ should never be separated from what follows
+    // because they change meaning when isolated (${X} vs $ {X})
+    if let TokenType::Identifier(_) = &left.kind {
+        let text = &left.text;
+        if text.ends_with('{') && text.len() == 2 {
+            let first_char = text.chars().next().unwrap();
+            if matches!(first_char, '$' | '@' | '%') {
+                return false;
+            }
+        }
+    }
+
+    // Also check if the left token is a contextual token that loses meaning when isolated
+    let left_alone = lex_core_spans(&left.text);
+    if left_alone.len() != 1 || left_alone[0].text != left.text || left_alone[0].kind != left.kind {
+        // The left token behaves differently when lexed alone vs in context
+        return false;
+    }
+
     let joined = format!("{}{}", left.text, right.text);
     let re = lex_core_spans(&joined);
     re.len() == 2
@@ -496,7 +524,17 @@ pub fn respace_preserving(original: &str, ws: &str) -> String {
     // For each token boundary
     for i in 0..toks.len() {
         let t = &toks[i];
-        out.push_str(&t.text);
+
+        // For Error tokens, use the original source span instead of token text
+        // because Error tokens may have mismatched text vs span
+        match &t.kind {
+            perl_lexer::TokenType::Error(_) => {
+                out.push_str(&original[t.start..t.end]);
+            }
+            _ => {
+                out.push_str(&t.text);
+            }
+        }
 
         if i + 1 < toks.len() {
             let right = &toks[i + 1];

@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Comprehensive PR Workflow Integration with Production-Stable AST Generation  
+**Latest Release**: v0.8.9+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA)
+### Published Crates (v0.8.8 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -18,6 +18,7 @@ This repository contains **five published crates** forming a complete Perl parsi
    - Production-ready Rope integration for UTF-16/UTF-8 position conversion
    - Enhanced workspace navigation and PR workflow integration
    - **Thread-safe semantic tokens** - 2.826µs average performance (35x better than 100µs target)
+   - **Optimized lexer performance** (v0.8.8+) - 15-22% improvement across parsing scenarios
    - **Zero-race-condition LSP features** - immutable provider pattern with local state management
    - **Cross-file workspace refactoring utilities** - comprehensive WorkspaceRefactor provider for symbol renaming, module extraction, import optimization
    - **Production-ready refactoring operations** - move subroutines between modules, inline variables, extract code sections
@@ -31,6 +32,7 @@ This repository contains **five published crates** forming a complete Perl parsi
 3. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with mode-based lexing
    - Handles slash disambiguation and Unicode identifiers
+   - **Performance-optimized** (v0.8.8+) - batch processing, ASCII fast-path, smart UTF-8 fallback
 
 4. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -69,6 +71,7 @@ cargo test
 - **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases
 - **Production-Ready LSP Server**: ~85% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
+- **Performance-Optimized Lexing** (v0.8.8+): 15-22% improvement through batch processing and ASCII fast-path
 - **Comprehensive Testing**: 100% test pass rate (195 library tests, 33 LSP E2E tests, 19 DAP tests)
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
@@ -108,14 +111,13 @@ cargo install --path crates/perl-lsp     # From source
 cargo test                               # All tests
 cargo test -p perl-parser               # Parser tests
 cargo test -p perl-lsp                  # LSP integration tests
-cargo xtask corpus                       # Comprehensive integration
 ```
 
 ### Development
 ```bash
-cargo xtask check --all                 # Format + clippy
-cargo bench                            # Performance benchmarks
-perl-lsp --stdio --log                 # Debug LSP server
+cargo clippy --workspace                # Lint workspace crates
+cargo bench                             # Performance benchmarks
+perl-lsp --stdio --log                  # Debug LSP server
 ```
 
 ### Performance Analysis & Memory Tracking
@@ -134,8 +136,6 @@ cargo run --bin xtask -- validate-memory-profiling
 ### Enhanced Workspace Navigation and PR Workflow Integration (v0.8.9) ⭐ **PRODUCTION READY**
 
 The v0.8.9 release introduces production-stable workspace navigation with comprehensive AST traversal enhancements and PR workflow integration capabilities.
-
-###
 #### DAP Server (Debug Adapter)
 ```bash
 # Build DAP server
@@ -1171,18 +1171,20 @@ This framework ensures systematic performance monitoring and provides early dete
 
 - **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - Comprehensive build/test commands
 - **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - LSP server architecture
+- **[LSP Development Guide](docs/LSP_DEVELOPMENT_GUIDE.md)** - Source threading and comment extraction
+- **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System design and components
 - **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance and implementation
-- **[Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)** - System design and components
-- **[Development Guidelines](docs/DEBUGGING.md)** - Contributing and troubleshooting
+- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Enterprise security practices
+- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
+- **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 
 ### Specialized Guides
-- **[LSP Crate Separation](docs/LSP_CRATE_SEPARATION_GUIDE.md)** - v0.8.9 architectural improvements
+- **[LSP Crate Separation](docs/LSP_CRATE_SEPARATION_GUIDE.md)** - v0.8.8 architectural improvements
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
 - **[Source Threading](docs/SOURCE_THREADING_GUIDE.md)** - Comment documentation extraction
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
-- **[File Completion](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 - **[Import Optimizer](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Advanced code actions
 
 ## Performance Targets ✅ **EXCEEDED**
@@ -1215,15 +1217,16 @@ This framework ensures systematic performance monitoring and provides early dete
 - Production-stable incremental parsing with statistical validation
 - Enhanced workspace navigation and PR workflow integration
 
-**LSP Features (~85% functional)**:
+**LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
 - ✅ Workspace symbols, rename, code actions
 - ✅ **Thread-safe semantic tokens** (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
+- ✅ **Code Lens** with reference counts, run/test lenses, and resolve support
 - ✅ File path completion with enterprise security
 - ✅ Debug Adapter Protocol (DAP) support
 
-**Recent Enhancements (v0.8.9)**:
+**Recent Enhancements (v0.8.8)**:
 - ✅ Comprehensive S-expression generation with 50+ operators
 - ✅ Enhanced AST traversal including ExpressionStatement support
 - ✅ Production-ready workspace indexing and cross-file analysis
@@ -1234,69 +1237,11 @@ This framework ensures systematic performance monitoring and provides early dete
   - Statistical memory analysis with min/max/avg/median calculations
   - Memory estimation for subprocess operations with size-based heuristics
   - Comprehensive memory profiling validation with workload simulation
-
-## Security Development Guidelines (PR #44)
-
-This project demonstrates **enterprise-grade security practices** in its test infrastructure. All contributors should follow these security development standards:
-
-### Secure Authentication Implementation
-
-When implementing authentication systems (including test scenarios), use production-grade security:
-
-```perl
-use Crypt::PBKDF2;
-
-# OWASP 2021 compliant PBKDF2 configuration
-sub get_pbkdf2_instance {
-    return Crypt::PBKDF2->new(
-        hash_class => 'HMACSHA2',      # SHA-2 family for cryptographic strength
-        hash_args => { sha_size => 256 }, # SHA-256 for collision resistance
-        iterations => 100_000,          # 100k iterations (OWASP 2021 minimum)
-        salt_len => 16,                 # 128-bit cryptographically random salt
-    );
-}
-
-sub authenticate_user {
-    my ($username, $password) = @_;
-    my $users = load_users();
-    my $pbkdf2 = get_pbkdf2_instance();
-    
-    foreach my $user (@$users) {
-        if ($user->{name} eq $username) {
-            # Constant-time validation prevents timing attacks
-            if ($pbkdf2->validate($user->{password_hash}, $password)) {
-                return $user;
-            }
-        }
-    }
-    return undef;  # Authentication failed
-}
-```
-
-### Security Requirements
-
-✅ **Cryptographic Standards**: Use OWASP 2021 compliant algorithms and parameters  
-✅ **Timing Attack Prevention**: Implement constant-time comparisons for authentication  
-✅ **No Plaintext Storage**: Hash all passwords immediately, never store in clear text  
-✅ **Secure Salt Generation**: Use cryptographically secure random salts (≥16 bytes)  
-✅ **Input Validation**: Sanitize and validate all user inputs  
-✅ **Path Security**: Use canonical paths with workspace boundary validation  
-
-### Security Testing Requirements
-
-All security-related code must include comprehensive tests:
-
-- **Authentication Security**: Test password hashing, validation, and timing consistency
-- **Input Validation**: Verify proper sanitization and boundary checking
-- **File Access Security**: Test path traversal prevention and workspace boundaries
-- **Error Message Security**: Ensure no sensitive information disclosure
-
-### Security Review Process
-
-- All authentication/security code changes require security review
-- Test implementations serve as security best practice examples  
-- Document security assumptions and threat models in code comments
-- Use the security implementation in PR #44 as the reference standard
+- ✅ **Enhanced signature parsing with parameter extraction** (PR #98)
+  - Complete built-in function signature support with active parameter tracking
+  - User-defined subroutine signature parsing with modern Perl syntax support
+  - Nested function call parameter detection with accurate comma counting
+  - Real-time signature help with comprehensive parameter documentation
 
 ## Contributing
 
@@ -1304,70 +1249,13 @@ All security-related code must include comprehensive tests:
 2. **LSP features** → `/crates/perl-parser/src/` (provider logic)
 3. **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
 4. **Testing** → Use existing comprehensive test infrastructure
-5. **Security features** → Follow PR #44 PBKDF2 implementation standards
-
-<<<<<<< HEAD
-Run `cargo xtask check --all` before committing. All tests must pass with zero warnings.
-=======
-The codebase maintains high quality standards with continuous improvements:
-
-### Recent Improvements (2025-02)
-
-#### Testing & Quality (v0.7.4)
-- **Fixed all tautological test assertions** - Replaced 27+ always-passing assertions with meaningful checks
-- **Created centralized test infrastructure** - Added `tests/support/mod.rs` with production-grade assertion helpers
-- **Achieved 100% LSP E2E test coverage** - All 33 comprehensive tests passing (includes 25 E2E + 8 user story tests)
-- **Cleaned up all dead code** - Removed 159+ lines of obsolete code, properly marked intentionally unused stubs
-- **Zero compilation warnings** in core library (only test helper warnings remain, intentionally preserved)
-
-#### LSP Features (v0.7.3)
-- **Achieved 100% LSP test coverage** (25/25 comprehensive E2E tests passing)
-- **Added robust error recovery** with fallback mechanisms for incomplete code
-- **Implemented undefined variable detection** under `use strict` with scope analysis
-- **Enhanced signature help** to work with incomplete/invalid code
-- **Added text-based folding** for unparseable files
-
-#### Code Quality (v0.7.2)
-- **Reduced clippy warnings by 61%** (from 133 to 52 in perl-parser)
-- **Eliminated 45+ unnecessary clone operations** on Copy types for better performance
-- **Fixed all recursive function warnings** with proper annotations
-- **Improved Rust idioms** throughout the codebase
-- **Memory optimizations** from avoiding unnecessary allocations
+5. **Security features** → Follow enterprise security practices (see [Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md))
 
 ### Coding Standards
-- Run `cargo clippy` before committing changes
+- Run `cargo clippy --workspace` before committing changes
 - Use `cargo fmt` for consistent formatting
 - Prefer `.first()` over `.get(0)` for accessing first element
 - Use `.push(char)` instead of `.push_str("x")` for single characters
 - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
 - Avoid unnecessary `.clone()` on types that implement Copy
 - Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
-
-## Documentation (**Diataxis Framework Applied**)
-
-### Architecture and Implementation Guides
-- **[Modern Architecture](docs/MODERN_ARCHITECTURE.md)** - Two-crate architecture with performance benchmarking (**Diataxis: Explanation**)
-- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Technical guide for LSP feature development (**Diataxis: How-to**)  
-- **[Stability Guarantees](docs/STABILITY.md)** - API stability commitments and versioning policy (**Diataxis: Reference**)
-- **[Edge Cases](docs/EDGE_CASES.md)** - Comprehensive edge case handling documentation (**Diataxis: Reference**)
-
-### Performance and Benchmarking ⭐ **NEW v0.8.9**
-- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Comprehensive cross-language performance analysis (**Diataxis: Tutorial + How-to**)
-  - Statistical comparison between C and Rust implementations
-  - Configurable performance gates (5% parse time, 20% memory defaults)
-  - Enterprise-grade regression detection and CI/CD integration
-  - Complete setup automation and 12 comprehensive test cases
-
-### Development and Debugging  
-- **[Debugging Guide](docs/DEBUGGING.md)** - DAP integration and VSCode debugging setup (**Diataxis: Tutorial**)
-- **[Parser Comparison](docs/PARSER_COMPARISON.md)** - Performance analysis across implementations (**Diataxis: Reference**)
-
-### Feature Implementation Status
-- **[LSP Documentation](docs/LSP_DOCUMENTATION.md)** - Complete LSP feature matrix and implementation status (**Diataxis: Reference**)
-- **[Incremental Parsing Progress](docs/INCREMENTAL_PARSING_PROGRESS.md)** - Production-ready incremental parsing implementation (**Diataxis: How-to**)
-
-The documentation follows the **Diataxis framework** for clear organization:
-- **Tutorial**: Learning-oriented, hands-on guidance for getting started
-- **How-to**: Problem-oriented, step-by-step solutions for specific tasks  
-- **Reference**: Information-oriented, comprehensive specifications and API docs
-- **Explanation**: Understanding-oriented, design decisions and architectural concepts

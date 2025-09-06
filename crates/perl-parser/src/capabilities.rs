@@ -110,7 +110,7 @@ impl BuildFlags {
             document_links: true,
             selection_ranges: true,
             on_type_formatting: true,
-            code_lens: false,        // Only ~20% functional → don't advertise
+            code_lens: true,         // Reference counts & run/test lenses
             call_hierarchy: false,   // Partial implementation
             type_hierarchy: false,   // Not implemented
             linked_editing: true,    // Implemented for paired delimiters
@@ -180,10 +180,10 @@ impl BuildFlags {
             document_links: true, // v0.8.4 feature - working
             selection_ranges: true, // v0.8.4 feature - working
             on_type_formatting: true, // v0.8.4 feature - working
-            code_lens: false, // Only ~20% functional → don't advertise
+            code_lens: false, // Disabled in GA lock builds
             call_hierarchy: false, // Partial implementation
             type_hierarchy: false, // Not implemented
-            linked_editing: true, // Implemented for paired delimiters
+            linked_editing: false, // Disabled in GA lock builds
             inline_completion: false, // New feature, not GA yet
             inline_values: false, // New feature, not GA yet
             moniker: false, // New feature, not GA yet
@@ -346,13 +346,16 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.execute_command {
+        let mut commands = vec![
+            "perl.tidy".to_string(),
+            "perl.critic".to_string(),
+            "perl.extractVariable".to_string(),
+            "perl.extractSubroutine".to_string(),
+        ];
+        // Advertise executeCommandProvider commands from the execute_command module
+        commands.extend(crate::execute_command::get_supported_commands());
         caps.execute_command_provider = Some(ExecuteCommandOptions {
-            commands: vec![
-                "perl.tidy".to_string(),
-                "perl.critic".to_string(),
-                "perl.extractVariable".to_string(),
-                "perl.extractSubroutine".to_string(),
-            ],
+            commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),
         });
     }
@@ -383,7 +386,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.code_lens {
-        caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(false) });
+        caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(true) });
     }
 
     if build.linked_editing {

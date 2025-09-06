@@ -42,12 +42,29 @@ Hierarchical outline of your Perl code:
 - **Find References**: Find all uses of a variable or function
 - **Workspace Symbols**: Search across all files (planned)
 
-### 4. Signature Help
-Function parameter hints while typing:
-- Built-in Perl functions (print, substr, splice, etc.)
-- User-defined subroutines with signatures
-- Active parameter highlighting
-- Parameter documentation (when available)
+### 4. Signature Help (**Enhanced in v0.8.8+**)
+Advanced function parameter hints while typing:
+- **Built-in Perl functions**: Complete coverage for print, substr, splice, split, push, pop, etc.
+- **User-defined subroutines**: Full support for modern Perl signature syntax (`sub add($x, $y)`)
+- **Active parameter highlighting**: Real-time tracking of which parameter you're currently entering
+- **Parameter documentation**: Comprehensive parameter information and type hints
+- **Nested call support**: Accurate parameter tracking in complex nested function calls
+- **Context-aware parsing**: Handles method calls (`->method()`) and regular function calls
+
+#### Example Usage:
+```perl
+# Built-in function signature help
+substr($str, 5, |)  # Shows: EXPR, OFFSET, LENGTH, REPLACEMENT
+                    # Highlights LENGTH parameter (index 2)
+
+# User-defined function with signature
+sub calculate($base, $rate, $time = 1) {
+    return $base * $rate * $time;
+}
+
+calculate(1000, 0.05, |)  # Shows: $base, $rate, $time = 1
+                          # Highlights $time parameter
+```
 
 ### 5. Semantic Tokens
 Enhanced syntax highlighting beyond regex-based:

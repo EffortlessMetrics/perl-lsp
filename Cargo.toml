@@ -10,8 +10,8 @@ members = [
 exclude = [
     "tree-sitter-perl",
     "tree-sitter-perl-c",  # Excluded: requires libclang-dev system package for bindgen (legacy C parser)
+    "crates/tree-sitter-perl-rs",  # Excluded: requires libclang-dev system package for bindgen (Rust wrapper for tree-sitter-perl)
     "crates/perl-parser-pest",  # Excluded: legacy Pest parser with bindgen dependency
-    "crates/tree-sitter-perl-rs",  # Excluded: internal testing crate with bindgen dependency
     "crates/parser-benchmarks",  # Excluded: benchmarking crate with potential dependencies
     "crates/parser-tests",  # Excluded: test harness with potential dependencies
 ]
@@ -26,7 +26,6 @@ tree-sitter = "0.25.8"
 [patch.crates-io]
 perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
-perl-parser-pest = { path = "crates/perl-parser-pest" }
 perl-corpus = { path = "crates/perl-corpus" }
 
 # Profile for development - slightly optimized for better performance
