@@ -431,7 +431,7 @@ fn test_regression_detection_across_sessions() {
             }
 
             let current_stats = analyzer.calculate_statistics();
-            let baseline = baseline_stats.get(name).unwrap();
+            let baseline = baseline_stats.get(*name).unwrap();
 
             // Regression detection
             let mean_regression = current_stats.mean / baseline.mean;

@@ -674,18 +674,24 @@ use Data::Dumper;  # duplicate
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        assert!(analysis
-            .organization_suggestions
-            .iter()
-            .any(|s| s.description.contains("Sort import statements")));
-        assert!(analysis
-            .organization_suggestions
-            .iter()
-            .any(|s| s.description.contains("Remove duplicate imports")));
-        assert!(analysis
-            .organization_suggestions
-            .iter()
-            .any(|s| s.description.contains("Sort and deduplicate symbols")));
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Sort import statements"))
+        );
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Remove duplicate imports"))
+        );
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Sort and deduplicate symbols"))
+        );
     }
 
     #[test]
