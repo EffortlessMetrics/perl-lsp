@@ -62,11 +62,9 @@ fn full_capabilities_match_contract() {
     let ot = &caps["documentOnTypeFormattingProvider"];
     assert!(ot.is_object());
 
-    // Type hierarchy is NOT advertised in v0.8.4 (will be in v0.8.5)
-    assert!(
-        caps["typeHierarchyProvider"].is_null(),
-        "typeHierarchyProvider must NOT be advertised in v0.8.4"
-    );
+    // Call and type hierarchy should now be advertised
+    assert!(!caps["callHierarchyProvider"].is_null(), "callHierarchyProvider must be advertised");
+    assert!(!caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must be advertised");
 
     // Pull diagnostics is now advertised (v0.8.5)
     assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider must be advertised");

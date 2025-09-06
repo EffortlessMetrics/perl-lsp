@@ -895,6 +895,9 @@ impl LspServer {
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
         capabilities["documentHighlightProvider"] = json!(true);
+        if build_flags.type_hierarchy {
+            capabilities["typeHierarchyProvider"] = json!(true);
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
