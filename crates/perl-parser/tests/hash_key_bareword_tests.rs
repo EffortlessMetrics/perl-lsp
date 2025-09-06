@@ -79,7 +79,7 @@ fn test_hash_slice_mixed_elements() {
 use strict;
 my %h = ();
 my $k = "key1";
-my @values = @h{$k, 'literal', func(), keys %h};
+my @values = @h{$k, 'literal', func(), keys(%h)};
 print BAREWORD;
 "#;
 

@@ -41,6 +41,7 @@ This document provides a comprehensive list of parsing limitations across all th
 2. **Emoji identifiers**: `my $♥ = 'love'` - Parsed but may need Unicode category validation
 3. **Format declarations**: `format STDOUT =` - Basic support, may need enhancement
 4. **Decimal without trailing digits**: `5.` - Works but could be more explicit in AST
+5. **Nested complex interpolation**: `@{[ map { $_ * 2 } @array ]}` now parses, but deeper nesting or multiple list operators inside `@{[ ... ]}` may still fail
 
 ## v2: Pest-based Parser
 
