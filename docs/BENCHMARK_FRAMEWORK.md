@@ -27,7 +27,13 @@ This document describes the comprehensive benchmarking framework for comparing C
    - Integrates C and Rust benchmarking
    - Automated regression detection
 
-5. **Corpus Comparison Infrastructure** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+5. **Memory Profiling System** (`xtask/src/tasks/compare.rs`)
+   - **Dual-mode memory measurement** using procfs RSS and peak_alloc integration
+   - **Statistical memory analysis** with min/max/avg/median calculations
+   - **Memory estimation** for subprocess operations with size-based heuristics
+   - **Comprehensive validation** with workload simulation testing
+
+6. **Corpus Comparison Infrastructure** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
    - **C vs V3 Scanner Comparison**: Direct benchmarking between legacy C scanner and V3 native parser
    - **Performance Optimization Validation**: Measure improvements from lexer optimizations (PR #102)
    - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
@@ -130,7 +136,7 @@ Create `benchmark_config.json` in the project root:
   ],
   "output_path": "benchmark_results.json",
   "detailed_stats": true,
-  "memory_tracking": false
+  "memory_tracking": true
 }
 ```
 
@@ -141,7 +147,7 @@ Create `benchmark_config.json` in the project root:
 - `test_files`: List of test files or directories to benchmark
 - `output_path`: Path for JSON results output
 - `detailed_stats`: Include detailed statistical analysis
-- `memory_tracking`: Enable memory usage measurement (experimental)
+- `memory_tracking`: Enable dual-mode memory usage measurement (production-ready)
 
 ### Comparison Configuration
 
@@ -184,6 +190,9 @@ The framework includes configurable performance gates that automatically detect 
 - **Threshold**: Configurable (default: 20% regression)
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
+- **Dual-mode Tracking**: procfs RSS measurement with peak_alloc fallback
+- **Statistical Analysis**: Memory usage patterns with confidence intervals
+- **Subprocess Estimation**: Size-based memory estimation for external processes
 
 ### Test Coverage Gates
 - **Threshold**: Configurable (default: 90% coverage)
@@ -203,7 +212,7 @@ The framework includes configurable performance gates that automatically detect 
 {
   "metadata": {
     "generated_at": "1630000000",
-    "parser_version": "0.8.3",
+    "parser_version": "0.8.9",
     "rust_version": "1.89",
     "total_tests": 10,
     "total_iterations": 1000,
@@ -221,7 +230,12 @@ The framework includes configurable performance gates that automatically detect 
       "max_duration_ns": 135000,
       "median_duration_ns": 127000.0,
       "success_rate": 1.0,
-      "tokens_per_second": 15000.0
+      "tokens_per_second": 15000.0,
+      "avg_memory": 0.85,
+      "min_memory": 0.75,
+      "max_memory": 0.95,
+      "median_memory": 0.83,
+      "memory_tracking_mode": "dual_mode_rss_peak_alloc"
     }
   },
   "summary": {
@@ -282,7 +296,7 @@ Tests are automatically categorized by:
 - **Medium files**: <1ms average parse time  
 - **Large files**: <10ms average parse time
 - **Success rate**: >99% for valid Perl code
-- **Memory usage**: <1MB peak memory for typical files
+- **Memory usage**: <1MB peak memory for typical files (measured with dual-mode tracking)
 
 ### Lexer Optimization Targets (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
 
@@ -302,8 +316,10 @@ Tests are automatically categorized by:
 ### Regression Detection
 
 - **Parse Time**: >5% slowdown triggers regression warning
-- **Memory Usage**: >20% increase triggers memory warning
+- **Memory Usage**: >20% increase triggers memory warning (dual-mode measurement)
 - **Success Rate**: Any decrease in parsing success rate
+- **Memory Accuracy**: ±10% precision with fallback mechanisms
+- **Statistical Significance**: Confidence intervals for memory measurements
 
 ## Integration with CI/CD
 
@@ -344,6 +360,17 @@ The framework can be integrated with performance monitoring systems:
 - Check that benchmark.js has execute permissions
 - Verify TEST_CODE environment variable is set
 
+#### "Memory measurement returned zero"
+- Memory tracking uses dual-mode measurement (procfs RSS + peak_alloc)
+- Small operations may show minimal memory usage (normal behavior)
+- Check that `/proc` filesystem is available (Linux systems)
+- Fallback to peak_alloc measurement if procfs unavailable
+
+#### "Memory profiling validation failed"
+- Run `cargo run --bin xtask -- validate-memory-profiling` for diagnosis
+- Check system permissions for /proc filesystem access
+- Verify peak_alloc crate is properly initialized
+
 #### Performance Gate Failures
 - Review regression threshold configuration
 - Check if performance changes are expected
@@ -366,9 +393,42 @@ python3 scripts/generate_comparison.py --verbose [other args]
 For detailed performance analysis:
 
 1. **Increase Iterations**: Higher iteration counts for statistical significance
-2. **Enable Memory Tracking**: Monitor memory usage patterns
+2. **Enable Memory Tracking**: Monitor memory usage patterns with dual-mode measurement
 3. **Detailed Stats**: Enable comprehensive statistical analysis
 4. **Profiling**: Use `cargo flamegraph` or similar tools
+
+### Memory Profiling System (v0.8.9+)
+
+The framework includes advanced memory profiling capabilities:
+
+#### Dual-Mode Memory Measurement
+- **procfs RSS Tracking**: Real-time process memory usage from `/proc/[pid]/statm`
+- **peak_alloc Integration**: Local memory allocation tracking with fallback support
+- **Automatic Fallback**: Uses peak_alloc when procfs unavailable or returns zero
+- **Statistical Analysis**: Comprehensive min/max/avg/median calculations
+
+#### Memory Profiling Commands
+```bash
+# Validate memory profiling functionality
+cargo run --bin xtask -- validate-memory-profiling
+
+# Run comparison with memory tracking enabled
+cargo xtask compare --report  # Includes memory metrics in output
+```
+
+#### Memory Measurement Process
+1. **Pre-operation Baseline**: Measures RSS memory before operation
+2. **Peak Allocator Reset**: Resets local allocation tracking
+3. **Operation Execution**: Runs the target parsing operation
+4. **Post-operation Measurement**: Captures final RSS memory state
+5. **Intelligent Selection**: Uses delta RSS or falls back to peak_alloc
+6. **Statistical Processing**: Calculates comprehensive memory statistics
+
+#### Memory Estimation for Subprocesses
+- **File-size Based Heuristics**: Estimates memory usage for external processes
+- **Conservative Scaling**: Uses ~8x file size plus 0.5MB base overhead
+- **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
+- **Fallback Values**: Returns 0.5MB default for inaccessible files
 
 ## Contributing
 

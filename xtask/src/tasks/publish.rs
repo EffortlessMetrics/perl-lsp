@@ -89,7 +89,7 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
     // First compile the extension
     println!("Compiling extension...");
     let output =
-        Command::new("npm").current_dir("vscode-extension").args(&["run", "compile"]).output()?;
+        Command::new("npm").current_dir("vscode-extension").args(["run", "compile"]).output()?;
 
     if !output.status.success() {
         bail!("Failed to compile extension: {}", String::from_utf8_lossy(&output.stderr));
@@ -100,7 +100,7 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
     let output = Command::new("npx")
         .current_dir("vscode-extension")
         .env("VSCE_PAT", token.unwrap())
-        .args(&["vsce", "publish"])
+        .args(["vsce", "publish"])
         .output()?;
 
     if !output.status.success() {
