@@ -2940,15 +2940,17 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     #[cfg(feature = "workspace")]
-                    let provider = ImplementationProvider::new(self.workspace_index.clone());
+                    {
+                        let provider = ImplementationProvider::new(self.workspace_index.clone());
 
-                    // Convert documents to HashMap<String, String> for provider
-                    let doc_map: HashMap<String, String> =
-                        documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
+                        // Convert documents to HashMap<String, String> for provider
+                        let doc_map: HashMap<String, String> =
+                            documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
 
-                    let locations =
-                        provider.find_implementations(ast, line, character, uri, &doc_map);
-                    return Ok(Some(json!(locations)));
+                        let locations =
+                            provider.find_implementations(ast, line, character, uri, &doc_map);
+                        return Ok(Some(json!(locations)));
+                    }
                 }
             }
         }
