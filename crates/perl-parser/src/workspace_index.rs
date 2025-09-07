@@ -423,7 +423,7 @@ impl WorkspaceIndex {
 
     /// Search for symbols by query
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        self.search_symbols_with_limit(query, 100) // Default limit for performance
+        self.search_symbols_with_limit(query, 1000) // Default limit for performance
     }
 
     /// Search symbols with result limit for better performance
@@ -441,7 +441,7 @@ impl WorkspaceIndex {
 
         let all_symbols = self.all_symbols();
         let mut processed = 0;
-        const MAX_PROCESS: usize = 1000; // Limit processing for performance
+        const MAX_PROCESS: usize = 10000; // Limit processing for performance
 
         for (i, symbol) in all_symbols.into_iter().enumerate() {
             // Cooperative yield every 64 symbols
