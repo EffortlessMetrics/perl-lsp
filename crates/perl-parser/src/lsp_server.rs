@@ -7923,8 +7923,8 @@ impl LspServer {
                 return Some(p);
             }
         }
-        // Best-effort even if not present (for test workspaces)
-        Some(root.join("lib").join(rel))
+        // Only return paths that actually exist
+        None
     }
 
     /// Get buffer text for a URI
