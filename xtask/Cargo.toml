@@ -27,6 +27,7 @@ procfs = "0.15"
 notify = "6.1.1"
 tokio = { version = "1.42.0", features = ["full"] }
 which = "6.0.3"
+tiny_http = "0.12"
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -34,3 +35,7 @@ tempfile = "3.8"
 [features]
 # Additional tasks that depend on legacy tree-sitter-perl crate
 legacy = ["tree-sitter-perl"]
+
+[patch.crates-io]
+perl-lexer = { path = "../crates/perl-lexer" }
+perl-parser = { path = "../crates/perl-parser" }
