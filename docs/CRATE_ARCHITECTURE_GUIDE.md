@@ -114,8 +114,63 @@
 ### `/crates/tree-sitter-perl-rs/` - Internal Test Harness
 - **Exclusion Reason**: bindgen dependency
 
-### `/xtask/` - Development Automation
+### `/xtask/` - Development Automation (*Diataxis: Explanation* - Design decisions)
 - **Exclusion Reason**: Circular dependency with excluded crates
+- **Purpose**: Advanced testing and development tools requiring system dependencies
+- **Architecture**: Excluded from workspace to maintain clean builds while preserving functionality
+
+## xtask Architecture (*Diataxis: Explanation* - Advanced testing design)
+
+### Dual-Scanner Corpus Comparison (v0.8.9+)
+
+The xtask system implements a sophisticated dual-scanner corpus comparison architecture:
+
+#### **Design Rationale**
+- **Workspace Exclusion**: xtask is excluded from the main workspace to prevent libclang dependency pollution
+- **Clean Builds**: Main workspace builds remain system-dependency-free for CI/CD reliability  
+- **Advanced Functionality**: xtask provides C vs Rust scanner comparison requiring system dependencies
+- **Development Isolation**: Advanced testing tools don't interfere with production builds
+
+#### **Core Components** 
+- **`/xtask/src/tasks/corpus.rs`**: Dual-scanner comparison engine with structural analysis
+- **`/xtask/src/types.rs`**: Scanner type definitions (C, Rust, V3, Both)
+- **`/xtask/Cargo.toml`**: Dependencies on both tree-sitter-perl (C) and perl-parser (Rust)
+
+#### **Scanner Comparison Architecture**
+```rust
+// Dual-scanner test outcome tracking
+struct TestOutcome {
+    passed: bool,              // Test passed in both scanners
+    scanner_mismatch: bool,    // Scanners produced different results
+}
+
+// Comprehensive result tracking
+struct CorpusTestResults {
+    total: usize,              // Total tests run
+    passed: usize,             // Tests passing both scanners
+    failed: usize,             // Tests failing in either scanner  
+    mismatched: usize,         // Scanner output differences
+    mismatches: Vec<String>,   // Detailed mismatch locations
+}
+```
+
+#### **Structural Analysis Features** (*Diataxis: Reference* - Technical capabilities)
+- **Node Count Comparison**: Tracks structural differences between scanner outputs
+- **Missing Node Detection**: Identifies nodes present in C but missing in Rust output
+- **Extra Node Detection**: Identifies nodes present in Rust but missing in C output
+- **S-expression Normalization**: Whitespace-independent comparison for accurate results
+- **Diagnostic Analysis**: Detailed structural breakdown for debugging parser differences
+
+#### **Usage Pattern** (*Diataxis: How-to Guide* - Implementation approach)
+```bash
+# From project root, navigate to xtask directory
+cd xtask
+
+# Run dual-scanner comparison (requires libclang-dev)
+cargo run corpus                        # Default: --scanner both
+cargo run corpus -- --scanner both     # Explicit dual-scanner mode
+cargo run corpus -- --diagnose         # Detailed analysis
+```
 
 ## Key Components
 
@@ -175,7 +230,7 @@
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 - **Legacy (Excluded)**: `/crates/perl-parser-pest/` - maintenance only, excluded from workspace
-- **Build Tools (Excluded)**: `/xtask/` - build automation, excluded due to dependencies
+- **Advanced Testing (Excluded)**: `/xtask/` - dual-scanner corpus comparison, excluded due to libclang dependencies
 
 ### Rope Development Guidelines
 **IMPORTANT**: All Rope improvements should target the **production perl-parser crate**, not internal test harnesses.

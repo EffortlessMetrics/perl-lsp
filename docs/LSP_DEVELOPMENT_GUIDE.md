@@ -74,6 +74,56 @@ When implementing new LSP features, follow this structure:
    - **Symbol documentation tests** for comment extraction features
    - User story tests for real-world scenarios
 
+## Testing Procedures (*Diataxis: How-to Guide* - Testing procedures)
+
+### Dual-Scanner Corpus Validation (v0.8.9+)
+
+For comprehensive LSP development testing, use dual-scanner corpus comparison to validate parser behavior:
+
+```bash
+# Prerequisites: Install system dependencies
+sudo apt-get install libclang-dev  # Ubuntu/Debian
+brew install llvm                  # macOS
+
+# Navigate to xtask directory (excluded from main workspace)
+cd xtask
+
+# Run dual-scanner corpus comparison
+cargo run corpus                   # Compare both C and Rust scanners
+cargo run corpus -- --scanner both --diagnose  # Detailed analysis
+
+# Individual scanner validation  
+cargo run corpus -- --scanner c     # C scanner only (baseline)
+cargo run corpus -- --scanner rust  # Rust scanner only
+cargo run corpus -- --scanner v3    # V3 native parser
+
+# Diagnostic analysis for parser differences
+cargo run corpus -- --diagnose      # Analyze first failing test
+cargo run corpus -- --test          # Test simple expressions
+```
+
+### Understanding Scanner Mismatch Reports (*Diataxis: Reference* - Output interpretation)
+
+When scanner outputs differ, the system provides detailed analysis:
+```
+🔀 Scanner mismatches:
+   expressions.txt: binary_expression_precedence
+
+🔍 STRUCTURAL ANALYSIS:
+C scanner nodes: 15
+Rust scanner nodes: 14
+❌ Nodes missing in Rust output:
+  - precedence_node
+➕ Extra nodes in Rust output:  
+  - simplified_expression
+```
+
+Use this information to:
+1. **Identify parsing differences** between C and Rust implementations
+2. **Validate LSP behavior** across different parser backends  
+3. **Track parser development** and feature parity
+4. **Debug structural inconsistencies** in AST generation
+
 ## Code Actions and Refactoring
 
 The refactoring system has two layers:

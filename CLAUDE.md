@@ -83,6 +83,23 @@ cargo bench                             # Performance benchmarks
 perl-lsp --stdio --log                  # Debug LSP server
 ```
 
+### Advanced Testing (*Diataxis: Tutorial* - Dual-Scanner Corpus Comparison)
+```bash
+# Prerequisites: Install system dependencies for dual-scanner testing
+sudo apt-get install libclang-dev       # Ubuntu/Debian  
+brew install llvm                       # macOS
+
+# Run dual-scanner corpus comparison (tutorial)
+cd xtask                                 # Navigate to xtask directory
+cargo run corpus                        # Compare C and Rust scanners
+cargo run corpus -- --diagnose          # Get detailed analysis of differences
+
+# Understanding the output:
+# - Scanner mismatches: Different S-expressions between C/Rust
+# - Structural analysis: Node count and type differences  
+# - Diagnostic mode: Detailed breakdown of parsing differences
+```
+
 ## Architecture
 
 ### Crate Structure
@@ -90,6 +107,7 @@ perl-lsp --stdio --log                  # Debug LSP server
 - **LSP Binary**: `/crates/perl-lsp/` - standalone server, CLI interface, protocol handling
 - **Lexer**: `/crates/perl-lexer/` - tokenization, Unicode support
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
+- **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
 - **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
