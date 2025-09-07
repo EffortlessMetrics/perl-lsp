@@ -5462,13 +5462,21 @@ impl LspServer {
             }
 
             NodeKind::Program { statements } => {
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    // Cooperative yield every 32 statements for performance
+                    if i & 0x1f == 0 {
+                        std::thread::yield_now();
+                    }
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
 
             NodeKind::Block { statements } => {
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    // Cooperative yield every 32 statements for performance
+                    if i & 0x1f == 0 {
+                        std::thread::yield_now();
+                    }
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
@@ -7915,8 +7923,8 @@ impl LspServer {
                 return Some(p);
             }
         }
-        // Best-effort even if not present (for test workspaces)
-        Some(root.join("lib").join(rel))
+        // Only return paths that actually exist
+        None
     }
 
     /// Get buffer text for a URI
