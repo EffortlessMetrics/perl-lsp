@@ -254,7 +254,7 @@ impl LspHarness {
 
         let start = Instant::now();
         let max_duration = duration.min(Duration::from_millis(2000)); // Cap at 2 seconds
-        
+
         while start.elapsed() < max_duration {
             // Try to drain any pending notifications
             let notifications = self.notification_buffer.lock().unwrap();
@@ -307,16 +307,16 @@ impl LspHarness {
 
         while start.elapsed() < budget && attempts < MAX_ATTEMPTS {
             attempts += 1;
-            
+
             // Use progressively shorter timeouts for requests
             let request_timeout = Duration::from_millis(200 + (attempts * 100) as u64);
-            
+
             let res = self.request_with_timeout(
                 "workspace/symbol",
                 serde_json::json!({ "query": query }),
                 request_timeout,
             );
-            
+
             if let Ok(v) = res {
                 if let Some(arr) = v.as_array() {
                     let ok = arr.iter().any(|s| {
@@ -328,12 +328,12 @@ impl LspHarness {
                     }
                 }
             }
-            
+
             // Exponential backoff with cap
             let wait_time = Duration::from_millis((40 * attempts).min(200) as u64);
             thread::sleep(wait_time);
         }
-        
+
         Err(format!("symbol '{}' not ready within {:?} after {} attempts", query, budget, attempts))
     }
 

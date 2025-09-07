@@ -239,7 +239,7 @@ impl WorkspaceSymbolsProvider {
                 let match_result = self.classify_match(&symbol.name, &query_lower);
                 if let Some(match_type) = match_result {
                     let workspace_symbol = self.symbol_to_workspace_symbol(uri, symbol, source);
-                    
+
                     match match_type {
                         MatchType::Exact => {
                             exact_matches.push(workspace_symbol);
@@ -254,8 +254,10 @@ impl WorkspaceSymbolsProvider {
                     }
 
                     // Stop early if we have collected enough results
-                    let total_found = exact_matches.len() + prefix_matches.len() + 
-                                    contains_matches.len() + fuzzy_matches.len();
+                    let total_found = exact_matches.len()
+                        + prefix_matches.len()
+                        + contains_matches.len()
+                        + fuzzy_matches.len();
                     if total_found >= limit * 2 {
                         break 'documents;
                     }
@@ -267,15 +269,15 @@ impl WorkspaceSymbolsProvider {
         let mut results = Vec::new();
         results.extend(exact_matches.into_iter().take(limit));
         let remaining = limit.saturating_sub(results.len());
-        
+
         if remaining > 0 {
             results.extend(prefix_matches.into_iter().take(remaining));
             let remaining = limit.saturating_sub(results.len());
-            
+
             if remaining > 0 {
                 results.extend(contains_matches.into_iter().take(remaining));
                 let remaining = limit.saturating_sub(results.len());
-                
+
                 if remaining > 0 {
                     results.extend(fuzzy_matches.into_iter().take(remaining));
                 }
