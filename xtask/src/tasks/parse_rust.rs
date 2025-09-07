@@ -12,7 +12,7 @@ pub fn run(source: PathBuf, sexp: bool, ast: bool, bench: bool) -> Result<()> {
 
     // Build the command to run the compare_parsers binary with pure-rust feature
     let mut cmd = Command::new("cargo");
-    cmd.args(&["run", "--features", "pure-rust test-utils", "--bin", "compare_parsers", "--"]);
+    cmd.args(["run", "--features", "pure-rust test-utils", "--bin", "compare_parsers", "--"]);
 
     // Add the source file
     cmd.arg(&source);

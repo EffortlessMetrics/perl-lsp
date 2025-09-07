@@ -43,12 +43,12 @@ pub fn run(version: String, yes: bool) -> Result<()> {
 
     // Update Cargo.toml files
     for file in cargo_files {
-        update_cargo_version(&file, &version)?;
+        update_cargo_version(file, &version)?;
         println!("  ✅ Updated {}", file);
     }
 
     // Update package.json
-    update_package_json_version(&package_json, &version)?;
+    update_package_json_version(package_json, &version)?;
     println!("  ✅ Updated {}", package_json);
 
     // Update version strings in source files
@@ -62,7 +62,7 @@ pub fn run(version: String, yes: bool) -> Result<()> {
     // Show git status
     println!();
     println!("📋 Changed files:");
-    let output = Command::new("git").args(&["status", "--short"]).output()?;
+    let output = Command::new("git").args(["status", "--short"]).output()?;
     print!("{}", String::from_utf8_lossy(&output.stdout));
 
     println!();

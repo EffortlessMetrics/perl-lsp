@@ -52,11 +52,12 @@ impl LspServer {
             if changes.len() == 1 && changes[0].get("range").is_none() {
                 // Full document replacement
                 let text = changes[0]["text"].as_str().unwrap_or_default();
-                doc.content = text.to_string();
+                doc.text = text.to_string();
+                doc.rope = Rope::from_str(text);
             } else {
                 // Incremental updates using rope; keep a mapper in sync
-                let mut rope = Rope::from_str(&doc.content);
-                let mut mapper = PositionMapper::new(&doc.content);
+                let mut rope = doc.rope.clone();
+                let mut mapper = PositionMapper::new(&doc.text);
 
                 for change in changes {
                     if let Some(range) = change.get("range") {
@@ -95,10 +96,11 @@ impl LspServer {
                 }
 
                 // Commit edited rope to the document once
-                doc.content = rope.to_string();
+                doc.rope = rope.clone();
+                doc.text = rope.to_string();
             }
 
-            doc.content.clone()
+            doc.text.clone()
         }; // lock dropped
 
         // Parse the updated text
@@ -126,7 +128,7 @@ impl LspServer {
                         doc.parse_errors = vec![e];
                     }
                 }
-                doc.line_starts = LineStartsCache::new(&doc.content);
+                doc.line_starts = LineStartsCache::new(&doc.text);
             }
         }
 

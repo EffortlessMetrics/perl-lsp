@@ -9,7 +9,7 @@ mod support;
 
 use crate::support::incremental_test_utils::IncrementalTestUtils;
 use perl_parser::incremental_v2::IncrementalParserV2;
-// Unused imports removed for clippy compliance
+// Remove unused imports - these were imported but not used in the current test implementation
 use std::time::Instant;
 
 /// Test incremental parsing with deeply nested structures
