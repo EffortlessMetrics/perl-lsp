@@ -312,7 +312,7 @@ impl ImportOptimizer {
 
                 if !is_pragma {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let (is_known_module, known_exports) =
+                    let (_is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
                             Some(exports) => (true, exports),
                             None => (false, Vec::new()),
@@ -356,9 +356,16 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // Mark as unused if module is known and no usage detected
-                    if !is_used && is_known_module {
-                        unused_symbols.push("(bare import)".to_string());
+                    // For bare imports, we need to be careful about side effects.
+                    // Some modules like DBI, LWP::UserAgent are object-oriented with no default exports,
+                    // and if they're not used, they can be safely flagged as unused.
+                    // Others like Data::Dumper, JSON have exports and may have side effects.
+                    if !is_used && _is_known_module {
+                        // Only flag as unused if it's a known module with no exports (object-oriented modules)
+                        if known_exports.is_empty() {
+                            unused_symbols.push("(bare import)".to_string());
+                        }
+                        // Modules with exports might have side effects, so we don't flag them as unused
                     }
                 }
             }
