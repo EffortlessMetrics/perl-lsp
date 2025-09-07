@@ -83,7 +83,7 @@ impl PullDiagnosticsProvider {
             let uri = Uri::parse(uri_str).unwrap_or_else(|_| Uri::from_file_path("/invalid").unwrap());
             let prev_id = prev_ids.get(&uri).cloned();
             
-            let report = self.get_document_diagnostics(&uri, &doc_state.content, prev_id);
+            let report = self.get_document_diagnostics(&uri, &doc_state.text, prev_id);
             
             items.push(WorkspaceDocumentDiagnosticReport {
                 uri,

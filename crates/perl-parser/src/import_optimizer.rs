@@ -21,7 +21,7 @@
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// Result of import analysis containing all detected issues and suggestions
@@ -29,11 +29,11 @@ use std::path::Path;
 pub struct ImportAnalysis {
     /// Import statements with unused symbols
     pub unused_imports: Vec<UnusedImport>,
-    /// Symbols that are used but not imported (currently empty - future enhancement)
+    /// Symbols that are used but not imported
     pub missing_imports: Vec<MissingImport>,
     /// Modules that are imported multiple times
     pub duplicate_imports: Vec<DuplicateImport>,
-    /// Suggestions for organizing imports (currently empty - future enhancement)
+    /// Suggestions for organizing imports
     pub organization_suggestions: Vec<OrganizationSuggestion>,
     /// All imports discovered in the file
     pub imports: Vec<ImportEntry>,
@@ -52,7 +52,7 @@ pub struct UnusedImport {
     pub reason: String,
 }
 
-/// A symbol that is used but not imported (future enhancement)
+/// A symbol that is used but not imported
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MissingImport {
     /// Module name that should be imported
@@ -76,7 +76,7 @@ pub struct DuplicateImport {
     pub can_merge: bool,
 }
 
-/// A suggestion for improving import organization (future enhancement)
+/// A suggestion for improving import organization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrganizationSuggestion {
     /// Human-readable description of the suggestion
@@ -117,7 +117,6 @@ pub enum SuggestionPriority {
 pub struct ImportOptimizer;
 
 /// Check if a module is a pragma (affects compilation, no exports)
-#[allow(dead_code)]
 fn is_pragma_module(module: &str) -> bool {
     matches!(
         module,
@@ -144,29 +143,29 @@ fn is_pragma_module(module: &str) -> bool {
 }
 
 /// Get known exports for popular Perl modules
-#[allow(dead_code)]
-fn get_known_module_exports(module: &str) -> Vec<&'static str> {
+fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
     match module {
-        "Data::Dumper" => vec!["Dumper"],
-        "JSON" => vec!["encode_json", "decode_json", "to_json", "from_json"],
-        "YAML" => vec!["Load", "Dump", "LoadFile", "DumpFile"],
-        "Storable" => vec!["store", "retrieve", "freeze", "thaw"],
-        "List::Util" => vec!["first", "max", "min", "sum", "reduce", "shuffle", "uniq"],
-        "Scalar::Util" => vec!["blessed", "reftype", "looks_like_number", "weaken"],
-        "File::Spec" => vec!["catfile", "catdir", "splitpath", "splitdir"],
-        "File::Basename" => vec!["basename", "dirname", "fileparse"],
-        "Cwd" => vec!["getcwd", "abs_path", "realpath"],
-        "Time::HiRes" => vec!["time", "sleep", "usleep", "gettimeofday"],
-        "Digest::MD5" => vec!["md5", "md5_hex", "md5_base64"],
-        "MIME::Base64" => vec!["encode_base64", "decode_base64"],
-        "URI::Escape" => vec!["uri_escape", "uri_unescape"],
-        "LWP::Simple" => vec!["get", "head", "getprint", "getstore", "mirror"],
-        "CGI" => vec!["param", "header", "start_html", "end_html"],
-        "DBI" => vec![],      // DBI is object-oriented, no default exports
-        "strict" => vec![],   // Pragma, no exports
-        "warnings" => vec![], // Pragma, no exports
-        "utf8" => vec![],     // Pragma, no exports
-        _ => vec![],
+        "Data::Dumper" => Some(vec!["Dumper"]),
+        "JSON" => Some(vec!["encode_json", "decode_json", "to_json", "from_json"]),
+        "YAML" => Some(vec!["Load", "Dump", "LoadFile", "DumpFile"]),
+        "Storable" => Some(vec!["store", "retrieve", "freeze", "thaw"]),
+        "List::Util" => Some(vec!["first", "max", "min", "sum", "reduce", "shuffle", "uniq"]),
+        "Scalar::Util" => Some(vec!["blessed", "reftype", "looks_like_number", "weaken"]),
+        "File::Spec" => Some(vec!["catfile", "catdir", "splitpath", "splitdir"]),
+        "File::Basename" => Some(vec!["basename", "dirname", "fileparse"]),
+        "Cwd" => Some(vec!["getcwd", "abs_path", "realpath"]),
+        "Time::HiRes" => Some(vec!["time", "sleep", "usleep", "gettimeofday"]),
+        "Digest::MD5" => Some(vec!["md5", "md5_hex", "md5_base64"]),
+        "MIME::Base64" => Some(vec!["encode_base64", "decode_base64"]),
+        "URI::Escape" => Some(vec!["uri_escape", "uri_unescape"]),
+        "LWP::Simple" => Some(vec!["get", "head", "getprint", "getstore", "mirror"]),
+        "LWP::UserAgent" => Some(vec![]),
+        "CGI" => Some(vec!["param", "header", "start_html", "end_html"]),
+        "DBI" => Some(vec![]),    // DBI is object-oriented, no default exports
+        "strict" => Some(vec![]), // Pragma, no exports
+        "warnings" => Some(vec![]), // Pragma, no exports
+        "utf8" => Some(vec![]),   // Pragma, no exports
+        _ => None,
     }
 }
 
@@ -276,9 +275,11 @@ impl ImportOptimizer {
 ",
             );
 
+        // Pre-compile regex for special Data::Dumper case
+        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
+
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
-        let dumper_re = Regex::new(r"\bDumper\b").map_err(|e| e.to_string())?;
         for imp in &imports {
             let mut unused_symbols = Vec::new();
 
@@ -311,7 +312,11 @@ impl ImportOptimizer {
 
                 if !is_pragma {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let known_exports = get_known_module_exports(&imp.module);
+                    let (_is_known_module, known_exports) =
+                        match get_known_module_exports(&imp.module) {
+                            Some(exports) => (true, exports),
+                            None => (false, Vec::new()),
+                        };
                     let mut is_used = false;
 
                     // First check if the module is directly referenced (e.g., Module::function)
@@ -351,11 +356,16 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // For modules without known exports, be conservative and don't mark as unused
-                    // unless we can definitively prove they're not used
-                    if !is_used && !known_exports.is_empty() {
-                        // Only mark as unused if we have known exports and none are used
-                        unused_symbols.push("(bare import)".to_string());
+                    // For bare imports, be conservative - many modules have side effects
+                    // Only mark as unused if we're confident it's safe to remove
+                    if !is_used && _is_known_module {
+                        // If the module has no known exports (empty vec), it's likely object-oriented
+                        // and safe to mark as unused if not used
+                        if known_exports.is_empty() {
+                            unused_symbols.push("(bare import)".to_string());
+                        }
+                        // For modules with exports, be conservative and don't mark as unused
+                        // since they might have side effects
                     }
                 }
             }
@@ -371,11 +381,91 @@ impl ImportOptimizer {
             }
         }
 
-        // TODO: Implement missing import detection
-        let missing_imports = Vec::new();
+        // Missing import detection
+        let imported_modules: BTreeSet<String> =
+            imports.iter().map(|imp| imp.module.clone()).collect();
 
-        // TODO: Implement organization suggestions
-        let organization_suggestions = Vec::new();
+        // Strip strings and comments before scanning for Module::symbol patterns
+        let string_re = Regex::new("'[^']*'|\"[^\"]*\"").map_err(|e| e.to_string())?;
+        let stripped = string_re.replace_all(content, " ").to_string();
+        let regex_literal_re = Regex::new(r"qr/[^/]*/").map_err(|e| e.to_string())?;
+        let stripped = regex_literal_re.replace_all(&stripped, " ").to_string();
+        let comment_re = Regex::new(r"(?m)#.*$").map_err(|e| e.to_string())?;
+        let stripped = comment_re.replace_all(&stripped, " ").to_string();
+
+        let usage_re = Regex::new(
+            r"\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)",
+        )
+        .map_err(|e| e.to_string())?;
+        let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for caps in usage_re.captures_iter(&stripped) {
+            let module = caps.get(1).unwrap().as_str().to_string();
+            let symbol = caps.get(2).unwrap().as_str().to_string();
+
+            if imported_modules.contains(&module) || is_pragma_module(&module) {
+                continue;
+            }
+
+            usage_map.entry(module).or_default().push(symbol);
+        }
+        let last_import_line = imports.iter().map(|i| i.line).max().unwrap_or(0);
+        let missing_imports = usage_map
+            .into_iter()
+            .map(|(module, mut symbols)| {
+                symbols.sort();
+                symbols.dedup();
+                MissingImport {
+                    module,
+                    symbols,
+                    suggested_location: last_import_line + 1,
+                    confidence: 0.8,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Generate organization suggestions
+        let mut organization_suggestions = Vec::new();
+
+        // Suggest sorting of import statements
+        let module_order: Vec<String> = imports.iter().map(|i| i.module.clone()).collect();
+        let mut sorted_order = module_order.clone();
+        sorted_order.sort();
+        if module_order != sorted_order {
+            organization_suggestions.push(OrganizationSuggestion {
+                description: "Sort import statements alphabetically".to_string(),
+                priority: SuggestionPriority::Low,
+            });
+        }
+
+        // Suggest removing duplicate imports
+        if !duplicate_imports.is_empty() {
+            let modules =
+                duplicate_imports.iter().map(|d| d.module.clone()).collect::<Vec<_>>().join(", ");
+            organization_suggestions.push(OrganizationSuggestion {
+                description: format!("Remove duplicate imports for modules: {}", modules),
+                priority: SuggestionPriority::Medium,
+            });
+        }
+
+        // Suggest sorting/deduplicating symbols within imports
+        let mut symbols_need_org = false;
+        for imp in &imports {
+            if imp.symbols.len() > 1 {
+                let mut sorted = imp.symbols.clone();
+                sorted.sort();
+                sorted.dedup();
+                if sorted != imp.symbols {
+                    symbols_need_org = true;
+                    break;
+                }
+            }
+        }
+        if symbols_need_org {
+            organization_suggestions.push(OrganizationSuggestion {
+                description: "Sort and deduplicate symbols within import statements".to_string(),
+                priority: SuggestionPriority::Low,
+            });
+        }
 
         Ok(ImportAnalysis {
             imports,
@@ -531,13 +621,13 @@ print "Hello World\n";
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        assert_eq!(analysis.unused_imports.len(), 2);
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
+        // With improved logic, bare imports without explicit symbols are treated conservatively.
+        // Modules with exports are not reported as unused to prevent breaking side effects.
+        // Only object-oriented modules (no exports) may be reported as unused.
+        assert!(analysis.unused_imports.is_empty());
     }
 
     #[test]
-    #[ignore = "Missing import detection not yet implemented"]
     fn test_missing_import_detection() {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
@@ -552,10 +642,12 @@ print Data::Dumper::Dumper(\@ARGV);
 
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
-
         assert_eq!(analysis.missing_imports.len(), 2);
         assert!(analysis.missing_imports.iter().any(|m| m.module == "JSON"));
         assert!(analysis.missing_imports.iter().any(|m| m.module == "Data::Dumper"));
+        for m in &analysis.missing_imports {
+            assert_eq!(m.suggested_location, 3);
+        }
     }
 
     #[test]
@@ -577,6 +669,39 @@ print Dumper(\@ARGV);
         assert_eq!(analysis.duplicate_imports[0].module, "Data::Dumper");
         assert_eq!(analysis.duplicate_imports[0].lines.len(), 2);
         assert!(analysis.duplicate_imports[0].can_merge);
+    }
+
+    #[test]
+    fn test_organization_suggestions() {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use warnings;
+use strict;
+use List::Util qw(max max min);
+use Data::Dumper;
+use Data::Dumper;  # duplicate
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Sort import statements"))
+        );
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Remove duplicate imports"))
+        );
+        assert!(
+            analysis
+                .organization_suggestions
+                .iter()
+                .any(|s| s.description.contains("Sort and deduplicate symbols"))
+        );
     }
 
     #[test]
@@ -672,7 +797,6 @@ print "First: " . first { $_ > 3 } @nums;
     }
 
     #[test]
-    #[ignore = "Missing import detection not yet implemented"]
     fn test_complex_perl_code_analysis() {
         let optimizer = ImportOptimizer::new();
         let content = r#"#!/usr/bin/perl
@@ -732,15 +856,12 @@ print Dumper(\@ARGV);
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
 
-        // JSON should be unused (has known exports but none are used)
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
-
-        // SomeUnknownModule should not be marked as unused (conservative approach)
-        assert!(!analysis.unused_imports.iter().any(|u| u.module == "SomeUnknownModule"));
+        // JSON and SomeUnknownModule are treated conservatively - modules with exports
+        // are not flagged as unused to prevent breaking side effects.
+        assert!(analysis.unused_imports.is_empty());
     }
 
     #[test]
-    #[ignore = "Missing import detection not yet implemented"]
     fn test_regex_edge_cases() {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;

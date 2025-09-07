@@ -1,8 +1,8 @@
-# API Stability & SemVer - v0.8.9 GA
+# API Stability & SemVer - v0.8.8 GA
 
 **MSRV:** 1.89 • **Edition:** 2024 • **Status:** Production Ready with Enhanced Workspace Configuration
 
-## Published Crates (v0.8.9 GA)
+## Published Crates (v0.8.8 GA)
 
 | Crate | Version | Purpose | Stability |
 |-------|---------|---------|-----------|
@@ -32,19 +32,19 @@
 - **LSP interface**: `--stdio` mode with standard LSP request/response protocol
 - **Feature set**: ~85% functional (see [LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md))
 - **Working features**: Enhanced diagnostics, completion, go-to-definition, workspace symbols, bless parsing, symbol extraction
-- **Enhanced v0.8.9**: Production-ready workspace configuration with reliable build system
+- **Enhanced v0.8.8**: Production-ready workspace configuration with reliable build system
 - **Backward compatible**: All existing features maintained while adding workspace reliability
 
-## Additive guarantee (Enhanced v0.8.9)
+## Additive guarantee (Enhanced v0.8.8)
 - We **add** `NodeKind` variants and token types in **minor** releases
 - We **do not rename or remove** existing variants until 1.0
 - `to_sexp()` output is stable for test automation (modulo whitespace/additional metadata)
-- **Enhanced v0.8.9**: Production-ready workspace configuration ensures reliable builds across platforms
-- **Enhanced v0.8.9**: LSP crate separation provides cleaner architecture without breaking existing APIs
+- **Enhanced v0.8.8**: Production-ready workspace configuration ensures reliable builds across platforms
+- **Enhanced v0.8.8**: LSP crate separation provides cleaner architecture without breaking existing APIs
 - New LSP capabilities are added without breaking existing clients
-- **Backward compatibility**: All v0.8.8 and earlier APIs remain fully functional in v0.8.9
+- **Backward compatibility**: All v0.8.7 and earlier APIs remain fully functional in v0.8.8
 
-## Workspace Configuration Stability (v0.8.9+)
+## Workspace Configuration Stability (v0.8.8+)
 - **Build reliability**: Workspace excludes system-dependent crates (tree-sitter-perl-c, etc.)
 - **Platform independence**: Clean builds on all platforms without libclang or C dependencies
 - **Test stability**: 291+ tests pass consistently with zero flaky failures
@@ -118,4 +118,4 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for detailed workspa
 
 ---
 
-*This document is authoritative for API stability questions. Last updated: 2025-09-04 (v0.8.9 GA with Production Workspace Configuration)*
+*This document is authoritative for API stability questions. Last updated: 2025-09-05 (v0.8.8 GA with Production Workspace Configuration)*

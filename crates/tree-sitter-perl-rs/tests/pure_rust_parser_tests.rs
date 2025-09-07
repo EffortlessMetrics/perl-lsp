@@ -34,8 +34,8 @@ mod tests {
             r#"my $str = "Value: ${name}";"#,
             r#"my $str = "Array: @{[1, 2, 3]}";"#,
             r#"my $str = "Hash: ${hash{key}}";"#,
-            // TODO: Add support for expressions with blocks inside interpolation
-            // r#"my $str = "Complex: @{[ map { $_ * 2 } @array ]}";"#,
+            // Expression with a block inside interpolation
+            r#"my $str = "Complex: @{[ map { $_ * 2 } @array ]}";"#,
         ];
 
         for code in test_cases {

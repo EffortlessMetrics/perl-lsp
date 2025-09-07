@@ -10,7 +10,7 @@ keywords = ["perl", "parser", "pest", "legacy", "v2"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
-perl-lexer = { version = "0.8.8" }
+perl-lexer = { path = "../perl-lexer" }
 tree-sitter = "0.25.8"
 tree-sitter-perl = { path = "../tree-sitter-perl-rs", features = ["pure-rust", "test-utils"], default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }

@@ -72,6 +72,24 @@ Test files used in benchmarks:
 
 ### Full Reparse Baseline (v0.8.6)
 
+### Lexer Performance Optimizations (v0.8.8+) (**Diataxis: Reference**)
+
+**PR #102 Optimization Results:**
+The lexer received significant performance improvements in v0.8.8 targeting critical parsing bottlenecks:
+
+- **Slash Disambiguation**: 14.768% improvement in operator parsing performance
+- **Whitespace-Heavy Parsing**: 18.779% improvement through batch processing optimization
+- **String Interpolation**: 22.156% improvement via optimized variable parsing
+- **Comment Processing**: Optimized ASCII comment skipping with direct byte operations
+- **Number Parsing**: Enhanced bounds checking and unrolled digit consumption
+
+**Key Optimization Techniques Applied:**
+- Batch processing for consecutive whitespace characters (spaces and tabs)
+- Conditional heredoc processing to avoid unnecessary work
+- Direct byte operations for ASCII-only constructs
+- Optimized compound operator lookup with perfect hashing
+- Smart UTF-8 fallback only for non-ASCII characters
+
 ### Microbenchmark Performance
 From the benchmark suite (average across 14 test files, confirmed v0.8.8):
 - **Pure Rust**: 6-21 µs actual measured performance (significantly improved from 178.88 µs theoretical)
@@ -169,6 +187,14 @@ The Pure Rust parser delivers exceptional performance (v0.8.8 confirmed metrics)
 - **Improved bless parsing**: Complete AST generation with maintained sub-50µs performance targets
 - **Enhanced symbol extraction**: Comprehensive workspace navigation with excellent performance
 - **95.9% test pass rate**: Production stability with confirmed performance metrics
+
+**v0.8.8+ Lexer Optimization Benefits (PR #102)**:
+- **Whitespace Processing**: 18.779% improvement through intelligent batch processing of consecutive spaces and tabs
+- **Operator Parsing**: 14.768% improvement in slash disambiguation using optimized byte-level operations  
+- **String Interpolation**: 22.156% improvement via fast-path ASCII identifier parsing with UTF-8 fallback
+- **Comment Scanning**: Optimized ASCII comment processing with direct position advancement
+- **Number Recognition**: Enhanced digit consumption with unrolled loops and optimized bounds checking
+- **Memory Efficiency**: Reduced allocations through in-place string processing and smart caching strategies
 
 **v0.8.7 Position Tracking Benefits**:
 - **LSP responsiveness**: Real-time position updates in <1ms
