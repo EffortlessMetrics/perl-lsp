@@ -56,6 +56,15 @@ struct SymbolInfo {
     container: Option<String>,
 }
 
+/// Match type for ranking search results
+#[derive(Debug, Clone, Copy)]
+enum MatchType {
+    Exact,
+    Prefix,
+    Contains,
+    Fuzzy,
+}
+
 /// Workspace symbols provider
 pub struct WorkspaceSymbolsProvider {
     /// Map of file URI to symbols
@@ -190,72 +199,131 @@ impl WorkspaceSymbolsProvider {
         query: &str,
         source_map: &HashMap<String, String>,
     ) -> Vec<WorkspaceSymbol> {
-        let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
+        self.search_with_limit(query, source_map, 100) // Default limit for performance
+    }
 
-        for (uri, symbols) in &self.documents {
+    /// Search with result limit for better performance
+    pub fn search_with_limit(
+        &self,
+        query: &str,
+        source_map: &HashMap<String, String>,
+        limit: usize,
+    ) -> Vec<WorkspaceSymbol> {
+        let query_lower = query.to_lowercase();
+        let mut exact_matches = Vec::new();
+        let mut prefix_matches = Vec::new();
+        let mut contains_matches = Vec::new();
+        let mut fuzzy_matches = Vec::new();
+
+        let mut total_processed = 0;
+        const MAX_PROCESS: usize = 1000; // Limit processing for performance
+
+        'documents: for (uri, symbols) in &self.documents {
             // Get source for this document to convert offsets
             let source = match source_map.get(uri) {
                 Some(s) => s,
                 None => continue,
             };
 
-            for symbol in symbols {
-                if self.matches_query(&symbol.name, &query_lower) {
-                    results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
+            for (i, symbol) in symbols.iter().enumerate() {
+                // Cooperative yield every 32 symbols
+                if i & 0x1f == 0 {
+                    std::thread::yield_now();
+                }
+
+                total_processed += 1;
+                if total_processed >= MAX_PROCESS {
+                    break 'documents;
+                }
+
+                let match_result = self.classify_match(&symbol.name, &query_lower);
+                if let Some(match_type) = match_result {
+                    let workspace_symbol = self.symbol_to_workspace_symbol(uri, symbol, source);
+                    
+                    match match_type {
+                        MatchType::Exact => {
+                            exact_matches.push(workspace_symbol);
+                            // Stop early if we have enough exact matches
+                            if exact_matches.len() >= limit {
+                                break 'documents;
+                            }
+                        }
+                        MatchType::Prefix => prefix_matches.push(workspace_symbol),
+                        MatchType::Contains => contains_matches.push(workspace_symbol),
+                        MatchType::Fuzzy => fuzzy_matches.push(workspace_symbol),
+                    }
+
+                    // Stop early if we have collected enough results
+                    let total_found = exact_matches.len() + prefix_matches.len() + 
+                                    contains_matches.len() + fuzzy_matches.len();
+                    if total_found >= limit * 2 {
+                        break 'documents;
+                    }
                 }
             }
         }
 
-        // Sort by relevance
-        results.sort_by(|a, b| {
-            let a_exact = a.name.to_lowercase() == query_lower;
-            let b_exact = b.name.to_lowercase() == query_lower;
-            let a_prefix = a.name.to_lowercase().starts_with(&query_lower);
-            let b_prefix = b.name.to_lowercase().starts_with(&query_lower);
-
-            match (a_exact, b_exact) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => match (a_prefix, b_prefix) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.name.cmp(&b.name),
-                },
+        // Combine results in order of relevance, respecting limit
+        let mut results = Vec::new();
+        results.extend(exact_matches.into_iter().take(limit));
+        let remaining = limit.saturating_sub(results.len());
+        
+        if remaining > 0 {
+            results.extend(prefix_matches.into_iter().take(remaining));
+            let remaining = limit.saturating_sub(results.len());
+            
+            if remaining > 0 {
+                results.extend(contains_matches.into_iter().take(remaining));
+                let remaining = limit.saturating_sub(results.len());
+                
+                if remaining > 0 {
+                    results.extend(fuzzy_matches.into_iter().take(remaining));
+                }
             }
-        });
+        }
 
+        // Sort within each category by name for consistency
+        results.sort_by(|a, b| a.name.cmp(&b.name));
         results
     }
 
-    /// Check if a symbol name matches the query
-    fn matches_query(&self, name: &str, query: &str) -> bool {
+    /// Classify match type for better ranking
+    fn classify_match(&self, name: &str, query: &str) -> Option<MatchType> {
         if query.is_empty() {
-            return true;
+            return Some(MatchType::Contains); // Return all symbols for empty query
         }
 
         let name_lower = name.to_lowercase();
 
-        // Exact match
+        // Exact match (highest priority)
         if name_lower == query {
-            return true;
+            return Some(MatchType::Exact);
         }
 
-        // Prefix match
+        // Prefix match (high priority)
         if name_lower.starts_with(query) {
-            return true;
+            return Some(MatchType::Prefix);
         }
 
-        // Contains match
+        // Contains match (medium priority)
         if name_lower.contains(query) {
-            return true;
+            return Some(MatchType::Contains);
         }
 
-        // Simple fuzzy match
+        // Simple fuzzy match (lowest priority)
+        if self.fuzzy_matches(&name_lower, query) {
+            return Some(MatchType::Fuzzy);
+        }
+
+        None
+    }
+
+    /// Check for fuzzy match
+    fn fuzzy_matches(&self, name: &str, query: &str) -> bool {
         let mut query_chars = query.chars();
         let mut current_char = query_chars.next();
 
-        for ch in name_lower.chars() {
+        for ch in name.chars() {
             if let Some(qch) = current_char {
                 if ch == qch {
                     current_char = query_chars.next();
@@ -266,6 +334,11 @@ impl WorkspaceSymbolsProvider {
         }
 
         current_char.is_none()
+    }
+
+    /// Check if a symbol name matches the query (legacy method)
+    fn matches_query(&self, name: &str, query: &str) -> bool {
+        self.classify_match(name, query).is_some()
     }
 
     /// Convert internal Symbol to LSP WorkspaceSymbol
