@@ -71,16 +71,17 @@ cargo install --path crates/perl-lsp     # From source
 
 ### Testing
 ```bash
-cargo test                               # All tests
-cargo test -p perl-parser               # Parser tests
-cargo test -p perl-lsp                  # LSP integration tests
+cargo test                               # Run all tests
+cargo test -p perl-parser               # Parser library tests
+cargo test -p perl-lsp                  # LSP server integration tests
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
 ```
 
 ### Development
 ```bash
-cargo clippy --workspace                # Lint workspace crates
-cargo bench                             # Performance benchmarks
-perl-lsp --stdio --log                  # Debug LSP server
+cargo clippy --workspace                # Lint all crates
+cargo bench                             # Run performance benchmarks
+perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
 ## Architecture
@@ -142,7 +143,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
-- 100% test pass rate across all components (284+ tests passing)
+- 100% test pass rate across all components (291+ tests passing)
 - Zero clippy warnings, consistent formatting
 - Enterprise-grade LSP server with comprehensive features
 - Production-stable incremental parsing with statistical validation

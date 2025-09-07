@@ -32,6 +32,7 @@ This guide helps you find the right documentation for your needs, organized usin
 11. **[STABILITY.md](STABILITY.md)** - API stability guarantees and versioning policy
 12. **[WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md)** - Current workspace configuration status and build reliability
 13. **[CHANGELOG.md](../CHANGELOG.md)** - Complete version history and feature tracking
+14. **[BENCHMARK_RESULTS.md](../BENCHMARK_RESULTS.md)** - Performance benchmark results.
 
 ### **Explanations** (Understanding-oriented) 🧠
 
@@ -74,18 +75,19 @@ This guide helps you find the right documentation for your needs, organized usin
 ## Documentation Status
 
 ### Active (Current)
-- README.md (updated with LSP)
+- README.md (Updated for v0.8.9, including crate separation, incremental parsing, and latest features)
 - ROADMAP.md (NEW - comprehensive future vision)
 - FEATURE_ROADMAP.md (NEW - detailed feature plans)
 - ROADMAP_2025.md (NEW - this year's focus)
-- CLAUDE.md (updated with LSP commands)
-- LSP_DOCUMENTATION.md (NEW)
+- CLAUDE.md (Updated with latest commands and project status)
+- LSP_DOCUMENTATION.md (Updated with all implemented LSP features)
 - EDGE_CASES.md (consolidated)
 - HEREDOC_IMPLEMENTATION.md
 - SLASH_DISAMBIGUATION.md
-- ARCHITECTURE.md (updated with v3 parser and LSP)
+- ARCHITECTURE.md (Updated with LSP crate separation and latest architectural patterns)
 - CONTRIBUTING.md
 - QUICK_REFERENCE.md (NEW - one-page guide)
+- BENCHMARK_RESULTS.md (Populated with latest performance data)
 
 ### Historical (Reference Only)
 - Individual edge case files (superseded by EDGE_CASES.md)
