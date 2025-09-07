@@ -739,6 +739,10 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 ✅ **Advanced Architecture**: Rope-based document management and thread-safe providers.
 ✅ **Statistical Performance Validation**: Rigorous performance analysis with mathematical guarantees.
 
+### Previously Implemented Features
+- **v0.4.0**: The v3 native parser was completed, providing 100% edge case coverage and a 4-19x speedup over the C implementation. The initial LSP server implementation was also created.
+- **v0.2.0**: Support for deep dereference chains, `qq{}` string interpolation, and postfix code dereferencing was added.
+
 ### Previous Features (v0.2.0)
 ✅ Deep dereference chains: `$hash->{key}->[0]->{sub}`  
 ✅ Double quoted string interpolation: `qq{hello $world}`  
