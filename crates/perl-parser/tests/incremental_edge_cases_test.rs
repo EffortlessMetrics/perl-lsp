@@ -9,7 +9,7 @@ mod support;
 
 use crate::support::incremental_test_utils::IncrementalTestUtils;
 use perl_parser::incremental_v2::IncrementalParserV2;
-use perl_parser::{edit::Edit, position::Position};
+// Unused imports removed for clippy compliance
 use std::time::Instant;
 
 /// Test incremental parsing with deeply nested structures
@@ -184,7 +184,7 @@ fn test_whitespace_sensitivity() {
 fn test_syntax_error_recovery() {
     println!("\n🚨 Testing syntax error recovery...");
 
-    let error_cases = vec![
+    let error_cases = [
         // Missing semicolons
         ("my $x = 42", "42", "99"),
         // Unmatched parens
@@ -398,7 +398,7 @@ fn test_extreme_position_shifts() {
 fn test_circular_reference_patterns() {
     println!("\n🔄 Testing circular reference patterns...");
 
-    let circular_cases = vec![
+    let circular_cases = [
         // Self-referencing hash
         ("my %hash = (key => \\%hash);", "key", "ref"),
         // Nested self-reference

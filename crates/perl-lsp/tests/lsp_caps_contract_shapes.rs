@@ -1,12 +1,11 @@
-use perl_parser::capabilities::{BuildFlags, capabilities_for};
+use perl_parser::capabilities::{BuildFlags, capabilities_json};
 use serde_json::json;
 
 /// Contract test ensuring all advertised capabilities have the correct shape per LSP 3.18 spec
 #[test]
 fn test_capability_shapes_lsp_318_contract() {
     let build = BuildFlags::production();
-    let caps = capabilities_for(build.clone());
-    let caps_json = serde_json::to_value(&caps).unwrap();
+    let caps_json = capabilities_json(build.clone());
 
     // Test text document sync shape (must be object with options)
     // Text sync is always enabled
@@ -278,8 +277,7 @@ fn test_non_advertised_features_return_method_not_found() {
 #[test]
 fn test_capability_handler_consistency() {
     let build = BuildFlags::all();
-    let caps = capabilities_for(build);
-    let caps_json = serde_json::to_value(&caps).unwrap();
+    let caps_json = capabilities_json(build);
 
     // Verify rename has prepareProvider when handler exists
     if caps_json["renameProvider"].is_object() {
@@ -309,7 +307,7 @@ fn test_ga_lock_is_conservative() {
     let _prod = BuildFlags::production();
 
     // GA lock should be more conservative than production
-    assert!(!ga.linked_editing, "linked editing not GA");
+    // Note: linked_editing is now GA-ready (implemented for paired delimiters)
     assert!(!ga.inline_completion, "inline completion not GA");
     assert!(!ga.inline_values, "inline values not GA");
     assert!(!ga.moniker, "moniker not GA");
