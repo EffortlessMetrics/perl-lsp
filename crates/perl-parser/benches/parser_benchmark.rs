@@ -98,8 +98,12 @@ fn benchmark_ast_generation(c: &mut Criterion) {
                 });
             }
             Err(_) => {
-                // Skip benchmark if parsing fails
+                // Must call iter even when skipping to avoid panic
                 eprintln!("Warning: Skipping ast_to_sexp benchmark due to parse error");
+                b.iter(|| {
+                    // Dummy operation to satisfy criterion
+                    black_box(());
+                });
             }
         }
     });
