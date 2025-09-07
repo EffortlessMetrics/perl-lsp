@@ -409,3 +409,19 @@ glob access
       (glob_deref_expression
         (scalar
           (varname))))))
+
+================================================================================
+variable as indirect object
+================================================================================
+print $fh 'hi';
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content)))))

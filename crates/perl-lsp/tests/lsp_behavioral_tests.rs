@@ -74,7 +74,7 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
     harness.did_save(&workspace.uri("script.pl")).ok();
     harness.did_save(&workspace.uri("lib/My/Module.pm")).ok();
 
-    // Wait for the server to process files and become idle (reduced timeout)
+    // Wait for the server to process files and become idle (optimized timeout)
     harness.wait_for_idle(Duration::from_millis(200));
 
     (harness, workspace)

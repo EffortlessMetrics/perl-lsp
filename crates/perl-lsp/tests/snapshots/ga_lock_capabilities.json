@@ -1,4 +1,5 @@
 {
+  "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
       "quickfix",
@@ -42,7 +43,11 @@
       "perl.tidy",
       "perl.critic",
       "perl.extractVariable",
-      "perl.extractSubroutine"
+      "perl.extractSubroutine",
+      "perl.runTests",
+      "perl.runFile",
+      "perl.runTestSub",
+      "perl.debugTests"
     ]
   },
   "foldingRangeProvider": true,
@@ -109,6 +114,7 @@
     "change": 1,
     "openClose": true
   },
+  "typeHierarchyProvider": true,
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }

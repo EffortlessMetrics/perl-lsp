@@ -440,6 +440,7 @@ mod tests {
                 statements: vec![Node::new(
                     NodeKind::Subroutine {
                         name: Some("test_func".to_string()),
+                        name_span: None,
                         prototype: None,
                         signature: None,
                         attributes: vec![],
@@ -468,6 +469,7 @@ mod tests {
         let ast = Node::new(
             NodeKind::Subroutine {
                 name: Some("complex".to_string()),
+                name_span: None,
                 prototype: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature {

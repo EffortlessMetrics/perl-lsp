@@ -153,12 +153,9 @@ fn test_e2e_initialization_and_capabilities() {
         capabilities["codeActionProvider"].is_boolean()
             || capabilities["codeActionProvider"].is_object()
     );
-    // codeLensProvider might be null if not implemented
-    assert!(
-        capabilities["codeLensProvider"].is_null()
-            || capabilities["codeLensProvider"].is_boolean()
-            || capabilities["codeLensProvider"].is_object()
-    );
+    // Code lens should be advertised
+    assert!(capabilities["codeLensProvider"].is_object());
+    assert_eq!(capabilities["codeLensProvider"]["resolveProvider"], json!(true));
     assert!(capabilities["documentFormattingProvider"].is_boolean());
     assert!(capabilities["documentRangeFormattingProvider"].is_boolean());
     assert!(
@@ -690,7 +687,7 @@ sub method {
 
 /// Test 12: Code Lens (Reference Counts)
 #[test]
-#[cfg(not(feature = "lsp-ga-lock"))] // Code lens is not advertised by default
+#[cfg(not(feature = "lsp-ga-lock"))] // Code lens disabled in GA lock builds
 fn test_e2e_code_lens() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -721,12 +718,10 @@ rarely_used();
         })),
     );
 
-    // Code lens is not advertised by default, so it returns empty array or error
-    // Both are acceptable for partial implementation
-    if let Some(lenses) = result {
-        assert!(lenses.is_array());
-    }
-    // If result is None (error), that's also OK for unadvertised feature
+    assert!(result.is_some());
+    let lenses = result.unwrap();
+    assert!(lenses.is_array());
+    assert!(!lenses.as_array().unwrap().is_empty(), "Should return at least one code lens");
 }
 
 /// Test 13: Folding Ranges

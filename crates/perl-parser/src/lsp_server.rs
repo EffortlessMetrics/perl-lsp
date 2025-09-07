@@ -15,6 +15,7 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
+    module_resolver,
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -130,24 +131,57 @@ pub struct LspServer {
     client_supports_pull_diags: Arc<AtomicBool>,
 }
 
-/// State of a document
+/// Document state with Rope-based content management for efficient LSP operations
+///
+/// This structure maintains both a Rope for efficient edits and a cached String
+/// representation for compatibility with subsystems that expect `&str`. The dual
+/// representation ensures optimal performance for both incremental edits (Rope)
+/// and parsing/analysis operations (String).
+///
+/// ## Performance Characteristics
+/// - **Rope operations**: O(log n) for insertions, deletions, and slicing
+/// - **String operations**: O(1) access for parsing and analysis
+/// - **Position mapping**: O(log n) with line starts cache
+/// - **Memory usage**: ~2x content size due to dual representation
 #[derive(Clone)]
 pub(crate) struct DocumentState {
-    /// Document content
-    /// TODO: Use Rope for O(1) edits in future optimization
-    pub(crate) content: String,
-    /// Version number
+    /// Rope-backed document content providing O(log n) edit performance
+    ///
+    /// The rope is the authoritative source for document content and supports
+    /// efficient incremental updates from LSP TextDocumentContentChangeEvents.
+    pub(crate) rope: ropey::Rope,
+
+    /// Cached string representation synchronized with rope content
+    ///
+    /// This cached copy enables efficient access for parsing and analysis
+    /// subsystems that operate on `&str`. Updated lazily when rope changes.
+    pub(crate) text: String,
+
+    /// LSP document version number for synchronization
     pub(crate) _version: i32,
-    /// Parsed AST (cached)
+
+    /// Cached parsed AST for semantic analysis
+    ///
+    /// Rebuilt when document content changes, providing fast access to
+    /// structured representation for LSP features like hover and completion.
     pub(crate) ast: Option<std::sync::Arc<crate::ast::Node>>,
-    /// Parse errors
+
+    /// Parse errors from last AST generation attempt
     pub(crate) parse_errors: Vec<crate::error::ParseError>,
-    /// Parent map for O(1) scope traversal (built once per AST)
-    /// Uses FxHashMap for faster pointer hashing
+
+    /// Parent map for O(1) scope traversal during semantic analysis
+    ///
+    /// Built once per AST generation, uses FxHashMap for faster pointer hashing
+    /// enabling efficient parent lookups during symbol resolution.
     pub(crate) parent_map: ParentMap,
-    /// Line starts cache for O(log n) position conversion
+
+    /// Line starts cache for O(log n) LSP position conversion
+    ///
+    /// Enables fast conversion between byte offsets (rope operations) and
+    /// line/column positions (LSP protocol) with UTF-16 encoding support.
     pub(crate) line_starts: LineStartsCache,
-    /// Generation counter for latest-wins race condition prevention
+
+    /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
 }
 
@@ -862,6 +896,9 @@ impl LspServer {
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
         capabilities["documentHighlightProvider"] = json!(true);
+        if build_flags.type_hierarchy {
+            capabilities["typeHierarchyProvider"] = json!(true);
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
@@ -925,14 +962,16 @@ impl LspServer {
             }
 
             // Build line starts cache for O(log n) position conversion
-            let line_starts = LineStartsCache::new(text);
+            let rope = ropey::Rope::from_str(text);
+            let line_starts = LineStartsCache::new_rope(&rope);
 
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
             self.documents.lock().unwrap().insert(
                 normalized_uri,
                 DocumentState {
-                    content: text.to_string(),
+                    rope: rope.clone(),
+                    text: text.to_string(),
                     _version: version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
@@ -1003,7 +1042,8 @@ impl LspServer {
                     .or_else(|| documents.get(uri))
                     .cloned()
                     .unwrap_or_else(|| DocumentState {
-                        content: String::new(),
+                        rope: ropey::Rope::new(),
+                        text: String::new(),
                         _version: version,
                         ast: None,
                         parse_errors: vec![],
@@ -1019,9 +1059,8 @@ impl LspServer {
                 // Apply incremental changes with UTF-16 aware mapping
                 use crate::textdoc::{Doc, PosEnc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
-                use ropey::Rope;
 
-                let mut doc = Doc { rope: Rope::from_str(&doc_state.content), version };
+                let mut doc = Doc { rope: doc_state.rope.clone(), version };
 
                 // Convert JSON changes to proper LSP types
                 let lsp_changes: Vec<TextDocumentContentChangeEvent> =
@@ -1065,11 +1104,12 @@ impl LspServer {
                 }
 
                 // Build line starts cache for O(log n) position conversion
-                let line_starts = LineStartsCache::new(&text);
+                let line_starts = LineStartsCache::new_rope(&doc.rope);
 
                 // Update document state with properly updated content
                 doc_state = DocumentState {
-                    content: text.to_string(),
+                    rope: doc.rope.clone(),
+                    text: text.to_string(),
                     _version: version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
@@ -1112,7 +1152,7 @@ impl LspServer {
                                 .lock()
                                 .unwrap()
                                 .get(uri)
-                                .map(|d| d.content.clone())
+                                .map(|d| d.text.clone())
                                 .unwrap_or_default();
                             if let Err(e) = workspace_index.index_file(url, doc_content) {
                                 eprintln!("Failed to index file {}: {}", uri, e);
@@ -1135,13 +1175,12 @@ impl LspServer {
         if let Some(doc) = documents.get(uri) {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
-                let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                let mut diagnostics =
-                    provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                let provider = DiagnosticsProvider::new(ast, doc.text.clone());
+                let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                 // Add Perl::Critic built-in analysis
                 let built_in_analyzer = BuiltInAnalyzer::new();
-                let violations = built_in_analyzer.analyze(ast, &doc.content);
+                let violations = built_in_analyzer.analyze(ast, &doc.text);
                 for violation in violations {
                     diagnostics.push(crate::Diagnostic {
                         range: (violation.range.start.byte, violation.range.end.byte),
@@ -1193,7 +1232,7 @@ impl LspServer {
                                 (*location, message.clone())
                             }
                             crate::error::ParseError::UnexpectedEof => {
-                                (doc.content.len(), "Unexpected end of input".to_string())
+                                (doc.text.len(), "Unexpected end of input".to_string())
                             }
                             crate::error::ParseError::LexerError { message } => {
                                 (0, message.clone())
@@ -1285,9 +1324,8 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
-                    let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                    let diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                    let provider = DiagnosticsProvider::new(ast, doc.text.clone());
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics
@@ -1376,7 +1414,7 @@ impl LspServer {
                         trim_final_newlines: Some(true),
                     };
 
-                    if let Ok(edits) = formatter.format_document(&doc.content, &format_options) {
+                    if let Ok(edits) = formatter.format_document(&doc.text, &format_options) {
                         if !edits.is_empty() {
                             // Convert FormatTextEdit to LSP TextEdit
                             // The edits already have line/character positions
@@ -1459,19 +1497,31 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
+                    let resolver = {
+                        let docs = self.documents.clone();
+                        let folders = self.workspace_folders.clone();
+                        Arc::new(move |m: &str| {
+                            module_resolver::resolve_module_to_path(&docs, &folders, m)
+                        })
+                    };
                     #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
-                        &doc.content,
+                        &doc.text,
                         self.workspace_index.clone(),
+                        Some(resolver.clone()),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.content, None);
+                    let provider = CompletionProvider::new_with_index_and_source(
+                        ast,
+                        &doc.text,
+                        None,
+                        Some(resolver.clone()),
+                    );
 
                     let mut base_completions =
-                        provider.get_completions_with_path(&doc.content, offset, Some(uri));
+                        provider.get_completions_with_path(&doc.text, offset, Some(uri));
 
                     // Enhance completions with type information
                     let mut type_engine = TypeInferenceEngine::new();
@@ -1507,14 +1557,14 @@ impl LspServer {
                     base_completions
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
-                    self.lexical_complete(&doc.content, offset)
+                    self.lexical_complete(&doc.text, offset)
                 };
 
                 // Add workspace-wide completions (functions and modules from other files)
                 #[cfg(feature = "workspace")]
                 if let Some(ref workspace_index) = self.workspace_index {
                     // Get the current context to filter relevant completions
-                    let text_before = &doc.content[..offset.min(doc.content.len())];
+                    let text_before = &doc.text[..offset.min(doc.text.len())];
                     let prefix = text_before
                         .chars()
                         .rev()
@@ -1641,19 +1691,19 @@ impl LspServer {
                     let end_offset = self.pos16_to_offset(doc, end_line, end_char);
 
                     // Get diagnostics from the document
-                    let diag_provider = DiagnosticsProvider::new(ast, doc.content.clone());
+                    let diag_provider = DiagnosticsProvider::new(ast, doc.text.clone());
                     let diagnostics =
-                        diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                        diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Get code actions from both providers
                     let mut code_actions: Vec<Value> = Vec::new();
 
                     // Add Perl::Critic quick fixes
                     let builtin_analyzer = BuiltInAnalyzer::new();
-                    let violations = builtin_analyzer.analyze(ast, &doc.content);
+                    let violations = builtin_analyzer.analyze(ast, &doc.text);
                     for violation in &violations {
                         if let Some(quick_fix) =
-                            builtin_analyzer.get_quick_fix(violation, &doc.content)
+                            builtin_analyzer.get_quick_fix(violation, &doc.text)
                         {
                             let mut changes = HashMap::new();
                             let (start_line, start_char) =
@@ -1698,7 +1748,7 @@ impl LspServer {
                     }
 
                     // Get quick-fixes from the V2 provider (diagnostic-based)
-                    let provider_v2 = CodeActionsProviderV2::new(doc.content.clone());
+                    let provider_v2 = CodeActionsProviderV2::new(doc.text.clone());
                     let quick_fixes =
                         provider_v2.get_code_actions((start_offset, end_offset), &diagnostics);
 
@@ -1733,7 +1783,7 @@ impl LspServer {
                     }
 
                     // Get refactorings from the original provider (AST-based)
-                    let provider = CodeActionsProvider::new(doc.content.clone());
+                    let provider = CodeActionsProvider::new(doc.text.clone());
                     let actions =
                         provider.get_code_actions(ast, (start_offset, end_offset), &diagnostics);
 
@@ -1774,7 +1824,7 @@ impl LspServer {
                     }
 
                     // Get enhanced refactorings (extract variable, convert loops, etc.)
-                    let enhanced_provider = EnhancedCodeActionsProvider::new(doc.content.clone());
+                    let enhanced_provider = EnhancedCodeActionsProvider::new(doc.text.clone());
                     let enhanced_actions = enhanced_provider
                         .get_enhanced_refactoring_actions(ast, (start_offset, end_offset));
 
@@ -1876,21 +1926,20 @@ impl LspServer {
                     let mut code_actions: Vec<Value> = Vec::new();
 
                     // Check if source lacks strict/warnings
-                    if !doc.content.contains("use strict") || !doc.content.contains("use warnings")
-                    {
+                    if !doc.text.contains("use strict") || !doc.text.contains("use warnings") {
                         let mut changes = HashMap::new();
                         // Find first non-shebang line
-                        let insert_pos = if doc.content.starts_with("#!") {
-                            doc.content.find('\n').map(|p| p + 1).unwrap_or(0)
+                        let insert_pos = if doc.text.starts_with("#!") {
+                            doc.text.find('\n').map(|p| p + 1).unwrap_or(0)
                         } else {
                             0
                         };
 
-                        let new_text = if !doc.content.contains("use strict")
-                            && !doc.content.contains("use warnings")
+                        let new_text = if !doc.text.contains("use strict")
+                            && !doc.text.contains("use warnings")
                         {
                             "use strict;\nuse warnings;\n\n"
-                        } else if !doc.content.contains("use strict") {
+                        } else if !doc.text.contains("use strict") {
                             "use strict;\n"
                         } else {
                             "use warnings;\n"
@@ -1932,7 +1981,7 @@ impl LspServer {
                     let global_var_pattern =
                         regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=").ok();
                     if let Some(re) = global_var_pattern {
-                        if re.is_match(&doc.content) {
+                        if re.is_match(&doc.text) {
                             code_actions.push(json!({
                                 "title": "Convert globals to 'my' declarations",
                                 "kind": "refactor.rewrite",
@@ -2019,7 +2068,7 @@ impl LspServer {
                     }
 
                     // Fall back to simple token display
-                    let hover_text = self.get_token_at_position(&doc.content, offset);
+                    let hover_text = self.get_token_at_position(&doc.text, offset);
 
                     if !hover_text.is_empty() {
                         return Ok(Some(json!({
@@ -2049,7 +2098,7 @@ impl LspServer {
 
                 // Find the function call context at this position
                 if let Some((function_name, active_param)) =
-                    self.find_function_context(&doc.content, offset)
+                    self.find_function_context(&doc.text, offset)
                 {
                     // Try to get signature from user-defined functions first (if AST exists)
                     if let Some(ref ast) = doc.ast {
@@ -2561,7 +2610,7 @@ impl LspServer {
                     // Use the Declaration provider - ast is already an Arc
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
-                        doc.content.clone(),
+                        doc.text.clone(),
                         uri.to_string(),
                     )
                     .with_parent_map(&doc.parent_map)
@@ -2660,7 +2709,7 @@ impl LspServer {
 
                 // Performance monitoring
                 let dt = t0.elapsed();
-                if doc.content.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
+                if doc.text.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
                     eprintln!("[warn] slow declaration: {:?} (uri={})", dt, uri);
                 }
             }
@@ -2682,7 +2731,7 @@ impl LspServer {
                 // Extract text around cursor to check for module references
                 let radius = 50;
                 let text_start = offset.saturating_sub(radius);
-                let text_around = self.get_text_around_offset(&doc.content, offset, radius);
+                let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                 let cursor_in_text = offset - text_start;
 
                 // Check for patterns like "use Module::Name", "require Module::Name", or "Module::Name->method"
@@ -2690,7 +2739,11 @@ impl LspServer {
                     self.extract_module_reference(&text_around, cursor_in_text)
                 {
                     // Try to resolve module to file path
-                    if let Some(module_path) = self.resolve_module_to_path(&module_name) {
+                    if let Some(module_path) = module_resolver::resolve_module_to_path(
+                        &self.documents,
+                        &self.workspace_folders,
+                        &module_name,
+                    ) {
                         return Ok(Some(json!([{
                             "uri": module_path,
                             "range": {
@@ -2721,8 +2774,11 @@ impl LspServer {
                             // Check if cursor is within the package name
                             if cursor_in_text >= match_start && cursor_in_text <= match_end {
                                 let package_name = package_match.as_str();
-                                if let Some(module_path) = self.resolve_module_to_path(package_name)
-                                {
+                                if let Some(module_path) = module_resolver::resolve_module_to_path(
+                                    &self.documents,
+                                    &self.workspace_folders,
+                                    package_name,
+                                ) {
                                     return Ok(Some(json!([{
                                         "uri": module_path,
                                         "range": {
@@ -2748,7 +2804,7 @@ impl LspServer {
                     // Try DeclarationProvider first (it handles function calls properly)
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
-                        doc.content.clone(),
+                        doc.text.clone(),
                         uri.to_string(),
                     )
                     .with_parent_map(&doc.parent_map)
@@ -2880,7 +2936,7 @@ impl LspServer {
 
                     // Convert documents to HashMap<String, String> for provider
                     let doc_map: HashMap<String, String> =
-                        documents.iter().map(|(k, v)| (k.clone(), v.content.clone())).collect();
+                        documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
 
                     if let Some(locations) =
                         provider.find_type_definition(ast, line, character, uri, &doc_map)
@@ -2907,15 +2963,17 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     #[cfg(feature = "workspace")]
-                    let provider = ImplementationProvider::new(self.workspace_index.clone());
+                    {
+                        let provider = ImplementationProvider::new(self.workspace_index.clone());
 
-                    // Convert documents to HashMap<String, String> for provider
-                    let doc_map: HashMap<String, String> =
-                        documents.iter().map(|(k, v)| (k.clone(), v.content.clone())).collect();
+                        // Convert documents to HashMap<String, String> for provider
+                        let doc_map: HashMap<String, String> =
+                            documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
 
-                    let locations =
-                        provider.find_implementations(ast, line, character, uri, &doc_map);
-                    return Ok(Some(json!(locations)));
+                        let locations =
+                            provider.find_implementations(ast, line, character, uri, &doc_map);
+                        return Ok(Some(json!(locations)));
+                    }
                 }
             }
         }
@@ -3003,7 +3061,7 @@ impl LspServer {
                 // Get source text for position conversion
                 let documents = self.documents.lock().unwrap();
                 if let Some(doc) = documents.get(uri) {
-                    let source_text = &doc.content;
+                    let source_text = &doc.text;
                     // Convert byte offsets to UTF-16 line/column
                     let (start_line, start_col) =
                         crate::position::offset_to_utf16_line_col(source_text, node.location.start);
@@ -3242,7 +3300,7 @@ impl LspServer {
                     let provider = DocumentHighlightProvider::new();
 
                     // Find all highlights at the position
-                    let highlights = provider.find_highlights(ast, &doc.content, offset);
+                    let highlights = provider.find_highlights(ast, &doc.text, offset);
 
                     if !highlights.is_empty() {
                         let lsp_highlights: Vec<Value> = highlights
@@ -3298,7 +3356,7 @@ impl LspServer {
                     let provider = TypeHierarchyProvider::new();
 
                     // Prepare type hierarchy at the position
-                    if let Some(items) = provider.prepare(ast, &doc.content, offset) {
+                    if let Some(items) = provider.prepare(ast, &doc.text, offset) {
                         let lsp_items: Vec<Value> = items
                             .iter()
                             .map(|item| {
@@ -3345,7 +3403,7 @@ impl LspServer {
 
                 // Find all subs and packages with their positions
                 let mut exact_sub: Option<(String, usize, usize)> = None;
-                for cap in sub_regex.captures_iter(&doc.content) {
+                for cap in sub_regex.captures_iter(&doc.text) {
                     if let (Some(m), Some(name)) = (cap.get(0), cap.get(1)) {
                         if offset >= m.start() && offset <= m.end() {
                             // Exact match - cursor is on this sub
@@ -3356,8 +3414,8 @@ impl LspServer {
                 }
 
                 if let Some((name, start, end)) = exact_sub {
-                    let start_pos = doc.line_starts.offset_to_position(&doc.content, start);
-                    let end_pos = doc.line_starts.offset_to_position(&doc.content, end);
+                    let start_pos = doc.line_starts.offset_to_position_rope(&doc.rope, start);
+                    let end_pos = doc.line_starts.offset_to_position_rope(&doc.rope, end);
                     return Ok(Some(json!([{
                         "name": name,
                         "kind": 12, // Function
@@ -3377,7 +3435,7 @@ impl LspServer {
 
                 // Check packages
                 let mut exact_pkg: Option<(String, usize, usize)> = None;
-                for cap in package_regex.captures_iter(&doc.content) {
+                for cap in package_regex.captures_iter(&doc.text) {
                     if let (Some(m), Some(name)) = (cap.get(0), cap.get(1)) {
                         if offset >= m.start() && offset <= m.end() {
                             // Exact match - cursor is on this package
@@ -3388,8 +3446,8 @@ impl LspServer {
                 }
 
                 if let Some((name, start, end)) = exact_pkg {
-                    let start_pos = doc.line_starts.offset_to_position(&doc.content, start);
-                    let end_pos = doc.line_starts.offset_to_position(&doc.content, end);
+                    let start_pos = doc.line_starts.offset_to_position_rope(&doc.rope, start);
+                    let end_pos = doc.line_starts.offset_to_position_rope(&doc.rope, end);
                     return Ok(Some(json!([{
                         "name": name,
                         "kind": 5, // Class
@@ -3587,7 +3645,7 @@ impl LspServer {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     // Get the token at the current position
-                    let token = self.get_token_at_position(&doc.content, offset);
+                    let token = self.get_token_at_position(&doc.text, offset);
                     if !token.is_empty()
                         && (token.starts_with('$')
                             || token.starts_with('@')
@@ -3595,8 +3653,7 @@ impl LspServer {
                             || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_'))
                     {
                         // Find the token bounds
-                        let (start_offset, end_offset) =
-                            self.get_token_bounds(&doc.content, offset);
+                        let (start_offset, end_offset) = self.get_token_bounds(&doc.text, offset);
                         let (start_line, start_char) = self.offset_to_pos16(doc, start_offset);
                         let (end_line, end_char) = self.offset_to_pos16(doc, end_offset);
 
@@ -3730,7 +3787,7 @@ impl LspServer {
                 let documents = self.documents.lock().unwrap();
                 if let Some(doc) = documents.get(uri) {
                     let mut actions =
-                        crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.content);
+                        crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
 
                     // Fill in edits with proper ranges
                     for a in &mut actions {
@@ -3832,7 +3889,7 @@ impl LspServer {
             })?;
             if let Some(ref ast) = doc.ast {
                 let data =
-                    crate::semantic_tokens::collect_semantic_tokens(ast, &doc.content, &|off| {
+                    crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                         self.offset_to_pos16(doc, off)
                     });
                 return Ok(Some(json!({ "data": data.into_iter().flatten().collect::<Vec<_>>() })));
@@ -3903,7 +3960,7 @@ impl LspServer {
 
             // Get workspace roots from initialization params
             let roots = self.workspace_roots();
-            let links = crate::document_links::compute_links(uri, &doc.content, &roots);
+            let links = crate::document_links::compute_links(uri, &doc.text, &roots);
             Ok(Some(json!(links)))
         } else {
             Ok(Some(json!([])))
@@ -3977,7 +4034,7 @@ impl LspServer {
             })?;
 
             if let Some(edits) =
-                crate::on_type_formatting::compute_on_type_edit(&doc.content, line, col, ch)
+                crate::on_type_formatting::compute_on_type_edit(&doc.text, line, col, ch)
             {
                 return Ok(Some(json!(edits)));
             }
@@ -4001,7 +4058,7 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
-                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.text);
                     let symbol_table = extractor.extract(ast);
 
                     // Convert to DocumentSymbol format
@@ -4126,7 +4183,7 @@ impl LspServer {
                 } else {
                     // Fallback: Extract symbols via regex when parse fails
                     eprintln!("Using fallback symbol extraction for {}", uri);
-                    let symbols = self.extract_symbols_fallback(&doc.content);
+                    let symbols = self.extract_symbols_fallback(&doc.text);
                     eprintln!("Returning {} fallback symbols", symbols.len());
                     return Ok(Some(json!(symbols)));
                 }
@@ -4146,10 +4203,9 @@ impl LspServer {
                 let mut lsp_ranges = Vec::new();
 
                 // Add text-based data section folding
-                if let Some(marker_offset) = crate::util::find_data_marker_byte_lexed(&doc.content)
-                {
-                    let marker_line = self.offset_to_line(&doc.content, marker_offset);
-                    let total_lines = doc.content.lines().count();
+                if let Some(marker_offset) = crate::util::find_data_marker_byte_lexed(&doc.text) {
+                    let marker_line = self.offset_to_line(&doc.text, marker_offset);
+                    let total_lines = doc.text.lines().count();
 
                     // Add fold for data section body if it exists
                     if marker_line + 1 < total_lines {
@@ -4163,7 +4219,7 @@ impl LspServer {
 
                 // Add heredoc folding ranges from lexer
                 let heredoc_ranges =
-                    crate::folding::FoldingRangeExtractor::extract_heredoc_ranges(&doc.content);
+                    crate::folding::FoldingRangeExtractor::extract_heredoc_ranges(&doc.text);
                 for range in heredoc_ranges {
                     // Use saturating_sub to ensure we're inside the body
                     let (start_line, _) = self.offset_to_pos16(doc, range.start_offset);
@@ -4187,8 +4243,8 @@ impl LspServer {
                     // Convert to LSP JSON format with proper line offsets
                     for range in ranges {
                         // Calculate actual line numbers from document content
-                        let start_line = self.offset_to_line(&doc.content, range.start_offset);
-                        let end_line = self.offset_to_line(&doc.content, range.end_offset);
+                        let start_line = self.offset_to_line(&doc.text, range.start_offset);
+                        let end_line = self.offset_to_line(&doc.text, range.end_offset);
 
                         if end_line > start_line {
                             let mut lsp_range = json!({
@@ -4210,13 +4266,13 @@ impl LspServer {
 
                     // If no ranges from AST, try fallback
                     if lsp_ranges.is_empty() {
-                        return Ok(Some(json!(self.extract_folding_fallback(&doc.content))));
+                        return Ok(Some(json!(self.extract_folding_fallback(&doc.text))));
                     }
 
                     return Ok(Some(json!(lsp_ranges)));
                 } else {
                     // No AST, use fallback
-                    return Ok(Some(json!(self.extract_folding_fallback(&doc.content))));
+                    return Ok(Some(json!(self.extract_folding_fallback(&doc.text))));
                 }
             }
         }
@@ -4574,7 +4630,7 @@ impl LspServer {
     #[inline]
     fn pos16_to_offset(&self, doc: &DocumentState, line: u32, ch: u32) -> usize {
         // Uses the cached, CRLF/UTF-16 aware converter
-        doc.line_starts.position_to_offset(&doc.content, line, ch)
+        doc.line_starts.position_to_offset_rope(&doc.rope, line, ch)
     }
 
     /// Normalize URI key for consistent document lookup
@@ -4771,7 +4827,7 @@ impl LspServer {
     /// Offset to position conversion using cached line starts for O(log n) performance
     #[inline]
     fn offset_to_pos16(&self, doc: &DocumentState, offset: usize) -> (u32, u32) {
-        doc.line_starts.offset_to_position(&doc.content, offset)
+        doc.line_starts.offset_to_position_rope(&doc.rope, offset)
     }
 
     /// Handle textDocument/formatting request
@@ -4797,7 +4853,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
-                match formatter.format_document(&doc.content, &options) {
+                match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
                             .into_iter()
@@ -4871,7 +4927,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
-                match formatter.format_range(&doc.content, &range, &options) {
+                match formatter.format_range(&doc.text, &range, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
                             .into_iter()
@@ -4957,7 +5013,7 @@ impl LspServer {
             }
 
             if let Some(ref ast) = doc.ast {
-                let doc_symbols = self.extract_document_symbols(ast, &doc.content, uri);
+                let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
                 let query_lower = query.to_lowercase();
 
                 for sym in doc_symbols {
@@ -4992,7 +5048,7 @@ impl LspServer {
             for (uri, doc) in documents.iter() {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from this document
-                    let doc_symbols = self.extract_document_symbols(ast, &doc.content, uri);
+                    let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
 
                     // Filter by query
                     let query_lower = query.to_lowercase();
@@ -5013,7 +5069,7 @@ impl LspServer {
             for (uri, doc) in documents.iter() {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols using document symbol provider
-                    self.extract_simple_symbols(ast, &doc.content, uri, query, &mut symbols);
+                    self.extract_simple_symbols(ast, &doc.text, uri, query, &mut symbols);
                 }
             }
             symbols
@@ -5104,11 +5160,11 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = CodeLensProvider::new(doc.content.clone());
+                    let provider = CodeLensProvider::new(doc.text.clone());
                     let mut lenses = provider.extract(ast);
 
                     // Add shebang lens if applicable
-                    if let Some(shebang_lens) = get_shebang_lens(&doc.content) {
+                    if let Some(shebang_lens) = get_shebang_lens(&doc.text) {
                         lenses.insert(0, shebang_lens);
                     }
 
@@ -5182,7 +5238,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let provider = InlineCompletionProvider::new();
-                let completions = provider.get_inline_completions(&doc.content, line, character);
+                let completions = provider.get_inline_completions(&doc.text, line, character);
                 return Ok(Some(serde_json::to_value(completions).unwrap_or(Value::Null)));
             }
         }
@@ -5208,7 +5264,7 @@ impl LspServer {
                 let mut inline_values = Vec::new();
 
                 // Simple implementation: find scalar variables in the visible range
-                let lines: Vec<&str> = doc.content.lines().collect();
+                let lines: Vec<&str> = doc.text.lines().collect();
                 // Move regex construction outside loop
                 let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
 
@@ -5308,7 +5364,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let result =
-                    crate::linked_editing::handle_linked_editing(&doc.content, line, character);
+                    crate::linked_editing::handle_linked_editing(&doc.text, line, character);
                 return Ok(Some(serde_json::to_value(result).unwrap_or(Value::Null)));
             }
         }
@@ -5426,13 +5482,21 @@ impl LspServer {
             }
 
             NodeKind::Program { statements } => {
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    // Cooperative yield every 32 statements for performance
+                    if i & 0x1f == 0 {
+                        std::thread::yield_now();
+                    }
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
 
             NodeKind::Block { statements } => {
-                for stmt in statements {
+                for (i, stmt) in statements.iter().enumerate() {
+                    // Cooperative yield every 32 statements for performance
+                    if i & 0x1f == 0 {
+                        std::thread::yield_now();
+                    }
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
@@ -5714,7 +5778,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = SemanticTokensProvider::new(doc.content.clone());
+                    let provider = SemanticTokensProvider::new(doc.text.clone());
                     let tokens = provider.extract(ast);
                     let encoded = encode_semantic_tokens(&tokens);
 
@@ -5751,7 +5815,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = SemanticTokensProvider::new(doc.content.clone());
+                    let provider = SemanticTokensProvider::new(doc.text.clone());
                     let all_tokens = provider.extract(ast);
 
                     // Filter tokens to the requested range
@@ -5797,7 +5861,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
                     if let Some(items) = provider.prepare(ast, line, character) {
                         let json_items: Vec<_> = items.iter().map(|item| item.to_json()).collect();
                         return Ok(Some(json!(json_items)));
@@ -5823,7 +5887,7 @@ impl LspServer {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
 
-                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
                     let calls = provider.incoming_calls(ast, &ch_item);
 
                     let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
@@ -5849,7 +5913,7 @@ impl LspServer {
                     // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
 
-                    let provider = CallHierarchyProvider::new(doc.content.clone(), uri.to_string());
+                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
                     let calls = provider.outgoing_calls(ast, &ch_item);
 
                     let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
@@ -6197,7 +6261,7 @@ impl LspServer {
                         max_length: server_config.inlay_hints_max_length,
                     };
 
-                    let provider = InlayHintsProvider::with_config(doc.content.clone(), config);
+                    let provider = InlayHintsProvider::with_config(doc.text.clone(), config);
 
                     // Extract range if provided
                     let lsp_range = if params.get("range").is_some() {
@@ -6234,9 +6298,9 @@ impl LspServer {
                     let s_ch = range["start"]["character"].as_u64().unwrap_or(0) as u32;
                     let e_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
                     let e_ch = range["end"]["character"].as_u64().unwrap_or(0) as u32;
-                    self.slice_in_range(&doc.content, (s_line, s_ch), (e_line, e_ch))
+                    self.slice_in_range(&doc.text, (s_line, s_ch), (e_line, e_ch))
                 } else {
-                    (0, doc.content.len(), doc.content.as_str())
+                    (0, doc.text.len(), doc.text.as_str())
                 };
 
                 // Add named argument hints for => pairs
@@ -6271,7 +6335,7 @@ impl LspServer {
 
                         // Calculate position for the hint (at the value start)
                         let val_offset = m.end();
-                        let (l, c) = doc.line_starts.offset_to_position(&doc.content, val_offset);
+                        let (l, c) = doc.line_starts.offset_to_position_rope(&doc.rope, val_offset);
 
                         // Only add hint if within requested range
                         let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
@@ -6321,9 +6385,9 @@ impl LspServer {
                     let s_ch = range["start"]["character"].as_u64().unwrap_or(0) as u32;
                     let e_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
                     let e_ch = range["end"]["character"].as_u64().unwrap_or(0) as u32;
-                    self.slice_in_range(&doc.content, (s_line, s_ch), (e_line, e_ch))
+                    self.slice_in_range(&doc.text, (s_line, s_ch), (e_line, e_ch))
                 } else {
-                    (0, doc.content.len(), doc.content.as_str())
+                    (0, doc.text.len(), doc.text.as_str())
                 };
                 let _start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
                 let _end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
@@ -6352,7 +6416,7 @@ impl LspServer {
                         }
                         let local_anchor = self.smart_arg_anchor(body, *rel);
                         let global_off = open_global + 1 + local_anchor;
-                        let (l, c) = doc.line_starts.offset_to_position(&doc.content, global_off);
+                        let (l, c) = doc.line_starts.offset_to_position_rope(&doc.rope, global_off);
                         // Get range bounds for position checking
                         let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
                         let start_char = range["start"]["character"].as_u64().unwrap_or(0) as u32;
@@ -6396,7 +6460,7 @@ impl LspServer {
                             let local_anchor = self.smart_arg_anchor(body, *rel);
                             let global_off = win_s + body_start + local_anchor;
                             let (l, c) =
-                                doc.line_starts.offset_to_position(&doc.content, global_off);
+                                doc.line_starts.offset_to_position_rope(&doc.rope, global_off);
                             // Get range bounds for position checking
                             let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
                             let start_char =
@@ -6448,7 +6512,7 @@ impl LspServer {
                             if let Some(var) = caps.get(1) {
                                 let var_global = win_s + m.start() + var.start();
                                 let (l, c) =
-                                    doc.line_starts.offset_to_position(&doc.content, var_global);
+                                    doc.line_starts.offset_to_position_rope(&doc.rope, var_global);
                                 // Get range bounds for position checking
                                 let start_line =
                                     range["start"]["line"].as_u64().unwrap_or(0) as u32;
@@ -6496,7 +6560,7 @@ impl LspServer {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+                    let runner = TestRunner::new(doc.text.clone(), uri.to_string());
                     let tests = runner.discover_tests(ast);
 
                     // Convert test items to JSON
@@ -6585,7 +6649,7 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
@@ -6594,7 +6658,7 @@ impl LspServer {
                     }
                 }
                 // Debug commands (stub implementation for now)
-                "perl.debugFile" | "perl.debugTests" => {
+                "perl.debugFile" => {
                     eprintln!("Debug command requested: {}", command);
                     // Return a success status - actual DAP integration can be added later
                     return Ok(Some(
@@ -6641,7 +6705,7 @@ impl LspServer {
 
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
-            let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+            let runner = TestRunner::new(doc.text.clone(), uri.to_string());
             let results = runner.run_test(&test_name);
 
             // Convert results to JSON
@@ -6672,7 +6736,7 @@ impl LspServer {
 
         let documents = self.documents.lock().unwrap();
         if let Some(doc) = documents.get(uri) {
-            let runner = TestRunner::new(doc.content.clone(), uri.to_string());
+            let runner = TestRunner::new(doc.text.clone(), uri.to_string());
             let results = runner.run_test(uri);
 
             // Convert results to JSON
@@ -6731,17 +6795,17 @@ impl LspServer {
                         eprintln!("External perlcritic failed: {}, using built-in analyzer", e);
                         // Fall back to built-in analyzer
                         let builtin = BuiltInAnalyzer::new();
-                        let code_text = crate::util::code_slice(&doc.content);
+                        let code_text = crate::util::code_slice(&doc.text);
                         let mut parser = Parser::new(code_text);
                         if let Ok(ast) = parser.parse() {
-                            builtin.analyze(&ast, &doc.content)
+                            builtin.analyze(&ast, &doc.text)
                         } else {
                             builtin.analyze(
                                 &Node::new(
                                     NodeKind::Error { message: "Parse error".to_string() },
                                     crate::ast::SourceLocation { start: 0, end: 0 },
                                 ),
-                                &doc.content,
+                                &doc.text,
                             )
                         }
                     }
@@ -6750,17 +6814,17 @@ impl LspServer {
                 // Use built-in analyzer
                 eprintln!("Using built-in Perl::Critic analyzer");
                 let builtin = BuiltInAnalyzer::new();
-                let code_text = crate::util::code_slice(&doc.content);
+                let code_text = crate::util::code_slice(&doc.text);
                 let mut parser = Parser::new(code_text);
                 if let Ok(ast) = parser.parse() {
-                    builtin.analyze(&ast, &doc.content)
+                    builtin.analyze(&ast, &doc.text)
                 } else {
                     builtin.analyze(
                         &Node::new(
                             NodeKind::Error { message: "Parse error".to_string() },
                             crate::ast::SourceLocation { start: 0, end: 0 },
                         ),
-                        &doc.content,
+                        &doc.text,
                     )
                 }
             };
@@ -6912,7 +6976,7 @@ impl LspServer {
                             // We'll need to re-read the file or restructure this
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
-                                    doc.content = content;
+                                    doc.text = content;
                                     doc._version += 1;
                                     // Clear cached AST
                                     doc.ast = None;
@@ -6992,7 +7056,7 @@ impl LspServer {
                                 let mut edits = Vec::new();
 
                                 // Find and replace use statements
-                                for (line_num, line) in doc.content.lines().enumerate() {
+                                for (line_num, line) in doc.text.lines().enumerate() {
                                     if line.contains(&format!("use {}", old_module))
                                         || line.contains(&format!("require {}", old_module))
                                         || line.contains(&format!("use parent '{}'", old_module))
@@ -7160,7 +7224,7 @@ impl LspServer {
 
                                     // Apply the edit to the document content
                                     let lines: Vec<String> =
-                                        doc.content.lines().map(String::from).collect();
+                                        doc.text.lines().map(String::from).collect();
                                     let mut new_lines = Vec::new();
 
                                     // Copy lines before the edit
@@ -7196,7 +7260,7 @@ impl LspServer {
                                         new_lines.push(lines[i].clone());
                                     }
 
-                                    doc.content = new_lines.join("\n");
+                                    doc.text = new_lines.join("\n");
                                     doc._version += 1;
                                 }
                             }
@@ -7205,7 +7269,7 @@ impl LspServer {
                             #[cfg(feature = "workspace")]
                             if let Some(ref workspace_index) = self.workspace_index {
                                 if let Ok(url) = url::Url::parse(uri) {
-                                    let _ = workspace_index.index_file(url, doc.content.clone());
+                                    let _ = workspace_index.index_file(url, doc.text.clone());
                                 }
                             }
 
@@ -7265,7 +7329,7 @@ impl LspServer {
                     message: "Invalid URI".to_string(),
                     data: None,
                 })?;
-                match crate::lsp_document_link::collect_document_links(&doc.content, &uri_parsed) {
+                match crate::lsp_document_link::collect_document_links(&doc.text, &uri_parsed) {
                     Ok(links) => Ok(Some(serde_json::to_value(links).unwrap_or(Value::Null))),
                     Err(_) => Ok(Some(Value::Null)),
                 }
@@ -7300,7 +7364,7 @@ impl LspServer {
                     .parse::<lsp_types::Uri>()
                     .unwrap_or_else(|_| "file:///tmp".parse::<lsp_types::Uri>().unwrap());
                 let edits = crate::lsp_on_type_formatting::format_on_type(
-                    &doc.content,
+                    &doc.text,
                     uri_obj,
                     ch.to_string(),
                     lsp_types::Position::new(line, character),
@@ -7385,12 +7449,11 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
-                    let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                    let diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                    let provider = DiagnosticsProvider::new(ast, doc.text.clone());
+                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Generate a result ID based on content
-                    let result_id = format!("{:x}", md5::compute(&doc.content));
+                    let result_id = format!("{:x}", md5::compute(&doc.text));
 
                     // If the result ID matches the previous one, return unchanged
                     if let Some(prev_id) = previous_result_id {
@@ -7412,9 +7475,9 @@ impl LspServer {
                                 std::thread::yield_now();
                             }
                             let start_pos =
-                                doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                                doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
-                                doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                                doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
                             json!({
                                 "range": {
                                     "start": {
@@ -7494,11 +7557,11 @@ impl LspServer {
                 previous_result_ids.iter().find(|(u, _)| u == uri_str).map(|(_, id)| id.clone());
 
             if let Some(ast) = &doc.ast {
-                let provider = DiagnosticsProvider::new(ast, doc.content.clone());
-                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.content);
+                let provider = DiagnosticsProvider::new(ast, doc.text.clone());
+                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                 // Generate result ID
-                let result_id = format!("{:x}", md5::compute(&doc.content));
+                let result_id = format!("{:x}", md5::compute(&doc.text));
 
                 // Check if unchanged
                 let report = if let Some(prev) = prev_id {
@@ -7520,9 +7583,9 @@ impl LspServer {
                                     std::thread::yield_now();
                                 }
                                 let start_pos =
-                                    doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                                    doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                                 let end_pos =
-                                    doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                                    doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
                                 json!({
                                     "range": {
                                         "start": {
@@ -7565,9 +7628,9 @@ impl LspServer {
                                 std::thread::yield_now();
                             }
                             let start_pos =
-                                doc.line_starts.offset_to_position(&doc.content, d.range.0);
+                                doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
-                                doc.line_starts.offset_to_position(&doc.content, d.range.1);
+                                doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
                             json!({
                                 "range": {
                                     "start": {
@@ -7639,7 +7702,7 @@ impl LspServer {
             if let Some(doc) = doc_opt {
                 if let Some(ast) = &doc.ast {
                     // Find the symbol in the AST to get more accurate information
-                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.content);
+                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.text);
                     let symbol_table = extractor.extract(ast);
 
                     // Find matching symbol
@@ -7649,10 +7712,9 @@ impl LspServer {
                                 // Return enhanced symbol with detail and accurate range
                                 let start_pos = doc
                                     .line_starts
-                                    .offset_to_position(&doc.content, sym.location.start);
-                                let end_pos = doc
-                                    .line_starts
-                                    .offset_to_position(&doc.content, sym.location.end);
+                                    .offset_to_position(&doc.text, sym.location.start);
+                                let end_pos =
+                                    doc.line_starts.offset_to_position(&doc.text, sym.location.end);
 
                                 // Start with the provided symbol JSON so we can add
                                 // additional details without panicking if fields are missing
@@ -7787,84 +7849,6 @@ impl LspServer {
         None
     }
 
-    /// Resolve a module name to a file path URI
-    fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
-        use std::time::{Duration, Instant};
-
-        // Convert Module::Name to Module/Name.pm
-        let relative_path = format!("{}.pm", module_name.replace("::", "/"));
-
-        // First check if we have the document already opened (fast path)
-        let documents = self.documents.lock().unwrap();
-        for (uri, _doc) in documents.iter() {
-            if uri.ends_with(&relative_path) {
-                return Some(uri.clone());
-            }
-        }
-        drop(documents);
-
-        // Set a timeout for file system operations
-        let start_time = Instant::now();
-        let timeout = Duration::from_millis(50); // Reduced timeout for faster response
-
-        // Get workspace folders from initialization
-        let workspace_folders = self.workspace_folders.lock().unwrap().clone();
-
-        // Only check workspace-local directories to avoid blocking
-        let search_dirs = ["lib", ".", "local/lib/perl5"];
-
-        for workspace_folder in workspace_folders.iter() {
-            // Early timeout check
-            if start_time.elapsed() > timeout {
-                eprintln!(
-                    "Module resolution timeout for: {} (elapsed: {:?})",
-                    module_name,
-                    start_time.elapsed()
-                );
-                return None;
-            }
-
-            // Parse the workspace folder URI to get the file path
-            let workspace_path = if workspace_folder.starts_with("file://") {
-                workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder)
-            } else {
-                workspace_folder
-            };
-
-            for dir in &search_dirs {
-                let full_path = if *dir == "." {
-                    format!("{}/{}", workspace_path, relative_path)
-                } else {
-                    format!("{}/{}/{}", workspace_path, dir, relative_path)
-                };
-
-                // Check timeout before each FS operation
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
-
-                // Use metadata() instead of exists() as it's slightly more predictable
-                // and we can potentially wrap this in a timeout later
-                match std::fs::metadata(&full_path) {
-                    Ok(meta) if meta.is_file() => {
-                        return Some(format!("file://{}", full_path));
-                    }
-                    _ => {
-                        // File doesn't exist or isn't a regular file, continue
-                    }
-                }
-
-                // Final timeout check
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
-            }
-        }
-
-        // Don't check system paths (@INC) to avoid blocking on network filesystems
-        None
-    }
-
     /// Set the root path from the root URI during initialization
     fn set_root_uri(&self, root_uri: &str) {
         let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
@@ -7881,20 +7865,20 @@ impl LspServer {
                 return Some(p);
             }
         }
-        // Best-effort even if not present (for test workspaces)
-        Some(root.join("lib").join(rel))
+        // Only return paths that actually exist
+        None
     }
 
     /// Get buffer text for a URI
     fn buffer_text(&self, uri: &str) -> Option<String> {
         let docs = self.documents.lock().unwrap();
-        docs.get(uri).map(|d| d.content.clone())
+        docs.get(uri).map(|d| d.text.clone())
     }
 
     /// Iterate over all open buffers (for reference search)
     fn iter_open_buffers(&self) -> Vec<(String, String)> {
         let docs = self.documents.lock().unwrap();
-        docs.iter().map(|(uri, doc)| (uri.clone(), doc.content.clone())).collect()
+        docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
     }
 
     /// Non-blocking definition handler with fallback

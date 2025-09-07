@@ -96,6 +96,36 @@ impl LineStartsCache {
 
         line_start + byte_offset
     }
+
+    /// Convert byte offset to (line, utf16_column) using a Rope
+    pub fn offset_to_position_rope(&self, rope: &Rope, offset: usize) -> (u32, u32) {
+        let offset = offset.min(rope.len_bytes());
+        let line = match self.line_starts.binary_search(&offset) {
+            Ok(idx) => idx,
+            Err(idx) => idx.saturating_sub(1),
+        };
+        let line_start = self.line_starts[line];
+        let slice = rope.byte_slice(line_start..offset);
+        let utf16_col: usize = slice.chars().map(|c| c.len_utf16()).sum();
+        (line as u32, utf16_col as u32)
+    }
+
+    /// Convert (line, utf16_column) to byte offset using a Rope
+    pub fn position_to_offset_rope(&self, rope: &Rope, line: u32, character: u32) -> usize {
+        let line = line as usize;
+        if line >= self.line_starts.len() {
+            return rope.len_bytes();
+        }
+        let line_start = self.line_starts[line];
+        let line_end = if line + 1 < self.line_starts.len() {
+            self.line_starts[line + 1]
+        } else {
+            rope.len_bytes()
+        };
+        let slice = rope.byte_slice(line_start..line_end);
+        let byte_offset = utf16_position_to_byte_offset(&slice.to_string(), character as usize);
+        line_start + byte_offset
+    }
 }
 
 /// Count UTF-16 code units in a string

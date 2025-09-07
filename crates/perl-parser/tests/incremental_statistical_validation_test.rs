@@ -401,7 +401,7 @@ fn test_regression_detection_across_sessions() {
             stats.mean,
             stats.percentiles.get(&95).unwrap_or(&0.0)
         );
-        baseline_stats.insert(name.to_string(), stats);
+        baseline_stats.insert(*name, stats);
     }
 
     // Simulate multiple test sessions to detect regression
@@ -431,7 +431,7 @@ fn test_regression_detection_across_sessions() {
             }
 
             let current_stats = analyzer.calculate_statistics();
-            let baseline = baseline_stats.get(name).unwrap();
+            let baseline = baseline_stats.get(&**name).unwrap();
 
             // Regression detection
             let mean_regression = current_stats.mean / baseline.mean;
