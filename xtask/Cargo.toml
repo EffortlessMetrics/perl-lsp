@@ -16,13 +16,19 @@ anyhow = "1.0.98"
 indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["pure-rust", "c-scanner"] }
-perl-parser = { path = "../crates/perl-parser" }
-tree-sitter = "0.25.8"
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["pure-rust"] }
+perl-parser = { workspace = true }
+tree-sitter = { workspace = true }
 regex = "1.11.1"
 serde_yaml = "0.9"
 bindgen = "0.72.0"
 peak_alloc = "0.3"
+procfs = "0.15"
+difference = "2.0"
 
 [dev-dependencies]
 tempfile = "3.8"
+
+[features]
+# Additional tasks that depend on legacy tree-sitter-perl crate
+legacy = []

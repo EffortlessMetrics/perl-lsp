@@ -5,7 +5,7 @@ members = [
     "crates/perl-parser",
     "crates/perl-corpus",
     "crates/perl-lsp",
-    "crates/tree-sitter-perl-rs",
+    "crates/tree-sitter-perl-rs",  # Included: needed for dual-scanner corpus functionality
     "xtask",
 ]
 exclude = [

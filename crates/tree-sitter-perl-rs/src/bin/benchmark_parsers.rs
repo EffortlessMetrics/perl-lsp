@@ -23,7 +23,7 @@
 //!   -h, --help             Print help information
 //!   -V, --version          Print version information
 
-use clap::{Arg, Command, ArgAction};
+use clap::{Arg, ArgAction, Command};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -38,19 +38,19 @@ use walkdir::WalkDir;
 enum BenchmarkError {
     #[error("File I/O error: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[error("JSON serialization error: {0}")]
     SerdeError(#[from] serde_json::Error),
-    
+
     #[error("Configuration error: {message}")]
     ConfigError { message: String },
-    
+
     #[error("No test files found in specified paths: {paths:?}")]
     NoTestFiles { paths: Vec<String> },
-    
+
     #[error("Invalid output path: {path}")]
     InvalidOutputPath { path: String },
-    
+
     #[error("Directory creation failed: {path} - {source}")]
     DirectoryCreationFailed { path: String, source: std::io::Error },
 }
@@ -128,15 +128,14 @@ struct BenchmarkSummary {
 impl Default for BenchmarkConfig {
     fn default() -> Self {
         // Check if running in CI/test environment for performance optimization
-        let is_ci_env = std::env::var("CI").is_ok() || 
-                       std::env::var("CARGO_TARGET_DIR").is_ok();
-        
+        let is_ci_env = std::env::var("CI").is_ok() || std::env::var("CARGO_TARGET_DIR").is_ok();
+
         let (iterations, warmup_iterations) = if is_ci_env {
-            (5, 1)  // Minimal iterations for CI/testing
+            (5, 1) // Minimal iterations for CI/testing
         } else {
-            (100, 10)  // Full iterations for benchmarking
+            (100, 10) // Full iterations for benchmarking
         };
-        
+
         Self {
             iterations,
             warmup_iterations,
@@ -146,7 +145,7 @@ impl Default for BenchmarkConfig {
             ],
             output_path: "benchmark_results.json".to_string(),
             detailed_stats: !is_ci_env, // Reduce stats in CI for performance
-            memory_tracking: false, // Disabled by default for performance
+            memory_tracking: false,     // Disabled by default for performance
             save_results: true,
         }
     }
@@ -160,42 +159,40 @@ impl BenchmarkConfig {
                 message: "iterations must be greater than 0".to_string(),
             });
         }
-        
+
         if self.test_files.is_empty() {
             return Err(BenchmarkError::ConfigError {
                 message: "test_files cannot be empty".to_string(),
             });
         }
-        
+
         // Only validate output path structure, don't create directories yet
         let output_path = Path::new(&self.output_path);
         if output_path.is_dir() {
-            return Err(BenchmarkError::InvalidOutputPath { 
-                path: self.output_path.clone() 
-            });
+            return Err(BenchmarkError::InvalidOutputPath { path: self.output_path.clone() });
         }
-        
+
         // Skip expensive file system checks in validation
         // These will be handled lazily during execution
-        
+
         Ok(())
     }
-    
+
     /// Apply CLI overrides to configuration
     fn apply_cli_overrides(&mut self, args: &CliArgs) {
         if let Some(ref output_path) = args.output_path {
             self.output_path = output_path.clone();
             self.save_results = true; // Implicit when output is specified
         }
-        
+
         if args.save_results {
             self.save_results = true;
         }
-        
+
         if let Some(iterations) = args.iterations {
             self.iterations = iterations;
         }
-        
+
         if let Some(warmup) = args.warmup_iterations {
             self.warmup_iterations = warmup;
         }
@@ -220,22 +217,19 @@ impl BenchmarkRunner {
             let path = Path::new(test_path);
 
             if path.is_file() {
-                let content = fs::read_to_string(path)
-                    .map_err(BenchmarkError::IoError)?;
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unknown")
-                    .to_string();
+                let content = fs::read_to_string(path).map_err(BenchmarkError::IoError)?;
+                let name =
+                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
                 test_files.push((name, content));
             } else if path.is_dir() {
                 // Optimized directory walk with early filtering
                 for entry in WalkDir::new(path)
-                    .max_depth(2)  // Limit recursion for performance
+                    .max_depth(2) // Limit recursion for performance
                     .into_iter()
                     .filter_entry(|e| {
                         // Pre-filter to avoid expensive operations on irrelevant files
-                        e.path().extension()
+                        e.path()
+                            .extension()
                             .map_or(false, |ext| ext == "pl" || ext == "pm" || ext == "t")
                     })
                     .filter_map(|e| e.ok())
@@ -258,9 +252,7 @@ impl BenchmarkRunner {
         }
 
         if test_files.is_empty() {
-            return Err(BenchmarkError::NoTestFiles {
-                paths: self.config.test_files.clone(),
-            });
+            return Err(BenchmarkError::NoTestFiles { paths: self.config.test_files.clone() });
         }
 
         println!("Found {} test files", test_files.len());
@@ -469,50 +461,44 @@ impl BenchmarkRunner {
 
         Ok(benchmark_results)
     }
-    
+
     /// Save benchmark results to the specified output file
     fn save_results(&self, results: &BenchmarkResults) -> Result<(), BenchmarkError> {
         let output_path = Path::new(&self.config.output_path);
-        
+
         // Ensure parent directory exists
         if let Some(parent) = output_path.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| BenchmarkError::DirectoryCreationFailed {
+                fs::create_dir_all(parent).map_err(|e| {
+                    BenchmarkError::DirectoryCreationFailed {
                         path: parent.display().to_string(),
                         source: e,
-                    })?;
+                    }
+                })?;
             }
         }
-        
-        let json_output = serde_json::to_string_pretty(results)
-            .map_err(BenchmarkError::SerdeError)?;
-        
-        fs::write(&self.config.output_path, json_output)
-            .map_err(BenchmarkError::IoError)?;
-        
+
+        let json_output =
+            serde_json::to_string_pretty(results).map_err(BenchmarkError::SerdeError)?;
+
+        fs::write(&self.config.output_path, json_output).map_err(BenchmarkError::IoError)?;
+
         println!("Results saved to: {}", self.config.output_path);
         Ok(())
     }
-    
+
     /// Print benchmark summary to console
     fn print_summary(&self, results: &BenchmarkResults) {
         println!("\nBenchmark Results Summary:");
         println!("  Total tests: {}", results.metadata.total_tests);
         println!("  Total iterations: {}", results.metadata.total_iterations);
-        println!(
-            "  Overall mean: {:.2} ms",
-            results.summary.overall_mean_ns / 1_000_000.0
-        );
-        println!(
-            "  Overall std dev: {:.2} ms",
-            results.summary.overall_std_dev_ns / 1_000_000.0
-        );
+        println!("  Overall mean: {:.2} ms", results.summary.overall_mean_ns / 1_000_000.0);
+        println!("  Overall std dev: {:.2} ms", results.summary.overall_std_dev_ns / 1_000_000.0);
         println!("  Success rate: {:.1}%", results.summary.success_rate * 100.0);
         println!("  Runtime: {:.2} seconds", results.summary.total_runtime_seconds);
         println!("  Fastest test: {}", results.summary.fastest_test);
         println!("  Slowest test: {}", results.summary.slowest_test);
-        
+
         if self.config.save_results {
             println!("  Results saved to: {}", self.config.output_path);
         } else {
@@ -531,21 +517,21 @@ fn parse_args() -> CliArgs {
                 .short('o')
                 .long("output")
                 .value_name("PATH")
-                .help("Output file path (default: benchmark_results.json)")
+                .help("Output file path (default: benchmark_results.json)"),
         )
         .arg(
             Arg::new("save")
                 .short('s')
                 .long("save")
                 .help("Save results to file (implied when --output is used)")
-                .action(ArgAction::SetTrue)
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("config")
                 .short('c')
                 .long("config")
                 .value_name("PATH")
-                .help("Configuration file path")
+                .help("Configuration file path"),
         )
         .arg(
             Arg::new("iterations")
@@ -553,7 +539,7 @@ fn parse_args() -> CliArgs {
                 .long("iterations")
                 .value_name("N")
                 .help("Number of benchmark iterations (default: 100)")
-                .value_parser(clap::value_parser!(usize))
+                .value_parser(clap::value_parser!(usize)),
         )
         .arg(
             Arg::new("warmup")
@@ -561,7 +547,7 @@ fn parse_args() -> CliArgs {
                 .long("warmup")
                 .value_name("N")
                 .help("Number of warmup iterations (default: 10)")
-                .value_parser(clap::value_parser!(usize))
+                .value_parser(clap::value_parser!(usize)),
         )
         .get_matches();
 
@@ -578,24 +564,25 @@ fn parse_args() -> CliArgs {
 fn load_config(args: &CliArgs) -> Result<BenchmarkConfig, BenchmarkError> {
     let mut config = if let Some(ref config_path) = args.config_path {
         // Only try to load specified config file
-        let config_content = fs::read_to_string(config_path)
-            .map_err(|e| BenchmarkError::ConfigError {
+        let config_content =
+            fs::read_to_string(config_path).map_err(|e| BenchmarkError::ConfigError {
                 message: format!("Failed to read config file {}: {}", config_path, e),
             })?;
-        
-        serde_json::from_str::<BenchmarkConfig>(&config_content)
-            .map_err(|e| BenchmarkError::ConfigError {
+
+        serde_json::from_str::<BenchmarkConfig>(&config_content).map_err(|e| {
+            BenchmarkError::ConfigError {
                 message: format!("Invalid JSON in config file {}: {}", config_path, e),
-            })?
+            }
+        })?
     } else {
         // Skip automatic config file discovery - use defaults directly
         // This eliminates unnecessary file system operations
         BenchmarkConfig::default()
     };
-    
+
     // Apply CLI overrides
     config.apply_cli_overrides(args);
-    
+
     Ok(config)
 }
 
@@ -607,15 +594,15 @@ fn main() -> Result<(), BenchmarkError> {
             "--help" | "-h" => {
                 let args = parse_args(); // This will handle help and exit
                 return Ok(());
-            },
+            }
             "--version" | "-V" => {
                 let args = parse_args(); // This will handle version and exit
                 return Ok(());
-            },
+            }
             _ => {}
         }
     }
-    
+
     let args = parse_args();
     let config = load_config(&args)?;
     let mut runner = BenchmarkRunner::new(config)?;

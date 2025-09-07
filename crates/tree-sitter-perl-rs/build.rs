@@ -11,15 +11,16 @@ fn main() {
     build_c_parser();
 
     // Conditionally build scanner based on features
-    if cfg!(feature = "c-scanner") {
+    #[cfg(feature = "c-scanner")]
+    {
         build_c_scanner();
-    } else {
-        // Default to rust-scanner
-        build_rust_scanner_stub();
+        generate_bindings();
     }
 
-    // Generate bindings for the C parser
-    generate_bindings();
+    #[cfg(not(feature = "c-scanner"))]
+    {
+        build_rust_scanner_stub();
+    }
 
     // Tell cargo to rerun this script if any of these files change
     println!("cargo:rerun-if-changed=src/parser.c");
@@ -160,6 +161,7 @@ fn find_tree_sitter_runtime() -> Option<PathBuf> {
     None
 }
 
+#[cfg(feature = "c-scanner")]
 fn generate_bindings() {
     // Generate bindings for the C parser
     let bindings = bindgen::Builder::default()
