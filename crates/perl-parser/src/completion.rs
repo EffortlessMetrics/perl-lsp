@@ -227,7 +227,7 @@ pub struct CompletionProvider {
     keywords: HashSet<&'static str>,
     builtins: HashSet<&'static str>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
-    module_resolver: Option<Arc<dyn Fn(&str) -> Option<String>>>,
+    module_resolver: Option<ModuleResolver>,
 }
 
 // Test::More function completions
@@ -266,7 +266,7 @@ impl CompletionProvider {
     pub fn new_with_index(
         ast: &Node,
         workspace_index: Option<Arc<WorkspaceIndex>>,
-        module_resolver: Option<Arc<dyn Fn(&str) -> Option<String>>>,
+        module_resolver: Option<ModuleResolver>,
     ) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index, module_resolver)
     }
@@ -276,7 +276,7 @@ impl CompletionProvider {
         ast: &Node,
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
-        module_resolver: Option<Arc<dyn Fn(&str) -> Option<String>>>,
+        module_resolver: Option<ModuleResolver>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 
