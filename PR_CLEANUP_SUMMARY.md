@@ -35,8 +35,8 @@ fn classify_match(&self, name: &str, query: &str) -> Option<MatchType>
 ```
 
 **Performance Improvements:**
-- **Result Limiting**: Default 100 results (configurable)
-- **Early Termination**: Stop processing after 1000 symbols max
+- **Result Limiting**: Default 1000 results (configurable)
+- **Early Termination**: Stop processing after 10000 symbols max
 - **Smart Ranking**: Exact matches first, then prefix, contains, fuzzy
 - **Cooperative Yielding**: Every 32 symbols to maintain responsiveness
 
@@ -47,7 +47,7 @@ pub fn search_symbols_with_limit(&self, query: &str, limit: usize) -> Vec<Worksp
 ```
 
 **Performance Improvements:**
-- **Processing Limit**: Maximum 1000 symbols processed per search
+- **Processing Limit**: Maximum 10000 symbols processed per search
 - **Cooperative Yielding**: Every 64 symbols
 - **Smart Early Exit**: Stop when sufficient results found
 - **Empty Query Optimization**: Fast path for empty queries

@@ -199,7 +199,7 @@ impl WorkspaceSymbolsProvider {
         query: &str,
         source_map: &HashMap<String, String>,
     ) -> Vec<WorkspaceSymbol> {
-        self.search_with_limit(query, source_map, 100) // Default limit for performance
+        self.search_with_limit(query, source_map, 1000) // Default limit for performance
     }
 
     /// Search with result limit for better performance
@@ -216,7 +216,7 @@ impl WorkspaceSymbolsProvider {
         let mut fuzzy_matches = Vec::new();
 
         let mut total_processed = 0;
-        const MAX_PROCESS: usize = 1000; // Limit processing for performance
+        const MAX_PROCESS: usize = 10000; // Limit processing for performance
 
         'documents: for (uri, symbols) in &self.documents {
             // Get source for this document to convert offsets
