@@ -429,7 +429,7 @@ impl WorkspaceIndex {
     /// Search symbols with result limit for better performance
     pub fn search_symbols_with_limit(&self, query: &str, limit: usize) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
-        
+
         // Early return for empty query
         if query.is_empty() {
             return self.all_symbols().into_iter().take(limit).collect();
@@ -438,7 +438,7 @@ impl WorkspaceIndex {
         let mut exact_matches = Vec::new();
         let mut prefix_matches = Vec::new();
         let mut contains_matches = Vec::new();
-        
+
         let all_symbols = self.all_symbols();
         let mut processed = 0;
         const MAX_PROCESS: usize = 1000; // Limit processing for performance
@@ -455,26 +455,28 @@ impl WorkspaceIndex {
             }
 
             let name_lower = symbol.name.to_lowercase();
-            let qualified_match = symbol.qualified_name
-                .as_ref()
-                .map(|qn| qn.to_lowercase())
-                .unwrap_or_default();
+            let qualified_match =
+                symbol.qualified_name.as_ref().map(|qn| qn.to_lowercase()).unwrap_or_default();
 
             let is_name_match = name_lower.contains(&query_lower);
-            let is_qualified_match = !qualified_match.is_empty() && qualified_match.contains(&query_lower);
+            let is_qualified_match =
+                !qualified_match.is_empty() && qualified_match.contains(&query_lower);
 
             if is_name_match || is_qualified_match {
                 // Classify match type for better ranking
                 if name_lower == query_lower || qualified_match == query_lower {
                     exact_matches.push(symbol);
-                } else if name_lower.starts_with(&query_lower) || qualified_match.starts_with(&query_lower) {
+                } else if name_lower.starts_with(&query_lower)
+                    || qualified_match.starts_with(&query_lower)
+                {
                     prefix_matches.push(symbol);
                 } else {
                     contains_matches.push(symbol);
                 }
 
                 // Early exit if we have enough results
-                let total_found = exact_matches.len() + prefix_matches.len() + contains_matches.len();
+                let total_found =
+                    exact_matches.len() + prefix_matches.len() + contains_matches.len();
                 if total_found >= limit * 2 {
                     break;
                 }
@@ -485,11 +487,11 @@ impl WorkspaceIndex {
         let mut results = Vec::new();
         results.extend(exact_matches.into_iter().take(limit));
         let remaining = limit.saturating_sub(results.len());
-        
+
         if remaining > 0 {
             results.extend(prefix_matches.into_iter().take(remaining));
             let remaining = limit.saturating_sub(results.len());
-            
+
             if remaining > 0 {
                 results.extend(contains_matches.into_iter().take(remaining));
             }
