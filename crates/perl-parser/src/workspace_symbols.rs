@@ -8,12 +8,11 @@ use crate::{
     symbol::{SymbolExtractor, SymbolKind},
 };
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Normalize legacy package separator ' to ::
-fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
-    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
+fn norm_pkg(s: &str) -> String {
+    if s.contains('\'') { s.replace('\'', "::") } else { s.to_string() }
 }
 
 /// LSP WorkspaceSymbol
@@ -83,13 +82,16 @@ impl WorkspaceSymbolsProvider {
         let mut symbols = Vec::new();
 
         // Extract symbols from the symbol table
-        for (name, symbol_list) in &table.symbols {
+        for symbol_list in table.symbols.values() {
             for symbol in symbol_list {
+                let container =
+                    symbol.qualified_name.rsplit_once("::").map(|(pkg, _)| pkg.to_string());
+
                 symbols.push(SymbolInfo {
-                    name: name.clone(),
+                    name: symbol.name.clone(),
                     kind: symbol.kind,
                     location: symbol.location,
-                    container: None, // TODO: Track containing package/class
+                    container,
                 });
             }
         }
@@ -119,7 +121,7 @@ impl WorkspaceSymbolsProvider {
                             end: Position { line: 0, character: 0 },
                         },
                     },
-                    container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
+                    container_name: symbol.container.as_ref().map(|s| norm_pkg(s)),
                 });
             }
         }
@@ -286,7 +288,7 @@ impl WorkspaceSymbolsProvider {
                     end: Position { line: end_line as u32, character: end_col as u32 },
                 },
             },
-            container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
+            container_name: symbol.container.as_ref().map(|s| norm_pkg(s)),
         }
     }
 }
@@ -363,24 +365,35 @@ sub baz {
 
         provider.index_document("file:///test.pl", &ast, source);
 
+        // Verify container information is indexed
+        let all_symbols = provider.get_all_symbols();
+        let pkg = all_symbols.iter().find(|s| s.name == "MyPackage").unwrap();
+        assert!(pkg.container_name.is_none());
+        let foo = all_symbols.iter().find(|s| s.name == "foo").unwrap();
+        assert_eq!(foo.container_name.as_deref(), Some("MyPackage"));
+
         // Test exact match
         let results = provider.search("foo", &source_map);
         assert_eq!(results.len(), 2); // foo and foobar
         assert_eq!(results[0].name, "foo"); // Exact match first
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
 
         // Test prefix match
         let results = provider.search("fo", &source_map);
         assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|s| s.container_name.as_deref() == Some("MyPackage")));
 
         // Test contains match
         let results = provider.search("bar", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
 
         // Test fuzzy match
         let results = provider.search("fb", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+        assert_eq!(results[0].container_name.as_deref(), Some("MyPackage"));
     }
 
     #[test]
