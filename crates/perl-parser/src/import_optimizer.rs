@@ -356,16 +356,16 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // For bare imports, we need to be careful about side effects.
-                    // Some modules like DBI, LWP::UserAgent are object-oriented with no default exports,
-                    // and if they're not used, they can be safely flagged as unused.
-                    // Others like Data::Dumper, JSON have exports and may have side effects.
+                    // For bare imports, be conservative - many modules have side effects
+                    // Only mark as unused if we're confident it's safe to remove
                     if !is_used && _is_known_module {
-                        // Only flag as unused if it's a known module with no exports (object-oriented modules)
+                        // If the module has no known exports (empty vec), it's likely object-oriented
+                        // and safe to mark as unused if not used
                         if known_exports.is_empty() {
                             unused_symbols.push("(bare import)".to_string());
                         }
-                        // Modules with exports might have side effects, so we don't flag them as unused
+                        // For modules with exports, be conservative and don't mark as unused
+                        // since they might have side effects
                     }
                 }
             }
@@ -621,8 +621,9 @@ print "Hello World\n";
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        // Bare imports without explicit symbols are assumed to have side effects,
-        // so they are not reported as unused even if their exports aren't referenced.
+        // With improved logic, bare imports without explicit symbols are treated conservatively.
+        // Modules with exports are not reported as unused to prevent breaking side effects.
+        // Only object-oriented modules (no exports) may be reported as unused.
         assert!(analysis.unused_imports.is_empty());
     }
 
@@ -855,8 +856,8 @@ print Dumper(\@ARGV);
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
 
-        // JSON and SomeUnknownModule are treated as having potential side effects,
-        // so neither is flagged as unused.
+        // JSON and SomeUnknownModule are treated conservatively - modules with exports
+        // are not flagged as unused to prevent breaking side effects.
         assert!(analysis.unused_imports.is_empty());
     }
 
