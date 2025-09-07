@@ -26,6 +26,8 @@
   - `src/incremental_integration.rs`: LSP integration bridge
   - `src/incremental_handler_v2.rs`: Document change processing
   - `src/declaration.rs`: Declaration provider with O(1) position lookups
+  - `src/module_resolver.rs`: **NEW v0.8.9** - Reusable module resolution component for LSP features
+  - `src/completion.rs`: Enhanced completion provider with pluggable module resolver integration
 
 ### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.9)
 - **Purpose**: Clean LSP server implementation separated from parser logic
@@ -173,6 +175,74 @@ cargo run corpus -- --diagnose         # Detailed analysis
 ```
 
 ## Key Components
+
+### ModuleResolver Component (NEW v0.8.9) - (*Diataxis: Reference*)
+
+The ModuleResolver provides a reusable, generic module resolution system for LSP features requiring Perl module path resolution.
+
+#### **Architecture Overview**
+```rust
+/// Resolve a module name to a file path URI.
+/// Generic over document type D for flexible integration
+pub fn resolve_module_to_path<D>(
+    documents: &Arc<Mutex<HashMap<String, D>>>,
+    workspace_folders: &Arc<Mutex<Vec<String>>>,
+    module_name: &str,
+) -> Option<String>
+```
+
+#### **Key Design Principles**
+- **Generic Document Support**: Works with any document representation via generic type `D`
+- **Performance Optimized**: Fast path checks open documents first, then bounded filesystem search
+- **Security Conscious**: Time-limited search (50ms timeout) prevents blocking on network filesystems
+- **Cooperative**: Yields control during long operations to maintain LSP responsiveness
+- **Standard Perl Paths**: Searches `lib`, `.`, `local/lib/perl5` directories in workspace folders
+
+#### **Integration Pattern**
+The ModuleResolver follows a functional approach allowing easy integration into LSP providers:
+
+```rust
+// Create resolver closure for completion provider
+let resolver = {
+    let docs = self.documents.clone();
+    let folders = self.workspace_folders.clone();
+    Arc::new(move |module_name: &str| {
+        module_resolver::resolve_module_to_path(&docs, &folders, module_name)
+    })
+};
+
+// Pass resolver to completion provider
+let provider = CompletionProvider::new_with_index_and_source(
+    ast,
+    &doc.text,
+    workspace_index,
+    Some(resolver)
+);
+```
+
+#### **Resolution Algorithm**
+1. **Fast Path**: Check already-open documents for matching module paths
+2. **Filesystem Search**: Time-limited search through standard Perl directories
+3. **Path Standardization**: Convert `Module::Name` to `Module/Name.pm` format
+4. **URI Generation**: Return proper `file://` URIs for LSP compatibility
+
+#### **Performance Characteristics**
+- **Fast Path**: O(n) where n = number of open documents (typically <100)
+- **Filesystem Search**: O(m) where m = files in search directories (bounded by timeout)
+- **Timeout Protection**: 50ms maximum to prevent LSP blocking
+- **Memory Efficient**: No persistent state, operates on provided references
+
+#### **Testing Coverage**
+- **Existing Module Resolution**: Tests successful resolution of modules in workspace
+- **Missing Module Handling**: Tests graceful failure for non-existent modules
+- **Path Conversion**: Tests `Module::Name` to `Module/Name.pm` transformation
+- **Timeout Behavior**: Ensures bounded execution time
+
+#### **Benefits for LSP Features**
+- **Reusable**: Single implementation shared across completion, hover, go-to-definition
+- **Extensible**: Generic design allows future LSP features to easily add module resolution
+- **Reliable**: Comprehensive error handling and timeout protection
+- **Standard Compliant**: Follows Perl module path conventions and LSP URI requirements
 
 ### Pest Parser Architecture
 - PEG grammar in `grammar.pest` defines all Perl syntax

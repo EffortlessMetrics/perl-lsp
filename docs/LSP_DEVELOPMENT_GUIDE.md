@@ -6,16 +6,68 @@ All LSP providers now support source-aware analysis for enhanced documentation e
 
 ### Provider Constructor Patterns
 ```rust
-// Enhanced constructors with source text (v0.8.7)
-CompletionProvider::new_with_index_and_source(ast, source, workspace_index)
+// Enhanced constructors with source text and module resolver (v0.8.9)
+CompletionProvider::new_with_index_and_source(ast, source, workspace_index, module_resolver)
 SignatureHelpProvider::new_with_source(ast, source)
 SymbolExtractor::new_with_source(source)
 
 // Legacy constructors (still supported)
-CompletionProvider::new_with_index(ast, workspace_index)  // uses empty source
+CompletionProvider::new_with_index(ast, workspace_index)  // uses empty source, no module resolver
 SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```
+
+### ModuleResolver Integration (NEW v0.8.9) - (*Diataxis: How-to Guide*)
+
+The CompletionProvider now supports pluggable module resolution for enhanced Perl module completion. This allows LSP features to resolve module names to file paths for improved functionality.
+
+#### **Creating a Module Resolver**
+```rust
+use crate::module_resolver;
+use std::sync::{Arc, Mutex};
+
+// Create resolver closure in LSP server
+let resolver = {
+    let docs = self.documents.clone();        // Reference to open documents
+    let folders = self.workspace_folders.clone();  // Reference to workspace folders
+    Arc::new(move |module_name: &str| {
+        module_resolver::resolve_module_to_path(&docs, &folders, module_name)
+    })
+};
+```
+
+#### **Integration with CompletionProvider**
+```rust
+// Pass resolver to completion provider
+let provider = CompletionProvider::new_with_index_and_source(
+    ast,                          // Parsed AST
+    &doc.text,                   // Source text for documentation
+    workspace_index,             // Workspace symbol index
+    Some(resolver)               // Optional module resolver
+);
+
+// The provider can now resolve module references during completion
+let completions = provider.get_completions_with_path(&doc.text, offset, Some(uri));
+```
+
+#### **Module Resolution Process**
+1. **Fast Path**: Check already-open documents for matching module paths
+2. **Standard Directories**: Search `lib/`, `./`, `local/lib/perl5/` in workspace folders  
+3. **Path Conversion**: Transform `Module::Name` → `Module/Name.pm`
+4. **Timeout Protection**: 50ms maximum to prevent LSP blocking
+5. **URI Generation**: Return proper `file://` URIs for LSP compatibility
+
+#### **Benefits for LSP Features**
+- **Enhanced Completions**: Module-aware completion suggestions
+- **Go-to-Definition**: Navigate to module files from `use` statements
+- **Hover Information**: Display module documentation and file paths
+- **Future Extensibility**: Easy integration for new LSP features requiring module resolution
+
+#### **Performance Considerations**
+- **Bounded Search**: Time-limited filesystem operations (50ms timeout)
+- **Cooperative Yielding**: Doesn't block LSP server during long searches
+- **Caching Strategy**: Fast path checks open documents first
+- **Generic Design**: Works with any document representation for flexibility
 
 ### Comment Documentation Extraction
 
