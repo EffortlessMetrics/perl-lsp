@@ -79,6 +79,9 @@ use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+/// Type alias for module resolver function to reduce complexity
+type ModuleResolver = Arc<dyn Fn(&str) -> Option<String>>;
+
 /// Type of completion item
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CompletionItemKind {
@@ -224,6 +227,7 @@ pub struct CompletionProvider {
     keywords: HashSet<&'static str>,
     builtins: HashSet<&'static str>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    module_resolver: Option<ModuleResolver>,
 }
 
 // Test::More function completions
@@ -259,8 +263,12 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 
 impl CompletionProvider {
     /// Create a new completion provider from parsed AST
-    pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+    pub fn new_with_index(
+        ast: &Node,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        module_resolver: Option<ModuleResolver>,
+    ) -> Self {
+        Self::new_with_index_and_source(ast, "", workspace_index, module_resolver)
     }
 
     /// Create a new completion provider from parsed AST and source
@@ -268,6 +276,7 @@ impl CompletionProvider {
         ast: &Node,
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
+        module_resolver: Option<ModuleResolver>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 
@@ -458,12 +467,12 @@ impl CompletionProvider {
         .into_iter()
         .collect();
 
-        CompletionProvider { symbol_table, keywords, builtins, workspace_index }
+        CompletionProvider { symbol_table, keywords, builtins, workspace_index, module_resolver }
     }
 
     /// Create a new completion provider from parsed AST without workspace context
     pub fn new(ast: &Node) -> Self {
-        Self::new_with_index(ast, None)
+        Self::new_with_index(ast, None, None)
     }
 
     /// Get completions at a given position (with optional filepath for test detection)
@@ -540,6 +549,25 @@ impl CompletionProvider {
         } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
             // Method completion
             self.add_method_completions(&mut completions, &context, source);
+        } else if context.prefix.starts_with("use ") {
+            if let Some(resolver) = &self.module_resolver {
+                let module_name = context.prefix[4..].trim();
+                if !module_name.is_empty() {
+                    if let Some(path) = resolver(module_name) {
+                        completions.push(CompletionItem {
+                            label: module_name.to_string(),
+                            kind: CompletionItemKind::Module,
+                            detail: Some(path),
+                            documentation: None,
+                            insert_text: Some(module_name.to_string()),
+                            sort_text: Some(format!("0_{}", module_name)),
+                            filter_text: Some(module_name.to_string()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start + 4, context.position)),
+                        });
+                    }
+                }
+            }
         } else if context.in_string {
             // String interpolation or file path
             let line_prefix = &source[..context.position];
@@ -968,6 +996,11 @@ impl CompletionProvider {
         }
         let member_prefix = parts.pop().unwrap_or("");
         let package_name = parts.join("::");
+        if let Some(resolver) = &self.module_resolver {
+            if resolver(&package_name).is_none() {
+                return;
+            }
+        }
 
         // Query workspace index for members of the package
         let members = index.get_package_members(&package_name);
@@ -1711,7 +1744,7 @@ sub internal_sub { }
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
 
-        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let provider = CompletionProvider::new_with_index(&ast, Some(index), None);
         let completions = provider.get_completions(code, code.len());
 
         assert!(
