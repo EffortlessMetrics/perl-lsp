@@ -16,6 +16,7 @@ This repository contains **five published crates** forming a complete Perl parsi
    - 4-19x faster than legacy implementations (1-150 µs parsing)
    - Production-ready incremental parsing with <1ms LSP updates
    - Enterprise-grade workspace refactoring and cross-file analysis
+   - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
