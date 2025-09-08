@@ -197,6 +197,10 @@ LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 cargo test -p perl-lsp test_completion_detail_formatting
 cargo test -p perl-lsp test_workspace_symbol_search
 
+# Run formatting capability tests (robust across environments)
+cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting
+cargo test -p perl-lsp --test lsp_perltidy_test test_formatting_provider_capability
+
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
 
@@ -216,6 +220,10 @@ perl-lsp --stdio < test_requests.jsonrpc
 ```bash
 # Enable fast testing mode (reduces test timeouts by ~75%)
 export LSP_TEST_FALLBACKS=1
+
+# Optional external dependencies for enhanced features
+export PERLTIDY_PATH="/usr/local/bin/perltidy"    # Custom perltidy location
+export PERLCRITIC_PATH="/usr/local/bin/perlcritic" # Custom perlcritic location
 
 # Performance characteristics in fallback mode:
 # - Base timeout: 500ms (vs 2000ms)
@@ -605,6 +613,62 @@ V3 scanner nodes: 14
 ➕ Extra nodes in V3 output:
   - literal
 ```
+
+## Scanner Architecture Testing (*Diataxis: How-to Guide* - Unified scanner validation)
+
+The project uses a unified scanner architecture where both `c-scanner` and `rust-scanner` features use the same Rust implementation, with `CScanner` serving as a compatibility wrapper that delegates to `RustScanner`.
+
+### Scanner Implementation Testing (*Diataxis: Reference* - Scanner validation commands)
+
+```bash
+# Test core Rust scanner implementation directly
+cargo test -p tree-sitter-perl-rs --features rust-scanner
+
+# Test C scanner wrapper (delegates to Rust implementation internally)
+cargo test -p tree-sitter-perl-rs --features c-scanner
+
+# Validate scanner delegation functionality
+cargo test -p tree-sitter-perl-rs rust_scanner_smoke
+
+# Test scanner state management and serialization
+cargo test -p tree-sitter-perl-rs scanner_state
+```
+
+### Scanner Compatibility Validation (*Diataxis: How-to Guide* - Ensuring backward compatibility)
+
+```bash
+# Verify both scanner interfaces work correctly
+cargo test -p tree-sitter-perl-rs --features rust-scanner,c-scanner
+
+# Test C scanner API compatibility (should delegate to Rust without changes)
+cargo test -p tree-sitter-perl-rs c_scanner::tests::test_c_scanner_delegates
+
+# Performance testing (both scanners use same Rust implementation)
+cargo bench -p tree-sitter-perl-rs --features rust-scanner
+cargo bench -p tree-sitter-perl-rs --features c-scanner
+```
+
+### Scanner Build Configuration (*Diataxis: Reference* - Feature flag usage)
+
+```bash
+# Build with Rust scanner only (direct usage)
+cargo build -p tree-sitter-perl-rs --features rust-scanner
+
+# Build with C scanner wrapper (delegates to Rust internally)
+cargo build -p tree-sitter-perl-rs --features c-scanner
+
+# Build with both scanner interfaces available
+cargo build -p tree-sitter-perl-rs --features rust-scanner,c-scanner
+```
+
+### Understanding Scanner Architecture (*Diataxis: Explanation* - Design rationale)
+
+The unified scanner architecture provides:
+
+- **Single Implementation**: Both `c-scanner` and `rust-scanner` features use the same Rust code
+- **Backward Compatibility**: `CScanner` API unchanged, existing benchmark code works without modification  
+- **Simplified Maintenance**: One scanner implementation instead of separate C and Rust versions
+- **Consistent Performance**: All interfaces benefit from Rust implementation performance
 
 ## Edge Case Testing Commands
 

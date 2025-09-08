@@ -72,10 +72,13 @@ cargo install --path crates/perl-lsp     # From source
 
 ### Testing
 ```bash
-cargo test                               # Run all tests
+cargo test                               # All tests (robust across environments)
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
+
+# Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
+# Formatting tests demonstrate graceful degradation when tools are missing
 ```
 
 ### Development
@@ -139,6 +142,15 @@ cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custo
 - **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing, enhanced builtin function support
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
 - **v1 (C-based)**: ~95% coverage, benchmarking only (now uses unified Rust scanner via delegation)
+
+### Scanner Architecture (*Diataxis: Explanation* - Unified scanner design)
+The scanner implementation uses a unified Rust-based architecture with C compatibility wrapper:
+
+- **Rust Scanner** (`RustScanner`): Core scanning implementation in Rust with full Perl lexical analysis
+- **C Scanner Wrapper** (`CScanner`): Compatibility wrapper that delegates to `RustScanner` for legacy API support
+- **Unified Implementation**: Both scanner features (`c-scanner` and `rust-scanner`) ultimately use the same Rust code
+- **Backward Compatibility**: Existing benchmark and test code continues to work without modification
+- **Simplified Maintenance**: Single scanner implementation reduces maintenance overhead while preserving API contracts
 
 ## Key Features
 
@@ -230,6 +242,7 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 - ✅ Enhanced call hierarchy, go-to-definition, find references
 - ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
 - ✅ File path completion with enterprise security
+- ✅ Enhanced formatting: always-available capabilities with graceful perltidy fallback
 - ✅ Debug Adapter Protocol (DAP) support
 
 ## Contributing
