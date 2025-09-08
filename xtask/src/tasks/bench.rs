@@ -54,28 +54,29 @@ fn validate_output_path(output_path: &Path) -> Result<()> {
     if output_path.to_string_lossy().contains("..") {
         return Err(color_eyre::eyre::eyre!("Path traversal not allowed in output path"));
     }
-    
+
     // Ensure the filename has a reasonable extension for text output
     if let Some(extension) = output_path.extension() {
         let ext_str = extension.to_string_lossy();
         if !matches!(ext_str.as_ref(), "txt" | "log" | "out" | "bench" | "json" | "md") {
             return Err(color_eyre::eyre::eyre!(
-                "Unsupported file extension '{}'. Use txt, log, out, bench, json, or md", 
+                "Unsupported file extension '{}'. Use txt, log, out, bench, json, or md",
                 ext_str
             ));
         }
     }
-    
+
     // Ensure parent directory is writable if it exists
-    if let Some(parent) = output_path.parent() {
-        if parent.exists() && parent.metadata()?.permissions().readonly() {
-            return Err(color_eyre::eyre::eyre!(
-                "Output directory '{}' is read-only", 
-                parent.display()
-            ));
-        }
+    if let Some(parent) = output_path.parent()
+        && parent.exists()
+        && parent.metadata()?.permissions().readonly()
+    {
+        return Err(color_eyre::eyre::eyre!(
+            "Output directory '{}' is read-only",
+            parent.display()
+        ));
     }
-    
+
     Ok(())
 }
 
@@ -119,14 +120,16 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
 
             // Create parent directories if needed
             if let Some(parent) = output_path.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create output directory: {}", parent.display()))?;
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create output directory: {}", parent.display())
+                })?;
             }
 
             // Write benchmark results to file
-            fs::write(&output_path, &result.stdout)
-                .with_context(|| format!("Failed to write benchmark results to: {}", output_path.display()))?;
-            
+            fs::write(&output_path, &result.stdout).with_context(|| {
+                format!("Failed to write benchmark results to: {}", output_path.display())
+            })?;
+
             spinner.finish_with_message(format!(
                 "✅ Benchmark results saved to {}",
                 output_path.display()
@@ -135,10 +138,11 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
             // Default behavior: save to timestamped file in current directory
             let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
             let default_path = PathBuf::from(format!("benchmark_results_{}.txt", timestamp));
-            
-            fs::write(&default_path, &result.stdout)
-                .with_context(|| format!("Failed to write benchmark results to: {}", default_path.display()))?;
-                
+
+            fs::write(&default_path, &result.stdout).with_context(|| {
+                format!("Failed to write benchmark results to: {}", default_path.display())
+            })?;
+
             spinner.finish_with_message(format!(
                 "✅ Benchmark results saved to {} (Criterion data also available in target/criterion)",
                 default_path.display()
@@ -147,8 +151,9 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
     }
 
     // Phase 2: C vs Rust comparison flow (optional - only if files exist)
-    if std::path::Path::new("test/benchmark_simple.pl").exists() && 
-       std::path::Path::new("tree-sitter-perl/test/benchmark.js").exists() {
+    if std::path::Path::new("test/benchmark_simple.pl").exists()
+        && std::path::Path::new("tree-sitter-perl/test/benchmark.js").exists()
+    {
         let c_result = run_c_benchmarks()?;
         let rust_mean = extract_rust_mean()?;
         let comparison = compare_implementations(rust_mean, c_result.average);
@@ -164,6 +169,7 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
 
 /// Result from running the C benchmark harness
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CBenchmarkResult {
     duration: u64,
     iterations: u64,
@@ -245,7 +251,7 @@ mod tests {
     #[test]
     fn test_validate_output_path_valid_extensions() {
         let valid_extensions = ["txt", "log", "out", "bench", "json", "md"];
-        
+
         for ext in &valid_extensions {
             let path = PathBuf::from(format!("test.{}", ext));
             assert!(validate_output_path(&path).is_ok(), "Extension {} should be valid", ext);
@@ -272,9 +278,13 @@ mod tests {
             PathBuf::from("../../test.txt"),
             PathBuf::from("test/../../../etc/passwd"),
         ];
-        
+
         for path in &paths {
-            assert!(validate_output_path(path).is_err(), "Path traversal should be blocked for: {}", path.display());
+            assert!(
+                validate_output_path(path).is_err(),
+                "Path traversal should be blocked for: {}",
+                path.display()
+            );
         }
     }
 
@@ -283,18 +293,18 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let readonly_dir = temp_dir.path().join("readonly");
         fs::create_dir(&readonly_dir)?;
-        
+
         // Set directory to readonly
         let mut perms = fs::metadata(&readonly_dir)?.permissions();
         perms.set_readonly(true);
         fs::set_permissions(&readonly_dir, perms)?;
-        
+
         let output_path = readonly_dir.join("test.txt");
         let result = validate_output_path(&output_path);
-        
+
         // Should fail due to readonly directory
         assert!(result.is_err());
-        
+
         Ok(())
     }
 
@@ -302,10 +312,10 @@ mod tests {
     fn test_validate_output_path_writable_directory() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let output_path = temp_dir.path().join("test.txt");
-        
+
         // Should succeed for writable directory
         assert!(validate_output_path(&output_path).is_ok());
-        
+
         Ok(())
     }
 
@@ -319,14 +329,9 @@ mod tests {
     #[test]
     fn test_validate_output_path_with_special_characters() {
         // Test various special characters that should be allowed
-        let valid_paths = [
-            "test_file.txt",
-            "test-file.txt", 
-            "test file.txt",
-            "test.file.txt",
-            "test123.txt",
-        ];
-        
+        let valid_paths =
+            ["test_file.txt", "test-file.txt", "test file.txt", "test.file.txt", "test123.txt"];
+
         for path_str in &valid_paths {
             let path = PathBuf::from(path_str);
             assert!(validate_output_path(&path).is_ok(), "Path should be valid: {}", path_str);
@@ -335,16 +340,16 @@ mod tests {
 
     // Integration test would require mocking cargo bench, which is complex
     // So we focus on unit tests for the validation logic
-    #[test] 
+    #[test]
     fn test_benchmark_with_mock_command() {
         // This would require substantial mocking infrastructure
         // For now, we test the validation logic which is the main improvement
         // In a real scenario, we might use a test framework like mockall
-        
+
         // Test that we can at least call the validation function
         let temp_dir = tempfile::tempdir().unwrap();
         let output_path = temp_dir.path().join("benchmark_results.txt");
-        
+
         assert!(validate_output_path(&output_path).is_ok());
     }
 }

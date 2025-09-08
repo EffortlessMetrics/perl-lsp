@@ -5,7 +5,8 @@
 //! 2. Pest monolith (pure Rust with PEG grammar)
 //! 3. Modern stack (perl-lexer + perl-parser)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use std::hint::black_box;
 use std::time::Duration;
 
 // Test files of varying complexity

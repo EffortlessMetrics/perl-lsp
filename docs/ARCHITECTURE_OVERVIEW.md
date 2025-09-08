@@ -3,17 +3,8 @@
 ## Crate Structure
 
 ### Production Crates
-- **`/crates/perl-parser/`**: Main parser with production-ready incremental parsing
-  - `src/parser.rs`: Recursive descent parser with 99.7% node reuse efficiency
-  - `src/incremental_v2.rs`: Advanced incremental parser with statistical validation
-  - `src/lsp_server.rs`: LSP implementation with real-time document updates
-  - `src/ast.rs`: AST definitions with Arc<Node> sharing for memory efficiency
-  - `src/textdoc.rs`: Rope-based document management for UTF-16/UTF-8 position tracking
-  - `src/position_mapper.rs`: High-performance position conversion (65µs average updates)
-  - **`src/semantic_tokens_provider.rs`**: Thread-safe semantic token generation (2.826µs average, 35x target improvement)
-  - **`src/semantic_tokens.rs`**: LSP-compliant delta encoding with zero-race-condition design
-  - `bin/perl-lsp.rs`: LSP server binary (moved to perl-lsp crate in v0.8.9)
-  - Published as `perl-parser` on crates.io
+- **`/crates/perl-lsp/`**: Standalone LSP server binary. This is what users install for IDE integration.
+- **`/crates/perl-parser/`**: The core parsing library. It contains the parser itself, the AST definitions, and all the LSP feature implementations. Published as `perl-parser` on crates.io.
 
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
   - `src/lib.rs`: Lexer API with Unicode support
@@ -119,19 +110,21 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
 
 ### Development Locations
-- **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **Lexer**: `/crates/perl-lexer/` - tokenization improvements
-- **Test Corpus**: `/crates/perl-corpus/` - test case additions
-- **Legacy**: `/crates/perl-parser-pest/` - maintenance only (contains outdated Rope usage)
+- **LSP Binary & CLI**: `/crates/perl-lsp/` - for changes to the command-line interface or server startup.
+- **LSP Feature Logic**: `/crates/perl-parser/` - for all core LSP features (diagnostics, completion, etc.). This is where most LSP development happens.
+- **Parser Core**: `/crates/perl-parser/` - for changes to the parsing engine itself.
+- **Lexer**: `/crates/perl-lexer/` - for tokenization improvements.
+- **Test Corpus**: `/crates/perl-corpus/` - for adding new test cases.
+- **Legacy**: `/crates/perl-parser-pest/` - maintenance only.
 
 ### Rope Development Guidelines
 **IMPORTANT**: All Rope improvements should target the **production perl-parser crate**, not internal test harnesses.
 
 **Production Rope Modules** (Target for improvements):
-- **`/crates/perl-parser/src/textdoc.rs`**: Core document management with `ropey::Rope`
-- **`/crates/perl-parser/src/position_mapper.rs`**: UTF-16/UTF-8 position conversion
-- **`/crates/perl-parser/src/incremental_integration.rs`**: LSP integration bridge (RECENTLY ENHANCED)
-- **`/crates/perl-parser/src/incremental_handler_v2.rs`**: Document change processing (RECENTLY ENHANCED)
+- **`/crates/perl-parser/src/textdoc.rs`**: Core document management with `ropey::Rope`.
+- **`/crates/perl-parser/src/position_mapper.rs`**: UTF-16/UTF-8 position conversion.
+- **`/crates/perl-parser/src/incremental_integration.rs`**: LSP integration bridge.
+- **`/crates/perl-parser/src/incremental_handler_v2.rs`**: Document change processing.
 
 **Recent Incremental Parsing Improvements**:
 - **Enhanced Module Organization**: Fixed import issues in incremental parsing comprehensive tests

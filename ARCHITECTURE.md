@@ -4,51 +4,40 @@ This document provides a comprehensive overview of the tree-sitter-perl project 
 
 ## 🏗️ System Overview
 
-The tree-sitter-perl project provides **multiple parser implementations** and **IDE integration**:
+The tree-sitter-perl project provides **multiple parser implementations** and **IDE integration** through a set of specialized Rust crates.
 
-1. **v1: C-based Parser**: Original tree-sitter implementation (~95% coverage)
-2. **v2: Pest Parser**: Pure Rust with PEG grammar (~99.995% coverage)
-3. **v3: Native Parser**: Hand-written lexer+parser (~100% coverage) ⭐
-4. **Incremental Parsing**: True subtree reuse for <1ms LSP updates (v0.8.7+) 🚀
-5. **LSP Server**: Full Language Server Protocol implementation with real-time editing
-6. **WorkspaceRefactor**: Enterprise-grade cross-file refactoring operations (NEW v0.8.9)
-7. **Enhanced S-expression System**: Comprehensive operator-specific AST output (Issue #72 resolved)
-8. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs), incremental achieves 50-100x speedup for edits
+1. **v1: C-based Parser**: Original tree-sitter implementation (~95% coverage). Used for historical benchmarks.
+2. **v2: Pest Parser**: Pure Rust with PEG grammar (~99.995% coverage). Legacy.
+3. **v3: Native Parser**: Hand-written lexer+parser (~100% coverage). ⭐ **This is the primary parsing engine.**
+4. **Incremental Parser**: Built on the v3 parser, provides true subtree reuse for <1ms LSP updates (v0.8.7+). 🚀
+5. **LSP Server**: A standalone binary (`perl-lsp`) providing Language Server Protocol features for editors.
+6. **WorkspaceRefactor**: Enterprise-grade cross-file refactoring operations (NEW v0.8.9).
+7. **Enhanced S-expression System**: Comprehensive operator-specific AST output (Issue #72 resolved).
+8. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs), and the incremental parser is 6-10x faster than a full re-parse on edits.
 
 ## 📐 Architecture Diagram
 
+The architecture is composed of several crates that work together. The `perl-lsp` crate provides the main binary for IDEs, which in turn uses `perl-parser` for its logic, which uses `perl-lexer`.
+
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     tree-sitter-perl Project                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐  │
-│  │ v1: C Parser │  │ v2: Pest    │  │ v3: Native   │  │  LSP   │  │
-│  │   (Legacy)   │  │   Parser     │  │Parser ⭐     │  │ Server │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └───┬────┘  │
-│         │                  │                  │              │       │
-│         ▼                  ▼                  ▼              ▼       │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │              Common S-Expression Output Format                │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │                    v3: Native Parser Detail                   │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐      │  │
-│  │  │ perl-lexer  │→ │ perl-parser │→ │ Tree-sitter AST   │      │  │
-│  │  │ (Tokenizer) │  │ (RD Parser) │  │ (S-expressions)   │      │  │
-│  │  └─────────────┘  └─────────────┘  └───────────────────┘      │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │                    LSP Server Architecture                    │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐      │  │
-│  │  │  JSON-RPC   │  │  Document   │  │ Language Services │      │  │
-│  │  │  Handler    │  │  Manager    │  │ (Diagnostics,     │      │  │
-│  │  │             │  │             │  │  Symbols, etc.)   │      │  │
-│  │  └─────────────┘  └─────────────┘  └───────────────────┘      │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
++--------------------------------------------------------------------------------------------------+
+|                                     tree-sitter-perl Project                                     |
+|--------------------------------------------------------------------------------------------------|
+|                                                                                                  |
+|    +------------------------+      +--------------------------+      +------------------------+    |
+|    |      perl-lsp crate    |----->|    perl-parser crate     |----->|    perl-lexer crate    |    |
+|    | (LSP Binary for IDEs)  |      |  (Parsing & LSP Logic)   |      |      (Tokenizer)       |    |
+|    +------------------------+      +--------------------------+      +------------------------+    |
+|               ^                                |                                                  |
+|               |                                |                                                  |
+| (Editor communicates via JSON-RPC)             | (Produces Tree-sitter compatible AST)            |
+|                                                |                                                  |
+|                                                v                                                  |
+|    +------------------------------------------------------------------------------------------+    |
+|    |                                Common S-Expression Output                                |    |
+|    +------------------------------------------------------------------------------------------+    |
+|                                                                                                  |
++--------------------------------------------------------------------------------------------------+
 ```
 
 ## 🔧 Core Components
@@ -301,14 +290,24 @@ impl PositionMapper {
 - **Error Recovery**: Maintains functionality during incomplete/invalid code states  
 - **Fallback Support**: Full reparse available when incremental parsing fails
 - **Test Infrastructure**: Comprehensive async harness with timeout support
-### 6. LSP Server (`/crates/perl-parser/src/lsp_server.rs`)
+### 6. LSP Server (`/crates/perl-lsp/` and `/crates/perl-parser/`)
 
-**Purpose**: Language Server Protocol implementation for IDE integration
+**Purpose**: Language Server Protocol implementation for IDE integration.
 
 **Architecture**:
+The LSP functionality is split between two crates:
+-   **`perl-lsp`**: This crate contains the binary entry point (`main.rs`). It handles command-line argument parsing, sets up logging, and launches the LSP server loop. It is a thin wrapper around the logic in `perl-parser`.
+-   **`perl-parser`**: This crate contains all the core LSP logic, including:
+    -   The main server loop that handles JSON-RPC communication.
+    -   The `DocumentManager` for tracking open files.
+    -   All the "Language Service" providers (e.g., for diagnostics, completion, hover, etc.).
+
+This separation allows the core parsing and LSP logic to be published as a library (`perl-parser`) that other tools can use, while `perl-lsp` provides the convenient, installable binary for end-users.
 
 ```
-LSP Client (Editor) ←→ JSON-RPC ←→ LSP Server
+LSP Client (Editor) ←→ JSON-RPC ←→ perl-lsp binary
+                                        ↓
+                                 LSP Server Loop (in perl-parser)
                                         ↓
                                  Document Manager
                                         ↓
