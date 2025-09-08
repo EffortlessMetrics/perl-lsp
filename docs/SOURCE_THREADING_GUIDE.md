@@ -7,13 +7,13 @@ All LSP providers now support source-aware analysis for enhanced documentation e
 ## Provider Constructor Patterns
 
 ```rust
-// Enhanced constructors with source text (v0.8.7)
-CompletionProvider::new_with_index_and_source(ast, source, workspace_index)
+// Enhanced constructors with source text and module resolver (v0.8.9)
+CompletionProvider::new_with_index_and_source(ast, source, workspace_index, module_resolver)
 SignatureHelpProvider::new_with_source(ast, source)
 SymbolExtractor::new_with_source(source)
 
 // Legacy constructors (still supported)
-CompletionProvider::new_with_index(ast, workspace_index)  // uses empty source
+CompletionProvider::new_with_index(ast, workspace_index)  // uses empty source, no module resolver
 SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```

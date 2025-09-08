@@ -312,7 +312,7 @@ impl ImportOptimizer {
 
                 if !is_pragma {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let (is_known_module, known_exports) =
+                    let (_is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
                             Some(exports) => (true, exports),
                             None => (false, Vec::new()),
@@ -358,7 +358,7 @@ impl ImportOptimizer {
 
                     // For bare imports, be conservative - many modules have side effects
                     // Only mark as unused if we're confident it's safe to remove
-                    if !is_used && is_known_module {
+                    if !is_used && _is_known_module {
                         // If the module has no known exports (empty vec), it's likely object-oriented
                         // and safe to mark as unused if not used
                         if known_exports.is_empty() {
