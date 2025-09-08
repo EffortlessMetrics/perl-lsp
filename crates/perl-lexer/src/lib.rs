@@ -2444,78 +2444,53 @@ impl<'a> PerlLexer<'a> {
     }
 }
 
-/// Perl keywords sorted by length for faster rejection
-const KEYWORDS: &[&str] = &[
-    // 1 letter
-    "q",
-    "m",
-    "s",
-    "y",
-    // 2 letters
-    "if",
-    "do",
-    "my",
-    "or",
-    "qq",
-    "qw",
-    "qr",
-    "qx",
-    "tr",
-    // 3 letters
-    "sub",
-    "our",
-    "use",
-    "and",
-    "not",
-    "xor",
-    "die",
-    "say",
-    "for",
-    "try",
-    "END",
-    "cmp",
-    // 4 letters
-    "else",
-    "when",
-    "next",
-    "last",
-    "redo",
-    "goto",
-    "eval",
-    "warn",
-    "INIT",
-    // 5 letters
-    "elsif",
-    "while",
-    "until",
-    "local",
-    "state",
-    "given",
-    "break",
-    "print",
-    "catch",
-    "BEGIN",
-    "CHECK",
-    "class",
-    "undef",
-    // 6+ letters
-    "unless",
-    "return",
-    "require",
-    "package",
-    "default",
-    "foreach",
-    "finally",
-    "continue",
-    "UNITCHECK",
-    "method",
-    "format",
-];
-
 #[inline]
 fn is_keyword(word: &str) -> bool {
-    let len = word.len();
-    KEYWORDS.iter().copied().any(|kw| kw.len() == len && kw == word)
+    // Fast length-based rejection, then direct lookup
+    match word.len() {
+        1 => matches!(word, "q" | "m" | "s" | "y"),
+        2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
+        3 => matches!(
+            word,
+            "sub"
+                | "our"
+                | "use"
+                | "and"
+                | "not"
+                | "xor"
+                | "die"
+                | "say"
+                | "for"
+                | "try"
+                | "END"
+                | "cmp"
+        ),
+        4 => matches!(
+            word,
+            "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"
+        ),
+        5 => matches!(
+            word,
+            "elsif"
+                | "while"
+                | "until"
+                | "local"
+                | "state"
+                | "given"
+                | "break"
+                | "print"
+                | "catch"
+                | "BEGIN"
+                | "CHECK"
+                | "class"
+                | "undef"
+        ),
+        6 => matches!(word, "unless" | "return" | "method" | "format"),
+        7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
+        8 => matches!(word, "continue"),
+        9 => matches!(word, "UNITCHECK"),
+        _ => false,
+    }
 }
 
 /// Fast lookup table for compound operator second characters
