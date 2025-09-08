@@ -2078,7 +2078,7 @@ impl LspServer {
 
                     if !hover_text.is_empty() {
                         // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::") || hover_text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if hover_text.contains("::") || hover_text.chars().next().is_some_and(|c| c.is_uppercase()) {
                             return Ok(Some(json!({
                                 "contents": {
                                     "kind": "markdown",
@@ -2101,7 +2101,7 @@ impl LspServer {
 
                     if !hover_text.is_empty() {
                         // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::") || hover_text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if hover_text.contains("::") || hover_text.chars().next().is_some_and(|c| c.is_uppercase()) {
                             return Ok(Some(json!({
                                 "contents": {
                                     "kind": "markdown",
