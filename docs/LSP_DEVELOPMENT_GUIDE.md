@@ -188,10 +188,191 @@ The refactoring system has two layers:
 2. **Enhanced Refactorings** (`code_actions_enhanced.rs`)
    - Extract variable/subroutine
    - Loop conversions
-   - Import organization
+   - Advanced pattern matching
    - Smart naming and formatting preservation
 
-To add a new refactoring:
+3. **Import Optimization** (`import_optimizer.rs` + integration)
+   - Remove unused imports and symbols
+   - Add missing imports via Module::symbol detection  
+   - Remove duplicate imports and consolidate
+   - Alphabetical sorting and clean formatting
+   - LSP code action integration with "Organize Imports"
+
+### Import Optimization Development Pattern (*Diataxis: How-to* - Import feature development)
+
+Implementing import optimization features follows this pattern:
+
+#### 1. Core Analysis Engine (`import_optimizer.rs`)
+```rust
+pub struct ImportOptimizer {
+    // Stateless analyzer - no persistent state for thread safety
+}
+
+impl ImportOptimizer {
+    pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
+        // Parse import statements using regex
+        let imports = self.extract_imports(content)?;
+        
+        // Analyze usage patterns 
+        let unused = self.find_unused_imports(&imports, content);
+        let duplicates = self.find_duplicate_imports(&imports);
+        let missing = self.find_missing_imports(content);
+        
+        Ok(ImportAnalysis {
+            imports,
+            unused_imports: unused,
+            duplicate_imports: duplicates,
+            missing_imports: missing,
+            organization_suggestions: self.generate_suggestions(&imports),
+        })
+    }
+    
+    pub fn generate_edits(&self, content: &str, analysis: &ImportAnalysis) -> Vec<TextEdit> {
+        // Generate LSP-compatible text edits for optimization
+        let optimized_imports = self.generate_optimized_imports(analysis);
+        self.create_replacement_edits(content, analysis, &optimized_imports)
+    }
+}
+```
+
+#### 2. Code Actions Integration (`code_actions.rs`)
+```rust
+// Integration point in main code actions provider
+fn optimize_imports(&self) -> Option<CodeAction> {
+    let optimizer = ImportOptimizer::new();
+    let analysis = optimizer.analyze_content(&self.source).ok()?;
+    
+    // Skip if no optimizations needed
+    if analysis.unused_imports.is_empty() 
+        && analysis.duplicate_imports.is_empty()
+        && analysis.missing_imports.is_empty() 
+    {
+        return None;
+    }
+    
+    let edits = optimizer.generate_edits(&self.source, &analysis);
+    Some(CodeAction {
+        title: "Organize imports".to_string(),
+        kind: CodeActionKind::SourceOrganizeImports,
+        diagnostics: Vec::new(),
+        edit: CodeActionEdit { changes: edits },
+        is_preferred: false,
+    })
+}
+
+// Called automatically in main code actions handler
+pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &[Diagnostic]) -> Vec<CodeAction> {
+    let mut actions = Vec::new();
+    
+    // Add diagnostic-based quick fixes...
+    
+    // Add import optimization (always available)
+    if let Some(import_action) = self.optimize_imports() {
+        actions.push(import_action);
+    }
+    
+    actions
+}
+```
+
+#### 3. LSP Server Registration (`lsp_server.rs`)
+```rust
+// Capability registration for import optimization
+fn handle_initialize(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    Ok(Some(json!({
+        "capabilities": {
+            "codeActionProvider": {
+                "codeActionKinds": [
+                    "quickfix",
+                    "refactor",
+                    "refactor.extract",
+                    "source.organizeImports", // Import optimization
+                ]
+            }
+        }
+    })))
+}
+
+// Code action handler with import optimization 
+fn handle_code_action(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    let params: CodeActionParams = serde_json::from_value(params?)?;
+    let doc = self.get_document(&params.text_document.uri)?;
+    
+    let provider = CodeActionsProvider::new(doc.content.clone());
+    let actions = provider.get_code_actions(
+        &doc.ast,
+        (params.range.start, params.range.end), 
+        &diagnostics
+    );
+    
+    Ok(Some(json!(actions)))
+}
+```
+
+#### 4. Testing Pattern for Import Features
+```rust
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+    
+    #[test]
+    fn test_import_optimization_integration() {
+        let source = r#"
+use strict;
+use warnings;
+use Data::Dumper;  # Used
+use JSON;          # Unused
+use List::Util qw(first max min);  # Partially used
+
+my @nums = (1, 2, 3);
+print "Max: " . max(@nums) . "\n";
+print Dumper(\@nums);
+"#;
+        
+        // Test analysis
+        let optimizer = ImportOptimizer::new();
+        let analysis = optimizer.analyze_content(source).unwrap();
+        
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "JSON"));
+        assert!(analysis.unused_imports.iter().any(|u| u.module == "List::Util" && u.symbols.contains(&"first".to_string())));
+        
+        // Test code action integration
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
+        
+        let import_action = actions.iter()
+            .find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports))
+            .expect("Should have import optimization action");
+            
+        assert_eq!(import_action.title, "Organize imports");
+        assert!(!import_action.edit.changes.is_empty());
+    }
+    
+    #[test] 
+    fn test_lsp_import_optimization_e2e() {
+        // End-to-end LSP server test
+        let mut server = create_test_server();
+        initialize_server(&mut server);
+        
+        open_document(&mut server, "file:///test.pl", source_with_import_issues);
+        
+        let response = send_request(&mut server, "textDocument/codeAction", Some(json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 10, "character": 0 } },
+            "context": { "diagnostics": [] }
+        })));
+        
+        let actions = response["result"].as_array().unwrap();
+        let import_action = actions.iter()
+            .find(|a| a["kind"] == "source.organizeImports")
+            .expect("Should have import optimization");
+            
+        assert_eq!(import_action["title"], "Organize imports");
+    }
+}
+```
+
+### Generic Refactoring Pattern
 ```rust
 // In code_actions_enhanced.rs
 fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {

@@ -128,7 +128,8 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
-- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
+- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, comprehensive import optimization
+- **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
 
 ## Documentation
 
@@ -149,6 +150,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
+- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 
 ## Development Guidelines
 
@@ -201,7 +203,8 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 
 **LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
-- ✅ Workspace symbols, rename, code actions
+- ✅ Workspace symbols, rename, code actions (including import optimization)
+- ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
 - ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
