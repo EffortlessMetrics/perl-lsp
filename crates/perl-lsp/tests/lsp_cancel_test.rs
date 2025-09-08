@@ -17,7 +17,7 @@ use common::*;
 fn test_cancel_request_handling() {
     let mut server = start_lsp_server();
     let init_resp = initialize_lsp(&mut server);
-    
+
     // Check if initialization failed
     if let Some(error) = init_resp.get("error") {
         if error["code"].as_i64() == Some(-32000) {
@@ -138,7 +138,7 @@ fn test_cancel_request_handling() {
 fn test_cancel_request_no_response() {
     let mut server = start_lsp_server();
     let init_resp = initialize_lsp(&mut server);
-    
+
     // Check if initialization failed
     if let Some(error) = init_resp.get("error") {
         if error["code"].as_i64() == Some(-32000) {
@@ -198,7 +198,7 @@ fn test_cancel_request_no_response() {
 fn test_cancel_multiple_requests() {
     let mut server = start_lsp_server();
     let init_resp = initialize_lsp(&mut server);
-    
+
     // Check if initialization failed
     if let Some(error) = init_resp.get("error") {
         if error["code"].as_i64() == Some(-32000) {

@@ -111,14 +111,16 @@ pub fn start_lsp_server() -> LspServer {
     let mut last_err: Option<io::Error> = None;
     let mut process: Child = {
         let mut spawned: Option<Child> = None;
-        
+
         // Build the binary first to ensure it's available
-        if std::env::var("CARGO_BIN_EXE_perl-lsp").is_err() && std::env::var("CARGO_BIN_EXE_perl_lsp").is_err() {
+        if std::env::var("CARGO_BIN_EXE_perl-lsp").is_err()
+            && std::env::var("CARGO_BIN_EXE_perl_lsp").is_err()
+        {
             let _ = std::process::Command::new("cargo")
                 .args(["build", "-p", "perl-lsp", "--quiet"])
                 .output();
         }
-        
+
         for mut cmd in resolve_perl_lsp_cmds() {
             match cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
                 Ok(mut child) => {
@@ -127,7 +129,10 @@ pub fn start_lsp_server() -> LspServer {
                     match child.try_wait() {
                         Ok(Some(_)) => {
                             // Process exited immediately, try next command
-                            last_err = Some(io::Error::new(io::ErrorKind::Other, "Process exited immediately"));
+                            last_err = Some(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Process exited immediately",
+                            ));
                             continue;
                         }
                         Ok(None) => {
@@ -429,14 +434,13 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 with extended timeout for initialization
     let init_timeout = Duration::from_secs(20); // Generous timeout for initialization
-    let resp = read_response_matching_i64(server, 1, init_timeout)
-        .unwrap_or_else(|| {
-            // If initialization fails, try to diagnose the issue
-            eprintln!("LSP initialization timed out after {:?}", init_timeout);
-            eprintln!("Server alive: {}", server.is_alive());
-            // Return timeout error for better diagnostics
-            json!({"error": {"code": ERR_TEST_TIMEOUT, "message": "LSP initialization timed out"}})
-        });
+    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
+        // If initialization fails, try to diagnose the issue
+        eprintln!("LSP initialization timed out after {:?}", init_timeout);
+        eprintln!("Server alive: {}", server.is_alive());
+        // Return timeout error for better diagnostics
+        json!({"error": {"code": ERR_TEST_TIMEOUT, "message": "LSP initialization timed out"}})
+    });
 
     // Only send initialized if we got a successful response
     if resp.get("error").is_none() {
