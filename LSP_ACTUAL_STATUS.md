@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.9+ Post-Validation
+# LSP Actual Status - v0.8.8+ Post-Validation
 
 ## LSP GA Contract
 
@@ -10,7 +10,7 @@
 
 ## Honest Assessment of LSP Functionality - **Post-Validation Status**
 
-The `perl-parser` crate LSP implementation has achieved **approximately 87% functional LSP features** (up from 85% with comprehensive post-validation improvements). Major enhancements include enterprise-grade security validation, enhanced scope analysis with 41 comprehensive test cases, production-stable incremental parsing with 99.7% node reuse efficiency, comprehensive workspace navigation improvements, and **v0.8.9 workspace refactoring capabilities**. **291+ tests passing** across all components with 100% reliability validation. This document provides an honest assessment of current capabilities based on comprehensive validation results.
+The `perl-parser` crate LSP implementation has achieved **approximately 87% functional LSP features** (up from 85% with comprehensive post-validation improvements). Major enhancements include enterprise-grade security validation, enhanced scope analysis with 41 comprehensive test cases, production-stable incremental parsing with 99.7% node reuse efficiency, comprehensive workspace navigation improvements, and **v0.8.8 workspace refactoring capabilities**. **291+ tests passing** across all components with 100% reliability validation. This document provides an honest assessment of current capabilities based on comprehensive validation results.
 
 ## ✅ Actually Working Features (~87%) - **Validation Enhanced**
 
@@ -46,7 +46,7 @@ These features have been extensively tested and provide real, production-ready f
 - **use vars pragma support** with qw() parsing for global variable declarations
 - Missing pragma suggestions (strict/warnings) with contextual recommendations
 - **41 comprehensive test cases** passing with enhanced parameter handling and AST traversal
-- **291+ total test validation** across all components with 100% reliability
+- **291+ tests passing** across all components with 100% reliability validation
 - **Status**: Production-ready with enhanced position accuracy, enterprise-grade security validation, and comprehensive parameter analysis
 
 ### 2. **Enhanced Code Completion**
@@ -230,11 +230,10 @@ These features have been extensively tested and provide real, production-ready f
 - **Enhanced Call Hierarchy Provider**: Complete workspace analysis with improved function call tracking
 - **Production-Ready Workspace Features**: Improved workspace indexing, symbol tracking, and cross-file operations
 - **Status**: Fully functional (100% test reliability achieved)
->>>>>>> master
 
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
-### ✅ Advertised in v0.8.9 (Working Features)
+### ✅ Advertised in v0.8.8 (Working Features)
 - `textDocumentSync` - File synchronization
 - `completionProvider` - Enhanced completions with file path support
 - `hoverProvider` - Hover information
@@ -243,6 +242,7 @@ These features have been extensively tested and provide real, production-ready f
 - `referencesProvider` - Find references
 - `documentHighlightProvider` - Enhanced highlight occurrences with expression statement support
 - `signatureHelpProvider` - Signature help
+- `codeLensProvider` - Code lens with reference counts and resolve support (PRODUCTION BUILD ONLY)
 - `documentSymbolProvider` - Document symbols
 - `foldingRangeProvider` - Folding ranges
 - `documentFormattingProvider` - Formatting (if perltidy available)
@@ -259,14 +259,14 @@ These features have been extensively tested and provide real, production-ready f
 - `workspaceSymbolProvider.resolveProvider` - Symbol resolve (NEW in v0.8.5)
 - `typeDefinitionProvider` - Type definition (NEW in v0.8.6)
 - `implementationProvider` - Implementation (NEW in v0.8.6)
-- `workspaceRefactoringProvider` - Cross-file refactoring operations (NEW in v0.8.9)
-- `advancedCodeActionProvider` - Enhanced code actions and refactoring (NEW in v0.8.9)
+- `workspaceRefactoringProvider` - Cross-file refactoring operations (NEW in v0.8.8)
+- `advancedCodeActionProvider` - Enhanced code actions and refactoring (NEW in v0.8.8)
 
-### ❌ NOT Advertised in v0.8.9 (Not Implemented)
+### ❌ NOT Advertised in v0.8.8 (Not Implemented)
 
 #### Code Lens
-- **Status:** Partial (not advertised).
-- **Notes:** Early provider exists (run/debug links scaffolding), but no stable contract and no cross-feature integration. Not surfaced until stable & tested.
+- **Status:** Preview (advertised in production builds only).
+- **Notes:** Functional implementation with reference counts and run/test lenses. Advertised in production builds but not in GA-lock mode due to conservative release policy. ~85% functional.
 
 #### Call/Type Hierarchy
 - **Status:** Partial/Not implemented (not advertised).
@@ -280,10 +280,11 @@ These features have been extensively tested and provide real, production-ready f
 
 These features have partial implementations but are not advertised due to significant limitations:
 
-### 1. **Code Lens**
-- Run/Debug links partially implemented
-- Test discovery not connected
-- **Status**: ~20% functional
+### 1. **Code Lens** (PREVIEW STATUS)
+- Run/Debug links fully implemented
+- Test discovery patterns functional (test_*, Test*, *_test)
+- Reference counts working with LSP resolve support
+- **Status**: ~85% functional (advertised in production builds)
 
 ### 2. **Call Hierarchy**
 - Basic structure exists
@@ -329,9 +330,8 @@ These features exist in the code but return empty results or don't work:
 
 ### 7. **Advanced Features**
 - Call Hierarchy: Returns empty
-- Code Lens: Returns empty
 - Inlay Hints: Partially works for hash literals only
-- **Status**: <10% functional
+- **Status**: <10% functional (Code Lens moved to Preview status)
 
 ## 🚀 Incremental Parsing Performance (NEW in v0.8.7)
 
@@ -503,7 +503,6 @@ See [LSP_WIRING_OPPORTUNITIES.md](LSP_WIRING_OPPORTUNITIES.md) for technical det
 - **Unicode Lexer Fix**: Fixed panic on Unicode + incomplete heredoc syntax (`¡<<'`)
 - Enhanced test reliability with thread-safe communication and real JSON-RPC protocol testing
 - LSP improved to ~75% functional with testing coverage
->>>>>>> master
 
 ### v0.8.3 GA
 - Fixed go-to-definition with DeclarationProvider

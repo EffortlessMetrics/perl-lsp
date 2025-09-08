@@ -145,6 +145,7 @@ enum Commands {
     },
 
     /// Run corpus tests
+    #[cfg(feature = "legacy")]
     Corpus {
         /// Path to corpus directory
         #[arg(long, default_value = "c/test/corpus")]
@@ -258,6 +259,7 @@ enum Commands {
     },
 
     /// Run three-way parser comparison
+    #[cfg(feature = "legacy")]
     CompareThree {
         /// Show detailed output
         #[arg(long)]
@@ -323,6 +325,13 @@ enum Commands {
 
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
+
+    /// Optimize LSP test performance
+    OptimizeTests {
+        /// Apply optimizations automatically without prompting
+        #[arg(long)]
+        auto_apply: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -370,6 +379,7 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
+        #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
         }
@@ -392,6 +402,7 @@ fn main() -> Result<()> {
             )
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }
@@ -407,5 +418,6 @@ fn main() -> Result<()> {
             FeaturesCommand::Report => features::report(),
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
+        Commands::OptimizeTests { auto_apply: _ } => optimize_tests::optimize_lsp_tests(),
     }
 }

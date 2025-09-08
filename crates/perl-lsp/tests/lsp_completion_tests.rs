@@ -667,7 +667,7 @@ MyModule::"#
     );
 
     let items = completion_items(&response);
-    // Since package completion is TODO, this might be empty for now
+    // Since package completion may timeout (TODO in implementation), this might be empty
     assert!(items.is_empty() || !items.is_empty(), "Package completion handling");
 }
 

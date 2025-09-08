@@ -62,11 +62,9 @@ fn full_capabilities_match_contract() {
     let ot = &caps["documentOnTypeFormattingProvider"];
     assert!(ot.is_object());
 
-    // Type hierarchy is NOT advertised in v0.8.4 (will be in v0.8.5)
-    assert!(
-        caps["typeHierarchyProvider"].is_null(),
-        "typeHierarchyProvider must NOT be advertised in v0.8.4"
-    );
+    // Call and type hierarchy should now be advertised
+    assert!(!caps["callHierarchyProvider"].is_null(), "callHierarchyProvider must be advertised");
+    assert!(!caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must be advertised");
 
     // Pull diagnostics is now advertised (v0.8.5)
     assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider must be advertised");
@@ -74,8 +72,13 @@ fn full_capabilities_match_contract() {
     assert_eq!(diag["interFileDependencies"], json!(false));
     assert_eq!(diag["workspaceDiagnostics"], json!(true));
 
-    // Must NOT be advertised until fully supported
-    assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised");
+    // Code lens should now be advertised
+    assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+    assert_eq!(
+        caps["codeLensProvider"]["resolveProvider"],
+        json!(true),
+        "codeLensProvider.resolveProvider must be true"
+    );
     // ExecuteCommand is now implemented in v0.8.6
     assert!(
         !caps["executeCommandProvider"].is_null(),

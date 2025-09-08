@@ -38,16 +38,33 @@ Hierarchical outline of your Perl code:
 - Constants and use statements
 
 ### 3. Symbol Navigation
-- **Go to Definition**: Jump to where symbols are defined
-- **Find References**: Find all uses of a variable or function
-- **Workspace Symbols**: Search across all files (planned)
+- **Go to Definition**: Jump to where symbols are defined.
+- **Find References**: Find all uses of a variable or function.
+- **Workspace Symbols**: Fuzzy search for symbols across all files in the project.
 
-### 4. Signature Help
-Function parameter hints while typing:
-- Built-in Perl functions (print, substr, splice, etc.)
-- User-defined subroutines with signatures
-- Active parameter highlighting
-- Parameter documentation (when available)
+### 4. Signature Help (**Enhanced in v0.8.8+**)
+Advanced function parameter hints while typing:
+- **Built-in Perl functions**: Complete coverage for print, substr, splice, split, push, pop, etc.
+- **User-defined subroutines**: Full support for modern Perl signature syntax (`sub add($x, $y)`)
+- **Active parameter highlighting**: Real-time tracking of which parameter you're currently entering.
+- **Parameter documentation**: Comprehensive parameter information and type hints.
+- **Nested call support**: Accurate parameter tracking in complex nested function calls.
+- **Context-aware parsing**: Handles method calls (`->method()`) and regular function calls.
+
+#### Example Usage:
+```perl
+# Built-in function signature help
+substr($str, 5, |)  # Shows: EXPR, OFFSET, LENGTH, REPLACEMENT
+                    # Highlights LENGTH parameter (index 2)
+
+# User-defined function with signature
+sub calculate($base, $rate, $time = 1) {
+    return $base * $rate * $time;
+}
+
+calculate(1000, 0.05, |)  # Shows: $base, $rate, $time = 1
+                          # Highlights $time parameter
+```
 
 ### 5. Semantic Tokens
 Enhanced syntax highlighting beyond regex-based:
@@ -56,47 +73,63 @@ Enhanced syntax highlighting beyond regex-based:
 - Proper highlighting of interpolated strings
 - Context-aware operator highlighting
 
-### 6. Code Completion (Planned)
-- Variable name completion
-- Function name completion
-- Package and module completion
-- Snippet support
+### 6. Code Completion
+- **Variable Completion**: Suggests variables in the current scope.
+- **Built-in Completion**: Suggests all 150+ built-in functions.
+- **Keyword Completion**: Suggests Perl keywords.
+- **File Path Completion**: Securely completes file paths in `use` and `require` statements.
 
-### 7. Code Actions (Planned)
-- Add missing 'use strict'
-- Declare undefined variables
-- Convert between quote styles
-- Extract subroutine
+### 7. Code Actions
+- **Add Pragmas**: Add missing `use strict;` and `use warnings;`.
+- **Perltidy**: Format the current file with `perltidy` (if installed).
+- **Import Optimization**: Detects and removes unused imports, and consolidates duplicate imports.
 
-### 8. Incremental Parsing
-- Only re-parses changed portions of documents
-- Maintains full AST for accurate analysis
-- Sub-millisecond update times
+### 8. Refactoring
+- **Rename**: Cross-file rename for `our` variables and local rename for `my` variables.
+
+### 9. Other Features
+- **Inlay Hints**: Shows parameter names and inferred types.
+- **Document Links**: Creates links from `use`/`require` statements to the corresponding file or MetaCPAN page.
+- **Selection Ranges**: Allows for smart, hierarchical selection of code blocks.
+- **On-Type Formatting**: Automatically adjusts indentation when typing `{`, `}`, `;`, etc.
+- **Code Lens**: Shows reference counts above subroutines, and provides "Run Test" lenses.
+
+### 10. Incremental Parsing
+- Only re-parses changed portions of documents.
+- Maintains full AST for accurate analysis.
+- Sub-millisecond update times, with 96.8% - 99.7% of the AST reused on typical edits.
 
 ## Installation
 
-### From Source
+The recommended way to install is to use the pre-built binaries or a package manager.
 
+### Quick Install (Linux/macOS)
 ```bash
-# Clone the repository
-git clone https://github.com/EffortlessSteven/tree-sitter-perl
-cd tree-sitter-perl
-
-# Build the LSP server
-cargo build -p perl-parser --bin perl-lsp --release
-
-# The binary will be at:
-# target/release/perl-lsp
+# One-liner installer
+curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 ```
 
-### Using Cargo Install
+### Quick Install (Windows PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+```
 
+### Homebrew (macOS/Linux)
 ```bash
-# Install from git
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+brew tap effortlesssteven/tap
+brew install perl-lsp
+```
 
-# Or from a local clone
-cargo install --path crates/perl-parser --bin perl-lsp
+### Build from Source
+```bash
+# Install the perl-lsp binary from crates.io
+cargo install perl-lsp
+
+# Or, build from this repository
+git clone https://github.com/EffortlessSteven/tree-sitter-perl
+cd tree-sitter-perl
+cargo build --release -p perl-lsp
+# The binary will be in target/release/perl-lsp
 ```
 
 ### System Requirements
@@ -209,11 +242,16 @@ Using `lsp-mode`:
 - [x] `textDocument/references`
 - [x] `textDocument/signatureHelp`
 - [x] `textDocument/semanticTokens/full`
-- [ ] `textDocument/completion` (planned)
-- [ ] `textDocument/hover` (planned)
-- [ ] `textDocument/codeAction` (planned)
-- [ ] `textDocument/formatting` (planned)
-- [ ] `textDocument/rename` (planned)
+- [x] `textDocument/completion`
+- [x] `textDocument/hover`
+- [x] `textDocument/codeAction`
+- [x] `textDocument/formatting`
+- [x] `textDocument/rename`
+- [x] `textDocument/codeLens`
+- [x] `textDocument/documentLink`
+- [x] `textDocument/selectionRange`
+- [x] `textDocument/onTypeFormatting`
+- [x] `workspace/symbol`
 
 ### Client Capabilities
 
@@ -227,9 +265,13 @@ The server adapts its behavior based on client capabilities:
 
 ### Components
 
+The LSP is composed of two main crates:
+- **`perl-lsp`**: The binary that runs the server.
+- **`perl-parser`**: The library that contains all the logic.
+
 ```
-perl-lsp
-├── LSP Server (lsp_server.rs)
+perl-parser crate
+├── LSP Server Logic
 │   ├── JSON-RPC message handling
 │   ├── Request routing
 │   └── Response serialization
@@ -237,13 +279,14 @@ perl-lsp
 │   ├── Document state tracking
 │   ├── Change management
 │   └── AST caching
-├── Language Services (lsp.rs)
+├── Language Services
 │   ├── DiagnosticsProvider
-│   ├── DocumentSymbolProvider
+│   ├── CompletionProvider
+│   ├── HoverProvider
+│   ├── SignatureHelpProvider
 │   ├── DefinitionProvider
 │   ├── ReferencesProvider
-│   ├── SignatureHelpProvider
-│   └── SemanticTokensProvider
+│   ├── ... and many more
 └── Parser Integration
     ├── perl-lexer (tokenization)
     └── perl-parser (AST generation)

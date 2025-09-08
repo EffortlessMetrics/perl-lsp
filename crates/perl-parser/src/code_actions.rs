@@ -4,6 +4,7 @@
 
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::diagnostics::Diagnostic;
+use crate::import_optimizer::ImportOptimizer;
 use crate::rename::TextEdit;
 
 /// A code action that can be applied to fix an issue
@@ -87,6 +88,11 @@ impl CodeActionsProvider {
 
         // Get refactoring actions for the selection
         actions.extend(self.get_refactoring_actions(ast, range));
+
+        // Offer import optimization using ImportOptimizer
+        if let Some(action) = self.optimize_imports() {
+            actions.push(action);
+        }
 
         actions
     }
@@ -507,6 +513,23 @@ impl CodeActionsProvider {
             return Some(node);
         }
         None
+    }
+
+    /// Use the ImportOptimizer to produce an organize imports action
+    fn optimize_imports(&self) -> Option<CodeAction> {
+        let optimizer = ImportOptimizer::new();
+        let analysis = optimizer.analyze_content(&self.source).ok()?;
+        let edits = optimizer.generate_edits(&self.source, &analysis);
+        if edits.is_empty() {
+            return None;
+        }
+        Some(CodeAction {
+            title: "Organize imports".to_string(),
+            kind: CodeActionKind::SourceOrganizeImports,
+            diagnostics: Vec::new(),
+            edit: CodeActionEdit { changes: edits },
+            is_preferred: false,
+        })
     }
 }
 

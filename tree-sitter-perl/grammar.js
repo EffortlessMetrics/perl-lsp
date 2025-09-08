@@ -88,7 +88,7 @@ module.exports = grammar({
   name: 'perl',
   supertypes: $ => [
     $.primitive,
-    // $.variables, // TODO - i don't know why, but these just went crazy
+    $.variables,
     $.postfix_deref,
     $.subscripted,
     $.slices,
@@ -168,7 +168,7 @@ module.exports = grammar({
     [$.return_expression],
     [$.function, $.bareword],
     [$.function, $.function_call_expression],
-    [$._variables, $.indirect_object],
+    [$.variables, $.indirect_object],
     [$.expression_statement, $._tricky_indirob_hashref],
     [$.autoquoted_bareword],
     // nameless params need extra lookahead
@@ -503,7 +503,7 @@ module.exports = grammar({
       $.command_heredoc_token,
       $.stub_expression,
       // all the variable handlings
-      $._variables,
+      $.variables,
       $.subscripted,
       $.slices,
       $.postfix_deref,
@@ -677,20 +677,43 @@ module.exports = grammar({
       alias($._declare_array, $.array),
       alias($._declare_hash, $.hash),
     ),
+    _my_declared_vars: $ => choice(
+      alias($._lexical_scalar, $.scalar),
+      alias($._lexical_array, $.array),
+      alias($._lexical_hash, $.hash),
+    ),
 
     variable_declaration: $ => prec.left(TERMPREC.QUESTION_MARK + 1,
-      seq(
-        choice('my', 'state', 'our', 'field'),
-        choice(
-          field('variable', $._declared_vars),
-          field('variables', $._decl_variable_list)),
-        optseq(':', optional(field('attributes', $.attrlist))))
+      choice(
+        seq(
+          'my',
+          choice(
+            field('variable', $._my_declared_vars),
+            field('variables', $._my_decl_variable_list)
+          ),
+          optseq(':', optional(field('attributes', $.attrlist)))
+        ),
+        seq(
+          choice('state', 'our', 'field'),
+          choice(
+            field('variable', $._declared_vars),
+            field('variables', $._decl_variable_list)
+          ),
+          optseq(':', optional(field('attributes', $.attrlist)))
+        )
+      )
     ),
 
     _decl_variable_list: $ => paren_list_of(
       choice(
         $.undef_expression,
         $._declared_vars
+      )
+    ),
+    _my_decl_variable_list: $ => paren_list_of(
+      choice(
+        $.undef_expression,
+        $._my_declared_vars
       )
     ),
 
@@ -820,7 +843,7 @@ module.exports = grammar({
     )),
     method: $ => choice($._bareword, $.scalar),
 
-    _variables: $ => choice(
+    variables: $ => choice(
       $.scalar,
       $.array,
       $.hash,
@@ -831,9 +854,11 @@ module.exports = grammar({
     scalar: $ => seq('$', $._var_indirob),
     _declare_scalar: $ => seq('$', $.varname),
     _signature_scalar: $ => seq('$', $._signature_varname),
+    _lexical_scalar: $ => seq('$', $._signature_varname),
     array: $ => seq('@', $._var_indirob),
     _declare_array: $ => seq('@', $.varname),
     _signature_array: $ => seq('@', $._signature_varname),
+    _lexical_array: $ => seq('@', $._signature_varname),
     // these need to have higher prec than the equivalent operator symbols
     _HASH_PERCENT: $ => alias(token(prec(2, '%')), '%'), // self-aliasing b/c token
     _SUB_AMPER: $ => alias(token(prec(2, '&')), '&'), // self-aliasing b/c token
@@ -842,6 +867,7 @@ module.exports = grammar({
     hash: $ => seq($._HASH_PERCENT, $._var_indirob),
     _declare_hash: $ => seq($._HASH_PERCENT, $.varname),
     _signature_hash: $ => seq($._HASH_PERCENT, $._signature_varname),
+    _lexical_hash: $ => seq($._HASH_PERCENT, $._signature_varname),
 
     arraylen: $ => seq('$#', $._var_indirob),
     glob: $ => seq($._GLOB_STAR, $._var_indirob),
@@ -860,7 +886,7 @@ module.exports = grammar({
     ),
     varname: $ => choice(
       $._identifier,
-      $._ident_special // TODO - not sure if we wanna make `my $1` error out
+      $._ident_special
     ),
     // not all indirobs are alike; for variables, they have autoquoting behavior
     _var_indirob_autoquote: $ => seq(
