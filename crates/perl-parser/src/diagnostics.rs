@@ -334,18 +334,17 @@ impl DiagnosticsProvider {
         F: FnMut(&Node),
     {
         func(node);
-
-        // Visit children based on node kind
+        self.visit_children(node, func);
+    }
+    
+    /// Visit child nodes based on node kind (extracted to reduce complexity)
+    fn visit_children<F>(&self, node: &Node, func: &mut F)
+    where
+        F: FnMut(&Node),
+    {
         match &node.kind {
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    self.walk_node(stmt, func);
-                }
-            }
-            NodeKind::Block { statements } => {
-                for stmt in statements {
-                    self.walk_node(stmt, func);
-                }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.iter().for_each(|stmt| self.walk_node(stmt, func));
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.walk_node(condition, func);
@@ -367,9 +366,7 @@ impl DiagnosticsProvider {
                 self.walk_node(right, func);
             }
             NodeKind::FunctionCall { args, .. } => {
-                for arg in args {
-                    self.walk_node(arg, func);
-                }
+                args.iter().for_each(|arg| self.walk_node(arg, func));
             }
             NodeKind::ExpressionStatement { expression } => {
                 self.walk_node(expression, func);
@@ -438,12 +435,18 @@ pub fn dead_code_lsp_diagnostics(
     file_path: &Path,
 ) -> Vec<LspDiagnostic> {
     let detector = DeadCodeDetector::new(index.clone());
-    let analysis = detector.analyze_file(file_path);
-
     let mut diagnostics = Vec::new();
+    
+    // Safely handle analysis errors by logging and continuing
+    let items = match detector.analyze_file(file_path) {
+        Ok(items) => items,
+        Err(_) => {
+            // Could log error here in a real implementation
+            return diagnostics;
+        }
+    };
 
-    if let Ok(items) = analysis {
-        for item in items {
+    for item in items {
             let (code, message, tags_vec) = match item.code_type {
                 DeadCodeType::UnusedSubroutine => (
                     "unused-subroutine",
@@ -469,9 +472,12 @@ pub fn dead_code_lsp_diagnostics(
                 _ => continue,
             };
 
+            let start_line = item.start_line.saturating_sub(1) as u32;
+            let end_line = item.end_line.saturating_sub(1) as u32;
+            
             let range = Range {
-                start: Position { line: item.start_line.saturating_sub(1) as u32, character: 0 },
-                end: Position { line: item.end_line.saturating_sub(1) as u32, character: 0 },
+                start: Position { line: start_line, character: 0 },
+                end: Position { line: end_line, character: 0 },
             };
 
             diagnostics.push(LspDiagnostic {
@@ -485,7 +491,6 @@ pub fn dead_code_lsp_diagnostics(
                 tags: if tags_vec.is_empty() { None } else { Some(tags_vec) },
                 data: None,
             });
-        }
     }
 
     diagnostics

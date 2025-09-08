@@ -72,12 +72,12 @@ impl DeadCodeDetector {
 
     /// Analyze a single file for dead code
     pub fn analyze_file(&self, file_path: &Path) -> Result<Vec<DeadCode>, String> {
-        let uri = fs_path_to_uri(file_path).map_err(|e| e.to_string())?;
+        let uri = fs_path_to_uri(file_path).map_err(|e| format!("Failed to convert path to URI: {}", e))?;
         let text = self
             .workspace_index
             .document_store()
             .get_text(&uri)
-            .ok_or_else(|| "file not indexed".to_string())?;
+            .ok_or_else(|| format!("File not indexed: {:?}", file_path))?;
 
         let mut dead = Vec::new();
         let mut terminator: Option<(usize, String)> = None;
@@ -104,33 +104,36 @@ impl DeadCodeDetector {
             }
 
             if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
-                terminator = Some((i + 1, trimmed.split_whitespace().next().unwrap().to_string()));
+                if let Some(first_word) = trimmed.split_whitespace().next() {
+                    terminator = Some((i + 1, first_word.to_string()));
+                }
             }
         }
 
         // Unused variables and subroutines in this file
+        // Filter symbols first for better performance
         let unused_symbols = self.workspace_index.find_unused_symbols();
-        for sym in unused_symbols {
-            if sym.uri == uri
-                && matches!(sym.kind, SymbolKind::Subroutine | SymbolKind::Variable)
-            {
-                let code_type = match sym.kind {
-                    SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
-                    SymbolKind::Variable => DeadCodeType::UnusedVariable,
-                    _ => continue,
-                };
+        let file_symbols: Vec<_> = unused_symbols.into_iter()
+            .filter(|sym| sym.uri == uri && matches!(sym.kind, SymbolKind::Subroutine | SymbolKind::Variable))
+            .collect();
+        
+        for sym in file_symbols {
+            let code_type = match sym.kind {
+                SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
+                SymbolKind::Variable => DeadCodeType::UnusedVariable,
+                _ => continue, // This should never happen due to filter above
+            };
 
-                dead.push(DeadCode {
-                    code_type,
-                    name: Some(sym.name.clone()),
-                    file_path: file_path.to_path_buf(),
-                    start_line: sym.range.start.line as usize + 1,
-                    end_line: sym.range.end.line as usize + 1,
-                    reason: "Symbol is never used".to_string(),
-                    confidence: 0.9,
-                    suggestion: Some("Remove or use this symbol".to_string()),
-                });
-            }
+            dead.push(DeadCode {
+                code_type,
+                name: Some(sym.name.clone()),
+                file_path: file_path.to_path_buf(),
+                start_line: sym.range.start.line as usize + 1,
+                end_line: sym.range.end.line as usize + 1,
+                reason: "Symbol is never used".to_string(),
+                confidence: 0.9,
+                suggestion: Some("Remove or use this symbol".to_string()),
+            });
         }
 
         Ok(dead)
@@ -146,20 +149,31 @@ impl DeadCodeDetector {
         for doc in &docs {
             total_lines += doc.text.lines().count();
             if let Some(path) = uri_to_fs_path(&doc.uri) {
-                if let Ok(mut file_dead) = self.analyze_file(&path) {
-                    dead_code.append(&mut file_dead);
+                match self.analyze_file(&path) {
+                    Ok(mut file_dead) => {
+                        dead_code.append(&mut file_dead);
+                    }
+                    Err(_) => {
+                        // Skip files that can't be analyzed
+                        // In a real implementation, we might log this error
+                        continue;
+                    }
                 }
             }
         }
 
         // Workspace-level unused symbols for items not covered per-file
-        for sym in self.workspace_index.find_unused_symbols() {
+        // Filter to only constants and packages for workspace-level analysis
+        let workspace_symbols: Vec<_> = self.workspace_index.find_unused_symbols()
+            .into_iter()
+            .filter(|sym| matches!(sym.kind, SymbolKind::Constant | SymbolKind::Package))
+            .collect();
+            
+        for sym in workspace_symbols {
             let code_type = match sym.kind {
                 SymbolKind::Constant => DeadCodeType::UnusedConstant,
                 SymbolKind::Package => DeadCodeType::UnusedPackage,
-                // Variables and subroutines are handled by analyze_file
-                SymbolKind::Subroutine | SymbolKind::Variable => continue,
-                _ => continue,
+                _ => continue, // Should never happen due to filter
             };
 
             let file_path = uri_to_fs_path(&sym.uri).unwrap_or_else(|| PathBuf::from(&sym.uri));
