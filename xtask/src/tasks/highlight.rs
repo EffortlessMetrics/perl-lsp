@@ -1,13 +1,13 @@
 //! Highlight test task implementation
 
 use crate::types::ScannerType;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use tree_sitter::{Parser, Query, QueryCursor};
 use walkdir::WalkDir;
-use perl_parser::{Parser, Node, NodeKind};
 
 /// Highlight expectation from test file comments
 #[derive(Clone, Debug)]
@@ -160,124 +160,44 @@ fn run_highlight_test_case(
     test_case: &HighlightTestCase,
     _scanner: &Option<ScannerType>,
 ) -> Result<bool> {
-    // Parse the source code using perl-parser
-    let mut parser = Parser::new(&test_case.source);
-    let ast = parser.parse()
-        .context("Failed to parse test source")?;
+    // Parse the source code using tree-sitter-perl
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_perl::language())
+        .context("Failed to load tree-sitter-perl language")?;
+    let tree = parser
+        .parse(&test_case.source, None)
+        .ok_or_else(|| eyre!("Failed to parse test source"))?;
 
-    // Collect actual node kinds from the AST to simulate highlight scopes
-    let mut actual_scopes: HashMap<String, usize> = HashMap::new();
-    collect_node_kinds(&ast, &mut actual_scopes);
+    // Load and compile the highlight query
+    let query_source =
+        fs::read_to_string("queries/highlights.scm").context("Failed to read highlight query")?;
+    let query = Query::new(&tree_sitter_perl::language(), &query_source)
+        .context("Failed to compile highlight query")?;
 
-    // Map expected highlight scopes to node kinds
-    let mut success = true;
-    for expectation in &test_case.expectations {
-        let expected_scope = &expectation.expected_scope;
-        
-        // Map common highlight scopes to parser node kinds
-        let node_kind = match expected_scope.as_str() {
-            "number" => "number",
-            "operator" => "binary_+", // Map operator to binary addition as example
-            "keyword" => "VariableDeclaration", // Map keyword to variable declaration
-            "punctuation.special" => "Variable", // Sigil is part of variable node
-            "variable" => "Variable",
-            "string" => "string",
-            "function" => "SubDeclaration", // Map function to subroutine declaration
-            "type" => "UseStatement", // Map type to use statement
-            "label" => "HereDocEnd", // Map label to heredoc end marker
-            _ => expected_scope, // Use as-is for other cases
-        };
-        
-        let actual_count = actual_scopes.get(node_kind).copied().unwrap_or(0);
-        
-        if actual_count == 0 {
-            eprintln!("Expected scope '{}' (mapped to '{}') not found in AST", expected_scope, node_kind);
-            success = false;
-        }
+    // Execute the query and collect actual capture names
+    let mut cursor = QueryCursor::new();
+    let captures = cursor.captures(&query, tree.root_node(), test_case.source.as_bytes());
+    let mut actual_counts: HashMap<String, usize> = HashMap::new();
+    for (_m, capture_index) in captures {
+        let name = query.capture_names()[capture_index as usize].clone();
+        *actual_counts.entry(name).or_insert(0) += 1;
     }
 
-    // Debug: Print all actual node kinds for troubleshooting
-    if !success {
-        eprintln!("Available node kinds: {:?}", actual_scopes.keys().collect::<Vec<_>>());
-        eprintln!("Expected scopes: {:?}", test_case.expectations.iter().map(|e| &e.expected_scope).collect::<Vec<_>>());
+    // Verify that each expected scope appears at least as many times as specified
+    let mut success = true;
+    for expectation in &test_case.expectations {
+        match actual_counts.get_mut(&expectation.expected_scope) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+            }
+            _ => {
+                success = false;
+            }
+        }
     }
 
     Ok(success)
-}
-
-/// Recursively collect all node kinds from the AST
-fn collect_node_kinds(node: &Node, scopes: &mut HashMap<String, usize>) {
-    let kind_name = match &node.kind {
-        NodeKind::Program { .. } => "Program",
-        NodeKind::ExpressionStatement { .. } => "ExpressionStatement", 
-        NodeKind::VariableDeclaration { .. } => "VariableDeclaration",
-        NodeKind::Variable { .. } => "Variable",
-        NodeKind::Binary { op, .. } => {
-            // Return specific binary operator types
-            match op.as_str() {
-                "+" => "binary_+",
-                "-" => "binary_-",
-                "*" => "binary_*",
-                "/" => "binary_/",
-                "=" => "Assignment",
-                "==" => "binary_==",
-                "=~" => "binary_=~",
-                "=>" => "binary_=>",
-                _ => "binary_op",
-            }
-        }
-        NodeKind::Number { .. } => "number",
-        NodeKind::String { .. } => "string",
-        NodeKind::Assignment { .. } => "Assignment",
-        NodeKind::Subroutine { .. } => "SubDeclaration",
-        NodeKind::Use { .. } => "UseStatement",
-        NodeKind::FunctionCall { .. } => "FunctionCall",
-        NodeKind::Identifier { .. } => "Identifier",
-        NodeKind::Heredoc { .. } => "HereDoc",
-        _ => "other", // Fallback for other node types
-    }.to_string();
-    
-    *scopes.entry(kind_name).or_insert(0) += 1;
-    
-    // Manually recurse into child nodes based on NodeKind
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                collect_node_kinds(stmt, scopes);
-            }
-        }
-        NodeKind::ExpressionStatement { expression } => {
-            collect_node_kinds(expression, scopes);
-        }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            collect_node_kinds(variable, scopes);
-            if let Some(init) = initializer {
-                collect_node_kinds(init, scopes);
-            }
-        }
-        NodeKind::Binary { left, right, .. } => {
-            collect_node_kinds(left, scopes);
-            collect_node_kinds(right, scopes);
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            collect_node_kinds(lhs, scopes);
-            collect_node_kinds(rhs, scopes);
-        }
-        NodeKind::Subroutine { body, .. } => {
-            // Note: name is an Option<String>, not a Node, so we don't recurse into it
-            collect_node_kinds(body, scopes);
-        }
-        NodeKind::Use { .. } => {
-            // Note: module is a String, not a Node, so we don't recurse into it
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            // Note: name is a String, not a Node, so we don't recurse into it
-            for arg in args {
-                collect_node_kinds(arg, scopes);
-            }
-        }
-        _ => {}
-    }
 }
 
 pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {

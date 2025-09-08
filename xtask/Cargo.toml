@@ -16,7 +16,7 @@ anyhow = "1.0.98"
 indicatif = "0.18.0"
 console = "0.16.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-# Remove tree-sitter-perl dependency for now - focus on perl-parser integration
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", features = ["pure-rust"], optional = true }
 perl-parser = { path = "../crates/perl-parser" }
 tree-sitter = "0.25.8"
 regex = "1.11.1"
@@ -33,6 +33,11 @@ tiny_http = "0.12"
 tempfile = "3.8"
 
 [features]
-default = []
+# Additional tasks that depend on legacy tree-sitter-perl crate
+legacy = ["tree-sitter-perl"]
+
+[patch.crates-io]
+perl-lexer = { path = "../crates/perl-lexer" }
+perl-parser = { path = "../crates/perl-parser" }
 
 
