@@ -1,7 +1,7 @@
+use lsp_types::NumberOrString;
 use perl_parser::dead_code_detector::{DeadCodeDetector, DeadCodeType};
 use perl_parser::diagnostics::dead_code_lsp_diagnostics;
 use perl_parser::workspace_index::WorkspaceIndex;
-use lsp_types::NumberOrString;
 use std::path::{Path, PathBuf};
 
 #[test]
@@ -62,7 +62,13 @@ fn lsp_diagnostics_report_dead_code() {
 
     let diags = dead_code_lsp_diagnostics(&index, Path::new("/Unused.pm"));
 
-    assert!(diags.iter().any(|d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unused-variable")));
-    assert!(diags.iter().any(|d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unused-subroutine")));
-    assert!(diags.iter().any(|d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unreachable-code")));
+    assert!(diags.iter().any(
+        |d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unused-variable")
+    ));
+    assert!(diags.iter().any(
+        |d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unused-subroutine")
+    ));
+    assert!(diags.iter().any(
+        |d| matches!(d.code.as_ref(), Some(NumberOrString::String(s)) if s == "unreachable-code")
+    ));
 }
