@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.9)
+### 📦 Published Crates (v0.8.8)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization and production-ready CLI interface
@@ -25,9 +25,9 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.9 GA (General Availability) - LSP Performance Breakthrough Release ⚡
+## 📦 Latest Release: v0.8.8 GA (General Availability) - LSP Performance Breakthrough Release ⚡
 
-### 🚀 v0.8.9 - Revolutionary LSP Performance Optimizations (99.5% Timeout Reduction)
+### 🚀 v0.8.8 - Revolutionary LSP Performance Optimizations (99.5% Timeout Reduction)
 
 **Game-changing performance improvements that eliminate workspace bottlenecks**:
 - ⚡ **test_completion_detail_formatting**: 99.5% performance improvement (>60 seconds → 0.26 seconds)
@@ -198,6 +198,19 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Need to parse Perl in your Rust project?** → Use the `perl-parser` library.
 - **Building a new Perl parser?** → Use `perl-corpus` for testing.
 - **Migrating from the old Pest parser?** → Use `perl-parser-pest` as a temporary step.
+
+---
+
+---
+
+## 📚 Documentation Framework
+
+This documentation follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive learning:
+
+- **🎓 Tutorials**: Learning-oriented, hands-on guidance for first-time users
+- **🔧 How-to Guides**: Problem-oriented, step-by-step solutions for specific tasks
+- **📖 Reference**: Information-oriented, comprehensive specifications and API docs
+- **💡 Explanation**: Understanding-oriented, design decisions and architectural concepts
 
 ---
 
@@ -956,17 +969,39 @@ See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 
 ---
 
-## 📖 Documentation
+## 📖 Documentation (*Diataxis: Reference* - Information architecture and navigation)
 
-- [API Documentation](https://docs.rs/perl-parser)
-- [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) - Find the right docs
-- [Architecture Guide](ARCHITECTURE.md)
-- [Development Guide](DEVELOPMENT.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
-- [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
-- [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
-- [Workspace Test Report](WORKSPACE_TEST_REPORT.md) - Current workspace configuration status and build reliability
+### 🎓 Tutorials (Learning-oriented)
+- **[Quick Start](#-quick-start-diataxis-tutorial---learning-oriented-guidance-for-first-time-users)** - Get up and running quickly
+- **[Editor Integration](#-editor-integration-diataxis-how-to-guide---editor-specific-setup-instructions)** - Set up your editor with perl-lsp
+- **[Workspace Refactoring Tutorial](docs/WORKSPACE_REFACTORING_TUTORIAL.md)** - Learn cross-file refactoring
+
+### 🔧 How-to Guides (Problem-oriented)
+- **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute to the project
+- **[Build and Test](#-build-and-test-diataxis-how-to-guide---development-workflow-steps)** - Development workflow steps
+- **[LSP Development Guide](docs/LSP_DEVELOPMENT_GUIDE.md)** - Implement LSP features
+- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Use import optimization features
+- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Follow security best practices
+
+### 📖 Reference (Information-oriented)
+- **[API Documentation](https://docs.rs/perl-parser)** - Complete API reference
+- **[LSP Actual Status](LSP_ACTUAL_STATUS.md)** - Current LSP feature matrix
+- **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - All available commands
+- **[Performance Benchmarks](#-performance-diataxis-reference---benchmark-data-and-measurements)** - Performance data and metrics
+- **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System components and design
+- **[Edge Case Handling](docs/EDGE_CASES.md)** - Comprehensive edge case documentation
+
+### 💡 Explanation (Understanding-oriented)
+- **[Architecture](#-architecture-diataxis-explanation---design-concepts-and-rationale)** - Design concepts and rationale  
+- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Technical architecture
+- **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance implementation details
+- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Performance analysis methodology
+- **[Workspace Navigation Guide](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Cross-file navigation concepts
+
+### 🗂️ Additional Resources
+- **[Documentation Guide](docs/DOCUMENTATION_GUIDE.md)** - Find the right documentation for your needs
+- **[Feature Roadmap](FEATURE_ROADMAP.md)** - Planned features and development timeline
+- **[Stability Guide](docs/STABILITY.md)** - API stability guarantees
 
 ---
 

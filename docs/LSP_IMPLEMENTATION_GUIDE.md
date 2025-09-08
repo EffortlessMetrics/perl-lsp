@@ -1,6 +1,12 @@
-# LSP Implementation Technical Guide
+# LSP Implementation Technical Guide (*Diataxis: Explanation* - Understanding LSP architecture and design decisions)
 
-## Architecture Overview
+> This guide follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive technical documentation:
+> - **Tutorial sections**: Hands-on learning with examples
+> - **How-to sections**: Step-by-step implementation guidance  
+> - **Reference sections**: Complete technical specifications
+> - **Explanation sections**: Design concepts and architectural decisions
+
+## Architecture Overview (*Diataxis: Explanation* - LSP design concepts)
 
 ```
 ┌─────────────────┐     JSON-RPC      ┌──────────────────┐
@@ -19,13 +25,13 @@
                                       └──────────────────┘
 ```
 
-## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics
+## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics (*Diataxis: Explanation* - Understanding the bareword analysis breakthrough)
 
 The v0.8.6 release introduces breakthrough hash key context detection that eliminates false positives in bareword analysis under `use strict`. This represents a significant advancement in Perl static analysis.
 
-### Technical Implementation
+### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
 
-#### Core Algorithm
+#### Core Algorithm (*Diataxis: Reference* - Implementation details)
 
 ```rust
 fn is_in_hash_key_context(

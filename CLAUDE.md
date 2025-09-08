@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
+**Latest Release**: v0.8.8+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA)
+### Published Crates (v0.8.8 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage

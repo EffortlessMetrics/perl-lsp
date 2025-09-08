@@ -1,4 +1,4 @@
-# LSP Actual Status - v0.8.9+ Post-Validation
+# LSP Actual Status - v0.8.8+ Post-Validation
 
 ## LSP GA Contract
 
@@ -10,7 +10,7 @@
 
 ## Honest Assessment of LSP Functionality - **Post-Validation Status**
 
-The `perl-parser` crate LSP implementation has achieved **approximately 87% functional LSP features** (up from 85% with comprehensive post-validation improvements). Major enhancements include enterprise-grade security validation, enhanced scope analysis with 41 comprehensive test cases, production-stable incremental parsing with 99.7% node reuse efficiency, comprehensive workspace navigation improvements, and **v0.8.9 workspace refactoring capabilities**. **291+ tests passing** across all components with 100% reliability validation. This document provides an honest assessment of current capabilities based on comprehensive validation results.
+The `perl-parser` crate LSP implementation has achieved **approximately 87% functional LSP features** (up from 85% with comprehensive post-validation improvements). Major enhancements include enterprise-grade security validation, enhanced scope analysis with 41 comprehensive test cases, production-stable incremental parsing with 99.7% node reuse efficiency, comprehensive workspace navigation improvements, and **v0.8.8 workspace refactoring capabilities**. **291+ tests passing** across all components with 100% reliability validation. This document provides an honest assessment of current capabilities based on comprehensive validation results.
 
 ## ✅ Actually Working Features (~87%) - **Validation Enhanced**
 
@@ -233,7 +233,7 @@ These features have been extensively tested and provide real, production-ready f
 
 ## 📋 GA Contract: What's Advertised vs Not Advertised
 
-### ✅ Advertised in v0.8.9 (Working Features)
+### ✅ Advertised in v0.8.8 (Working Features)
 - `textDocumentSync` - File synchronization
 - `completionProvider` - Enhanced completions with file path support
 - `hoverProvider` - Hover information
@@ -259,10 +259,10 @@ These features have been extensively tested and provide real, production-ready f
 - `workspaceSymbolProvider.resolveProvider` - Symbol resolve (NEW in v0.8.5)
 - `typeDefinitionProvider` - Type definition (NEW in v0.8.6)
 - `implementationProvider` - Implementation (NEW in v0.8.6)
-- `workspaceRefactoringProvider` - Cross-file refactoring operations (NEW in v0.8.9)
-- `advancedCodeActionProvider` - Enhanced code actions and refactoring (NEW in v0.8.9)
+- `workspaceRefactoringProvider` - Cross-file refactoring operations (NEW in v0.8.8)
+- `advancedCodeActionProvider` - Enhanced code actions and refactoring (NEW in v0.8.8)
 
-### ❌ NOT Advertised in v0.8.9 (Not Implemented)
+### ❌ NOT Advertised in v0.8.8 (Not Implemented)
 
 #### Code Lens
 - **Status:** Preview (advertised in production builds only).
