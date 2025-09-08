@@ -47,23 +47,20 @@ fn next_id() -> i64 {
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
     static EMPTY_VEC: Vec<serde_json::Value> = Vec::new();
-    
+
     // Handle error responses
     if resp.get("error").is_some() {
         return &EMPTY_VEC;
     }
-    
+
     // Handle null results
     if let Some(result) = resp.get("result") {
         if result.is_null() {
             return &EMPTY_VEC;
         }
     }
-    
-    resp["result"]["items"]
-        .as_array()
-        .or_else(|| resp["result"].as_array())
-        .unwrap_or(&EMPTY_VEC)
+
+    resp["result"]["items"].as_array().or_else(|| resp["result"].as_array()).unwrap_or(&EMPTY_VEC)
 }
 
 pub struct LspServer {

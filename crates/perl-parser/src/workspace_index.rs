@@ -227,6 +227,7 @@ struct FileIndex {
 }
 
 /// Thread-safe workspace index
+#[derive(Clone)]
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
