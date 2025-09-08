@@ -450,6 +450,8 @@ impl IncrementalDocument {
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
         self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
+        self.subtree_cache.lru.push_back(hash);
+        self.subtree_cache.evict_if_needed();
 
         // Recursively cache children
         match &node.kind {
@@ -521,6 +523,11 @@ impl IncrementalDocument {
     pub fn metrics(&self) -> &ParseMetrics {
         &self.metrics
     }
+
+    /// Set maximum cache size
+    pub fn set_cache_max_size(&mut self, max_size: usize) {
+        self.subtree_cache.set_max_size(max_size);
+    }
 }
 
 impl SubtreeCache {
@@ -539,13 +546,17 @@ impl SubtreeCache {
         self.lru.clear();
     }
 
-    #[allow(dead_code)]
     fn evict_if_needed(&mut self) {
         while self.by_content.len() > self.max_size {
             if let Some(hash) = self.lru.pop_front() {
                 self.by_content.remove(&hash);
             }
         }
+    }
+
+    fn set_max_size(&mut self, max_size: usize) {
+        self.max_size = max_size;
+        self.evict_if_needed();
     }
 }
 
@@ -622,5 +633,27 @@ mod tests {
         // Cache should have entries
         assert!(!doc.subtree_cache.by_range.is_empty());
         assert!(!doc.subtree_cache.by_content.is_empty());
+    }
+
+    #[test]
+    fn test_cache_respects_max_size() {
+        let source = "my $x = 1; my $y = 2; my $z = 3;";
+        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+
+        // Ensure cache starts larger than 1 entry
+        assert!(doc.subtree_cache.by_content.len() > 1);
+
+        // Shrink cache and verify eviction
+        doc.set_cache_max_size(1);
+        assert!(doc.subtree_cache.by_content.len() <= 1);
+
+        // Applying an edit should not grow the cache beyond max_size
+        let edit = IncrementalEdit::new(
+            source.find("1").unwrap(),
+            source.find("1").unwrap() + 1,
+            "10".to_string(),
+        );
+        doc.apply_edit(edit).unwrap();
+        assert!(doc.subtree_cache.by_content.len() <= 1);
     }
 }
