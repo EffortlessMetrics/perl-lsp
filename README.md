@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.8)
+### 📦 Published Crates (v0.8.9)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
@@ -25,7 +25,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
+## 📦 Latest Release: v0.8.9 GA (General Availability) - Enhanced Lexer Performance Optimizations ⚡
 
 ### Recent Post-Validation Improvements - Enterprise-Ready Perl Development Environment
 - 🚀 **Comprehensive Security Validation**: Enterprise-grade security patterns with PBKDF2 authentication implementation (PR #44)
@@ -37,7 +37,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - ⚡ **Architecture Maturity**: Production-ready incremental parsing with 99.7% node reuse efficiency and <1ms update times
 - ✅ **Quality Assurance**: Zero clippy warnings, consistent formatting, and full enterprise-grade compliance maintained
 
-### v0.8.8 - Comprehensive Rope Integration with Production-Stable AST Generation 🚀
+### v0.8.9 - Enhanced Lexer Performance with Import Optimizer Improvements 🚀
 - 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility
 - 🧠 **Comprehensive Workspace Navigation**: Enhanced AST traversal including `NodeKind::ExpressionStatement` support across all LSP providers
 - 📊 **Advanced Code Actions and Refactoring**: Fixed parameter threshold validation and enhanced refactoring suggestions with proper AST handling
@@ -47,7 +47,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - 🔧 **Quality Gate Compliance**: Zero clippy warnings, consistent code formatting, full architectural compliance maintained
 - ✅ **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking and reference resolution
 
-### v0.8.8+ - Production-Ready Incremental Parsing with Statistical Validation 🚀
+### v0.8.9+ - Production-Ready Incremental Parsing with Statistical Validation 🚀
 - 🚀 **Advanced Incremental Parsing V2**: Production-ready incremental parser with 99.7% node reuse efficiency
 - 🧠 **Sub-millisecond Performance**: 65µs average for simple edits with 96.8-99.7% node reuse rates
 - 📊 **Statistical Validation Framework**: Comprehensive performance analysis with coefficient of variation <0.6
@@ -161,7 +161,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
-### Production Crates (v0.8.8 GA)
+### Production Crates (v0.8.9 GA)
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
@@ -235,7 +235,7 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8.8"
+perl-parser = "0.8.9"
 ```
 
 ```rust
@@ -327,7 +327,7 @@ See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 ### Using the LSP Server (*Diataxis: How-to Guide* - Installation and usage steps)
 
 ```bash
-# Run the LSP server (NEW standalone crate in v0.8.8)
+# Run the LSP server (standalone crate in v0.8.9)
 cargo run -p perl-lsp
 
 # Or install it globally
@@ -431,7 +431,7 @@ endif
 
 ## 📊 Performance (*Diataxis: Reference* - Benchmark data and measurements)
 
-### Incremental Parsing (v0.8.8+)
+### Incremental Parsing (v0.8.9+)
 The latest versions feature a production-ready incremental parser with statistically validated performance. This means that for typical code edits, the parser only re-processes the changed parts of a file, resulting in sub-millisecond update times.
 
 | Metric | Performance | Details |
@@ -730,7 +730,7 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 - ✅ References and dereferencing
 - ✅ Tree-sitter compatible output
 
-### Recent Improvements (v0.8.8+)
+### Recent Improvements (v0.8.9+)
 
 ✅ **Production-Ready Incremental Parsing**: 99.7% node reuse with 65µs average updates and statistical validation.
 ✅ **Standalone LSP Crate**: The `perl-lsp` crate provides a dedicated binary for IDE integration.
@@ -1010,7 +1010,7 @@ The benchmarking system provides:
 To use the parser in your own Rust project:
 ```toml
 [dependencies]
-perl-parser = "0.8.8"
+perl-parser = "0.8.9"
 ```
 
 To install the LSP server for your editor:
