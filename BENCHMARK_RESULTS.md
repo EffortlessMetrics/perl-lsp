@@ -23,6 +23,29 @@ This document contains the actual benchmark results comparing the Rust implement
 
 **Performance Summary**: The Rust implementation excels at small files and incremental parsing, while the C implementation remains faster for larger files. The Rust version provides significant advantages in memory usage, error recovery, and incremental updates that make it superior for LSP server usage despite raw parsing performance trade-offs.
 
+## Performance Context (*Diataxis: Explanation*)
+
+### Why Performance Varies by Use Case
+
+The benchmark results reflect different optimization strategies:
+
+- **Rust Implementation**: Optimized for LSP server usage patterns (small files, frequent incremental updates)
+- **C Implementation**: Optimized for batch processing of large files
+
+### Real-World Usage Patterns
+
+Most Perl development involves:
+- **Small to Medium Files**: Where Rust parser excels (11x faster for <1KB files)
+- **Interactive Editing**: Where incremental parsing provides 6-10x speedup
+- **Error Recovery**: Where Rust implementation provides 7x faster recovery
+
+### Benchmark Interpretation Guide
+
+When evaluating these benchmarks:
+- Focus on **your typical use case** (file sizes and editing patterns)
+- Consider **total development workflow** benefits (diagnostics, completion, refactoring)
+- Weigh **raw parsing speed** against **feature completeness** and **reliability**
+
 ## Detailed Performance Comparison
 
 ### Full Parse Time Benchmarks
