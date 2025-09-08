@@ -2296,7 +2296,9 @@ impl<'a> Parser<'a> {
                                 && self.peek_kind() == Some(TokenKind::My)
                             {
                                 args.push(self.parse_variable_declaration()?);
-                            } else if matches!(func_name.as_str(), "map" | "grep" | "sort") && self.peek_kind() == Some(TokenKind::LeftBrace) {
+                            } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
+                                && self.peek_kind() == Some(TokenKind::LeftBrace)
+                            {
                                 // Special handling for map/grep/sort with block as first argument
                                 let block_start = self.current_position();
                                 self.expect(TokenKind::LeftBrace)?;
@@ -4846,7 +4848,7 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::RightBrace) {
             self.tokens.next()?; // consume }
             let end = self.previous_position();
-            
+
             // For empty braces, default to hash (correct for most functions)
             // Functions like sort/map/grep have special handling that creates blocks
             return Ok(Node::new(
