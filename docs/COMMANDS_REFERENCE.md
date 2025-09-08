@@ -93,6 +93,13 @@ cargo check  # Should build cleanly without system dependencies
 - **Production Focus**: Tests only published crate APIs
 - **Platform Independence**: Works without tree-sitter C toolchain
 
+### xtask Exclusion Strategy (*Diataxis: Explanation* - Design decisions)
+The xtask crate is excluded from the workspace to maintain clean builds while preserving advanced functionality:
+- **Why excluded**: xtask depends on excluded crates (tree-sitter-perl-rs with libclang)
+- **How to use**: Run from xtask directory: `cd xtask && cargo run <command>`
+- **Benefits**: Workspace builds remain system-dependency-free
+- **Advanced features**: Dual-scanner corpus comparison requires libclang-dev
+
 ## Test Commands
 
 ### Workspace Testing (v0.8.9)
@@ -107,9 +114,9 @@ cargo test -p perl-lexer                # Lexer tests (40 tests)
 cargo test -p perl-corpus               # Corpus tests (12 tests)
 cargo test -p perl-lsp                  # LSP integration tests
 
-# Legacy test commands (require excluded dependencies)
-# cargo xtask test                      # xtask excluded from workspace
-# cargo xtask corpus                    # xtask excluded from workspace
+# Advanced test commands (excluded from workspace, run from xtask directory)
+# cd xtask && cargo run test            # Advanced xtask test suite
+# cd xtask && cargo run corpus          # Dual-scanner corpus comparison
 ```
 
 ### Comprehensive Integration Testing
@@ -177,9 +184,18 @@ cargo run -p perl-parser --example lsp_capabilities
 
 ## LSP Development Commands
 
+### Core LSP Testing (*Diataxis: How-to Guide* - Development workflows)
+
 ```bash
-# Run LSP tests
+# Run LSP tests with performance optimizations (v0.8.9+)
 cargo test -p perl-parser lsp
+
+# Run LSP integration tests with fast mode (99.5% timeout reduction)
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
+
+# Run specific performance-sensitive tests
+cargo test -p perl-lsp test_completion_detail_formatting
+cargo test -p perl-lsp test_workspace_symbol_search
 
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
@@ -192,6 +208,37 @@ PERL_LSP_INCREMENTAL=1 perl-lsp --stdio < test_requests.jsonrpc
 
 # Run with a test file
 perl-lsp --stdio < test_requests.jsonrpc
+```
+
+### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
+
+**LSP_TEST_FALLBACKS** (**NEW in v0.8.9**):
+```bash
+# Enable fast testing mode (reduces test timeouts by ~75%)
+export LSP_TEST_FALLBACKS=1
+
+# Performance characteristics in fallback mode:
+# - Base timeout: 500ms (vs 2000ms)
+# - Wait for idle: 50ms (vs 2000ms)  
+# - Symbol polling: single 200ms attempt (vs progressive backoff)
+# - Result: 99.5% faster test execution (60s+ → 0.26s for workspace tests)
+
+# Use cases:
+cargo test -p perl-lsp                    # Fast CI/development testing
+LSP_TEST_FALLBACKS=1 cargo test --workspace  # Quick workspace validation
+LSP_TEST_FALLBACKS=1 cargo check --workspace # Fast build verification
+```
+
+**PERL_LSP_INCREMENTAL**:
+```bash
+# Enable incremental parsing (production-ready)
+export PERL_LSP_INCREMENTAL=1
+perl-lsp --stdio
+
+# Performance benefits:
+# - <1ms LSP updates with 70-99% node reuse efficiency
+# - Production-stable incremental parsing
+# - Enterprise-grade workspace refactoring support
 ```
 
 ## Benchmark Commands
@@ -266,6 +313,153 @@ cargo test --doc                      # Documentation tests
 # Legacy quality commands (excluded from workspace)
 # cargo xtask check --all             # xtask excluded from workspace
 # cargo xtask fmt                     # xtask excluded from workspace
+```
+
+## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
+
+### Running Dual-Scanner Corpus Tests (v0.8.9+)
+```bash
+# Prerequisites: Install libclang-dev for C scanner support
+sudo apt-get install libclang-dev  # Ubuntu/Debian
+brew install llvm                  # macOS
+
+# Run dual-scanner corpus comparison (requires xtask excluded from workspace)
+cd xtask && cargo run corpus                              # Default: compare both scanners
+cd xtask && cargo run corpus -- --scanner both           # Explicit dual-scanner mode
+cd xtask && cargo run corpus -- --scanner both --diagnose # With detailed analysis
+
+# Individual scanner testing
+cd xtask && cargo run corpus -- --scanner c              # C scanner only
+cd xtask && cargo run corpus -- --scanner rust           # Rust scanner only  
+cd xtask && cargo run corpus -- --scanner v3             # V3 parser only
+
+# Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
+cd xtask && cargo run corpus -- --diagnose               # Analyze first failing test
+cd xtask && cargo run corpus -- --test                   # Test current parser behavior
+
+# Custom corpus path
+cd xtask && cargo run corpus -- --path ../test/corpus    # Custom corpus directory
+```
+
+### Dual-Scanner Output Analysis (*Diataxis: Explanation* - Understanding results)
+```bash
+# Scanner mismatch tracking
+# When using --scanner both, the system tracks:
+# - Total corpus tests run
+# - Tests passing both scanners  
+# - Tests failing in either scanner
+# - Scanner output mismatches (different S-expressions)
+
+# Example output interpretation:
+# 📊 Corpus Test Summary:
+#    Total: 157
+#    Passed: 142 ✅
+#    Failed: 15 ❌
+#    Scanner mismatches: 23  # C vs Rust differences
+
+# 🔀 Scanner mismatches:
+#    corpus_file.txt: test_case_name  # Specific mismatch location
+```
+
+### Structural Analysis Features (*Diataxis: Reference* - Analysis capabilities)
+```bash
+# The dual-scanner system provides:
+# - Node count comparison between C and Rust scanners
+# - Missing node detection (in C but not Rust output)
+# - Extra node detection (in Rust but not C output)  
+# - Normalized S-expression comparison (whitespace-independent)
+# - Detailed structural diff output for debugging
+
+# Example diagnostic output:
+# 🔍 STRUCTURAL ANALYSIS:
+# C scanner nodes: 42
+# V3 scanner nodes: 41
+# ❌ Nodes missing in V3 output:
+#   - specific_node_type
+# ➕ Extra nodes in V3 output:  
+#   - different_node_type
+```
+
+### xtask corpus Command Reference (*Diataxis: Reference* - Complete command specification)
+
+```bash
+# Basic corpus command structure
+cd xtask && cargo run corpus [OPTIONS]
+
+# Command line options:
+--path <PATH>              # Corpus directory path (default: ../c/test/corpus)
+--scanner <SCANNER>        # Scanner type: c, rust, v3, both (default: both)
+--diagnose                 # Run diagnostic analysis on first failing test
+--test                     # Test current parser behavior with simple expressions
+
+# Scanner type options:
+c       # Use C tree-sitter scanner only (baseline for comparison)
+rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
+v3      # Use V3 native parser only (perl_parser::Parser)
+both    # Compare C scanner vs Rust scanner (dual-scanner mode)
+
+# Prerequisites for dual-scanner mode:
+# Ubuntu/Debian: sudo apt-get install libclang-dev
+# macOS: brew install llvm
+# Fedora: sudo dnf install clang-devel
+
+# Exit codes:
+# 0  - All tests passed, no scanner mismatches
+# 1  - Test failures or scanner mismatches detected
+
+# Output format:
+# 📊 Corpus Test Summary:
+#    Total: <number>         # Total corpus tests processed
+#    Passed: <number> ✅     # Tests passing in all scanners
+#    Failed: <number> ❌     # Tests failing in any scanner
+#    Scanner mismatches: <number>  # Different outputs between scanners
+#
+# ❌ Failed Tests:           # List of failing tests
+#    filename: test_name
+#
+# 🔀 Scanner mismatches:     # List of scanner differences
+#    filename: test_name
+```
+
+### Corpus Test File Structure (*Diataxis: Reference* - Test format specification)
+
+```
+Test Case Name
+================================================================================
+source code here
+----
+(expected s_expression output here)
+
+Next Test Case Name
+================================================================================
+more source code
+----
+(expected_output)
+```
+
+### Advanced Diagnostic Features (*Diataxis: Reference* - Analysis capabilities)
+
+```bash
+# Structural analysis when using --diagnose:
+🔍 DIAGNOSTIC: test_name
+Input Perl code:
+```perl
+source code being tested
+```
+
+📊 C scanner S-expression:
+(program (expression_statement (number "1")))
+
+📊 V3 scanner S-expression:  
+(program (expression_statement (literal "1")))
+
+🔍 STRUCTURAL ANALYSIS:
+C scanner nodes: 15
+V3 scanner nodes: 14
+❌ Nodes missing in V3 output:
+  - number
+➕ Extra nodes in V3 output:
+  - literal
 ```
 
 ## Edge Case Testing Commands

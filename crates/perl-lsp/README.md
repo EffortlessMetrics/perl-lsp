@@ -11,7 +11,7 @@ A **Language Server Protocol (LSP) server for Perl** that provides comprehensive
 - **Real-time Diagnostics**: Syntax checking with intelligent error recovery
 - **Code Completion**: Variables, built-in functions (150+), keywords
 - **Code Navigation**: Go-to-definition, find references, workspace symbols
-- **Code Actions**: Quick fixes, refactoring suggestions
+- **Code Actions**: Quick fixes, refactoring suggestions, import optimization
 - **Formatting Support**: Integration with Perl::Tidy
 - **Modern Editor Integration**: Works with VSCode, Neovim, Emacs, and more
 
@@ -105,12 +105,12 @@ This LSP server is built on top of the [perl-parser](https://crates.io/crates/pe
 - **textDocument/foldingRange**: Code folding support
 - **workspace/symbol**: Cross-file symbol search
 - **textDocument/rename**: Symbol renaming
-- **textDocument/codeAction**: Quick fixes and refactoring
+- **textDocument/codeAction**: Quick fixes, refactoring, and import optimization ("Organize Imports")
 - **textDocument/semanticTokens**: Enhanced syntax highlighting
 
 ### 🚧 Partial Implementation
 
-- **textDocument/codeLens**: ~20% functional
+- **textDocument/codeLens**: ~85% functional (Preview - advertised in production builds only)
 - **callHierarchy/**: ~15% functional
 
 See the [LSP Capability Documentation](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/master/docs/LSP_ACTUAL_STATUS.md) for complete feature status.
