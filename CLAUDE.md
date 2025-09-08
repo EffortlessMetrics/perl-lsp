@@ -81,6 +81,13 @@ cargo test -p perl-lsp                  # LSP integration tests
 cargo clippy --workspace                # Lint workspace crates
 cargo bench                             # Performance benchmarks
 perl-lsp --stdio --log                  # Debug LSP server
+
+# Development Server (with file watching and LSP hot-reload)
+cd xtask && cargo run --no-default-features -- dev --watch --port 8080
+cd xtask && cargo run --no-default-features -- dev                    # Static mode without file watching
+
+# Performance Optimization (LSP test speed improvements)
+cd xtask && cargo run --no-default-features -- optimize-tests         # Analyze and fix slow tests
 ```
 
 ### Advanced Testing (*Diataxis: Tutorial* - Dual-Scanner Corpus Comparison)
@@ -156,6 +163,33 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.9)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
+
+### Development Workflow (Enhanced)
+
+**Development Server** - Automatic LSP reload on file changes:
+```bash
+# Start development server with file watching and hot-reload
+cd xtask && cargo run --no-default-features -- dev --watch --port 8080
+
+# Features:
+# - Monitors Rust (.rs), Perl (.pl, .pm), and config files (.toml)
+# - Automatic LSP server restart on changes with 500ms debouncing
+# - Graceful shutdown with Ctrl+C
+# - Health monitoring and automatic recovery if LSP crashes
+# - Cross-platform file watching support
+```
+
+**Performance Testing Workflow** - Optimize slow test suites:
+```bash
+# Analyze test performance and apply optimizations
+cd xtask && cargo run --no-default-features -- optimize-tests
+
+# Automatically detects:
+# - Long timeout values (>1000ms reduced to 500ms)
+# - Excessive wait_for_idle calls (>500ms reduced to 200ms)  
+# - Inefficient polling patterns
+# - Potential savings up to 3+ seconds per test file
+```
 
 ## Current Status (v0.8.9)
 

@@ -15,6 +15,7 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
+    module_resolver,
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -182,6 +183,9 @@ pub(crate) struct DocumentState {
 
     /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
+
+    /// Document lock to ensure atomic document operations
+    pub(crate) document_lock: Arc<std::sync::RwLock<()>>,
 }
 
 /// Normalize legacy package separator ' to ::
@@ -898,6 +902,9 @@ impl LspServer {
         if build_flags.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
         }
+        if build_flags.call_hierarchy {
+            capabilities["callHierarchyProvider"] = json!(true);
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
@@ -977,6 +984,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
+                    document_lock: Arc::new(std::sync::RwLock::new(())),
                 },
             );
 
@@ -1049,6 +1057,7 @@ impl LspServer {
                         parent_map: ParentMap::default(),
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
+                        document_lock: Arc::new(std::sync::RwLock::new(())),
                     });
 
                 // Increment generation counter for this change
@@ -1115,6 +1124,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
+                    document_lock: doc_state.document_lock.clone(), // Preserve the document lock
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -1496,16 +1506,28 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
+                    let resolver = {
+                        let docs = self.documents.clone();
+                        let folders = self.workspace_folders.clone();
+                        Arc::new(move |m: &str| {
+                            module_resolver::resolve_module_to_path(&docs, &folders, m)
+                        })
+                    };
                     #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
                         self.workspace_index.clone(),
+                        Some(resolver.clone()),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source(
+                        ast,
+                        &doc.text,
+                        None,
+                        Some(resolver.clone()),
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -2058,6 +2080,43 @@ impl LspServer {
                     let hover_text = self.get_token_at_position(&doc.text, offset);
 
                     if !hover_text.is_empty() {
+                        // Enhanced fallback: if it looks like a package/module name, provide better info
+                        if hover_text.contains("::")
+                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
+                        {
+                            return Ok(Some(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
+                                },
+                            })));
+                        }
+
+                        return Ok(Some(json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": format!("**Perl**: `{}`", hover_text),
+                            },
+                        })));
+                    }
+                } else {
+                    // Fallback: use document text directly without AST
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let hover_text = self.get_token_at_position(&doc.text, offset);
+
+                    if !hover_text.is_empty() {
+                        // Enhanced fallback: if it looks like a package/module name, provide better info
+                        if hover_text.contains("::")
+                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
+                        {
+                            return Ok(Some(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
+                                },
+                            })));
+                        }
+
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
@@ -2068,7 +2127,7 @@ impl LspServer {
                 }
             }
         }
-
+        // Return explicit null result as expected by LSP protocol
         Ok(Some(json!(null)))
     }
 
@@ -2726,7 +2785,11 @@ impl LspServer {
                     self.extract_module_reference(&text_around, cursor_in_text)
                 {
                     // Try to resolve module to file path
-                    if let Some(module_path) = self.resolve_module_to_path(&module_name) {
+                    if let Some(module_path) = module_resolver::resolve_module_to_path(
+                        &self.documents,
+                        &self.workspace_folders,
+                        &module_name,
+                    ) {
                         return Ok(Some(json!([{
                             "uri": module_path,
                             "range": {
@@ -2757,8 +2820,11 @@ impl LspServer {
                             // Check if cursor is within the package name
                             if cursor_in_text >= match_start && cursor_in_text <= match_end {
                                 let package_name = package_match.as_str();
-                                if let Some(module_path) = self.resolve_module_to_path(package_name)
-                                {
+                                if let Some(module_path) = module_resolver::resolve_module_to_path(
+                                    &self.documents,
+                                    &self.workspace_folders,
+                                    package_name,
+                                ) {
                                     return Ok(Some(json!([{
                                         "uri": module_path,
                                         "range": {
@@ -4465,13 +4531,16 @@ impl LspServer {
                 || chars[start - 1] == '_'
                 || chars[start - 1] == '$'
                 || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
+                || chars[start - 1] == '%'
+                || chars[start - 1] == ':')
         {
             start -= 1;
         }
 
         let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        while end < chars.len()
+            && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == ':')
+        {
             end += 1;
         }
 
@@ -5855,6 +5924,11 @@ impl LspServer {
 
     /// Handle incoming calls request
     fn handle_incoming_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().call_hierarchy {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
@@ -5881,6 +5955,11 @@ impl LspServer {
 
     /// Handle outgoing calls request
     fn handle_outgoing_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().call_hierarchy {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
@@ -7826,84 +7905,6 @@ impl LspServer {
             }
         }
 
-        None
-    }
-
-    /// Resolve a module name to a file path URI
-    fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
-        use std::time::{Duration, Instant};
-
-        // Convert Module::Name to Module/Name.pm
-        let relative_path = format!("{}.pm", module_name.replace("::", "/"));
-
-        // First check if we have the document already opened (fast path)
-        let documents = self.documents.lock().unwrap();
-        for (uri, _doc) in documents.iter() {
-            if uri.ends_with(&relative_path) {
-                return Some(uri.clone());
-            }
-        }
-        drop(documents);
-
-        // Set a timeout for file system operations
-        let start_time = Instant::now();
-        let timeout = Duration::from_millis(50); // Reduced timeout for faster response
-
-        // Get workspace folders from initialization
-        let workspace_folders = self.workspace_folders.lock().unwrap().clone();
-
-        // Only check workspace-local directories to avoid blocking
-        let search_dirs = ["lib", ".", "local/lib/perl5"];
-
-        for workspace_folder in workspace_folders.iter() {
-            // Early timeout check
-            if start_time.elapsed() > timeout {
-                eprintln!(
-                    "Module resolution timeout for: {} (elapsed: {:?})",
-                    module_name,
-                    start_time.elapsed()
-                );
-                return None;
-            }
-
-            // Parse the workspace folder URI to get the file path
-            let workspace_path = if workspace_folder.starts_with("file://") {
-                workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder)
-            } else {
-                workspace_folder
-            };
-
-            for dir in &search_dirs {
-                let full_path = if *dir == "." {
-                    format!("{}/{}", workspace_path, relative_path)
-                } else {
-                    format!("{}/{}/{}", workspace_path, dir, relative_path)
-                };
-
-                // Check timeout before each FS operation
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
-
-                // Use metadata() instead of exists() as it's slightly more predictable
-                // and we can potentially wrap this in a timeout later
-                match std::fs::metadata(&full_path) {
-                    Ok(meta) if meta.is_file() => {
-                        return Some(format!("file://{}", full_path));
-                    }
-                    _ => {
-                        // File doesn't exist or isn't a regular file, continue
-                    }
-                }
-
-                // Final timeout check
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
-            }
-        }
-
-        // Don't check system paths (@INC) to avoid blocking on network filesystems
         None
     }
 

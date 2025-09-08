@@ -13,6 +13,7 @@ pub mod compare_parsers;
 pub mod corpus;
 pub mod dev;
 pub mod doc;
+pub mod optimize_tests;
 pub mod edge_cases;
 pub mod features;
 pub mod fmt;
