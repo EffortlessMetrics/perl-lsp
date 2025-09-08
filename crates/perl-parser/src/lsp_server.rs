@@ -1458,7 +1458,6 @@ impl LspServer {
     }
 
     /// Get the end position of a document
-    #[allow(dead_code)]
     fn get_document_end_position(&self, content: &str) -> Value {
         let lines: Vec<&str> = content.lines().collect();
         let last_line = lines.len().saturating_sub(1);
@@ -3850,17 +3849,29 @@ impl LspServer {
                         );
 
                         if let (Some(u), Some(off), Some(txt)) = data_info {
-                            let (line, col) = self.offset_to_pos16(doc, off as usize);
                             if let Some(obj) = a.as_object_mut() {
-                                obj.insert("edit".into(), json!({
-                                    "changes": {
-                                        u: [{
-                                            "range": { "start": {"line": line, "character": col},
-                                                       "end":   {"line": line, "character": col} },
-                                            "newText": txt
-                                        }]
-                                    }
-                                }));
+                                let edit_range = if off as usize >= doc.text.len() {
+                                    let end = self.get_document_end_position(&doc.text);
+                                    json!({"start": end.clone(), "end": end })
+                                } else {
+                                    let (line, col) = self.offset_to_pos16(doc, off as usize);
+                                    json!({
+                                        "start": {"line": line, "character": col},
+                                        "end": {"line": line, "character": col}
+                                    })
+                                };
+
+                                obj.insert(
+                                    "edit".into(),
+                                    json!({
+                                        "changes": {
+                                            u: [{
+                                                "range": edit_range,
+                                                "newText": txt
+                                            }]
+                                        }
+                                    }),
+                                );
                                 obj.remove("data");
                             }
                         }
@@ -4904,6 +4915,7 @@ impl LspServer {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
+                        let doc_end = self.get_document_end_position(&doc.text);
                         let lsp_edits: Vec<Value> = edits
                             .into_iter()
                             .map(|edit| {
@@ -4913,10 +4925,7 @@ impl LspServer {
                                             "line": edit.range.start.line,
                                             "character": edit.range.start.character,
                                         },
-                                        "end": {
-                                            "line": edit.range.end.line,
-                                            "character": edit.range.end.character,
-                                        },
+                                        "end": doc_end.clone(),
                                     },
                                     "newText": edit.new_text,
                                 })
@@ -8186,5 +8195,86 @@ fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
 impl Default for LspServer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn end_position_handles_missing_final_newline() {
+        let server = LspServer::new();
+        let content = "package Foo;";
+        let pos = server.get_document_end_position(content);
+        assert_eq!(pos, json!({"line": 0, "character": content.len()}));
+    }
+
+    #[test]
+    fn code_action_append_uses_document_end() {
+        use std::sync::Arc;
+
+        let server = LspServer::new();
+        let uri = "file:///test.pl";
+        let text = "package Foo;"; // No trailing newline
+        let rope = ropey::Rope::from_str(text);
+        let line_starts = LineStartsCache::new_rope(&rope);
+        server.documents.lock().unwrap().insert(
+            uri.to_string(),
+            DocumentState {
+                rope,
+                text: text.to_string(),
+                _version: 1,
+                ast: None,
+                parse_errors: Vec::new(),
+                parent_map: ParentMap::default(),
+                line_starts,
+                generation: Arc::new(AtomicU32::new(0)),
+                document_lock: Arc::new(std::sync::RwLock::new(())),
+            },
+        );
+
+        let result = server
+            .handle_code_actions_pragmas(Some(json!({"textDocument": {"uri": uri}})))
+            .unwrap()
+            .unwrap();
+        let actions = result.as_array().unwrap();
+        assert!(!actions.is_empty());
+        let edit = &actions[0]["edit"]["changes"][uri][0]["range"];
+        let end = server.get_document_end_position(text);
+        assert_eq!(edit["start"], end);
+        assert_eq!(edit["end"], end);
+    }
+
+    #[test]
+    fn formatting_edit_has_correct_end_position() {
+        let formatter = CodeFormatter::new();
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let code = "sub test{my$x=1;return$x;}";
+        match formatter.format_document(code, &options) {
+            Ok(edits) => {
+                if edits.is_empty() {
+                    return;
+                }
+                let server = LspServer::new();
+                let end = server.get_document_end_position(code);
+                assert_eq!(edits[0].range.end.line, end["line"].as_u64().unwrap() as u32);
+                assert_eq!(edits[0].range.end.character, end["character"].as_u64().unwrap() as u32);
+            }
+            Err(e) => {
+                if e.to_string().contains("not found") {
+                    eprintln!("Skipping test: perltidy not installed");
+                } else {
+                    panic!("Formatting failed: {}", e);
+                }
+            }
+        }
     }
 }
