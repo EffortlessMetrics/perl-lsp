@@ -145,6 +145,7 @@ enum Commands {
     },
 
     /// Run corpus tests
+    #[cfg(feature = "legacy")]
     Corpus {
         /// Path to corpus directory
         #[arg(long, default_value = "c/test/corpus")]
@@ -183,8 +184,12 @@ enum Commands {
 
     /// Generate bindings
     Bindings {
-        /// Output directory for bindings
-        #[arg(long, default_value = "crates/tree-sitter-perl/src/bindings")]
+        /// Header file to generate bindings from
+        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        header: PathBuf,
+
+        /// Output file for bindings
+        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/bindings.rs")]
         output: PathBuf,
     },
 
@@ -254,6 +259,7 @@ enum Commands {
     },
 
     /// Run three-way parser comparison
+    #[cfg(feature = "legacy")]
     CompareThree {
         /// Show detailed output
         #[arg(long)]
@@ -316,6 +322,16 @@ enum Commands {
         #[command(subcommand)]
         command: FeaturesCommand,
     },
+
+    /// Validate memory profiling functionality
+    ValidateMemoryProfiler,
+
+    /// Optimize LSP test performance
+    OptimizeTests {
+        /// Apply optimizations automatically without prompting
+        #[arg(long)]
+        auto_apply: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -363,12 +379,13 @@ fn main() -> Result<()> {
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
+        #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
         }
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
-        Commands::Bindings { output } => bindings::run(output),
+        Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
@@ -385,6 +402,7 @@ fn main() -> Result<()> {
             )
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }
@@ -399,5 +417,7 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
+        Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
+        Commands::OptimizeTests { auto_apply: _ } => optimize_tests::optimize_lsp_tests(),
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
+use difference::Changeset;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
@@ -21,12 +22,21 @@ struct CorpusTestResults {
     total: usize,
     passed: usize,
     failed: usize,
+    mismatched: usize,
     errors: Vec<String>,
+    mismatches: Vec<String>,
 }
 
 impl CorpusTestResults {
     fn new() -> Self {
-        Self { total: 0, passed: 0, failed: 0, errors: Vec::new() }
+        Self {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            mismatched: 0,
+            errors: Vec::new(),
+            mismatches: Vec::new(),
+        }
     }
 
     fn add_passed(&mut self) {
@@ -40,16 +50,29 @@ impl CorpusTestResults {
         self.errors.push(error);
     }
 
+    fn add_mismatch(&mut self, mismatch: String) {
+        self.mismatched += 1;
+        self.mismatches.push(mismatch);
+    }
+
     fn print_summary(&self) {
         println!("\n📊 Corpus Test Summary:");
         println!("   Total: {}", self.total);
         println!("   Passed: {} ✅", self.passed);
         println!("   Failed: {} ❌", self.failed);
+        println!("   Scanner mismatches: {}", self.mismatched);
 
         if !self.errors.is_empty() {
             println!("\n❌ Failed Tests:");
             for error in &self.errors {
                 println!("   {}", error);
+            }
+        }
+
+        if !self.mismatches.is_empty() {
+            println!("\n🔀 Scanner mismatches:");
+            for mismatch in &self.mismatches {
+                println!("   {}", mismatch);
             }
         }
     }
@@ -67,42 +90,58 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     let mut in_source = false;
     let mut in_expected = false;
 
+    let mut seen_closing_separator = false;
+
     for line in content.lines() {
         if line.starts_with(
             "================================================================================",
         ) {
-            // Save previous test case if we have one
-            if !current_name.is_empty()
-                && !current_source.is_empty()
-                && !current_expected.is_empty()
-            {
-                test_cases.push(CorpusTestCase {
-                    name: current_name.clone(),
-                    source: current_source.clone(),
-                    expected: current_expected.clone(),
-                });
-            }
+            if seen_closing_separator {
+                // Save previous test case if we have one
+                if !current_name.is_empty()
+                    && !current_source.is_empty()
+                    && !current_expected.is_empty()
+                {
+                    test_cases.push(CorpusTestCase {
+                        name: current_name.clone(),
+                        source: current_source.trim().to_string(),
+                        expected: current_expected.trim().to_string(),
+                    });
+                }
 
-            // Start new test case
-            current_name.clear();
-            current_source.clear();
-            current_expected.clear();
-            in_source = false;
-            in_expected = false;
+                // Reset for new test case
+                current_name.clear();
+                current_source.clear();
+                current_expected.clear();
+                in_source = false;
+                in_expected = false;
+                seen_closing_separator = false;
+            } else if !current_name.is_empty() {
+                // This is the closing separator for current test case
+                seen_closing_separator = true;
+                in_source = true;
+                in_expected = false;
+            }
+            // First separator or opening separator - just continue to look for name
         } else if line.starts_with("----") {
             // Transition from source to expected
             in_source = false;
             in_expected = true;
-        } else if in_source {
+        } else if !current_name.is_empty() && in_source {
+            // We're collecting source code
+            if !current_source.is_empty() {
+                current_source.push('\n');
+            }
             current_source.push_str(line);
-            current_source.push('\n');
         } else if in_expected {
+            // We're collecting expected output
+            if !current_expected.is_empty() {
+                current_expected.push('\n');
+            }
             current_expected.push_str(line);
-            current_expected.push('\n');
-        } else if !line.trim().is_empty() && !line.starts_with("=") {
+        } else if current_name.is_empty() && !line.trim().is_empty() && !line.starts_with("=") {
             // This is the test case name
             current_name = line.trim().to_string();
-            in_source = true;
         }
     }
 
@@ -110,8 +149,8 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
     if !current_name.is_empty() && !current_source.is_empty() && !current_expected.is_empty() {
         test_cases.push(CorpusTestCase {
             name: current_name,
-            source: current_source,
-            expected: current_expected,
+            source: current_source.trim().to_string(),
+            expected: current_expected.trim().to_string(),
         });
     }
 
@@ -119,59 +158,89 @@ fn parse_corpus_file(path: &PathBuf) -> Result<Vec<CorpusTestCase>> {
 }
 
 fn normalize_sexp(s: &str) -> String {
-    s.lines()
-        .map(|line| line.trim_end())
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+    // Normalize by removing all whitespace - we only care about structural equality
+    // This handles differences between single-line and multi-line S-expression formats
+    s.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// Test outcome containing success status and scanner mismatch information
+struct TestOutcome {
+    passed: bool,
+    scanner_mismatch: bool,
 }
 
 /// Run a single corpus test case
-fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
+fn run_corpus_test_case(
+    test_case: &CorpusTestCase,
+    scanner: &Option<ScannerType>,
+) -> Result<TestOutcome> {
+    let mut scanner_mismatch = false;
+
     // Parse the source code using tree-sitter-perl
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // Use the C-based tree-sitter parser
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
-            // Use the pure-rust parser
             let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
+            }
+        }
+        Some(ScannerType::V3) => {
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => format!("(ERROR {})", e),
             }
         }
         Some(ScannerType::Both) => {
-            // TODO: Test both scanners and compare results
-            // For now, use the C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_sexp = c_tree.root_node().to_sexp();
+            let c_norm = normalize_sexp(&c_sexp);
+
+            let mut rust_parser = tree_sitter_perl::PureRustPerlParser::new();
+            let rust_sexp = match rust_parser.parse(&test_case.source) {
+                Ok(ast) => rust_parser.to_sexp(&ast),
+                Err(e) => format!("(ERROR {})", e),
+            };
+            let rust_norm = normalize_sexp(&rust_sexp);
+
+            if c_norm != rust_norm {
+                scanner_mismatch = true;
+                println!("\n❌ Scanner outputs differ: {}", test_case.name);
+                println!("C scanner : {}", c_norm);
+                println!("Rust scanner: {}", rust_norm);
+            }
+
+            rust_sexp
         }
         None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => format!("(ERROR {})", e),
+            }
         }
     };
 
     let actual = normalize_sexp(&actual_sexp);
     let expected = normalize_sexp(test_case.expected.trim());
 
-    if actual == expected {
-        Ok(true)
+    let passed = if actual == expected {
+        true
     } else {
         println!("\n❌ Test failed: {}", test_case.name);
         println!("Expected:");
         println!("{}", expected);
         println!("Actual:");
         println!("{}", actual);
-        Ok(false)
-    }
+        false
+    };
+
+    Ok(TestOutcome { passed, scanner_mismatch })
 }
 
 /// Diagnostic function to analyze differences between expected and actual S-expressions
@@ -185,33 +254,121 @@ fn diagnose_parse_differences(
     println!("{}", test_case.source.trim());
     println!("```");
 
-    // Parse with current parser
+    // Parse with current parser(s)
+    if let Some(ScannerType::Both) = scanner {
+        let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+        let c_sexp = normalize_sexp(&c_tree.root_node().to_sexp());
+
+        let mut v3_parser = perl_parser::Parser::new(&test_case.source);
+        let v3_sexp = match v3_parser.parse() {
+            Ok(ast) => normalize_sexp(&ast.to_sexp()),
+            Err(e) => format!("(ERROR {})", e),
+        };
+
+        println!("\n📊 C scanner S-expression:\n{}", c_sexp);
+        println!("\n📊 V3 scanner S-expression:\n{}", v3_sexp);
+
+        println!("\n🔍 STRUCTURAL ANALYSIS:");
+        let c_nodes = count_nodes(&c_sexp);
+        let v3_nodes = count_nodes(&v3_sexp);
+        println!("C scanner nodes: {}", c_nodes);
+        println!("V3 scanner nodes: {}", v3_nodes);
+
+        let missing = find_missing_nodes(&c_sexp, &v3_sexp);
+        if !missing.is_empty() {
+            println!("❌ Nodes missing in V3 output:");
+            for node in missing {
+                println!("  - {}", node);
+            }
+        }
+
+        let extra = find_extra_nodes(&c_sexp, &v3_sexp);
+        if !extra.is_empty() {
+            println!("➕ Extra nodes in V3 output:");
+            for node in extra {
+                println!("  - {}", node);
+            }
+        }
+
+        if c_sexp == v3_sexp {
+            println!("✅ Parsers produce identical S-expressions");
+        } else {
+            println!("❌ Parsers differ");
+        }
+
+        return Ok(());
+    }
+
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            // Use the C-based tree-sitter parser
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
-            // Use the pure-rust parser
             let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
+                Err(e) => format!("(ERROR {})", e),
+            }
+        }
+        Some(ScannerType::V3) | None => {
+            let mut parser = perl_parser::Parser::new(&test_case.source);
+            match parser.parse() {
+                Ok(ast) => ast.to_sexp(),
+                Err(e) => format!("(ERROR {})", e),
             }
         }
         Some(ScannerType::Both) => {
-            // Default to C scanner for now
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
-        }
-        None => {
-            // Default to C scanner
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
-            tree.root_node().to_sexp()
+            // Compare C scanner output against Rust scanner output
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_sexp = c_tree.root_node().to_sexp();
+
+            let mut rust_parser = tree_sitter_perl::PureRustPerlParser::new();
+            let rust_sexp = match rust_parser.parse(&test_case.source) {
+                Ok(ast) => rust_parser.to_sexp(&ast),
+                Err(e) => format!("(ERROR {})", e),
+            };
+
+            // Use C output as expected and Rust output as actual
+            let expected = normalize_sexp(&c_sexp);
+            let actual = normalize_sexp(&rust_sexp);
+
+            println!("\n📊 COMPARISON:");
+            println!("C scanner S-expression:");
+            println!("{}", expected);
+            println!("\nRust scanner S-expression:");
+            println!("{}", actual);
+
+            // Analyze structural differences between the two outputs
+            println!("\n🔍 STRUCTURAL ANALYSIS:");
+            let expected_nodes = count_nodes(&expected);
+            let actual_nodes = count_nodes(&actual);
+            println!("C nodes: {}", expected_nodes);
+            println!("Rust nodes: {}", actual_nodes);
+
+            let missing_nodes = find_missing_nodes(&expected, &actual);
+            if !missing_nodes.is_empty() {
+                println!("❌ Nodes missing in Rust output:");
+                for node in missing_nodes {
+                    println!("  - {}", node);
+                }
+            }
+
+            let extra_nodes = find_extra_nodes(&expected, &actual);
+            if !extra_nodes.is_empty() {
+                println!("➕ Extra nodes in Rust output:");
+                for node in extra_nodes {
+                    println!("  - {}", node);
+                }
+            }
+
+            if actual == expected {
+                println!("✅ Scanner outputs match");
+            } else {
+                println!("❌ Scanner outputs differ");
+            }
+
+            return Ok(());
         }
     };
 
@@ -224,17 +381,13 @@ fn diagnose_parse_differences(
     println!("\nActual S-expression:");
     println!("{}", actual);
 
-    // Analyze structural differences
     println!("\n🔍 STRUCTURAL ANALYSIS:");
 
-    // Count nodes in each
     let expected_nodes = count_nodes(&expected);
     let actual_nodes = count_nodes(&actual);
-
     println!("Expected nodes: {}", expected_nodes);
     println!("Actual nodes: {}", actual_nodes);
 
-    // Find missing nodes
     let missing_nodes = find_missing_nodes(&expected, &actual);
     if !missing_nodes.is_empty() {
         println!("❌ Missing nodes in actual output:");
@@ -243,7 +396,6 @@ fn diagnose_parse_differences(
         }
     }
 
-    // Find extra nodes
     let extra_nodes = find_extra_nodes(&expected, &actual);
     if !extra_nodes.is_empty() {
         println!("➕ Extra nodes in actual output:");
@@ -252,7 +404,6 @@ fn diagnose_parse_differences(
         }
     }
 
-    // Check for structural differences
     if actual == expected {
         println!("✅ Parse trees match exactly");
     } else {
@@ -368,8 +519,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path =
-        if path.exists() { path } else { PathBuf::from("crates/tree-sitter-perl/test/corpus") };
+    let corpus_path = if path.exists() { path } else { PathBuf::from("test/corpus") };
 
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
@@ -392,25 +542,38 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
         let file_path = entry.path();
         let file_name = file_path.file_name().unwrap().to_string_lossy();
 
+        // Skip files that are clearly not corpus files
+        if file_name.starts_with('_')
+            || file_name.ends_with(".md")
+            || file_name.starts_with("README")
+        {
+            continue;
+        }
+
         spinner.set_message(format!("Processing {}", file_name));
 
         match parse_corpus_file(&file_path.to_path_buf()) {
             Ok(test_cases) => {
                 for test_case in test_cases {
                     match run_corpus_test_case(&test_case, &scanner) {
-                        Ok(true) => {
-                            results.add_passed();
-                        }
-                        Ok(false) => {
-                            results.add_failed(format!("{}: {}", file_name, test_case.name));
+                        Ok(outcome) => {
+                            if outcome.passed {
+                                results.add_passed();
+                            } else {
+                                results.add_failed(format!("{}: {}", file_name, test_case.name));
 
-                            // Run diagnostic on first failing test if requested
-                            if diagnose && !diagnostic_run {
-                                if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
-                                    println!("Diagnostic error: {}", e);
+                                if diagnose && !diagnostic_run {
+                                    if let Err(e) = diagnose_parse_differences(&test_case, &scanner) {
+                                        println!("Diagnostic error: {}", e);
+                                    }
+                                    diagnostic_run = true;
                                 }
-                                diagnostic_run = true;
                             }
+
+                            if outcome.scanner_mismatch {
+                                results.add_mismatch(format!("{}: {}", file_name, test_case.name));
+                            }
+                        }
                         }
                         Err(e) => {
                             results.add_failed(format!(
@@ -432,8 +595,12 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     // Print summary
     results.print_summary();
 
-    if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
+    if results.failed > 0 || results.mismatched > 0 {
+        Err(color_eyre::eyre::eyre!(
+            "{} corpus tests failed, {} scanner mismatches",
+            results.failed,
+            results.mismatched
+        ))
     } else {
         Ok(())
     }

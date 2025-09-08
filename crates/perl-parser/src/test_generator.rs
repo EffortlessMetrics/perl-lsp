@@ -34,6 +34,10 @@ pub struct TestGeneratorOptions {
     pub data_driven: bool,
     /// Generate performance tests
     pub perf_tests: bool,
+    /// Expected return values for generated tests
+    pub expected_values: HashMap<String, String>,
+    /// Performance thresholds in seconds for benchmarks
+    pub perf_thresholds: HashMap<String, f64>,
 }
 
 impl Default for TestGeneratorOptions {
@@ -44,6 +48,8 @@ impl Default for TestGeneratorOptions {
             use_mocks: true,
             data_driven: true,
             perf_tests: false,
+            expected_values: HashMap::new(),
+            perf_thresholds: HashMap::new(),
         }
     }
 }
@@ -108,28 +114,44 @@ impl TestGenerator {
         subs
     }
 
+    fn extract_params_from_signature(&self, signature: &Node, params: &mut Vec<String>) {
+        // Extract parameter names from signature node
+        // This is a simplified implementation - real one would parse signature properly
+        match &signature.kind {
+            NodeKind::ParameterList { parameters } => {
+                for param in parameters {
+                    if let NodeKind::Variable { sigil, name } = &param.kind {
+                        params.push(format!("{}{}", sigil, name));
+                    }
+                }
+            }
+            _ => {
+                // Fallback: try to extract from child nodes
+                for child in signature.children() {
+                    self.extract_params_from_signature(child, params);
+                }
+            }
+        }
+    }
+
     fn find_subroutines_recursive(&self, node: &Node, subs: &mut Vec<SubroutineInfo>) {
         match &node.kind {
-            NodeKind::Subroutine { name, params, .. } => {
+            NodeKind::SubroutineDeclaration { name, signature, .. } => {
                 if let Some(name) = name {
                     let is_private = name.starts_with('_');
                     if !is_private || self.options.test_private {
-                        // Extract actual parameter names from the nodes
-                        let param_names = if params.is_empty() {
-                            None
+                        // Extract actual parameter names from signature if available
+                        let param_names = if let Some(sig) = signature {
+                            // Extract parameters from signature
+                            let mut params = Vec::new();
+                            self.extract_params_from_signature(&sig, &mut params);
+                            if params.is_empty() {
+                                None
+                            } else {
+                                Some(params)
+                            }
                         } else {
-                            Some(
-                                params
-                                    .iter()
-                                    .filter_map(|param| {
-                                        if let NodeKind::Variable { sigil, name } = &param.kind {
-                                            Some(format!("{}{}", sigil, name))
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect(),
-                            )
+                            None
                         };
 
                         subs.push(SubroutineInfo {
@@ -245,7 +267,7 @@ impl TestGenerator {
     fn generate_test_more_basic(&self, sub: &SubroutineInfo) -> String {
         let mut code = String::new();
         code.push_str("use Test::More;\n\n");
-
+        
         code.push_str(&format!("subtest '{}' => sub {{\n", sub.name));
 
         if let Some(params) = &sub.params {
@@ -278,6 +300,7 @@ impl TestGenerator {
                 code.push_str("    ok(defined $result, 'Function returns defined value');\n");
             }
         }
+
 
         code.push_str("};\n");
         code
@@ -466,16 +489,26 @@ impl TestGenerator {
 
         let code = match self.framework {
             TestFramework::TestMore => {
-                format!(
-                    "use Test::More;\n\
-                     use Benchmark qw(timethis);\n\n\
-                     subtest '{} performance' => sub {{\n    \
-                     my $result = timethis(1000, sub {{ {}() }});\n    \
-                     ok($result, 'Performance benchmark completed');\n    \
-                     cmp_ok($result->real, '<', {}, 'Performance within expected range');\n\
-                     }};\n",
-                    sub.name, sub.name, threshold
-                )
+                let mut snippet = String::new();
+                snippet.push_str("use Test::More;\n");
+                snippet.push_str("use Benchmark qw(timeit);\n\n");
+                snippet.push_str(&format!("subtest '{} performance' => sub {{\n", sub.name));
+                snippet.push_str(&format!("    my $result = timeit(1000, sub {{ {}() }});\n", sub.name));
+                
+                // Use complexity-based threshold if available, otherwise check options
+                if let Some(threshold) = self.options.perf_thresholds.get(&sub.name) {
+                    snippet.push_str(&format!(
+                        "    cmp_ok($result->real, '<', {}, 'Executes under threshold');\n",
+                        threshold
+                    ));
+                } else {
+                    snippet.push_str(&format!(
+                        "    cmp_ok($result->real, '<', {}, 'Performance within expected range');\n",
+                        threshold
+                    ));
+                }
+                snippet.push_str("};\n");
+                snippet
             }
             _ => String::new(),
         };
@@ -546,7 +579,7 @@ impl TestGenerator {
 
     fn find_subroutine(&self, node: &Node, name: &str) -> Option<Node> {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(n), .. } if n == name => Some(node.clone()),
+            NodeKind::SubroutineDeclaration { name: Some(n), .. } if n == name => Some(node.clone()),
             _ => {
                 for child in node.children() {
                     if let Some(result) = self.find_subroutine(child, name) {
@@ -807,7 +840,7 @@ impl RefactoringSuggester {
 
     fn check_complex_methods_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::Subroutine { name, .. } => {
+            NodeKind::SubroutineDeclaration { name, .. } => {
                 let complexity = self.calculate_cyclomatic_complexity(node);
                 if complexity > 10 {
                     self.suggestions.push(RefactoringSuggestion {
@@ -861,7 +894,7 @@ impl RefactoringSuggester {
 
     fn check_long_methods_recursive(&mut self, node: &Node, source: &str) {
         match &node.kind {
-            NodeKind::Subroutine { name, .. } => {
+            NodeKind::SubroutineDeclaration { name, .. } => {
                 let lines = self.count_lines(node, source);
                 if lines > 50 {
                     self.suggestions.push(RefactoringSuggestion {
@@ -901,21 +934,19 @@ impl RefactoringSuggester {
 
     fn check_parameter_count_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::Subroutine { name, params, .. } => {
-                if params.len() > 5 {
-                    self.suggestions.push(RefactoringSuggestion {
-                        title: format!(
-                            "Too many parameters in {}",
-                            name.as_ref().unwrap_or(&"anonymous".to_string())
-                        ),
-                        description: format!(
-                            "Function has {} parameters. Consider using a hash or object.",
-                            params.len()
-                        ),
-                        priority: Priority::Medium,
-                        category: RefactoringCategory::TooManyParameters,
-                        code_action: Some("introduce_parameter_object".to_string()),
-                    });
+            NodeKind::SubroutineDeclaration { name, signature, .. } => {
+                if let Some(sig) = signature {
+                    let mut params = Vec::new();
+                    self.extract_params_from_signature(sig, &mut params);
+                    if params.len() > 5 {
+                        self.suggestions.push(RefactoringSuggestion {
+                            title: format!("Too many parameters in {}", name.as_ref().unwrap_or(&"anonymous".to_string())),
+                            description: format!("Function has {} parameters. Consider using a hash or object.", params.len()),
+                            priority: Priority::Medium,
+                            category: RefactoringCategory::TooManyParameters,
+                            code_action: Some("introduce_parameter_object".to_string()),
+                        });
+                    }
                 }
             }
             _ => {
@@ -932,7 +963,7 @@ impl RefactoringSuggester {
 
     fn check_naming_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name), .. } => {
+            NodeKind::SubroutineDeclaration { name: Some(name), .. } => {
                 if !self.is_good_name(name) {
                     self.suggestions.push(RefactoringSuggestion {
                         title: format!("Poor naming: {}", name),

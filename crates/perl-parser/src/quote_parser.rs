@@ -35,6 +35,14 @@ pub fn extract_regex_parts(text: &str) -> (String, String) {
 }
 
 /// Extract pattern, replacement, and modifiers from a substitution token
+///
+/// This function parses substitution operators like s/pattern/replacement/flags
+/// and handles various delimiter forms including:
+/// - Non-paired delimiters: s/pattern/replacement/ (same delimiter for all parts)
+/// - Paired delimiters: s{pattern}{replacement} (different open/close delimiters)
+///
+/// For paired delimiters, properly handles nested delimiters within the pattern
+/// or replacement parts. Returns (pattern, replacement, modifiers) as strings.
 pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // Skip 's' prefix
     let content = text.strip_prefix('s').unwrap_or(text);
@@ -51,15 +59,57 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
+    let rest2_owned;
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
+        // For paired delimiters like s{pattern}{replacement}, we expect another opening delimiter
+        if trimmed.starts_with(delimiter) {
+            // Keep the delimiter - don't strip it here since extract_delimited_content expects it
+            trimmed
+        } else {
+            // If no second delimiter found, the replacement is empty
+            ""
+        }
     } else {
-        rest1
+        rest2_owned = format!("{}{}", delimiter, rest1);
+        &rest2_owned
     };
 
     // Parse second body (replacement)
-    let (replacement, modifiers_str) = extract_delimited_content(rest2, delimiter, closing);
+    // For non-paired delimiters, we need special handling
+    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+        // Manually parse the replacement for non-paired delimiters
+        let chars = rest1.char_indices();
+        let mut body = String::new();
+        let mut escaped = false;
+        let mut end_pos = rest1.len();
+
+        for (i, ch) in chars {
+            if escaped {
+                body.push(ch);
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    body.push(ch);
+                    escaped = true;
+                }
+                c if c == closing => {
+                    end_pos = i + ch.len_utf8();
+                    break;
+                }
+                _ => body.push(ch),
+            }
+        }
+
+        (body, &rest1[end_pos..])
+    } else if is_paired {
+        extract_delimited_content(rest2, delimiter, closing)
+    } else {
+        (String::new(), rest1)
+    };
 
     // Extract only alphabetic modifiers
     let modifiers = extract_modifiers(modifiers_str);

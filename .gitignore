@@ -6,6 +6,7 @@ package-lock.json
 # Debug and build artifacts
 /debug_parse/
 /target/
+/target-tests/
 *.a
 *.dylib
 *.so
@@ -22,3 +23,8 @@ log.html
 
 # Property test regression files
 **/tests/_proptest-regressions/
+scripts/__pycache__/
+
+# Python cache files
+scripts/__pycache__/
+*.pyc

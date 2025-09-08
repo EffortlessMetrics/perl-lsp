@@ -88,7 +88,7 @@ module.exports = grammar({
   name: 'perl',
   supertypes: $ => [
     $.primitive,
-    // $.variables, // TODO - i don't know why, but these just went crazy
+    $.variables,
     $.postfix_deref,
     $.subscripted,
     $.slices,
@@ -168,7 +168,7 @@ module.exports = grammar({
     [$.return_expression],
     [$.function, $.bareword],
     [$.function, $.function_call_expression],
-    [$._variables, $.indirect_object],
+    [$.variables, $.indirect_object],
     [$.expression_statement, $._tricky_indirob_hashref],
     [$.autoquoted_bareword],
     // nameless params need extra lookahead
@@ -204,7 +204,9 @@ module.exports = grammar({
       $.method_declaration_statement,
       $.phaser_statement,
       $.conditional_statement,
-      /* TODO: given/when/default */
+      $.given_statement,
+      $.when_statement,
+      $.default_statement,
       $.loop_statement,
       $.cstyle_for_statement,
       $.for_statement,
@@ -331,6 +333,11 @@ module.exports = grammar({
         field('block', $.block),
         optional($._else)
       ),
+    given_statement: $ =>
+      seq('given', '(', field('value', $._expr), ')', field('block', $.block)),
+    when_statement: $ =>
+      seq('when', '(', field('condition', $._expr), ')', field('block', $.block)),
+    default_statement: $ => seq('default', field('block', $.block)),
     _loop_body: $ => seq(field('block', $.block), optseq('continue', field('continue', $.block))),
     loop_statement: $ => seq($._loops, '(', field('condition', $._expr), ')', $._loop_body),
     cstyle_for_statement: $ =>
@@ -496,7 +503,7 @@ module.exports = grammar({
       $.command_heredoc_token,
       $.stub_expression,
       // all the variable handlings
-      $._variables,
+      $.variables,
       $.subscripted,
       $.slices,
       $.postfix_deref,
@@ -558,7 +565,7 @@ module.exports = grammar({
           '+=', '-=', '.=',
           '*=', '/=', '%=', 'x=',
           '&=', '|=', '^=',
-          // TODO: Also &.= |.= ^.= when enabled
+          '&.=', '|.=', '^.=',
           '<<=', '>>=',
           '&&=', '||=', '//=',
         ),
@@ -572,8 +579,8 @@ module.exports = grammar({
         [prec.right, binop, '**', TERMPREC.POWOP], // _POWOP
         [prec.left, binop, choice('||', '//', '^^'), TERMPREC.OROR], // _OROR_DORDOR
         [prec.left, binop, '&&', TERMPREC.ANDAND], // _ANDAND
-        [prec.left, binop, choice('|', '^'), TERMPREC.BITOROP], // _BITORDOP
-        [prec.left, binop, '&', TERMPREC.BITANDOP], // _BITANDOP
+        [prec.left, binop, choice('|', '^', '|.', '^.'), TERMPREC.BITOROP], // _BITORDOP
+        [prec.left, binop, choice('&', '&.'), TERMPREC.BITANDOP], // _BITANDOP
         [prec.left, binop, choice('<<', '>>'), TERMPREC.SHIFTOP], // _SHIFTOP
         [prec.left, binop, choice('+', '-', '.'), TERMPREC.ADDOP], // _ADDOP
         [prec.left, binop, choice('*', '/', '%', 'x'), TERMPREC.MULOP], // _MULOP
@@ -607,7 +614,7 @@ module.exports = grammar({
     unary_expression: $ => choice(
       prec(TERMPREC.UMINUS, unop_pre('-', $._term)),
       prec(TERMPREC.UMINUS, unop_pre('+', $._term)),
-      prec(TERMPREC.UMINUS, unop_pre('~', $._term)), // TODO: also ~. when enabled
+      prec(TERMPREC.UMINUS, unop_pre(choice('~', '~.'), $._term)),
       prec(TERMPREC.UMINUS, unop_pre('!', $._term)),
     ),
     preinc_expression: $ =>
@@ -670,20 +677,43 @@ module.exports = grammar({
       alias($._declare_array, $.array),
       alias($._declare_hash, $.hash),
     ),
+    _my_declared_vars: $ => choice(
+      alias($._lexical_scalar, $.scalar),
+      alias($._lexical_array, $.array),
+      alias($._lexical_hash, $.hash),
+    ),
 
     variable_declaration: $ => prec.left(TERMPREC.QUESTION_MARK + 1,
-      seq(
-        choice('my', 'state', 'our', 'field'),
-        choice(
-          field('variable', $._declared_vars),
-          field('variables', $._decl_variable_list)),
-        optseq(':', optional(field('attributes', $.attrlist))))
+      choice(
+        seq(
+          'my',
+          choice(
+            field('variable', $._my_declared_vars),
+            field('variables', $._my_decl_variable_list)
+          ),
+          optseq(':', optional(field('attributes', $.attrlist)))
+        ),
+        seq(
+          choice('state', 'our', 'field'),
+          choice(
+            field('variable', $._declared_vars),
+            field('variables', $._decl_variable_list)
+          ),
+          optseq(':', optional(field('attributes', $.attrlist)))
+        )
+      )
     ),
 
     _decl_variable_list: $ => paren_list_of(
       choice(
         $.undef_expression,
         $._declared_vars
+      )
+    ),
+    _my_decl_variable_list: $ => paren_list_of(
+      choice(
+        $.undef_expression,
+        $._my_declared_vars
       )
     ),
 
@@ -813,7 +843,7 @@ module.exports = grammar({
     )),
     method: $ => choice($._bareword, $.scalar),
 
-    _variables: $ => choice(
+    variables: $ => choice(
       $.scalar,
       $.array,
       $.hash,
@@ -824,9 +854,11 @@ module.exports = grammar({
     scalar: $ => seq('$', $._var_indirob),
     _declare_scalar: $ => seq('$', $.varname),
     _signature_scalar: $ => seq('$', $._signature_varname),
+    _lexical_scalar: $ => seq('$', $._signature_varname),
     array: $ => seq('@', $._var_indirob),
     _declare_array: $ => seq('@', $.varname),
     _signature_array: $ => seq('@', $._signature_varname),
+    _lexical_array: $ => seq('@', $._signature_varname),
     // these need to have higher prec than the equivalent operator symbols
     _HASH_PERCENT: $ => alias(token(prec(2, '%')), '%'), // self-aliasing b/c token
     _SUB_AMPER: $ => alias(token(prec(2, '&')), '&'), // self-aliasing b/c token
@@ -835,6 +867,7 @@ module.exports = grammar({
     hash: $ => seq($._HASH_PERCENT, $._var_indirob),
     _declare_hash: $ => seq($._HASH_PERCENT, $.varname),
     _signature_hash: $ => seq($._HASH_PERCENT, $._signature_varname),
+    _lexical_hash: $ => seq($._HASH_PERCENT, $._signature_varname),
 
     arraylen: $ => seq('$#', $._var_indirob),
     glob: $ => seq($._GLOB_STAR, $._var_indirob),
@@ -853,7 +886,7 @@ module.exports = grammar({
     ),
     varname: $ => choice(
       $._identifier,
-      $._ident_special // TODO - not sure if we wanna make `my $1` error out
+      $._ident_special
     ),
     // not all indirobs are alike; for variables, they have autoquoting behavior
     _var_indirob_autoquote: $ => seq(

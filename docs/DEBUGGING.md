@@ -119,6 +119,45 @@ The Perl Language Server extension automatically detects and uses the debug adap
 
 ## Troubleshooting
 
+### Workspace Build Issues (v0.8.9+)
+
+#### "Cannot find parser.c" or "libclang not found"
+The workspace uses an exclusion strategy to avoid these system dependency issues:
+
+```bash
+# ✅ This should work (workspace tests only production crates)
+cargo test
+
+# ❌ This may fail if you try to build excluded crates directly
+cargo build -p tree-sitter-perl-c
+```
+
+**Solution**: The workspace is configured to exclude problematic crates. Use the standard workspace commands:
+
+```bash
+# Build only production crates
+cargo build
+
+# Test only production crates  
+cargo test
+
+# Check workspace configuration
+cargo check
+```
+
+#### Feature Conflicts Between Crates
+If you see feature resolution errors:
+
+```bash
+# ✅ Use workspace-level commands
+cargo test
+
+# ❌ Avoid direct crate builds that may conflict
+cargo test -p example-crate-with-conflicts
+```
+
+**Reference**: See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspace status.
+
 ### Debug adapter not found
 ```bash
 # Verify installation

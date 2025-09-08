@@ -806,7 +806,7 @@ impl<'a> Parser<'a> {
         }
         
         // Parse optional prototype or signature after attributes
-        let (params, prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
+        let (signature, prototype) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
@@ -827,7 +827,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name,
-                params,
+                signature,
                 attributes,
                 body: Box::new(body),
             },
@@ -876,7 +876,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Method {
                 name,
-                params,
+                signature,
                 body: Box::new(body),
             },
             SourceLocation { start, end }
@@ -2149,7 +2149,7 @@ impl<'a> Parser<'a> {
                                 },
                                 SourceLocation { start, end }
                             );
-                        } else if let NodeKind::Regex { pattern, modifiers } = &right.kind {
+                        } else if let NodeKind::Regex { pattern, replacement: _, modifiers } = &right.kind {
                             // Create a Match node
                             expr = Node::new(
                                 NodeKind::Match {

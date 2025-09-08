@@ -50,9 +50,20 @@ impl DocumentStore {
     /// Normalize a URI to a consistent key
     /// This handles platform differences and ensures consistent lookups
     pub fn uri_key(uri: &str) -> String {
-        // For now, just return the URI as-is
-        // TODO: Add normalization for Windows drive letters if needed
-        uri.to_string()
+        if let Ok(u) = url::Url::parse(uri) {
+            let s = u.as_str().to_string();
+            if let Some(rest) = s.strip_prefix("file:///") {
+                if rest.len() > 1
+                    && rest.as_bytes()[1] == b':'
+                    && rest.as_bytes()[0].is_ascii_alphabetic()
+                {
+                    return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
+                }
+            }
+            s
+        } else {
+            uri.to_string()
+        }
     }
 
     /// Open or update a document
@@ -154,12 +165,23 @@ mod tests {
     }
 
     #[test]
-    fn test_uri_normalization() {
-        // Test that URIs with different formats map to same key
-        let uri1 = "file:///test.pl";
-        let uri2 = "file:///test.pl";
-
+    fn test_uri_drive_letter_normalization() {
+        let uri1 = "file:///C:/test.pl";
+        let uri2 = "file:///c:/test.pl";
         assert_eq!(DocumentStore::uri_key(uri1), DocumentStore::uri_key(uri2));
+    }
+
+    #[test]
+    fn test_drive_letter_lookup() {
+        let store = DocumentStore::new();
+        let uri_upper = "file:///C:/test.pl".to_string();
+        let uri_lower = "file:///c:/test.pl".to_string();
+
+        store.open(uri_upper.clone(), 1, "# test".to_string());
+        assert!(store.is_open(&uri_lower));
+        assert_eq!(store.get_text(&uri_lower), Some("# test".to_string()));
+        assert!(store.close(&uri_lower));
+        assert_eq!(store.count(), 0);
     }
 
     #[test]

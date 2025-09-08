@@ -206,8 +206,23 @@ impl Node {
                 format!("(string {})", value)
             }
 
-            NodeKind::Regex { pattern, modifiers } => {
-                format!("(regex (pattern {}) (modifiers {}))", pattern, modifiers)
+            NodeKind::Regex { pattern, replacement, modifiers } => match replacement {
+                Some(repl) => {
+                    format!(
+                        "(regex (pattern {}) (replacement {}) (modifiers {}))",
+                        pattern, repl, modifiers
+                    )
+                }
+                None => {
+                    format!("(regex (pattern {}) (modifiers {}))", pattern, modifiers)
+                }
+            },
+
+            NodeKind::Substitution { pattern, replacement, modifiers } => {
+                format!(
+                    "(substitution (pattern {}) (replacement {}) (modifiers {}))",
+                    pattern, replacement, modifiers
+                )
             }
 
             NodeKind::List { elements } => {
@@ -448,6 +463,12 @@ pub enum NodeKind {
 
     Regex {
         pattern: Arc<str>,
+        replacement: Option<Arc<str>>,
+        modifiers: Arc<str>,
+    },
+    Substitution {
+        pattern: Arc<str>,
+        replacement: Arc<str>,
         modifiers: Arc<str>,
     },
 
@@ -536,5 +557,22 @@ mod tests {
         );
 
         assert_eq!(program.to_sexp(), "(program (variable $x))");
+    }
+
+    #[test]
+    fn test_substitution_to_sexp() {
+        let substitution = Node::new(
+            NodeKind::Substitution {
+                pattern: Arc::from("foo"),
+                replacement: Arc::from("bar"),
+                modifiers: Arc::from("g"),
+            },
+            SourceLocation { start: 0, end: 9 },
+        );
+
+        assert_eq!(
+            substitution.to_sexp(),
+            "(substitution (pattern foo) (replacement bar) (modifiers g))"
+        );
     }
 }

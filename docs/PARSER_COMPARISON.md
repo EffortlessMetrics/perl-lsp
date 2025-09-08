@@ -7,7 +7,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 | Parser | Best For | Coverage | Performance |
 |--------|----------|----------|-------------|
 | **v3: Native** | Production use | ~100% | 1-150 µs |
-| **v2: Pest** | Grammar experimentation | ~99.995% | 200-450 µs |
+| **v2: Pest** | Grammar experimentation | ~99.996% | 200-450 µs |
 | **v1: C** | Legacy compatibility | ~95% | 12-68 µs |
 
 ## Detailed Comparison
@@ -39,7 +39,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 
 **Pros:**
 - ✅ **Easy to modify** - Grammar in readable PEG format
-- ✅ **Excellent coverage** - ~99.995% of real-world Perl
+- ✅ **Excellent coverage** - ~99.996% of real-world Perl (enhanced substitution support via PR #42)
 - ✅ **Well-tested** - Comprehensive test suite
 - ✅ **Good error messages** - Pest provides clear parse errors
 - ✅ **Pure Rust** - No C dependencies

@@ -13,6 +13,7 @@ struct FeaturesCatalog {
 struct Meta {
     version: String,
     lsp_version: String,
+    #[allow(dead_code)]
     compliance_percent: Option<u32>,
 }
 
@@ -72,7 +73,7 @@ fn sync_docs_impl() -> Result<()> {
 }
 
 fn update_roadmap(
-    catalog: &FeaturesCatalog,
+    _catalog: &FeaturesCatalog,
     area_stats: &HashMap<String, (usize, usize)>,
 ) -> Result<()> {
     let roadmap_path = Path::new("ROADMAP.md");
@@ -167,7 +168,7 @@ fn update_lsp_status(
                 feature.description
             ));
         }
-        content.push_str("\n");
+        content.push('\n');
     }
 
     fs::write(status_path, content)?;
@@ -311,7 +312,7 @@ fn verify_features() -> Result<()> {
     }
 
     // Verify compliance percentage matches what's documented
-    let total_features = catalog.feature.len();
+    let _total_features = catalog.feature.len();
     let non_planned = catalog.feature.iter().filter(|f| f.maturity != "planned").count();
     let advertised_ga_prod = catalog
         .feature
@@ -328,22 +329,21 @@ fn verify_features() -> Result<()> {
     // Check ROADMAP.md for documented percentage
     if let Ok(roadmap) = fs::read_to_string("ROADMAP.md") {
         let regex = regex::Regex::new(r"partial LSP 3\.18 compliance \(~(\d+)%\)")?;
-        if let Some(cap) = regex.captures(&roadmap) {
-            if let Some(doc_percent) = cap.get(1).and_then(|m| m.as_str().parse::<u32>().ok()) {
-                if doc_percent != computed_compliance {
-                    // Make this a hard error unless explicitly allowed
-                    if std::env::var("CI_ALLOW_COMPLIANCE_DRIFT").is_err() {
-                        errors.push(format!(
-                            "Compliance percentage drift detected: documented {}% vs computed {}% - run 'cargo xtask features sync-docs' to fix",
-                            doc_percent, computed_compliance
-                        ));
-                    } else {
-                        warnings.push(format!(
-                            "Compliance percentage mismatch (allowed): documented {}% vs computed {}%",
-                            doc_percent, computed_compliance
-                        ));
-                    }
-                }
+        if let Some(cap) = regex.captures(&roadmap)
+            && let Some(doc_percent) = cap.get(1).and_then(|m| m.as_str().parse::<u32>().ok())
+            && doc_percent != computed_compliance
+        {
+            // Make this a hard error unless explicitly allowed
+            if std::env::var("CI_ALLOW_COMPLIANCE_DRIFT").is_err() {
+                errors.push(format!(
+                        "Compliance percentage drift detected: documented {}% vs computed {}% - run 'cargo xtask features sync-docs' to fix",
+                        doc_percent, computed_compliance
+                    ));
+            } else {
+                warnings.push(format!(
+                    "Compliance percentage mismatch (allowed): documented {}% vs computed {}%",
+                    doc_percent, computed_compliance
+                ));
             }
         }
     }

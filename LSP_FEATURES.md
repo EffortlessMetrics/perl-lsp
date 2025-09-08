@@ -69,11 +69,23 @@ Context-aware completion with rich documentation:
 - Perl special variables (`$_`, `@ARGV`, `%ENV`)
 - With documentation and usage examples
 
+#### File Path Completion (v0.8.7+)
+- **Automatic activation** inside quoted string literals containing path-like content
+- **Security-hardened** with path traversal prevention and filename validation  
+- **Intelligent file type detection** for Perl, Rust, JavaScript, Python, config files
+- **Cross-platform** support for Unix and Windows path separators
+- **Performance optimized** with result limits and cancellation support
+
 Example:
 ```perl
 pri<cursor>  # Suggests: print, printf, private
 $arr<cursor> # Suggests: $array, $array_ref
 for<cursor>  # Expands to: for (my $i = 0; $i < $count; $i++) { ... }
+
+# File completion in strings
+my $config = "config/app.<cursor>";  # Suggests: config/app.yaml, config/app.json
+open my $fh, '<', "src/lib<cursor>"; # Suggests: src/lib.rs, src/lib/
+my $script = "scripts/<cursor>";     # Shows directory contents with file types
 ```
 
 ### 3. Go to Definition

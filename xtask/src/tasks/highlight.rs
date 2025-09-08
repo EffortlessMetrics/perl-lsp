@@ -1,10 +1,12 @@
 //! Highlight test task implementation
 
 use crate::types::ScannerType;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use tree_sitter::{Parser, Query, QueryCursor};
 use walkdir::WalkDir;
 
 /// Highlight expectation from test file comments
@@ -155,17 +157,47 @@ fn parse_highlight_expectation(line: &str, _line_num: usize) -> Option<Highlight
 
 /// Run a single highlight test case
 fn run_highlight_test_case(
-    _test_case: &HighlightTestCase,
+    test_case: &HighlightTestCase,
     _scanner: &Option<ScannerType>,
 ) -> Result<bool> {
-    // TODO: Implement actual highlight testing using tree-sitter-perl
-    // For now, this is a placeholder that always passes
-    // The real implementation would:
-    // 1. Parse the source code using tree-sitter-perl
-    // 2. Apply the highlight query from queries/highlights.scm
-    // 3. Compare the actual highlights with the expected ones
+    // Parse the source code using tree-sitter-perl
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_perl::language())
+        .context("Failed to load tree-sitter-perl language")?;
+    let tree = parser
+        .parse(&test_case.source, None)
+        .ok_or_else(|| eyre!("Failed to parse test source"))?;
 
-    Ok(true)
+    // Load and compile the highlight query
+    let query_source =
+        fs::read_to_string("queries/highlights.scm").context("Failed to read highlight query")?;
+    let query = Query::new(&tree_sitter_perl::language(), &query_source)
+        .context("Failed to compile highlight query")?;
+
+    // Execute the query and collect actual capture names
+    let mut cursor = QueryCursor::new();
+    let captures = cursor.captures(&query, tree.root_node(), test_case.source.as_bytes());
+    let mut actual_counts: HashMap<String, usize> = HashMap::new();
+    for (_m, capture_index) in captures {
+        let name = query.capture_names()[capture_index as usize].clone();
+        *actual_counts.entry(name).or_insert(0) += 1;
+    }
+
+    // Verify that each expected scope appears at least as many times as specified
+    let mut success = true;
+    for expectation in &test_case.expectations {
+        match actual_counts.get_mut(&expectation.expected_scope) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+            }
+            _ => {
+                success = false;
+            }
+        }
+    }
+
+    Ok(success)
 }
 
 pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {

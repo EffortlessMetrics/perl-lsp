@@ -1,4 +1,5 @@
 use crate::ast::{Node, NodeKind};
+use crate::position_mapper::PositionMapper;
 use serde_json::{Value, json};
 
 /// Call Hierarchy Item
@@ -28,11 +29,15 @@ pub struct Position {
 pub struct CallHierarchyProvider {
     source: String,
     uri: String,
+    position_mapper: PositionMapper,
 }
 
 impl CallHierarchyProvider {
     pub fn new(source: String, uri: String) -> Self {
-        Self { source, uri }
+        // Validate that URI is well-formed (basic security check)
+        let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
+        let position_mapper = PositionMapper::new(&source);
+        Self { source, uri, position_mapper }
     }
 
     /// Prepare call hierarchy - find items at a given position
@@ -75,15 +80,15 @@ impl CallHierarchyProvider {
     fn find_callable_at_position(&self, node: &Node, offset: usize) -> Option<CallHierarchyItem> {
         if offset >= node.location.start && offset <= node.location.end {
             match &node.kind {
-                NodeKind::Subroutine { name, params, .. } => {
+                NodeKind::Subroutine { name, prototype: _, signature, .. } => {
                     if let Some(name_str) = name {
                         let range = self.node_to_range(node);
                         let selection_range = range.clone(); // TODO: Calculate name range
 
-                        let detail = if params.is_empty() {
-                            None
+                        let detail = if signature.is_some() {
+                            Some("(signature)".to_string())
                         } else {
-                            Some(format!("({} params)", params.len()))
+                            None
                         };
 
                         return Some(CallHierarchyItem {
@@ -276,6 +281,11 @@ impl CallHierarchyProvider {
                     }
                 }
             }
+            NodeKind::ExpressionStatement { expression } => {
+                if let Some(result) = f(expression) {
+                    return Some(result);
+                }
+            }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
@@ -336,10 +346,14 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Subroutine { params, body, .. } => {
-                for param in params {
-                    if let Some(result) = f(param) {
-                        return Some(result);
+            NodeKind::Subroutine { signature, body, .. } => {
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            if let Some(result) = f(param) {
+                                return Some(result);
+                            }
+                        }
                     }
                 }
                 if let Some(result) = f(body) {
@@ -430,46 +444,16 @@ impl CallHierarchyProvider {
         Range { start, end }
     }
 
-    /// Convert byte offset to line/character position
+    /// Convert byte offset to line/character position using PositionMapper for UTF-16 compliance
     fn offset_to_position(&self, offset: usize) -> Position {
-        let mut line = 0;
-        let mut col = 0;
-
-        for (i, ch) in self.source.chars().enumerate() {
-            if i >= offset {
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-        }
-
-        Position { line, character: col }
+        let pos = self.position_mapper.byte_to_lsp_pos(offset);
+        Position { line: pos.line, character: pos.character }
     }
 
-    /// Convert line/character position to byte offset
+    /// Convert line/character position to byte offset using PositionMapper for UTF-16 compliance
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
-        let mut current_line = 0;
-        let mut current_col = 0;
-        let mut offset = 0;
-
-        for (i, ch) in self.source.chars().enumerate() {
-            if current_line == line && current_col == character {
-                return i;
-            }
-            if ch == '\n' {
-                current_line += 1;
-                current_col = 0;
-            } else {
-                current_col += 1;
-            }
-            offset = i;
-        }
-
-        offset + 1
+        let pos = crate::position_mapper::Position { line, character };
+        self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
     }
 }
 

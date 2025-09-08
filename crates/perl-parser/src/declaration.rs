@@ -655,28 +655,19 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     fn get_subroutine_name_range(&self, decl: &Node) -> (usize, usize) {
-        // TODO: Store name spans in AST to avoid this heuristic
-        let text = self.get_node_text(decl);
-        if text.starts_with("sub ") {
-            let name_start = decl.location.start + 4;
-            let rest = &self.content[name_start..decl.location.end];
-            let name_len = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').count();
-            return (name_start, name_start + name_len);
+        if let NodeKind::Subroutine { name_span: Some(loc), .. } = &decl.kind {
+            (loc.start, loc.end)
+        } else {
+            (decl.location.start, decl.location.end)
         }
-        (decl.location.start, decl.location.end)
     }
 
     fn get_package_name_range(&self, decl: &Node) -> (usize, usize) {
-        // TODO: Store name spans in AST to avoid this heuristic
-        let text = self.get_node_text(decl);
-        if text.starts_with("package ") {
-            let name_start = decl.location.start + 8;
-            let rest = &self.content[name_start..decl.location.end];
-            let name_len =
-                rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == ':').count();
-            return (name_start, name_start + name_len);
+        if let NodeKind::Package { name_span, .. } = &decl.kind {
+            (name_span.start, name_span.end)
+        } else {
+            (decl.location.start, decl.location.end)
         }
-        (decl.location.start, decl.location.end)
     }
 
     fn get_constant_name_range(&self, decl: &Node) -> (usize, usize) {
@@ -767,9 +758,11 @@ impl<'a> DeclarationProvider<'a> {
                 }
                 children
             }
-            NodeKind::Subroutine { params, body, .. } => {
+            NodeKind::Subroutine { signature, body, .. } => {
                 let mut children = vec![body.as_ref()];
-                children.extend(params.iter());
+                if let Some(sig) = signature {
+                    children.push(sig.as_ref());
+                }
                 children
             }
             NodeKind::FunctionCall { args, .. } => args.iter().collect(),
@@ -798,6 +791,7 @@ impl<'a> DeclarationProvider<'a> {
             NodeKind::Foreach { variable, list, body, .. } => {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
+            NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
             _ => vec![],
         }
     }
@@ -896,6 +890,7 @@ pub fn get_node_children(node: &Node) -> Vec<&Node> {
         NodeKind::Subroutine { body, .. } => {
             vec![body.as_ref()]
         }
+        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
         _ => vec![],
     }
 }

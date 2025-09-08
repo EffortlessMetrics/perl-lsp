@@ -4,7 +4,7 @@ mod provider_version_guard_init {
     use std::sync::Arc;
 
     #[test]
-    #[should_panic(expected = "with_doc_version() not called")]
+    #[should_panic(expected = "used after AST refresh")]
     #[cfg(debug_assertions)]
     fn provider_panics_without_doc_version() {
         let code = "my $x = 42;";

@@ -3,7 +3,7 @@
 //! This module identifies unused code including unreachable code and unused symbols.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use crate::workspace_index::WorkspaceIndex;
+use crate::workspace_index::{SymbolKind, WorkspaceIndex, fs_path_to_uri, uri_to_fs_path};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -56,13 +56,13 @@ pub struct DeadCodeStats {
 
 /// Dead code detector
 pub struct DeadCodeDetector {
-    _workspace_index: WorkspaceIndex,
+    workspace_index: WorkspaceIndex,
     entry_points: HashSet<PathBuf>,
 }
 
 impl DeadCodeDetector {
     pub fn new(workspace_index: WorkspaceIndex) -> Self {
-        Self { _workspace_index: workspace_index, entry_points: HashSet::new() }
+        Self { workspace_index, entry_points: HashSet::new() }
     }
 
     /// Add an entry point (main script)
@@ -70,21 +70,149 @@ impl DeadCodeDetector {
         self.entry_points.insert(path);
     }
 
-    /// Analyze a single file for dead code (stub implementation)
-    pub fn analyze_file(&self, _file_path: &Path) -> Result<Vec<DeadCode>, String> {
-        // Stub implementation
-        Ok(vec![])
+    /// Analyze a single file for dead code
+    pub fn analyze_file(&self, file_path: &Path) -> Result<Vec<DeadCode>, String> {
+        let uri = fs_path_to_uri(file_path)
+            .map_err(|e| format!("Failed to convert path to URI: {}", e))?;
+        let text = self
+            .workspace_index
+            .document_store()
+            .get_text(&uri)
+            .ok_or_else(|| format!("File not indexed: {:?}", file_path))?;
+
+        let mut dead = Vec::new();
+        let mut terminator: Option<(usize, String)> = None;
+
+        for (i, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if let Some((term_line, term_kw)) = &terminator {
+                if !trimmed.is_empty() {
+                    dead.push(DeadCode {
+                        code_type: DeadCodeType::UnreachableCode,
+                        name: None,
+                        file_path: file_path.to_path_buf(),
+                        start_line: i + 1,
+                        end_line: i + 1,
+                        reason: format!(
+                            "Code is unreachable after `{}` on line {}",
+                            term_kw, term_line
+                        ),
+                        confidence: 0.5,
+                        suggestion: Some("Remove or restructure this code".to_string()),
+                    });
+                    break;
+                }
+            }
+
+            if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
+                if let Some(first_word) = trimmed.split_whitespace().next() {
+                    terminator = Some((i + 1, first_word.to_string()));
+                }
+            }
+        }
+
+        // Unused variables and subroutines in this file
+        // Filter symbols first for better performance
+        let unused_symbols = self.workspace_index.find_unused_symbols();
+        let file_symbols: Vec<_> = unused_symbols
+            .into_iter()
+            .filter(|sym| {
+                sym.uri == uri && matches!(sym.kind, SymbolKind::Subroutine | SymbolKind::Variable)
+            })
+            .collect();
+
+        for sym in file_symbols {
+            let code_type = match sym.kind {
+                SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
+                SymbolKind::Variable => DeadCodeType::UnusedVariable,
+                _ => continue, // This should never happen due to filter above
+            };
+
+            dead.push(DeadCode {
+                code_type,
+                name: Some(sym.name.clone()),
+                file_path: file_path.to_path_buf(),
+                start_line: sym.range.start.line as usize + 1,
+                end_line: sym.range.end.line as usize + 1,
+                reason: "Symbol is never used".to_string(),
+                confidence: 0.9,
+                suggestion: Some("Remove or use this symbol".to_string()),
+            });
+        }
+
+        Ok(dead)
     }
 
-    /// Analyze entire workspace for dead code (stub implementation)
+    /// Analyze entire workspace for dead code
     pub fn analyze_workspace(&self) -> DeadCodeAnalysis {
-        // Stub implementation
-        DeadCodeAnalysis {
-            dead_code: vec![],
-            stats: DeadCodeStats::default(),
-            files_analyzed: 0,
-            total_lines: 0,
+        let docs = self.workspace_index.document_store().all_documents();
+        let mut dead_code = Vec::new();
+        let mut total_lines = 0;
+
+        // Per-file unreachable code
+        for doc in &docs {
+            total_lines += doc.text.lines().count();
+            if let Some(path) = uri_to_fs_path(&doc.uri) {
+                match self.analyze_file(&path) {
+                    Ok(mut file_dead) => {
+                        dead_code.append(&mut file_dead);
+                    }
+                    Err(_) => {
+                        // Skip files that can't be analyzed
+                        // In a real implementation, we might log this error
+                        continue;
+                    }
+                }
+            }
         }
+
+        // Workspace-level unused symbols for items not covered per-file
+        // Filter to only constants and packages for workspace-level analysis
+        let workspace_symbols: Vec<_> = self
+            .workspace_index
+            .find_unused_symbols()
+            .into_iter()
+            .filter(|sym| matches!(sym.kind, SymbolKind::Constant | SymbolKind::Package))
+            .collect();
+
+        for sym in workspace_symbols {
+            let code_type = match sym.kind {
+                SymbolKind::Constant => DeadCodeType::UnusedConstant,
+                SymbolKind::Package => DeadCodeType::UnusedPackage,
+                _ => continue, // Should never happen due to filter
+            };
+
+            let file_path = uri_to_fs_path(&sym.uri).unwrap_or_else(|| PathBuf::from(&sym.uri));
+
+            dead_code.push(DeadCode {
+                code_type,
+                name: Some(sym.name.clone()),
+                file_path,
+                start_line: sym.range.start.line as usize + 1,
+                end_line: sym.range.end.line as usize + 1,
+                reason: "Symbol is never used".to_string(),
+                confidence: 0.9,
+                suggestion: Some("Remove or use this symbol".to_string()),
+            });
+        }
+
+        // Compute stats
+        let mut stats = DeadCodeStats::default();
+        for item in &dead_code {
+            let lines = item.end_line.saturating_sub(item.start_line) + 1;
+            stats.total_dead_lines += lines;
+            match item.code_type {
+                DeadCodeType::UnusedSubroutine => stats.unused_subroutines += 1,
+                DeadCodeType::UnusedVariable => stats.unused_variables += 1,
+                DeadCodeType::UnusedConstant => stats.unused_constants += 1,
+                DeadCodeType::UnusedPackage => stats.unused_packages += 1,
+                DeadCodeType::UnreachableCode => stats.unreachable_statements += 1,
+                DeadCodeType::DeadBranch => stats.dead_branches += 1,
+                _ => {}
+            }
+        }
+
+        DeadCodeAnalysis { dead_code, stats, files_analyzed: docs.len(), total_lines }
     }
 }
 

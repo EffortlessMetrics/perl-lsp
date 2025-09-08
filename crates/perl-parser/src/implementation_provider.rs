@@ -3,9 +3,9 @@
 //! This provider finds:
 //! - Subclasses that inherit from a base class
 //! - Overridden methods in derived classes
-//! - Blessed references of a specific type
 
 use crate::ast::{Node, NodeKind};
+use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
 use lsp_types::{LocationLink, Position, Range};
@@ -44,6 +44,10 @@ impl ImplementationProvider {
             Some(ImplementationTarget::Method { package, method }) => {
                 self.find_method_implementations(&package, &method, documents)
             }
+            Some(ImplementationTarget::BlessedType(name)) => {
+                // For blessed types, find package implementations
+                self.find_package_implementations(&name, documents)
+            }
             None => Vec::new(),
         }
     }
@@ -57,6 +61,7 @@ impl ImplementationProvider {
         let mut results = Vec::new();
 
         // Build inheritance index from all documents
+        let _hierarchy_provider = TypeHierarchyProvider::new();
 
         for (uri, content) in documents {
             // Parse document
@@ -116,24 +121,6 @@ impl ImplementationProvider {
                         &mut results,
                     );
                 }
-            }
-        }
-
-        results
-    }
-
-    /// Find blessed references of a specific type
-    #[allow(dead_code)]
-    fn find_blessed_implementations(
-        &self,
-        type_name: &str,
-        documents: &HashMap<String, String>,
-    ) -> Vec<LocationLink> {
-        let mut results = Vec::new();
-
-        for (uri, content) in documents {
-            if let Ok(ast) = crate::Parser::new(content).parse() {
-                self.find_blessed_refs_in_ast(&ast, type_name, uri, &mut results);
             }
         }
 
@@ -246,40 +233,6 @@ impl ImplementationProvider {
         }
     }
 
-    /// Find blessed references in AST
-    #[allow(dead_code)]
-    fn find_blessed_refs_in_ast(
-        &self,
-        node: &Node,
-        type_name: &str,
-        uri: &str,
-        results: &mut Vec<LocationLink>,
-    ) {
-        match &node.kind {
-            NodeKind::FunctionCall { name, args } if name == "bless" => {
-                if args.len() >= 2 {
-                    if let Some(blessed_type) = self.extract_string_value(&args[1]) {
-                        if blessed_type == type_name {
-                            let target_uri = parse_uri(uri);
-                            results.push(LocationLink {
-                                origin_selection_range: None,
-                                target_uri,
-                                target_range: self.node_to_range(node),
-                                target_selection_range: self.node_to_range(node),
-                            });
-                        }
-                    }
-                }
-            }
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                for stmt in statements {
-                    self.find_blessed_refs_in_ast(stmt, type_name, uri, results);
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// Extract implementation target from node
     fn extract_implementation_target(&self, node: &Node) -> Option<ImplementationTarget> {
         match &node.kind {
@@ -371,18 +324,11 @@ impl ImplementationProvider {
             _ => false,
         }
     }
-
-    /// Extract string value from node
-    #[allow(dead_code)]
-    fn extract_string_value(&self, node: &Node) -> Option<String> {
-        match &node.kind {
-            NodeKind::String { value, .. } => Some(value.clone()),
-            _ => None,
-        }
-    }
 }
 
+#[allow(dead_code)]
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
+    BlessedType(String),
 }

@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser"
-version = "0.8.6"
+version = "0.8.8"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]
@@ -21,8 +21,11 @@ include = [
   "LICENSE*"
 ]
 
+[lib]
+doctest = false
+
 [dependencies]
-perl-lexer = { version = "0.8.6" }
+perl-lexer = { path = "../perl-lexer" }
 thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
@@ -33,6 +36,11 @@ url = "2.5"
 rustc-hash = "2.1.0"
 md5 = "0.7"
 phf = { version = "0.11", features = ["macros"] }
+walkdir = "2.4.0"
+
+# Unix-only dependency for signal handling
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["signal"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
@@ -44,9 +52,9 @@ anyhow = { version = "1.0", optional = true }
 name = "perl-parse"
 required-features = ["cli"]
 
-[[bin]]
-name = "perl-lsp"
-path = "src/bin/perl-lsp.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
 
 [[bin]]
 name = "perl-dap"
@@ -84,7 +92,7 @@ regex = "1.11.1"
 serial_test = "3.0"
 tempfile = "3.8"
 proptest = "1"
-perl-corpus = { version = "0.8.6" }
+perl-corpus = { version = "0.8.8" }
 which = "6"
 
 [[bench]]
@@ -96,19 +104,8 @@ name = "incremental_benchmark"
 harness = false
 required-features = ["incremental"]
 
+[[example]]
+name = "test_incremental_v2"
+required-features = ["incremental"]
+
 # Edge case test examples
-[[example]]
-name = "test_all_edge_cases"
-path = "examples/test_all_edge_cases.rs"
-
-[[example]]
-name = "test_expanded_edge_cases"
-
-[[example]]
-name = "test_additional_edge_cases"
-
-[[example]]
-name = "test_more_edge_cases"
-
-[[example]]
-name = "test_label"

@@ -108,6 +108,7 @@ fn get_node_children(node: &Node) -> Vec<&Node> {
         NodeKind::Subroutine { body, .. } => {
             vec![body.as_ref()]
         }
+        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
         _ => vec![],
     }
 }

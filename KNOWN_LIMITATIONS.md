@@ -7,7 +7,7 @@ This document provides a comprehensive list of parsing limitations across all th
 | Parser | Coverage | Status | Main Limitations |
 |--------|----------|--------|------------------|
 | **v3: Native** | ~100% | Production Ready | 4 minor edge cases (2% of edge case tests) |
-| **v2: Pest** | ~99.995% | Production Ready | Cannot handle m!pattern!, indirect object syntax |
+| **v2: Pest** | ~99.996% | Production Ready | Cannot handle m!pattern!, indirect object syntax (Improved substitution support) |
 | **v1: C** | ~95% | Legacy | Limited modern Perl support, edge cases |
 
 ## v3: Native Parser (perl-lexer + perl-parser) - RECOMMENDED
@@ -41,20 +41,29 @@ This document provides a comprehensive list of parsing limitations across all th
 2. **Emoji identifiers**: `my $♥ = 'love'` - Parsed but may need Unicode category validation
 3. **Format declarations**: `format STDOUT =` - Basic support, may need enhancement
 4. **Decimal without trailing digits**: `5.` - Works but could be more explicit in AST
+5. **Nested complex interpolation**: `@{[ map { $_ * 2 } @array ]}` now parses, but deeper nesting or multiple list operators inside `@{[ ... ]}` may still fail
 
 ## v2: Pest-based Parser
 
-### Coverage: ~99.995%
+### Coverage: ~99.996% (Improved regex/substitution support as of PR #42)
 
 **Successfully handles:**
 - ✅ All core Perl 5 features
 - ✅ Modern Perl features (class, method, try/catch, signatures)
 - ✅ Standard regex forms (`/pattern/`, `s/old/new/`)
+- ✅ **Substitution operators** (`s/old/new/g`) with dedicated AST nodes (NEW)
+- ✅ **Enhanced regex parsing** with fallback mechanisms (NEW)
 - ✅ Heredocs (all variants)
 - ✅ Unicode identifiers
 - ✅ Complex dereferencing
 
-**Known Limitations (~0.005%):**
+**Recent improvements (PR #42):**
+- ✅ Added separate `Substitution` NodeKind for proper s/// parsing
+- ✅ Fixed substitution test regressions with backward compatibility
+- ✅ Enhanced regex parser with graceful fallback mechanisms
+- ✅ Improved S-expression structural compatibility
+
+**Known Limitations (~0.004%):**
 
 1. **Regex with arbitrary delimiters**
    ```perl
@@ -65,7 +74,7 @@ This document provides a comprehensive list of parsing limitations across all th
    
    # SUPPORTED:
    $text =~ /pattern/;       # Standard slash delimiters
-   $text =~ s/old/new/g;     # Standard substitution
+   $text =~ s/old/new/g;     # Standard substitution (IMPROVED)
    ```
    **Reason**: PEG grammars cannot distinguish `m` as function vs regex operator without extensive lookahead.
 

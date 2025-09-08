@@ -51,8 +51,8 @@ pub struct BuildFlags {
     pub selection_ranges: bool,
     pub on_type_formatting: bool,
     pub code_lens: bool,         // Not advertised by default
-    pub call_hierarchy: bool,    // Not advertised by default
-    pub type_hierarchy: bool,    // Not implemented
+    pub call_hierarchy: bool,    // Call hierarchy navigation
+    pub type_hierarchy: bool,    // Type hierarchy navigation
     pub linked_editing: bool,    // Linked editing ranges
     pub inline_completion: bool, // Inline completion suggestions
     pub inline_values: bool,     // Inline values for debugging
@@ -110,9 +110,9 @@ impl BuildFlags {
             document_links: true,
             selection_ranges: true,
             on_type_formatting: true,
-            code_lens: true,         // Now implemented
-            call_hierarchy: false,   // Partial implementation
-            type_hierarchy: false,   // Not implemented
+            code_lens: true,         // Reference counts & run/test lenses (v0.8.9)
+            call_hierarchy: true,    // Call hierarchy support (v0.8.9)
+            type_hierarchy: true,    // Type hierarchy support (v0.8.9)
             linked_editing: true,    // Implemented for paired delimiters
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
@@ -169,25 +169,25 @@ impl BuildFlags {
             implementation: false,  // New feature, not GA yet
             references: true,
             document_symbol: true,
-            workspace_symbol: false,
-            inlay_hints: false,
-            pull_diagnostics: false,
-            workspace_symbol_resolve: false,
-            semantic_tokens: false,
-            code_actions: false,
-            execute_command: false, // New feature, not GA yet
-            rename: false,
-            document_links: false,
-            selection_ranges: false,
-            on_type_formatting: false,
-            code_lens: false,
-            call_hierarchy: false,
-            type_hierarchy: false,
-            linked_editing: false,    // New feature, not GA yet
+            workspace_symbol: true, // Working via index
+            inlay_hints: true,      // v0.8.4 feature - working
+            pull_diagnostics: true, // v0.8.5 feature - working
+            workspace_symbol_resolve: true,
+            semantic_tokens: true,    // v0.8.4 feature - working
+            code_actions: true,       // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
+            execute_command: true,    // v0.8.5 feature - working
+            rename: true, // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
+            document_links: true, // v0.8.4 feature - working
+            selection_ranges: true, // v0.8.4 feature - working
+            on_type_formatting: true, // v0.8.4 feature - working
+            code_lens: false, // Only ~20% functional → don't advertise in GA-lock
+            call_hierarchy: true, // Call hierarchy support (v0.8.9)
+            type_hierarchy: true, // Type hierarchy support (v0.8.9)
+            linked_editing: true, // Implemented for paired delimiters
             inline_completion: false, // New feature, not GA yet
-            inline_values: false,     // New feature, not GA yet
-            moniker: false,           // New feature, not GA yet
-            document_color: false,    // New feature, not GA yet
+            inline_values: false, // New feature, not GA yet
+            moniker: false, // New feature, not GA yet
+            document_color: false, // New feature, not GA yet
             formatting: false,
             range_formatting: false,
             folding_range: true,
@@ -346,13 +346,16 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.execute_command {
+        let mut commands = vec![
+            "perl.tidy".to_string(),
+            "perl.critic".to_string(),
+            "perl.extractVariable".to_string(),
+            "perl.extractSubroutine".to_string(),
+        ];
+        // Advertise executeCommandProvider commands from the execute_command module
+        commands.extend(crate::execute_command::get_supported_commands());
         caps.execute_command_provider = Some(ExecuteCommandOptions {
-            commands: vec![
-                "perl.tidy".to_string(),
-                "perl.critic".to_string(),
-                "perl.extractVariable".to_string(),
-                "perl.extractSubroutine".to_string(),
-            ],
+            commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),
         });
     }
@@ -383,7 +386,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.code_lens {
-        caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(false) });
+        caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(true) });
     }
 
     if build.linked_editing {
@@ -430,8 +433,15 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
 /// Generate capabilities as JSON Value for testing
 pub fn capabilities_json(build: BuildFlags) -> Value {
-    let caps = capabilities_for(build);
-    serde_json::to_value(caps).unwrap()
+    let caps = capabilities_for(build.clone());
+    let mut json = serde_json::to_value(caps).unwrap();
+
+    // lsp-types 0.97 lacks typeHierarchyProvider, so add it manually
+    if build.type_hierarchy {
+        json["typeHierarchyProvider"] = serde_json::json!(true);
+    }
+
+    json
 }
 
 /// Check if a capability is a boolean or object (for flexible assertions)
