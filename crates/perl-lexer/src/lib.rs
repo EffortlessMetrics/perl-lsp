@@ -147,7 +147,7 @@ impl<'a> PerlLexer<'a> {
     /// Normalize file start by skipping BOM if present
     fn normalize_file_start(&mut self) {
         // Skip UTF-8 BOM (EF BB BF) if at file start
-        if self.position == 0 && self.input_bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        if self.position == 0 && self.matches_bytes(&[0xEF, 0xBB, 0xBF]) {
             self.position = 3;
             self.line_start_offset = 3;
         }
@@ -562,7 +562,6 @@ impl<'a> PerlLexer<'a> {
 
     /// Check if the next bytes match a pattern (ASCII only)
     #[inline]
-    #[allow(dead_code)]
     fn matches_bytes(&self, pattern: &[u8]) -> bool {
         let end = self.position + pattern.len();
         if end <= self.input_bytes.len() {
@@ -962,8 +961,13 @@ impl<'a> PerlLexer<'a> {
                     && self.input.is_char_boundary(self.position.saturating_sub(1));
 
                 if check_arrow
-                    && &self.input[self.position.saturating_sub(3)..self.position.saturating_sub(1)]
-                        == "->"
+                    && {
+                        let saved = self.position;
+                        self.position -= 3;
+                        let arrow = self.matches_bytes(b"->");
+                        self.position = saved;
+                        arrow
+                    }
                     && matches!(self.current_char(), Some('{' | '[' | '*'))
                 {
                     // Just return the sigil
@@ -1240,13 +1244,29 @@ impl<'a> PerlLexer<'a> {
 
             let text = &self.input[start..self.position];
 
-            // Check for __DATA__ and __END__ markers
+            // Check for __DATA__ and __END__ markers using byte comparison
             // Only recognize these in code channel, not inside data/format sections or heredocs
             let in_code_channel =
                 !matches!(self.mode, LexerMode::InDataSection | LexerMode::InFormatBody)
                     && self.pending_heredocs.is_empty();
 
-            if in_code_channel && (text == "__DATA__" || text == "__END__") {
+            let marker = if in_code_channel {
+                let saved = self.position;
+                self.position = start;
+                let result = if self.matches_bytes(b"__DATA__") {
+                    Some("__DATA__")
+                } else if self.matches_bytes(b"__END__") {
+                    Some("__END__")
+                } else {
+                    None
+                };
+                self.position = saved;
+                result
+            } else {
+                None
+            };
+
+            if let Some(marker_text) = marker {
                 // These must be at the beginning of a line
                 // Use the after_newline flag to determine if we're at line start
                 if self.after_newline {
@@ -1269,8 +1289,8 @@ impl<'a> PerlLexer<'a> {
                         self.mode = LexerMode::InDataSection;
 
                         return Some(Token {
-                            token_type: TokenType::DataMarker(Arc::from(text)),
-                            text: Arc::from(text),
+                            token_type: TokenType::DataMarker(Arc::from(marker_text)),
+                            text: Arc::from(marker_text),
                             start,
                             end: self.position,
                         });
@@ -2425,13 +2445,22 @@ impl<'a> PerlLexer<'a> {
 }
 
 /// Perl keywords sorted by length for faster rejection
-#[allow(dead_code)]
 const KEYWORDS: &[&str] = &[
+    // 1 letter
+    "q",
+    "m",
+    "s",
+    "y",
     // 2 letters
     "if",
     "do",
     "my",
     "or",
+    "qq",
+    "qw",
+    "qr",
+    "qx",
+    "tr",
     // 3 letters
     "sub",
     "our",
@@ -2485,55 +2514,11 @@ const KEYWORDS: &[&str] = &[
 
 #[inline]
 fn is_keyword(word: &str) -> bool {
-    // Fast length check first
-    match word.len() {
-        1 => matches!(word, "q" | "m" | "s" | "y"),
-        2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
-        3 => matches!(
-            word,
-            "sub"
-                | "our"
-                | "use"
-                | "and"
-                | "not"
-                | "xor"
-                | "die"
-                | "say"
-                | "for"
-                | "try"
-                | "END"
-                | "cmp"
-        ),
-        4 => matches!(
-            word,
-            "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"
-        ),
-        5 => matches!(
-            word,
-            "elsif"
-                | "while"
-                | "until"
-                | "local"
-                | "state"
-                | "given"
-                | "break"
-                | "print"
-                | "catch"
-                | "BEGIN"
-                | "CHECK"
-                | "class"
-                | "undef"
-        ),
-        6 => matches!(word, "unless" | "return" | "method" | "format"),
-        7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
-        8 => word == "continue",
-        9 => word == "UNITCHECK",
-        _ => false,
-    }
+    let len = word.len();
+    KEYWORDS.iter().copied().any(|kw| kw.len() == len && kw == word)
 }
 
 /// Fast lookup table for compound operator second characters
-#[allow(dead_code)]
 const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
 
 #[inline]
@@ -2543,6 +2528,10 @@ fn is_compound_operator(first: char, second: char) -> bool {
     if first.is_ascii() && second.is_ascii() {
         let first_byte = first as u8;
         let second_byte = second as u8;
+
+        if !COMPOUND_SECOND_CHARS.contains(&second_byte) {
+            return false;
+        }
 
         // Use lookup table approach for maximum performance
         match (first_byte, second_byte) {
