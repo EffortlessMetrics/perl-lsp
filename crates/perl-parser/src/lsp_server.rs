@@ -183,7 +183,7 @@ pub(crate) struct DocumentState {
 
     /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
-    
+
     /// Document lock to ensure atomic document operations
     pub(crate) document_lock: Arc<std::sync::RwLock<()>>,
 }
@@ -2081,7 +2081,9 @@ impl LspServer {
 
                     if !hover_text.is_empty() {
                         // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::") || hover_text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if hover_text.contains("::")
+                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
+                        {
                             return Ok(Some(json!({
                                 "contents": {
                                     "kind": "markdown",
@@ -2089,7 +2091,7 @@ impl LspServer {
                                 },
                             })));
                         }
-                        
+
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
@@ -2104,7 +2106,9 @@ impl LspServer {
 
                     if !hover_text.is_empty() {
                         // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::") || hover_text.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if hover_text.contains("::")
+                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
+                        {
                             return Ok(Some(json!({
                                 "contents": {
                                     "kind": "markdown",
@@ -2112,7 +2116,7 @@ impl LspServer {
                                 },
                             })));
                         }
-                        
+
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
@@ -4534,7 +4538,9 @@ impl LspServer {
         }
 
         let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == ':') {
+        while end < chars.len()
+            && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == ':')
+        {
             end += 1;
         }
 
