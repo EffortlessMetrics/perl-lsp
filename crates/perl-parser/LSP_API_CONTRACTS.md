@@ -37,7 +37,7 @@ These contracts are enforced by tests in `tests/lsp_api_contracts.rs`.
     "documentSymbolProvider": true,
     "workspaceSymbolProvider": true,
     "codeActionProvider": true,
-    "codeLensProvider": { "resolveProvider": false },
+    "codeLensProvider": { "resolveProvider": true },  // ✅ IMPLEMENTED (v0.8.9+ Preview)
     "documentFormattingProvider": true,
     "documentRangeFormattingProvider": true,
     "documentOnTypeFormattingProvider": {
