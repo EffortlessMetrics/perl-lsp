@@ -1,6 +1,12 @@
-# LSP Implementation Technical Guide
+# LSP Implementation Technical Guide (*Diataxis: Explanation* - Understanding LSP architecture and design decisions)
 
-## Architecture Overview
+> This guide follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive technical documentation:
+> - **Tutorial sections**: Hands-on learning with examples
+> - **How-to sections**: Step-by-step implementation guidance  
+> - **Reference sections**: Complete technical specifications
+> - **Explanation sections**: Design concepts and architectural decisions
+
+## Architecture Overview (*Diataxis: Explanation* - LSP design concepts)
 
 ```
 ┌─────────────────┐     JSON-RPC      ┌──────────────────┐
@@ -19,13 +25,13 @@
                                       └──────────────────┘
 ```
 
-## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics
+## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics (*Diataxis: Explanation* - Understanding the bareword analysis breakthrough)
 
 The v0.8.6 release introduces breakthrough hash key context detection that eliminates false positives in bareword analysis under `use strict`. This represents a significant advancement in Perl static analysis.
 
-### Technical Implementation
+### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
 
-#### Core Algorithm
+#### Core Algorithm (*Diataxis: Reference* - Implementation details)
 
 ```rust
 fn is_in_hash_key_context(
@@ -765,6 +771,164 @@ The thread-safe semantic token provider achieves exceptional performance:
 - **Memory efficiency**: No persistent state between calls
 
 This makes it suitable for real-time LSP operations and high-frequency syntax highlighting updates.
+
+## Import Optimization Integration (**Diataxis: Reference**)
+
+### Overview
+
+The import optimization system provides comprehensive analysis and optimization of Perl import statements through LSP code actions. It integrates seamlessly with the existing code actions framework to provide real-time import management.
+
+### Core Components
+
+```rust
+// Import optimization through code actions (code_actions.rs)
+fn optimize_imports(&self) -> Option<CodeAction> {
+    let optimizer = ImportOptimizer::new();
+    let analysis = optimizer.analyze_content(&self.source).ok()?;
+    let edits = optimizer.generate_edits(&self.source, &analysis);
+    if edits.is_empty() {
+        return None;
+    }
+    Some(CodeAction {
+        title: "Organize imports".to_string(),
+        kind: CodeActionKind::SourceOrganizeImports,
+        diagnostics: Vec::new(),
+        edit: CodeActionEdit { changes: edits },
+        is_preferred: false,
+    })
+}
+```
+
+### Import Analysis Engine
+
+**Features Provided**:
+- **Unused Import Detection**: Regex-based usage analysis identifies import statements never used in code
+- **Duplicate Import Consolidation**: Merges multiple import lines from same module into single optimized statements
+- **Missing Import Detection**: Identifies Module::symbol references requiring additional imports
+- **Alphabetical Sorting**: Organizes imports in consistent alphabetical order
+
+```rust
+// Core import analysis (import_optimizer.rs)
+impl ImportOptimizer {
+    pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
+        // Parse use statements with regex
+        let re_use = Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;")?
+        
+        // Build import tracking
+        let mut imports = Vec::new();
+        for (idx, line) in content.lines().enumerate() {
+            if let Some(caps) = re_use.captures(line) {
+                let module = caps[1].to_string();
+                let symbols = /* parse qw() symbols */;
+                imports.push(ImportEntry { module, symbols, line: idx + 1 });
+            }
+        }
+        
+        // Analyze for unused, duplicates, missing imports
+        let analysis = self.perform_analysis(&imports, content)?;
+        Ok(analysis)
+    }
+    
+    pub fn generate_optimized_imports(&self, analysis: &ImportAnalysis) -> String {
+        // Generate clean, sorted import statements
+        // Remove unused symbols, consolidate duplicates, add missing
+    }
+}
+```
+
+### LSP Integration Pattern
+
+**Code Action Registration**:
+```rust
+// LSP server capabilities (lsp_server.rs)
+fn handle_initialize(&self, _params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    Ok(Some(json!({
+        "capabilities": {
+            "codeActionProvider": {
+                "codeActionKinds": [
+                    "quickfix",
+                    "refactor",
+                    "refactor.extract", 
+                    "source.organizeImports", // Import optimization
+                ]
+            }
+        }
+    })))
+}
+```
+
+**Code Action Handler**:
+```rust
+// Handle code action requests including import optimization
+fn handle_code_action(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    let params: CodeActionParams = parse_params(params)?;
+    let doc = get_document(&params.text_document.uri)?;
+    
+    let provider = CodeActionsProvider::new(doc.content.clone());
+    let actions = provider.get_code_actions(
+        &doc.ast, 
+        (params.range.start, params.range.end),
+        &diagnostics
+    );
+    
+    // Import optimization is automatically included via optimize_imports()
+    Ok(Some(json!(actions)))
+}
+```
+
+### Performance Characteristics
+
+**Import Analysis Performance**:
+- **Regex-based parsing**: Fast identification of use statements
+- **Usage detection**: Efficient symbol usage scanning with compiled regex
+- **Memory efficiency**: Bounded processing with reasonable file size limits
+- **LSP responsiveness**: Suitable for real-time code actions
+
+**Key Performance Features**:
+```rust
+// Performance optimizations in ImportOptimizer
+const MAX_FILE_SIZE: usize = 1_000_000; // 1MB limit
+const MAX_IMPORTS: usize = 1000;        // Reasonable import limit
+
+// Regex compilation is cached for repeated use
+static IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;").unwrap()
+});
+```
+
+### Testing Integration
+
+**Comprehensive Test Coverage**:
+```rust
+#[test]
+fn test_import_optimization_code_action() {
+    let source = r#"use strict;
+use warnings;
+use Data::Dumper;  # Unused
+use JSON;          # Unused
+
+print "Hello World\n";
+"#;
+    
+    let provider = CodeActionsProvider::new(source.to_string());
+    let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
+    
+    let import_action = actions.iter()
+        .find(|a| a.kind == CodeActionKind::SourceOrganizeImports)
+        .expect("Should have import optimization action");
+    
+    assert_eq!(import_action.title, "Organize imports");
+    assert!(!import_action.edit.changes.is_empty());
+}
+```
+
+### Editor Integration Benefits
+
+1. **VSCode Integration**: Seamless "Organize Imports" command via LSP code actions
+2. **Real-time Analysis**: Import issues detected as you type with immediate fixes
+3. **Batch Operations**: Single action to clean up all import issues in a file  
+4. **Workspace-wide**: Can be applied across entire Perl codebases
+5. **Non-destructive**: Preview changes before applying optimizations
 
 ## Adding New LSP Features - Step by Step
 

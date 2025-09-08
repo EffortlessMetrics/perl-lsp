@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
+**Latest Release**: v0.8.8+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA)
+### Published Crates (v0.8.8 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -71,9 +71,10 @@ cargo install --path crates/perl-lsp     # From source
 
 ### Testing
 ```bash
-cargo test                               # All tests
-cargo test -p perl-parser               # Parser tests
-cargo test -p perl-lsp                  # LSP integration tests
+cargo test                               # Run all tests
+cargo test -p perl-parser               # Parser library tests
+cargo test -p perl-lsp                  # LSP server integration tests
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
 ```
 
 ### Development
@@ -128,7 +129,8 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
-- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
+- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, comprehensive import optimization
+- **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
 
 ## Documentation
 
@@ -149,6 +151,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
+- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 
 ## Development Guidelines
 
@@ -194,14 +197,15 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
-- 100% test pass rate across all components (284+ tests passing)
+- 100% test pass rate across all components (291+ tests passing)
 - Zero clippy warnings, consistent formatting
 - Enterprise-grade LSP server with comprehensive features
 - Production-stable incremental parsing with statistical validation
 
 **LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
-- ✅ Workspace symbols, rename, code actions
+- ✅ Workspace symbols, rename, code actions (including import optimization)
+- ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
 - ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)

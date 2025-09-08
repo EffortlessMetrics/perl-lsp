@@ -572,11 +572,8 @@ impl ImportOptimizer {
             if optimized.is_empty() {
                 return Vec::new();
             }
-            let insert_line = analysis
-                .missing_imports
-                .first()
-                .map(|m| m.suggested_location)
-                .unwrap_or(1);
+            let insert_line =
+                analysis.missing_imports.first().map(|m| m.suggested_location).unwrap_or(1);
             let insert_offset = self.line_offset(content, insert_line);
             return vec![TextEdit {
                 location: SourceLocation { start: insert_offset, end: insert_offset },
@@ -592,11 +589,7 @@ impl ImportOptimizer {
 
         vec![TextEdit {
             location: SourceLocation { start: start_offset, end: end_offset },
-            new_text: if optimized.is_empty() {
-                String::new()
-            } else {
-                optimized + "\n"
-            },
+            new_text: if optimized.is_empty() { String::new() } else { optimized + "\n" },
         }]
     }
 
