@@ -204,7 +204,7 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 - ✅ Workspace symbols, rename, code actions
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
-- ✅ Code Lens with reference counts and resolve support
+- ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
 - ✅ File path completion with enterprise security
 - ✅ Debug Adapter Protocol (DAP) support
 
