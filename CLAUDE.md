@@ -71,9 +71,13 @@ cargo install --path crates/perl-lsp     # From source
 
 ### Testing
 ```bash
-cargo test                               # All tests
-cargo test -p perl-parser               # Parser tests
-cargo test -p perl-lsp                  # LSP integration tests
+cargo test                               # All tests (robust across environments)
+cargo test -p perl-parser               # Parser library tests
+cargo test -p perl-lsp                  # LSP server integration tests
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
+
+# Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
+# Formatting tests demonstrate graceful degradation when tools are missing
 ```
 
 ### Development
@@ -204,18 +208,20 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
-- 100% test pass rate across all components (284+ tests passing)
+- 100% test pass rate across all components (291+ tests passing)
 - Zero clippy warnings, consistent formatting
 - Enterprise-grade LSP server with comprehensive features
 - Production-stable incremental parsing with statistical validation
 
 **LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
-- ✅ Workspace symbols, rename, code actions
+- ✅ Workspace symbols, rename, code actions (including import optimization)
+- ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
-- ✅ Code Lens with reference counts and resolve support
+- ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
 - ✅ File path completion with enterprise security
+- ✅ Enhanced formatting: always-available capabilities with graceful perltidy fallback
 - ✅ Debug Adapter Protocol (DAP) support
 
 ## Contributing

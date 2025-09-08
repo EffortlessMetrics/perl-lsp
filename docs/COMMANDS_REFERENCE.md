@@ -197,6 +197,10 @@ LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 cargo test -p perl-lsp test_completion_detail_formatting
 cargo test -p perl-lsp test_workspace_symbol_search
 
+# Run formatting capability tests (robust across environments)
+cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting
+cargo test -p perl-lsp --test lsp_perltidy_test test_formatting_provider_capability
+
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
 
@@ -216,6 +220,10 @@ perl-lsp --stdio < test_requests.jsonrpc
 ```bash
 # Enable fast testing mode (reduces test timeouts by ~75%)
 export LSP_TEST_FALLBACKS=1
+
+# Optional external dependencies for enhanced features
+export PERLTIDY_PATH="/usr/local/bin/perltidy"    # Custom perltidy location
+export PERLCRITIC_PATH="/usr/local/bin/perlcritic" # Custom perlcritic location
 
 # Performance characteristics in fallback mode:
 # - Base timeout: 500ms (vs 2000ms)
