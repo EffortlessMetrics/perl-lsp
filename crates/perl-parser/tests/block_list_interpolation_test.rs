@@ -9,7 +9,8 @@ fn test_simple_array_interpolation() {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        {
             if let Some(init) = initializer {
                 if let NodeKind::String { value, interpolated } = &init.kind {
                     assert_eq!(interpolated, &true, "String should be interpolated");
@@ -40,7 +41,8 @@ fn test_complex_map_interpolation() {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        {
             if let Some(init) = initializer {
                 if let NodeKind::String { value, interpolated } = &init.kind {
                     assert_eq!(interpolated, &true, "String should be interpolated");
@@ -71,7 +73,8 @@ fn test_hash_interpolation() {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        {
             if let Some(init) = initializer {
                 if let NodeKind::String { value, interpolated } = &init.kind {
                     assert_eq!(interpolated, &true, "String should be interpolated");
@@ -99,7 +102,8 @@ fn test_variable_interpolation() {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        {
             if let Some(init) = initializer {
                 if let NodeKind::String { value, interpolated } = &init.kind {
                     assert_eq!(interpolated, &true, "String should be interpolated");
