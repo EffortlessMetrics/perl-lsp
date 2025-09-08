@@ -36,7 +36,11 @@
 
 ### Internal/Unpublished
 - **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)
-- **`/crates/tree-sitter-perl-rs/`**: Internal test harness
+- **`/crates/tree-sitter-perl-rs/`**: Internal test harness with unified scanner architecture
+  - **`src/scanner/rust_scanner.rs`**: Core Rust scanner implementation with full Perl lexical analysis
+  - **`src/scanner/c_scanner.rs`**: C API compatibility wrapper that delegates to RustScanner
+  - **`src/scanner/mod.rs`**: Unified scanner interface supporting both `c-scanner` and `rust-scanner` features
+  - **Architecture**: Single Rust implementation with C wrapper for backward compatibility
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 

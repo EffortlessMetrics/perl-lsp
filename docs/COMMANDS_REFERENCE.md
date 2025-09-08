@@ -462,6 +462,62 @@ V3 scanner nodes: 14
   - literal
 ```
 
+## Scanner Architecture Testing (*Diataxis: How-to Guide* - Unified scanner validation)
+
+The project uses a unified scanner architecture where both `c-scanner` and `rust-scanner` features use the same Rust implementation, with `CScanner` serving as a compatibility wrapper that delegates to `RustScanner`.
+
+### Scanner Implementation Testing (*Diataxis: Reference* - Scanner validation commands)
+
+```bash
+# Test core Rust scanner implementation directly
+cargo test -p tree-sitter-perl-rs --features rust-scanner
+
+# Test C scanner wrapper (delegates to Rust implementation internally)
+cargo test -p tree-sitter-perl-rs --features c-scanner
+
+# Validate scanner delegation functionality
+cargo test -p tree-sitter-perl-rs rust_scanner_smoke
+
+# Test scanner state management and serialization
+cargo test -p tree-sitter-perl-rs scanner_state
+```
+
+### Scanner Compatibility Validation (*Diataxis: How-to Guide* - Ensuring backward compatibility)
+
+```bash
+# Verify both scanner interfaces work correctly
+cargo test -p tree-sitter-perl-rs --features rust-scanner,c-scanner
+
+# Test C scanner API compatibility (should delegate to Rust without changes)
+cargo test -p tree-sitter-perl-rs c_scanner::tests::test_c_scanner_delegates
+
+# Performance testing (both scanners use same Rust implementation)
+cargo bench -p tree-sitter-perl-rs --features rust-scanner
+cargo bench -p tree-sitter-perl-rs --features c-scanner
+```
+
+### Scanner Build Configuration (*Diataxis: Reference* - Feature flag usage)
+
+```bash
+# Build with Rust scanner only (direct usage)
+cargo build -p tree-sitter-perl-rs --features rust-scanner
+
+# Build with C scanner wrapper (delegates to Rust internally)
+cargo build -p tree-sitter-perl-rs --features c-scanner
+
+# Build with both scanner interfaces available
+cargo build -p tree-sitter-perl-rs --features rust-scanner,c-scanner
+```
+
+### Understanding Scanner Architecture (*Diataxis: Explanation* - Design rationale)
+
+The unified scanner architecture provides:
+
+- **Single Implementation**: Both `c-scanner` and `rust-scanner` features use the same Rust code
+- **Backward Compatibility**: `CScanner` API unchanged, existing benchmark code works without modification  
+- **Simplified Maintenance**: One scanner implementation instead of separate C and Rust versions
+- **Consistent Performance**: All interfaces benefit from Rust implementation performance
+
 ## Edge Case Testing Commands
 
 ### Workspace Edge Case Tests (v0.8.9)

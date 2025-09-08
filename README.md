@@ -589,9 +589,38 @@ tree-sitter-perl/
 **Architecture Highlights:**
 - **v3 Native**: Two-phase architecture (lexer + parser) for maximum performance
 - **v2 Pest**: Grammar-driven parsing with PEG
-- **v1 C**: Original tree-sitter implementation
+- **v1 C**: Original tree-sitter implementation with unified Rust scanner backend
 - **Tree-sitter Compatible**: All parsers output standard S-expressions
 - **Modular Design**: Clean separation of concerns
+- **Unified Scanner**: Single Rust scanner implementation with C compatibility wrapper for legacy API support
+
+### Scanner Implementation Details (*Diataxis: Explanation* - Understanding scanner architecture)
+
+The project uses a unified scanner architecture that simplifies maintenance while preserving backward compatibility:
+
+#### Design Rationale
+- **Single Implementation**: Both `c-scanner` and `rust-scanner` features use the same Rust code
+- **C Compatibility Wrapper**: `CScanner` delegates to `RustScanner` to maintain existing API contracts  
+- **Reduced Maintenance**: One scanner implementation instead of separate C and Rust versions
+- **Benchmark Compatibility**: Legacy benchmark code continues to work without modification
+
+#### Implementation Structure (*Diataxis: Reference* - Technical components)
+```rust
+// Unified scanner architecture
+CScanner {          // C API compatibility wrapper  
+    inner: RustScanner  // Delegates to unified Rust implementation
+}
+
+RustScanner {       // Core scanning implementation
+    // Full Perl lexical analysis in Rust
+}
+```
+
+#### Benefits (*Diataxis: Explanation* - Why this design)
+- **Maintainability**: Single codebase for all scanner functionality
+- **Performance**: Rust implementation provides consistent performance characteristics
+- **Compatibility**: Existing tooling and benchmarks work without changes
+- **Safety**: Memory-safe Rust implementation with proper error handling
 
 ---
 

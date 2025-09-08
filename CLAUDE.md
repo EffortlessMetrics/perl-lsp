@@ -114,12 +114,22 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 - **LSP Binary**: `/crates/perl-lsp/` - standalone server, CLI interface, protocol handling
 - **Lexer**: `/crates/perl-lexer/` - tokenization, Unicode support
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
+- **Scanner Components**: `/crates/tree-sitter-perl-rs/src/scanner/` - unified scanner architecture with C wrapper delegation
 - **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
 - **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
 - **v1 (C-based)**: ~95% coverage, benchmarking only
+
+### Scanner Architecture (*Diataxis: Explanation* - Unified scanner design)
+The scanner implementation uses a unified Rust-based architecture with C compatibility wrapper:
+
+- **Rust Scanner** (`RustScanner`): Core scanning implementation in Rust with full Perl lexical analysis
+- **C Scanner Wrapper** (`CScanner`): Compatibility wrapper that delegates to `RustScanner` for legacy API support
+- **Unified Implementation**: Both scanner features (`c-scanner` and `rust-scanner`) ultimately use the same Rust code
+- **Backward Compatibility**: Existing benchmark and test code continues to work without modification
+- **Simplified Maintenance**: Single scanner implementation reduces maintenance overhead while preserving API contracts
 
 ## Key Features
 
