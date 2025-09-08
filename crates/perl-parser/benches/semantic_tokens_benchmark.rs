@@ -3,6 +3,7 @@ use perl_parser::{
     Parser,
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
 };
+#[allow(unused_imports)] // Used in benchmark functions but clippy may not detect it
 use std::hint::black_box;
 
 fn benchmark_semantic_tokens_small(c: &mut Criterion) {

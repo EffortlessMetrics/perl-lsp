@@ -356,8 +356,10 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // Mark as unused if module is known and no usage detected
-                    if !is_used && is_known_module {
+                    // Conservative approach: Don't flag bare imports as unused if they have exports
+                    // Modules with exports might have side effects or implicit behavior we can't detect
+                    // But modules with no exports (like LWP::UserAgent) can still be flagged if unused
+                    if !is_used && is_known_module && known_exports.is_empty() {
                         unused_symbols.push("(bare import)".to_string());
                     }
                 }
