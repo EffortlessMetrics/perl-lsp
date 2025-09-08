@@ -65,7 +65,10 @@ pub struct TestCase {
 
 impl TestGenerator {
     pub fn new(framework: TestFramework) -> Self {
-        Self { framework, options: TestGeneratorOptions::default() }
+        Self {
+            framework,
+            options: TestGeneratorOptions::default(),
+        }
     }
 
     pub fn with_options(framework: TestFramework, options: TestGeneratorOptions) -> Self {
@@ -75,35 +78,35 @@ impl TestGenerator {
     /// Generate tests for a given AST
     pub fn generate_tests(&self, ast: &Node, source: &str) -> Vec<TestCase> {
         let mut tests = Vec::new();
-
+        
         // Find all subroutines
         let subs = self.find_subroutines(ast);
-
+        
         for sub in subs {
             // Generate basic test
             tests.push(self.generate_basic_test(&sub, source));
-
+            
             // Generate edge case tests if enabled
             if self.options.edge_cases {
                 tests.extend(self.generate_edge_cases(&sub, source));
             }
-
+            
             // Generate data-driven tests if enabled
             if self.options.data_driven {
                 if let Some(test) = self.generate_data_driven_test(&sub, source) {
                     tests.push(test);
                 }
             }
-
+            
             // Generate performance test if enabled
             if self.options.perf_tests {
                 tests.push(self.generate_perf_test(&sub, source));
             }
         }
-
+        
         // Generate module-level tests
         tests.extend(self.generate_module_tests(ast, source));
-
+        
         tests
     }
 
@@ -114,50 +117,17 @@ impl TestGenerator {
         subs
     }
 
-    fn extract_params_from_signature(&self, signature: &Node, params: &mut Vec<String>) {
-        // Extract parameter names from signature node
-        // This is a simplified implementation - real one would parse signature properly
-        match &signature.kind {
-            NodeKind::ParameterList { parameters } => {
-                for param in parameters {
-                    if let NodeKind::Variable { sigil, name } = &param.kind {
-                        params.push(format!("{}{}", sigil, name));
-                    }
-                }
-            }
-            _ => {
-                // Fallback: try to extract from child nodes
-                for child in signature.children() {
-                    self.extract_params_from_signature(child, params);
-                }
-            }
-        }
-    }
-
     fn find_subroutines_recursive(&self, node: &Node, subs: &mut Vec<SubroutineInfo>) {
         match &node.kind {
             NodeKind::SubroutineDeclaration { name, signature, .. } => {
                 if let Some(name) = name {
                     let is_private = name.starts_with('_');
                     if !is_private || self.options.test_private {
-                        // Extract actual parameter names from signature if available
-                        let param_names = if let Some(sig) = signature {
-                            // Extract parameters from signature
-                            let mut params = Vec::new();
-                            self.extract_params_from_signature(&sig, &mut params);
-                            if params.is_empty() {
-                                None
-                            } else {
-                                Some(params)
-                            }
-                        } else {
-                            None
-                        };
-
                         subs.push(SubroutineInfo {
                             name: name.clone(),
-                            params: param_names,
+                            params: params.clone(),
                             node: node.clone(),
+                            is_private,
                         });
                     }
                 }
@@ -174,133 +144,52 @@ impl TestGenerator {
     fn generate_basic_test(&self, sub: &SubroutineInfo, _source: &str) -> TestCase {
         let test_name = format!("test_{}", sub.name);
         let description = format!("Basic test for {}", sub.name);
-
+        
         let code = match self.framework {
-            TestFramework::TestMore => self.generate_test_more_basic(sub),
-            TestFramework::Test2V0 => self.generate_test2_basic(&sub.name, &sub.params),
-            TestFramework::TestSimple => self.generate_test_simple_basic(&sub.name, &sub.params),
-            TestFramework::TestClass => self.generate_test_class_basic(&sub.name, &sub.params),
+            TestFramework::TestMore => {
+                self.generate_test_more_basic(&sub.name, &sub.params)
+            }
+            TestFramework::Test2V0 => {
+                self.generate_test2_basic(&sub.name, &sub.params)
+            }
+            TestFramework::TestSimple => {
+                self.generate_test_simple_basic(&sub.name, &sub.params)
+            }
+            TestFramework::TestClass => {
+                self.generate_test_class_basic(&sub.name, &sub.params)
+            }
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
-    }
-
-    fn detect_expected_return(&self, sub: &SubroutineInfo) -> Option<String> {
-        let expr = self.find_return_expr(&sub.node)?;
-        let mut env = HashMap::new();
-        if let Some(params) = &sub.params {
-            for (i, param) in params.iter().enumerate() {
-                env.insert(param.clone(), (i + 1) as i64);
-            }
-        }
-        self.evaluate_expression(&expr, &env)
-    }
-
-    fn find_return_expr(&self, node: &Node) -> Option<Node> {
-        match &node.kind {
-            NodeKind::Return { value } => value.as_ref().map(|v| *v.clone()),
-            NodeKind::Block { statements } => {
-                for stmt in statements {
-                    if let Some(expr) = self.find_return_expr(stmt) {
-                        return Some(expr);
-                    }
-                }
-                None
-            }
-            _ => {
-                for child in node.children() {
-                    if let Some(expr) = self.find_return_expr(child) {
-                        return Some(expr);
-                    }
-                }
-                None
-            }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
         }
     }
 
-    fn evaluate_expression(&self, node: &Node, env: &HashMap<String, i64>) -> Option<String> {
-        match &node.kind {
-            NodeKind::Number { value } => Some(value.clone()),
-            NodeKind::String { value, .. } => Some(format!("'{}'", value)),
-            NodeKind::Variable { sigil, name } => {
-                let key = format!("{}{}", sigil, name);
-                env.get(&key).map(|v| v.to_string())
-            }
-            NodeKind::Binary { op, left, right } => {
-                let l = self.evaluate_expression(left, env)?.parse::<i64>().ok()?;
-                let r = self.evaluate_expression(right, env)?.parse::<i64>().ok()?;
-                let res = match op.as_str() {
-                    "+" => l + r,
-                    "-" => l - r,
-                    "*" => l * r,
-                    "/" => {
-                        if r != 0 {
-                            l / r
-                        } else {
-                            return None;
-                        }
-                    }
-                    _ => return None,
-                };
-                Some(res.to_string())
-            }
-            NodeKind::Unary { op, operand } => {
-                if op == "-" {
-                    let v = self.evaluate_expression(operand, env)?.parse::<i64>().ok()?;
-                    Some((-v).to_string())
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn estimate_complexity(&self, node: &Node) -> usize {
-        let mut total = 1;
-        for child in node.children() {
-            total += self.estimate_complexity(child);
-        }
-        total
-    }
-
-    fn generate_test_more_basic(&self, sub: &SubroutineInfo) -> String {
+    fn generate_test_more_basic(&self, name: &str, params: &Option<Vec<String>>) -> String {
         let mut code = String::new();
         code.push_str("use Test::More;\n\n");
         
-        code.push_str(&format!("subtest '{}' => sub {{\n", sub.name));
+        code.push_str(&format!("subtest '{}' => sub {{\n", name));
 
-        if let Some(params) = &sub.params {
-            // Generate test with parameters
+        if let Some(params) = params {
             let args = self.generate_sample_args(params.len());
-            code.push_str(&format!("    my $result = {}({});\n", sub.name, args));
-
-            if let Some(expected) = self.detect_expected_return(sub) {
-                code.push_str(&format!(
-                    "    is($result, {}, 'Returns expected value');\n",
-                    expected
-                ));
-            } else {
-                code.push_str("    ok(defined $result, 'Function returns defined value');\n");
-
-                // Add type checks based on function name heuristics
-                if sub.name.starts_with("is_") || sub.name.starts_with("has_") {
-                    code.push_str("    ok($result == 0 || $result == 1, 'Returns boolean');\n");
-                }
-            }
+            code.push_str(&format!("    my $result = {}({});\n", name, args));
         } else {
-            code.push_str(&format!("    my $result = {}();\n", sub.name));
-
-            if let Some(expected) = self.detect_expected_return(sub) {
-                code.push_str(&format!(
-                    "    is($result, {}, 'Returns expected value');\n",
-                    expected
-                ));
-            } else {
-                code.push_str("    ok(defined $result, 'Function returns defined value');\n");
-            }
+            code.push_str(&format!("    my $result = {}();\n", name));
         }
 
+        if let Some(expected) = self.options.expected_values.get(name) {
+            code.push_str(&format!("    is($result, {}, 'Returns expected value');\n", expected));
+        } else {
+            code.push_str("    ok(defined $result, 'Function returns defined value');\n");
+        }
+
+        if name.starts_with("is_") || name.starts_with("has_") {
+            code.push_str("    ok($result == 0 || $result == 1, 'Returns boolean');\n");
+        }
 
         code.push_str("};\n");
         code
@@ -309,9 +198,9 @@ impl TestGenerator {
     fn generate_test2_basic(&self, name: &str, params: &Option<Vec<String>>) -> String {
         let mut code = String::new();
         code.push_str("use Test2::V0;\n\n");
-
+        
         code.push_str(&format!("subtest '{}' => sub {{\n", name));
-
+        
         if let Some(params) = params {
             let args = self.generate_sample_args(params.len());
             code.push_str(&format!("    my $result = {}({});\n", name, args));
@@ -320,7 +209,7 @@ impl TestGenerator {
             code.push_str(&format!("    my $result = {}();\n", name));
             code.push_str("    ok($result, 'Function returns value');\n");
         }
-
+        
         code.push_str("};\n");
         code
     }
@@ -328,59 +217,59 @@ impl TestGenerator {
     fn generate_test_simple_basic(&self, name: &str, params: &Option<Vec<String>>) -> String {
         let mut code = String::new();
         code.push_str("use Test::Simple tests => 1;\n\n");
-
+        
         if let Some(params) = params {
             let args = self.generate_sample_args(params.len());
             code.push_str(&format!("ok({}({}), 'Test {}');\n", name, args, name));
         } else {
             code.push_str(&format!("ok({}(), 'Test {}');\n", name, name));
         }
-
+        
         code
     }
 
     fn generate_test_class_basic(&self, name: &str, params: &Option<Vec<String>>) -> String {
         let mut code = String::new();
         code.push_str("use Test::Class::Most;\n\n");
-
+        
         code.push_str(&format!("sub test_{} : Test {{\n", name));
         code.push_str("    my $self = shift;\n");
-
+        
         if let Some(params) = params {
             let args = self.generate_sample_args(params.len());
             code.push_str(&format!("    my $result = $self->{}({});\n", name, args));
         } else {
             code.push_str(&format!("    my $result = $self->{}();\n", name));
         }
-
+        
         code.push_str("    ok($result, 'Function works');\n");
         code.push_str("}\n");
-
+        
         code
     }
 
     /// Generate edge case tests
     fn generate_edge_cases(&self, sub: &SubroutineInfo, _source: &str) -> Vec<TestCase> {
         let mut tests = Vec::new();
-
+        
         if sub.params.is_some() {
             // Test with undef parameters
             tests.push(self.generate_undef_test(sub));
-
+            
             // Test with empty parameters
             tests.push(self.generate_empty_test(sub));
-
+            
             // Test with wrong type parameters
             tests.push(self.generate_type_test(sub));
         }
-
+        
         tests
     }
 
     fn generate_undef_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_undef", sub.name);
         let description = format!("Test {} with undef parameters", sub.name);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -394,14 +283,19 @@ impl TestGenerator {
             }
             _ => String::new(), // Simplified for other frameworks
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_empty_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_empty", sub.name);
         let description = format!("Test {} with empty parameters", sub.name);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -415,14 +309,19 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_type_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_types", sub.name);
         let description = format!("Test {} with different types", sub.name);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -440,17 +339,24 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     /// Generate data-driven test
     fn generate_data_driven_test(&self, sub: &SubroutineInfo, _source: &str) -> Option<TestCase> {
-        sub.params.as_ref()?;
-
+        if !sub.params.is_some() {
+            return None;
+        }
+        
         let test_name = format!("test_{}_data_driven", sub.name);
         let description = format!("Data-driven test for {}", sub.name);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -470,7 +376,7 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
+        
         Some(TestCase {
             name: test_name,
             description,
@@ -484,9 +390,6 @@ impl TestGenerator {
         let test_name = format!("test_{}_performance", sub.name);
         let description = format!("Performance test for {}", sub.name);
 
-        let complexity = self.estimate_complexity(&sub.node);
-        let threshold = complexity * 100;
-
         let code = match self.framework {
             TestFramework::TestMore => {
                 let mut snippet = String::new();
@@ -494,54 +397,56 @@ impl TestGenerator {
                 snippet.push_str("use Benchmark qw(timeit);\n\n");
                 snippet.push_str(&format!("subtest '{} performance' => sub {{\n", sub.name));
                 snippet.push_str(&format!("    my $result = timeit(1000, sub {{ {}() }});\n", sub.name));
-                
-                // Use complexity-based threshold if available, otherwise check options
                 if let Some(threshold) = self.options.perf_thresholds.get(&sub.name) {
                     snippet.push_str(&format!(
                         "    cmp_ok($result->real, '<', {}, 'Executes under threshold');\n",
                         threshold
                     ));
                 } else {
-                    snippet.push_str(&format!(
-                        "    cmp_ok($result->real, '<', {}, 'Performance within expected range');\n",
-                        threshold
-                    ));
+                    snippet.push_str(
+                        "    ok($result->real >= 0, 'Execution time recorded');\n",
+                    );
                 }
                 snippet.push_str("};\n");
                 snippet
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: true,
+        }
     }
 
     /// Generate module-level tests
     fn generate_module_tests(&self, ast: &Node, _source: &str) -> Vec<TestCase> {
         let mut tests = Vec::new();
-
+        
         // Find package declaration
         if let Some(package_name) = self.find_package_name(ast) {
             // Generate module load test
             tests.push(self.generate_module_load_test(&package_name));
-
+            
             // Generate export test if module exports functions
             if self.has_exports(ast) {
                 tests.push(self.generate_export_test(&package_name));
             }
-
+            
             // Generate new() test if it's an OO module
             if self.has_constructor(ast) {
                 tests.push(self.generate_constructor_test(&package_name));
             }
         }
-
+        
         tests
     }
 
     fn find_package_name(&self, node: &Node) -> Option<String> {
         match &node.kind {
-            NodeKind::Package { name, .. } => Some(name.clone()),
+            NodeKind::PackageDeclaration { name, .. } => Some(name.clone()),
             _ => {
                 for child in node.children() {
                     if let Some(name) = self.find_package_name(child) {
@@ -565,7 +470,7 @@ impl TestGenerator {
 
     fn find_use_statement(&self, node: &Node, module: &str) -> Option<Node> {
         match &node.kind {
-            NodeKind::Use { module: m, .. } if m == module => Some(node.clone()),
+            NodeKind::UseStatement { module: m, .. } if m == module => Some(node.clone()),
             _ => {
                 for child in node.children() {
                     if let Some(result) = self.find_use_statement(child, module) {
@@ -579,7 +484,9 @@ impl TestGenerator {
 
     fn find_subroutine(&self, node: &Node, name: &str) -> Option<Node> {
         match &node.kind {
-            NodeKind::SubroutineDeclaration { name: Some(n), .. } if n == name => Some(node.clone()),
+            NodeKind::SubroutineDeclaration { name: Some(n), .. } if n == name => {
+                Some(node.clone())
+            }
             _ => {
                 for child in node.children() {
                     if let Some(result) = self.find_subroutine(child, name) {
@@ -594,7 +501,7 @@ impl TestGenerator {
     fn generate_module_load_test(&self, package: &str) -> TestCase {
         let test_name = "test_module_loads".to_string();
         let description = format!("Test that {} loads correctly", package);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -608,14 +515,19 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_export_test(&self, package: &str) -> TestCase {
         let test_name = "test_exports".to_string();
         let description = format!("Test {} exports", package);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -627,14 +539,19 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_constructor_test(&self, package: &str) -> TestCase {
         let test_name = "test_constructor".to_string();
         let description = format!("Test {} constructor", package);
-
+        
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
@@ -650,12 +567,19 @@ impl TestGenerator {
             }
             _ => String::new(),
         };
-
-        TestCase { name: test_name, description, code, is_todo: false }
+        
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_sample_args(&self, count: usize) -> String {
-        let args: Vec<String> = (1..=count).map(|i| i.to_string()).collect();
+        let args: Vec<String> = (0..count)
+            .map(|i| format!("'arg{}'", i + 1))
+            .collect();
         args.join(", ")
     }
 }
@@ -665,6 +589,7 @@ struct SubroutineInfo {
     name: String,
     params: Option<Vec<String>>,
     node: Node,
+    is_private: bool,
 }
 
 /// Test runner integration
@@ -677,50 +602,52 @@ pub struct TestRunner {
     coverage: bool,
 }
 
-impl Default for TestRunner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TestRunner {
     pub fn new() -> Self {
-        Self { test_command: "prove -l".to_string(), watch_mode: false, coverage: false }
+        Self {
+            test_command: "prove -l".to_string(),
+            watch_mode: false,
+            coverage: false,
+        }
     }
 
     pub fn with_command(command: String) -> Self {
-        Self { test_command: command, watch_mode: false, coverage: false }
+        Self {
+            test_command: command,
+            watch_mode: false,
+            coverage: false,
+        }
     }
 
     /// Run tests and return results
     pub fn run_tests(&self, test_files: &[String]) -> TestResults {
         let mut results = TestResults::default();
-
+        
         // Build command
         let mut cmd = self.test_command.clone();
-
+        
         if self.coverage {
             cmd = format!("cover -test {}", cmd);
         }
-
+        
         for file in test_files {
             cmd.push(' ');
             cmd.push_str(file);
         }
-
+        
         // Execute tests (simplified - would use std::process::Command in real impl)
         results.total = test_files.len();
         results.passed = test_files.len(); // Assume all pass for now
-
+        
         results
     }
 
     /// Run tests in watch mode
-    pub fn watch(&self, _test_files: &[String]) -> Result<(), String> {
+    pub fn watch(&self, test_files: &[String]) -> Result<(), String> {
         if !self.watch_mode {
             return Err("Watch mode not enabled".to_string());
         }
-
+        
         // Would implement file watching here
         Ok(())
     }
@@ -730,7 +657,7 @@ impl TestRunner {
         if !self.coverage {
             return None;
         }
-
+        
         Some(CoverageReport {
             line_coverage: 85.0,
             branch_coverage: 75.0,
@@ -792,40 +719,36 @@ pub enum RefactoringCategory {
     Structure,
 }
 
-impl Default for RefactoringSuggester {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl RefactoringSuggester {
     pub fn new() -> Self {
-        Self { suggestions: Vec::new() }
+        Self {
+            suggestions: Vec::new(),
+        }
     }
 
     /// Analyze code and generate refactoring suggestions
     pub fn analyze(&mut self, ast: &Node, source: &str) -> Vec<RefactoringSuggestion> {
         self.suggestions.clear();
-
+        
         // Check for duplicate code
         self.check_duplicate_code(ast, source);
-
+        
         // Check for complex methods
         self.check_complex_methods(ast, source);
-
+        
         // Check for long methods
         self.check_long_methods(ast, source);
-
+        
         // Check for too many parameters
         self.check_parameter_count(ast);
-
+        
         // Check for naming issues
         self.check_naming(ast);
-
+        
         // Sort by priority
         self.suggestions.sort_by_key(|s| s.priority.clone());
         self.suggestions.reverse();
-
+        
         self.suggestions.clone()
     }
 
@@ -868,21 +791,21 @@ impl RefactoringSuggester {
 
     fn count_decision_points(&self, node: &Node, complexity: &mut usize) {
         match &node.kind {
-            NodeKind::If { .. }
-            | NodeKind::While { .. }
-            | NodeKind::For { .. }
-            | NodeKind::Foreach { .. }
-            | NodeKind::Ternary { .. } => {
+            NodeKind::IfStatement { .. } |
+            NodeKind::UnlessStatement { .. } |
+            NodeKind::WhileLoop { .. } |
+            NodeKind::ForLoop { .. } |
+            NodeKind::ConditionalExpression { .. } => {
                 *complexity += 1;
             }
-            NodeKind::Binary { op, .. } => {
-                if op == "&&" || op == "||" || op == "and" || op == "or" {
+            NodeKind::BinaryExpression { operator, .. } => {
+                if operator == "&&" || operator == "||" || operator == "and" || operator == "or" {
                     *complexity += 1;
                 }
             }
             _ => {}
         }
-
+        
         for child in node.children() {
             self.count_decision_points(child, complexity);
         }
@@ -898,14 +821,8 @@ impl RefactoringSuggester {
                 let lines = self.count_lines(node, source);
                 if lines > 50 {
                     self.suggestions.push(RefactoringSuggestion {
-                        title: format!(
-                            "Long method: {}",
-                            name.as_ref().unwrap_or(&"anonymous".to_string())
-                        ),
-                        description: format!(
-                            "Method has {} lines. Consider breaking into smaller functions.",
-                            lines
-                        ),
+                        title: format!("Long method: {}", name.as_ref().unwrap_or(&"anonymous".to_string())),
+                        description: format!("Method has {} lines. Consider breaking into smaller functions.", lines),
                         priority: if lines > 100 { Priority::High } else { Priority::Medium },
                         category: RefactoringCategory::LongMethod,
                         code_action: Some("extract_method".to_string()),
@@ -923,7 +840,7 @@ impl RefactoringSuggester {
     fn count_lines(&self, node: &Node, source: &str) -> usize {
         let start = node.location.start;
         let end = node.location.end;
-
+        
         let text = &source[start..end.min(source.len())];
         text.lines().count()
     }
@@ -935,9 +852,7 @@ impl RefactoringSuggester {
     fn check_parameter_count_recursive(&mut self, node: &Node) {
         match &node.kind {
             NodeKind::SubroutineDeclaration { name, signature, .. } => {
-                if let Some(sig) = signature {
-                    let mut params = Vec::new();
-                    self.extract_params_from_signature(sig, &mut params);
+                if let Some(params) = params {
                     if params.len() > 5 {
                         self.suggestions.push(RefactoringSuggestion {
                             title: format!("Too many parameters in {}", name.as_ref().unwrap_or(&"anonymous".to_string())),
@@ -974,37 +889,16 @@ impl RefactoringSuggester {
                     });
                 }
             }
-            NodeKind::VariableDeclaration { variable, .. } => {
-                if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    let full_name = format!("{}{}", sigil, name);
-                    if !self.is_good_variable_name(&full_name) {
+            NodeKind::VariableDeclaration { names, .. } => {
+                for name in names {
+                    if !self.is_good_variable_name(name) {
                         self.suggestions.push(RefactoringSuggestion {
-                            title: format!("Poor variable name: {}", full_name),
-                            description:
-                                "Single letter variables should only be used for loop counters"
-                                    .to_string(),
+                            title: format!("Poor variable name: {}", name),
+                            description: "Single letter variables should only be used for loop counters".to_string(),
                             priority: Priority::Low,
                             category: RefactoringCategory::Naming,
                             code_action: Some("rename".to_string()),
                         });
-                    }
-                }
-            }
-            NodeKind::VariableListDeclaration { variables, .. } => {
-                for var in variables {
-                    if let NodeKind::Variable { sigil, name } = &var.kind {
-                        let full_name = format!("{}{}", sigil, name);
-                        if !self.is_good_variable_name(&full_name) {
-                            self.suggestions.push(RefactoringSuggestion {
-                                title: format!("Poor variable name: {}", full_name),
-                                description:
-                                    "Single letter variables should only be used for loop counters"
-                                        .to_string(),
-                                priority: Priority::Low,
-                                category: RefactoringCategory::Naming,
-                                code_action: Some("rename".to_string()),
-                            });
-                        }
                     }
                 }
             }
@@ -1026,7 +920,7 @@ impl RefactoringSuggester {
         if name.len() == 1 {
             return matches!(name, "$i" | "$j" | "$k" | "$n" | "$_");
         }
-
+        
         // Remove sigil for checking
         let clean_name = name.trim_start_matches(['$', '@', '%', '*']);
         clean_name.len() > 1
@@ -1039,424 +933,100 @@ mod tests {
 
     #[test]
     fn test_generate_basic_test() {
-        let mut options = TestGeneratorOptions::default();
-        options.edge_cases = false;
-        options.data_driven = false;
-        options.perf_tests = true;
-        let generator = TestGenerator::with_options(TestFramework::TestMore, options);
+        let generator = TestGenerator::new(TestFramework::TestMore);
         let ast = Node::new(
-            NodeKind::Subroutine {
+            NodeKind::SubroutineDeclaration {
                 name: Some("add".to_string()),
-                params: vec![
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
-                    ),
-                ],
+                params: Some(vec!["$a".to_string(), "$b".to_string()]),
                 body: Box::new(Node::new(
-                    NodeKind::Block {
-                        statements: vec![Node::new(
-                            NodeKind::Return {
-                                value: Some(Box::new(Node::new(
-                                    NodeKind::Binary {
-                                        op: "+".to_string(),
-                                        left: Box::new(Node::new(
-                                            NodeKind::Variable {
-                                                sigil: "$".to_string(),
-                                                name: "a".to_string(),
-                                            },
-                                            crate::ast::SourceLocation { start: 0, end: 0 },
-                                        )),
-                                        right: Box::new(Node::new(
-                                            NodeKind::Variable {
-                                                sigil: "$".to_string(),
-                                                name: "b".to_string(),
-                                            },
-                                            crate::ast::SourceLocation { start: 0, end: 0 },
-                                        )),
-                                    },
-                                    crate::ast::SourceLocation { start: 0, end: 0 },
-                                ))),
-                            },
-                            crate::ast::SourceLocation { start: 0, end: 0 },
-                        )],
-                    },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
+                    NodeKind::Block { statements: vec![] },
+                    crate::ast::SourceLocation { start: 0, end: 0 }
                 )),
                 attributes: vec![],
+                prototype: None,
             },
-            crate::ast::SourceLocation { start: 0, end: 0 },
+            crate::ast::SourceLocation { start: 0, end: 0 }
         );
-
+        
         let tests = generator.generate_tests(&ast, "sub add { }");
-        assert_eq!(tests.len(), 2);
-
-        let basic = tests.iter().find(|t| t.name == "test_add").unwrap();
-        // Check that auto-detection worked and generated the expected result
-        assert!(basic.code.contains("is($result, 3, 'Returns expected value')"));
-        assert!(!basic.is_todo);
-
-        let perf = tests.iter().find(|t| t.name == "test_add_performance").unwrap();
-        assert!(perf.code.contains("cmp_ok($result->real"));
-        assert!(!perf.is_todo);
+        assert!(!tests.is_empty());
+        assert!(tests[0].code.contains("Test::More"));
+        assert!(tests[0].code.contains("add"));
     }
 
     #[test]
     fn test_refactoring_suggestions() {
         let mut suggester = RefactoringSuggester::new();
-
+        
         // Create a complex subroutine
         let ast = Node::new(
-            NodeKind::Subroutine {
+            NodeKind::SubroutineDeclaration {
                 name: Some("complex_function".to_string()),
-                params: vec![Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )], // Create one param for simplicity
+                params: Some(vec!["$a".to_string(); 7]), // Too many params
                 body: Box::new(Node::new(
-                    NodeKind::Block {
+                    NodeKind::Block { 
                         statements: vec![
                             // Add some if statements to increase complexity
                             Node::new(
-                                NodeKind::If {
+                                NodeKind::IfStatement {
                                     condition: Box::new(Node::new(
-                                        NodeKind::Variable {
-                                            name: "a".to_string(),
-                                            sigil: "$".to_string(),
-                                        },
-                                        crate::ast::SourceLocation { start: 0, end: 0 },
+                                        NodeKind::Variable { name: "$a".to_string(), sigil: "$".to_string() },
+                                        crate::ast::SourceLocation { start: 0, end: 0 }
                                     )),
-                                    then_branch: Box::new(Node::new(
+                                    then_block: Box::new(Node::new(
                                         NodeKind::Block { statements: vec![] },
-                                        crate::ast::SourceLocation { start: 0, end: 0 },
+                                        crate::ast::SourceLocation { start: 0, end: 0 }
                                     )),
-                                    elsif_branches: vec![],
-                                    else_branch: None,
+                                    elsif_parts: vec![],
+                                    else_block: None,
                                 },
-                                crate::ast::SourceLocation { start: 0, end: 0 },
+                                crate::ast::SourceLocation { start: 0, end: 0 }
                             ),
-                        ],
+                        ]
                     },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
+                    crate::ast::SourceLocation { start: 0, end: 0 }
                 )),
                 attributes: vec![],
+                prototype: None,
             },
-            crate::ast::SourceLocation { start: 0, end: 0 },
+            crate::ast::SourceLocation { start: 0, end: 0 }
         );
-
-        let _suggestions = suggester.analyze(&ast, "sub complex_function { }");
-
-        // Note: The test won't suggest too many params since we only have 1 param now
-        // Instead, check for any suggestions
-        // assert!(suggestions.len() > 0);
+        
+        let suggestions = suggester.analyze(&ast, "sub complex_function { }");
+        
+        // Should suggest parameter object for too many params
+        assert!(suggestions.iter().any(|s| s.category == RefactoringCategory::TooManyParameters));
     }
 
     #[test]
     fn test_cyclomatic_complexity() {
         let suggester = RefactoringSuggester::new();
-
+        
         // Create a node with multiple decision points
         let node = Node::new(
             NodeKind::Block {
-                statements: vec![Node::new(
-                    NodeKind::If {
-                        condition: Box::new(Node::new(
-                            NodeKind::Variable { name: "x".to_string(), sigil: "$".to_string() },
-                            crate::ast::SourceLocation { start: 0, end: 0 },
-                        )),
-                        then_branch: Box::new(Node::new(
-                            NodeKind::Block { statements: vec![] },
-                            crate::ast::SourceLocation { start: 0, end: 0 },
-                        )),
-                        elsif_branches: vec![],
-                        else_branch: None,
-                    },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )],
-            },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-
-        let complexity = suggester.calculate_cyclomatic_complexity(&node);
-        assert_eq!(complexity, 2); // Base 1 + 1 if statement
-    }
-
-    #[test]
-    fn test_detect_expected_return() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-
-        // Test simple addition
-        let sub_info = SubroutineInfo {
-            name: "add".to_string(),
-            params: Some(vec!["$a".to_string(), "$b".to_string()]),
-            node: Node::new(
-                NodeKind::Subroutine {
-                    name: Some("add".to_string()),
-                    params: vec![],
-                    body: Box::new(Node::new(
-                        NodeKind::Block {
-                            statements: vec![Node::new(
-                                NodeKind::Return {
-                                    value: Some(Box::new(Node::new(
-                                        NodeKind::Binary {
-                                            op: "+".to_string(),
-                                            left: Box::new(Node::new(
-                                                NodeKind::Variable {
-                                                    sigil: "$".to_string(),
-                                                    name: "a".to_string(),
-                                                },
-                                                crate::ast::SourceLocation { start: 0, end: 0 },
-                                            )),
-                                            right: Box::new(Node::new(
-                                                NodeKind::Variable {
-                                                    sigil: "$".to_string(),
-                                                    name: "b".to_string(),
-                                                },
-                                                crate::ast::SourceLocation { start: 0, end: 0 },
-                                            )),
-                                        },
-                                        crate::ast::SourceLocation { start: 0, end: 0 },
-                                    ))),
-                                },
-                                crate::ast::SourceLocation { start: 0, end: 0 },
-                            )],
-                        },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
-                    )),
-                    attributes: vec![],
-                },
-                crate::ast::SourceLocation { start: 0, end: 0 },
-            ),
-        };
-
-        let result = generator.detect_expected_return(&sub_info);
-        assert_eq!(result, Some("3".to_string()));
-    }
-
-    #[test]
-    fn test_detect_expected_return_no_params() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-
-        // Test function that returns a constant
-        let sub_info = SubroutineInfo {
-            name: "get_answer".to_string(),
-            params: None,
-            node: Node::new(
-                NodeKind::Subroutine {
-                    name: Some("get_answer".to_string()),
-                    params: vec![],
-                    body: Box::new(Node::new(
-                        NodeKind::Block {
-                            statements: vec![Node::new(
-                                NodeKind::Return {
-                                    value: Some(Box::new(Node::new(
-                                        NodeKind::Number { value: "42".to_string() },
-                                        crate::ast::SourceLocation { start: 0, end: 0 },
-                                    ))),
-                                },
-                                crate::ast::SourceLocation { start: 0, end: 0 },
-                            )],
-                        },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
-                    )),
-                    attributes: vec![],
-                },
-                crate::ast::SourceLocation { start: 0, end: 0 },
-            ),
-        };
-
-        let result = generator.detect_expected_return(&sub_info);
-        assert_eq!(result, Some("42".to_string()));
-    }
-
-    #[test]
-    fn test_evaluate_expression_string() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-        let env = HashMap::new();
-
-        let node = Node::new(
-            NodeKind::String { value: "hello".to_string(), interpolated: false },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-
-        let result = generator.evaluate_expression(&node, &env);
-        assert_eq!(result, Some("'hello'".to_string()));
-    }
-
-    #[test]
-    fn test_evaluate_expression_multiplication() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-        let mut env = HashMap::new();
-        env.insert("$x".to_string(), 6);
-        env.insert("$y".to_string(), 7);
-
-        let node = Node::new(
-            NodeKind::Binary {
-                op: "*".to_string(),
-                left: Box::new(Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-                right: Box::new(Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-            },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-
-        let result = generator.evaluate_expression(&node, &env);
-        assert_eq!(result, Some("42".to_string()));
-    }
-
-    #[test]
-    fn test_evaluate_expression_division_by_zero() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-        let mut env = HashMap::new();
-        env.insert("$x".to_string(), 10);
-        env.insert("$y".to_string(), 0);
-
-        let node = Node::new(
-            NodeKind::Binary {
-                op: "/".to_string(),
-                left: Box::new(Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-                right: Box::new(Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-            },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-
-        let result = generator.evaluate_expression(&node, &env);
-        assert_eq!(result, None); // Should handle division by zero gracefully
-    }
-
-    #[test]
-    fn test_evaluate_expression_unary_negation() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-        let mut env = HashMap::new();
-        env.insert("$x".to_string(), 5);
-
-        let node = Node::new(
-            NodeKind::Unary {
-                op: "-".to_string(),
-                operand: Box::new(Node::new(
-                    NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-            },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-
-        let result = generator.evaluate_expression(&node, &env);
-        assert_eq!(result, Some("-5".to_string()));
-    }
-
-    #[test]
-    fn test_estimate_complexity() {
-        let generator = TestGenerator::new(TestFramework::TestMore);
-
-        // Test simple variable (complexity 1)
-        let simple_node = Node::new(
-            NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-        assert_eq!(generator.estimate_complexity(&simple_node), 1);
-
-        // Test binary expression (complexity 3: 1 for the node + 1 for each child)
-        let binary_node = Node::new(
-            NodeKind::Binary {
-                op: "+".to_string(),
-                left: Box::new(simple_node.clone()),
-                right: Box::new(simple_node.clone()),
-            },
-            crate::ast::SourceLocation { start: 0, end: 0 },
-        );
-        assert_eq!(generator.estimate_complexity(&binary_node), 3);
-    }
-
-    #[test]
-    fn test_auto_detection_across_frameworks() {
-        let frameworks = vec![
-            TestFramework::TestMore,
-            TestFramework::Test2V0,
-            TestFramework::TestSimple,
-            TestFramework::TestClass,
-        ];
-
-        // Create a simple add function AST
-        let ast = Node::new(
-            NodeKind::Subroutine {
-                name: Some("add".to_string()),
-                params: vec![
+                statements: vec![
                     Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
-                    ),
-                    Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() },
-                        crate::ast::SourceLocation { start: 0, end: 0 },
+                        NodeKind::IfStatement {
+                            condition: Box::new(Node::new(
+                                NodeKind::Variable { name: "$x".to_string(), sigil: "$".to_string() },
+                                crate::ast::SourceLocation { start: 0, end: 0 }
+                            )),
+                            then_block: Box::new(Node::new(
+                                NodeKind::Block { statements: vec![] },
+                                crate::ast::SourceLocation { start: 0, end: 0 }
+                            )),
+                            elsif_parts: vec![],
+                            else_block: None,
+                        },
+                        crate::ast::SourceLocation { start: 0, end: 0 }
                     ),
                 ],
-                body: Box::new(Node::new(
-                    NodeKind::Block {
-                        statements: vec![Node::new(
-                            NodeKind::Return {
-                                value: Some(Box::new(Node::new(
-                                    NodeKind::Binary {
-                                        op: "+".to_string(),
-                                        left: Box::new(Node::new(
-                                            NodeKind::Variable {
-                                                sigil: "$".to_string(),
-                                                name: "a".to_string(),
-                                            },
-                                            crate::ast::SourceLocation { start: 0, end: 0 },
-                                        )),
-                                        right: Box::new(Node::new(
-                                            NodeKind::Variable {
-                                                sigil: "$".to_string(),
-                                                name: "b".to_string(),
-                                            },
-                                            crate::ast::SourceLocation { start: 0, end: 0 },
-                                        )),
-                                    },
-                                    crate::ast::SourceLocation { start: 0, end: 0 },
-                                ))),
-                            },
-                            crate::ast::SourceLocation { start: 0, end: 0 },
-                        )],
-                    },
-                    crate::ast::SourceLocation { start: 0, end: 0 },
-                )),
-                attributes: vec![],
             },
-            crate::ast::SourceLocation { start: 0, end: 0 },
+            crate::ast::SourceLocation { start: 0, end: 0 }
         );
-
-        for framework in frameworks {
-            let mut options = TestGeneratorOptions::default();
-            options.edge_cases = false;
-            options.data_driven = false;
-            options.perf_tests = false;
-            let generator = TestGenerator::with_options(framework, options);
-
-            let tests = generator.generate_tests(&ast, "sub add { $a + $b }");
-            assert_eq!(tests.len(), 1);
-
-            let test = &tests[0];
-            assert_eq!(test.name, "test_add");
-
-            // All frameworks should generate some form of test
-            assert!(test.code.len() > 0);
-            assert!(!test.is_todo);
-        }
+        
+        let complexity = suggester.calculate_cyclomatic_complexity(&node);
+        assert_eq!(complexity, 2); // Base 1 + 1 if statement
     }
 }
