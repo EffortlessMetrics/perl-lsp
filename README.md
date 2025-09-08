@@ -54,7 +54,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - 📊 **Enhanced Performance Metrics**: 5-25x improvements over baseline targets with statistical validation framework
 - 🔧 **Comprehensive Import Optimization**: Complete import analysis with unused/duplicate/missing detection, "Organize Imports" code action, and smart bare import analysis with reduced false positives for pragma modules
 - 🧠 **Production-Stable Scope Analysis**: MandatoryParameter support with comprehensive variable name extraction and 41 comprehensive test cases
-- 📈 **Test Coverage Excellence**: 291+ tests passing across all components with 100% reliability validation
+- 📈 **Test Coverage Excellence**: 295+ tests passing across all components with 100% reliability validation
 - 🔍 **Enhanced AST Traversal**: Comprehensive ExpressionStatement support across all LSP providers with improved workspace navigation
 - ⚡ **Architecture Maturity**: Production-ready incremental parsing with 99.7% node reuse efficiency and <1ms update times
 - ✅ **Quality Assurance**: Zero clippy warnings, consistent formatting, and full enterprise-grade compliance maintained
@@ -490,14 +490,15 @@ The latest versions feature a production-ready incremental parser with statistic
 - **99.7% incremental node reuse** with <1ms real-time updates
 - **Context-aware lexing** for proper disambiguation and edge case handling
 - **Zero dependencies** for maximum portability and enterprise deployment
-- **291+ comprehensive tests** passing with 100% reliability validation
+- **295+ comprehensive tests** passing with 100% reliability validation
 
 ### Test Results - **Current Validation Status** ✅
-- **v3 Production**: 291+ tests passing across all components (100% reliability)
+- **v3 Production**: 295+ tests passing across all components (100% reliability)
   - 195+ library tests (parser core functionality)
   - 41 comprehensive scope analyzer tests (enhanced parameter handling)
   - 33+ LSP E2E tests (workspace navigation and features)
   - 19+ DAP tests (debug adapter protocol)
+  - 4+ highlight integration tests (tree-sitter highlight test runner)
   - 100% edge case coverage (141/141 critical edge cases passing)
 - **v2 Legacy**: 100% coverage for supported features (legacy mode)
 - **v1 Reference**: Limited edge case support (baseline comparison)
@@ -512,7 +513,7 @@ The latest versions feature a production-ready incremental parser with statistic
 - **v3 Native Parser**: 100% complete with all edge cases handled.
 - **LSP Server**: Full implementation with over 15 features, including advanced capabilities like incremental parsing, cross-file rename, and code actions.
 - **Performance**: Achieved 4-19x speedup over the C implementation, with 6-10x additional speedup for edits using incremental parsing.
-- **Test Coverage**: 291+ tests passing, including 141/141 edge cases.
+- **Test Coverage**: 295+ tests passing, including 141/141 edge cases and highlight integration.
 - **Documentation**: Comprehensive guides for users and contributors, structured with the Diataxis framework.
 
 ### 🚧 Development
@@ -950,10 +951,11 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 **DAP Server**: ✅ 19+ comprehensive tests passing (debug adapter protocol)  
 **Scope Analyzer**: ✅ 41+ comprehensive tests passing (enhanced parameter handling)  
 **Corpus Tests**: ✅ 12+ tests passing (comprehensive edge case validation)  
+**Highlight Integration**: ✅ 4+ comprehensive tests passing (tree-sitter highlight test runner with perl-parser AST integration)  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage, legacy support)  
 **v1 Parser (C)**: ⚠️ Limited edge case support (reference baseline)  
 **Quality Gates**: ✅ Zero clippy warnings, consistent formatting, enterprise-grade compliance
-**Overall Test Suite**: ✅ **291+ tests passing** with 100% reliability validation
+**Overall Test Suite**: ✅ **295+ tests passing** with 100% reliability validation
 
 > **Note**: If you see "0 tests, N filtered out", a wrapper probably injected
 > a stray positional filter (e.g., mis-parsed `2>&1`). Run the same command in a
