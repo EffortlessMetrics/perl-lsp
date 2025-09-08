@@ -8,6 +8,10 @@ use crate::error_classifier::ErrorClassifier;
 use crate::pragma_tracker::PragmaTracker;
 use crate::scope_analyzer::{IssueKind, ScopeAnalyzer};
 use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use crate::dead_code_detector::{DeadCodeDetector, DeadCodeType};
+use crate::workspace_index::WorkspaceIndex;
+use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity as LspDiagnosticSeverity, DiagnosticTag as LspDiagnosticTag, NumberOrString, Position, Range};
+use std::path::Path;
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -426,6 +430,65 @@ impl DiagnosticsProvider {
                 && a.message == b.message
         });
     }
+}
+
+/// Convert dead code analysis into LSP diagnostics for a single file
+pub fn dead_code_lsp_diagnostics(
+    index: &WorkspaceIndex,
+    file_path: &Path,
+) -> Vec<LspDiagnostic> {
+    let detector = DeadCodeDetector::new(index.clone());
+    let analysis = detector.analyze_file(file_path);
+
+    let mut diagnostics = Vec::new();
+
+    if let Ok(items) = analysis {
+        for item in items {
+            let (code, message, tags_vec) = match item.code_type {
+                DeadCodeType::UnusedSubroutine => (
+                    "unused-subroutine",
+                    format!(
+                        "Subroutine `{}` is never used",
+                        item.name.clone().unwrap_or_default()
+                    ),
+                    vec![LspDiagnosticTag::UNNECESSARY],
+                ),
+                DeadCodeType::UnusedVariable => (
+                    "unused-variable",
+                    format!(
+                        "Variable `{}` is never used",
+                        item.name.clone().unwrap_or_default()
+                    ),
+                    vec![LspDiagnosticTag::UNNECESSARY],
+                ),
+                DeadCodeType::UnreachableCode => (
+                    "unreachable-code",
+                    item.reason.clone(),
+                    Vec::new(),
+                ),
+                _ => continue,
+            };
+
+            let range = Range {
+                start: Position { line: item.start_line.saturating_sub(1) as u32, character: 0 },
+                end: Position { line: item.end_line.saturating_sub(1) as u32, character: 0 },
+            };
+
+            diagnostics.push(LspDiagnostic {
+                range,
+                severity: Some(LspDiagnosticSeverity::WARNING),
+                code: Some(NumberOrString::String(code.to_string())),
+                code_description: None,
+                source: Some("perl-lsp".to_string()),
+                message,
+                related_information: None,
+                tags: if tags_vec.is_empty() { None } else { Some(tags_vec) },
+                data: None,
+            });
+        }
+    }
+
+    diagnostics
 }
 
 #[cfg(test)]

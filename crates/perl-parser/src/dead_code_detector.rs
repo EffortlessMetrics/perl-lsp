@@ -108,6 +108,31 @@ impl DeadCodeDetector {
             }
         }
 
+        // Unused variables and subroutines in this file
+        let unused_symbols = self.workspace_index.find_unused_symbols();
+        for sym in unused_symbols {
+            if sym.uri == uri
+                && matches!(sym.kind, SymbolKind::Subroutine | SymbolKind::Variable)
+            {
+                let code_type = match sym.kind {
+                    SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
+                    SymbolKind::Variable => DeadCodeType::UnusedVariable,
+                    _ => continue,
+                };
+
+                dead.push(DeadCode {
+                    code_type,
+                    name: Some(sym.name.clone()),
+                    file_path: file_path.to_path_buf(),
+                    start_line: sym.range.start.line as usize + 1,
+                    end_line: sym.range.end.line as usize + 1,
+                    reason: "Symbol is never used".to_string(),
+                    confidence: 0.9,
+                    suggestion: Some("Remove or use this symbol".to_string()),
+                });
+            }
+        }
+
         Ok(dead)
     }
 
@@ -127,13 +152,13 @@ impl DeadCodeDetector {
             }
         }
 
-        // Unused symbols across workspace
+        // Workspace-level unused symbols for items not covered per-file
         for sym in self.workspace_index.find_unused_symbols() {
             let code_type = match sym.kind {
-                SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
-                SymbolKind::Variable => DeadCodeType::UnusedVariable,
                 SymbolKind::Constant => DeadCodeType::UnusedConstant,
                 SymbolKind::Package => DeadCodeType::UnusedPackage,
+                // Variables and subroutines are handled by analyze_file
+                SymbolKind::Subroutine | SymbolKind::Variable => continue,
                 _ => continue,
             };
 
