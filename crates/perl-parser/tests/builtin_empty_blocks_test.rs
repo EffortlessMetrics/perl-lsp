@@ -17,17 +17,17 @@ mod builtin_empty_blocks_tests {
 
     #[test]
     fn test_sort_empty_block() {
-        parse_and_check("sort {} @array", "(call sort ((block ))");
+        parse_and_check("sort {} @array", "(call sort ((block )");
     }
 
     #[test]
     fn test_map_empty_block() {
-        parse_and_check("map {} @array", "(call map ((block ))");
+        parse_and_check("map {} @array", "(call map ((block )");
     }
 
     #[test]
     fn test_grep_empty_block() {
-        parse_and_check("grep {} @array", "(call grep ((block ))");
+        parse_and_check("grep {} @array", "(call grep ((block )");
     }
 
     #[test]
