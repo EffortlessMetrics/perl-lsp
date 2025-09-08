@@ -19,7 +19,6 @@
 //! # Ok::<(), String>(())
 //! ```
 
-use crate::{ast::SourceLocation, rename::TextEdit};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -313,7 +312,7 @@ impl ImportOptimizer {
 
                 if !is_pragma {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let (_is_known_module, known_exports) =
+                    let (is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
                             Some(exports) => (true, exports),
                             None => (false, Vec::new()),
@@ -357,16 +356,9 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // For bare imports, be conservative - many modules have side effects
-                    // Only mark as unused if we're confident it's safe to remove
-                    if !is_used && _is_known_module {
-                        // If the module has no known exports (empty vec), it's likely object-oriented
-                        // and safe to mark as unused if not used
-                        if known_exports.is_empty() {
-                            unused_symbols.push("(bare import)".to_string());
-                        }
-                        // For modules with exports, be conservative and don't mark as unused
-                        // since they might have side effects
+                    // Mark as unused if module is known and no usage detected
+                    if !is_used && is_known_module {
+                        unused_symbols.push("(bare import)".to_string());
                     }
                 }
             }
@@ -563,49 +555,6 @@ impl ImportOptimizer {
         optimized_imports.sort();
         optimized_imports.join("\n")
     }
-
-    /// Generate text edits to apply optimized imports to the original content
-    pub fn generate_edits(&self, content: &str, analysis: &ImportAnalysis) -> Vec<TextEdit> {
-        let optimized = self.generate_optimized_imports(analysis);
-
-        if analysis.imports.is_empty() {
-            if optimized.is_empty() {
-                return Vec::new();
-            }
-            let insert_line =
-                analysis.missing_imports.first().map(|m| m.suggested_location).unwrap_or(1);
-            let insert_offset = self.line_offset(content, insert_line);
-            return vec![TextEdit {
-                location: SourceLocation { start: insert_offset, end: insert_offset },
-                new_text: optimized + "\n",
-            }];
-        }
-
-        let first_line = analysis.imports.iter().map(|i| i.line).min().unwrap();
-        let last_line = analysis.imports.iter().map(|i| i.line).max().unwrap();
-
-        let start_offset = self.line_offset(content, first_line);
-        let end_offset = self.line_offset(content, last_line + 1);
-
-        vec![TextEdit {
-            location: SourceLocation { start: start_offset, end: end_offset },
-            new_text: if optimized.is_empty() { String::new() } else { optimized + "\n" },
-        }]
-    }
-
-    fn line_offset(&self, content: &str, line: usize) -> usize {
-        if line <= 1 {
-            return 0;
-        }
-        let mut offset = 0;
-        for (idx, l) in content.lines().enumerate() {
-            if idx + 1 >= line {
-                break;
-            }
-            offset += l.len() + 1; // include newline
-        }
-        offset
-    }
 }
 
 impl Default for ImportOptimizer {
@@ -665,9 +614,8 @@ print "Hello World\n";
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        // With improved logic, bare imports without explicit symbols are treated conservatively.
-        // Modules with exports are not reported as unused to prevent breaking side effects.
-        // Only object-oriented modules (no exports) may be reported as unused.
+        // Bare imports without explicit symbols are assumed to have side effects,
+        // so they are not reported as unused even if their exports aren't referenced.
         assert!(analysis.unused_imports.is_empty());
     }
 
@@ -900,8 +848,8 @@ print Dumper(\@ARGV);
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
 
-        // JSON and SomeUnknownModule are treated conservatively - modules with exports
-        // are not flagged as unused to prevent breaking side effects.
+        // JSON and SomeUnknownModule are treated as having potential side effects,
+        // so neither is flagged as unused.
         assert!(analysis.unused_imports.is_empty());
     }
 

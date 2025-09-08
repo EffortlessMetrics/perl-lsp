@@ -113,82 +113,20 @@ let result = refactor.extract_module(
 
 ### Import Optimization
 
-Workspace-wide import statement optimization with comprehensive analysis and automatic fixing.
+Workspace-wide import statement optimization.
 
 ```rust
 // Optimize all imports across the workspace
 let result = refactor.optimize_imports()?;
 
 println!("Optimized {} files", result.file_edits.len());
-for warning in &result.warnings {
-    println!("Warning: {}", warning);
-}
 ```
 
-#### Single-File Import Optimization
-
-```rust
-// Optimize imports for a specific file using ImportOptimizer
-use perl_parser::import_optimizer::ImportOptimizer;
-
-let optimizer = ImportOptimizer::new();
-let analysis = optimizer.analyze_file(Path::new("script.pl"))?;
-
-// Review findings
-for unused in &analysis.unused_imports {
-    println!("Unused import '{}' at line {}: {:?}", 
-        unused.module, unused.line, unused.symbols);
-}
-
-for duplicate in &analysis.duplicate_imports {
-    println!("Duplicate import '{}' on lines: {:?}", 
-        duplicate.module, duplicate.lines);
-}
-
-for missing in &analysis.missing_imports {
-    println!("Missing import '{}' for symbols: {:?}", 
-        missing.module, missing.symbols);
-}
-
-// Generate optimized imports
-let optimized = optimizer.generate_optimized_imports(&analysis);
-println!("Optimized imports:\n{}", optimized);
-
-// Generate LSP-compatible text edits
-let content = std::fs::read_to_string("script.pl")?;
-let edits = optimizer.generate_edits(&content, &analysis);
-for edit in edits {
-    println!("Edit at {}..{}: '{}'", 
-        edit.location.start, edit.location.end, edit.new_text);
-}
-```
-
-**Comprehensive Features:**
-- **Unused Import Detection**: Identifies import statements never used in code using regex-based usage analysis
-- **Duplicate Import Consolidation**: Merges multiple import lines from same module into single optimized statements
-- **Missing Import Detection**: Identifies Module::symbol references requiring additional imports
-- **Alphabetical Sorting**: Organizes imports in consistent alphabetical order
-- **Symbol-Level Analysis**: Removes unused symbols from qw() imports while preserving used ones
-- **Conservative Pragma Handling**: Special handling for pragma modules like strict, warnings, utf8
-- **Performance Optimized**: Fast analysis suitable for real-time LSP code actions (<10ms typical files)
-- **LSP Integration**: Seamless integration with "Organize Imports" code actions in editors
-
-**Advanced Analysis Features:**
-- **Context-Aware Usage Detection**: Handles qualified function calls (Module::function)
-- **String/Comment Filtering**: Ignores module references in strings and comments
-- **Nested Function Call Support**: Proper comma counting in complex nested calls
-- **Regex-Based Pattern Matching**: Efficient symbol usage scanning with compiled patterns
-- **Unicode Support**: Proper handling of Unicode characters in module names and symbols
-
-**Integration with LSP Code Actions:**
-```rust
-// Import optimization is automatically available in LSP code actions
-// Editor integration provides:
-// - "Organize Imports" command (Cmd/Ctrl+Shift+O in VSCode)
-// - Right-click context menu actions
-// - Real-time quick fixes for import issues
-// - Preview changes before applying
-```
+**Features:**
+- Removes duplicate imports from the same module
+- Alphabetical sorting of import statements
+- Consolidates multiple imports from the same module
+- Conservative handling of pragma modules
 
 ### Subroutine Movement
 

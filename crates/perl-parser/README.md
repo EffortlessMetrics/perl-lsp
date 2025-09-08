@@ -53,8 +53,6 @@ perl-lsp --stdio
 - Semantic tokens
 - Call hierarchy
 - Inlay hints
-- **Import optimization** - Remove unused imports, add missing imports, remove duplicates, sort alphabetically
-- Code actions and refactoring
 - Test discovery and execution
 - Code formatting
 

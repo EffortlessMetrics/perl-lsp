@@ -16,7 +16,7 @@ This project provides a **complete Perl parsing ecosystem** with Tree-sitter com
 ### 📦 Published Crates (v0.8.8)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
-2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization and production-ready CLI interface
+2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
 3. **perl-lexer** - Context-aware tokenizer for Perl syntax
 4. **perl-corpus** - Comprehensive test corpus and property testing
 5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
@@ -25,34 +25,12 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.8 GA (General Availability) - LSP Performance Breakthrough Release ⚡
-
-### 🚀 v0.8.8 - Revolutionary LSP Performance Optimizations (99.5% Timeout Reduction)
-
-**Game-changing performance improvements that eliminate workspace bottlenecks**:
-- ⚡ **test_completion_detail_formatting**: 99.5% performance improvement (>60 seconds → 0.26 seconds)
-- 🎯 **Bounded Processing**: MAX_PROCESS limit (1000 symbols) prevents runaway processing
-- 🤝 **Cooperative Yielding**: Every 32 symbols with non-blocking behavior for smooth UI experience
-- 🧠 **Smart Result Limiting**: RESULT_LIMIT (100) with early termination for optimal memory usage
-- 📊 **Match Classification**: Exact > Prefix > Contains > Fuzzy ranking for superior result relevance
-- 🔧 **LSP_TEST_FALLBACKS Environment Variable**: Fast testing mode reducing timeouts by 75% (2000ms → 500ms)
-- 🎪 **Zero Regressions**: 100% API compatibility maintained with configurable performance modes
-- 🔍 **Enhanced Module Path Resolution**: Accurate require completion with false positive elimination
-
-**Performance Metrics**:
-- **Workspace Symbol Search**: 99.5% faster execution
-- **Test Suite Runtime**: <10 seconds total with fast mode
-- **Memory Usage**: Capped by processing and result limits
-- **Cooperative Processing**: Non-blocking symbol extraction
-
----
-
-## 📦 Previous Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
+## 📦 Latest Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
 
 ### Recent Post-Validation Improvements - Enterprise-Ready Perl Development Environment
 - 🚀 **Comprehensive Security Validation**: Enterprise-grade security patterns with PBKDF2 authentication implementation (PR #44)
 - 📊 **Enhanced Performance Metrics**: 5-25x improvements over baseline targets with statistical validation framework
-- 🔧 **Comprehensive Import Optimization**: Complete import analysis with unused/duplicate/missing detection, "Organize Imports" code action, and smart bare import analysis with reduced false positives for pragma modules
+- 🔧 **Advanced Import Optimization**: Smart bare import analysis with reduced false positives for pragma modules
 - 🧠 **Production-Stable Scope Analysis**: MandatoryParameter support with comprehensive variable name extraction and 41 comprehensive test cases
 - 📈 **Test Coverage Excellence**: 291+ tests passing across all components with 100% reliability validation
 - 🔍 **Enhanced AST Traversal**: Comprehensive ExpressionStatement support across all LSP providers with improved workspace navigation
@@ -201,19 +179,6 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
----
-
-## 📚 Documentation Framework
-
-This documentation follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive learning:
-
-- **🎓 Tutorials**: Learning-oriented, hands-on guidance for first-time users
-- **🔧 How-to Guides**: Problem-oriented, step-by-step solutions for specific tasks
-- **📖 Reference**: Information-oriented, comprehensive specifications and API docs
-- **💡 Explanation**: Understanding-oriented, design decisions and architectural concepts
-
----
-
 ## 🚀 Quick Start (*Diataxis: Tutorial* - Learning-oriented guidance for first-time users)
 
 ### Install the LSP Server (Recommended) (*Diataxis: How-to Guide* - Step-by-step problem-solving)
@@ -304,13 +269,13 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
 | **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
 | **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
-| **Import Optimization**             |   ✅   | NEW – unused/duplicate/missing imports, sort, "Organize Imports" action |
+| **Import Optimization**             |   ✅   | NEW – unused/duplicate import analysis      |
 | **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
 | **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
 | **Selection Ranges**                |   ✅   | NEW – parent-chain expansion                |
 | **On-Type Formatting**              |   ✅   | NEW – `{`, `}`, `;`, `\n` predictable       |
-| **Code Lens**                       |   ⚠️   | **PREVIEW** – Reference counts, run/test lenses with resolve support (~85% functional) |
+| **Code Lens**                       |   ✅   | **NEW** – Reference counts, run/test lenses with resolve support |
 | Call/Type Hierarchy                 |   ⚠️/❌ | Partial / not implemented                   |
 | Execute Command                     |   ❌   | Not wired                                   |
 
@@ -969,39 +934,17 @@ See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 
 ---
 
-## 📖 Documentation (*Diataxis: Reference* - Information architecture and navigation)
+## 📖 Documentation
 
-### 🎓 Tutorials (Learning-oriented)
-- **[Quick Start](#-quick-start-diataxis-tutorial---learning-oriented-guidance-for-first-time-users)** - Get up and running quickly
-- **[Editor Integration](#-editor-integration-diataxis-how-to-guide---editor-specific-setup-instructions)** - Set up your editor with perl-lsp
-- **[Workspace Refactoring Tutorial](docs/WORKSPACE_REFACTORING_TUTORIAL.md)** - Learn cross-file refactoring
-
-### 🔧 How-to Guides (Problem-oriented)
-- **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute to the project
-- **[Build and Test](#-build-and-test-diataxis-how-to-guide---development-workflow-steps)** - Development workflow steps
-- **[LSP Development Guide](docs/LSP_DEVELOPMENT_GUIDE.md)** - Implement LSP features
-- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Use import optimization features
-- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Follow security best practices
-
-### 📖 Reference (Information-oriented)
-- **[API Documentation](https://docs.rs/perl-parser)** - Complete API reference
-- **[LSP Actual Status](LSP_ACTUAL_STATUS.md)** - Current LSP feature matrix
-- **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - All available commands
-- **[Performance Benchmarks](#-performance-diataxis-reference---benchmark-data-and-measurements)** - Performance data and metrics
-- **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System components and design
-- **[Edge Case Handling](docs/EDGE_CASES.md)** - Comprehensive edge case documentation
-
-### 💡 Explanation (Understanding-oriented)
-- **[Architecture](#-architecture-diataxis-explanation---design-concepts-and-rationale)** - Design concepts and rationale  
-- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Technical architecture
-- **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance implementation details
-- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Performance analysis methodology
-- **[Workspace Navigation Guide](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Cross-file navigation concepts
-
-### 🗂️ Additional Resources
-- **[Documentation Guide](docs/DOCUMENTATION_GUIDE.md)** - Find the right documentation for your needs
-- **[Feature Roadmap](FEATURE_ROADMAP.md)** - Planned features and development timeline
-- **[Stability Guide](docs/STABILITY.md)** - API stability guarantees
+- [API Documentation](https://docs.rs/perl-parser)
+- [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) - Find the right docs
+- [Architecture Guide](ARCHITECTURE.md)
+- [Development Guide](DEVELOPMENT.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
+- [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
+- [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
+- [Workspace Test Report](WORKSPACE_TEST_REPORT.md) - Current workspace configuration status and build reliability
 
 ---
 

@@ -152,7 +152,6 @@ pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
 pub mod lsp_utils;
-pub mod module_resolver;
 pub mod on_type_formatting;
 pub mod parser;
 pub mod parser_context;

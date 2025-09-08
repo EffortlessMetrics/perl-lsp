@@ -1,19 +1,18 @@
-# Contributing to tree-sitter-perl (*Diataxis: How-to Guide* - Step-by-step contributor guidance)
+# Contributing to Pure Rust Perl Parser
 
-Thank you for your interest in contributing to tree-sitter-perl! This document provides step-by-step guidelines for contributing to the project, following the Diataxis framework for clarity and effectiveness.
+Thank you for your interest in contributing to the Pure Rust Perl Parser! This document provides guidelines for contributing to the project.
 
-> **About this Guide**: This is a *How-to Guide* focusing on specific tasks and solutions. For understanding project concepts, see the [Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md). For learning basics, check the [Tutorial sections in README.md](README.md#-quick-start).
+## Table of Contents
 
-## Table of Contents (*How-to Guide Structure*)
+- [Project Structure](#project-structure)
+- [Development Setup](#development-setup)
+- [Testing Guidelines](#testing-guidelines)
+- [Adding New Features](#adding-new-features)
+- [Incremental Parsing Development](#incremental-parsing-development)
+- [Code Style](#code-style)
+- [Pull Request Process](#pull-request-process)
 
-- [How to Set Up Development Environment](#how-to-set-up-development-environment)
-- [How to Run Tests Effectively](#how-to-run-tests-effectively)
-- [How to Add New Features](#how-to-add-new-features)
-- [How to Work with Incremental Parsing](#how-to-work-with-incremental-parsing)
-- [How to Follow Code Style](#how-to-follow-code-style)
-- [How to Submit Pull Requests](#how-to-submit-pull-requests)
-
-## Project Structure (*Reference* - Current architecture overview)
+## Project Structure
 
 ```
 tree-sitter-perl/
@@ -30,7 +29,7 @@ tree-sitter-perl/
 └── tree-sitter-perl/               # Legacy reference (corpus tests)
 ```
 
-## How to Set Up Development Environment
+## Development Setup
 
 1. **Clone the repository**
    ```bash
@@ -57,7 +56,7 @@ tree-sitter-perl/
    cargo xtask build --features pure-rust
    ```
 
-## How to Run Tests Effectively
+## Testing Guidelines
 
 ### No New Ignored Tests Policy
 We enforce a strict "no new ignored tests" policy. The CI guard (`ci/check_ignored.sh`) tracks the count of `#[ignore]` attributes and will fail if the count increases.
@@ -217,7 +216,7 @@ When adding tests, consider these categories:
 4. **Performance Tests**: Large files or complex nested structures
 5. **Regression Tests**: Previously broken cases
 
-## How to Add New Features
+## Adding New Features
 
 ### 1. Grammar Changes
 
@@ -389,7 +388,7 @@ RUST_LOG=debug perl-lsp --stdio --log
 cargo run -p perl-parser --example lsp_capabilities
 ```
 
-## How to Work with Incremental Parsing
+## Incremental Parsing Development
 
 **Diataxis: How-to Guides** - Step-by-step instructions for working with incremental parsing
 
@@ -574,7 +573,7 @@ let config = IncrementalConfig {
 };
 ```
 
-## How to Follow Code Style
+## Code Style
 
 ### Rust Code
 
@@ -633,7 +632,7 @@ refactor: simplify scanner state machine
 perf: optimize string interpolation parsing
 ```
 
-## How to Submit Pull Requests
+## Pull Request Process
 
 1. **Fork and create a branch**
    ```bash

@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.8+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
+**Latest Release**: v0.8.9+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.8 GA)
+### Published Crates (v0.8.9 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -79,33 +79,9 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Ful
 
 ### Development
 ```bash
-cargo clippy --workspace                # Lint workspace crates
-cargo bench                             # Performance benchmarks
-perl-lsp --stdio --log                  # Debug LSP server
-
-# Development Server (with file watching and LSP hot-reload)
-cd xtask && cargo run --no-default-features -- dev --watch --port 8080
-cd xtask && cargo run --no-default-features -- dev                    # Static mode without file watching
-
-# Performance Optimization (LSP test speed improvements)
-cd xtask && cargo run --no-default-features -- optimize-tests         # Analyze and fix slow tests
-```
-
-### Advanced Testing (*Diataxis: Tutorial* - Dual-Scanner Corpus Comparison)
-```bash
-# Prerequisites: Install system dependencies for dual-scanner testing
-sudo apt-get install libclang-dev       # Ubuntu/Debian  
-brew install llvm                       # macOS
-
-# Run dual-scanner corpus comparison (tutorial)
-cd xtask                                 # Navigate to xtask directory
-cargo run corpus                        # Compare C and Rust scanners
-cargo run corpus -- --diagnose          # Get detailed analysis of differences
-
-# Understanding the output:
-# - Scanner mismatches: Different S-expressions between C/Rust
-# - Structural analysis: Node count and type differences  
-# - Diagnostic mode: Detailed breakdown of parsing differences
+cargo clippy --workspace                # Lint all crates
+cargo bench                             # Run performance benchmarks
+perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
 ## Architecture
@@ -115,7 +91,6 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 - **LSP Binary**: `/crates/perl-lsp/` - standalone server, CLI interface, protocol handling
 - **Lexer**: `/crates/perl-lexer/` - tokenization, Unicode support
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
-- **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
 - **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
@@ -129,8 +104,7 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
-- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, comprehensive import optimization
-- **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
+- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
 
 ## Documentation
 
@@ -151,7 +125,6 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
-- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 
 ## Development Guidelines
 
@@ -167,33 +140,6 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 
-### Development Workflow (Enhanced)
-
-**Development Server** - Automatic LSP reload on file changes:
-```bash
-# Start development server with file watching and hot-reload
-cd xtask && cargo run --no-default-features -- dev --watch --port 8080
-
-# Features:
-# - Monitors Rust (.rs), Perl (.pl, .pm), and config files (.toml)
-# - Automatic LSP server restart on changes with 500ms debouncing
-# - Graceful shutdown with Ctrl+C
-# - Health monitoring and automatic recovery if LSP crashes
-# - Cross-platform file watching support
-```
-
-**Performance Testing Workflow** - Optimize slow test suites:
-```bash
-# Analyze test performance and apply optimizations
-cd xtask && cargo run --no-default-features -- optimize-tests
-
-# Automatically detects:
-# - Long timeout values (>1000ms reduced to 500ms)
-# - Excessive wait_for_idle calls (>500ms reduced to 200ms)  
-# - Inefficient polling patterns
-# - Potential savings up to 3+ seconds per test file
-```
-
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
@@ -204,11 +150,10 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 
 **LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
-- ✅ Workspace symbols, rename, code actions (including import optimization)
-- ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
+- ✅ Workspace symbols, rename, code actions
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
-- ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
+- ✅ Code Lens with reference counts and resolve support
 - ✅ File path completion with enterprise security
 - ✅ Debug Adapter Protocol (DAP) support
 

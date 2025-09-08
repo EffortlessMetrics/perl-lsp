@@ -39,13 +39,6 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
    - **Regression Detection**: Automated detection of performance degradation across parser implementations
 
-7. **LSP Performance Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
-   - **Workspace Symbol Search Optimization**: 99.5% performance improvement measurement
-   - **Test Timeout Reduction**: Validation of 60s+ → 0.26s improvements
-   - **Cooperative Yielding Validation**: Measure non-blocking behavior in symbol processing
-   - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
-   - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
-
 ## Usage
 
 ### Quick Start
@@ -197,13 +190,6 @@ The framework includes configurable performance gates that automatically detect 
 - **Threshold**: Configurable (default: 20% regression)
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
-
-### LSP Performance Gates (v0.8.9+) (**Diataxis: Reference**)
-- **Test Timeout Threshold**: Validates 99.5% timeout reduction (60s+ → 0.26s)
-- **Workspace Symbol Search**: Validates bounded processing (MAX_PROCESS: 1000)
-- **Cooperative Yielding**: Validates non-blocking behavior (yield every 32 symbols)
-- **Memory Bounds**: Validates result limiting (RESULT_LIMIT: 100)
-- **Fast Mode Performance**: Validates LSP_TEST_FALLBACKS effectiveness
 - **Dual-mode Tracking**: procfs RSS measurement with peak_alloc fallback
 - **Statistical Analysis**: Memory usage patterns with confidence intervals
 - **Subprocess Estimation**: Size-based memory estimation for external processes
@@ -443,55 +429,6 @@ cargo xtask compare --report  # Includes memory metrics in output
 - **Conservative Scaling**: Uses ~8x file size plus 0.5MB base overhead
 - **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
 - **Fallback Values**: Returns 0.5MB default for inaccessible files
-
-### LSP Performance Benchmarking (v0.8.9+) (**Diataxis: How-to Guide**)
-
-The framework now includes specialized LSP performance benchmarking to validate workspace optimization improvements:
-
-#### LSP Benchmark Commands
-```bash
-# Run LSP performance tests with standard timeouts
-cargo test -p perl-lsp test_completion_detail_formatting
-
-# Run with fast mode (99.5% timeout reduction)
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting
-
-# Benchmark workspace symbol search performance
-cargo test -p perl-lsp test_workspace_symbol_search -- --nocapture
-
-# Run all LSP tests in fast mode
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
-```
-
-#### Performance Validation Metrics
-- **Baseline Performance**: >60 seconds (pre-optimization)
-- **Optimized Performance**: 0.26 seconds (post-optimization)
-- **Improvement Factor**: 99.5% reduction in test execution time
-- **Memory Usage**: Bounded by MAX_PROCESS (1000) and RESULT_LIMIT (100)
-- **Cooperative Yielding**: Every 32 symbols to prevent blocking
-
-#### LSP Performance Configuration
-```bash
-# Environment variables for LSP benchmarking
-export LSP_TEST_FALLBACKS=1          # Enable fast mode
-export PERL_LSP_INCREMENTAL=1        # Enable incremental parsing
-
-# Performance targets:
-# - Workspace symbol search: <1 second
-# - Symbol processing: bounded to 1000 items
-# - Result limiting: maximum 100 results
-# - Cooperative yielding: every 32 iterations
-```
-
-#### Performance Gate Validation
-```bash
-# Validate performance improvements
-time cargo test -p perl-lsp test_completion_detail_formatting  # Should be <1s
-
-# Compare with and without fallbacks
-time cargo test -p perl-lsp test_workspace_symbol_search
-LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp test_workspace_symbol_search
-```
 
 ## Contributing
 
