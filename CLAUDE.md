@@ -108,6 +108,22 @@ cargo run corpus -- --diagnose          # Get detailed analysis of differences
 # - Diagnostic mode: Detailed breakdown of parsing differences
 ```
 
+### Highlight Testing (*Diataxis: Tutorial* - Tree-Sitter Highlight Test Runner)
+```bash
+# Prerequisites: Highlight test fixtures in crates/tree-sitter-perl/test/highlight/
+# Navigate to xtask directory for highlight testing commands
+cd xtask                                 # Navigate to xtask directory
+
+# Run highlight tests with perl-parser AST integration
+cargo run highlight                      # Test highlight fixtures with v3 parser
+cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custom path
+
+# Understanding the output:
+# - Total test cases: Number of highlight test fixtures processed
+# - Passed/Failed: AST node matching results for expected highlight scopes
+# - Integration with perl-corpus: Comprehensive highlight integration tests (4/4 passing)
+```
+
 ## Architecture
 
 ### Crate Structure
