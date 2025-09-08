@@ -164,6 +164,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ### All Parsers Support:
 - **Tree-sitter Compatible**: Standard S-expressions for IDE integration
+- **Test-Driven Development**: Auto-detecting TestGenerator with intelligent return value analysis
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
@@ -817,6 +818,36 @@ let ast = parser.parse().unwrap();
 
 println!("AST: {:?}", ast);
 // Output: Program { statements: [SubroutineDeclaration { ... }] }
+```
+
+### Test Generation (*Diataxis: Tutorial*)
+
+The TestGenerator provides intelligent TDD support with auto-detection:
+
+```rust
+use perl_parser::{Parser, TestGenerator, TestFramework};
+
+// Parse a simple add function
+let source = r#"
+    sub add {
+        my ($a, $b) = @_;
+        return $a + $b;
+    }
+"#;
+
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+
+// Generate tests with auto-detection
+let generator = TestGenerator::new(TestFramework::TestMore);
+let tests = generator.generate_tests(&ast, source);
+
+for test in tests {
+    println!("Test: {}", test.name);
+    println!("Code:\n{}", test.code);
+    // Automatically detects that add(1, 2) should return 3
+    // Generates: is($result, 3, 'Returns expected value');
+}
 ```
 
 ### Command Line Interface
