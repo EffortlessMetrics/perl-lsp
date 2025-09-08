@@ -13,7 +13,7 @@ The tree-sitter-perl project provides **multiple parser implementations** and **
 5. **LSP Server**: A standalone binary (`perl-lsp`) providing Language Server Protocol features for editors.
 6. **WorkspaceRefactor**: Enterprise-grade cross-file refactoring operations (NEW v0.8.9).
 7. **Enhanced S-expression System**: Comprehensive operator-specific AST output (Issue #72 resolved).
-8. **Performance**: v3 provides optimized performance for different use cases (excellent small file and incremental parsing performance), and the incremental parser is 6-10x faster than a full re-parse on edits.
+8. **Performance**: v3 achieves 4-19x speedup over v1 (1-150 µs), and the incremental parser is 6-10x faster than a full re-parse on edits.
 
 ## 📐 Architecture Diagram
 

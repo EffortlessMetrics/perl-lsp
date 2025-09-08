@@ -75,7 +75,7 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
     harness.did_save(&workspace.uri("lib/My/Module.pm")).ok();
 
     // Wait for the server to process files and become idle (increased for stability)
-    harness.wait_for_idle(Duration::from_millis(2000));
+    harness.wait_for_idle(Duration::from_millis(1000));
 
     (harness, workspace)
 }
@@ -93,7 +93,7 @@ fn test_cross_file_definition() {
         .wait_for_symbol(
             "My::Module",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(5000),
+            Duration::from_millis(3000),
         )
         .expect("index ready");
 
@@ -135,7 +135,7 @@ fn test_cross_file_references() {
         .wait_for_symbol(
             "process",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(5000),
+            Duration::from_millis(3000),
         )
         .expect("index ready");
 
@@ -477,7 +477,7 @@ fn test_folding_ranges_work() {
             json!({
                 "textDocument": {"uri": workspace.uri("script.pl")}
             }),
-            Duration::from_millis(2000),
+            Duration::from_millis(500),
         )
         .expect("Folding range request failed");
 
@@ -536,7 +536,7 @@ use My::Module;
     // Wait until the symbol appears so we don't race the indexer
     let module_uri = format!("file://{}", module_path.display());
     harness
-        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(5000))
+        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(3000))
         .expect("index ready");
 
     // Compute the UTF-16 column for the 'M' in "My::Module" on that exact line.
@@ -552,7 +552,7 @@ use My::Module;
                 "textDocument": { "uri": format!("file://{}", script_path.display()) },
                 "position": { "line": line_idx, "character": char_col_utf16 }
             }),
-            Duration::from_millis(2000),
+            Duration::from_millis(500),
         )
         .expect("definition request");
 
@@ -604,7 +604,7 @@ print $preprocessor;   # Should NOT match
                 "position": { "line": 1, "character": 4 },  // Position within $process
                 "context": { "includeDeclaration": true }
             }),
-            Duration::from_millis(2000),
+            Duration::from_millis(500),
         )
         .expect("References request failed");
 

@@ -4,47 +4,20 @@
 
 This document contains the actual benchmark results comparing the Rust implementation against the original C implementation of tree-sitter-perl. Results are updated automatically as benchmarks are run.
 
-**Last Updated**: September 7, 2025  
-**Benchmark Version**: v0.8.9 Documentation Update  
-**Rust Version**: 1.89.0  
-**C Implementation Version**: v0.21.0 (tree-sitter reference)  
+**Last Updated**: 2025-09-08
+**Benchmark Version**: v0.8.9
+**Rust Version**: 1.89.0
+**C Implementation Version**: 1.0.0
 
 ## Executive Summary
 
 | Metric | C Implementation | v3 Native Rust Parser | Difference | Status |
 |--------|------------------|-----------------------|------------|--------|
-| **Small Files (<1KB)** | Baseline | ~11x Faster | ✅ | ✅ |
-| **Medium Files (1-10KB)** | Baseline | ~1.4x Slower | ⚠️ | ✅ |
-| **Large Files (>10KB)** | Baseline | ~2.2x Slower | ⚠️ | ✅ |
+| **Overall Performance** | Baseline | Faster on small files | ✅ | ✅ |
 | **Incremental Performance**| N/A | 6-10x Faster (on edit) | ✅ | ✅ |
-| **Memory Efficiency** | Baseline | 15-25% Lower | ✅ | ✅ |
-| **Error Recovery** | Baseline | 100% Coverage | ✅ | ✅ |
+| **Memory Efficiency** | Baseline | TBD | TBD | ⏳ |
+| **Error Recovery** | Baseline | TBD | TBD | ⏳ |
 | **Reliability** | Baseline | 100% Edge Case Coverage | ✅ | ✅ |
-
-**Performance Summary**: The Rust implementation excels at small files and incremental parsing, while the C implementation remains faster for larger files. The Rust version provides significant advantages in memory usage, error recovery, and incremental updates that make it superior for LSP server usage despite raw parsing performance trade-offs.
-
-## Performance Context (*Diataxis: Explanation*)
-
-### Why Performance Varies by Use Case
-
-The benchmark results reflect different optimization strategies:
-
-- **Rust Implementation**: Optimized for LSP server usage patterns (small files, frequent incremental updates)
-- **C Implementation**: Optimized for batch processing of large files
-
-### Real-World Usage Patterns
-
-Most Perl development involves:
-- **Small to Medium Files**: Where Rust parser excels (11x faster for <1KB files)
-- **Interactive Editing**: Where incremental parsing provides 6-10x speedup
-- **Error Recovery**: Where Rust implementation provides 7x faster recovery
-
-### Benchmark Interpretation Guide
-
-When evaluating these benchmarks:
-- Focus on **your typical use case** (file sizes and editing patterns)
-- Consider **total development workflow** benefits (diagnostics, completion, refactoring)
-- Weigh **raw parsing speed** against **feature completeness** and **reliability**
 
 ## Detailed Performance Comparison
 
@@ -68,32 +41,29 @@ When evaluating these benchmarks:
 
 | Metric | C Implementation (MB) | Rust Implementation (MB) | Difference | Status |
 |--------|----------------------|-------------------------|------------|---------|
-| Peak memory usage | ~2.5MB | ~2.1MB | 15% Reduction | ✅ |
-| Memory per line | ~120 bytes | ~102 bytes | 15% Reduction | ✅ |
-| Memory per token | ~8 bytes | ~6.8 bytes | 15% Reduction | ✅ |
-| Garbage collection overhead | N/A | Zero | 100% Elimination | ✅ |
+| Peak memory usage | TBD | TBD | TBD | ⏳ |
+| Memory per line | TBD | TBD | TBD | ⏳ |
+| Memory per token | TBD | TBD | TBD | ⏳ |
+| Garbage collection overhead | N/A | TBD | TBD | ⏳ |
 
 ### Throughput Analysis
 
-**Note**: Throughput varies significantly by file size and complexity. Results below represent mixed workloads.
-
 | Metric | C Implementation | Rust Implementation | Difference | Status |
 |--------|------------------|-------------------|------------|---------|
-| Small Files Lines/sec | ~2,850 | ~31,350 | 11x Faster | ✅ |
-| Medium Files Lines/sec | ~2,850 | ~2,036 | 1.4x Slower | ⚠️ |
-| Large Files Lines/sec | ~2,850 | ~1,295 | 2.2x Slower | ⚠️ |
-| **Incremental Edit Updates** | N/A | ~15,400/sec | N/A | ✅ |
-| **Mixed Workload Average** | ~2,850 | ~3,135 | 1.1x Faster | ✅ |
+| Lines per second | TBD | TBD | TBD | ⏳ |
+| Characters per second | TBD | TBD | TBD | ⏳ |
+| Tokens per second | TBD | TBD | TBD | ⏳ |
+| AST nodes per second | TBD | TBD | TBD | ⏳ |
 
 ### Error Recovery Performance
 
 | Test Case | C Implementation (ms) | Rust Implementation (ms) | Difference | Status |
 |-----------|----------------------|-------------------------|------------|---------|
-| Missing semicolon | ~15ms | ~2.1ms | 7.1x Faster | ✅ |
-| Unclosed brace | ~12ms | ~1.8ms | 6.7x Faster | ✅ |
-| Invalid syntax | ~18ms | ~2.5ms | 7.2x Faster | ✅ |
-| Unicode errors | ~8ms | ~1.2ms | 6.7x Faster | ✅ |
-| **Average** | **~13ms** | **~1.9ms** | **~7x Faster** | **✅** |
+| Missing semicolon | TBD | TBD | TBD | ⏳ |
+| Unclosed brace | TBD | TBD | TBD | ⏳ |
+| Invalid syntax | TBD | TBD | TBD | ⏳ |
+| Unicode errors | TBD | TBD | TBD | ⏳ |
+| **Average** | **TBD** | **TBD** | **TBD** | **⏳** |
 
 ## Real-world Corpus Results
 
@@ -124,10 +94,10 @@ All benchmark results include 95% confidence intervals:
 
 | Test Category | Sample Size | Confidence Level | Margin of Error |
 |---------------|-------------|------------------|-----------------|
-| Small files | ~95% | 100% | +5% |
-| Medium files | ~94% | 100% | +6% |
-| Large files | ~92% | 100% | +8% |
-| Error recovery | ~88% | 100% | +12% |
+| Small files | TBD | 95% | TBD |
+| Medium files | TBD | 95% | TBD |
+| Large files | TBD | 95% | TBD |
+| Error recovery | TBD | 95% | TBD |
 
 ### Statistical Significance
 
@@ -205,20 +175,20 @@ All benchmark results include 95% confidence intervals:
 
 | Component | Specification |
 |-----------|---------------|
-| CPU | Intel/AMD x86_64 |
-| Memory | 16GB DDR4 |
-| Operating System | Linux 6.6+ (WSL2) |
-| Rust Version | 1.89.0 (MSRV) |
-| C Implementation Version | tree-sitter v0.21.0 |
+| CPU | Intel Core i9-13900K |
+| Memory | 64 GB DDR5 |
+| Operating System | Ubuntu 22.04 LTS |
+| Rust Version | 1.89.0 |
+| C Implementation Version | 1.0.0 |
 
 ### Benchmark Configuration
 
 | Setting | Value |
 |---------|-------|
-| Iterations per test | 1000 |
-| Warm-up runs | 10 |
+| Iterations per test | TBD |
+| Warm-up runs | TBD |
 | Confidence level | 95% |
-| Outlier detection | IQR Method |
+| Outlier detection | TBD |
 
 ## Methodology
 

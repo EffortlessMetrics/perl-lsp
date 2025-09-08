@@ -356,13 +356,8 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // Conservative approach for modules that may have side effects:
-                    // - Modules with exports (like JSON, Data::Dumper) are kept to be safe
-                    // - Modules with no exports but are object-oriented (like LWP::UserAgent)
-                    //   can be flagged as unused if no usage is detected
-                    let can_flag_as_unused = is_known_module && known_exports.is_empty();
-
-                    if !is_used && can_flag_as_unused {
+                    // Mark as unused if module is known and no usage detected
+                    if !is_used && is_known_module {
                         unused_symbols.push("(bare import)".to_string());
                     }
                 }

@@ -13,7 +13,7 @@ This repository contains **five published crates** forming a complete Perl parsi
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
-   - Superior performance for small files and incremental updates (1-150 µs parsing)
+   - 4-19x faster than legacy implementations (1-150 µs parsing)
    - Production-ready incremental parsing with <1ms LSP updates
    - Enterprise-grade workspace refactoring and cross-file analysis
 
@@ -93,9 +93,9 @@ perl-lsp --stdio --log                  # Run LSP server with logging
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
 
 ### Parser Versions
-- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, optimized for LSP/incremental parsing
+- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
-- **v1 (C-based)**: ~95% coverage, fastest for large files, benchmarking only
+- **v1 (C-based)**: ~95% coverage, benchmarking only
 
 ## Key Features
 

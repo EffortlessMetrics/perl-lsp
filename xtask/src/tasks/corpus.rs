@@ -147,12 +147,12 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
             // Use the C-based tree-sitter parser
-            let tree = tree_sitter::parse(&test_case.source)?;
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
             // Use the pure-rust parser
-            let mut parser = tree_sitter::PureRustPerlParser::new();
+            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
                 Err(e) => {
@@ -174,7 +174,7 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
         }
         Some(ScannerType::Both) => {
             // Parse using both C and V3 scanners and compare results
-            let c_tree = tree_sitter::parse(&test_case.source)?;
+            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
             let c_raw = c_tree.root_node().to_sexp();
             let c_sexp = normalize_sexp(&c_raw);
 
@@ -235,7 +235,7 @@ fn diagnose_parse_differences(
 
     // Parse with current parser(s)
     if let Some(ScannerType::Both) = scanner {
-        let c_tree = tree_sitter::parse(&test_case.source)?;
+        let c_tree = tree_sitter_perl::parse(&test_case.source)?;
         let c_sexp = normalize_sexp(&c_tree.root_node().to_sexp());
 
         let mut v3_parser = perl_parser::Parser::new(&test_case.source);
@@ -280,11 +280,11 @@ fn diagnose_parse_differences(
 
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            let tree = tree_sitter::parse(&test_case.source)?;
+            let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => {
-            let mut parser = tree_sitter::PureRustPerlParser::new();
+            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
                 Err(e) => format!("(ERROR {})", e),
@@ -419,7 +419,7 @@ fn test_current_parser() -> Result<()> {
 
     for source in test_cases {
         println!("\nInput: '{}'", source);
-        match tree_sitter::parse(source) {
+        match tree_sitter_perl::parse(source) {
             Ok(tree) => {
                 let sexp = normalize_sexp(&tree.root_node().to_sexp());
                 println!("Output: {}", sexp);
