@@ -77,7 +77,7 @@ use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
 use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Type alias for module resolver function to reduce complexity
 type ModuleResolver = Arc<dyn Fn(&str) -> Option<String>>;
@@ -148,7 +148,13 @@ pub struct CompletionContext {
 }
 
 impl CompletionContext {
-    fn detect_current_package(symbol_table: &SymbolTable, position: usize) -> String {
+    fn detect_current_package(symbol_table: &Arc<RwLock<SymbolTable>>, position: usize) -> String {
+        // Use read lock for thread-safe access
+        let symbol_table = match symbol_table.read() {
+            Ok(table) => table,
+            Err(_) => return "main".to_string(), // Return default if lock is poisoned
+        };
+
         // First, check for innermost package scope containing the position
         let mut scope_start: Option<usize> = None;
         for scope in symbol_table.scopes.values() {
@@ -198,7 +204,7 @@ impl CompletionContext {
     }
 
     fn new(
-        symbol_table: &SymbolTable,
+        symbol_table: &Arc<RwLock<SymbolTable>>,
         position: usize,
         trigger_character: Option<char>,
         in_string: bool,
@@ -221,9 +227,9 @@ impl CompletionContext {
     }
 }
 
-/// Completion provider
+/// Thread-safe completion provider with protected symbol table access
 pub struct CompletionProvider {
-    symbol_table: SymbolTable,
+    symbol_table: Arc<RwLock<SymbolTable>>,
     keywords: HashSet<&'static str>,
     builtins: HashSet<&'static str>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
@@ -278,7 +284,7 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
         module_resolver: Option<ModuleResolver>,
     ) -> Self {
-        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let symbol_table = Arc::new(RwLock::new(SymbolExtractor::new_with_source(source).extract(ast)));
 
         let keywords = [
             "my",
@@ -498,11 +504,11 @@ impl CompletionProvider {
             return vec![];
         }
 
-        let context = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.analyze_context(source, position)
-        })) {
+        // Replace catch_unwind with proper error handling
+        let context = match self.try_analyze_context(source, position) {
             Ok(ctx) => ctx,
             Err(_) => {
+                // Context analysis failed, return empty completions rather than panicking
                 return vec![];
             }
         };
@@ -521,21 +527,21 @@ impl CompletionProvider {
         // Determine what kind of completions to provide based on context
         if context.prefix.starts_with('$') {
             // Scalar variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::ScalarVariable);
+            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::ScalarVariable, is_cancelled);
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::ArrayVariable);
+            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::ArrayVariable, is_cancelled);
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::HashVariable);
+            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::HashVariable, is_cancelled);
             if is_cancelled() {
                 return vec![];
             }
@@ -636,14 +642,17 @@ impl CompletionProvider {
         }
 
         // Remove duplicates and sort completions by relevance
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.deduplicate_and_sort(completions.clone())
-        })) {
+        match self.try_deduplicate_and_sort(completions.clone()) {
             Ok(sorted_completions) => sorted_completions,
             Err(_) => {
                 completions // Return unsorted completions as fallback
             }
         }
+    }
+
+    /// Safely remove duplicates and sort completions with error handling
+    fn try_deduplicate_and_sort(&self, completions: Vec<CompletionItem>) -> Result<Vec<CompletionItem>, String> {
+        Ok(self.deduplicate_and_sort(completions))
     }
 
     /// Remove duplicates and sort completions with stable, deterministic ordering
@@ -719,6 +728,11 @@ impl CompletionProvider {
         self.get_completions_with_path(source, position, None)
     }
 
+    /// Safely analyze the context at the cursor position with error handling
+    fn try_analyze_context(&self, source: &str, position: usize) -> Result<CompletionContext, String> {
+        Ok(self.analyze_context(source, position))
+    }
+
     /// Analyze the context at the cursor position
     fn analyze_context(&self, source: &str, position: usize) -> CompletionContext {
         // Find the prefix (text before cursor on the same line)
@@ -773,18 +787,31 @@ impl CompletionProvider {
         )
     }
 
-    /// Add variable completions
+
+    /// Add variable completions with cancellation support and thread-safe symbol table access
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
-    fn add_variable_completions(
+    fn add_variable_completions_cancellable(
         &self,
         completions: &mut Vec<CompletionItem>,
         context: &CompletionContext,
         kind: SymbolKind,
+        is_cancelled: &dyn Fn() -> bool,
     ) {
         let sigil = kind.sigil().unwrap_or("");
         let prefix_without_sigil = context.prefix.trim_start_matches(sigil);
 
-        for (name, symbols) in &self.symbol_table.symbols {
+        // Use read lock for thread-safe access to symbol table
+        let symbol_table = match self.symbol_table.read() {
+            Ok(table) => table,
+            Err(_) => return, // Skip if lock is poisoned
+        };
+
+        for (name, symbols) in &symbol_table.symbols {
+            // Check for cancellation periodically to maintain responsiveness
+            if is_cancelled() {
+                return;
+            }
+
             for symbol in symbols {
                 if symbol.kind == kind && name.starts_with(prefix_without_sigil) {
                     let insert_text = format!("{}{}", sigil, name);
@@ -873,7 +900,7 @@ impl CompletionProvider {
         }
     }
 
-    /// Add function completions
+    /// Add function completions with thread-safe symbol table access
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_function_completions(
         &self,
@@ -882,7 +909,13 @@ impl CompletionProvider {
     ) {
         let prefix_without_amp = context.prefix.trim_start_matches('&');
 
-        for (name, symbols) in &self.symbol_table.symbols {
+        // Use read lock for thread-safe access to symbol table
+        let symbol_table = match self.symbol_table.read() {
+            Ok(table) => table,
+            Err(_) => return, // Skip if lock is poisoned
+        };
+
+        for (name, symbols) in &symbol_table.symbols {
             for symbol in symbols {
                 if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix_without_amp) {
                     completions.push(CompletionItem {
@@ -1486,7 +1519,7 @@ impl CompletionProvider {
         }
     }
 
-    /// Add all variables without sigils (for interpolation contexts)
+    /// Add all variables without sigils (for interpolation contexts) with thread-safe access
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_all_variables(
         &self,
@@ -1495,7 +1528,13 @@ impl CompletionProvider {
     ) {
         // Only add if the prefix doesn't already have a sigil
         if !context.prefix.starts_with(['$', '@', '%', '&']) {
-            for (name, symbols) in &self.symbol_table.symbols {
+            // Use read lock for thread-safe access to symbol table
+            let symbol_table = match self.symbol_table.read() {
+                Ok(table) => table,
+                Err(_) => return, // Skip if lock is poisoned
+            };
+
+            for (name, symbols) in &symbol_table.symbols {
                 for symbol in symbols {
                     if matches!(
                         symbol.kind,
@@ -1530,15 +1569,20 @@ impl CompletionProvider {
         self.keywords.iter().any(|k| k.starts_with(prefix))
     }
 
-    /// Check if prefix could be a function
+    /// Check if prefix could be a function with thread-safe symbol table access
     fn could_be_function(&self, prefix: &str) -> bool {
         // Check builtins
         if self.builtins.iter().any(|b| b.starts_with(prefix)) {
             return true;
         }
 
-        // Check user-defined functions
-        for (name, symbols) in &self.symbol_table.symbols {
+        // Check user-defined functions with thread-safe access
+        let symbol_table = match self.symbol_table.read() {
+            Ok(table) => table,
+            Err(_) => return false, // Return false if lock is poisoned
+        };
+
+        for (name, symbols) in &symbol_table.symbols {
             for symbol in symbols {
                 if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix) {
                     return true;

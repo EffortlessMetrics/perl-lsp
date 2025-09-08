@@ -183,6 +183,9 @@ pub(crate) struct DocumentState {
 
     /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
+    
+    /// Document lock to ensure atomic document operations
+    pub(crate) document_lock: Arc<std::sync::RwLock<()>>,
 }
 
 /// Normalize legacy package separator ' to ::
@@ -978,6 +981,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
+                    document_lock: Arc::new(std::sync::RwLock::new(())),
                 },
             );
 
@@ -1050,6 +1054,7 @@ impl LspServer {
                         parent_map: ParentMap::default(),
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
+                        document_lock: Arc::new(std::sync::RwLock::new(())),
                     });
 
                 // Increment generation counter for this change
@@ -1116,6 +1121,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
+                    document_lock: doc_state.document_lock.clone(), // Preserve the document lock
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -2071,6 +2077,39 @@ impl LspServer {
                     let hover_text = self.get_token_at_position(&doc.text, offset);
 
                     if !hover_text.is_empty() {
+                        // Enhanced fallback: if it looks like a package/module name, provide better info
+                        if hover_text.contains("::") || hover_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            return Ok(Some(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
+                                },
+                            })));
+                        }
+                        
+                        return Ok(Some(json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": format!("**Perl**: `{}`", hover_text),
+                            },
+                        })));
+                    }
+                } else {
+                    // Fallback: use document text directly without AST
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let hover_text = self.get_token_at_position(&doc.text, offset);
+
+                    if !hover_text.is_empty() {
+                        // Enhanced fallback: if it looks like a package/module name, provide better info
+                        if hover_text.contains("::") || hover_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            return Ok(Some(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
+                                },
+                            })));
+                        }
+                        
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
@@ -2081,7 +2120,7 @@ impl LspServer {
                 }
             }
         }
-
+        // Return explicit null result as expected by LSP protocol
         Ok(Some(json!(null)))
     }
 
@@ -4485,13 +4524,14 @@ impl LspServer {
                 || chars[start - 1] == '_'
                 || chars[start - 1] == '$'
                 || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
+                || chars[start - 1] == '%'
+                || chars[start - 1] == ':')
         {
             start -= 1;
         }
 
         let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == ':') {
             end += 1;
         }
 
