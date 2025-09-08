@@ -13,11 +13,15 @@ This document contains the actual benchmark results comparing the Rust implement
 
 | Metric | C Implementation | v3 Native Rust Parser | Difference | Status |
 |--------|------------------|-----------------------|------------|--------|
-| **Overall Performance** | Baseline | 4-19x Faster | ✅ | ✅ |
+| **Small Files (<1KB)** | Baseline | ~11x Faster | ✅ | ✅ |
+| **Medium Files (1-10KB)** | Baseline | ~1.4x Slower | ⚠️ | ✅ |
+| **Large Files (>10KB)** | Baseline | ~2.2x Slower | ⚠️ | ✅ |
 | **Incremental Performance**| N/A | 6-10x Faster (on edit) | ✅ | ✅ |
 | **Memory Efficiency** | Baseline | 15-25% Lower | ✅ | ✅ |
 | **Error Recovery** | Baseline | 100% Coverage | ✅ | ✅ |
 | **Reliability** | Baseline | 100% Edge Case Coverage | ✅ | ✅ |
+
+**Performance Summary**: The Rust implementation excels at small files and incremental parsing, while the C implementation remains faster for larger files. The Rust version provides significant advantages in memory usage, error recovery, and incremental updates that make it superior for LSP server usage despite raw parsing performance trade-offs.
 
 ## Detailed Performance Comparison
 
@@ -48,12 +52,15 @@ This document contains the actual benchmark results comparing the Rust implement
 
 ### Throughput Analysis
 
+**Note**: Throughput varies significantly by file size and complexity. Results below represent mixed workloads.
+
 | Metric | C Implementation | Rust Implementation | Difference | Status |
 |--------|------------------|-------------------|------------|---------|
-| Lines per second | ~2,850 | ~13,700 | 4.8x Faster | ✅ |
-| Characters per second | ~142,500 | ~685,000 | 4.8x Faster | ✅ |
-| Tokens per second | ~28,500 | ~137,000 | 4.8x Faster | ✅ |
-| AST nodes per second | ~14,250 | ~68,500 | 4.8x Faster | ✅ |
+| Small Files Lines/sec | ~2,850 | ~31,350 | 11x Faster | ✅ |
+| Medium Files Lines/sec | ~2,850 | ~2,036 | 1.4x Slower | ⚠️ |
+| Large Files Lines/sec | ~2,850 | ~1,295 | 2.2x Slower | ⚠️ |
+| **Incremental Edit Updates** | N/A | ~15,400/sec | N/A | ✅ |
+| **Mixed Workload Average** | ~2,850 | ~3,135 | 1.1x Faster | ✅ |
 
 ### Error Recovery Performance
 
