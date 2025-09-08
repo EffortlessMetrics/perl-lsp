@@ -242,6 +242,7 @@ These features have been extensively tested and provide real, production-ready f
 - `referencesProvider` - Find references
 - `documentHighlightProvider` - Enhanced highlight occurrences with expression statement support
 - `signatureHelpProvider` - Signature help
+- `codeLensProvider` - Code lens with reference counts and resolve support (PRODUCTION BUILD ONLY)
 - `documentSymbolProvider` - Document symbols
 - `foldingRangeProvider` - Folding ranges
 - `documentFormattingProvider` - Formatting (if perltidy available)
@@ -264,8 +265,8 @@ These features have been extensively tested and provide real, production-ready f
 ### ❌ NOT Advertised in v0.8.9 (Not Implemented)
 
 #### Code Lens
-- **Status:** Partial (not advertised).
-- **Notes:** Early provider exists (run/debug links scaffolding), but no stable contract and no cross-feature integration. Not surfaced until stable & tested.
+- **Status:** Preview (advertised in production builds only).
+- **Notes:** Functional implementation with reference counts and run/test lenses. Advertised in production builds but not in GA-lock mode due to conservative release policy. ~85% functional.
 
 #### Call/Type Hierarchy
 - **Status:** Partial/Not implemented (not advertised).
@@ -279,10 +280,11 @@ These features have been extensively tested and provide real, production-ready f
 
 These features have partial implementations but are not advertised due to significant limitations:
 
-### 1. **Code Lens**
-- Run/Debug links partially implemented
-- Test discovery not connected
-- **Status**: ~20% functional
+### 1. **Code Lens** (PREVIEW STATUS)
+- Run/Debug links fully implemented
+- Test discovery patterns functional (test_*, Test*, *_test)
+- Reference counts working with LSP resolve support
+- **Status**: ~85% functional (advertised in production builds)
 
 ### 2. **Call Hierarchy**
 - Basic structure exists
@@ -328,9 +330,8 @@ These features exist in the code but return empty results or don't work:
 
 ### 7. **Advanced Features**
 - Call Hierarchy: Returns empty
-- Code Lens: Returns empty
 - Inlay Hints: Partially works for hash literals only
-- **Status**: <10% functional
+- **Status**: <10% functional (Code Lens moved to Preview status)
 
 ## 🚀 Incremental Parsing Performance (NEW in v0.8.7)
 
