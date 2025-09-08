@@ -38,6 +38,7 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU32, Ordering},
 };
+use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::uri::parse_uri;
@@ -456,6 +457,15 @@ impl LspServer {
         }
     }
 
+    /// Create a server cancelled error
+    fn server_cancelled() -> JsonRpcError {
+        JsonRpcError {
+            code: ERR_SERVER_CANCELLED,
+            message: "Server cancelled the request".to_string(),
+            data: None,
+        }
+    }
+
     /// Mark a request as cancelled
     fn cancel_mark(&self, id: &Value) {
         if let Ok(mut c) = self.cancelled.lock() {
@@ -688,10 +698,19 @@ impl LspServer {
             // Test-specific slow operation for cancellation testing
             // This is available in all builds but only used by tests
             "$/test/slowOperation" => {
+                // Optional server-side timeout for internal cancellation testing
+                let timeout = request
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("serverTimeoutMs"))
+                    .and_then(|v| v.as_u64())
+                    .map(Duration::from_millis);
+                let start = Instant::now();
+
                 // Check for cancellation periodically during the slow operation
                 // Total time: 20 * 50ms = 1 second
                 for i in 0..20 {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(50));
                     if let Some(ref id) = id {
                         if self.is_cancelled(id) {
                             eprintln!("Operation cancelled at iteration {}", i);
@@ -701,6 +720,18 @@ impl LspServer {
                                 result: None,
                                 error: Some(Self::request_cancelled()),
                             });
+                        }
+
+                        if let Some(to) = timeout {
+                            if start.elapsed() >= to {
+                                eprintln!("Server-side timeout at iteration {}", i);
+                                return Some(JsonRpcResponse {
+                                    jsonrpc: "2.0".to_string(),
+                                    id: Some(id.clone()),
+                                    result: None,
+                                    error: Some(Self::server_cancelled()),
+                                });
+                            }
                         }
                     }
                 }
