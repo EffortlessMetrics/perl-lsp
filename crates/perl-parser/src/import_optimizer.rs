@@ -361,7 +361,7 @@ impl ImportOptimizer {
                     // - Modules with no exports but are object-oriented (like LWP::UserAgent)
                     //   can be flagged as unused if no usage is detected
                     let can_flag_as_unused = is_known_module && known_exports.is_empty();
-                    
+
                     if !is_used && can_flag_as_unused {
                         unused_symbols.push("(bare import)".to_string());
                     }
