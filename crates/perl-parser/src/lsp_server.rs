@@ -898,6 +898,9 @@ impl LspServer {
         if build_flags.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
         }
+        if build_flags.call_hierarchy {
+            capabilities["callHierarchyProvider"] = json!(true);
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
@@ -5855,6 +5858,11 @@ impl LspServer {
 
     /// Handle incoming calls request
     fn handle_incoming_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().call_hierarchy {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
@@ -5881,6 +5889,11 @@ impl LspServer {
 
     /// Handle outgoing calls request
     fn handle_outgoing_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().call_hierarchy {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
