@@ -39,3 +39,5 @@ legacy = ["tree-sitter-perl"]
 [patch.crates-io]
 perl-lexer = { path = "../crates/perl-lexer" }
 perl-parser = { path = "../crates/perl-parser" }
+
+

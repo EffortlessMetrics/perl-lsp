@@ -19,6 +19,7 @@
 //! # Ok::<(), String>(())
 //! ```
 
+use crate::{ast::SourceLocation, rename::TextEdit};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -561,6 +562,49 @@ impl ImportOptimizer {
         // Sort alphabetically for consistency
         optimized_imports.sort();
         optimized_imports.join("\n")
+    }
+
+    /// Generate text edits to apply optimized imports to the original content
+    pub fn generate_edits(&self, content: &str, analysis: &ImportAnalysis) -> Vec<TextEdit> {
+        let optimized = self.generate_optimized_imports(analysis);
+
+        if analysis.imports.is_empty() {
+            if optimized.is_empty() {
+                return Vec::new();
+            }
+            let insert_line =
+                analysis.missing_imports.first().map(|m| m.suggested_location).unwrap_or(1);
+            let insert_offset = self.line_offset(content, insert_line);
+            return vec![TextEdit {
+                location: SourceLocation { start: insert_offset, end: insert_offset },
+                new_text: optimized + "\n",
+            }];
+        }
+
+        let first_line = analysis.imports.iter().map(|i| i.line).min().unwrap();
+        let last_line = analysis.imports.iter().map(|i| i.line).max().unwrap();
+
+        let start_offset = self.line_offset(content, first_line);
+        let end_offset = self.line_offset(content, last_line + 1);
+
+        vec![TextEdit {
+            location: SourceLocation { start: start_offset, end: end_offset },
+            new_text: if optimized.is_empty() { String::new() } else { optimized + "\n" },
+        }]
+    }
+
+    fn line_offset(&self, content: &str, line: usize) -> usize {
+        if line <= 1 {
+            return 0;
+        }
+        let mut offset = 0;
+        for (idx, l) in content.lines().enumerate() {
+            if idx + 1 >= line {
+                break;
+            }
+            offset += l.len() + 1; // include newline
+        }
+        offset
     }
 }
 

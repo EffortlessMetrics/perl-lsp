@@ -810,6 +810,18 @@ impl CompletionProvider {
         )
     }
 
+    /// Add variable completions with thread-safe symbol table access
+    #[allow(dead_code)] // Available for future completion enhancement
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
+    fn add_variable_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        kind: SymbolKind,
+    ) {
+        self.add_variable_completions_cancellable(completions, context, kind, &|| false);
+    }
+
     /// Add variable completions with cancellation support and thread-safe symbol table access
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_variable_completions_cancellable(

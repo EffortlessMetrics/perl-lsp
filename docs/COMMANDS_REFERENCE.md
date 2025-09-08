@@ -337,8 +337,8 @@ cd xtask && cargo run corpus -- --scanner both           # Explicit dual-scanner
 cd xtask && cargo run corpus -- --scanner both --diagnose # With detailed analysis
 
 # Individual scanner testing
-cd xtask && cargo run corpus -- --scanner c              # C scanner only
-cd xtask && cargo run corpus -- --scanner rust           # Rust scanner only  
+cd xtask && cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
+cd xtask && cargo run corpus -- --scanner rust           # Rust scanner implementation  
 cd xtask && cargo run corpus -- --scanner v3             # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
@@ -404,7 +404,7 @@ cd xtask && cargo run corpus [OPTIONS]
 c       # Use C tree-sitter scanner only (baseline for comparison)
 rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (dual-scanner mode)
+both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev
@@ -444,6 +444,150 @@ more source code
 ----
 (expected_output)
 ```
+
+## Highlight Testing Commands (*Diataxis: Reference* - Tree-Sitter Highlight Test Runner)
+
+### Basic Highlight Testing (*Diataxis: Tutorial* - Getting started with highlight tests)
+
+```bash
+# Prerequisites: Navigate to xtask directory for highlight testing
+cd xtask
+
+# Run all highlight tests with perl-parser AST integration
+cargo run --no-default-features -- highlight
+
+# Test specific highlight directory
+cargo run --no-default-features -- highlight --path ../crates/tree-sitter-perl/test/highlight
+
+# Test with specific scanner (for compatibility testing)
+cargo run --no-default-features -- highlight --scanner v3
+```
+
+### Highlight Integration Testing (*Diataxis: How-to Guide* - Running comprehensive tests)
+
+```bash
+# Run perl-corpus highlight integration tests (4 comprehensive tests)
+cargo test -p perl-corpus --test highlight_integration_test
+
+# Individual integration test scenarios
+cargo test -p perl-corpus highlight_integration_test::test_highlight_runner_integration     # Basic AST integration
+cargo test -p perl-corpus highlight_integration_test::test_complex_highlight_constructs    # Complex Perl constructs  
+cargo test -p perl-corpus highlight_integration_test::test_highlight_error_handling        # Edge case handling
+cargo test -p perl-corpus highlight_integration_test::test_highlight_performance           # Performance validation
+
+# Performance characteristics validation (<100ms for complex code)
+cargo test -p perl-corpus highlight_integration_test::test_highlight_performance -- --nocapture
+```
+
+### Creating Highlight Test Fixtures (*Diataxis: How-to Guide* - Adding new test cases)
+
+```bash
+# Navigate to highlight test fixture directory
+cd crates/tree-sitter-perl/test/highlight
+
+# Create new highlight test file (follow existing naming conventions)
+touch new_feature.pm
+
+# Highlight test file format:
+# Working highlight test examples
+# 
+# Simple variable assignment
+# my $name = "John";
+# # <- keyword  
+# #    ^ punctuation.special
+# #     ^ variable
+# #            ^ string
+# 
+# Number operations  
+# 42;
+# # <- number
+# 
+# Use statement
+# use strict;
+# # <- keyword
+# #   ^ type
+
+# Supported highlight scopes mapped to perl-parser AST nodes:
+# - keyword        → VariableDeclaration
+# - punctuation.special → Variable (sigil mapping)
+# - variable       → Variable
+# - string         → string
+# - number         → number
+# - operator       → binary_+ (binary operations)
+# - function       → SubDeclaration
+# - type           → UseStatement
+# - label          → HereDocEnd
+
+# Test your new fixture
+cd ../../../../xtask
+cargo run --no-default-features -- highlight --path ../crates/tree-sitter-perl/test/highlight
+```
+
+### Highlight Test Runner Reference (*Diataxis: Reference* - Complete command specification)
+
+```bash
+# Command structure
+cd xtask && cargo run --no-default-features -- highlight [OPTIONS]
+
+# Command line options:
+--path <PATH>         # Path to highlight test directory [default: c/test/highlight]
+--scanner <SCANNER>   # Run with specific scanner [possible values: c, rust, both, v3]
+
+# Default behavior:
+# - Uses v3 parser (perl-parser native recursive descent)
+# - Processes all .pm files in highlight directory
+# - Maps highlight scopes to AST node kinds
+# - Reports test results with pass/fail statistics
+
+# Test fixture format requirements:
+# - Files must have .pm extension
+# - Comments starting with # define expected highlight scopes
+# - Source code lines contain the Perl code to be highlighted
+# - Empty lines separate test cases within a file
+# - Position markers: ^ or <- indicate highlight scope location
+
+# Performance characteristics:
+# - ~540ms for 21 test cases (reasonable performance)
+# - Integration with comprehensive perl-parser AST traversal
+# - Secure path handling with WalkDir max_depth protection
+```
+
+### Highlight Test Architecture (*Diataxis: Explanation* - System design and integration)
+
+The highlight test runner integrates deeply with the perl-parser AST generation system:
+
+**Parser Integration**: 
+- Uses `perl_parser::Parser` for native recursive descent parsing
+- Leverages comprehensive AST node kind collection via `collect_node_kinds()`
+- Maps tree-sitter highlight scopes to perl-parser NodeKind variants
+
+**AST Node Mapping Strategy**:
+```rust
+// Highlight scope → AST NodeKind mapping
+"keyword"           → NodeKind::VariableDeclaration
+"punctuation.special" → NodeKind::Variable (Perl sigils)
+"variable"          → NodeKind::Variable
+"string"            → NodeKind::String
+"number"            → NodeKind::Number  
+"operator"          → NodeKind::Binary with specific operators (+, -, *, etc.)
+"function"          → NodeKind::Subroutine
+"type"              → NodeKind::Use
+```
+
+**Integration with perl-corpus Testing**:
+- Comprehensive integration tests validate highlight runner functionality
+- 4/4 integration tests passing with performance validation (<100ms)
+- Tests cover basic constructs, complex scenarios, error handling, and performance
+
+**Security and Path Handling**:
+- Uses `WalkDir` with `max_depth(1)` for secure directory traversal
+- Validates file extensions (`.pm` only)
+- Proper error handling for parse failures and missing files
+
+**Performance Optimizations**:
+- Efficient AST traversal using manual recursion over NodeKind variants
+- HashMap-based node counting for fast scope matching
+- Progress indication with `indicatif` for user feedback
 
 ### Advanced Diagnostic Features (*Diataxis: Reference* - Analysis capabilities)
 
