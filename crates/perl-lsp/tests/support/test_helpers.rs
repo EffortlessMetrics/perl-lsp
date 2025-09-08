@@ -45,7 +45,12 @@ pub fn assert_hover_has_text(v: &Option<Value>) {
 pub fn assert_completion_has_items(v: &Option<Value>) {
     if let Some(completion) = v {
         if !completion.is_null() {
-            let array = completion.as_array().expect("completion should be array");
+            // Handle LSP completion response format: either direct array or object with "items" field
+            let array = if let Some(items) = completion.get("items") {
+                items.as_array().expect("completion items should be array")
+            } else {
+                completion.as_array().expect("completion should be array")
+            };
             assert!(!array.is_empty(), "completion must have at least one item");
 
             for item in array {

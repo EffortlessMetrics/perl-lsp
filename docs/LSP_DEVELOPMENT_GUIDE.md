@@ -503,6 +503,10 @@ cargo test -p perl-lsp lsp_api_contracts
 cargo test -p perl-parser lsp_your_feature_tests
 
 # Manual testing with real protocol
+
+# Test external dependency robustness
+cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting  # Passes with or without perltidy
+cargo test -p perl-lsp --test lsp_perltidy_test                                         # Tests capability advertising
 echo '{"jsonrpc":"2.0","method":"your_method",...}' | perl-lsp --stdio
 
 # Run comprehensive E2E tests (100% passing as of v0.8.6)
