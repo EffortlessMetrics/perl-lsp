@@ -22,6 +22,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 - ✅ **Context-aware lexing** - Properly disambiguates `/` and other ambiguous syntax
 - ✅ **Zero dependencies** - Pure Rust with only std library
 - ✅ **Best edge case support** - Handles `m!pattern!`, indirect object syntax, etc.
+- ✅ **Enhanced builtin function parsing** - Correctly distinguishes `map {}` (block) from `ref {}` (hash)
 
 **Cons:**
 - ❌ More complex to modify (hand-written parser)
@@ -57,24 +58,25 @@ This document provides a comprehensive comparison of the three Perl parser imple
 
 ### v1: C-based Parser (tree-sitter-perl)
 
-**Architecture**: Original tree-sitter grammar with C external scanner
+**Architecture**: Original tree-sitter grammar with unified Rust scanner (C wrapper delegates to Rust implementation)
 
 **Pros:**
 - ✅ **Mature implementation** - Battle-tested in tree-sitter ecosystem
-- ✅ **Good simple parse performance** - Fast for basic Perl
+- ✅ **Unified scanner performance** - Now powered by optimized Rust scanner
 - ✅ **Native tree-sitter** - Direct integration with tree-sitter tools
+- ✅ **Backward compatible** - API unchanged with delegation pattern
 
 **Cons:**
 - ❌ **Limited coverage** - Only ~95% of Perl syntax
 - ❌ **No modern Perl** - Missing class/method, try/catch, etc.
-- ❌ **C dependencies** - Requires C toolchain
-- ❌ **Limited edge case support** - Many constructs unsupported
-- ❌ **Harder to maintain** - Split between grammar.js and C scanner
+- ❌ **C build dependencies** - Requires C toolchain for compilation
+- ❌ **Limited edge case support** - Many constructs unsupported by grammar
+- ❌ **Grammar limitations** - Tree-sitter grammar constrains parser capabilities
 
 **Use When:**
 - You need direct tree-sitter C API compatibility
 - You're parsing simple, older Perl code
-- You have existing C-based tooling
+- You have existing C-based tooling that requires tree-sitter interface
 
 ## Feature Support Matrix
 

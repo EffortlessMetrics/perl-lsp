@@ -132,16 +132,17 @@ cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custo
 - **LSP Binary**: `/crates/perl-lsp/` - standalone server, CLI interface, protocol handling
 - **Lexer**: `/crates/perl-lexer/` - tokenization, Unicode support
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
+- **Tree-Sitter Integration**: `/crates/tree-sitter-perl-rs/` - unified scanner architecture with Rust delegation pattern
 - **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
-- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
+- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing, enhanced builtin function support
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
-- **v1 (C-based)**: ~95% coverage, benchmarking only
+- **v1 (C-based)**: ~95% coverage, benchmarking only (now uses unified Rust scanner via delegation)
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function empty block parsing
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
@@ -162,6 +163,8 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
+- **[Scanner Migration Guide](docs/SCANNER_MIGRATION_GUIDE.md)** - C-to-Rust scanner delegation architecture
+- **[Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort functions
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
 - **[Source Threading](docs/SOURCE_THREADING_GUIDE.md)** - Comment documentation extraction

@@ -145,8 +145,8 @@ cargo run corpus                   # Compare both C and Rust scanners
 cargo run corpus -- --scanner both --diagnose  # Detailed analysis
 
 # Individual scanner validation  
-cargo run corpus -- --scanner c     # C scanner only (baseline)
-cargo run corpus -- --scanner rust  # Rust scanner only
+cargo run corpus -- --scanner c     # C scanner (delegates to Rust)
+cargo run corpus -- --scanner rust  # Rust scanner implementation
 cargo run corpus -- --scanner v3    # V3 native parser
 
 # Diagnostic analysis for parser differences
@@ -156,7 +156,7 @@ cargo run corpus -- --test          # Test simple expressions
 
 ### Understanding Scanner Mismatch Reports (*Diataxis: Reference* - Output interpretation)
 
-When scanner outputs differ, the system provides detailed analysis:
+When scanner outputs differ (primarily legacy testing since C scanner now delegates to Rust), the system provides detailed analysis:
 ```
 🔀 Scanner mismatches:
    expressions.txt: binary_expression_precedence
