@@ -284,7 +284,8 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
         module_resolver: Option<ModuleResolver>,
     ) -> Self {
-        let symbol_table = Arc::new(RwLock::new(SymbolExtractor::new_with_source(source).extract(ast)));
+        let symbol_table =
+            Arc::new(RwLock::new(SymbolExtractor::new_with_source(source).extract(ast)));
 
         let keywords = [
             "my",
@@ -527,21 +528,36 @@ impl CompletionProvider {
         // Determine what kind of completions to provide based on context
         if context.prefix.starts_with('$') {
             // Scalar variable completion
-            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::ScalarVariable, is_cancelled);
+            self.add_variable_completions_cancellable(
+                &mut completions,
+                &context,
+                SymbolKind::ScalarVariable,
+                is_cancelled,
+            );
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
-            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::ArrayVariable, is_cancelled);
+            self.add_variable_completions_cancellable(
+                &mut completions,
+                &context,
+                SymbolKind::ArrayVariable,
+                is_cancelled,
+            );
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
-            self.add_variable_completions_cancellable(&mut completions, &context, SymbolKind::HashVariable, is_cancelled);
+            self.add_variable_completions_cancellable(
+                &mut completions,
+                &context,
+                SymbolKind::HashVariable,
+                is_cancelled,
+            );
             if is_cancelled() {
                 return vec![];
             }
@@ -651,7 +667,10 @@ impl CompletionProvider {
     }
 
     /// Safely remove duplicates and sort completions with error handling
-    fn try_deduplicate_and_sort(&self, completions: Vec<CompletionItem>) -> Result<Vec<CompletionItem>, String> {
+    fn try_deduplicate_and_sort(
+        &self,
+        completions: Vec<CompletionItem>,
+    ) -> Result<Vec<CompletionItem>, String> {
         Ok(self.deduplicate_and_sort(completions))
     }
 
@@ -729,7 +748,11 @@ impl CompletionProvider {
     }
 
     /// Safely analyze the context at the cursor position with error handling
-    fn try_analyze_context(&self, source: &str, position: usize) -> Result<CompletionContext, String> {
+    fn try_analyze_context(
+        &self,
+        source: &str,
+        position: usize,
+    ) -> Result<CompletionContext, String> {
         Ok(self.analyze_context(source, position))
     }
 
@@ -786,7 +809,6 @@ impl CompletionProvider {
             prefix_start,
         )
     }
-
 
     /// Add variable completions with cancellation support and thread-safe symbol table access
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
