@@ -329,8 +329,8 @@ cd xtask && cargo run corpus -- --scanner both           # Explicit dual-scanner
 cd xtask && cargo run corpus -- --scanner both --diagnose # With detailed analysis
 
 # Individual scanner testing
-cd xtask && cargo run corpus -- --scanner c              # C scanner only
-cd xtask && cargo run corpus -- --scanner rust           # Rust scanner only  
+cd xtask && cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
+cd xtask && cargo run corpus -- --scanner rust           # Rust scanner implementation  
 cd xtask && cargo run corpus -- --scanner v3             # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
@@ -396,7 +396,7 @@ cd xtask && cargo run corpus [OPTIONS]
 c       # Use C tree-sitter scanner only (baseline for comparison)
 rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (dual-scanner mode)
+both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev

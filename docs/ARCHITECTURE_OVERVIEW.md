@@ -27,7 +27,10 @@
 
 ### Internal/Unpublished
 - **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)
-- **`/crates/tree-sitter-perl-rs/`**: Internal test harness
+- **`/crates/tree-sitter-perl-rs/`**: Tree-sitter integration with unified scanner architecture
+  - Delegation pattern: C scanner wrapper delegates to Rust implementation
+  - Single source of truth for all scanner functionality
+  - Maintains backward compatibility while providing modern Rust performance
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 
