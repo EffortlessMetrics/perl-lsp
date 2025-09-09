@@ -12,6 +12,7 @@ use crate::{
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
+use tracing::debug;
 
 /// A document with incremental parsing and subtree reuse
 #[derive(Debug, Clone)]
@@ -23,22 +24,33 @@ pub struct IncrementalDocument {
     /// Version number for tracking changes
     pub version: u64,
     /// Cache of reusable subtrees
-    subtree_cache: SubtreeCache,
+    pub subtree_cache: SubtreeCache,
     /// Performance metrics
     pub metrics: ParseMetrics,
 }
 
 /// Cache for reusable subtrees
 #[derive(Debug, Clone, Default)]
-struct SubtreeCache {
+pub struct SubtreeCache {
     /// Maps content hash to subtree for content-based reuse
-    by_content: HashMap<u64, Arc<Node>>,
+    pub by_content: HashMap<u64, Arc<Node>>,
     /// Maps byte range to subtree for position-based reuse
-    by_range: HashMap<(usize, usize), Arc<Node>>,
+    pub by_range: HashMap<(usize, usize), Arc<Node>>,
     /// LRU queue for cache eviction
-    lru: VecDeque<u64>,
+    pub lru: VecDeque<u64>,
+    /// Critical symbols that should be preserved longer
+    pub critical_symbols: HashMap<u64, SymbolPriority>,
     /// Maximum cache size
-    max_size: usize,
+    pub max_size: usize,
+}
+
+/// Priority levels for symbols in cache eviction
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SymbolPriority {
+    Low = 0,
+    Medium = 1,
+    High = 2,
+    Critical = 3,
 }
 
 /// Performance metrics for incremental parsing
@@ -449,7 +461,10 @@ impl IncrementalDocument {
 
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
+        let priority = self.get_symbol_priority(node);
+        
         self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
+        self.subtree_cache.critical_symbols.insert(hash, priority);
         self.subtree_cache.lru.push_back(hash);
         self.subtree_cache.evict_if_needed();
 
@@ -509,6 +524,33 @@ impl IncrementalDocument {
         count
     }
 
+    /// Determine the priority of a symbol for cache eviction
+    fn get_symbol_priority(&self, node: &Node) -> SymbolPriority {
+        match &node.kind {
+            // Critical symbols needed for LSP features
+            NodeKind::Package { .. } => SymbolPriority::Critical,
+            NodeKind::Use { .. } | NodeKind::No { .. } => SymbolPriority::Critical,
+            NodeKind::Subroutine { .. } => SymbolPriority::Critical,
+            
+            // High priority symbols for completion and navigation
+            NodeKind::FunctionCall { .. } => SymbolPriority::High,
+            NodeKind::Variable { .. } => SymbolPriority::High,
+            NodeKind::VariableDeclaration { .. } => SymbolPriority::High,
+            
+            // Medium priority for structural elements
+            NodeKind::Block { .. } => SymbolPriority::Medium,
+            NodeKind::If { .. } | NodeKind::While { .. } | NodeKind::For { .. } => SymbolPriority::Medium,
+            NodeKind::Assignment { .. } => SymbolPriority::Medium,
+            
+            // Low priority for literals and simple expressions
+            NodeKind::Number { .. } | NodeKind::String { .. } => SymbolPriority::Low,
+            NodeKind::Binary { .. } | NodeKind::Unary { .. } => SymbolPriority::Low,
+            
+            // Default to medium for unknown types
+            _ => SymbolPriority::Medium,
+        }
+    }
+
     /// Get current parse tree
     pub fn tree(&self) -> &Node {
         &self.root
@@ -536,6 +578,7 @@ impl SubtreeCache {
             by_content: HashMap::new(),
             by_range: HashMap::new(),
             lru: VecDeque::new(),
+            critical_symbols: HashMap::new(),
             max_size,
         }
     }
@@ -544,14 +587,53 @@ impl SubtreeCache {
         self.by_content.clear();
         self.by_range.clear();
         self.lru.clear();
+        self.critical_symbols.clear();
     }
 
     fn evict_if_needed(&mut self) {
         while self.by_content.len() > self.max_size {
-            if let Some(hash) = self.lru.pop_front() {
+            if let Some(hash) = self.find_least_important_entry() {
+                debug!(
+                    "Evicting cache entry with hash {} (priority: {:?})",
+                    hash,
+                    self.critical_symbols.get(&hash).unwrap_or(&SymbolPriority::Low)
+                );
                 self.by_content.remove(&hash);
+                self.critical_symbols.remove(&hash);
+                // Remove from LRU queue
+                self.lru.retain(|&h| h != hash);
+            } else {
+                // Fallback: remove oldest entry if no low priority entries found
+                if let Some(hash) = self.lru.pop_front() {
+                    debug!("Fallback eviction for hash {}", hash);
+                    self.by_content.remove(&hash);
+                    self.critical_symbols.remove(&hash);
+                }
             }
         }
+    }
+
+    /// Find the least important cache entry for eviction
+    /// Prioritizes removing low-priority symbols first, then oldest entries
+    fn find_least_important_entry(&self) -> Option<u64> {
+        let mut candidates: Vec<(u64, SymbolPriority)> = self.critical_symbols
+            .iter()
+            .map(|(&hash, &priority)| (hash, priority))
+            .collect();
+        
+        // Sort by priority (ascending), then by LRU position (oldest first)
+        candidates.sort_by(|a, b| {
+            let priority_cmp = a.1.cmp(&b.1);
+            if priority_cmp != std::cmp::Ordering::Equal {
+                return priority_cmp;
+            }
+            // If same priority, prefer entries that appear earlier in LRU (older)
+            let a_pos = self.lru.iter().position(|&h| h == a.0).unwrap_or(usize::MAX);
+            let b_pos = self.lru.iter().position(|&h| h == b.0).unwrap_or(usize::MAX);
+            a_pos.cmp(&b_pos)
+        });
+        
+        candidates.first().map(|(hash, _)| *hash)
     }
 
     fn set_max_size(&mut self, max_size: usize) {
@@ -620,6 +702,13 @@ mod tests {
 
         doc.apply_edits(&edits).unwrap();
 
+        // Cache should preserve critical symbols even during batch edits
+        let critical_count = doc.subtree_cache.critical_symbols
+            .values()
+            .filter(|&&p| p == SymbolPriority::Critical)
+            .count();
+        assert!(critical_count > 0, "Should preserve critical symbols during batch edits");
+        
         // TODO: enable metrics assertions once multi-edit reuse is fully implemented
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
@@ -633,6 +722,37 @@ mod tests {
         // Cache should have entries
         assert!(!doc.subtree_cache.by_range.is_empty());
         assert!(!doc.subtree_cache.by_content.is_empty());
+    }
+    
+    #[test]
+    fn test_symbol_priority_classification() {
+        let source = r#"
+            package TestPkg;
+            use strict;
+            
+            sub test_func {
+                my $var = 42;
+                if ($var > 0) {
+                    return $var + 1;
+                }
+            }
+        "#;
+        let doc = IncrementalDocument::new(source.to_string()).unwrap();
+        
+        // Verify we have different priority levels in cache
+        let priorities: std::collections::HashSet<_> = doc.subtree_cache.critical_symbols
+            .values()
+            .collect();
+        
+        // Should have critical symbols (package, use, sub)
+        assert!(priorities.contains(&SymbolPriority::Critical), "Should classify package/use/sub as critical");
+        // Should have high priority symbols (variables)
+        assert!(priorities.contains(&SymbolPriority::High), "Should classify variables as high priority");
+        // Should have lower priority symbols (literals, operators)
+        assert!(
+            priorities.contains(&SymbolPriority::Low) || priorities.contains(&SymbolPriority::Medium),
+            "Should have lower priority symbols"
+        );
     }
 
     #[test]
@@ -655,5 +775,132 @@ mod tests {
         );
         doc.apply_edit(edit).unwrap();
         assert!(doc.subtree_cache.by_content.len() <= 1);
+    }
+
+    #[test]
+    fn test_cache_priority_preservation() {
+        let source = r#"
+            package MyPackage;
+            use strict;
+            use warnings;
+            
+            sub process {
+                my $x = 42;
+                my $y = "hello";
+                return $x + 1;
+            }
+        "#;
+        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        
+        // Store initial cache state
+        let initial_cache_size = doc.subtree_cache.by_content.len();
+        assert!(initial_cache_size > 3, "Should have multiple cached nodes");
+        
+        // Set very small cache to force aggressive eviction
+        doc.set_cache_max_size(3);
+        assert!(doc.subtree_cache.by_content.len() <= 3);
+        
+        // Check that critical symbols are preserved
+        let has_critical_symbols = doc.subtree_cache.critical_symbols
+            .values()
+            .any(|&p| p == SymbolPriority::Critical);
+        assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
+        
+        // Apply edit and verify critical symbols remain
+        let edit = IncrementalEdit::new(
+            source.find("42").unwrap(),
+            source.find("42").unwrap() + 2,
+            "100".to_string(),
+        );
+        doc.apply_edit(edit).unwrap();
+        assert!(doc.subtree_cache.by_content.len() <= 3);
+        
+        // Still should have critical symbols after edit
+        let has_critical_after_edit = doc.subtree_cache.critical_symbols
+            .values()
+            .any(|&p| p == SymbolPriority::Critical);
+        assert!(has_critical_after_edit, "Should preserve critical symbols after edit");
+    }
+    
+    #[test]
+    fn test_workspace_symbol_cache_preservation() {
+        let source = r#"
+            package TestModule;
+            
+            sub exported_function { }
+            sub internal_helper { }
+            
+            my $global_var = "test";
+        "#;
+        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        
+        // Force small cache size
+        doc.set_cache_max_size(2);
+        
+        // Verify package declaration is preserved (critical for workspace symbols)
+        let package_preserved = doc.subtree_cache.by_content
+            .values()
+            .any(|node| matches!(node.kind, NodeKind::Package { .. }));
+        assert!(package_preserved, "Package declaration should be preserved for workspace symbols");
+    }
+    
+    #[test] 
+    fn test_completion_metadata_preservation() {
+        let source = r#"
+            use Data::Dumper;
+            use List::Util qw(first max);
+            
+            sub calculate {
+                my ($input, $multiplier) = @_;
+                return $input * $multiplier;
+            }
+        "#;
+        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        
+        // Force cache eviction
+        doc.set_cache_max_size(4);
+        
+        // Verify use statements are preserved (critical for completion)
+        let use_statements_count = doc.subtree_cache.by_content
+            .values()
+            .filter(|node| matches!(node.kind, NodeKind::Use { .. }))
+            .count();
+        assert!(use_statements_count >= 1, "Use statements should be preserved for completion metadata");
+        
+        // Verify function definitions are preserved
+        let function_preserved = doc.subtree_cache.by_content
+            .values()
+            .any(|node| matches!(node.kind, NodeKind::Subroutine { .. }));
+        assert!(function_preserved, "Function definitions should be preserved for completion");
+    }
+    
+    #[test]
+    fn test_code_lens_reference_preservation() {
+        let source = r#"
+            package MyClass;
+            
+            sub new { 
+                my $class = shift;
+                return bless {}, $class;
+            }
+            
+            sub process_data {
+                my ($self, $data) = @_;
+                return $self->transform($data);
+            }
+        "#;
+        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        
+        // Force aggressive cache eviction
+        doc.set_cache_max_size(3);
+        
+        // Package and subroutines should be preserved for code lens reference counting
+        let critical_nodes = doc.subtree_cache.by_content
+            .values()
+            .filter(|node| {
+                matches!(node.kind, NodeKind::Package { .. } | NodeKind::Subroutine { .. })
+            })
+            .count();
+        assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
     }
 }
