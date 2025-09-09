@@ -122,7 +122,7 @@ pub enum DocumentParser {
     /// Full parsing mode (current implementation)
     Full { content: String, ast: Option<Arc<Node>> },
     /// Incremental parsing mode
-    Incremental { document: IncrementalDocument, rope: Rope },
+    Incremental { document: Box<IncrementalDocument>, rope: Rope },
 }
 
 impl DocumentParser {
@@ -132,7 +132,7 @@ impl DocumentParser {
             // Use incremental parsing
             let document = IncrementalDocument::new(content.clone())?;
             let rope = Rope::from_str(&content);
-            Ok(DocumentParser::Incremental { document, rope })
+            Ok(DocumentParser::Incremental { document: Box::new(document), rope })
         } else {
             // Use full parsing
             let mut parser = Parser::new(&content);
@@ -159,7 +159,8 @@ impl DocumentParser {
                 }
                 Ok(())
             }
-            DocumentParser::Incremental { document, rope } => {
+            DocumentParser::Incremental { document: boxed_document, rope } => {
+                let document = boxed_document.as_mut();
                 // Incremental updates
                 let mut edits = Vec::new();
 
