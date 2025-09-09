@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.8+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
+**Latest Release**: v0.8.9+ GA - Enhanced Builtin Function Parsing with Production-Stable AST Generation
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
@@ -76,6 +76,7 @@ cargo test                               # All tests (robust across environments
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
+cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function parsing tests
 
 # Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
 # Formatting tests demonstrate graceful degradation when tools are missing
@@ -83,33 +84,9 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Ful
 
 ### Development
 ```bash
-cargo clippy --workspace                # Lint workspace crates
-cargo bench                             # Performance benchmarks
-perl-lsp --stdio --log                  # Debug LSP server
-
-# Development Server (with file watching and LSP hot-reload)
-cd xtask && cargo run --no-default-features -- dev --watch --port 8080
-cd xtask && cargo run --no-default-features -- dev                    # Static mode without file watching
-
-# Performance Optimization (LSP test speed improvements)
-cd xtask && cargo run --no-default-features -- optimize-tests         # Analyze and fix slow tests
-```
-
-### Advanced Testing (*Diataxis: Tutorial* - Dual-Scanner Corpus Comparison)
-```bash
-# Prerequisites: Install system dependencies for dual-scanner testing
-sudo apt-get install libclang-dev       # Ubuntu/Debian  
-brew install llvm                       # macOS
-
-# Run dual-scanner corpus comparison (tutorial)
-cd xtask                                 # Navigate to xtask directory
-cargo run corpus                        # Compare C and Rust scanners
-cargo run corpus -- --diagnose          # Get detailed analysis of differences
-
-# Understanding the output:
-# - Scanner mismatches: Different S-expressions between C/Rust
-# - Structural analysis: Node count and type differences  
-# - Diagnostic mode: Detailed breakdown of parsing differences
+cargo clippy --workspace                # Lint all crates
+cargo bench                             # Run performance benchmarks
+perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
 ### Highlight Testing (*Diataxis: Tutorial* - Tree-Sitter Highlight Test Runner)
@@ -154,7 +131,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function empty block parsing
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function parsing (PR #119)
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
@@ -199,33 +176,6 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 
-### Development Workflow (Enhanced)
-
-**Development Server** - Automatic LSP reload on file changes:
-```bash
-# Start development server with file watching and hot-reload
-cd xtask && cargo run --no-default-features -- dev --watch --port 8080
-
-# Features:
-# - Monitors Rust (.rs), Perl (.pl, .pm), and config files (.toml)
-# - Automatic LSP server restart on changes with 500ms debouncing
-# - Graceful shutdown with Ctrl+C
-# - Health monitoring and automatic recovery if LSP crashes
-# - Cross-platform file watching support
-```
-
-**Performance Testing Workflow** - Optimize slow test suites:
-```bash
-# Analyze test performance and apply optimizations
-cd xtask && cargo run --no-default-features -- optimize-tests
-
-# Automatically detects:
-# - Long timeout values (>1000ms reduced to 500ms)
-# - Excessive wait_for_idle calls (>500ms reduced to 200ms)  
-# - Inefficient polling patterns
-# - Potential savings up to 3+ seconds per test file
-```
-
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
@@ -240,7 +190,7 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 - ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
-- ⚠️ Code Lens with reference counts and resolve support (Preview: ~85% functional, advertised in production builds only)
+- ✅ Code Lens with reference counts and resolve support
 - ✅ File path completion with enterprise security
 - ✅ Enhanced formatting: always-available capabilities with graceful perltidy fallback
 - ✅ Debug Adapter Protocol (DAP) support

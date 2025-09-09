@@ -15,7 +15,7 @@
   - [ ] Extract/inline variable
   - [ ] Extract subroutine  
   - [ ] Safe rename across files
-- [x] **Code Lens** ✅ **IMPLEMENTED (v0.8.9+ Preview)** - Run tests, show references (~85% functional)
+- [ ] **Code Lens** - Run tests, show references
 - [ ] **Quick Fixes** - Auto-import, fix syntax
 
 ### Editor Integration

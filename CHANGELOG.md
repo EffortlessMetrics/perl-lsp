@@ -5,36 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.8.9] - Performance Optimization and LSP Enhancement Release
-
-### Added - **Comprehensive Performance Optimizations (v0.8.9)**
-- **LSP Performance Breakthrough (99.5% Timeout Reduction)** - Revolutionary LSP performance optimizations eliminating workspace bottlenecks:
-  - **test_completion_detail_formatting**: Performance improvement from >60 seconds to 0.26 seconds (99.5% reduction)
-  - **Bounded Processing**: MAX_PROCESS limit (1000 symbols) prevents runaway symbol processing
-  - **Cooperative Yielding**: Every 32 symbols with `std::thread::yield_now()` preventing UI blocking
-  - **Smart Result Limiting**: RESULT_LIMIT (100) with early termination for memory efficiency
-  - **Match Classification**: Exact > Prefix > Contains > Fuzzy ranking for optimal result relevance
-- **LSP_TEST_FALLBACKS Environment Variable** - Fast testing mode for CI and development:
-  - **Timeout Reduction**: 75% faster test execution (2000ms → 500ms base timeout)
-  - **Idle Optimization**: 97.5% faster idle detection (2000ms → 50ms)
-  - **Symbol Polling**: Single 200ms attempt vs progressive backoff
-  - **Zero Regressions**: 100% API compatibility maintained with configurable performance modes
-- **Require Path Completion Fix** - Enhanced module path resolution:
-  - **Accurate Completion**: Only returns existing file paths for require statements
-  - **Workspace Integration**: Improved accuracy in complex project structures
-  - **False Positive Elimination**: Removes best-effort fallbacks that suggest non-existent paths
-
-### Performance Metrics
-- **Workspace Symbol Search**: 99.5% faster execution (60s+ → 0.26s)
-- **Test Suite Runtime**: <10 seconds total with LSP_TEST_FALLBACKS=1
-- **Memory Usage**: Capped by result and processing limits preventing unbounded growth
-- **Cooperative Processing**: Non-blocking symbol extraction with yield every 32 iterations
-
-### Changed - **Performance Infrastructure**
-- **LSP Test Harness**: Enhanced timeout configuration with fallback mode support
-- **Workspace Symbol Provider**: Completely rewritten with bounded processing and smart ranking
-- **Symbol Search**: Progressive timeout system with configurable attempt limiting
-
 ## [Unreleased] - Post-v0.8.8 Validation Enhancements
 
 ### Added - **Post-Validation Enterprise Features**
@@ -86,7 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Missing import detection for Module::symbol references (planned)
   - Optimized import generation with alphabetical sorting
   - Complete test coverage with 9 comprehensive test cases
-- **Built-in Function Parsing Enhancement** - Fixed 15 test failures in builtin_empty_blocks_test.rs
+- **Enhanced Builtin Function Parsing (Issue #110)** - Comprehensive resolution of empty block parsing for map/grep/sort functions:
+  - **Deterministic Block Parsing**: Added dedicated `parse_builtin_block()` method ensuring {} is always parsed as Block nodes, never HashLiteral nodes
+  - **Complete AST Consistency**: All 15 builtin function tests now passing (15/15) with consistent AST generation
+  - **Maintained API Compatibility**: Enhancement preserves backward compatibility while improving parser accuracy
+  - **Comprehensive S-Expression Support**: Consistent output format "(call map ((block ) (variable @ array)))" for all empty block scenarios
+  - **Production Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 - **Architectural Quality Improvements** - Zero clippy warnings, consistent formatting across all crates
 
 ### Added - **Enhanced Reliability and Fallback Mechanisms (v0.8.8+)** - 99.9% Feature Availability

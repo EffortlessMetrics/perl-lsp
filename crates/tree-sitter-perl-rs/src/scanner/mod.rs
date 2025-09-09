@@ -3,25 +3,13 @@
 //! Note: The Pure Rust Pest parser does not use this scanner module.
 //! This is retained only for benchmarking comparisons with the legacy C implementation.
 
-//
-// The legacy C scanner is only kept around for benchmarking.  Both the
-// "c-scanner" and "rust-scanner" features ultimately use the Rust
-// implementation.  When `c-scanner` is enabled we simply provide a thin
-// wrapper that delegates to the Rust scanner so that consumers expecting the
-// C API continue to compile while actually exercising the Rust code.
-
-// Compile the Rust scanner whenever either scanner feature is enabled so that
-// the C wrapper can reuse it.
-#[cfg(any(feature = "rust-scanner", feature = "c-scanner"))]
+#[cfg(feature = "rust-scanner")]
 mod rust_scanner;
 
-// The C wrapper is only built when explicitly requested.
 #[cfg(feature = "c-scanner")]
 mod c_scanner;
 
-// Re-export the appropriate scanner implementations based on the active
-// features.  The C wrapper reuses the Rust implementation internally.
-#[cfg(any(feature = "rust-scanner", feature = "c-scanner"))]
+#[cfg(feature = "rust-scanner")]
 pub use rust_scanner::*;
 
 #[cfg(feature = "c-scanner")]

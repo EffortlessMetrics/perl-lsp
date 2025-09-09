@@ -326,13 +326,6 @@ enum Commands {
 
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
-
-    /// Optimize LSP test performance
-    OptimizeTests {
-        /// Apply optimizations automatically without prompting
-        #[arg(long)]
-        auto_apply: bool,
-    },
 }
 
 #[derive(Subcommand)]
@@ -420,6 +413,5 @@ fn main() -> Result<()> {
             FeaturesCommand::Report => features::report(),
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
-        Commands::OptimizeTests { auto_apply: _ } => optimize_tests::optimize_lsp_tests(),
     }
 }
