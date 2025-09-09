@@ -7431,43 +7431,13 @@ impl LspServer {
         }
     }
 
-    // Handle selectionRange request - removed duplicate (see new implementation above)
-    // The old stub was commented out since the real implementation is above
-
-    // Handle onTypeFormatting request - OLD STUB (replaced above)
-    #[allow(dead_code)]
+    /// Legacy onTypeFormatting handler retained for compatibility.
+    /// Delegates to the modern formatting pipeline.
     fn handle_on_type_formatting_old(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let ch = params["ch"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            let tab_size = params["options"]["tabSize"].as_u64().unwrap_or(4) as usize;
-            let insert_spaces = params["options"]["insertSpaces"].as_bool().unwrap_or(true);
-
-            let documents = self.documents.lock().unwrap();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let uri_obj = uri
-                    .parse::<lsp_types::Uri>()
-                    .unwrap_or_else(|_| "file:///tmp".parse::<lsp_types::Uri>().unwrap());
-                let edits = crate::lsp_on_type_formatting::format_on_type(
-                    &doc.text,
-                    uri_obj,
-                    ch.to_string(),
-                    lsp_types::Position::new(line, character),
-                    tab_size,
-                    insert_spaces,
-                );
-                Ok(Some(serde_json::to_value(edits).unwrap_or(Value::Null)))
-            } else {
-                Ok(Some(Value::Null))
-            }
-        } else {
-            Ok(Some(Value::Null))
-        }
+        self.handle_on_type_formatting(params)
     }
 
     /// Register file watchers for Perl files
