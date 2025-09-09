@@ -45,7 +45,7 @@ pub struct SubtreeCache {
 }
 
 /// Priority levels for symbols in cache eviction
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SymbolPriority {
     Low = 0,
     Medium = 1,
@@ -618,7 +618,7 @@ impl SubtreeCache {
     fn find_least_important_entry(&self) -> Option<u64> {
         let mut candidates: Vec<(u64, SymbolPriority)> = self.critical_symbols
             .iter()
-            .map(|(&hash, &priority)| (hash, priority))
+            .map(|(&hash, priority)| (hash, *priority))
             .collect();
         
         // Sort by priority (ascending), then by LRU position (oldest first)
@@ -705,7 +705,7 @@ mod tests {
         // Cache should preserve critical symbols even during batch edits
         let critical_count = doc.subtree_cache.critical_symbols
             .values()
-            .filter(|&&p| p == SymbolPriority::Critical)
+            .filter(|&p| *p == SymbolPriority::Critical)
             .count();
         assert!(critical_count > 0, "Should preserve critical symbols during batch edits");
         
@@ -742,6 +742,7 @@ mod tests {
         // Verify we have different priority levels in cache
         let priorities: std::collections::HashSet<_> = doc.subtree_cache.critical_symbols
             .values()
+            .cloned()
             .collect();
         
         // Should have critical symbols (package, use, sub)
@@ -803,7 +804,8 @@ mod tests {
         // Check that critical symbols are preserved
         let has_critical_symbols = doc.subtree_cache.critical_symbols
             .values()
-            .any(|&p| p == SymbolPriority::Critical);
+            .cloned()
+            .any(|p| p == SymbolPriority::Critical);
         assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
         
         // Apply edit and verify critical symbols remain
@@ -818,7 +820,8 @@ mod tests {
         // Still should have critical symbols after edit
         let has_critical_after_edit = doc.subtree_cache.critical_symbols
             .values()
-            .any(|&p| p == SymbolPriority::Critical);
+            .cloned()
+            .any(|p| p == SymbolPriority::Critical);
         assert!(has_critical_after_edit, "Should preserve critical symbols after edit");
     }
     
