@@ -62,7 +62,7 @@ The implementation correctly handles all edge cases from the reference document:
 1. **Division after identifier**: `x / 2` → Division
 2. **Regex after operator**: `=~ /foo/` → Regex
 3. **Mixed expressions**: `1/ /abc/` → Division then Regex
-4. **Substitution variants**: `s/a/b/`, `s{a}{b}`
+4. **Substitution variants**: `s/a/b/`, `s{a}{b}`, `s'a'b'`
 5. **Complex precedence**: `split /,/, $x / 3`
 
 ## Performance Impact
