@@ -183,6 +183,7 @@ enum Commands {
     },
 
     /// Generate bindings
+    #[cfg(feature = "parser-tasks")]
     Bindings {
         /// Header file to generate bindings from
         #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
@@ -385,6 +386,7 @@ fn main() -> Result<()> {
         }
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
+        #[cfg(feature = "parser-tasks")]
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::ParseRust { source, sexp, ast, bench } => {

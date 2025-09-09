@@ -168,6 +168,7 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
 }
 
 /// Result from running the C benchmark harness
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct CBenchmarkResult {
@@ -340,6 +341,7 @@ mod tests {
 
     // Integration test would require mocking cargo bench, which is complex
     // So we focus on unit tests for the validation logic
+
     #[test]
     fn test_benchmark_with_mock_command() {
         // This would require substantial mocking infrastructure
