@@ -4840,14 +4840,22 @@ impl<'a> Parser<'a> {
 
     /// Parse hash literal or block
     fn parse_hash_or_block(&mut self) -> ParseResult<Node> {
+        self.parse_hash_or_block_with_context(false)
+    }
+
+    /// Parse hash literal or block with context about whether blocks are expected
+    fn parse_hash_or_block_with_context(&mut self, _expect_block: bool) -> ParseResult<Node> {
         let start_token = self.tokens.next()?; // consume {
         let start = start_token.start;
 
         // Peek ahead to determine if it's a hash or block
-        // Empty {} is always a hash ref in expression context
+        // For empty {}, decide based on context
         if self.peek_kind() == Some(TokenKind::RightBrace) {
             self.tokens.next()?; // consume }
             let end = self.previous_position();
+
+            // For empty braces, default to hash (correct for most functions)
+            // Functions like sort/map/grep have special handling that creates blocks
             return Ok(Node::new(
                 NodeKind::HashLiteral { pairs: Vec::new() },
                 SourceLocation { start, end },

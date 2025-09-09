@@ -27,7 +27,10 @@
 
 ### Internal/Unpublished
 - **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)
-- **`/crates/tree-sitter-perl-rs/`**: Internal test harness
+- **`/crates/tree-sitter-perl-rs/`**: Tree-sitter integration with unified scanner architecture
+  - Delegation pattern: C scanner wrapper delegates to Rust implementation
+  - Single source of truth for all scanner functionality
+  - Maintains backward compatibility while providing modern Rust performance
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 
@@ -74,7 +77,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
   - Statistical consistency: <0.6 coefficient of variation (target: <1.0)
   - Success rate: 100% with comprehensive fallback mechanisms
 - **Unicode-Safe Operations**: Proper multibyte character handling with UTF-8 boundary validation
-- **Memory Efficiency**: Arc<Node> sharing, LRU cache eviction, Rope-based document management
+- **Memory Efficiency**: Arc<Node> sharing, intelligent symbol-priority cache eviction, Rope-based document management
 - **Test Infrastructure**: 40+ comprehensive test cases with production-grade validation
 - **LSP Integration**: Real-time document updates with Rope-based position tracking
 

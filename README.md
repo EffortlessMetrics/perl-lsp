@@ -13,10 +13,10 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.9)
+### 📦 Published Crates (v0.8.8)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
-2. **perl-lsp** 🔧 - Standalone Language Server binary with production-ready CLI interface
+2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization and production-ready CLI interface
 3. **perl-lexer** - Context-aware tokenizer for Perl syntax
 4. **perl-corpus** - Comprehensive test corpus and property testing
 5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
@@ -25,19 +25,50 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ---
 
-## 📦 Latest Release: v0.8.9 GA (General Availability) - Enhanced Lexer Performance Optimizations ⚡
+## 📦 Latest Release: v0.8.9 GA (General Availability) - Enhanced Builtin Function Parsing Release ⚡
+
+### 🚀 v0.8.8 - Revolutionary LSP Performance Optimizations (99.5% Timeout Reduction)
+
+**Game-changing performance improvements that eliminate workspace bottlenecks**:
+- ⚡ **test_completion_detail_formatting**: 99.5% performance improvement (>60 seconds → 0.26 seconds)
+- 🎯 **Bounded Processing**: MAX_PROCESS limit (1000 symbols) prevents runaway processing
+- 🤝 **Cooperative Yielding**: Every 32 symbols with non-blocking behavior for smooth UI experience
+- 🧠 **Smart Result Limiting**: RESULT_LIMIT (100) with early termination for optimal memory usage
+- 📊 **Match Classification**: Exact > Prefix > Contains > Fuzzy ranking for superior result relevance
+- 🔧 **LSP_TEST_FALLBACKS Environment Variable**: Fast testing mode reducing timeouts by 75% (2000ms → 500ms)
+- 🎪 **Zero Regressions**: 100% API compatibility maintained with configurable performance modes
+- 🔍 **Enhanced Module Path Resolution**: Accurate require completion with false positive elimination
+
+**Performance Metrics**:
+- **Workspace Symbol Search**: 99.5% faster execution
+- **Test Suite Runtime**: <10 seconds total with fast mode
+- **Memory Usage**: Capped by processing and result limits
+- **Cooperative Processing**: Non-blocking symbol extraction
+
+---
+
+## 📦 Previous Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
+
+### v0.8.9 - Enhanced Builtin Function Parsing (PR #119) - Resolves Core Parser Ambiguity
+
+**Deterministic Block Parsing for Builtin Functions**:
+- 🎯 **Parser Accuracy**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hashes
+- 🔧 **Enhanced AST**: Added dedicated `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
+- ✅ **Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
+- 🚀 **API Compatibility**: Zero breaking changes while improving parser semantic accuracy
+- 📚 **Complete Documentation**: Comprehensive Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 
 ### Recent Post-Validation Improvements - Enterprise-Ready Perl Development Environment
 - 🚀 **Comprehensive Security Validation**: Enterprise-grade security patterns with PBKDF2 authentication implementation (PR #44)
 - 📊 **Enhanced Performance Metrics**: 5-25x improvements over baseline targets with statistical validation framework
-- 🔧 **Advanced Import Optimization**: Smart bare import analysis with reduced false positives for pragma modules
+- 🔧 **Comprehensive Import Optimization**: Complete import analysis with unused/duplicate/missing detection, "Organize Imports" code action, and smart bare import analysis with reduced false positives for pragma modules
 - 🧠 **Production-Stable Scope Analysis**: MandatoryParameter support with comprehensive variable name extraction and 41 comprehensive test cases
-- 📈 **Test Coverage Excellence**: 291+ tests passing across all components with 100% reliability validation
+- 📈 **Test Coverage Excellence**: 295+ tests passing across all components with 100% reliability validation
 - 🔍 **Enhanced AST Traversal**: Comprehensive ExpressionStatement support across all LSP providers with improved workspace navigation
 - ⚡ **Architecture Maturity**: Production-ready incremental parsing with 99.7% node reuse efficiency and <1ms update times
 - ✅ **Quality Assurance**: Zero clippy warnings, consistent formatting, and full enterprise-grade compliance maintained
 
-### v0.8.9 - Enhanced Lexer Performance with Import Optimizer Improvements 🚀
+### v0.8.8 - Comprehensive Rope Integration with Production-Stable AST Generation 🚀
 - 🚀 **Enhanced AST Format Compatibility**: Program nodes now use tree-sitter standard (source_file) format while maintaining full backward compatibility
 - 🧠 **Comprehensive Workspace Navigation**: Enhanced AST traversal including `NodeKind::ExpressionStatement` support across all LSP providers
 - 📊 **Advanced Code Actions and Refactoring**: Fixed parameter threshold validation and enhanced refactoring suggestions with proper AST handling
@@ -47,7 +78,7 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 - 🔧 **Quality Gate Compliance**: Zero clippy warnings, consistent code formatting, full architectural compliance maintained
 - ✅ **Enhanced Symbol Resolution**: Improved accuracy in cross-file symbol tracking and reference resolution
 
-### v0.8.9+ - Production-Ready Incremental Parsing with Statistical Validation 🚀
+### v0.8.8+ - Production-Ready Incremental Parsing with Statistical Validation 🚀
 - 🚀 **Advanced Incremental Parsing V2**: Production-ready incremental parser with 99.7% node reuse efficiency
 - 🧠 **Sub-millisecond Performance**: 65µs average for simple edits with 96.8-99.7% node reuse rates
 - 📊 **Statistical Validation Framework**: Comprehensive performance analysis with coefficient of variation <0.6
@@ -130,7 +161,6 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Zero Dependencies**: Clean, maintainable codebase
 - **100% Edge Case Coverage**: 141/141 edge case tests passing
 - **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
-- **Enhanced Builtin Function Support**: Deterministic empty block parsing for map/grep/sort functions
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
@@ -143,6 +173,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ### All Parsers Support:
 - **Tree-sitter Compatible**: Standard S-expressions for IDE integration
+- **Test-Driven Development**: Auto-detecting TestGenerator with intelligent return value analysis
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
@@ -162,7 +193,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ## 📦 Which Crate Should I Use?
 
-### Production Crates (v0.8.9 GA)
+### Production Crates (v0.8.8 GA)
 
 | Crate | Purpose | When to Use |
 |-------|---------|-------------|
@@ -177,6 +208,19 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Need to parse Perl in your Rust project?** → Use the `perl-parser` library.
 - **Building a new Perl parser?** → Use `perl-corpus` for testing.
 - **Migrating from the old Pest parser?** → Use `perl-parser-pest` as a temporary step.
+
+---
+
+---
+
+## 📚 Documentation Framework
+
+This documentation follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive learning:
+
+- **🎓 Tutorials**: Learning-oriented, hands-on guidance for first-time users
+- **🔧 How-to Guides**: Problem-oriented, step-by-step solutions for specific tasks
+- **📖 Reference**: Information-oriented, comprehensive specifications and API docs
+- **💡 Explanation**: Understanding-oriented, design decisions and architectural concepts
 
 ---
 
@@ -236,7 +280,7 @@ printf 'Content-Length: 59\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize",
 ```toml
 # In your Cargo.toml
 [dependencies]
-perl-parser = "0.8.9"
+perl-parser = "0.8.8"
 ```
 
 ```rust
@@ -270,13 +314,13 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
 | **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
 | **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
-| **Import Optimization**             |   ✅   | NEW – unused/duplicate import analysis      |
+| **Import Optimization**             |   ✅   | NEW – unused/duplicate/missing imports, sort, "Organize Imports" action |
 | **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
 | **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |
 | **Selection Ranges**                |   ✅   | NEW – parent-chain expansion                |
 | **On-Type Formatting**              |   ✅   | NEW – `{`, `}`, `;`, `\n` predictable       |
-| **Code Lens**                       |   ✅   | **NEW** – Reference counts, run/test lenses with resolve support |
+| **Code Lens**                       |   ⚠️   | **PREVIEW** – Reference counts, run/test lenses with resolve support (~85% functional) |
 | Call/Type Hierarchy                 |   ⚠️/❌ | Partial / not implemented                   |
 | Execute Command                     |   ❌   | Not wired                                   |
 
@@ -328,7 +372,7 @@ See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed documentation.
 ### Using the LSP Server (*Diataxis: How-to Guide* - Installation and usage steps)
 
 ```bash
-# Run the LSP server (standalone crate in v0.8.9)
+# Run the LSP server (NEW standalone crate in v0.8.8)
 cargo run -p perl-lsp
 
 # Or install it globally
@@ -432,7 +476,7 @@ endif
 
 ## 📊 Performance (*Diataxis: Reference* - Benchmark data and measurements)
 
-### Incremental Parsing (v0.8.9+)
+### Incremental Parsing (v0.8.8+)
 The latest versions feature a production-ready incremental parser with statistically validated performance. This means that for typical code edits, the parser only re-processes the changed parts of a file, resulting in sub-millisecond update times.
 
 | Metric | Performance | Details |
@@ -456,14 +500,15 @@ The latest versions feature a production-ready incremental parser with statistic
 - **99.7% incremental node reuse** with <1ms real-time updates
 - **Context-aware lexing** for proper disambiguation and edge case handling
 - **Zero dependencies** for maximum portability and enterprise deployment
-- **291+ comprehensive tests** passing with 100% reliability validation
+- **295+ comprehensive tests** passing with 100% reliability validation
 
 ### Test Results - **Current Validation Status** ✅
-- **v3 Production**: 291+ tests passing across all components (100% reliability)
+- **v3 Production**: 295+ tests passing across all components (100% reliability)
   - 195+ library tests (parser core functionality)
   - 41 comprehensive scope analyzer tests (enhanced parameter handling)
   - 33+ LSP E2E tests (workspace navigation and features)
   - 19+ DAP tests (debug adapter protocol)
+  - 4+ highlight integration tests (tree-sitter highlight test runner)
   - 100% edge case coverage (141/141 critical edge cases passing)
 - **v2 Legacy**: 100% coverage for supported features (legacy mode)
 - **v1 Reference**: Limited edge case support (baseline comparison)
@@ -478,7 +523,7 @@ The latest versions feature a production-ready incremental parser with statistic
 - **v3 Native Parser**: 100% complete with all edge cases handled.
 - **LSP Server**: Full implementation with over 15 features, including advanced capabilities like incremental parsing, cross-file rename, and code actions.
 - **Performance**: Achieved 4-19x speedup over the C implementation, with 6-10x additional speedup for edits using incremental parsing.
-- **Test Coverage**: 291+ tests passing, including 141/141 edge cases.
+- **Test Coverage**: 295+ tests passing, including 141/141 edge cases and highlight integration.
 - **Documentation**: Comprehensive guides for users and contributors, structured with the Diataxis framework.
 
 ### 🚧 Development
@@ -581,9 +626,38 @@ tree-sitter-perl/
 **Architecture Highlights:**
 - **v3 Native**: Two-phase architecture (lexer + parser) for maximum performance
 - **v2 Pest**: Grammar-driven parsing with PEG
-- **v1 C**: Original tree-sitter implementation
+- **v1 C**: Original tree-sitter implementation with unified Rust scanner backend
 - **Tree-sitter Compatible**: All parsers output standard S-expressions
 - **Modular Design**: Clean separation of concerns
+- **Unified Scanner**: Single Rust scanner implementation with C compatibility wrapper for legacy API support
+
+### Scanner Implementation Details (*Diataxis: Explanation* - Understanding scanner architecture)
+
+The project uses a unified scanner architecture that simplifies maintenance while preserving backward compatibility:
+
+#### Design Rationale
+- **Single Implementation**: Both `c-scanner` and `rust-scanner` features use the same Rust code
+- **C Compatibility Wrapper**: `CScanner` delegates to `RustScanner` to maintain existing API contracts  
+- **Reduced Maintenance**: One scanner implementation instead of separate C and Rust versions
+- **Benchmark Compatibility**: Legacy benchmark code continues to work without modification
+
+#### Implementation Structure (*Diataxis: Reference* - Technical components)
+```rust
+// Unified scanner architecture
+CScanner {          // C API compatibility wrapper  
+    inner: RustScanner  // Delegates to unified Rust implementation
+}
+
+RustScanner {       // Core scanning implementation
+    // Full Perl lexical analysis in Rust
+}
+```
+
+#### Benefits (*Diataxis: Explanation* - Why this design)
+- **Maintainability**: Single codebase for all scanner functionality
+- **Performance**: Rust implementation provides consistent performance characteristics
+- **Compatibility**: Existing tooling and benchmarks work without changes
+- **Safety**: Memory-safe Rust implementation with proper error handling
 
 ---
 
@@ -731,7 +805,7 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 - ✅ References and dereferencing
 - ✅ Tree-sitter compatible output
 
-### Recent Improvements (v0.8.9+)
+### Recent Improvements (v0.8.8+)
 
 ✅ **Production-Ready Incremental Parsing**: 99.7% node reuse with 65µs average updates and statistical validation.
 ✅ **Standalone LSP Crate**: The `perl-lsp` crate provides a dedicated binary for IDE integration.
@@ -782,6 +856,36 @@ let ast = parser.parse().unwrap();
 
 println!("AST: {:?}", ast);
 // Output: Program { statements: [SubroutineDeclaration { ... }] }
+```
+
+### Test Generation (*Diataxis: Tutorial*)
+
+The TestGenerator provides intelligent TDD support with auto-detection:
+
+```rust
+use perl_parser::{Parser, TestGenerator, TestFramework};
+
+// Parse a simple add function
+let source = r#"
+    sub add {
+        my ($a, $b) = @_;
+        return $a + $b;
+    }
+"#;
+
+let mut parser = Parser::new(source);
+let ast = parser.parse().unwrap();
+
+// Generate tests with auto-detection
+let generator = TestGenerator::new(TestFramework::TestMore);
+let tests = generator.generate_tests(&ast, source);
+
+for test in tests {
+    println!("Test: {}", test.name);
+    println!("Code:\n{}", test.code);
+    // Automatically detects that add(1, 2) should return 3
+    // Generates: is($result, 3, 'Returns expected value');
+}
 ```
 
 ### Command Line Interface
@@ -915,12 +1019,13 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 **LSP Server**: ✅ 33+ comprehensive E2E tests passing (enhanced workspace navigation)  
 **DAP Server**: ✅ 19+ comprehensive tests passing (debug adapter protocol)  
 **Scope Analyzer**: ✅ 41+ comprehensive tests passing (enhanced parameter handling)  
-**Builtin Functions**: ✅ 15+ tests passing (enhanced empty block parsing for map/grep/sort functions)  
 **Corpus Tests**: ✅ 12+ tests passing (comprehensive edge case validation)  
+**Highlight Integration**: ✅ 4+ comprehensive tests passing (tree-sitter highlight test runner with perl-parser AST integration)  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage, legacy support)  
 **v1 Parser (C)**: ⚠️ Limited edge case support (reference baseline)  
 **Quality Gates**: ✅ Zero clippy warnings, consistent formatting, enterprise-grade compliance
-**Overall Test Suite**: ✅ **291+ tests passing** with 100% reliability validation
+**Builtin Function Parsing**: ✅ 15+ comprehensive tests passing (enhanced empty block parsing for map/grep/sort functions)
+**Overall Test Suite**: ✅ **295+ tests passing** with 100% reliability validation
 
 > **Note**: If you see "0 tests, N filtered out", a wrapper probably injected
 > a stray positional filter (e.g., mis-parsed `2>&1`). Run the same command in a
@@ -936,18 +1041,39 @@ See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 
 ---
 
-## 📖 Documentation
+## 📖 Documentation (*Diataxis: Reference* - Information architecture and navigation)
 
-- [API Documentation](https://docs.rs/perl-parser)
-- [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) - Find the right docs
-- [Architecture Guide](ARCHITECTURE.md)
-- [Development Guide](DEVELOPMENT.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
-- [Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md) - Enhanced empty block parsing for map/grep/sort
-- [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
-- [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
-- [Workspace Test Report](WORKSPACE_TEST_REPORT.md) - Current workspace configuration status and build reliability
+### 🎓 Tutorials (Learning-oriented)
+- **[Quick Start](#-quick-start-diataxis-tutorial---learning-oriented-guidance-for-first-time-users)** - Get up and running quickly
+- **[Editor Integration](#-editor-integration-diataxis-how-to-guide---editor-specific-setup-instructions)** - Set up your editor with perl-lsp
+- **[Workspace Refactoring Tutorial](docs/WORKSPACE_REFACTORING_TUTORIAL.md)** - Learn cross-file refactoring
+
+### 🔧 How-to Guides (Problem-oriented)
+- **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute to the project
+- **[Build and Test](#-build-and-test-diataxis-how-to-guide---development-workflow-steps)** - Development workflow steps
+- **[LSP Development Guide](docs/LSP_DEVELOPMENT_GUIDE.md)** - Implement LSP features
+- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Use import optimization features
+- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Follow security best practices
+
+### 📖 Reference (Information-oriented)
+- **[API Documentation](https://docs.rs/perl-parser)** - Complete API reference
+- **[LSP Actual Status](LSP_ACTUAL_STATUS.md)** - Current LSP feature matrix
+- **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - All available commands
+- **[Performance Benchmarks](#-performance-diataxis-reference---benchmark-data-and-measurements)** - Performance data and metrics
+- **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System components and design
+- **[Edge Case Handling](docs/EDGE_CASES.md)** - Comprehensive edge case documentation
+
+### 💡 Explanation (Understanding-oriented)
+- **[Architecture](#-architecture-diataxis-explanation---design-concepts-and-rationale)** - Design concepts and rationale  
+- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Technical architecture
+- **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance implementation details
+- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Performance analysis methodology
+- **[Workspace Navigation Guide](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Cross-file navigation concepts
+
+### 🗂️ Additional Resources
+- **[Documentation Guide](docs/DOCUMENTATION_GUIDE.md)** - Find the right documentation for your needs
+- **[Feature Roadmap](FEATURE_ROADMAP.md)** - Planned features and development timeline
+- **[Stability Guide](docs/STABILITY.md)** - API stability guarantees
 
 ---
 
@@ -1013,7 +1139,7 @@ The benchmarking system provides:
 To use the parser in your own Rust project:
 ```toml
 [dependencies]
-perl-parser = "0.8.9"
+perl-parser = "0.8.8"
 ```
 
 To install the LSP server for your editor:

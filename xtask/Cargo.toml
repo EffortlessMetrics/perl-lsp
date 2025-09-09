@@ -23,10 +23,13 @@ serde_yaml = "0.9"
 bindgen = "0.72.0"
 peak_alloc = "0.3"
 procfs = "0.15"
-
 [dev-dependencies]
 tempfile = "3.8"
 
 [features]
 # Additional tasks that depend on legacy tree-sitter-perl crate
 legacy = []
+
+[patch.crates-io]
+perl-lexer = { path = "../crates/perl-lexer" }
+perl-parser = { path = "../crates/perl-parser" }

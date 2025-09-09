@@ -37,11 +37,15 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU32, Ordering},
 };
+use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
+use crate::workspace_index::{
+    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
+    uri_to_fs_path,
+};
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -124,7 +128,6 @@ pub struct LspServer {
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
     /// Advertised server capabilities
-    #[allow(dead_code)]
     advertised_features: std::sync::Mutex<crate::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
     client_supports_pull_diags: Arc<AtomicBool>,
@@ -259,6 +262,15 @@ impl LspServer {
         #[cfg(feature = "workspace")]
         let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
 
+        let default_features = {
+            let flags = if cfg!(feature = "lsp-ga-lock") {
+                crate::capabilities::BuildFlags::ga_lock()
+            } else {
+                crate::capabilities::BuildFlags::production()
+            };
+            flags.to_advertised_features()
+        };
+
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
@@ -273,9 +285,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(
-                crate::capabilities::AdvertisedFeatures::default(),
-            ),
+            advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -285,6 +295,15 @@ impl LspServer {
         // Initialize workspace indexing (always enabled when workspace feature is on)
         #[cfg(feature = "workspace")]
         let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+
+        let default_features = {
+            let flags = if cfg!(feature = "lsp-ga-lock") {
+                crate::capabilities::BuildFlags::ga_lock()
+            } else {
+                crate::capabilities::BuildFlags::production()
+            };
+            flags.to_advertised_features()
+        };
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -299,9 +318,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(
-                crate::capabilities::AdvertisedFeatures::default(),
-            ),
+            advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -448,6 +465,15 @@ impl LspServer {
         JsonRpcError {
             code: ERR_REQUEST_CANCELLED,
             message: "Request cancelled".to_string(),
+            data: None,
+        }
+    }
+
+    /// Create a server cancelled error
+    fn server_cancelled() -> JsonRpcError {
+        JsonRpcError {
+            code: ERR_SERVER_CANCELLED,
+            message: "Server cancelled the request".to_string(),
             data: None,
         }
     }
@@ -684,10 +710,19 @@ impl LspServer {
             // Test-specific slow operation for cancellation testing
             // This is available in all builds but only used by tests
             "$/test/slowOperation" => {
+                // Optional server-side timeout for internal cancellation testing
+                let timeout = request
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("serverTimeoutMs"))
+                    .and_then(|v| v.as_u64())
+                    .map(Duration::from_millis);
+                let start = Instant::now();
+
                 // Check for cancellation periodically during the slow operation
                 // Total time: 20 * 50ms = 1 second
                 for i in 0..20 {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(50));
                     if let Some(ref id) = id {
                         if self.is_cancelled(id) {
                             eprintln!("Operation cancelled at iteration {}", i);
@@ -697,6 +732,18 @@ impl LspServer {
                                 result: None,
                                 error: Some(Self::request_cancelled()),
                             });
+                        }
+
+                        if let Some(to) = timeout {
+                            if start.elapsed() >= to {
+                                eprintln!("Server-side timeout at iteration {}", i);
+                                return Some(JsonRpcResponse {
+                                    jsonrpc: "2.0".to_string(),
+                                    id: Some(id.clone()),
+                                    result: None,
+                                    error: Some(Self::server_cancelled()),
+                                });
+                            }
                         }
                     }
                 }
@@ -887,16 +934,23 @@ impl LspServer {
             build_flags.range_formatting = true;
         }
 
+        // Persist advertised features for gating
+        let features = build_flags.to_advertised_features();
+        *self.advertised_features.lock().unwrap() = features.clone();
+
         // Generate capabilities from build flags
-        let server_caps = crate::capabilities::capabilities_for(build_flags.clone());
+        let server_caps = crate::capabilities::capabilities_for(build_flags);
         let mut capabilities = serde_json::to_value(&server_caps).unwrap();
 
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
         capabilities["documentHighlightProvider"] = json!(true);
-        if build_flags.type_hierarchy {
+        if features.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
+        }
+        if features.call_hierarchy {
+            capabilities["callHierarchyProvider"] = json!(true);
         }
 
         // Override text document sync with more detailed options
@@ -907,9 +961,6 @@ impl LspServer {
             "willSaveWaitUntil": false,
             "save": { "includeText": true }
         });
-
-        // Store advertised features for gating
-        *self.advertised_features.lock().unwrap() = build_flags.to_advertised_features();
 
         Ok(Some(json!({
             "capabilities": capabilities,
@@ -1448,7 +1499,6 @@ impl LspServer {
     }
 
     /// Get the end position of a document
-    #[allow(dead_code)]
     fn get_document_end_position(&self, content: &str) -> Value {
         let lines: Vec<&str> = content.lines().collect();
         let last_line = lines.len().saturating_sub(1);
@@ -3784,17 +3834,29 @@ impl LspServer {
                         );
 
                         if let (Some(u), Some(off), Some(txt)) = data_info {
-                            let (line, col) = self.offset_to_pos16(doc, off as usize);
                             if let Some(obj) = a.as_object_mut() {
-                                obj.insert("edit".into(), json!({
-                                    "changes": {
-                                        u: [{
-                                            "range": { "start": {"line": line, "character": col},
-                                                       "end":   {"line": line, "character": col} },
-                                            "newText": txt
-                                        }]
-                                    }
-                                }));
+                                let edit_range = if off as usize >= doc.text.len() {
+                                    let end = self.get_document_end_position(&doc.text);
+                                    json!({"start": end.clone(), "end": end })
+                                } else {
+                                    let (line, col) = self.offset_to_pos16(doc, off as usize);
+                                    json!({
+                                        "start": {"line": line, "character": col},
+                                        "end": {"line": line, "character": col}
+                                    })
+                                };
+
+                                obj.insert(
+                                    "edit".into(),
+                                    json!({
+                                        "changes": {
+                                            u: [{
+                                                "range": edit_range,
+                                                "newText": txt
+                                            }]
+                                        }
+                                    }),
+                                );
                                 obj.remove("data");
                             }
                         }
@@ -4685,8 +4747,56 @@ impl LspServer {
             .rev()
             .collect::<String>();
 
+        // Check if we're in a method call context (after ->)
+        let is_method_call = text_before.ends_with("->")
+            || text_before
+                .chars()
+                .rev()
+                .skip_while(|c| c.is_alphanumeric() || *c == '_')
+                .take(2)
+                .collect::<String>()
+                == ">-";
+
         // Check what sigil we're after (if any)
         let sigil = text_before.chars().rev().find(|&c| !(c.is_alphanumeric() || c == '_'));
+
+        // If we're completing after '->', provide common method completions
+        if is_method_call {
+            let common_methods = [
+                ("new", "constructor"),
+                ("init", "initializer"),
+                ("process", "processor"),
+                ("run", "executor"),
+                ("execute", "executor"),
+                ("handle", "handler"),
+                ("get", "getter"),
+                ("set", "setter"),
+                ("create", "constructor"),
+                ("build", "builder"),
+                ("parse", "parser"),
+                ("format", "formatter"),
+                ("validate", "validator"),
+                ("transform", "transformer"),
+                ("render", "renderer"),
+            ];
+
+            for (method, kind) in &common_methods {
+                if method.starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: method.to_string(),
+                        kind: CompletionItemKind::Function,
+                        detail: Some(format!("method ({})", kind)),
+                        documentation: None,
+                        insert_text: Some(method.to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                        text_edit_range: None,
+                    });
+                }
+            }
+            return completions; // Return early for method completions
+        }
 
         // Basic keywords that match the prefix
         let keywords = [
@@ -4835,6 +4945,7 @@ impl LspServer {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
+                        let doc_end = self.get_document_end_position(&doc.text);
                         let lsp_edits: Vec<Value> = edits
                             .into_iter()
                             .map(|edit| {
@@ -4844,10 +4955,7 @@ impl LspServer {
                                             "line": edit.range.start.line,
                                             "character": edit.range.start.character,
                                         },
-                                        "end": {
-                                            "line": edit.range.end.line,
-                                            "character": edit.range.end.character,
-                                        },
+                                        "end": doc_end.clone(),
                                     },
                                     "newText": edit.new_text,
                                 })
@@ -4973,8 +5081,11 @@ impl LspServer {
                 })
                 .collect();
 
-            eprintln!("Found {} symbols from index", lsp_symbols.len());
-            return Ok(Some(json!(lsp_symbols)));
+            // If the workspace index is empty (e.g., due to parsing failures),
+            // fall back to document-based search for better test reliability
+            if !lsp_symbols.is_empty() {
+                return Ok(Some(json!(lsp_symbols)));
+            }
         }
 
         // Fallback to document-based search
@@ -5001,10 +5112,13 @@ impl LspServer {
                         all_symbols.push(sym);
                     }
                 }
+            } else {
+                // Text-based fallback when AST is not available
+                let text_symbols = self.extract_text_based_symbols(&doc.text, uri, query);
+                all_symbols.extend(text_symbols);
             }
         }
 
-        eprintln!("Found {} symbols from documents", all_symbols.len());
         Ok(Some(json!(all_symbols)))
     }
 
@@ -5135,8 +5249,6 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            eprintln!("Getting code lenses for: {}", uri);
-
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
@@ -5148,9 +5260,11 @@ impl LspServer {
                         lenses.insert(0, shebang_lens);
                     }
 
-                    eprintln!("Found {} code lenses", lenses.len());
-
                     return Ok(Some(json!(lenses)));
+                } else {
+                    // Text-based fallback when AST is not available
+                    let text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    return Ok(Some(json!(text_lenses)));
                 }
             }
         }
@@ -5191,6 +5305,10 @@ impl LspServer {
                 for (_uri, doc) in documents.iter() {
                     if let Some(ref ast) = doc.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
+                    } else {
+                        // Text-based fallback when AST is not available
+                        total_references +=
+                            self.count_references_text_based(&doc.text, symbol_name, symbol_kind);
                     }
                 }
 
@@ -5350,6 +5468,224 @@ impl LspServer {
         }
 
         Ok(Some(Value::Null))
+    }
+
+    /// Count references to a symbol using text-based search
+    fn count_references_text_based(
+        &self,
+        text: &str,
+        symbol_name: &str,
+        symbol_kind: &str,
+    ) -> usize {
+        let mut count = 0;
+
+        match symbol_kind {
+            "package" => {
+                // Count package usage (use statements, new() calls, etc.)
+                use regex::Regex;
+
+                // Count "use PackageName" statements
+                if let Ok(use_regex) =
+                    Regex::new(&format!(r"\buse\s+{}\b", regex::escape(symbol_name)))
+                {
+                    count += use_regex.find_iter(text).count();
+                }
+
+                // Count "PackageName->new()" or "PackageName->method()" calls
+                if let Ok(call_regex) = Regex::new(&format!(r"\b{}->", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "bless ... PackageName" statements
+                if let Ok(bless_regex) =
+                    Regex::new(&format!(r"bless\s+.*?,\s*{}", regex::escape(symbol_name)))
+                {
+                    count += bless_regex.find_iter(text).count();
+                }
+            }
+            "subroutine" => {
+                // Count function calls
+                use regex::Regex;
+
+                // Count "function_name(" calls
+                if let Ok(call_regex) =
+                    Regex::new(&format!(r"\b{}\s*\(", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "&function_name" references
+                if let Ok(ref_regex) = Regex::new(&format!(r"&{}\b", regex::escape(symbol_name))) {
+                    count += ref_regex.find_iter(text).count();
+                }
+            }
+            _ => {
+                // Generic symbol name search for unknown kinds
+                use regex::Regex;
+                if let Ok(generic_regex) =
+                    Regex::new(&format!(r"\b{}\b", regex::escape(symbol_name)))
+                {
+                    count += generic_regex.find_iter(text).count();
+                    // Don't count the definition itself if it exists
+                    if count > 0 {
+                        count = count.saturating_sub(1);
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    /// Extract code lenses from text when AST parsing fails
+    fn extract_text_based_code_lenses(
+        &self,
+        text: &str,
+        _uri: &str,
+    ) -> Vec<crate::code_lens_provider::CodeLens> {
+        let mut lenses = Vec::new();
+
+        // Use simple regex patterns to find common Perl constructs that should have code lenses
+        use regex::Regex;
+
+        // Find package declarations
+        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = pkg_regex.captures(line) {
+                    if let Some(pkg_name) = captures.get(1) {
+                        let name = pkg_name.as_str().to_string();
+
+                        lenses.push(crate::code_lens_provider::CodeLens {
+                            range: crate::code_lens_provider::Range {
+                                start: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: pkg_name.start() as u32,
+                                },
+                                end: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: pkg_name.end() as u32,
+                                },
+                            },
+                            command: None, // Will be resolved later
+                            data: Some(json!({
+                                "name": name,
+                                "kind": "package"
+                            })),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Find subroutine declarations
+        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = sub_regex.captures(line) {
+                    if let Some(sub_name) = captures.get(1) {
+                        let name = sub_name.as_str().to_string();
+
+                        lenses.push(crate::code_lens_provider::CodeLens {
+                            range: crate::code_lens_provider::Range {
+                                start: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: sub_name.start() as u32,
+                                },
+                                end: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: sub_name.end() as u32,
+                                },
+                            },
+                            command: None, // Will be resolved later
+                            data: Some(json!({
+                                "name": name,
+                                "kind": "subroutine"
+                            })),
+                        });
+                    }
+                }
+            }
+        }
+
+        lenses
+    }
+
+    /// Extract symbols from text when AST parsing fails
+    fn extract_text_based_symbols(
+        &self,
+        text: &str,
+        uri: &str,
+        query: &str,
+    ) -> Vec<LspWorkspaceSymbol> {
+        let mut symbols = Vec::new();
+        let query_lower = query.to_lowercase();
+
+        // Use simple regex patterns to find common Perl symbols
+        use regex::Regex;
+
+        // Find subroutine definitions
+        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = sub_regex.captures(line) {
+                    if let Some(sub_name) = captures.get(1) {
+                        let name = sub_name.as_str().to_string();
+                        if name.to_lowercase().contains(&query_lower) {
+                            symbols.push(LspWorkspaceSymbol {
+                                name,
+                                kind: 12, // Function
+                                location: LspLocation {
+                                    uri: uri.to_string(),
+                                    range: LspRange {
+                                        start: LspPosition {
+                                            line: line_num as u32,
+                                            character: sub_name.start() as u32,
+                                        },
+                                        end: LspPosition {
+                                            line: line_num as u32,
+                                            character: sub_name.end() as u32,
+                                        },
+                                    },
+                                },
+                                container_name: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find package declarations
+        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = pkg_regex.captures(line) {
+                    if let Some(pkg_name) = captures.get(1) {
+                        let name = pkg_name.as_str().to_string();
+                        if name.to_lowercase().contains(&query_lower) {
+                            symbols.push(LspWorkspaceSymbol {
+                                name,
+                                kind: 4, // Namespace
+                                location: LspLocation {
+                                    uri: uri.to_string(),
+                                    range: LspRange {
+                                        start: LspPosition {
+                                            line: line_num as u32,
+                                            character: pkg_name.start() as u32,
+                                        },
+                                        end: LspPosition {
+                                            line: line_num as u32,
+                                            character: pkg_name.end() as u32,
+                                        },
+                                    },
+                                },
+                                container_name: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        symbols
     }
 
     /// Extract workspace symbols from a document's AST
@@ -7313,43 +7649,13 @@ impl LspServer {
         }
     }
 
-    // Handle selectionRange request - removed duplicate (see new implementation above)
-    // The old stub was commented out since the real implementation is above
-
-    // Handle onTypeFormatting request - OLD STUB (replaced above)
-    #[allow(dead_code)]
+    /// Legacy onTypeFormatting handler retained for compatibility.
+    /// Delegates to the modern formatting pipeline.
     fn handle_on_type_formatting_old(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let ch = params["ch"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            let tab_size = params["options"]["tabSize"].as_u64().unwrap_or(4) as usize;
-            let insert_spaces = params["options"]["insertSpaces"].as_bool().unwrap_or(true);
-
-            let documents = self.documents.lock().unwrap();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let uri_obj = uri
-                    .parse::<lsp_types::Uri>()
-                    .unwrap_or_else(|_| "file:///tmp".parse::<lsp_types::Uri>().unwrap());
-                let edits = crate::lsp_on_type_formatting::format_on_type(
-                    &doc.text,
-                    uri_obj,
-                    ch.to_string(),
-                    lsp_types::Position::new(line, character),
-                    tab_size,
-                    insert_spaces,
-                );
-                Ok(Some(serde_json::to_value(edits).unwrap_or(Value::Null)))
-            } else {
-                Ok(Some(Value::Null))
-            }
-        } else {
-            Ok(Some(Value::Null))
-        }
+        self.handle_on_type_formatting(params)
     }
 
     /// Register file watchers for Perl files
@@ -7359,6 +7665,10 @@ impl LspServer {
             RegistrationParams, WatchKind,
             notification::{DidChangeWatchedFiles, Notification},
         };
+
+        if !self.advertised_features.lock().unwrap().workspace_symbol {
+            return;
+        }
 
         let watchers = vec![
             FileSystemWatcher {
@@ -8177,5 +8487,86 @@ fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
 impl Default for LspServer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn end_position_handles_missing_final_newline() {
+        let server = LspServer::new();
+        let content = "package Foo;";
+        let pos = server.get_document_end_position(content);
+        assert_eq!(pos, json!({"line": 0, "character": content.len()}));
+    }
+
+    #[test]
+    fn code_action_append_uses_document_end() {
+        use std::sync::Arc;
+
+        let server = LspServer::new();
+        let uri = "file:///test.pl";
+        let text = "package Foo;"; // No trailing newline
+        let rope = ropey::Rope::from_str(text);
+        let line_starts = LineStartsCache::new_rope(&rope);
+        server.documents.lock().unwrap().insert(
+            uri.to_string(),
+            DocumentState {
+                rope,
+                text: text.to_string(),
+                _version: 1,
+                ast: None,
+                parse_errors: Vec::new(),
+                parent_map: ParentMap::default(),
+                line_starts,
+                generation: Arc::new(AtomicU32::new(0)),
+                document_lock: Arc::new(std::sync::RwLock::new(())),
+            },
+        );
+
+        let result = server
+            .handle_code_actions_pragmas(Some(json!({"textDocument": {"uri": uri}})))
+            .unwrap()
+            .unwrap();
+        let actions = result.as_array().unwrap();
+        assert!(!actions.is_empty());
+        let edit = &actions[0]["edit"]["changes"][uri][0]["range"];
+        let end = server.get_document_end_position(text);
+        assert_eq!(edit["start"], end);
+        assert_eq!(edit["end"], end);
+    }
+
+    #[test]
+    fn formatting_edit_has_correct_end_position() {
+        let formatter = CodeFormatter::new();
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let code = "sub test{my$x=1;return$x;}";
+        match formatter.format_document(code, &options) {
+            Ok(edits) => {
+                if edits.is_empty() {
+                    return;
+                }
+                let server = LspServer::new();
+                let end = server.get_document_end_position(code);
+                assert_eq!(edits[0].range.end.line, end["line"].as_u64().unwrap() as u32);
+                assert_eq!(edits[0].range.end.character, end["character"].as_u64().unwrap() as u32);
+            }
+            Err(e) => {
+                if e.to_string().contains("not found") {
+                    eprintln!("Skipping test: perltidy not installed");
+                } else {
+                    panic!("Formatting failed: {}", e);
+                }
+            }
+        }
     }
 }

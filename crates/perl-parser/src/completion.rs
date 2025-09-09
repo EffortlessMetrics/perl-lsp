@@ -745,7 +745,8 @@ impl CompletionProvider {
         )
     }
 
-    /// Add variable completions
+    /// Add variable completions with thread-safe symbol table access
+    #[allow(dead_code)] // Available for future completion enhancement
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     fn add_variable_completions(
         &self,

@@ -2,20 +2,21 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation
+**Latest Release**: v0.8.9+ GA - Enhanced Builtin Function Parsing with Production-Stable AST Generation
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA)
+### Published Crates (v0.8.8 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
    - 4-19x faster than legacy implementations (1-150 µs parsing)
    - Production-ready incremental parsing with <1ms LSP updates
    - Enterprise-grade workspace refactoring and cross-file analysis
+   - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
@@ -71,10 +72,14 @@ cargo install --path crates/perl-lsp     # From source
 
 ### Testing
 ```bash
-cargo test                               # Run all tests
+cargo test                               # All tests (robust across environments)
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
+cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function parsing tests
+
+# Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
+# Formatting tests demonstrate graceful degradation when tools are missing
 ```
 
 ### Development
@@ -84,6 +89,22 @@ cargo bench                             # Run performance benchmarks
 perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
+### Highlight Testing (*Diataxis: Tutorial* - Tree-Sitter Highlight Test Runner)
+```bash
+# Prerequisites: Highlight test fixtures in crates/tree-sitter-perl/test/highlight/
+# Navigate to xtask directory for highlight testing commands
+cd xtask                                 # Navigate to xtask directory
+
+# Run highlight tests with perl-parser AST integration
+cargo run highlight                      # Test highlight fixtures with v3 parser
+cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custom path
+
+# Understanding the output:
+# - Total test cases: Number of highlight test fixtures processed
+# - Passed/Failed: AST node matching results for expected highlight scopes
+# - Integration with perl-corpus: Comprehensive highlight integration tests (4/4 passing)
+```
+
 ## Architecture
 
 ### Crate Structure
@@ -91,20 +112,31 @@ perl-lsp --stdio --log                  # Run LSP server with logging
 - **LSP Binary**: `/crates/perl-lsp/` - standalone server, CLI interface, protocol handling
 - **Lexer**: `/crates/perl-lexer/` - tokenization, Unicode support
 - **Test Corpus**: `/crates/perl-corpus/` - comprehensive test suite
+- **Tree-Sitter Integration**: `/crates/tree-sitter-perl-rs/` - unified scanner architecture with Rust delegation pattern
+- **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
-- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing
+- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing, enhanced builtin function support
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
-- **v1 (C-based)**: ~95% coverage, benchmarking only
+- **v1 (C-based)**: ~95% coverage, benchmarking only (now uses unified Rust scanner via delegation)
+
+### Scanner Architecture (*Diataxis: Explanation* - Unified scanner design)
+The scanner implementation uses a unified Rust-based architecture with C compatibility wrapper:
+
+- **Rust Scanner** (`RustScanner`): Core scanning implementation in Rust with full Perl lexical analysis
+- **C Scanner Wrapper** (`CScanner`): Compatibility wrapper that delegates to `RustScanner` for legacy API support
+- **Unified Implementation**: Both scanner features (`c-scanner` and `rust-scanner`) ultimately use the same Rust code
+- **Backward Compatibility**: Existing benchmark and test code continues to work without modification
+- **Simplified Maintenance**: Single scanner implementation reduces maintenance overhead while preserving API contracts
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function empty block parsing
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function parsing (PR #119)
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
-- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
+- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, comprehensive import optimization
 - **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
 
 ## Documentation
@@ -120,6 +152,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
+- **[Scanner Migration Guide](docs/SCANNER_MIGRATION_GUIDE.md)** - C-to-Rust scanner delegation architecture
 - **[Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort functions
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
@@ -153,11 +186,13 @@ See the [docs/](docs/) directory for comprehensive documentation:
 
 **LSP Features (~87% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover
-- ✅ Workspace symbols, rename, code actions
+- ✅ Workspace symbols, rename, code actions (including import optimization)
+- ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
 - ✅ Enhanced call hierarchy, go-to-definition, find references
 - ✅ Code Lens with reference counts and resolve support
 - ✅ File path completion with enterprise security
+- ✅ Enhanced formatting: always-available capabilities with graceful perltidy fallback
 - ✅ Debug Adapter Protocol (DAP) support
 
 ## Contributing

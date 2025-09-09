@@ -30,6 +30,7 @@ const ERR_TEST_TIMEOUT: i64 = -32000;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -39,6 +40,9 @@ use std::time::{Duration, Instant};
 
 // Auto-generate unique IDs for requests
 static NEXT_ID: AtomicI64 = AtomicI64::new(1000);
+
+// Global mutex to serialize LSP server creation to prevent resource conflicts
+static LSP_SERVER_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn next_id() -> i64 {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
@@ -107,6 +111,9 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
 }
 
 pub fn start_lsp_server() -> LspServer {
+    // Serialize LSP server creation to prevent resource conflicts during concurrent testing
+    let _guard = LSP_SERVER_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap();
+
     // Try candidates in order; fall back cleanly on NotFound
     let mut last_err: Option<io::Error> = None;
     let mut process: Child = {
@@ -197,14 +204,19 @@ pub fn start_lsp_server() -> LspServer {
         })
         .unwrap();
 
-    LspServer {
+    let server = LspServer {
         process,
         writer: BufWriter::new(stdin),
         rx,
         _stdout_thread,
         _stderr_thread,
         pending: VecDeque::new(),
-    }
+    };
+
+    // Brief delay to allow server to fully initialize before returning
+    std::thread::sleep(Duration::from_millis(100));
+
+    server
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {

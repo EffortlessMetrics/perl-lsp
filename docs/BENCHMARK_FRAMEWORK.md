@@ -1,8 +1,14 @@
-# Benchmark Framework Documentation
+# Benchmark Framework Documentation (*Diataxis: Reference* - Complete benchmarking system specification)
 
-## Overview
+## Overview (*Diataxis: Explanation* - Understanding the benchmarking system)
 
 This document describes the comprehensive benchmarking framework for comparing C and Rust parser implementations. The framework provides statistical analysis, configurable performance gates, and detailed reporting capabilities.
+
+### Purpose and Design Goals (*Diataxis: Explanation* - Why this framework exists)
+- **Performance Validation**: Ensure Rust implementation meets or exceeds C parser performance
+- **Regression Detection**: Automatically detect performance regressions during development
+- **Statistical Rigor**: Provide confidence intervals and significance testing for reliable comparisons
+- **Cross-Language Support**: Enable meaningful comparisons between C and Rust implementations
 
 ## Architecture
 

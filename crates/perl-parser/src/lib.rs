@@ -1,8 +1,9 @@
-//! # perl-parser v3 — native Perl parser + LSP
+//! # perl-parser v3 — native Perl parser + LSP + TDD
 //!
 //! - **Tree-sitter compatible** kinds/fields/points.
 //! - Parser: ~100% edge cases; fast UTF-16 mapping.
 //! - LSP: contract-driven capability surface; ~82% functional in v0.8.6.
+//! - **TDD Support**: Auto-detecting TestGenerator with intelligent return value analysis.
 //!
 //! ## Quick use (library)
 //! ```rust
@@ -10,6 +11,17 @@
 //! let mut p = Parser::new();
 //! let ast = p.parse(r#"sub hello { print "hi\n"; }"#).unwrap();
 //! println!("{}", ast.to_sexp());
+//! ```
+//!
+//! ## Test Generation (TDD)
+//! ```rust
+//! use perl_parser::{Parser, TestGenerator, TestFramework};
+//! let mut p = Parser::new();
+//! let ast = p.parse(r#"sub add { my ($a, $b) = @_; return $a + $b; }"#).unwrap();
+//!
+//! let generator = TestGenerator::new(TestFramework::TestMore);
+//! let tests = generator.generate_tests(&ast, "");
+//! // Auto-detects that add(1, 2) should return 3
 //! ```
 //!
 //! ## LSP server
@@ -171,6 +183,7 @@ pub mod semantic_tokens;
 pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
+pub mod test_generator;
 pub mod test_runner;
 pub mod textdoc;
 pub mod token_stream;
@@ -185,7 +198,6 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
-// pub mod test_generator;  // TODO: Fix compilation
 // pub mod tdd_workflow;    // TODO: Fix compilation
 pub mod debug_adapter;
 pub mod modernize;
@@ -253,6 +265,10 @@ pub use semantic_tokens_provider::{
     SemanticTokenType as SemanticTokenTypeV2, SemanticTokensProvider, encode_semantic_tokens,
 };
 pub use signature_help::{ParameterInfo, SignatureHelp, SignatureHelpProvider, SignatureInfo};
+pub use test_generator::{
+    CoverageReport, Priority, RefactoringCategory, RefactoringSuggester, RefactoringSuggestion,
+    TestCase, TestFramework, TestGenerator, TestGeneratorOptions, TestResults, TestRunner,
+};
 pub use type_inference::{
     PerlType, ScalarType, TypeBasedCompletion, TypeConstraint, TypeEnvironment,
     TypeInferenceEngine, TypeLocation,
