@@ -81,8 +81,8 @@ impl Default for AdvertisedFeatures {
         // Match production BuildFlags
         Self {
             code_lens: false,
-            call_hierarchy: false,
-            type_hierarchy: false,
+            call_hierarchy: true,
+            type_hierarchy: true,
             inlay_hints: true,
             semantic_tokens: true,
             code_actions: true,

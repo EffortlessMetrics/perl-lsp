@@ -1,8 +1,8 @@
-# LSP Crate Separation Architecture Guide (v0.8.9)
+# LSP Crate Separation Architecture Guide (v0.8.8)
 
 ## Rationale and Benefits
 
-The comprehensive LSP crate separation in v0.8.9 represents a major architectural improvement that provides clear separation of concerns between parsing logic and LSP protocol implementation:
+The comprehensive LSP crate separation in v0.8.8 represents a major architectural improvement that provides clear separation of concerns between parsing logic and LSP protocol implementation:
 
 **Architectural Principles**:
 - **Single Responsibility**: Each crate has a focused, well-defined purpose

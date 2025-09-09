@@ -653,3 +653,18 @@ class Example :isa(BaseClass) {
         (block
           (expression_statement
             (number)))))))
+
+================================================================================
+numeric identifier after my
+================================================================================
+my $foo;
+my $1;
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (variable_declaration
+      variable: (scalar
+        (varname))))
+  (expression_statement
+    (ERROR)))

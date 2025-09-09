@@ -120,7 +120,7 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::Package { name: _, block } => {
+            NodeKind::Package { name: _, block, name_span: _ } => {
                 // Package with block is foldable
                 if let Some(block_node) = block {
                     self.add_range_from_node(node, None);

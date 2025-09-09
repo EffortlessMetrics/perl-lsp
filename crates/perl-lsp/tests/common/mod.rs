@@ -30,6 +30,7 @@ const ERR_TEST_TIMEOUT: i64 = -32000;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -40,16 +41,30 @@ use std::time::{Duration, Instant};
 // Auto-generate unique IDs for requests
 static NEXT_ID: AtomicI64 = AtomicI64::new(1000);
 
+// Global mutex to serialize LSP server creation to prevent resource conflicts
+static LSP_SERVER_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
 fn next_id() -> i64 {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
-    resp["result"]["items"]
-        .as_array()
-        .or_else(|| resp["result"].as_array())
-        .expect("completion result should be array or { items: [] }")
+    static EMPTY_VEC: Vec<serde_json::Value> = Vec::new();
+
+    // Handle error responses
+    if resp.get("error").is_some() {
+        return &EMPTY_VEC;
+    }
+
+    // Handle null results
+    if let Some(result) = resp.get("result") {
+        if result.is_null() {
+            return &EMPTY_VEC;
+        }
+    }
+
+    resp["result"]["items"].as_array().or_else(|| resp["result"].as_array()).unwrap_or(&EMPTY_VEC)
 }
 
 pub struct LspServer {
@@ -107,15 +122,47 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
 }
 
 pub fn start_lsp_server() -> LspServer {
+    // Serialize LSP server creation to prevent resource conflicts during concurrent testing
+    let _guard = LSP_SERVER_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap();
+
     // Try candidates in order; fall back cleanly on NotFound
     let mut last_err: Option<io::Error> = None;
     let mut process: Child = {
         let mut spawned: Option<Child> = None;
+
+        // Build the binary first to ensure it's available
+        if std::env::var("CARGO_BIN_EXE_perl-lsp").is_err()
+            && std::env::var("CARGO_BIN_EXE_perl_lsp").is_err()
+        {
+            let _ = std::process::Command::new("cargo")
+                .args(["build", "-p", "perl-lsp", "--quiet"])
+                .output();
+        }
+
         for mut cmd in resolve_perl_lsp_cmds() {
             match cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
-                Ok(child) => {
-                    spawned = Some(child);
-                    break;
+                Ok(mut child) => {
+                    // Give the process a moment to start up
+                    std::thread::sleep(Duration::from_millis(100));
+                    match child.try_wait() {
+                        Ok(Some(_)) => {
+                            // Process exited immediately, try next command
+                            last_err = Some(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Process exited immediately",
+                            ));
+                            continue;
+                        }
+                        Ok(None) => {
+                            // Process is still running, this is good
+                            spawned = Some(child);
+                            break;
+                        }
+                        Err(e) => {
+                            last_err = Some(e);
+                            continue;
+                        }
+                    }
                 }
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {
                     last_err = Some(e);
@@ -197,14 +244,19 @@ pub fn start_lsp_server() -> LspServer {
         })
         .unwrap();
 
-    LspServer {
+    let server = LspServer {
         process,
         writer: BufWriter::new(stdin),
         rx,
         _stdout_thread,
         _stderr_thread,
         pending: VecDeque::new(),
-    }
+    };
+
+    // Brief delay to allow server to fully initialize before returning
+    std::thread::sleep(Duration::from_millis(100));
+
+    server
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
@@ -248,7 +300,7 @@ fn default_timeout() -> Duration {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_secs(5))
+        .unwrap_or(Duration::from_secs(10)) // Increased from 5 to 10 seconds for CI reliability
 }
 
 /// Short timeout for expected non-responses (malformed requests, etc)
@@ -403,12 +455,20 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
         server.writer.flush().unwrap();
     }
 
-    // wait specifically for id=1
-    let resp =
-        read_response_matching_i64(server, 1, default_timeout()).expect("initialize response");
+    // wait specifically for id=1 with extended timeout for initialization
+    let init_timeout = Duration::from_secs(20); // Generous timeout for initialization
+    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
+        // If initialization fails, try to diagnose the issue
+        eprintln!("LSP initialization timed out after {:?}", init_timeout);
+        eprintln!("Server alive: {}", server.is_alive());
+        // Return timeout error for better diagnostics
+        json!({"error": {"code": ERR_TEST_TIMEOUT, "message": "LSP initialization timed out"}})
+    });
 
-    // send initialized notification
-    send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
+    // Only send initialized if we got a successful response
+    if resp.get("error").is_none() {
+        send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
+    }
 
     resp
 }

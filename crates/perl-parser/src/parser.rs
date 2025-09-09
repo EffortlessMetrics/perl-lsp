@@ -1091,11 +1091,10 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'sub'
 
-        let name = match self.peek_kind() {
+        let (name, name_span) = match self.peek_kind() {
             // Regular identifier
-            Some(TokenKind::Identifier) => Some(self.tokens.next()?.text.clone()),
-            // Keywords that can be used as subroutine names
-            Some(TokenKind::Method)
+            Some(TokenKind::Identifier)
+            | Some(TokenKind::Method)
             | Some(TokenKind::Class)
             | Some(TokenKind::Try)
             | Some(TokenKind::Catch)
@@ -1104,9 +1103,15 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::When)
             | Some(TokenKind::Default)
             | Some(TokenKind::Continue)
-            | Some(TokenKind::Format) => Some(self.tokens.next()?.text.clone()),
+            | Some(TokenKind::Format) => {
+                let token = self.tokens.next()?;
+                (
+                    Some(token.text.clone()),
+                    Some(SourceLocation { start: token.start, end: token.end }),
+                )
+            }
             // No name - anonymous subroutine
-            _ => None,
+            _ => (None, None),
         };
 
         // Parse optional attributes first (they come before signature in modern Perl)
@@ -1192,7 +1197,14 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Subroutine { name, prototype, signature, attributes, body: Box::new(body) },
+            NodeKind::Subroutine {
+                name,
+                name_span,
+                prototype,
+                signature,
+                attributes,
+                body: Box::new(body),
+            },
             SourceLocation { start, end },
         ))
     }
@@ -1374,22 +1386,30 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'package'
 
         // Parse package name (can include ::)
-        let mut name = self.expect(TokenKind::Identifier)?.text.clone();
+        let first = self.expect(TokenKind::Identifier)?;
+        let mut name = first.text.clone();
+        let name_start = first.start;
+        let mut name_end = first.end;
 
         // Handle :: in package names
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.tokens.next()?; // consume ::
+            let dc = self.tokens.next()?; // consume ::
+            name_end = dc.end;
             name.push_str("::");
 
             // Check if there's an identifier after ::
             // If not, it's a trailing :: which is valid in Perl
             if self.peek_kind() == Some(TokenKind::Identifier) {
-                name.push_str(&self.tokens.next()?.text);
+                let id = self.tokens.next()?;
+                name_end = id.end;
+                name.push_str(&id.text);
             } else {
                 // Trailing :: is valid, just break
                 break;
             }
         }
+
+        let name_span = SourceLocation { start: name_start, end: name_end };
 
         // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
@@ -1440,7 +1460,7 @@ impl<'a> Parser<'a> {
         };
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Package { name, block }, SourceLocation { start, end }))
+        Ok(Node::new(NodeKind::Package { name, name_span, block }, SourceLocation { start, end }))
     }
 
     /// Parse use statement
@@ -1824,6 +1844,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
+                name_span: None, // TODO: Set proper name span
                 prototype: None,
                 signature: None,
                 attributes: vec![],
@@ -2226,7 +2247,9 @@ impl<'a> Parser<'a> {
                 "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open"
                 | "tie" | "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite"
                 | "truncate" | "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select"
-                | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef" => {
+                | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef"
+                | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
+                | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join" => {
                     let start = token.start;
                     let func_name = token.text.clone();
 
@@ -2273,6 +2296,28 @@ impl<'a> Parser<'a> {
                                 && self.peek_kind() == Some(TokenKind::My)
                             {
                                 args.push(self.parse_variable_declaration()?);
+                            } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
+                                && self.peek_kind() == Some(TokenKind::LeftBrace)
+                            {
+                                // Special handling for map/grep/sort with block as first argument
+                                let block_start = self.current_position();
+                                self.expect(TokenKind::LeftBrace)?;
+
+                                // Parse the expression inside the block (if any)
+                                let mut statements = Vec::new();
+                                if self.peek_kind() != Some(TokenKind::RightBrace) {
+                                    statements.push(self.parse_expression()?);
+                                }
+
+                                self.expect(TokenKind::RightBrace)?;
+                                let block_end = self.previous_position();
+
+                                // Wrap the expression in a block node
+                                let block = Node::new(
+                                    NodeKind::Block { statements },
+                                    SourceLocation { start: block_start, end: block_end },
+                                );
+                                args.push(block);
                             } else {
                                 // For builtins, don't parse word operators as part of arguments
                                 // Word operators should be handled at statement level
@@ -2280,18 +2325,33 @@ impl<'a> Parser<'a> {
                             }
 
                             // Parse remaining arguments
-                            while self.peek_kind() == Some(TokenKind::Comma) {
-                                self.consume_token()?; // consume comma
+                            // For map/grep/sort, parse list arguments without requiring commas
+                            if matches!(func_name.as_str(), "map" | "grep" | "sort") {
+                                // Parse list arguments until statement boundary
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && !self.is_statement_modifier_keyword()
+                                {
+                                    // Skip optional comma
+                                    if self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?;
+                                    }
+                                    args.push(self.parse_assignment()?);
+                                }
+                            } else {
+                                // For other functions, require commas between arguments
+                                while self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?; // consume comma
 
-                                // Check if we hit a statement modifier
-                                match self.peek_kind() {
-                                    Some(TokenKind::If)
-                                    | Some(TokenKind::Unless)
-                                    | Some(TokenKind::While)
-                                    | Some(TokenKind::Until)
-                                    | Some(TokenKind::For)
-                                    | Some(TokenKind::Foreach) => break,
-                                    _ => args.push(self.parse_assignment()?),
+                                    // Check if we hit a statement modifier
+                                    match self.peek_kind() {
+                                        Some(TokenKind::If)
+                                        | Some(TokenKind::Unless)
+                                        | Some(TokenKind::While)
+                                        | Some(TokenKind::Until)
+                                        | Some(TokenKind::For)
+                                        | Some(TokenKind::Foreach) => break,
+                                        _ => args.push(self.parse_assignment()?),
+                                    }
                                 }
                             }
 
@@ -3593,13 +3653,18 @@ impl<'a> Parser<'a> {
 
                                     args.push(block);
 
-                                    // Parse remaining arguments
-                                    while self.peek_kind() == Some(TokenKind::Comma) {
-                                        self.consume_token()?; // consume comma
+                                    // Parse remaining arguments for map/grep/sort without requiring commas
+                                    // But respect statement boundaries including ] and )
+                                    while !self.is_at_statement_end() {
+                                        // Skip comma if present
+                                        if self.peek_kind() == Some(TokenKind::Comma) {
+                                            self.consume_token()?;
+                                        }
+                                        // Check again after potential comma
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_ternary()?);
                                     }
                                 } else if name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
@@ -3613,11 +3678,11 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_assignment()?);
                                     }
                                 } else {
                                     // Parse the first argument
-                                    args.push(self.parse_comma()?);
+                                    args.push(self.parse_ternary()?);
 
                                     // Parse remaining arguments separated by commas
                                     while self.peek_kind() == Some(TokenKind::Comma) {
@@ -3625,7 +3690,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_comma()?);
+                                        args.push(self.parse_ternary()?);
                                     }
                                 }
 
@@ -4768,16 +4833,24 @@ impl<'a> Parser<'a> {
         Ok(words)
     }
 
-    /// Parse hash literal or block
+    /// Parse hash literal or block  
     fn parse_hash_or_block(&mut self) -> ParseResult<Node> {
+        self.parse_hash_or_block_with_context(false)
+    }
+
+    /// Parse hash literal or block with context about whether blocks are expected
+    fn parse_hash_or_block_with_context(&mut self, _expect_block: bool) -> ParseResult<Node> {
         let start_token = self.tokens.next()?; // consume {
         let start = start_token.start;
 
         // Peek ahead to determine if it's a hash or block
-        // Empty {} is always a hash ref in expression context
+        // For empty {}, decide based on context
         if self.peek_kind() == Some(TokenKind::RightBrace) {
             self.tokens.next()?; // consume }
             let end = self.previous_position();
+
+            // For empty braces, default to hash (correct for most functions)
+            // Functions like sort/map/grep have special handling that creates blocks
             return Ok(Node::new(
                 NodeKind::HashLiteral { pairs: Vec::new() },
                 SourceLocation { start, end },

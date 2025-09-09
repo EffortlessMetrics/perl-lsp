@@ -967,8 +967,9 @@ list_op_arg = {
 }
 
 // Statement boundaries where list operators stop consuming arguments
+// Include closing bracket to allow list ops inside interpolation constructs
 statement_boundary = {
-    ";" | "}" | NEWLINE | EOI | statement_modifier | "&&" | "||" | "and" | "or"
+    ";" | "}" | "]" | NEWLINE | EOI | statement_modifier | "&&" | "||" | "and" | "or"
 }
 
 // DATA/END sections

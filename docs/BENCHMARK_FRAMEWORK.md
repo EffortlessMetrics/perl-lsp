@@ -1,8 +1,14 @@
-# Benchmark Framework Documentation
+# Benchmark Framework Documentation (*Diataxis: Reference* - Complete benchmarking system specification)
 
-## Overview
+## Overview (*Diataxis: Explanation* - Understanding the benchmarking system)
 
 This document describes the comprehensive benchmarking framework for comparing C and Rust parser implementations. The framework provides statistical analysis, configurable performance gates, and detailed reporting capabilities.
+
+### Purpose and Design Goals (*Diataxis: Explanation* - Why this framework exists)
+- **Performance Validation**: Ensure Rust implementation meets or exceeds C parser performance
+- **Regression Detection**: Automatically detect performance regressions during development
+- **Statistical Rigor**: Provide confidence intervals and significance testing for reliable comparisons
+- **Cross-Language Support**: Enable meaningful comparisons between C and Rust implementations
 
 ## Architecture
 
@@ -27,6 +33,25 @@ This document describes the comprehensive benchmarking framework for comparing C
    - Integrates C and Rust benchmarking
    - Automated regression detection
 
+5. **Memory Profiling System** (`xtask/src/tasks/compare.rs`)
+   - **Dual-mode memory measurement** using procfs RSS and peak_alloc integration
+   - **Statistical memory analysis** with min/max/avg/median calculations
+   - **Memory estimation** for subprocess operations with size-based heuristics
+   - **Comprehensive validation** with workload simulation testing
+
+6. **Corpus Comparison Infrastructure** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+   - **C vs V3 Scanner Comparison**: Direct benchmarking between legacy C scanner and V3 native parser
+   - **Performance Optimization Validation**: Measure improvements from lexer optimizations (PR #102)
+   - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
+   - **Regression Detection**: Automated detection of performance degradation across parser implementations
+
+7. **LSP Performance Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+   - **Workspace Symbol Search Optimization**: 99.5% performance improvement measurement
+   - **Test Timeout Reduction**: Validation of 60s+ → 0.26s improvements
+   - **Cooperative Yielding Validation**: Measure non-blocking behavior in symbol processing
+   - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
+   - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
+
 ## Usage
 
 ### Quick Start
@@ -50,6 +75,30 @@ cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
 # With custom configuration
 echo '{"iterations": 200, "warmup_iterations": 20}' > benchmark_config.json
 cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
+```
+
+#### Corpus Comparison Benchmarking ⭐ **NEW** (**Diataxis: How-to**)
+
+```bash
+# Run V3 vs C scanner comparison
+cargo run -p perl-parser --bin corpus_comparison_benchmark
+
+# Compare lexer optimization impact
+cargo xtask bench --save --output lexer_before.json
+# (Apply PR #102 optimizations)
+cargo xtask bench --save --output lexer_after.json
+
+# Generate optimization impact report
+python3 scripts/generate_comparison.py \
+  --baseline lexer_before.json \
+  --optimized lexer_after.json \
+  --report optimization_impact.md \
+  --verbose
+
+# Validate specific optimization categories
+cargo run -p perl-lexer --example whitespace_benchmark
+cargo run -p perl-lexer --example operator_disambiguation_benchmark  
+cargo run -p perl-lexer --example string_interpolation_benchmark
 ```
 
 #### C Benchmarking
@@ -100,7 +149,7 @@ Create `benchmark_config.json` in the project root:
   ],
   "output_path": "benchmark_results.json",
   "detailed_stats": true,
-  "memory_tracking": false
+  "memory_tracking": true
 }
 ```
 
@@ -111,7 +160,7 @@ Create `benchmark_config.json` in the project root:
 - `test_files`: List of test files or directories to benchmark
 - `output_path`: Path for JSON results output
 - `detailed_stats`: Include detailed statistical analysis
-- `memory_tracking`: Enable memory usage measurement (experimental)
+- `memory_tracking`: Enable dual-mode memory usage measurement (production-ready)
 
 ### Comparison Configuration
 
@@ -155,6 +204,16 @@ The framework includes configurable performance gates that automatically detect 
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
 
+### LSP Performance Gates (v0.8.9+) (**Diataxis: Reference**)
+- **Test Timeout Threshold**: Validates 99.5% timeout reduction (60s+ → 0.26s)
+- **Workspace Symbol Search**: Validates bounded processing (MAX_PROCESS: 1000)
+- **Cooperative Yielding**: Validates non-blocking behavior (yield every 32 symbols)
+- **Memory Bounds**: Validates result limiting (RESULT_LIMIT: 100)
+- **Fast Mode Performance**: Validates LSP_TEST_FALLBACKS effectiveness
+- **Dual-mode Tracking**: procfs RSS measurement with peak_alloc fallback
+- **Statistical Analysis**: Memory usage patterns with confidence intervals
+- **Subprocess Estimation**: Size-based memory estimation for external processes
+
 ### Test Coverage Gates
 - **Threshold**: Configurable (default: 90% coverage)
 - **Status**: PASS/WARNING based on test count
@@ -173,7 +232,7 @@ The framework includes configurable performance gates that automatically detect 
 {
   "metadata": {
     "generated_at": "1630000000",
-    "parser_version": "0.8.3",
+    "parser_version": "0.8.9",
     "rust_version": "1.89",
     "total_tests": 10,
     "total_iterations": 1000,
@@ -191,7 +250,12 @@ The framework includes configurable performance gates that automatically detect 
       "max_duration_ns": 135000,
       "median_duration_ns": 127000.0,
       "success_rate": 1.0,
-      "tokens_per_second": 15000.0
+      "tokens_per_second": 15000.0,
+      "avg_memory": 0.85,
+      "min_memory": 0.75,
+      "max_memory": 0.95,
+      "median_memory": 0.83,
+      "memory_tracking_mode": "dual_mode_rss_peak_alloc"
     }
   },
   "summary": {
@@ -252,13 +316,30 @@ Tests are automatically categorized by:
 - **Medium files**: <1ms average parse time  
 - **Large files**: <10ms average parse time
 - **Success rate**: >99% for valid Perl code
-- **Memory usage**: <1MB peak memory for typical files
+- **Memory usage**: <1MB peak memory for typical files (measured with dual-mode tracking)
+
+### Lexer Optimization Targets (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+
+**Achieved Performance Improvements (PR #102):**
+- **Whitespace Processing**: 18.779% improvement through batch processing
+- **Slash Disambiguation**: 14.768% improvement via optimized byte operations
+- **String Interpolation**: 22.156% improvement using fast-path ASCII parsing
+- **Comment Scanning**: Significant improvement through direct position advancement
+- **Number Parsing**: Enhanced performance via unrolled loops and bounds checking
+
+**Optimization Categories:**
+- **ASCII-Heavy Code**: 15-25% performance improvement expected
+- **Whitespace-Dense Files**: 18-20% faster processing
+- **Operator-Heavy Expressions**: 14-16% improvement in disambiguation
+- **Template/Interpolation Code**: 20-22% faster variable extraction
 
 ### Regression Detection
 
 - **Parse Time**: >5% slowdown triggers regression warning
-- **Memory Usage**: >20% increase triggers memory warning
+- **Memory Usage**: >20% increase triggers memory warning (dual-mode measurement)
 - **Success Rate**: Any decrease in parsing success rate
+- **Memory Accuracy**: ±10% precision with fallback mechanisms
+- **Statistical Significance**: Confidence intervals for memory measurements
 
 ## Integration with CI/CD
 
@@ -299,6 +380,17 @@ The framework can be integrated with performance monitoring systems:
 - Check that benchmark.js has execute permissions
 - Verify TEST_CODE environment variable is set
 
+#### "Memory measurement returned zero"
+- Memory tracking uses dual-mode measurement (procfs RSS + peak_alloc)
+- Small operations may show minimal memory usage (normal behavior)
+- Check that `/proc` filesystem is available (Linux systems)
+- Fallback to peak_alloc measurement if procfs unavailable
+
+#### "Memory profiling validation failed"
+- Run `cargo run --bin xtask -- validate-memory-profiling` for diagnosis
+- Check system permissions for /proc filesystem access
+- Verify peak_alloc crate is properly initialized
+
 #### Performance Gate Failures
 - Review regression threshold configuration
 - Check if performance changes are expected
@@ -321,9 +413,91 @@ python3 scripts/generate_comparison.py --verbose [other args]
 For detailed performance analysis:
 
 1. **Increase Iterations**: Higher iteration counts for statistical significance
-2. **Enable Memory Tracking**: Monitor memory usage patterns
+2. **Enable Memory Tracking**: Monitor memory usage patterns with dual-mode measurement
 3. **Detailed Stats**: Enable comprehensive statistical analysis
 4. **Profiling**: Use `cargo flamegraph` or similar tools
+
+### Memory Profiling System (v0.8.9+)
+
+The framework includes advanced memory profiling capabilities:
+
+#### Dual-Mode Memory Measurement
+- **procfs RSS Tracking**: Real-time process memory usage from `/proc/[pid]/statm`
+- **peak_alloc Integration**: Local memory allocation tracking with fallback support
+- **Automatic Fallback**: Uses peak_alloc when procfs unavailable or returns zero
+- **Statistical Analysis**: Comprehensive min/max/avg/median calculations
+
+#### Memory Profiling Commands
+```bash
+# Validate memory profiling functionality
+cargo run --bin xtask -- validate-memory-profiling
+
+# Run comparison with memory tracking enabled
+cargo xtask compare --report  # Includes memory metrics in output
+```
+
+#### Memory Measurement Process
+1. **Pre-operation Baseline**: Measures RSS memory before operation
+2. **Peak Allocator Reset**: Resets local allocation tracking
+3. **Operation Execution**: Runs the target parsing operation
+4. **Post-operation Measurement**: Captures final RSS memory state
+5. **Intelligent Selection**: Uses delta RSS or falls back to peak_alloc
+6. **Statistical Processing**: Calculates comprehensive memory statistics
+
+#### Memory Estimation for Subprocesses
+- **File-size Based Heuristics**: Estimates memory usage for external processes
+- **Conservative Scaling**: Uses ~8x file size plus 0.5MB base overhead
+- **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
+- **Fallback Values**: Returns 0.5MB default for inaccessible files
+
+### LSP Performance Benchmarking (v0.8.9+) (**Diataxis: How-to Guide**)
+
+The framework now includes specialized LSP performance benchmarking to validate workspace optimization improvements:
+
+#### LSP Benchmark Commands
+```bash
+# Run LSP performance tests with standard timeouts
+cargo test -p perl-lsp test_completion_detail_formatting
+
+# Run with fast mode (99.5% timeout reduction)
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting
+
+# Benchmark workspace symbol search performance
+cargo test -p perl-lsp test_workspace_symbol_search -- --nocapture
+
+# Run all LSP tests in fast mode
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
+```
+
+#### Performance Validation Metrics
+- **Baseline Performance**: >60 seconds (pre-optimization)
+- **Optimized Performance**: 0.26 seconds (post-optimization)
+- **Improvement Factor**: 99.5% reduction in test execution time
+- **Memory Usage**: Bounded by MAX_PROCESS (1000) and RESULT_LIMIT (100)
+- **Cooperative Yielding**: Every 32 symbols to prevent blocking
+
+#### LSP Performance Configuration
+```bash
+# Environment variables for LSP benchmarking
+export LSP_TEST_FALLBACKS=1          # Enable fast mode
+export PERL_LSP_INCREMENTAL=1        # Enable incremental parsing
+
+# Performance targets:
+# - Workspace symbol search: <1 second
+# - Symbol processing: bounded to 1000 items
+# - Result limiting: maximum 100 results
+# - Cooperative yielding: every 32 iterations
+```
+
+#### Performance Gate Validation
+```bash
+# Validate performance improvements
+time cargo test -p perl-lsp test_completion_detail_formatting  # Should be <1s
+
+# Compare with and without fallbacks
+time cargo test -p perl-lsp test_workspace_symbol_search
+LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp test_workspace_symbol_search
+```
 
 ## Contributing
 

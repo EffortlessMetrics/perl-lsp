@@ -3,11 +3,18 @@
 //! This module provides syntax error detection, linting, and code quality checks.
 
 use crate::ast::{Node, NodeKind};
+use crate::dead_code_detector::{DeadCodeDetector, DeadCodeType};
 use crate::error::ParseError;
 use crate::error_classifier::ErrorClassifier;
 use crate::pragma_tracker::PragmaTracker;
 use crate::scope_analyzer::{IssueKind, ScopeAnalyzer};
 use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use crate::workspace_index::WorkspaceIndex;
+use lsp_types::{
+    Diagnostic as LspDiagnostic, DiagnosticSeverity as LspDiagnosticSeverity,
+    DiagnosticTag as LspDiagnosticTag, NumberOrString, Position, Range,
+};
+use std::path::Path;
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -330,18 +337,17 @@ impl DiagnosticsProvider {
         F: FnMut(&Node),
     {
         func(node);
+        self.visit_children(node, func);
+    }
 
-        // Visit children based on node kind
+    /// Visit child nodes based on node kind (extracted to reduce complexity)
+    fn visit_children<F>(&self, node: &Node, func: &mut F)
+    where
+        F: FnMut(&Node),
+    {
         match &node.kind {
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    self.walk_node(stmt, func);
-                }
-            }
-            NodeKind::Block { statements } => {
-                for stmt in statements {
-                    self.walk_node(stmt, func);
-                }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.iter().for_each(|stmt| self.walk_node(stmt, func));
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.walk_node(condition, func);
@@ -363,9 +369,7 @@ impl DiagnosticsProvider {
                 self.walk_node(right, func);
             }
             NodeKind::FunctionCall { args, .. } => {
-                for arg in args {
-                    self.walk_node(arg, func);
-                }
+                args.iter().for_each(|arg| self.walk_node(arg, func));
             }
             NodeKind::ExpressionStatement { expression } => {
                 self.walk_node(expression, func);
@@ -426,6 +430,60 @@ impl DiagnosticsProvider {
                 && a.message == b.message
         });
     }
+}
+
+/// Convert dead code analysis into LSP diagnostics for a single file
+pub fn dead_code_lsp_diagnostics(index: &WorkspaceIndex, file_path: &Path) -> Vec<LspDiagnostic> {
+    let detector = DeadCodeDetector::new(index.clone());
+    let mut diagnostics = Vec::new();
+
+    // Safely handle analysis errors by logging and continuing
+    let items = match detector.analyze_file(file_path) {
+        Ok(items) => items,
+        Err(_) => {
+            // Could log error here in a real implementation
+            return diagnostics;
+        }
+    };
+
+    for item in items {
+        let (code, message, tags_vec) = match item.code_type {
+            DeadCodeType::UnusedSubroutine => (
+                "unused-subroutine",
+                format!("Subroutine `{}` is never used", item.name.clone().unwrap_or_default()),
+                vec![LspDiagnosticTag::UNNECESSARY],
+            ),
+            DeadCodeType::UnusedVariable => (
+                "unused-variable",
+                format!("Variable `{}` is never used", item.name.clone().unwrap_or_default()),
+                vec![LspDiagnosticTag::UNNECESSARY],
+            ),
+            DeadCodeType::UnreachableCode => ("unreachable-code", item.reason.clone(), Vec::new()),
+            _ => continue,
+        };
+
+        let start_line = item.start_line.saturating_sub(1) as u32;
+        let end_line = item.end_line.saturating_sub(1) as u32;
+
+        let range = Range {
+            start: Position { line: start_line, character: 0 },
+            end: Position { line: end_line, character: 0 },
+        };
+
+        diagnostics.push(LspDiagnostic {
+            range,
+            severity: Some(LspDiagnosticSeverity::WARNING),
+            code: Some(NumberOrString::String(code.to_string())),
+            code_description: None,
+            source: Some("perl-lsp".to_string()),
+            message,
+            related_information: None,
+            tags: if tags_vec.is_empty() { None } else { Some(tags_vec) },
+            data: None,
+        });
+    }
+
+    diagnostics
 }
 
 #[cfg(test)]

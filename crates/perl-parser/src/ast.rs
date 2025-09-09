@@ -271,10 +271,17 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body } => {
+            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
                 if let Some(sub_name) = name {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
+
+                    // Add attributes if present (before prototype/signature)
+                    if !attributes.is_empty() {
+                        for attr in attributes {
+                            parts.push(format!(":{}", attr));
+                        }
+                    }
 
                     // Add prototype/signature - use () for empty prototype
                     if let Some(proto) = prototype {
@@ -289,9 +296,12 @@ impl Node {
                     // Add body
                     parts.push(body.to_sexp());
 
-                    // Format: (sub name ()(block ...)) - space between name and (), no space between () and block
-                    if parts.len() == 3 && parts[1] == "()" {
-                        format!("(sub {} {}{})", parts[0], parts[1], parts[2])
+                    // Format: (sub name [attrs...] ()(block ...)) - space between name and (), no space between () and block
+                    if parts.len() >= 3 && parts[parts.len() - 2] == "()" {
+                        let name_and_attrs = parts[0..parts.len() - 2].join(" ");
+                        let proto = &parts[parts.len() - 2];
+                        let body = &parts[parts.len() - 1];
+                        format!("(sub {} {}{})", name_and_attrs, proto, body)
                     } else {
                         format!("(sub {})", parts.join(" "))
                     }
@@ -464,7 +474,7 @@ impl Node {
                 )
             }
 
-            NodeKind::Package { name, block } => {
+            NodeKind::Package { name, block, name_span: _ } => {
                 if let Some(blk) = block {
                     format!("(package {} {})", name, blk.to_sexp())
                 } else {
@@ -720,7 +730,27 @@ pub enum NodeKind {
 
     // Functions
     Subroutine {
+        /// Name of the subroutine
+        ///
+        /// # Precise Navigation Support
+        /// - Added name_span for exact LSP navigation
+        /// - Enables precise go-to-definition and hover behavior
+        /// - O(1) span lookup in workspace symbols
+        ///
+        /// ## Integration Points
+        /// - Semantic token providers
+        /// - Cross-reference generation
+        /// - Symbol renaming
         name: Option<String>,
+
+        /// Source location span of the subroutine name
+        ///
+        /// ## Usage Notes
+        /// - Always corresponds to the name field
+        /// - Provides constant-time position information
+        /// - Essential for precise editor interactions
+        name_span: Option<SourceLocation>,
+
         prototype: Option<Box<Node>>,
         signature: Option<Box<Node>>,
         attributes: Vec<String>,
@@ -813,7 +843,27 @@ pub enum NodeKind {
 
     // Package system
     Package {
+        /// Name of the package
+        ///
+        /// # Precise Navigation Support
+        /// - Added name_span for exact LSP navigation
+        /// - Enables precise go-to-definition and hover behavior
+        /// - O(1) span lookup in workspace symbols
+        ///
+        /// ## Integration Points
+        /// - Workspace indexing
+        /// - Cross-module symbol resolution
+        /// - Code action providers
         name: String,
+
+        /// Source location span of the package name
+        ///
+        /// ## Usage Notes
+        /// - Always corresponds to the name field
+        /// - Provides constant-time position information
+        /// - Essential for precise editor interactions
+        name_span: SourceLocation,
+
         block: Option<Box<Node>>,
     },
 

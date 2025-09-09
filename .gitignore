@@ -24,3 +24,8 @@ log.html
 # Property test regression files
 **/tests/_proptest-regressions/
 scripts/__pycache__/
+
+# Python cache files
+scripts/__pycache__/
+*.pyc
+releases/

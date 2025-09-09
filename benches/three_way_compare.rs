@@ -5,7 +5,8 @@
 //! 2. Legacy C parser (original tree-sitter-perl)
 //! 3. Modern parser (perl-lexer + perl-parser)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use std::hint::black_box;
 use std::time::Duration;
 
 // Test cases of varying complexity

@@ -1,10 +1,12 @@
 ---
 source: crates/perl-lsp/tests/lsp_features_snapshot_test.rs
-assertion_line: 39
 expression: "&snapshot_data"
 ---
 caps:
+  - lsp.call_hierarchy
   - lsp.code_action
+  - lsp.code_lens
+  - lsp.color
   - lsp.completion
   - lsp.definition
   - lsp.document_highlight
