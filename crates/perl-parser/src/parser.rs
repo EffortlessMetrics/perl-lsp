@@ -2296,6 +2296,11 @@ impl<'a> Parser<'a> {
                                 && self.peek_kind() == Some(TokenKind::My)
                             {
                                 args.push(self.parse_variable_declaration()?);
+                            } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
+                                && self.peek_kind() == Some(TokenKind::LeftBrace)
+                            {
+                                // Special handling for map/grep/sort with block first argument
+                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // For builtins, don't parse word operators as part of arguments
                                 // Word operators should be handled at statement level
@@ -3514,6 +3519,9 @@ impl<'a> Parser<'a> {
                                     }
                                     args.push(self.parse_comma()?);
                                 }
+                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
+                                // These builtins should parse {} as blocks, not hashes
+                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);
@@ -4809,6 +4817,25 @@ impl<'a> Parser<'a> {
 
         self.expect(close_delim)?;
         Ok(words)
+    }
+
+    /// Parse block specifically for builtin functions (map, grep, sort)
+    /// These always parse {} as blocks, never as hashes
+    fn parse_builtin_block(&mut self) -> ParseResult<Node> {
+        let start_token = self.tokens.next()?; // consume {
+        let start = start_token.start;
+
+        // Parse the expression inside the block (if any)
+        let mut statements = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RightBrace) {
+            statements.push(self.parse_expression()?);
+        }
+
+        self.expect(TokenKind::RightBrace)?;
+        let end = self.previous_position();
+
+        // Always return a block node for builtin functions
+        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
     }
 
     /// Parse hash literal or block
