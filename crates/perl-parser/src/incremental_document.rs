@@ -462,7 +462,7 @@ impl IncrementalDocument {
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
         let priority = self.get_symbol_priority(node);
-        
+
         self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
         self.subtree_cache.critical_symbols.insert(hash, priority);
         self.subtree_cache.lru.push_back(hash);
@@ -531,21 +531,23 @@ impl IncrementalDocument {
             NodeKind::Package { .. } => SymbolPriority::Critical,
             NodeKind::Use { .. } | NodeKind::No { .. } => SymbolPriority::Critical,
             NodeKind::Subroutine { .. } => SymbolPriority::Critical,
-            
+
             // High priority symbols for completion and navigation
             NodeKind::FunctionCall { .. } => SymbolPriority::High,
             NodeKind::Variable { .. } => SymbolPriority::High,
             NodeKind::VariableDeclaration { .. } => SymbolPriority::High,
-            
+
             // Medium priority for structural elements
             NodeKind::Block { .. } => SymbolPriority::Medium,
-            NodeKind::If { .. } | NodeKind::While { .. } | NodeKind::For { .. } => SymbolPriority::Medium,
+            NodeKind::If { .. } | NodeKind::While { .. } | NodeKind::For { .. } => {
+                SymbolPriority::Medium
+            }
             NodeKind::Assignment { .. } => SymbolPriority::Medium,
-            
+
             // Low priority for literals and simple expressions
             NodeKind::Number { .. } | NodeKind::String { .. } => SymbolPriority::Low,
             NodeKind::Binary { .. } | NodeKind::Unary { .. } => SymbolPriority::Low,
-            
+
             // Default to medium for unknown types
             _ => SymbolPriority::Medium,
         }
@@ -616,11 +618,9 @@ impl SubtreeCache {
     /// Find the least important cache entry for eviction
     /// Prioritizes removing low-priority symbols first, then oldest entries
     fn find_least_important_entry(&self) -> Option<u64> {
-        let mut candidates: Vec<(u64, SymbolPriority)> = self.critical_symbols
-            .iter()
-            .map(|(&hash, priority)| (hash, *priority))
-            .collect();
-        
+        let mut candidates: Vec<(u64, SymbolPriority)> =
+            self.critical_symbols.iter().map(|(&hash, priority)| (hash, *priority)).collect();
+
         // Sort by priority (ascending), then by LRU position (oldest first)
         candidates.sort_by(|a, b| {
             let priority_cmp = a.1.cmp(&b.1);
@@ -632,7 +632,7 @@ impl SubtreeCache {
             let b_pos = self.lru.iter().position(|&h| h == b.0).unwrap_or(usize::MAX);
             a_pos.cmp(&b_pos)
         });
-        
+
         candidates.first().map(|(hash, _)| *hash)
     }
 
@@ -703,12 +703,14 @@ mod tests {
         doc.apply_edits(&edits).unwrap();
 
         // Cache should preserve critical symbols even during batch edits
-        let critical_count = doc.subtree_cache.critical_symbols
+        let critical_count = doc
+            .subtree_cache
+            .critical_symbols
             .values()
             .filter(|&p| *p == SymbolPriority::Critical)
             .count();
         assert!(critical_count > 0, "Should preserve critical symbols during batch edits");
-        
+
         // TODO: enable metrics assertions once multi-edit reuse is fully implemented
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
@@ -723,7 +725,7 @@ mod tests {
         assert!(!doc.subtree_cache.by_range.is_empty());
         assert!(!doc.subtree_cache.by_content.is_empty());
     }
-    
+
     #[test]
     fn test_symbol_priority_classification() {
         let source = r#"
@@ -738,20 +740,25 @@ mod tests {
             }
         "#;
         let doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Verify we have different priority levels in cache
-        let priorities: std::collections::HashSet<_> = doc.subtree_cache.critical_symbols
-            .values()
-            .cloned()
-            .collect();
-        
+        let priorities: std::collections::HashSet<_> =
+            doc.subtree_cache.critical_symbols.values().cloned().collect();
+
         // Should have critical symbols (package, use, sub)
-        assert!(priorities.contains(&SymbolPriority::Critical), "Should classify package/use/sub as critical");
+        assert!(
+            priorities.contains(&SymbolPriority::Critical),
+            "Should classify package/use/sub as critical"
+        );
         // Should have high priority symbols (variables)
-        assert!(priorities.contains(&SymbolPriority::High), "Should classify variables as high priority");
+        assert!(
+            priorities.contains(&SymbolPriority::High),
+            "Should classify variables as high priority"
+        );
         // Should have lower priority symbols (literals, operators)
         assert!(
-            priorities.contains(&SymbolPriority::Low) || priorities.contains(&SymbolPriority::Medium),
+            priorities.contains(&SymbolPriority::Low)
+                || priorities.contains(&SymbolPriority::Medium),
             "Should have lower priority symbols"
         );
     }
@@ -792,22 +799,24 @@ mod tests {
             }
         "#;
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Store initial cache state
         let initial_cache_size = doc.subtree_cache.by_content.len();
         assert!(initial_cache_size > 3, "Should have multiple cached nodes");
-        
+
         // Set very small cache to force aggressive eviction
         doc.set_cache_max_size(3);
         assert!(doc.subtree_cache.by_content.len() <= 3);
-        
+
         // Check that critical symbols are preserved
-        let has_critical_symbols = doc.subtree_cache.critical_symbols
+        let has_critical_symbols = doc
+            .subtree_cache
+            .critical_symbols
             .values()
             .cloned()
             .any(|p| p == SymbolPriority::Critical);
         assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
-        
+
         // Apply edit and verify critical symbols remain
         let edit = IncrementalEdit::new(
             source.find("42").unwrap(),
@@ -816,15 +825,17 @@ mod tests {
         );
         doc.apply_edit(edit).unwrap();
         assert!(doc.subtree_cache.by_content.len() <= 3);
-        
+
         // Still should have critical symbols after edit
-        let has_critical_after_edit = doc.subtree_cache.critical_symbols
+        let has_critical_after_edit = doc
+            .subtree_cache
+            .critical_symbols
             .values()
             .cloned()
             .any(|p| p == SymbolPriority::Critical);
         assert!(has_critical_after_edit, "Should preserve critical symbols after edit");
     }
-    
+
     #[test]
     fn test_workspace_symbol_cache_preservation() {
         let source = r#"
@@ -836,18 +847,20 @@ mod tests {
             my $global_var = "test";
         "#;
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Force small cache size
         doc.set_cache_max_size(2);
-        
+
         // Verify package declaration is preserved (critical for workspace symbols)
-        let package_preserved = doc.subtree_cache.by_content
+        let package_preserved = doc
+            .subtree_cache
+            .by_content
             .values()
             .any(|node| matches!(node.kind, NodeKind::Package { .. }));
         assert!(package_preserved, "Package declaration should be preserved for workspace symbols");
     }
-    
-    #[test] 
+
+    #[test]
     fn test_completion_metadata_preservation() {
         let source = r#"
             use Data::Dumper;
@@ -859,24 +872,31 @@ mod tests {
             }
         "#;
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Force cache eviction
         doc.set_cache_max_size(4);
-        
+
         // Verify use statements are preserved (critical for completion)
-        let use_statements_count = doc.subtree_cache.by_content
+        let use_statements_count = doc
+            .subtree_cache
+            .by_content
             .values()
             .filter(|node| matches!(node.kind, NodeKind::Use { .. }))
             .count();
-        assert!(use_statements_count >= 1, "Use statements should be preserved for completion metadata");
-        
+        assert!(
+            use_statements_count >= 1,
+            "Use statements should be preserved for completion metadata"
+        );
+
         // Verify function definitions are preserved
-        let function_preserved = doc.subtree_cache.by_content
+        let function_preserved = doc
+            .subtree_cache
+            .by_content
             .values()
             .any(|node| matches!(node.kind, NodeKind::Subroutine { .. }));
         assert!(function_preserved, "Function definitions should be preserved for completion");
     }
-    
+
     #[test]
     fn test_code_lens_reference_preservation() {
         let source = r#"
@@ -893,12 +913,14 @@ mod tests {
             }
         "#;
         let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
-        
+
         // Force aggressive cache eviction
         doc.set_cache_max_size(3);
-        
+
         // Package and subroutines should be preserved for code lens reference counting
-        let critical_nodes = doc.subtree_cache.by_content
+        let critical_nodes = doc
+            .subtree_cache
+            .by_content
             .values()
             .filter(|node| {
                 matches!(node.kind, NodeKind::Package { .. } | NodeKind::Subroutine { .. })
