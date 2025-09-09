@@ -281,6 +281,7 @@ cargo test -p perl-parser --test scope_analyzer_tests        # Scope analysis ed
 cargo test -p perl-parser edge_case                          # Edge case pattern tests
 cargo test -p perl-parser regex                              # Regex delimiter tests
 cargo test -p perl-parser heredoc                            # Heredoc edge cases
+cargo test -p perl-parser builtin_empty_blocks               # Enhanced builtin function parsing (15/15 tests)
 ```
 
 ## Scope Analyzer Testing
@@ -296,6 +297,28 @@ cargo test -p perl-parser scope_analyzer_tests::test_complex_variable_patterns
 
 # Test hash key context detection
 cargo test -p perl-parser scope_analyzer_tests::test_hash_key_context_detection
+```
+
+## Builtin Function Testing (*Diataxis: Reference* - Complete builtin function test coverage)
+
+```bash
+# Run all builtin function tests (15/15 tests passing)
+cargo test -p perl-parser --test builtin_empty_blocks_test
+
+# Test specific builtin functions with empty blocks
+cargo test -p perl-parser builtin_empty_blocks_test::test_sort_empty_block
+cargo test -p perl-parser builtin_empty_blocks_test::test_map_empty_block  
+cargo test -p perl-parser builtin_empty_blocks_test::test_grep_empty_block
+
+# Test builtin function parsing in LSP context
+cargo test -p perl-lsp lsp_builtins_test
+
+# Verify AST consistency for builtin functions
+cargo test -p perl-parser builtin_empty_blocks -- --nocapture  # Shows S-expression output
+
+# Test enhanced builtin function signatures
+cargo test -p perl-parser builtin_signatures_test              # 150+ builtin function signatures
+cargo test -p perl-parser builtin_signatures_edge_cases_test   # Edge cases for builtin signatures
 ```
 
 ## LSP Development Commands

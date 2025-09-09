@@ -49,7 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Missing import detection for Module::symbol references (planned)
   - Optimized import generation with alphabetical sorting
   - Complete test coverage with 9 comprehensive test cases
-- **Built-in Function Parsing Enhancement** - Fixed 15 test failures in builtin_empty_blocks_test.rs
+- **Enhanced Builtin Function Parsing (Issue #110)** - Comprehensive resolution of empty block parsing for map/grep/sort functions:
+  - **Deterministic Block Parsing**: Added dedicated `parse_builtin_block()` method ensuring {} is always parsed as Block nodes, never HashLiteral nodes
+  - **Complete AST Consistency**: All 15 builtin function tests now passing (15/15) with consistent AST generation
+  - **Maintained API Compatibility**: Enhancement preserves backward compatibility while improving parser accuracy
+  - **Comprehensive S-Expression Support**: Consistent output format "(call map ((block ) (variable @ array)))" for all empty block scenarios
+  - **Production Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 - **Architectural Quality Improvements** - Zero clippy warnings, consistent formatting across all crates
 
 ### Changed - **Enterprise Architecture Enhancements**

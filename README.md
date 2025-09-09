@@ -130,6 +130,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Zero Dependencies**: Clean, maintainable codebase
 - **100% Edge Case Coverage**: 141/141 edge case tests passing
 - **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
+- **Enhanced Builtin Function Support**: Deterministic empty block parsing for map/grep/sort functions
 - **Production Ready**: Feature-complete with comprehensive testing
 
 ### v2: Pest-based Pure Rust Parser
@@ -914,6 +915,7 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 **LSP Server**: ✅ 33+ comprehensive E2E tests passing (enhanced workspace navigation)  
 **DAP Server**: ✅ 19+ comprehensive tests passing (debug adapter protocol)  
 **Scope Analyzer**: ✅ 41+ comprehensive tests passing (enhanced parameter handling)  
+**Builtin Functions**: ✅ 15+ tests passing (enhanced empty block parsing for map/grep/sort functions)  
 **Corpus Tests**: ✅ 12+ tests passing (comprehensive edge case validation)  
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage, legacy support)  
 **v1 Parser (C)**: ⚠️ Limited edge case support (reference baseline)  
@@ -942,6 +944,7 @@ See [Edge Case Documentation](docs/EDGE_CASES.md) for implementation details.
 - [Development Guide](DEVELOPMENT.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 - [Edge Case Handling](docs/EDGE_CASES.md) - Comprehensive edge case guide
+- [Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md) - Enhanced empty block parsing for map/grep/sort
 - [Heredoc Implementation](docs/HEREDOC_IMPLEMENTATION.md) - Core heredoc parsing
 - [Pure Rust Scanner](./crates/tree-sitter-perl-rs/src/scanner/) - Scanner implementation
 - [Workspace Test Report](WORKSPACE_TEST_REPORT.md) - Current workspace configuration status and build reliability

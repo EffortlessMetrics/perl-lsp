@@ -17,9 +17,10 @@
   - **Enterprise-grade safety and validation** - comprehensive error handling, input validation, and rollback support
   - **Precise name span tracking** - Enhanced AST nodes with O(1) position lookups for Subroutine and Package declarations
   - **Production-stable AST generation** - Comprehensive S-expression generation with 50+ operators and enhanced navigation
+  - **Enhanced builtin function parsing** - Deterministic empty block parsing for map/grep/sort functions with consistent AST generation
 
 - **Key Files**:
-  - `src/parser.rs`: Recursive descent parser with precise name span calculation
+  - `src/parser.rs`: Recursive descent parser with precise name span calculation and enhanced builtin function parsing (`parse_builtin_block` method)
   - `src/ast.rs`: AST definitions with enhanced navigation and name_span fields
   - `src/textdoc.rs`: Core document management with `ropey::Rope`
   - `src/position_mapper.rs`: UTF-16/UTF-8 position conversion

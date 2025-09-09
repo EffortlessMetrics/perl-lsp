@@ -1272,6 +1272,8 @@ pub struct SignatureInfo {
 **Built-in Function Support**:
 - Comprehensive parameter extraction from built-in signatures
 - Support for variadic parameters (LIST, EXPR patterns)
+- Enhanced empty block parsing for map/grep/sort functions with deterministic AST generation
+- Consistent Block node generation for builtin functions using {} syntax
 - Active parameter tracking during function call typing
 
 **User-Defined Subroutine Integration**:

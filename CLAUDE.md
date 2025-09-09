@@ -99,12 +99,13 @@ perl-lsp --stdio --log                  # Run LSP server with logging
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function empty block parsing
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
 - **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, import optimization
+- **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
 
 ## Documentation
 
@@ -119,12 +120,14 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
+- **[Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort functions
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
 - **[Source Threading](docs/SOURCE_THREADING_GUIDE.md)** - Comment documentation extraction
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
+- **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 
 ## Development Guidelines
 
