@@ -4,10 +4,13 @@
 //! that can be used with any LSP-compatible editor.
 
 use crate::{
+    CodeActionKind as InternalCodeActionKind, CodeActionKindV2 as InternalCodeActionKindV2,
+    CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
+    DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
-    code_lens_provider::{get_shebang_lens, resolve_code_lens, CodeLensProvider},
+    code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
@@ -16,34 +19,34 @@ use crate::{
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
-    semantic_tokens_provider::{encode_semantic_tokens, SemanticTokensProvider},
+    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
-    CodeActionKind as InternalCodeActionKind, CodeActionKindV2 as InternalCodeActionKindV2,
-    CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
-    DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
 };
 use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{uri_to_fs_path, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol};
+use crate::workspace_index::{
+    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
+    uri_to_fs_path,
+};
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -190,11 +193,7 @@ pub(crate) struct DocumentState {
 
 /// Normalize legacy package separator ' to ::
 fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
-    if s.contains('\'') {
-        Cow::Owned(s.replace('\'', "::"))
-    } else {
-        Cow::Borrowed(s)
-    }
+    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
 }
 
 /// Server configuration
@@ -499,11 +498,7 @@ impl LspServer {
 
     /// Check if a request has been cancelled
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() {
-            set.contains(id)
-        } else {
-            false
-        }
+        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
     }
 
     /// Handle a JSON-RPC request
@@ -1118,7 +1113,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{apply_changes, Doc, PosEnc};
+                use crate::textdoc::{Doc, PosEnc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
@@ -4818,8 +4813,56 @@ impl LspServer {
             .rev()
             .collect::<String>();
 
+        // Check if we're in a method call context (after ->)
+        let is_method_call = text_before.ends_with("->")
+            || text_before
+                .chars()
+                .rev()
+                .skip_while(|c| c.is_alphanumeric() || *c == '_')
+                .take(2)
+                .collect::<String>()
+                == ">-";
+
         // Check what sigil we're after (if any)
         let sigil = text_before.chars().rev().find(|&c| !(c.is_alphanumeric() || c == '_'));
+
+        // If we're completing after '->', provide common method completions
+        if is_method_call {
+            let common_methods = [
+                ("new", "constructor"),
+                ("init", "initializer"),
+                ("process", "processor"),
+                ("run", "executor"),
+                ("execute", "executor"),
+                ("handle", "handler"),
+                ("get", "getter"),
+                ("set", "setter"),
+                ("create", "constructor"),
+                ("build", "builder"),
+                ("parse", "parser"),
+                ("format", "formatter"),
+                ("validate", "validator"),
+                ("transform", "transformer"),
+                ("render", "renderer"),
+            ];
+
+            for (method, kind) in &common_methods {
+                if method.starts_with(&prefix) || prefix.is_empty() {
+                    completions.push(crate::completion::CompletionItem {
+                        label: method.to_string(),
+                        kind: CompletionItemKind::Function,
+                        detail: Some(format!("method ({})", kind)),
+                        documentation: None,
+                        insert_text: Some(method.to_string()),
+                        additional_edits: vec![],
+                        sort_text: None,
+                        filter_text: None,
+                        text_edit_range: None,
+                    });
+                }
+            }
+            return completions; // Return early for method completions
+        }
 
         // Basic keywords that match the prefix
         let keywords = [
@@ -5104,8 +5147,11 @@ impl LspServer {
                 })
                 .collect();
 
-            eprintln!("Found {} symbols from index", lsp_symbols.len());
-            return Ok(Some(json!(lsp_symbols)));
+            // If the workspace index is empty (e.g., due to parsing failures),
+            // fall back to document-based search for better test reliability
+            if !lsp_symbols.is_empty() {
+                return Ok(Some(json!(lsp_symbols)));
+            }
         }
 
         // Fallback to document-based search
@@ -5132,10 +5178,13 @@ impl LspServer {
                         all_symbols.push(sym);
                     }
                 }
+            } else {
+                // Text-based fallback when AST is not available
+                let text_symbols = self.extract_text_based_symbols(&doc.text, uri, query);
+                all_symbols.extend(text_symbols);
             }
         }
 
-        eprintln!("Found {} symbols from documents", all_symbols.len());
         Ok(Some(json!(all_symbols)))
     }
 
@@ -5266,8 +5315,6 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            eprintln!("Getting code lenses for: {}", uri);
-
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
@@ -5279,9 +5326,11 @@ impl LspServer {
                         lenses.insert(0, shebang_lens);
                     }
 
-                    eprintln!("Found {} code lenses", lenses.len());
-
                     return Ok(Some(json!(lenses)));
+                } else {
+                    // Text-based fallback when AST is not available
+                    let text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    return Ok(Some(json!(text_lenses)));
                 }
             }
         }
@@ -5322,6 +5371,10 @@ impl LspServer {
                 for (_uri, doc) in documents.iter() {
                     if let Some(ref ast) = doc.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
+                    } else {
+                        // Text-based fallback when AST is not available
+                        total_references +=
+                            self.count_references_text_based(&doc.text, symbol_name, symbol_kind);
                     }
                 }
 
@@ -5481,6 +5534,224 @@ impl LspServer {
         }
 
         Ok(Some(Value::Null))
+    }
+
+    /// Count references to a symbol using text-based search
+    fn count_references_text_based(
+        &self,
+        text: &str,
+        symbol_name: &str,
+        symbol_kind: &str,
+    ) -> usize {
+        let mut count = 0;
+
+        match symbol_kind {
+            "package" => {
+                // Count package usage (use statements, new() calls, etc.)
+                use regex::Regex;
+
+                // Count "use PackageName" statements
+                if let Ok(use_regex) =
+                    Regex::new(&format!(r"\buse\s+{}\b", regex::escape(symbol_name)))
+                {
+                    count += use_regex.find_iter(text).count();
+                }
+
+                // Count "PackageName->new()" or "PackageName->method()" calls
+                if let Ok(call_regex) = Regex::new(&format!(r"\b{}->", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "bless ... PackageName" statements
+                if let Ok(bless_regex) =
+                    Regex::new(&format!(r"bless\s+.*?,\s*{}", regex::escape(symbol_name)))
+                {
+                    count += bless_regex.find_iter(text).count();
+                }
+            }
+            "subroutine" => {
+                // Count function calls
+                use regex::Regex;
+
+                // Count "function_name(" calls
+                if let Ok(call_regex) =
+                    Regex::new(&format!(r"\b{}\s*\(", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "&function_name" references
+                if let Ok(ref_regex) = Regex::new(&format!(r"&{}\b", regex::escape(symbol_name))) {
+                    count += ref_regex.find_iter(text).count();
+                }
+            }
+            _ => {
+                // Generic symbol name search for unknown kinds
+                use regex::Regex;
+                if let Ok(generic_regex) =
+                    Regex::new(&format!(r"\b{}\b", regex::escape(symbol_name)))
+                {
+                    count += generic_regex.find_iter(text).count();
+                    // Don't count the definition itself if it exists
+                    if count > 0 {
+                        count = count.saturating_sub(1);
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    /// Extract code lenses from text when AST parsing fails
+    fn extract_text_based_code_lenses(
+        &self,
+        text: &str,
+        _uri: &str,
+    ) -> Vec<crate::code_lens_provider::CodeLens> {
+        let mut lenses = Vec::new();
+
+        // Use simple regex patterns to find common Perl constructs that should have code lenses
+        use regex::Regex;
+
+        // Find package declarations
+        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = pkg_regex.captures(line) {
+                    if let Some(pkg_name) = captures.get(1) {
+                        let name = pkg_name.as_str().to_string();
+
+                        lenses.push(crate::code_lens_provider::CodeLens {
+                            range: crate::code_lens_provider::Range {
+                                start: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: pkg_name.start() as u32,
+                                },
+                                end: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: pkg_name.end() as u32,
+                                },
+                            },
+                            command: None, // Will be resolved later
+                            data: Some(json!({
+                                "name": name,
+                                "kind": "package"
+                            })),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Find subroutine declarations
+        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = sub_regex.captures(line) {
+                    if let Some(sub_name) = captures.get(1) {
+                        let name = sub_name.as_str().to_string();
+
+                        lenses.push(crate::code_lens_provider::CodeLens {
+                            range: crate::code_lens_provider::Range {
+                                start: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: sub_name.start() as u32,
+                                },
+                                end: crate::code_lens_provider::Position {
+                                    line: line_num as u32,
+                                    character: sub_name.end() as u32,
+                                },
+                            },
+                            command: None, // Will be resolved later
+                            data: Some(json!({
+                                "name": name,
+                                "kind": "subroutine"
+                            })),
+                        });
+                    }
+                }
+            }
+        }
+
+        lenses
+    }
+
+    /// Extract symbols from text when AST parsing fails
+    fn extract_text_based_symbols(
+        &self,
+        text: &str,
+        uri: &str,
+        query: &str,
+    ) -> Vec<LspWorkspaceSymbol> {
+        let mut symbols = Vec::new();
+        let query_lower = query.to_lowercase();
+
+        // Use simple regex patterns to find common Perl symbols
+        use regex::Regex;
+
+        // Find subroutine definitions
+        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = sub_regex.captures(line) {
+                    if let Some(sub_name) = captures.get(1) {
+                        let name = sub_name.as_str().to_string();
+                        if name.to_lowercase().contains(&query_lower) {
+                            symbols.push(LspWorkspaceSymbol {
+                                name,
+                                kind: 12, // Function
+                                location: LspLocation {
+                                    uri: uri.to_string(),
+                                    range: LspRange {
+                                        start: LspPosition {
+                                            line: line_num as u32,
+                                            character: sub_name.start() as u32,
+                                        },
+                                        end: LspPosition {
+                                            line: line_num as u32,
+                                            character: sub_name.end() as u32,
+                                        },
+                                    },
+                                },
+                                container_name: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find package declarations
+        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
+            for (line_num, line) in text.lines().enumerate() {
+                if let Some(captures) = pkg_regex.captures(line) {
+                    if let Some(pkg_name) = captures.get(1) {
+                        let name = pkg_name.as_str().to_string();
+                        if name.to_lowercase().contains(&query_lower) {
+                            symbols.push(LspWorkspaceSymbol {
+                                name,
+                                kind: 4, // Namespace
+                                location: LspLocation {
+                                    uri: uri.to_string(),
+                                    range: LspRange {
+                                        start: LspPosition {
+                                            line: line_num as u32,
+                                            character: pkg_name.start() as u32,
+                                        },
+                                        end: LspPosition {
+                                            line: line_num as u32,
+                                            character: pkg_name.end() as u32,
+                                        },
+                                    },
+                                },
+                                container_name: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        symbols
     }
 
     /// Extract workspace symbols from a document's AST
@@ -6425,7 +6696,7 @@ impl LspServer {
                 };
 
                 // Add named argument hints for => pairs
-                use crate::builtin_signatures_phf::{get_param_names, BUILTIN_SIGS};
+                use crate::builtin_signatures_phf::{BUILTIN_SIGS, get_param_names};
                 use regex::Regex;
                 use std::collections::HashSet;
                 lazy_static::lazy_static! {
@@ -7474,9 +7745,9 @@ impl LspServer {
     /// Register file watchers for Perl files
     fn register_file_watchers_async(&self) {
         use lsp_types::{
-            notification::{DidChangeWatchedFiles, Notification},
             DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
             RegistrationParams, WatchKind,
+            notification::{DidChangeWatchedFiles, Notification},
         };
 
         if !self.advertised_features.lock().unwrap().workspace_symbol {
