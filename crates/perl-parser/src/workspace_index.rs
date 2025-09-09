@@ -383,9 +383,21 @@ impl WorkspaceIndex {
         let files = self.files.read().unwrap();
 
         for (_uri_key, file_index) in files.iter() {
+            // Search for exact match first
             if let Some(refs) = file_index.references.get(symbol_name) {
                 for reference in refs {
                     locations.push(Location { uri: reference.uri.clone(), range: reference.range });
+                }
+            }
+
+            // If the symbol is qualified, also search for bare name references
+            if let Some(idx) = symbol_name.rfind("::") {
+                let bare_name = &symbol_name[idx + 2..];
+                if let Some(refs) = file_index.references.get(bare_name) {
+                    for reference in refs {
+                        locations
+                            .push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
                 }
             }
         }
@@ -608,9 +620,23 @@ impl WorkspaceIndex {
 
     /// Find all reference locations for a symbol key
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
-        // For now, use the qualified name approach
         let qualified_name = format!("{}::{}", key.pkg, key.name);
-        self.find_references(&qualified_name)
+        let mut all_refs = self.find_references(&qualified_name);
+        all_refs.extend(self.find_references(&key.name));
+
+        // Deduplicate by URI and range
+        let mut seen = HashSet::new();
+        all_refs.retain(|loc| {
+            seen.insert((
+                loc.uri.clone(),
+                loc.range.start.line,
+                loc.range.start.character,
+                loc.range.end.line,
+                loc.range.end.character,
+            ))
+        });
+
+        all_refs
     }
 }
 
@@ -770,11 +796,28 @@ impl IndexVisitor {
 
             NodeKind::FunctionCall { name, args, .. } => {
                 let func_name = name.clone();
+                let location = self.node_to_range(node);
 
-                // Track as usage
-                file_index.references.entry(func_name).or_default().push(SymbolReference {
+                // Determine package and bare name
+                let (pkg, bare_name) = if let Some(idx) = func_name.rfind("::") {
+                    (&func_name[..idx], &func_name[idx + 2..])
+                } else {
+                    (self.current_package.as_deref().unwrap_or("main"), func_name.as_str())
+                };
+
+                let qualified = format!("{}::{}", pkg, bare_name);
+
+                // Track as usage for both qualified and bare forms
+                file_index.references.entry(bare_name.to_string()).or_default().push(
+                    SymbolReference {
+                        uri: self.uri.clone(),
+                        range: location.clone(),
+                        kind: ReferenceKind::Usage,
+                    },
+                );
+                file_index.references.entry(qualified).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
-                    range: self.node_to_range(node),
+                    range: location,
                     kind: ReferenceKind::Usage,
                 });
 
