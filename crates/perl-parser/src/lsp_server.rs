@@ -4,13 +4,10 @@
 //! that can be used with any LSP-compatible editor.
 
 use crate::{
-    CodeActionKind as InternalCodeActionKind, CodeActionKindV2 as InternalCodeActionKindV2,
-    CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
-    DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     code_actions_enhanced::EnhancedCodeActionsProvider,
-    code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
+    code_lens_provider::{get_shebang_lens, resolve_code_lens, CodeLensProvider},
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
@@ -19,31 +16,34 @@ use crate::{
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
-    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+    semantic_tokens_provider::{encode_semantic_tokens, SemanticTokensProvider},
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
+    CodeActionKind as InternalCodeActionKind, CodeActionKindV2 as InternalCodeActionKindV2,
+    CodeActionsProvider, CodeActionsProviderV2, CompletionItemKind, CompletionProvider,
+    DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
 };
 use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc, Mutex,
     atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
+use crate::workspace_index::{uri_to_fs_path, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol};
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -126,7 +126,6 @@ pub struct LspServer {
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
     /// Advertised server capabilities
-    #[allow(dead_code)]
     advertised_features: std::sync::Mutex<crate::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
     client_supports_pull_diags: Arc<AtomicBool>,
@@ -191,7 +190,11 @@ pub(crate) struct DocumentState {
 
 /// Normalize legacy package separator ' to ::
 fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
-    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
+    if s.contains('\'') {
+        Cow::Owned(s.replace('\'', "::"))
+    } else {
+        Cow::Borrowed(s)
+    }
 }
 
 /// Server configuration
@@ -264,6 +267,15 @@ impl LspServer {
         #[cfg(feature = "workspace")]
         let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
 
+        let default_features = {
+            let flags = if cfg!(feature = "lsp-ga-lock") {
+                crate::capabilities::BuildFlags::ga_lock()
+            } else {
+                crate::capabilities::BuildFlags::production()
+            };
+            flags.to_advertised_features()
+        };
+
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
@@ -278,9 +290,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(
-                crate::capabilities::AdvertisedFeatures::default(),
-            ),
+            advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -290,6 +300,15 @@ impl LspServer {
         // Initialize workspace indexing (always enabled when workspace feature is on)
         #[cfg(feature = "workspace")]
         let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+
+        let default_features = {
+            let flags = if cfg!(feature = "lsp-ga-lock") {
+                crate::capabilities::BuildFlags::ga_lock()
+            } else {
+                crate::capabilities::BuildFlags::production()
+            };
+            flags.to_advertised_features()
+        };
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -304,9 +323,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(
-                crate::capabilities::AdvertisedFeatures::default(),
-            ),
+            advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -482,7 +499,11 @@ impl LspServer {
 
     /// Check if a request has been cancelled
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
+        if let Ok(set) = self.cancelled.lock() {
+            set.contains(id)
+        } else {
+            false
+        }
     }
 
     /// Handle a JSON-RPC request
@@ -922,18 +943,22 @@ impl LspServer {
             build_flags.range_formatting = true;
         }
 
+        // Persist advertised features for gating
+        let features = build_flags.to_advertised_features();
+        *self.advertised_features.lock().unwrap() = features.clone();
+
         // Generate capabilities from build flags
-        let server_caps = crate::capabilities::capabilities_for(build_flags.clone());
+        let server_caps = crate::capabilities::capabilities_for(build_flags);
         let mut capabilities = serde_json::to_value(&server_caps).unwrap();
 
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
         capabilities["documentHighlightProvider"] = json!(true);
-        if build_flags.type_hierarchy {
+        if features.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
         }
-        if build_flags.call_hierarchy {
+        if features.call_hierarchy {
             capabilities["callHierarchyProvider"] = json!(true);
         }
 
@@ -945,9 +970,6 @@ impl LspServer {
             "willSaveWaitUntil": false,
             "save": { "includeText": true }
         });
-
-        // Store advertised features for gating
-        *self.advertised_features.lock().unwrap() = build_flags.to_advertised_features();
 
         Ok(Some(json!({
             "capabilities": capabilities,
@@ -1096,7 +1118,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{Doc, PosEnc, apply_changes};
+                use crate::textdoc::{apply_changes, Doc, PosEnc};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
@@ -6394,7 +6416,7 @@ impl LspServer {
                 };
 
                 // Add named argument hints for => pairs
-                use crate::builtin_signatures_phf::{BUILTIN_SIGS, get_param_names};
+                use crate::builtin_signatures_phf::{get_param_names, BUILTIN_SIGS};
                 use regex::Regex;
                 use std::collections::HashSet;
                 lazy_static::lazy_static! {
@@ -7443,10 +7465,14 @@ impl LspServer {
     /// Register file watchers for Perl files
     fn register_file_watchers_async(&self) {
         use lsp_types::{
+            notification::{DidChangeWatchedFiles, Notification},
             DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
             RegistrationParams, WatchKind,
-            notification::{DidChangeWatchedFiles, Notification},
         };
+
+        if !self.advertised_features.lock().unwrap().workspace_symbol {
+            return;
+        }
 
         let watchers = vec![
             FileSystemWatcher {
