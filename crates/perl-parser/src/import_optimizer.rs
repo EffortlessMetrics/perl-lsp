@@ -19,11 +19,12 @@
 //! # Ok::<(), String>(())
 //! ```
 
-use crate::{ast::SourceLocation, rename::TextEdit};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+use crate::code_actions_provider::TextEdit;
 
 /// Result of import analysis containing all detected issues and suggestions
 #[derive(Debug, Serialize, Deserialize)]
@@ -313,7 +314,7 @@ impl ImportOptimizer {
 
                 if !is_pragma {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let (_is_known_module, known_exports) =
+                    let (is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
                             Some(exports) => (true, exports),
                             None => (false, Vec::new()),
@@ -357,16 +358,11 @@ impl ImportOptimizer {
                         }
                     }
 
-                    // For bare imports, be conservative - many modules have side effects
-                    // Only mark as unused if we're confident it's safe to remove
-                    if !is_used && _is_known_module {
-                        // If the module has no known exports (empty vec), it's likely object-oriented
-                        // and safe to mark as unused if not used
-                        if known_exports.is_empty() {
-                            unused_symbols.push("(bare import)".to_string());
-                        }
-                        // For modules with exports, be conservative and don't mark as unused
-                        // since they might have side effects
+                    // Conservative approach: Don't flag bare imports as unused if they have exports
+                    // Modules with exports might have side effects or implicit behavior we can't detect
+                    // But modules with no exports (like LWP::UserAgent) can still be flagged if unused
+                    if !is_used && is_known_module && known_exports.is_empty() {
+                        unused_symbols.push("(bare import)".to_string());
                     }
                 }
             }
@@ -576,7 +572,7 @@ impl ImportOptimizer {
                 analysis.missing_imports.first().map(|m| m.suggested_location).unwrap_or(1);
             let insert_offset = self.line_offset(content, insert_line);
             return vec![TextEdit {
-                location: SourceLocation { start: insert_offset, end: insert_offset },
+                range: (insert_offset, insert_offset),
                 new_text: optimized + "\n",
             }];
         }
@@ -588,7 +584,7 @@ impl ImportOptimizer {
         let end_offset = self.line_offset(content, last_line + 1);
 
         vec![TextEdit {
-            location: SourceLocation { start: start_offset, end: end_offset },
+            range: (start_offset, end_offset),
             new_text: if optimized.is_empty() { String::new() } else { optimized + "\n" },
         }]
     }
@@ -665,9 +661,8 @@ print "Hello World\n";
         let (_temp_dir, file_path) = create_test_file(content);
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
-        // With improved logic, bare imports without explicit symbols are treated conservatively.
-        // Modules with exports are not reported as unused to prevent breaking side effects.
-        // Only object-oriented modules (no exports) may be reported as unused.
+        // Bare imports without explicit symbols are assumed to have side effects,
+        // so they are not reported as unused even if their exports aren't referenced.
         assert!(analysis.unused_imports.is_empty());
     }
 
@@ -900,8 +895,8 @@ print Dumper(\@ARGV);
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
 
-        // JSON and SomeUnknownModule are treated conservatively - modules with exports
-        // are not flagged as unused to prevent breaking side effects.
+        // JSON and SomeUnknownModule are treated as having potential side effects,
+        // so neither is flagged as unused.
         assert!(analysis.unused_imports.is_empty());
     }
 

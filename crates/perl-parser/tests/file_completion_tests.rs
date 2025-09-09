@@ -19,7 +19,7 @@ fn completes_files_in_src_directory() {
     let code = "\"src/com\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("com").unwrap() + "com".len();
     let completions = provider.get_completions(code, pos);
 
@@ -42,7 +42,7 @@ fn completes_files_in_tests_directory() {
     let code = "\"tests/file_comp\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("file_comp").unwrap() + "file_comp".len();
     let completions = provider.get_completions(code, pos);
 
@@ -55,7 +55,7 @@ fn does_complete_current_directory_files() {
     let code = "\"Cargo\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("Cargo").unwrap() + "Cargo".len();
     let completions = provider.get_completions(code, pos);
 
@@ -68,7 +68,7 @@ fn basic_security_test_rejects_path_traversal() {
     let code = "\"../src/completion.rs\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("completion").unwrap() + "completion".len();
     let completions = provider.get_completions(code, pos);
 
@@ -83,7 +83,7 @@ fn security_test_rejects_path_traversal_etc() {
     let code = "\"../etc/passwd\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide any completions for path traversal attempts
@@ -95,7 +95,7 @@ fn security_test_rejects_null_bytes() {
     let code = "\"src/test\0file\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide completions for paths with null bytes
@@ -107,7 +107,7 @@ fn security_test_rejects_absolute_paths() {
     let code = "\"/etc/passwd\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide completions for absolute paths (security)
@@ -119,7 +119,7 @@ fn security_test_allows_root_path() {
     let code = "\"/\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let _completions = provider.get_completions(code, pos);
     // Root path should be allowed, but we expect empty results in this test environment
@@ -132,7 +132,7 @@ fn security_test_rejects_control_characters() {
     let code = "\"src/test\x01file\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide completions for paths with control characters
@@ -154,7 +154,7 @@ fn security_test_rejects_windows_reserved_names() {
     for code in test_cases {
         let mut parser = Parser::new(code);
         let ast = parser.parse().unwrap();
-        let provider = CompletionProvider::new_with_index(&ast, None, None);
+        let provider = CompletionProvider::new_with_index(&ast, None);
         let pos = code.len() - 1;
         let completions = provider.get_completions(code, pos);
         // Should not provide completions containing Windows reserved names
@@ -179,7 +179,7 @@ fn performance_test_respects_result_limits() {
     let code = "\"src/\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
 
@@ -195,7 +195,7 @@ fn performance_test_cancellation_support() {
     let code = "\"src/\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
 
     // Test with immediate cancellation
@@ -218,7 +218,7 @@ fn performance_test_rejects_very_long_paths() {
     let code = format!("\"{}\"", long_path);
     let mut parser = Parser::new(&code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(&code, pos);
 
@@ -234,7 +234,7 @@ fn edge_case_handles_unicode_filenames() {
     let code = "\"src/test_ü\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let _completions = provider.get_completions(code, pos);
 
@@ -247,7 +247,7 @@ fn edge_case_handles_empty_prefix() {
     let code = "\"\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let _completions = provider.get_completions(code, pos);
 
@@ -260,7 +260,7 @@ fn edge_case_handles_whitespace_in_paths() {
     let code = "\"src/test file\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let _completions = provider.get_completions(code, pos);
 
@@ -275,7 +275,7 @@ fn file_type_recognition_works() {
     let code = "\"Cargo.\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
 
@@ -296,7 +296,7 @@ fn file_type_recognition_rust_files() {
     let code = "\"src/lib.\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
 
@@ -318,7 +318,7 @@ fn no_completions_in_comments() {
     let code = "# \"src/com\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("com").unwrap() + "com".len();
     let completions = provider.get_completions(code, pos);
 
@@ -331,7 +331,7 @@ fn no_completions_without_slash() {
     let code = "\"somefile\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    let provider = CompletionProvider::new_with_index(&ast, None, None);
+    let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
 

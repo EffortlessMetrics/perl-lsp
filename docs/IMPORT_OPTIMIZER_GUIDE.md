@@ -13,7 +13,10 @@ The import optimization system provides comprehensive analysis and optimization 
 
 ## Features
 
-- **Unused Import Detection**: Regex-based usage analysis identifies import statements never used in code
+- **Conservative Unused Import Detection**: Regex-based usage analysis with smart handling of bare imports
+  - **Bare Import Safety**: Modules with exports are preserved to prevent false positives from side effects
+  - **Pragma Module Recognition**: Automatically excludes pragma modules (strict, warnings, utf8, etc.)
+  - **Enhanced Accuracy**: Conservative approach reduces false positives for modules with potential side effects
 - **Duplicate Import Consolidation**: Merges multiple import lines from same module into single optimized statements  
 - **Missing Import Detection**: Identifies Module::symbol references requiring additional imports
 - **Optimized Import Generation**: Alphabetical sorting and clean formatting of import statements
@@ -65,6 +68,11 @@ let analysis = optimizer.analyze_file(Path::new("script.pl"))?;
 ```rust
 for unused in &analysis.unused_imports {
     println!("Module {} has unused symbols: {:?}", unused.module, unused.symbols);
+    
+    // Note: The optimizer uses a conservative approach for bare imports
+    // - Modules with exports may be preserved even if unused (potential side effects)
+    // - Pragma modules (strict, warnings, etc.) are automatically excluded
+    // - Only modules with no exports are flagged for unused bare imports
 }
 ```
 

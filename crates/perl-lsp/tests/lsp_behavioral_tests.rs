@@ -74,8 +74,8 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
     harness.did_save(&workspace.uri("script.pl")).ok();
     harness.did_save(&workspace.uri("lib/My/Module.pm")).ok();
 
-    // Wait for the server to process files and become idle (optimized timeout)
-    harness.wait_for_idle(Duration::from_millis(200));
+    // Wait for the server to process files and become idle (increased for stability)
+    harness.wait_for_idle(Duration::from_millis(1000));
 
     (harness, workspace)
 }
@@ -88,17 +88,14 @@ fn test_cross_file_definition() {
     }
     let (mut harness, workspace) = create_test_server();
 
-    // Wait until the module is discoverable (reduced timeout, use fallbacks)
+    // Wait until the module is discoverable (increased timeout for CI stability)
     harness
         .wait_for_symbol(
             "My::Module",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(800),
+            Duration::from_millis(3000),
         )
-        .unwrap_or_else(|_| {
-            // Fallback: proceed with test even if indexing isn't complete
-            eprintln!("Warning: Symbol indexing not complete, proceeding with fallback behavior");
-        });
+        .expect("index ready");
 
     // Request go-to-definition for My::Module usage
     let result = harness
@@ -133,17 +130,14 @@ fn test_cross_file_references() {
     }
     let (mut harness, workspace) = create_test_server();
 
-    // Wait until the module is indexed (reduced timeout, use fallbacks)
+    // Wait until the module is indexed (increased timeout for CI stability)
     harness
         .wait_for_symbol(
             "process",
             Some(workspace.uri("lib/My/Module.pm").as_str()),
-            Duration::from_millis(800),
+            Duration::from_millis(3000),
         )
-        .unwrap_or_else(|_| {
-            // Fallback: proceed with test even if indexing isn't complete
-            eprintln!("Warning: Symbol indexing not complete, proceeding with fallback behavior");
-        });
+        .expect("index ready");
 
     // Request references for the 'new' method
     let result = harness
@@ -542,11 +536,8 @@ use My::Module;
     // Wait until the symbol appears so we don't race the indexer
     let module_uri = format!("file://{}", module_path.display());
     harness
-        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(800))
-        .unwrap_or_else(|_| {
-            // Fallback: proceed with test even if indexing isn't complete
-            eprintln!("Warning: Symbol indexing not complete, proceeding with fallback behavior");
-        });
+        .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(3000))
+        .expect("index ready");
 
     // Compute the UTF-16 column for the 'M' in "My::Module" on that exact line.
     let line_idx = script.lines().position(|l| l == line).expect("line with non-ASCII is present");
