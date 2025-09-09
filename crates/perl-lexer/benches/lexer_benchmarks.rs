@@ -111,6 +111,19 @@ fn bench_number_parsing(c: &mut Criterion) {
     });
 }
 
+fn bench_keyword_heavy(c: &mut Criterion) {
+    let base =
+        "if else while until for foreach return last next redo package require default continue";
+    let input = base.repeat(100);
+
+    c.bench_function("keyword_heavy", |b| {
+        b.iter(|| {
+            let lexer = PerlLexer::new(black_box(&input));
+            collect_all_tokens(lexer)
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_simple_tokens,
@@ -119,6 +132,7 @@ criterion_group!(
     bench_large_file,
     bench_whitespace_heavy,
     bench_operator_heavy,
-    bench_number_parsing
+    bench_number_parsing,
+    bench_keyword_heavy
 );
 criterion_main!(benches);
