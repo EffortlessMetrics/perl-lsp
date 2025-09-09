@@ -10,7 +10,7 @@ fn test_benchmark_saves_output() -> Result<()> {
     let cargo_toml = temp_dir.path().join("Cargo.toml");
     fs::write(
         &cargo_toml,
-        "[package]\nname = \"bench_test\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[bench]]\nname = \"dummy\"\nharness = false\n",
+        "[package]\nname = \"bench_test\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bench]]\nname = \"dummy\"\nharness = false\n",
     )?;
     let benches_dir = temp_dir.path().join("benches");
     fs::create_dir(&benches_dir)?;
