@@ -2828,6 +2828,79 @@ impl LspServer {
                     }
                 }
 
+                #[cfg(feature = "workspace")]
+                {
+                    // Attempt to resolve fully-qualified symbols like Package::sub
+                    let re =
+                        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
+                            .unwrap();
+
+                    for cap in re.captures_iter(&text_around) {
+                        if let Some(m) = cap.get(1) {
+                            if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                let parts: Vec<&str> = m.as_str().split("::").collect();
+                                if parts.len() >= 2 {
+                                    let name = parts.last().unwrap().to_string();
+                                    let pkg = parts[..parts.len() - 1].join("::");
+                                    let key = crate::workspace_index::SymbolKey {
+                                        pkg: pkg.clone().into(),
+                                        name: name.clone().into(),
+                                        sigil: None,
+                                        kind: crate::workspace_index::SymKind::Sub,
+                                    };
+
+                                    if let Some(ref workspace_index) = self.workspace_index {
+                                        if let Some(def_location) = workspace_index.find_def(&key) {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                        let symbol_name = format!("{}::{}", pkg, name);
+                                        if let Some(def_location) =
+                                            workspace_index.find_definition(&symbol_name)
+                                        {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                    }
+
+                                    // Fallback: scan open documents
+                                    let docs_snapshot: Vec<(String, DocumentState)> = documents
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                        .collect();
+                                    for (doc_uri, doc_state) in docs_snapshot {
+                                        if let Some(ref ast) = doc_state.ast {
+                                            let symbols = self.extract_document_symbols(
+                                                ast,
+                                                &doc_state.text,
+                                                &doc_uri,
+                                            );
+                                            for sym in symbols {
+                                                if sym.name == name
+                                                    && sym.container_name.as_deref() == Some(&pkg)
+                                                {
+                                                    return Ok(Some(json!([sym.location])));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
