@@ -1469,9 +1469,10 @@ pub struct CompletionItem {
 - Documentation: O(1) - pre-extracted during construction
 
 **Memory Usage:**
-- Symbol cache: Proportional to code size and complexity
+- Symbol cache: Proportional to code size with intelligent priority-based eviction
 - Documentation: Stored per symbol, minimal overhead
 - Module resolver: Stateless function, no persistent storage
+- Subtree cache: 4-tier priority system preserves critical LSP symbols during memory pressure
 
 #### Error Handling
 
@@ -1928,6 +1929,11 @@ struct LspCache {
     // Workspace-level caches with bounded processing
     workspace_symbols: Arc<RwLock<SymbolIndex>>,
     type_cache: Arc<RwLock<TypeCache>>,
+    
+    // Intelligent subtree cache with symbol priority (v0.8.9+)
+    // Preserves critical LSP symbols (packages, use statements, subroutines) 
+    // during memory pressure using 4-tier priority system
+    subtree_cache: IncrementalDocument::SubtreeCache,
     
     // Performance monitoring (v0.8.9+)
     performance_metrics: Arc<Mutex<PerformanceMetrics>>,
