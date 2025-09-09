@@ -3,7 +3,6 @@ use perl_parser::{
     Parser,
     semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
 };
-use std::hint::black_box;
 
 fn benchmark_semantic_tokens_small(c: &mut Criterion) {
     let code = r#"
