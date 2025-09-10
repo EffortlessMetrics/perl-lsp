@@ -260,10 +260,10 @@ impl InlayHintsProvider {
         // Custom functions would be handled here
         match function_name {
             // Custom functions from symbol table
-            "open" => vec!["filehandle".to_string(), "mode".to_string(), "filename".to_string()],
+            "open" => vec!["FILEHANDLE".to_string(), "mode".to_string(), "filename".to_string()],
             "print" => vec!["filehandle".to_string(), "list".to_string()],
             "printf" => vec!["filehandle".to_string(), "format".to_string(), "list".to_string()],
-            "push" => vec!["array".to_string(), "list".to_string()],
+            "push" => vec!["ARRAY".to_string(), "list".to_string()],
             "unshift" => vec!["array".to_string(), "list".to_string()],
             "splice" => vec![
                 "array".to_string(),

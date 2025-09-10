@@ -25,126 +25,6 @@
                                       └──────────────────┘
 ```
 
-## Enhanced Workspace Indexing (v0.8.9+) - Dual Indexing Strategy (*Diataxis: Explanation* - Understanding the dual reference approach)
-
-The v0.8.9+ releases introduce a breakthrough dual indexing strategy for function call references that dramatically improves cross-file LSP navigation. This enhancement indexes functions under both qualified (`Package::function`) and bare (`function`) names, enabling comprehensive reference finding regardless of how functions are called.
-
-### Architectural Decision: Why Dual Indexing? (*Diataxis: Explanation* - Design rationale)
-
-Perl's flexible function call syntax creates a fundamental challenge for static analysis:
-
-```perl
-# File: lib/Utils.pm
-package Utils;
-sub process_data { ... }
-
-# File: main.pl
-use Utils;
-
-# These all reference the same function:
-Utils::process_data();    # Qualified call
-process_data();          # Bare call (via import or same package)
-&process_data();         # Explicit subroutine call
-```
-
-Traditional indexing approaches fail because they only index functions under one name form, missing references that use alternative calling conventions. The dual indexing strategy solves this by maintaining references under both forms.
-
-### Technical Implementation (*Diataxis: Reference* - Dual indexing algorithm)
-
-#### Indexing Phase (*Diataxis: Reference* - Reference storage specification)
-
-When a function call is encountered during workspace indexing:
-
-```rust
-// Track as usage for both qualified and bare forms
-// This dual indexing allows finding references whether the function is called
-// as `process_data()` or `Utils::process_data()`
-file_index.references.entry(bare_name.to_string()).or_default().push(
-    SymbolReference {
-        uri: self.uri.clone(),
-        range: location,
-        kind: ReferenceKind::Usage,
-    },
-);
-file_index.references.entry(qualified).or_default().push(SymbolReference {
-    uri: self.uri.clone(),
-    range: location,
-    kind: ReferenceKind::Usage,
-});
-```
-
-#### Search Phase (*Diataxis: Reference* - Reference retrieval algorithm)
-
-When searching for references to a qualified symbol:
-
-```rust
-/// Find all references to a symbol using dual indexing strategy
-///
-/// This function searches for both exact matches and bare name matches when
-/// the symbol is qualified. For example, when searching for "Utils::process_data":
-/// - First searches for exact "Utils::process_data" references
-/// - Then searches for bare "process_data" references that might refer to the same function
-pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
-    let mut locations = Vec::new();
-    let files = self.files.read().unwrap();
-
-    for (_uri_key, file_index) in files.iter() {
-        // Search for exact match first
-        if let Some(refs) = file_index.references.get(symbol_name) {
-            for reference in refs {
-                locations.push(Location { 
-                    uri: reference.uri.clone(), 
-                    range: reference.range 
-                });
-            }
-        }
-
-        // If the symbol is qualified, also search for bare name references
-        if let Some(idx) = symbol_name.rfind("::") {
-            let bare_name = &symbol_name[idx + 2..];
-            if let Some(refs) = file_index.references.get(bare_name) {
-                for reference in refs {
-                    locations.push(Location { 
-                        uri: reference.uri.clone(), 
-                        range: reference.range 
-                    });
-                }
-            }
-        }
-    }
-
-    locations
-}
-```
-
-#### Deduplication Strategy (*Diataxis: Reference* - Duplicate elimination)
-
-The enhanced `find_refs` method ensures each location appears only once even when indexed under multiple name forms:
-
-```rust
-/// Find all reference locations for a symbol key using enhanced dual indexing
-///
-/// This function leverages the dual indexing strategy to find references under both
-/// qualified and bare names, then deduplicates and excludes the definition itself.
-/// The deduplication ensures each location appears only once even if indexed under
-/// multiple name forms.
-pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
-    // Implementation includes automatic deduplication based on URI + Range
-}
-```
-
-### Lexer Enhancements (*Diataxis: Reference* - Package-qualified identifier support)
-
-The lexer has been enhanced to properly handle package-qualified segments:
-
-```rust
-// Handle package-qualified identifiers like Foo::bar
-while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
-    // consume '::'
-    // ... lexer implementation for qualified identifiers
-}
-```
-
 ## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics (*Diataxis: Explanation* - Understanding the bareword analysis breakthrough)
 
 The v0.8.6 release introduces breakthrough hash key context detection that eliminates false positives in bareword analysis under `use strict`. This represents a significant advancement in Perl static analysis.
@@ -1434,253 +1314,178 @@ impl LspServer {
 4. **Integration**: Clean conversion between internal types and LSP format
 5. **Extensibility**: Easy to add new refactoring operations
 
-## Enhanced Cross-File Definition Resolution (v0.8.9+) (*Diataxis: Explanation* - Understanding advanced LSP navigation)
+## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+, Enhanced v0.8.9+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
 
-The v0.8.9+ releases introduce significantly enhanced cross-file definition resolution capabilities, particularly for fully-qualified Perl symbols like `Package::subroutine` patterns. This enhancement provides robust fallback mechanisms when workspace index is unavailable and comprehensive reference search combining workspace index with enhanced text search.
+### Overview (*Diataxis: Explanation* - Design decisions and concepts)
 
-### Core Enhancement Features (*Diataxis: Reference* - Technical specifications)
+The v0.8.9+ release introduces a sophisticated dual indexing strategy for function calls that significantly improves cross-file navigation and reference finding with enhanced deduplication. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names.
 
-#### 1. Fully-Qualified Symbol Resolution
-The LSP server now handles `Package::subroutine` patterns with sophisticated pattern matching:
+### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
+
+#### Dual Function Call Indexing (*Diataxis: Reference* - Implementation details)
+
+The workspace index now maintains dual references for function calls, indexing both bare and qualified forms:
 
 ```rust
-// Enhanced regex pattern for fully-qualified symbols
-let re = regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
-    .unwrap();
-
-for cap in re.captures_iter(&text_around) {
-    if let Some(m) = cap.get(1) {
-        if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
-            let parts: Vec<&str> = m.as_str().split("::").collect();
-            if parts.len() >= 2 {
-                let name = parts.last().unwrap().to_string();
-                let pkg = parts[..parts.len() - 1].join("::");
-                // Create SymbolKey for workspace index lookup
-            }
+// Function call indexing strategy
+impl IndexVisitor {
+    fn visit_function_call(&mut self, node: &Node, file_index: &mut FileIndex) {
+        if let NodeKind::FunctionCall { name, .. } = &node.kind {
+            let location = self.node_to_range(node);
+            
+            // Determine package and bare name
+            let (pkg, bare_name) = if let Some(idx) = name.rfind("::") {
+                (&name[..idx], &name[idx + 2..])
+            } else {
+                (self.current_package.as_deref().unwrap_or("main"), name.as_str())
+            };
+            
+            let qualified = format!("{}::{}", pkg, bare_name);
+            
+            // Index both bare and qualified forms
+            file_index.references.entry(bare_name.to_string()).or_default().push(
+                SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location.clone(),
+                    kind: ReferenceKind::Usage,
+                }
+            );
+            
+            file_index.references.entry(qualified).or_default().push(
+                SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location,
+                    kind: ReferenceKind::Usage,
+                }
+            );
         }
     }
 }
 ```
 
-#### 2. Comprehensive Fallback Mechanisms
-When workspace index is unavailable, the system provides robust document scanning:
+#### Enhanced Reference Finding (*Diataxis: Reference* - Enhanced search algorithms)
+
+The `find_references` method implements intelligent dual lookup with deduplication:
 
 ```rust
-// Fallback: scan open documents for symbol definitions
-let docs_snapshot: Vec<(String, DocumentState)> = documents
-    .iter()
-    .map(|(k, v)| (k.clone(), v.clone()))
-    .collect();
+impl WorkspaceIndex {
+    pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+        let mut locations = Vec::new();
+        let files = self.files.read().unwrap();
 
-for (doc_uri, doc_state) in docs_snapshot {
-    if let Some(ref ast) = doc_state.ast {
-        let symbols = self.extract_document_symbols(
-            ast,
-            &doc_state.text,
-            &doc_uri,
-        );
-        for sym in symbols {
-            if sym.name == name && sym.container_name.as_deref() == Some(&pkg) {
-                return Ok(Some(json!([sym.location])));
+        for (_uri_key, file_index) in files.iter() {
+            // Search for exact match first
+            if let Some(refs) = file_index.references.get(symbol_name) {
+                for reference in refs {
+                    locations.push(Location { 
+                        uri: reference.uri.clone(), 
+                        range: reference.range 
+                    });
+                }
             }
-        }
-    }
-}
-```
 
-#### 3. Enhanced Reference Search with Dual Pattern Matching
-Reference resolution now combines workspace index results with enhanced text search using multiple patterns and optimized radius-based context analysis:
-
-```rust
-// Enhanced implementation with radius-based context analysis
-let radius = 50;
-let text_start = offset.saturating_sub(radius);
-let text_around = self.get_text_around_offset(&doc.text, offset, radius);
-let cursor_in_text = offset - text_start;
-
-// Sophisticated regex for Package::subroutine pattern detection
-let re = regex::Regex::new(
-    r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"
-).unwrap();
-
-for cap in re.captures_iter(&text_around) {
-    if let Some(m) = cap.get(1) {
-        if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
-            let parts: Vec<&str> = m.as_str().split("::").collect();
-            if parts.len() >= 2 {
-                let name = parts.last().unwrap().to_string();
-                let pkg = parts[..parts.len() - 1].join("::");
-                
-                // Enhanced dual-path workspace index lookup
-                let key = SymbolKey {
-                    pkg: pkg.clone().into(),
-                    name: name.clone().into(),
-                    sigil: None,
-                    kind: SymKind::Sub,
-                };
-                
-                // Primary: SymbolKey-based lookup
-                if let Some(refs) = workspace_index.find_refs(&key) {
-                    all_refs.extend(refs);
-                }
-                
-                // Secondary: Qualified name lookup
-                let symbol_name = format!("{}::{}", pkg, name);
-                if let Some(alt_refs) = workspace_index.find_references(&symbol_name) {
-                    all_refs.extend(alt_refs);
-                }
-                
-                // Tertiary: Enhanced regex-based text search with proper escaping
-                let qualified_name = format!("{}::{}", pkg, name);
-                let search_regex = regex::Regex::new(&format!(
-                    r"\b{}\b", 
-                    regex::escape(&qualified_name)
-                )).unwrap();
-                
-                for (doc_uri, doc_state) in documents {
-                    let lines: Vec<&str> = doc_state.text.lines().collect();
-                    for (line_num, line) in lines.iter().enumerate() {
-                        for mat in search_regex.find_iter(line) {
-                            enhanced_locations.push(json!({
-                                "uri": doc_uri,
-                                "range": {
-                                    "start": {"line": line_num, "character": mat.start()},
-                                    "end": {"line": line_num, "character": mat.end()},
-                                },
-                            }));
-                        }
+            // If the symbol is qualified, also search for bare name references
+            if let Some(idx) = symbol_name.rfind("::") {
+                let bare_name = &symbol_name[idx + 2..];
+                if let Some(refs) = file_index.references.get(bare_name) {
+                    for reference in refs {
+                        locations.push(Location { 
+                            uri: reference.uri.clone(), 
+                            range: reference.range 
+                        });
                     }
                 }
             }
         }
+
+        locations
     }
 }
 ```
 
-### Implementation Tutorial (*Diataxis: Tutorial* - Hands-on learning)
+#### Intelligent Deduplication (*Diataxis: Reference* - Reference deduplication algorithm, Enhanced v0.8.9+)
 
-#### Step 1: Basic Cross-File Navigation Setup
-
-```perl
-# File: lib/Utils.pm
-package Utils;
-
-sub utility_function {
-    my ($param) = @_;
-    return process($param);
-}
-
-1;
-```
-
-```perl
-# File: bin/app.pl
-use lib 'lib';
-use Utils;
-
-# Enhanced LSP now resolves these patterns:
-Utils::utility_function("test");  # ✅ Go-to-definition works
-my $result = Utils::utility_function();  # ✅ Find references works
-```
-
-#### Step 2: Testing Enhanced Resolution
-
-```bash
-# Test enhanced cross-file definition resolution
-cargo test -p perl-parser test_cross_file_package_subroutine_resolution
-
-# Test fallback mechanisms when workspace index unavailable
-cargo test -p perl-parser test_definition_fallback_without_workspace_index
-
-# Test enhanced reference search with dual patterns
-cargo test -p perl-parser test_enhanced_reference_search_dual_patterns
-```
-
-### How-to Guide: Implementing Enhanced Cross-File Features (*Diataxis: How-to* - Step-by-step guidance)
-
-#### Enabling Enhanced Cross-File Resolution in Your LSP Client
-
-**VSCode Configuration:**
-```json
-{
-    "perl-lsp.enhanced_navigation": true,
-    "perl-lsp.cross_file_resolution": "aggressive",
-    "perl-lsp.fallback_mechanisms": ["workspace_index", "document_scan", "text_search"]
-}
-```
-
-**Neovim LSP Setup:**
-```lua
-require('lspconfig').perl_lsp.setup({
-    settings = {
-        ['perl-lsp'] = {
-            enhanced_navigation = true,
-            cross_file_resolution = 'aggressive',
-            fallback_mechanisms = {'workspace_index', 'document_scan', 'text_search'}
-        }
-    }
-})
-```
-
-#### Performance Characteristics (*Diataxis: Reference* - Performance metrics)
-
-| Resolution Method | Average Time | Success Rate | Memory Usage | Fallback Rate |
-|------------------|--------------|--------------|--------------|---------------|
-| Workspace Index | 0.8ms | 95% | 2.1MB | N/A |
-| Document Scan Fallback | 2.3ms | 87% | 1.2MB | 5% |
-| Text Search Fallback | 4.1ms | 78% | 850KB | 13% |
-| **Combined Enhancement** | **1.2ms** | **98%** | **2.5MB** | **2%** |
-
-#### Key Performance Enhancements (v0.8.9+):
-- **Radius-based Context Analysis**: 50-character radius for efficient symbol detection reduces unnecessary processing
-- **Regex Compilation Caching**: Pre-compiled patterns reduce overhead by 60% for repeated lookups
-- **Enhanced Dual-Path Lookup**: SymbolKey + qualified name resolution improves success rate by 3%
-- **Optimized Escape Handling**: Proper regex escaping prevents false matches while maintaining performance
-
-#### Error Handling and Edge Cases
-
-**Package Name Parsing:**
-```perl
-# Complex namespace patterns supported:
-My::Deep::Namespace::Package::subroutine();  # ✅ Full resolution
-Some::Module::CONSTANT;                       # ✅ Variable resolution
-Data::Structure::Helper::transform();        # ✅ Method resolution
-```
-
-**Fallback Behavior:**
-1. **Primary**: Workspace index lookup for `Package::subroutine`
-2. **Secondary**: Document AST traversal for symbol matching
-3. **Tertiary**: Regex-based text search with dual patterns
-4. **Final**: Basic symbol name matching
-
-### Integration Best Practices (*Diataxis: How-to* - Implementation guidance)
-
-#### LSP Server Implementation
+The system automatically deduplicates references while excluding definitions. **v0.8.9+ Enhancement**: Improved definition exclusion prevents function definitions from appearing in reference results.
 
 ```rust
-impl LspServer {
-    fn handle_definition_enhanced(&self, params: Value) -> Result<Option<Value>, JsonRpcError> {
-        // Extract position and document information
-        let uri = params["textDocument"]["uri"].as_str().unwrap();
-        let position = &params["position"];
-        let line = position["line"].as_u64().unwrap() as usize;
-        let character = position["character"].as_u64().unwrap() as usize;
-        
-        let documents = self.documents.lock().unwrap();
-        let doc = documents.get(uri).ok_or_else(|| {
-            JsonRpcError::new(-32602, "Document not found")
-        })?;
-        
-        // Enhanced cross-file resolution with Package::subroutine support
-        if let Some(location) = self.resolve_cross_file_definition(doc, line, character)? {
-            return Ok(Some(json!([location])));
-        }
-        
-        // Fallback to standard resolution
-        self.handle_definition_standard(params)
+pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+    let qualified_name = format!("{}::{}", key.pkg, key.name);
+    let mut all_refs = self.find_references(&qualified_name);
+    
+    // v0.8.9+ Enhancement: More precise definition exclusion
+    // Remove the definition; the caller will include it separately if needed
+    if let Some(def) = self.find_def(key) {
+        all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
     }
+
+    // v0.8.9+ Enhancement: Optimized deduplication using simplified HashSet
+    let mut seen = HashSet::new();
+    all_refs.retain(|loc| seen.insert((loc.uri.clone(), loc.range)));
+
+    all_refs
 }
 ```
+
+**Key v0.8.9+ Improvements**:
+- **Cleaner Reference Results**: Function definitions are properly excluded from "Find All References"
+- **Improved LSP Compliance**: Separation of references vs definitions matches LSP specification expectations
+- **Enhanced Performance**: Simplified deduplication logic using range comparison instead of individual coordinate fields
+- **Accurate Cross-File Navigation**: Package-qualified identifiers handled consistently across workspace
+
+### Benefits for LSP Users (*Diataxis: Explanation* - User experience improvements)
+
+1. **Comprehensive Reference Finding**: Finds all references regardless of whether they use bare names (`foo()`) or qualified names (`Package::foo()`)
+2. **Smart Deduplication**: Eliminates duplicate references that occur from dual indexing
+3. **Package-Aware Navigation**: Correctly handles package contexts and qualified function calls
+4. **Cross-File Consistency**: Maintains consistent reference finding across the entire workspace
+5. **Performance Optimized**: Uses HashSet-based deduplication for efficient processing
+
+### Testing and Validation (*Diataxis: How-to* - Testing dual indexing)
+
+The dual indexing strategy includes comprehensive test coverage:
+
+```rust
+#[test]
+fn test_dual_function_call_indexing() {
+    let source = r#"
+package MyModule;
+
+sub my_function {
+    return 42;
+}
+
+# Bare call
+my_function();
+
+# Qualified call  
+MyModule::my_function();
+
+# Cross-package call
+OtherModule::my_function();
+"#;
+    
+    let index = WorkspaceIndex::new();
+    index.index_document("file:///test.pl", source);
+    
+    // Should find both bare and qualified references
+    let refs = index.find_references("MyModule::my_function");
+    assert!(refs.len() >= 3); // Definition + 2 calls
+    
+    // Bare name search should also work
+    let bare_refs = index.find_references("my_function");
+    assert!(bare_refs.len() >= 2); // Both calls found
+}
+```
+
+### Integration with LSP Features (*Diataxis: How-to* - Using dual indexing in LSP)
+
+The dual indexing strategy seamlessly integrates with existing LSP features:
+
+- **Go to Definition**: Enhanced to handle both bare and qualified lookups
+- **Find All References**: Comprehensive cross-file reference detection  
+- **Workspace Symbols**: Improved symbol search across package boundaries
+- **Rename Symbol**: Accurate renaming of both bare and qualified occurrences
+- **Hover Information**: Consistent symbol information regardless of call style
 
 ## API Reference Documentation
 
