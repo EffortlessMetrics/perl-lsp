@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Enhanced Workspace Navigation & Builtin Function Parsing
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Single-Quote Delimiter Support
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
@@ -27,8 +27,8 @@ This repository contains **five published crates** forming a complete Perl parsi
 
 3. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
-   - Enhanced package-qualified identifier parsing support
-   - Performance-optimized (v0.8.9+) with robust qualified name tokenization
+   - Enhanced delimiter recognition including single-quote substitution operators
+   - Performance-optimized (v0.8.9+) with comprehensive operator support
 
 4. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -143,7 +143,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, and deterministic empty block parsing
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, and comprehensive delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
 - **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
 - **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
 - **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support and enhanced reference resolution

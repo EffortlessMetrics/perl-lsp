@@ -66,8 +66,7 @@ fn test_substitution_with_different_delimiters() {
         ("s!foo!bar!", "foo", "bar"),
         ("s|foo|bar|", "foo", "bar"),
         ("s,foo,bar,", "foo", "bar"),
-        // Note: Single quote delimiter (s'foo'bar') is not yet supported by the lexer
-        // This would require lexer changes to recognize ' as a valid substitution delimiter
+        ("s'foo'bar'", "foo", "bar"),
     ];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
