@@ -24,6 +24,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
 };
+use lazy_static::lazy_static;
 use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,12 @@ use crate::workspace_index::{
     LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
     uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+lazy_static! {
+    static ref FQN_RE: regex::Regex =
+        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
+}
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -2831,11 +2838,7 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     // Attempt to resolve fully-qualified symbols like Package::sub
-                    let re =
-                        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
-                            .unwrap();
-
-                    for cap in re.captures_iter(&text_around) {
+                    for cap in FQN_RE.captures_iter(&text_around) {
                         if let Some(m) = cap.get(1) {
                             if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                 let parts: Vec<&str> = m.as_str().split("::").collect();
@@ -2873,27 +2876,6 @@ impl LspServer {
                                         }
                                     }
 
-                                    // Fallback: scan open documents
-                                    let docs_snapshot: Vec<(String, DocumentState)> = documents
-                                        .iter()
-                                        .map(|(k, v)| (k.clone(), v.clone()))
-                                        .collect();
-                                    for (doc_uri, doc_state) in docs_snapshot {
-                                        if let Some(ref ast) = doc_state.ast {
-                                            let symbols = self.extract_document_symbols(
-                                                ast,
-                                                &doc_state.text,
-                                                &doc_uri,
-                                            );
-                                            for sym in symbols {
-                                                if sym.name == name
-                                                    && sym.container_name.as_deref() == Some(&pkg)
-                                                {
-                                                    return Ok(Some(json!([sym.location])));
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                                 break;
                             }
