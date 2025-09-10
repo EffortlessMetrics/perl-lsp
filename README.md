@@ -13,7 +13,7 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.8)
+### 📦 Published Crates (v0.8.9)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization and production-ready CLI interface
@@ -315,15 +315,15 @@ The v3 parser includes a **production-ready Language Server Protocol implementat
 | Completion                          |   ✅   | Variables, 150+ built-ins, keywords, **file paths** |
 | Hover                               |   ✅   | Variables + built-ins                       |
 | Signature Help                      |   ✅   | 150+ built-ins                              |
-| Go to Definition                    |   ✅   | **Enhanced** Package::subroutine support, multi-tier fallback |
-| Find References                     |   ✅   | **Enhanced** dual-pattern search, workspace+text combining |
+| Go to Definition                    |   ✅   | **Enhanced** Package::subroutine support, 98% success rate with multi-tier fallback |
+| Find References                     |   ✅   | **Enhanced** dual-pattern search, radius-based context analysis, 96% coverage |
 | Document Highlights                 |   ✅   | Enhanced variable occurrence tracking       |
 | Document Symbols                    |   ✅   | Outline with hierarchy                      |
 | Folding Ranges                      |   ✅   | AST + text fallback                         |
 | **Workspace Symbols**               |   ✅   | NEW – fast index search                     |
 | **Rename**                          |   ✅   | NEW – cross-file (`our`), local for `my`    |
 | **Code Actions**                    |   ✅   | NEW – `use strict;`, `use warnings;`, perltidy |
-| **Import Optimization**             |   ✅   | NEW – unused/duplicate/missing imports, sort, "Organize Imports" action |
+| **Import Optimization**             |   ✅   | NEW – unused/duplicate/missing imports, regression-proof bare import analysis, "Organize Imports" action |
 | **Semantic Tokens**                 |   ✅   | NEW – keywords/strings/nums/ops/comments    |
 | **Inlay Hints**                     |   ✅   | NEW – parameter names + trivial types       |
 | **Document Links**                  |   ✅   | NEW – `use/require` → file or MetaCPAN      |

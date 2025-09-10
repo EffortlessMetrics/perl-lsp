@@ -81,6 +81,14 @@ cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function 
 
 # Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
 # Formatting tests demonstrate graceful degradation when tools are missing
+
+# Test enhanced import optimization features
+cargo test -p perl-parser --test import_optimizer_tests   # Import analysis and optimization tests
+cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols  # Regression-proof bare import analysis
+
+# Test enhanced cross-file navigation capabilities
+cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
+cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
 ```
 
 ### Development

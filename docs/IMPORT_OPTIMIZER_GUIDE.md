@@ -119,13 +119,18 @@ println!("Available action: {}", import_action.title);
 
 ### Test Commands
 ```bash
-# Run all import optimizer tests
+# Run all import optimizer tests (8 comprehensive test cases)
 cargo test -p perl-parser --test import_optimizer_tests
 
 # Test specific optimization scenarios
-cargo test -p perl-parser import_optimizer_tests::test_unused_import_detection
-cargo test -p perl-parser import_optimizer_tests::test_duplicate_consolidation
-cargo test -p perl-parser import_optimizer_tests::test_optimized_generation
+cargo test -p perl-parser --test import_optimizer_tests -- detects_unused_and_duplicate_imports
+cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols
+cargo test -p perl-parser --test import_optimizer_tests -- handles_complex_symbol_names_and_delimiters
+cargo test -p perl-parser --test import_optimizer_tests -- handles_entirely_unused_imports
+cargo test -p perl-parser --test import_optimizer_tests -- handles_mixed_imports_and_usage
+cargo test -p perl-parser --test import_optimizer_tests -- handles_symbols_used_in_comments
+cargo test -p perl-parser --test import_optimizer_tests -- preserves_order_in_optimized_output
+cargo test -p perl-parser --test import_optimizer_tests -- handles_empty_file
 
 # Integration testing with LSP code actions
 cargo test -p perl-parser --test lsp_code_actions_tests -- import_optimization
@@ -254,6 +259,58 @@ fn generate_import_fix_actions(&self, analysis: &ImportAnalysis) -> Vec<CodeActi
 - **Module Side Effects**: Conservative approach for modules that may have side effects
 - **Unknown Modules**: Careful handling of modules not in the known exports database
 - **Complex Usage Patterns**: Detection of module usage beyond simple function calls
+
+### Enhanced Bare Import Handling (v0.8.9+)
+
+Recent improvements address critical regression issues in bare import analysis:
+
+#### Regression Fix for Object-Oriented Modules (*Diataxis: Explanation* - Understanding the bare import logic)
+
+The import optimizer now correctly distinguishes between:
+
+1. **Object-Oriented Modules** (empty exports): Safe to flag as unused when not referenced
+   ```perl
+   use MyClass;  # Only flagged as unused if no MyClass->new() or similar usage found
+   ```
+
+2. **Side-Effect Modules** (potential exports): Preserved from being incorrectly flagged
+   ```perl
+   use Exporter::Easy;  # Never flagged as unused due to potential side effects
+   use strict;          # Pragma modules automatically excluded
+   ```
+
+#### Technical Implementation (*Diataxis: Reference* - Bare import analysis algorithm)
+
+```rust
+// Enhanced logic for marking bare imports as unused
+fn should_flag_bare_import_as_unused(&self, module: &str) -> bool {
+    // Only flag object-oriented modules (empty exports) as unused
+    // Preserve side-effect modules from being incorrectly flagged
+    match self.get_module_exports(module) {
+        Some(exports) if exports.is_empty() => true,  // Object-oriented, safe to flag
+        Some(_) => false,  // Has exports, preserve due to potential side effects
+        None => false,     // Unknown module, conservative approach
+    }
+}
+```
+
+#### Test Coverage for Regression Prevention (*Diataxis: Tutorial* - Testing bare import scenarios)
+
+The enhanced test suite includes specific coverage for regression prevention:
+
+```bash
+# Test bare import handling edge cases
+cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols --nocapture
+
+# Test mixed scenarios with side effects
+cargo test -p perl-parser --test import_optimizer_tests -- handles_mixed_imports_and_usage --nocapture
+```
+
+Key test scenarios now validated:
+- **Object-oriented modules**: Correctly flagged when unused
+- **Side-effect modules**: Protected from false positive detection
+- **Pragma modules**: Automatically excluded from analysis
+- **Mixed usage patterns**: Complex scenarios with multiple import types
 
 ## Future Enhancements
 
