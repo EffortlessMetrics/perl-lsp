@@ -3323,21 +3323,23 @@ impl LspServer {
                             }
 
                             // Enhanced fallback: always search for both qualified and unqualified references
-                            let docs_snapshot: Vec<(String, DocumentState)> = documents
-                                .iter()
-                                .map(|(k, v)| (k.clone(), v.clone()))
-                                .collect();
-                            
+                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
                             let mut enhanced_locations = Vec::new();
                             let symbol_name = &symbol_key.name;
                             let package_name = &symbol_key.pkg;
-                            
-                            // Search patterns: both "symbol_name" and "package::symbol_name"  
+
+                            // Search patterns: both "symbol_name" and "package::symbol_name"
                             let patterns = vec![
                                 format!(r"\b{}\b", regex::escape(symbol_name)),
-                                format!(r"\b{}::{}\b", regex::escape(package_name), regex::escape(symbol_name)),
+                                format!(
+                                    r"\b{}::{}\b",
+                                    regex::escape(package_name),
+                                    regex::escape(symbol_name)
+                                ),
                             ];
-                            
+
                             for pattern in patterns {
                                 if let Ok(search_regex) = regex::Regex::new(&pattern) {
                                     for (doc_uri, doc_state) in &docs_snapshot {
@@ -3362,14 +3364,16 @@ impl LspServer {
                                     }
                                 }
                             }
-                            
-                            // Combine workspace index results with text search results  
+
+                            // Combine workspace index results with text search results
                             workspace_locations.extend(enhanced_locations);
                             let all_combined_locations = workspace_locations;
-                            
+
                             if !all_combined_locations.is_empty() {
-                                eprintln!("Found {} total references via combined search", 
-                                         all_combined_locations.len());
+                                eprintln!(
+                                    "Found {} total references via combined search",
+                                    all_combined_locations.len()
+                                );
                                 return Ok(Some(json!(all_combined_locations)));
                             }
 
@@ -3402,9 +3406,11 @@ impl LspServer {
                         let text_start = offset.saturating_sub(radius);
                         let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                         let cursor_in_text = offset - text_start;
-                        
-                        let re = regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
-                            .unwrap();
+
+                        let re = regex::Regex::new(
+                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
+                        )
+                        .unwrap();
 
                         for cap in re.captures_iter(&text_around) {
                             if let Some(m) = cap.get(1) {
@@ -3423,16 +3429,17 @@ impl LspServer {
                                         if let Some(ref workspace_index) = self.workspace_index {
                                             // Search for all references to this qualified symbol
                                             let mut all_refs = Vec::new();
-                                            
+
                                             // Find references via symbol key
                                             let refs = workspace_index.find_refs(&key);
                                             all_refs.extend(refs);
-                                            
+
                                             // Also try with qualified name
                                             let symbol_name = format!("{}::{}", pkg, name);
-                                            let alt_refs = workspace_index.find_references(&symbol_name);
+                                            let alt_refs =
+                                                workspace_index.find_references(&symbol_name);
                                             all_refs.extend(alt_refs);
-                                            
+
                                             // Add definition if includeDeclaration is true
                                             if include_declaration {
                                                 if let Some(def) = workspace_index.find_def(&key) {
@@ -3442,7 +3449,7 @@ impl LspServer {
 
                                             if !all_refs.is_empty() {
                                                 // Convert internal Locations to LSP Locations
-                                                let lsp_locations = 
+                                                let lsp_locations =
                                                     crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
                                                 if !lsp_locations.is_empty() {
                                                     return Ok(Some(json!(lsp_locations)));
@@ -3450,17 +3457,23 @@ impl LspServer {
                                             }
 
                                             // Fallback: scan open documents for qualified name references
-                                            let docs_snapshot: Vec<(String, DocumentState)> = documents
-                                                .iter()
-                                                .map(|(k, v)| (k.clone(), v.clone()))
-                                                .collect();
-                                            
+                                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                                documents
+                                                    .iter()
+                                                    .map(|(k, v)| (k.clone(), v.clone()))
+                                                    .collect();
+
                                             let mut all_locations = Vec::new();
                                             let qualified_name = format!("{}::{}", pkg, name);
-                                            let search_regex = regex::Regex::new(&format!(r"\b{}\b", regex::escape(&qualified_name))).unwrap();
-                                            
+                                            let search_regex = regex::Regex::new(&format!(
+                                                r"\b{}\b",
+                                                regex::escape(&qualified_name)
+                                            ))
+                                            .unwrap();
+
                                             for (doc_uri, doc_state) in docs_snapshot {
-                                                let lines: Vec<&str> = doc_state.text.lines().collect();
+                                                let lines: Vec<&str> =
+                                                    doc_state.text.lines().collect();
                                                 for (line_num, line) in lines.iter().enumerate() {
                                                     for mat in search_regex.find_iter(line) {
                                                         all_locations.push(json!({
@@ -3479,7 +3492,7 @@ impl LspServer {
                                                     }
                                                 }
                                             }
-                                            
+
                                             if !all_locations.is_empty() {
                                                 return Ok(Some(json!(all_locations)));
                                             }
