@@ -376,7 +376,16 @@ impl WorkspaceIndex {
         self.index_file(url, text.to_string())
     }
 
-    /// Find all references to a symbol
+    /// Find all references to a symbol using dual indexing strategy
+    /// 
+    /// This function searches for both exact matches and bare name matches when 
+    /// the symbol is qualified. For example, when searching for "Utils::process_data":
+    /// - First searches for exact "Utils::process_data" references
+    /// - Then searches for bare "process_data" references that might refer to the same function
+    /// 
+    /// This dual approach handles cases where functions are called both as:
+    /// - Qualified: `Utils::process_data()`
+    /// - Unqualified: `process_data()` (when in the same package or imported)
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
         let files = self.files.read().unwrap();
@@ -551,7 +560,12 @@ impl WorkspaceIndex {
         self.find_definition(&qualified_name)
     }
 
-    /// Find all reference locations for a symbol key
+    /// Find all reference locations for a symbol key using enhanced dual indexing
+    ///
+    /// This function leverages the dual indexing strategy to find references under both
+    /// qualified and bare names, then deduplicates and excludes the definition itself.
+    /// The deduplication ensures each location appears only once even if indexed under
+    /// multiple name forms.
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
         let qualified_name = format!("{}::{}", key.pkg, key.name);
         let mut all_refs = self.find_references(&qualified_name);
@@ -745,10 +759,12 @@ impl IndexVisitor {
                 let qualified = format!("{}::{}", pkg, bare_name);
 
                 // Track as usage for both qualified and bare forms
+                // This dual indexing allows finding references whether the function is called
+                // as `process_data()` or `Utils::process_data()`
                 file_index.references.entry(bare_name.to_string()).or_default().push(
                     SymbolReference {
                         uri: self.uri.clone(),
-                        range: location.clone(),
+                        range: location,
                         kind: ReferenceKind::Usage,
                     },
                 );
