@@ -18,6 +18,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  RUST_TEST_THREADS: 2
 
 jobs:
   test:
@@ -71,25 +72,25 @@ jobs:
     - name: Build
       run: cargo build --all --verbose
     
-    - name: Run LSP tests
+    - name: Run LSP tests (capped)
       run: |
-        cargo test -p perl-lsp --test lsp_user_story_test
-        cargo test -p perl-lsp --test lsp_builtin_functions_test
-        cargo test -p perl-lsp --test lsp_edge_cases_test
-        cargo test -p perl-lsp --test lsp_multi_file_test
-        cargo test -p perl-lsp --test lsp_testing_integration_test
-        cargo test -p perl-lsp --test lsp_refactoring_test
-        cargo test -p perl-lsp --test lsp_performance_test
-        cargo test -p perl-lsp --test lsp_formatting_test
-        cargo test -p perl-lsp --test lsp_master_integration_test
+        cargo test -p perl-lsp --test lsp_user_story_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_builtin_functions_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_multi_file_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_testing_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_refactoring_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_performance_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_formatting_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_master_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
       if: matrix.os == 'ubuntu-latest'
       shell: bash
     
-    - name: Run all parser tests
-      run: cargo test --all --verbose
+    - name: Run all parser tests (capped)
+      run: cargo test --all --verbose -- --test-threads=${{ env.RUST_TEST_THREADS }}
     
     - name: Build release binary
       run: cargo build -p perl-lsp --release
