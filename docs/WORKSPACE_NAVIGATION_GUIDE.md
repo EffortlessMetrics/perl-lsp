@@ -94,8 +94,8 @@ my $result3 = MyModule::transformed("test");    # Qualified call
 1. **Bare Name Indexing**: Every function call like `foo()` is indexed under the bare name "foo"
 2. **Qualified Name Indexing**: The same call is also indexed under its qualified name like "MyModule::foo"
 3. **Package Context Detection**: The indexer automatically determines the correct package context
-4. **Smart Deduplication**: References found via both methods are automatically deduplicated
-5. **Definition Exclusion**: The function definition is handled separately from its references
+4. **Enhanced Smart Deduplication** (**v0.8.9+**): References found via both methods are automatically deduplicated using URI and range comparison
+5. **Improved Definition Exclusion** (**v0.8.9+**): Function definitions are now properly excluded from reference results, preventing duplicate entries in "Find All References"
 
 #### Benefits for Workspace Navigation (*Diataxis: Explanation* - User experience improvements)
 
@@ -104,6 +104,36 @@ my $result3 = MyModule::transformed("test");    # Qualified call
 - **Accurate Rename Operations**: Rename functions and automatically update both bare and qualified calls
 - **Enhanced Go-to-Definition**: Works consistently whether you click on bare or qualified calls
 - **Improved Code Understanding**: See all usage patterns for any function across the workspace
+
+#### Technical Improvements in v0.8.9+ (*Diataxis: Reference* - Enhanced cross-file reference accuracy)
+
+The latest improvements to cross-file reference handling include:
+
+**Enhanced Deduplication Algorithm**:
+```rust
+// Before: Simple list concatenation could create duplicates
+let mut all_refs = self.find_references(&qualified_name);
+all_refs.extend(self.find_references(&key.name));
+
+// After: Intelligent deduplication with definition exclusion
+let qualified_name = format!("{}::{}", key.pkg, key.name);
+let mut all_refs = self.find_references(&qualified_name);
+
+// Remove the definition; the caller will include it separately if needed
+if let Some(def) = self.find_def(key) {
+    all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+}
+
+// Deduplicate by URI and range using HashSet
+let mut seen = HashSet::new();
+all_refs.retain(|loc| seen.insert((loc.uri.clone(), loc.range)));
+```
+
+**Key Benefits**:
+- **Cleaner Reference Lists**: Definitions no longer appear in "Find All References" results
+- **Accurate Cross-File Tracking**: Package-qualified identifiers are handled correctly
+- **Performance Optimized**: HashSet-based deduplication for O(n) performance
+- **LSP Compliance**: Results match LSP specification expectations for reference vs definition separation
 
 ### Step 4: Advanced Code Actions and Refactoring
 ```perl

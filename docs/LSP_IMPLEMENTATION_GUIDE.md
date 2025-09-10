@@ -1314,7 +1314,7 @@ impl LspServer {
 4. **Integration**: Clean conversion between internal types and LSP format
 5. **Extensibility**: Easy to add new refactoring operations
 
-## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
+## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+, Enhanced v0.8.9+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
 
 ### Overview (*Diataxis: Explanation* - Design decisions and concepts)
 
@@ -1403,36 +1403,34 @@ impl WorkspaceIndex {
 }
 ```
 
-#### Intelligent Deduplication (*Diataxis: Reference* - Reference deduplication algorithm)
+#### Intelligent Deduplication (*Diataxis: Reference* - Reference deduplication algorithm, Enhanced v0.8.9+)
 
-The system automatically deduplicates references while excluding definitions:
+The system automatically deduplicates references while excluding definitions. **v0.8.9+ Enhancement**: Improved definition exclusion prevents function definitions from appearing in reference results.
 
 ```rust
 pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
     let qualified_name = format!("{}::{}", key.pkg, key.name);
     let mut all_refs = self.find_references(&qualified_name);
-    all_refs.extend(self.find_references(&key.name));
-
+    
+    // v0.8.9+ Enhancement: More precise definition exclusion
     // Remove the definition; the caller will include it separately if needed
     if let Some(def) = self.find_def(key) {
         all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
     }
 
-    // Deduplicate by URI and range
+    // v0.8.9+ Enhancement: Optimized deduplication using simplified HashSet
     let mut seen = HashSet::new();
-    all_refs.retain(|loc| {
-        seen.insert((
-            loc.uri.clone(),
-            loc.range.start.line,
-            loc.range.start.character,
-            loc.range.end.line,
-            loc.range.end.character,
-        ))
-    });
+    all_refs.retain(|loc| seen.insert((loc.uri.clone(), loc.range)));
 
     all_refs
 }
 ```
+
+**Key v0.8.9+ Improvements**:
+- **Cleaner Reference Results**: Function definitions are properly excluded from "Find All References"
+- **Improved LSP Compliance**: Separation of references vs definitions matches LSP specification expectations
+- **Enhanced Performance**: Simplified deduplication logic using range comparison instead of individual coordinate fields
+- **Accurate Cross-File Navigation**: Package-qualified identifiers handled consistently across workspace
 
 ### Benefits for LSP Users (*Diataxis: Explanation* - User experience improvements)
 

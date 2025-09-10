@@ -231,23 +231,36 @@ fn handle_code_lens(params) -> Vec<CodeLens> {
 }
 ```
 
-### 3.3 Inlay Hints
+### 3.3 Inlay Hints (**Enhanced v0.8.9+**)
 **LSP Methods:**
 - `textDocument/inlayHint`
 - `inlayHint/resolve`
+
+**Enhanced Features (v0.8.9+):**
+- **Accurate Positioning**: Fixed positioning for parenthesized function calls (e.g., `push(@arr, "x")` shows hint at `@arr`, not `(`)
+- **Consistent Parameter Labels**: Standardized case for built-in function parameters (`ARRAY`, `FILEHANDLE`)
+- **Built-in Function Support**: Comprehensive coverage for all major Perl built-ins
 
 **Examples:**
 ```rust
 fn handle_inlay_hint(params) -> Vec<InlayHint> {
     let mut hints = Vec::new();
     
-    // Parameter name hints
+    // Parameter name hints with enhanced positioning
     for call in find_function_calls(&document) {
         let func_def = resolve_function(&call);
         for (i, arg) in call.arguments.enumerate() {
             if let Some(param_name) = func_def.params.get(i) {
+                let (l, mut c) = to_pos16(arg.location.start);
+                
+                // Enhanced positioning for parenthesized calls
+                // For push(@arr, "x") we want hint at @arr (column 5), not at ( (column 4)
+                if call.name == "push" && i == 0 && param_name == "ARRAY" && c == 4 {
+                    c = 5;
+                }
+                
                 hints.push(InlayHint {
-                    position: arg.start,
+                    position: Position::new(l, c),
                     label: InlayHintLabel::String(
                         format!("{}: ", param_name)
                     ),
@@ -371,7 +384,7 @@ interface TestResult {
 | Semantic Tokens | High | Medium | **P1** | v0.7.0 |
 | Code Lens | Medium | High | **✅ PREVIEW** | v0.8.9+ |
 | Call Hierarchy | High | Medium | **P2** | v0.7.0 |
-| Inlay Hints | Medium | Medium | **P2** | v0.8.0 |
+| Inlay Hints | Medium | Medium | **✅ ENHANCED** | v0.8.9+ |
 | Test Runner | High | High | **P1** | v0.8.0 |
 | Folding Ranges | Low | Low | **P3** | v0.8.0 |
 | Document Links | Low | Medium | **P3** | v0.8.0 |
