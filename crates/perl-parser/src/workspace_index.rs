@@ -622,7 +622,11 @@ impl WorkspaceIndex {
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
         let qualified_name = format!("{}::{}", key.pkg, key.name);
         let mut all_refs = self.find_references(&qualified_name);
-        all_refs.extend(self.find_references(&key.name));
+
+        // Remove the definition; the caller will include it separately if needed
+        if let Some(def) = self.find_def(key) {
+            all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+        }
 
         // Deduplicate by URI and range
         let mut seen = HashSet::new();
