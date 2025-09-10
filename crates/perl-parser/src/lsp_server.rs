@@ -2875,7 +2875,6 @@ impl LspServer {
                                             }
                                         }
                                     }
-
                                 }
                                 break;
                             }

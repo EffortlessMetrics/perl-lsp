@@ -1163,6 +1163,31 @@ impl<'a> PerlLexer<'a> {
                             }
                         }
                     }
+                    // Handle variables starting with :: (absolute package variables like $::foo)
+                    else if ch == ':' && self.peek_char(1) == Some(':') {
+                        self.advance(); // consume first :
+                        self.advance(); // consume second :
+                        // Parse the variable name after ::
+                        while let Some(ch) = self.current_char() {
+                            if is_perl_identifier_continue(ch) {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        // Handle additional package-qualified segments
+                        while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
+                            self.advance();
+                            self.advance();
+                            while let Some(ch) = self.current_char() {
+                                if is_perl_identifier_continue(ch) {
+                                    self.advance();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     // Handle special punctuation variables
                     else if sigil == '$'
                         && matches!(
