@@ -25,6 +25,126 @@
                                       └──────────────────┘
 ```
 
+## Enhanced Workspace Indexing (v0.8.9+) - Dual Indexing Strategy (*Diataxis: Explanation* - Understanding the dual reference approach)
+
+The v0.8.9+ releases introduce a breakthrough dual indexing strategy for function call references that dramatically improves cross-file LSP navigation. This enhancement indexes functions under both qualified (`Package::function`) and bare (`function`) names, enabling comprehensive reference finding regardless of how functions are called.
+
+### Architectural Decision: Why Dual Indexing? (*Diataxis: Explanation* - Design rationale)
+
+Perl's flexible function call syntax creates a fundamental challenge for static analysis:
+
+```perl
+# File: lib/Utils.pm
+package Utils;
+sub process_data { ... }
+
+# File: main.pl
+use Utils;
+
+# These all reference the same function:
+Utils::process_data();    # Qualified call
+process_data();          # Bare call (via import or same package)
+&process_data();         # Explicit subroutine call
+```
+
+Traditional indexing approaches fail because they only index functions under one name form, missing references that use alternative calling conventions. The dual indexing strategy solves this by maintaining references under both forms.
+
+### Technical Implementation (*Diataxis: Reference* - Dual indexing algorithm)
+
+#### Indexing Phase (*Diataxis: Reference* - Reference storage specification)
+
+When a function call is encountered during workspace indexing:
+
+```rust
+// Track as usage for both qualified and bare forms
+// This dual indexing allows finding references whether the function is called
+// as `process_data()` or `Utils::process_data()`
+file_index.references.entry(bare_name.to_string()).or_default().push(
+    SymbolReference {
+        uri: self.uri.clone(),
+        range: location,
+        kind: ReferenceKind::Usage,
+    },
+);
+file_index.references.entry(qualified).or_default().push(SymbolReference {
+    uri: self.uri.clone(),
+    range: location,
+    kind: ReferenceKind::Usage,
+});
+```
+
+#### Search Phase (*Diataxis: Reference* - Reference retrieval algorithm)
+
+When searching for references to a qualified symbol:
+
+```rust
+/// Find all references to a symbol using dual indexing strategy
+///
+/// This function searches for both exact matches and bare name matches when
+/// the symbol is qualified. For example, when searching for "Utils::process_data":
+/// - First searches for exact "Utils::process_data" references
+/// - Then searches for bare "process_data" references that might refer to the same function
+pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+    let mut locations = Vec::new();
+    let files = self.files.read().unwrap();
+
+    for (_uri_key, file_index) in files.iter() {
+        // Search for exact match first
+        if let Some(refs) = file_index.references.get(symbol_name) {
+            for reference in refs {
+                locations.push(Location { 
+                    uri: reference.uri.clone(), 
+                    range: reference.range 
+                });
+            }
+        }
+
+        // If the symbol is qualified, also search for bare name references
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(refs) = file_index.references.get(bare_name) {
+                for reference in refs {
+                    locations.push(Location { 
+                        uri: reference.uri.clone(), 
+                        range: reference.range 
+                    });
+                }
+            }
+        }
+    }
+
+    locations
+}
+```
+
+#### Deduplication Strategy (*Diataxis: Reference* - Duplicate elimination)
+
+The enhanced `find_refs` method ensures each location appears only once even when indexed under multiple name forms:
+
+```rust
+/// Find all reference locations for a symbol key using enhanced dual indexing
+///
+/// This function leverages the dual indexing strategy to find references under both
+/// qualified and bare names, then deduplicates and excludes the definition itself.
+/// The deduplication ensures each location appears only once even if indexed under
+/// multiple name forms.
+pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+    // Implementation includes automatic deduplication based on URI + Range
+}
+```
+
+### Lexer Enhancements (*Diataxis: Reference* - Package-qualified identifier support)
+
+The lexer has been enhanced to properly handle package-qualified segments:
+
+```rust
+// Handle package-qualified identifiers like Foo::bar
+while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
+    // consume '::'
+    // ... lexer implementation for qualified identifiers
+}
+```
+
 ## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics (*Diataxis: Explanation* - Understanding the bareword analysis breakthrough)
 
 The v0.8.6 release introduces breakthrough hash key context detection that eliminates false positives in bareword analysis under `use strict`. This represents a significant advancement in Perl static analysis.
