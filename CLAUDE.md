@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.8+ GA - Enhanced Lexer Performance Optimizations with Production-Stable AST Generation  
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Single-Quote Delimiter Support  
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.8 GA)
+### Published Crates (v0.8.9 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -24,7 +24,8 @@ This repository contains **five published crates** forming a complete Perl parsi
 
 3. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
-   - Performance-optimized (v0.8.8+) with 15-22% improvement
+   - Enhanced delimiter recognition including single-quote substitution operators
+   - Performance-optimized (v0.8.9+) with comprehensive operator support
 
 4. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -154,7 +155,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function empty block parsing
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function empty block parsing, and comprehensive delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling

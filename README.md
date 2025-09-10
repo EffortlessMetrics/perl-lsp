@@ -13,11 +13,11 @@
 
 This project provides a **complete Perl parsing ecosystem** with Tree-sitter compatibility:
 
-### 📦 Published Crates (v0.8.8)
+### 📦 Published Crates (v0.8.9)
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 99.7% incremental parsing efficiency, and LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization and production-ready CLI interface
-3. **perl-lexer** - Context-aware tokenizer for Perl syntax
+3. **perl-lexer** - Context-aware tokenizer with enhanced delimiter support (including single-quote substitution operators)
 4. **perl-corpus** - Comprehensive test corpus and property testing
 5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
 
@@ -148,7 +148,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 ### v3: Native Rust Lexer+Parser (Recommended) ⭐ COMPLETE
 - **~100% Perl 5 Coverage**: Handles ALL real-world Perl code including edge cases
 - **Blazing Fast**: 4-19x faster than C implementation (1-150 µs per file)
-- **Context-Aware**: Properly handles `m!pattern!`, indirect object syntax, and more
+- **Context-Aware**: Properly handles `m!pattern!`, single-quote substitution delimiters (`s'pattern'replacement'`), indirect object syntax, and more
 - **Zero Dependencies**: Clean, maintainable codebase
 - **100% Edge Case Coverage**: 141/141 edge case tests passing
 - **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
@@ -157,7 +157,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 ### v2: Pest-based Pure Rust Parser
 - **~99.996% Perl 5 Coverage**: Handles virtually all real-world Perl code (improved substitution support via PR #42)
 - **Pure Rust**: Built with Pest parser generator, zero C dependencies
-- **Enhanced Substitution Parsing**: Robust s/// delimiter handling with paired delimiters support (PR #42)
+- **Enhanced Substitution Parsing**: Robust delimiter handling including single-quote delimiters (`s'pattern'replacement'`), paired delimiters, and comprehensive edge case support
 - **Improved Quote Parser**: Better error handling and nested delimiter support (PR #42)
 - **Well Tested**: 100% edge case coverage for supported features including comprehensive substitution tests
 - **Good Performance**: ~200-450 µs for typical files
@@ -168,7 +168,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Comprehensive Perl 5 Features**:
   - All variable types with all declaration types (my, our, local, state)
   - Full string interpolation ($var, @array, ${expr})
-  - Regular expressions with all operators and modifiers (enhanced substitution support)
+  - Regular expressions with all operators, modifiers, and delimiter types (including single-quote substitution delimiters: `s'pattern'replacement'`)
   - 100+ operators with correct precedence (including ~~, ISA)
   - All control flow (if/elsif/else, given/when/default, statement modifiers)
   - Subroutines with signatures and type constraints (Perl 5.36+)
@@ -575,6 +575,30 @@ The parser provides comprehensive Unicode support matching Perl's actual behavio
   # Comment with emoji 🎯
   ```
 
+### Enhanced Delimiter Support (*Diataxis: How-to* - Working with alternative delimiters)
+
+The parser supports comprehensive delimiter variations for regex and substitution operations:
+
+```perl
+# Traditional slash delimiters
+s/old/new/g;
+tr/abc/xyz/;
+
+# Single-quote delimiters (new in v0.8.9+)
+s'old'new'g;           # Basic substitution
+s'it\'s'it is';        # Escaped quotes supported
+s''empty replacement'; # Empty patterns supported
+y'from'to';            # Transliteration with y operator
+tr'from'to';           # Transliteration with tr operator
+
+# Other supported delimiters
+s{old}{new}g;          # Braces
+s[old][new]g;          # Brackets
+s(old)(new)g;          # Parentheses
+s|old|new|g;           # Pipes
+s#old#new#g;           # Hash symbols
+```
+
 ### Important Unicode Limitations
 Not all Unicode characters are valid in identifiers, matching Perl's behavior:
 - ❌ Mathematical symbols: `∑` (U+2211), `∏` (U+220F) are **not** valid identifiers
@@ -783,6 +807,7 @@ The Pure Rust parser provides full tree-sitter compatibility through:
 | Core Perl 5 | ✅ 95% | ✅ 99.995% | ✅ 100% |
 | Modern Perl (5.38+) | ❌ | ✅ | ✅ |
 | Regex with custom delimiters | ❌ | ❌ | ✅ |
+| Single-quote substitution delimiters | ❌ | ❌ | ✅ |
 | Indirect object syntax | ❌ | ❌ | ✅ |
 | Unicode identifiers | ✅ | ✅ | ✅ |
 | Heredocs | ⚠️ | ✅ | ✅ |
