@@ -54,7 +54,7 @@ fn test_complex_highlight_constructs() {
 
     for (source, expected_primary_kind) in test_cases {
         let mut parser = Parser::new(source);
-        let ast = parser.parse().expect(&format!("Failed to parse: {}", source));
+        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", source));
 
         let mut actual_kinds = HashMap::new();
         collect_node_kinds(&ast, &mut actual_kinds);
