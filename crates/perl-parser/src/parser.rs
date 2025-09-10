@@ -1392,10 +1392,22 @@ impl<'a> Parser<'a> {
         let mut name_end = first.end;
 
         // Handle :: in package names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            let dc = self.tokens.next()?; // consume ::
-            name_end = dc.end;
-            name.push_str("::");
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                let dc = self.tokens.next()?; // consume ::
+                name_end = dc.end;
+                name.push_str("::");
+            } else if self.peek_kind() == Some(TokenKind::Colon) {
+                // Handle two separate Colon tokens as ::
+                let _first_colon = self.tokens.next()?; // consume first :
+                let second_colon = self.tokens.next()?; // consume second :
+                name_end = second_colon.end;
+                name.push_str("::");
+            }
 
             // Check if there's an identifier after ::
             // If not, it's a trailing :: which is valid in Perl
@@ -1512,10 +1524,27 @@ impl<'a> Parser<'a> {
         };
 
         // Handle :: in module names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            module.push_str("::");
-            module.push_str(&self.expect(TokenKind::Identifier)?.text);
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                module.push_str("::");
+            }
+            // In Perl, trailing :: is valid (e.g., Foo::Bar::)
+            // Only consume identifier if there is one
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next_part = self.consume_token()?;
+                module.push_str(&next_part.text);
+            }
+            // No error for trailing :: - it's valid in Perl
         }
 
         // Parse optional version number
@@ -1909,10 +1938,27 @@ impl<'a> Parser<'a> {
         let mut module = self.expect(TokenKind::Identifier)?.text.clone();
 
         // Handle :: in module names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            module.push_str("::");
-            module.push_str(&self.expect(TokenKind::Identifier)?.text);
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                module.push_str("::");
+            }
+            // In Perl, trailing :: is valid (e.g., Foo::Bar::)
+            // Only consume identifier if there is one
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next_part = self.consume_token()?;
+                module.push_str(&next_part.text);
+            }
+            // No error for trailing :: - it's valid in Perl
         }
 
         // Parse optional version number
@@ -3982,7 +4028,7 @@ impl<'a> Parser<'a> {
             if self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.consume_token()?; // consume ::
                 name.push_str("::");
-            } else {
+            } else if self.peek_kind() == Some(TokenKind::Colon) {
                 // Handle two separate Colon tokens as ::
                 self.consume_token()?; // consume first :
                 self.consume_token()?; // consume second :
@@ -4589,10 +4635,30 @@ impl<'a> Parser<'a> {
         }
 
         // Check if the second token is a colon
-        match self.tokens.peek_second() {
-            Ok(token) => token.kind == TokenKind::Colon,
-            Err(_) => false,
+        if let Ok(second_token) = self.tokens.peek_second() {
+            if second_token.kind == TokenKind::Colon {
+                // To avoid conflict with qualified identifiers (Package::name),
+                // we need to be more careful. A true label should be:
+                // IDENTIFIER : STATEMENT
+                // where STATEMENT doesn't start with another colon.
+                //
+                // For now, let's be conservative and disable label detection
+                // when we see patterns that could be qualified identifiers.
+                // This is a simple heuristic: if we see IDENTIFIER : and the
+                // identifier looks like it could be a package name (starts with
+                // uppercase), we'll let the expression parser handle it.
+                if let Ok(first_token) = self.tokens.peek() {
+                    let name = &first_token.text;
+                    // If identifier starts with uppercase, it might be a package name
+                    // so avoid treating it as a label
+                    if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        return false;
+                    }
+                }
+                return true;
+            }
         }
+        false
     }
 
     /// Parse a labeled statement (LABEL: statement)
@@ -5342,5 +5408,20 @@ mod tests {
             "Should have hash or array, got: {}",
             sexp
         );
+    }
+
+    #[test]
+    fn test_qualified_function_call() {
+        let mut parser = Parser::new("return Data::Dumper::Dumper($param);");
+        let result = parser.parse();
+        match result {
+            Ok(ast) => {
+                println!("✅ Successfully parsed qualified function call: {}", ast.to_sexp());
+            }
+            Err(e) => {
+                println!("❌ Failed to parse qualified function call: {}", e);
+                panic!("Parsing failed: {}", e);
+            }
+        }
     }
 }
