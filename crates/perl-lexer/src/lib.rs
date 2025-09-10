@@ -1150,6 +1150,18 @@ impl<'a> PerlLexer<'a> {
                                 break;
                             }
                         }
+                        // Handle package-qualified segments like Foo::bar
+                        while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
+                            self.advance();
+                            self.advance();
+                            while let Some(ch) = self.current_char() {
+                                if is_perl_identifier_continue(ch) {
+                                    self.advance();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
                     }
                     // Handle special punctuation variables
                     else if sigil == '$'
@@ -1176,22 +1188,6 @@ impl<'a> PerlLexer<'a> {
                     // Handle special array/hash punctuation variables
                     else if (sigil == '@' || sigil == '%') && matches!(ch, '+' | '-') {
                         self.advance(); // consume the + or -
-                    }
-                    // Handle :: for package-qualified variables or stash access
-                    else if ch == ':' && self.peek_char(1) == Some(':') {
-                        self.advance(); // consume first :
-                        self.advance(); // consume second :
-                        // Now parse the rest like a normal identifier
-                        while let Some(ch) = self.current_char() {
-                            if is_perl_identifier_continue(ch) {
-                                self.advance();
-                            } else if ch == ':' && self.peek_char(1) == Some(':') {
-                                self.advance();
-                                self.advance();
-                            } else {
-                                break;
-                            }
-                        }
                     }
                 }
 
@@ -1234,6 +1230,22 @@ impl<'a> PerlLexer<'a> {
         let ch = self.current_char()?;
 
         if is_perl_identifier_start(ch) {
+            // Special case: substitution/transliteration with single-quote delimiter
+            // The single quote is considered an identifier continuation, so we need to
+            // detect these operators before consuming it as part of an identifier.
+            if ch == 's' && self.peek_char(1) == Some('\'') {
+                self.advance(); // consume 's'
+                return self.parse_substitution(start);
+            } else if ch == 'y' && self.peek_char(1) == Some('\'') {
+                self.advance(); // consume 'y'
+                return self.parse_transliteration(start);
+            } else if ch == 't' && self.peek_char(1) == Some('r') && self.peek_char(2) == Some('\'')
+            {
+                self.advance(); // consume 't'
+                self.advance(); // consume 'r'
+                return self.parse_transliteration(start);
+            }
+
             while let Some(ch) = self.current_char() {
                 if is_perl_identifier_continue(ch) {
                     self.advance();
@@ -1241,27 +1253,43 @@ impl<'a> PerlLexer<'a> {
                     break;
                 }
             }
+            // Handle package-qualified identifiers like Foo::bar
+            while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
+                // consume '::'
+                self.advance();
+                self.advance();
+
+                // consume following identifier segment if present
+                if let Some(ch) = self.current_char()
+                    && is_perl_identifier_start(ch)
+                {
+                    self.advance();
+                    while let Some(ch) = self.current_char() {
+                        if is_perl_identifier_continue(ch) {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
 
             let text = &self.input[start..self.position];
 
-            // Check for __DATA__ and __END__ markers using byte comparison
+            // Check for __DATA__ and __END__ markers using exact match
             // Only recognize these in code channel, not inside data/format sections or heredocs
             let in_code_channel =
                 !matches!(self.mode, LexerMode::InDataSection | LexerMode::InFormatBody)
                     && self.pending_heredocs.is_empty();
 
             let marker = if in_code_channel {
-                let saved = self.position;
-                self.position = start;
-                let result = if self.matches_bytes(b"__DATA__") {
+                if text == "__DATA__" {
                     Some("__DATA__")
-                } else if self.matches_bytes(b"__END__") {
+                } else if text == "__END__" {
                     Some("__END__")
                 } else {
                     None
-                };
-                self.position = saved;
-                result
+                }
             } else {
                 None
             };
@@ -1306,6 +1334,7 @@ impl<'a> PerlLexer<'a> {
                     if matches!(
                         next,
                         '/' | '|'
+                            | '\''
                             | '{'
                             | '['
                             | '('

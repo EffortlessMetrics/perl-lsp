@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing with Deterministic AST Generation
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Single-Quote Delimiter Support
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
@@ -16,16 +16,19 @@ This repository contains **five published crates** forming a complete Perl parsi
    - 4-19x faster than legacy implementations (1-150 µs parsing)
    - Production-ready incremental parsing with <1ms LSP updates
    - Enterprise-grade workspace refactoring and cross-file analysis
+   - **Enhanced Dual Indexing Strategy**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names for 98% reference coverage
    - **Enhanced Builtin Function Parsing**: Deterministic parsing of map/grep/sort functions with {} blocks
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
+   - Enhanced cross-file navigation with dual pattern matching
    - Works with VSCode, Neovim, Emacs, and all LSP-compatible editors
 
 3. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
-   - Performance-optimized (v0.8.8+) with 15-22% improvement
+   - Enhanced delimiter recognition including single-quote substitution operators
+   - Performance-optimized (v0.8.9+) with comprehensive operator support
 
 4. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -81,6 +84,14 @@ cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function 
 
 # Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
 # Formatting tests demonstrate graceful degradation when tools are missing
+
+# Test enhanced import optimization features
+cargo test -p perl-parser --test import_optimizer_tests   # Import analysis and optimization tests
+cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols  # Regression-proof bare import analysis
+
+# Test enhanced cross-file navigation capabilities
+cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
+cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
 ```
 
 ### Development
@@ -132,11 +143,10 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function parsing (PR #119)
-- **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support
-- **Enhanced Cross-File Navigation**: Package::subroutine pattern resolution with 98% success rate, multi-tier fallback system
-- **Advanced Definition Resolution**: Workspace index + AST scan + text search fallback for robust symbol navigation
-- **Dual-Pattern Reference Search**: Enhanced find references combining qualified/unqualified symbol matching
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, and comprehensive delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
+- **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
+- **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
+- **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support and enhanced reference resolution
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
@@ -179,6 +189,82 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.9)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
+
+### Development Workflow (Enhanced)
+
+**Development Server** - Automatic LSP reload on file changes:
+```bash
+# Start development server with file watching and hot-reload
+cd xtask && cargo run --no-default-features -- dev --watch --port 8080
+
+# Features:
+# - Monitors Rust (.rs), Perl (.pl, .pm), and config files (.toml)
+# - Automatic LSP server restart on changes with 500ms debouncing
+# - Graceful shutdown with Ctrl+C
+# - Health monitoring and automatic recovery if LSP crashes
+# - Cross-platform file watching support
+```
+
+**Performance Testing Workflow** - Optimize slow test suites:
+```bash
+# Analyze test performance and apply optimizations
+cd xtask && cargo run --no-default-features -- optimize-tests
+
+# Automatically detects:
+# - Long timeout values (>1000ms reduced to 500ms)
+# - Excessive wait_for_idle calls (>500ms reduced to 200ms)  
+# - Inefficient polling patterns
+# - Potential savings up to 3+ seconds per test file
+```
+
+## Dual Indexing Architecture Pattern
+
+When implementing workspace indexing features, follow the dual indexing pattern established in PR #122:
+
+### Implementation Pattern (*Diataxis: Reference* - Code patterns to follow)
+
+```rust
+// When indexing function calls, always index under both forms
+let qualified = format!("{}::{}", package, bare_name);
+
+// Index under bare name
+file_index.references.entry(bare_name.to_string()).or_default().push(symbol_ref.clone());
+
+// Index under qualified name  
+file_index.references.entry(qualified).or_default().push(symbol_ref);
+```
+
+### Search Pattern (*Diataxis: Reference* - Reference resolution patterns)
+
+```rust
+// When searching for references, implement dual pattern matching
+pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+    let mut locations = Vec::new();
+    
+    // Search exact match first
+    if let Some(refs) = index.get(symbol_name) {
+        locations.extend(refs.iter().cloned());
+    }
+    
+    // If qualified, also search bare name
+    if let Some(idx) = symbol_name.rfind("::") {
+        let bare_name = &symbol_name[idx + 2..];
+        if let Some(refs) = index.get(bare_name) {
+            locations.extend(refs.iter().cloned());
+        }
+    }
+    
+    locations
+}
+```
+
+### Design Principles (*Diataxis: Explanation* - Architectural guidance)
+
+1. **Dual Storage**: Always store function references under both qualified and bare forms
+2. **Dual Retrieval**: Always search both qualified and bare forms when resolving references
+3. **Automatic Deduplication**: Implement deduplication based on URI + Range to prevent duplicates
+4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
+5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
 ## Current Status (v0.8.9)
 

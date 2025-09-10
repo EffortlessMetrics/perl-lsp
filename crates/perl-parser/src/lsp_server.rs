@@ -1690,10 +1690,18 @@ impl LspServer {
                                 CompletionItemKind::Constant => 14,
                                 CompletionItemKind::Property => 7,
                             },
-                            "detail": c.detail,
-                            "insertText": c.insert_text,
                             "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
                         });
+
+                        // Only include detail if it has a value
+                        if let Some(detail) = c.detail {
+                            item["detail"] = json!(detail);
+                        }
+
+                        // Only include insertText if it has a value
+                        if let Some(insert_text) = c.insert_text {
+                            item["insertText"] = json!(insert_text);
+                        }
 
                         // Only add commit characters for functions and variables, not keywords
                         let needs_commit_chars = matches!(
