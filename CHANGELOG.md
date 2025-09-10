@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Lexer now recognizes single-quote delimiters for substitution operators (`s'foo'bar'`).
+- Fixed regex parser consuming the first pattern character when using non-slash delimiters.
 
 ## [v0.8.9] - Performance Optimization and LSP Enhancement Release
 
