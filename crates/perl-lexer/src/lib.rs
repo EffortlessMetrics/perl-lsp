@@ -1244,15 +1244,15 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
 
                 // consume following identifier segment if present
-                if let Some(ch) = self.current_char() {
-                    if is_perl_identifier_start(ch) {
-                        self.advance();
-                        while let Some(ch) = self.current_char() {
-                            if is_perl_identifier_continue(ch) {
-                                self.advance();
-                            } else {
-                                break;
-                            }
+                if let Some(ch) = self.current_char()
+                    && is_perl_identifier_start(ch)
+                {
+                    self.advance();
+                    while let Some(ch) = self.current_char() {
+                        if is_perl_identifier_continue(ch) {
+                            self.advance();
+                        } else {
+                            break;
                         }
                     }
                 }

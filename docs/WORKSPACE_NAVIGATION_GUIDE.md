@@ -56,7 +56,56 @@ $Utils::GLOBAL_CONFIG = {};  # Cross-file reference resolution
 Utils::utility_function();  # Enhanced call hierarchy navigation
 ```
 
-### Step 3: Advanced Code Actions and Refactoring
+### Step 3: Dual Function Call Indexing (v0.8.8+) (*Diataxis: Tutorial* - Understanding enhanced cross-file navigation)
+
+The enhanced workspace navigation now supports dual indexing for function calls, dramatically improving cross-file reference finding:
+
+```perl
+# File: lib/MyModule.pm
+package MyModule;
+
+sub process_data {
+    my ($data) = @_;
+    return transformed($data);  # This will be indexed as both "transformed" 
+                               # and "MyModule::transformed"
+}
+
+sub transformed {              # Function definition
+    my ($input) = @_;
+    return uc($input);
+}
+
+# File: bin/main.pl
+use MyModule;
+
+my $result1 = MyModule::process_data("hello");  # Calls process_data
+my $result2 = transformed("world");             # Bare name call
+my $result3 = MyModule::transformed("test");    # Qualified call
+
+# With dual indexing, "Find All References" for "transformed" now finds:
+# 1. The definition in MyModule.pm (line 9)
+# 2. The bare call in process_data (line 5)  
+# 3. The bare call in main.pl (line 7)
+# 4. The qualified call in main.pl (line 8)
+```
+
+#### How Dual Indexing Works (*Diataxis: Explanation* - Technical implementation)
+
+1. **Bare Name Indexing**: Every function call like `foo()` is indexed under the bare name "foo"
+2. **Qualified Name Indexing**: The same call is also indexed under its qualified name like "MyModule::foo"
+3. **Package Context Detection**: The indexer automatically determines the correct package context
+4. **Smart Deduplication**: References found via both methods are automatically deduplicated
+5. **Definition Exclusion**: The function definition is handled separately from its references
+
+#### Benefits for Workspace Navigation (*Diataxis: Explanation* - User experience improvements)
+
+- **Comprehensive Reference Finding**: Find all function calls regardless of how they're invoked
+- **Cross-Package Navigation**: Seamlessly navigate between bare and qualified function calls  
+- **Accurate Rename Operations**: Rename functions and automatically update both bare and qualified calls
+- **Enhanced Go-to-Definition**: Works consistently whether you click on bare or qualified calls
+- **Improved Code Understanding**: See all usage patterns for any function across the workspace
+
+### Step 4: Advanced Code Actions and Refactoring
 ```perl
 # Before refactoring suggestions enhancement:
 my $result = calculate_complex_value($a, $b, $c, $d, $e);  # Complex parameter list

@@ -1314,6 +1314,181 @@ impl LspServer {
 4. **Integration**: Clean conversion between internal types and LSP format
 5. **Extensibility**: Easy to add new refactoring operations
 
+## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
+
+### Overview (*Diataxis: Explanation* - Design decisions and concepts)
+
+The v0.8.8+ release introduces a sophisticated dual indexing strategy for function calls that significantly improves cross-file navigation and reference finding. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names.
+
+### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
+
+#### Dual Function Call Indexing (*Diataxis: Reference* - Implementation details)
+
+The workspace index now maintains dual references for function calls, indexing both bare and qualified forms:
+
+```rust
+// Function call indexing strategy
+impl IndexVisitor {
+    fn visit_function_call(&mut self, node: &Node, file_index: &mut FileIndex) {
+        if let NodeKind::FunctionCall { name, .. } = &node.kind {
+            let location = self.node_to_range(node);
+            
+            // Determine package and bare name
+            let (pkg, bare_name) = if let Some(idx) = name.rfind("::") {
+                (&name[..idx], &name[idx + 2..])
+            } else {
+                (self.current_package.as_deref().unwrap_or("main"), name.as_str())
+            };
+            
+            let qualified = format!("{}::{}", pkg, bare_name);
+            
+            // Index both bare and qualified forms
+            file_index.references.entry(bare_name.to_string()).or_default().push(
+                SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location.clone(),
+                    kind: ReferenceKind::Usage,
+                }
+            );
+            
+            file_index.references.entry(qualified).or_default().push(
+                SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location,
+                    kind: ReferenceKind::Usage,
+                }
+            );
+        }
+    }
+}
+```
+
+#### Enhanced Reference Finding (*Diataxis: Reference* - Enhanced search algorithms)
+
+The `find_references` method implements intelligent dual lookup with deduplication:
+
+```rust
+impl WorkspaceIndex {
+    pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+        let mut locations = Vec::new();
+        let files = self.files.read().unwrap();
+
+        for (_uri_key, file_index) in files.iter() {
+            // Search for exact match first
+            if let Some(refs) = file_index.references.get(symbol_name) {
+                for reference in refs {
+                    locations.push(Location { 
+                        uri: reference.uri.clone(), 
+                        range: reference.range 
+                    });
+                }
+            }
+
+            // If the symbol is qualified, also search for bare name references
+            if let Some(idx) = symbol_name.rfind("::") {
+                let bare_name = &symbol_name[idx + 2..];
+                if let Some(refs) = file_index.references.get(bare_name) {
+                    for reference in refs {
+                        locations.push(Location { 
+                            uri: reference.uri.clone(), 
+                            range: reference.range 
+                        });
+                    }
+                }
+            }
+        }
+
+        locations
+    }
+}
+```
+
+#### Intelligent Deduplication (*Diataxis: Reference* - Reference deduplication algorithm)
+
+The system automatically deduplicates references while excluding definitions:
+
+```rust
+pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+    let qualified_name = format!("{}::{}", key.pkg, key.name);
+    let mut all_refs = self.find_references(&qualified_name);
+    all_refs.extend(self.find_references(&key.name));
+
+    // Remove the definition; the caller will include it separately if needed
+    if let Some(def) = self.find_def(key) {
+        all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+    }
+
+    // Deduplicate by URI and range
+    let mut seen = HashSet::new();
+    all_refs.retain(|loc| {
+        seen.insert((
+            loc.uri.clone(),
+            loc.range.start.line,
+            loc.range.start.character,
+            loc.range.end.line,
+            loc.range.end.character,
+        ))
+    });
+
+    all_refs
+}
+```
+
+### Benefits for LSP Users (*Diataxis: Explanation* - User experience improvements)
+
+1. **Comprehensive Reference Finding**: Finds all references regardless of whether they use bare names (`foo()`) or qualified names (`Package::foo()`)
+2. **Smart Deduplication**: Eliminates duplicate references that occur from dual indexing
+3. **Package-Aware Navigation**: Correctly handles package contexts and qualified function calls
+4. **Cross-File Consistency**: Maintains consistent reference finding across the entire workspace
+5. **Performance Optimized**: Uses HashSet-based deduplication for efficient processing
+
+### Testing and Validation (*Diataxis: How-to* - Testing dual indexing)
+
+The dual indexing strategy includes comprehensive test coverage:
+
+```rust
+#[test]
+fn test_dual_function_call_indexing() {
+    let source = r#"
+package MyModule;
+
+sub my_function {
+    return 42;
+}
+
+# Bare call
+my_function();
+
+# Qualified call  
+MyModule::my_function();
+
+# Cross-package call
+OtherModule::my_function();
+"#;
+    
+    let index = WorkspaceIndex::new();
+    index.index_document("file:///test.pl", source);
+    
+    // Should find both bare and qualified references
+    let refs = index.find_references("MyModule::my_function");
+    assert!(refs.len() >= 3); // Definition + 2 calls
+    
+    // Bare name search should also work
+    let bare_refs = index.find_references("my_function");
+    assert!(bare_refs.len() >= 2); // Both calls found
+}
+```
+
+### Integration with LSP Features (*Diataxis: How-to* - Using dual indexing in LSP)
+
+The dual indexing strategy seamlessly integrates with existing LSP features:
+
+- **Go to Definition**: Enhanced to handle both bare and qualified lookups
+- **Find All References**: Comprehensive cross-file reference detection  
+- **Workspace Symbols**: Improved symbol search across package boundaries
+- **Rename Symbol**: Accurate renaming of both bare and qualified occurrences
+- **Hover Information**: Consistent symbol information regardless of call style
+
 ## API Reference Documentation
 
 ### CompletionProvider API Reference (**Diataxis: Reference**)

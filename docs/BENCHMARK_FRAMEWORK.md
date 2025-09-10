@@ -333,6 +333,173 @@ Tests are automatically categorized by:
 - **Operator-Heavy Expressions**: 14-16% improvement in disambiguation
 - **Template/Interpolation Code**: 20-22% faster variable extraction
 
+### Unicode Processing Performance Instrumentation (v0.8.8+) ⭐ **NEW** (*Diataxis: Reference* - Unicode performance monitoring)
+
+#### Overview (*Diataxis: Explanation* - Understanding Unicode processing costs)
+
+The v0.8.8+ release introduces comprehensive performance instrumentation for Unicode character processing in the lexer. This enables monitoring of Unicode-heavy codebases and optimization of character classification performance.
+
+#### Performance Counters (*Diataxis: Reference* - Atomic instrumentation API)
+
+The lexer maintains atomic performance counters for Unicode operations:
+
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// Performance tracking for Unicode operations
+static UNICODE_CHAR_CHECKS: AtomicU64 = AtomicU64::new(0);
+static UNICODE_EMOJI_HITS: AtomicU64 = AtomicU64::new(0);
+
+/// Get Unicode processing statistics for debugging
+pub fn get_unicode_stats() -> (u64, u64) {
+    (
+        UNICODE_CHAR_CHECKS.load(Ordering::Relaxed), 
+        UNICODE_EMOJI_HITS.load(Ordering::Relaxed)
+    )
+}
+
+/// Reset Unicode processing statistics
+pub fn reset_unicode_stats() {
+    UNICODE_CHAR_CHECKS.store(0, Ordering::Relaxed);
+    UNICODE_EMOJI_HITS.store(0, Ordering::Relaxed);
+}
+```
+
+#### Instrumented Unicode Classification (*Diataxis: Reference* - Performance-monitored character classification)
+
+Each Unicode character classification is instrumented with performance tracking:
+
+```rust
+pub fn is_perl_identifier_start(ch: char) -> bool {
+    UNICODE_CHAR_CHECKS.fetch_add(1, Ordering::Relaxed);
+
+    // Standard Unicode identifier check
+    if ch == '_' || is_xid_start(ch) {
+        return true;
+    }
+
+    // Enhanced emoji support with instrumentation
+    let is_emoji = matches!(ch as u32,
+        0x1F300..=0x1F6FF |  // Miscellaneous Symbols and Pictographs (🚀)
+        0x1F900..=0x1F9FF |  // Supplemental Symbols and Pictographs
+        0x2600..=0x26FF |    // Miscellaneous Symbols (♥)
+        0x2700..=0x27BF |    // Dingbats
+        // ... additional emoji ranges
+    );
+
+    if is_emoji {
+        UNICODE_EMOJI_HITS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    is_emoji
+}
+```
+
+#### Benchmarking Unicode Performance (*Diataxis: How-to* - Measuring Unicode processing costs)
+
+Use the instrumentation API to benchmark Unicode-heavy codebases:
+
+```rust
+#[test]
+fn benchmark_unicode_processing() {
+    use perl_lexer::unicode::{reset_unicode_stats, get_unicode_stats};
+    
+    reset_unicode_stats();
+    
+    // Process Unicode-heavy Perl code
+    let source = r#"
+my $🚀rocket_var = "space";
+my $♥heart_emoji = "love";  
+my $𝓾𝓷𝓲𝓬𝓸𝓭𝓮_math = "fancy";
+"#;
+    
+    let start = std::time::Instant::now();
+    let lexer = PerlLexer::new(source);
+    let tokens = lexer.tokenize();
+    let elapsed = start.elapsed();
+    
+    let (char_checks, emoji_hits) = get_unicode_stats();
+    
+    println!("Unicode Performance Metrics:");
+    println!("  Total character checks: {}", char_checks);
+    println!("  Emoji character hits: {}", emoji_hits);
+    println!("  Processing time: {:?}", elapsed);
+    println!("  Avg time per Unicode check: {:?}", elapsed / char_checks as u32);
+}
+```
+
+#### Performance Analysis Features (*Diataxis: Reference* - Unicode complexity analysis)
+
+Enhanced Unicode analysis for comprehensive performance monitoring:
+
+```rust
+/// Analyze Unicode complexity in source code
+pub fn analyze_unicode_complexity(source: &str) -> UnicodeStats {
+    let mut stats = UnicodeStats::default();
+    
+    for ch in source.chars() {
+        stats.total_chars += 1;
+        
+        if ch.is_ascii() {
+            stats.ascii_chars += 1;
+        } else if is_emoji_char(ch) {
+            stats.emoji_chars += 1;
+        } else {
+            stats.complex_unicode += 1;
+        }
+    }
+    
+    stats
+}
+
+#[derive(Default)]
+pub struct UnicodeStats {
+    pub total_chars: u64,
+    pub ascii_chars: u64,
+    pub emoji_chars: u64,
+    pub complex_unicode: u64,
+}
+```
+
+#### Performance Targets (*Diataxis: Reference* - Unicode processing benchmarks)
+
+**Unicode Processing Performance Targets:**
+- **ASCII-Heavy Files**: <1μs per 1000 character checks
+- **Emoji-Dense Code**: <5μs per emoji character classification  
+- **Complex Unicode**: <10μs per non-ASCII, non-emoji character
+- **Mixed Content**: <30s total processing for large files (timeout protection)
+
+**Performance Gates:**
+- Character check rate: >100,000 checks/second
+- Emoji classification: >50,000 emoji/second
+- Unicode timeout: <30s for any single file
+- Memory efficiency: <1MB additional overhead for Unicode stats
+
+#### Integration with LSP Testing (*Diataxis: How-to* - Unicode performance in LSP tests)
+
+The Unicode instrumentation integrates with LSP testing for performance validation:
+
+```rust
+#[tokio::test]
+async fn test_unicode_lsp_performance() {
+    let unicode_source = include_str!("../fixtures/unicode_heavy.pl");
+    
+    reset_unicode_stats();
+    let start = std::time::Instant::now();
+    
+    // Process through LSP pipeline
+    let result = lsp_server.handle_unicode_document(unicode_source).await;
+    
+    let elapsed = start.elapsed();
+    let (char_checks, emoji_hits) = get_unicode_stats();
+    
+    // Performance assertions
+    assert!(elapsed < Duration::from_secs(30), "Unicode processing timeout");
+    assert!(char_checks > 0, "Unicode checks should be instrumented");
+    assert_eq!(result.symbols.len() >= 5, "Should find Unicode symbols");
+}
+```
+
 ### Regression Detection
 
 - **Parse Time**: >5% slowdown triggers regression warning

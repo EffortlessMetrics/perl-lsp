@@ -815,7 +815,7 @@ impl IndexVisitor {
                 file_index.references.entry(bare_name.to_string()).or_default().push(
                     SymbolReference {
                         uri: self.uri.clone(),
-                        range: location.clone(),
+                        range: location,
                         kind: ReferenceKind::Usage,
                     },
                 );
