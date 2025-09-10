@@ -147,9 +147,7 @@ pub fn start_lsp_server() -> LspServer {
                     match child.try_wait() {
                         Ok(Some(_)) => {
                             // Process exited immediately, try next command
-                            last_err = Some(io::Error::other(
-                                "Process exited immediately",
-                            ));
+                            last_err = Some(io::Error::other("Process exited immediately"));
                             continue;
                         }
                         Ok(None) => {
