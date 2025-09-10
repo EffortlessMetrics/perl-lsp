@@ -5,8 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.8.9] - Enhanced Builtin Function Parsing Release - 2025-09-09
+## [Unreleased]
 
+### Added (*Diataxis: Reference* - New parser capabilities)
+- **Single-Quote Substitution Delimiter Support** - Enhanced lexer functionality with comprehensive single-quote delimiter recognition
+  - **Complete Operator Coverage**: Full support for `s'pattern'replacement'modifiers`, `y'from'to'`, and `tr'from'to'` syntax variations
+  - **Advanced Lexical Analysis**: Intelligent parsing that correctly identifies single-quote delimiters vs. string literals in context
+  - **Edge Case Handling**: Proper support for escaped quotes (`s'it\'s'it is'`), empty patterns/replacements (`s''bar'`, `s'foo''`), and modifier combinations
+  - **Backward Compatibility**: Existing slash and other delimiter support maintained with zero breaking changes
+  - **Comprehensive Test Coverage**: 17+ test cases covering all single-quote delimiter variations and edge cases
+
+### Fixed (*Diataxis: Explanation* - Parser improvements and bug resolutions)
+- **Enhanced Substitution Operator Recognition**: Lexer now recognizes single-quote delimiters for substitution operators (`s'foo'bar'`), expanding delimiter support beyond traditional slash-based patterns
+- **Regex Parser Delimiter Handling**: Fixed regex parser consuming the first pattern character when using non-slash delimiters, improving parsing accuracy for alternative delimiter styles
+
+## [v0.8.9] - Enhanced Builtin Function Parsing Release - 2025-09-09
 ### Fixed
 - **Enhanced Builtin Function Parsing (PR #119, Issue #110)** - Resolves core parser ambiguity for map/grep/sort functions:
   - **Parser Accuracy Enhancement**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hash literals

@@ -1230,6 +1230,22 @@ impl<'a> PerlLexer<'a> {
         let ch = self.current_char()?;
 
         if is_perl_identifier_start(ch) {
+            // Special case: substitution/transliteration with single-quote delimiter
+            // The single quote is considered an identifier continuation, so we need to
+            // detect these operators before consuming it as part of an identifier.
+            if ch == 's' && self.peek_char(1) == Some('\'') {
+                self.advance(); // consume 's'
+                return self.parse_substitution(start);
+            } else if ch == 'y' && self.peek_char(1) == Some('\'') {
+                self.advance(); // consume 'y'
+                return self.parse_transliteration(start);
+            } else if ch == 't' && self.peek_char(1) == Some('r') && self.peek_char(2) == Some('\'')
+            {
+                self.advance(); // consume 't'
+                self.advance(); // consume 'r'
+                return self.parse_transliteration(start);
+            }
+
             while let Some(ch) = self.current_char() {
                 if is_perl_identifier_continue(ch) {
                     self.advance();
@@ -1318,6 +1334,7 @@ impl<'a> PerlLexer<'a> {
                     if matches!(
                         next,
                         '/' | '|'
+                            | '\''
                             | '{'
                             | '['
                             | '('
