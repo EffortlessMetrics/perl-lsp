@@ -2828,6 +2828,79 @@ impl LspServer {
                     }
                 }
 
+                #[cfg(feature = "workspace")]
+                {
+                    // Attempt to resolve fully-qualified symbols like Package::sub
+                    let re =
+                        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
+                            .unwrap();
+
+                    for cap in re.captures_iter(&text_around) {
+                        if let Some(m) = cap.get(1) {
+                            if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                let parts: Vec<&str> = m.as_str().split("::").collect();
+                                if parts.len() >= 2 {
+                                    let name = parts.last().unwrap().to_string();
+                                    let pkg = parts[..parts.len() - 1].join("::");
+                                    let key = crate::workspace_index::SymbolKey {
+                                        pkg: pkg.clone().into(),
+                                        name: name.clone().into(),
+                                        sigil: None,
+                                        kind: crate::workspace_index::SymKind::Sub,
+                                    };
+
+                                    if let Some(ref workspace_index) = self.workspace_index {
+                                        if let Some(def_location) = workspace_index.find_def(&key) {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                        let symbol_name = format!("{}::{}", pkg, name);
+                                        if let Some(def_location) =
+                                            workspace_index.find_definition(&symbol_name)
+                                        {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                    }
+
+                                    // Fallback: scan open documents
+                                    let docs_snapshot: Vec<(String, DocumentState)> = documents
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                        .collect();
+                                    for (doc_uri, doc_state) in docs_snapshot {
+                                        if let Some(ref ast) = doc_state.ast {
+                                            let symbols = self.extract_document_symbols(
+                                                ast,
+                                                &doc_state.text,
+                                                &doc_uri,
+                                            );
+                                            for sym in symbols {
+                                                if sym.name == name
+                                                    && sym.container_name.as_deref() == Some(&pkg)
+                                                {
+                                                    return Ok(Some(json!([sym.location])));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
@@ -3238,14 +3311,70 @@ impl LspServer {
                                 }
                             }
 
+                            let mut workspace_locations: Vec<Value> = Vec::new();
                             if !all_refs.is_empty() {
                                 eprintln!("Found {} references via find_refs", all_refs.len());
                                 // Convert internal Locations to LSP Locations
                                 let lsp_locations =
                                     crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
-                                if !lsp_locations.is_empty() {
-                                    return Ok(Some(json!(lsp_locations)));
+                                for loc in lsp_locations {
+                                    workspace_locations.push(json!(loc));
                                 }
+                            }
+
+                            // Enhanced fallback: always search for both qualified and unqualified references
+                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
+                            let mut enhanced_locations = Vec::new();
+                            let symbol_name = &symbol_key.name;
+                            let package_name = &symbol_key.pkg;
+
+                            // Search patterns: both "symbol_name" and "package::symbol_name"
+                            let patterns = vec![
+                                format!(r"\b{}\b", regex::escape(symbol_name)),
+                                format!(
+                                    r"\b{}::{}\b",
+                                    regex::escape(package_name),
+                                    regex::escape(symbol_name)
+                                ),
+                            ];
+
+                            for pattern in patterns {
+                                if let Ok(search_regex) = regex::Regex::new(&pattern) {
+                                    for (doc_uri, doc_state) in &docs_snapshot {
+                                        let lines: Vec<&str> = doc_state.text.lines().collect();
+                                        for (line_num, line) in lines.iter().enumerate() {
+                                            for mat in search_regex.find_iter(line) {
+                                                enhanced_locations.push(json!({
+                                                    "uri": doc_uri,
+                                                    "range": {
+                                                        "start": {
+                                                            "line": line_num,
+                                                            "character": mat.start(),
+                                                        },
+                                                        "end": {
+                                                            "line": line_num,
+                                                            "character": mat.end(),
+                                                        },
+                                                    },
+                                                }));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Combine workspace index results with text search results
+                            workspace_locations.extend(enhanced_locations);
+                            let all_combined_locations = workspace_locations;
+
+                            if !all_combined_locations.is_empty() {
+                                eprintln!(
+                                    "Found {} total references via combined search",
+                                    all_combined_locations.len()
+                                );
+                                return Ok(Some(json!(all_combined_locations)));
                             }
 
                             // Also try with find_references for backward compatibility
@@ -3268,6 +3397,108 @@ impl LspServer {
                                     crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
                                 if !lsp_locations.is_empty() {
                                     return Ok(Some(json!(lsp_locations)));
+                                }
+                            }
+                        }
+
+                        // Regex-based fallback for fully-qualified symbols like Package::sub references
+                        let radius = 50;
+                        let text_start = offset.saturating_sub(radius);
+                        let text_around = self.get_text_around_offset(&doc.text, offset, radius);
+                        let cursor_in_text = offset - text_start;
+
+                        let re = regex::Regex::new(
+                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
+                        )
+                        .unwrap();
+
+                        for cap in re.captures_iter(&text_around) {
+                            if let Some(m) = cap.get(1) {
+                                if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                    let parts: Vec<&str> = m.as_str().split("::").collect();
+                                    if parts.len() >= 2 {
+                                        let name = parts.last().unwrap().to_string();
+                                        let pkg = parts[..parts.len() - 1].join("::");
+                                        let key = crate::workspace_index::SymbolKey {
+                                            pkg: pkg.clone().into(),
+                                            name: name.clone().into(),
+                                            sigil: None,
+                                            kind: crate::workspace_index::SymKind::Sub,
+                                        };
+
+                                        if let Some(ref workspace_index) = self.workspace_index {
+                                            // Search for all references to this qualified symbol
+                                            let mut all_refs = Vec::new();
+
+                                            // Find references via symbol key
+                                            let refs = workspace_index.find_refs(&key);
+                                            all_refs.extend(refs);
+
+                                            // Also try with qualified name
+                                            let symbol_name = format!("{}::{}", pkg, name);
+                                            let alt_refs =
+                                                workspace_index.find_references(&symbol_name);
+                                            all_refs.extend(alt_refs);
+
+                                            // Add definition if includeDeclaration is true
+                                            if include_declaration {
+                                                if let Some(def) = workspace_index.find_def(&key) {
+                                                    all_refs.push(def);
+                                                }
+                                            }
+
+                                            if !all_refs.is_empty() {
+                                                // Convert internal Locations to LSP Locations
+                                                let lsp_locations =
+                                                    crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
+                                                if !lsp_locations.is_empty() {
+                                                    return Ok(Some(json!(lsp_locations)));
+                                                }
+                                            }
+
+                                            // Fallback: scan open documents for qualified name references
+                                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                                documents
+                                                    .iter()
+                                                    .map(|(k, v)| (k.clone(), v.clone()))
+                                                    .collect();
+
+                                            let mut all_locations = Vec::new();
+                                            let qualified_name = format!("{}::{}", pkg, name);
+                                            let search_regex = regex::Regex::new(&format!(
+                                                r"\b{}\b",
+                                                regex::escape(&qualified_name)
+                                            ))
+                                            .unwrap();
+
+                                            for (doc_uri, doc_state) in docs_snapshot {
+                                                let lines: Vec<&str> =
+                                                    doc_state.text.lines().collect();
+                                                for (line_num, line) in lines.iter().enumerate() {
+                                                    for mat in search_regex.find_iter(line) {
+                                                        all_locations.push(json!({
+                                                            "uri": doc_uri,
+                                                            "range": {
+                                                                "start": {
+                                                                    "line": line_num,
+                                                                    "character": mat.start(),
+                                                                },
+                                                                "end": {
+                                                                    "line": line_num,
+                                                                    "character": mat.end(),
+                                                                },
+                                                            },
+                                                        }));
+                                                    }
+                                                }
+                                            }
+
+                                            if !all_locations.is_empty() {
+                                                return Ok(Some(json!(all_locations)));
+                                            }
+                                        }
+                                    }
+                                    break;
                                 }
                             }
                         }
