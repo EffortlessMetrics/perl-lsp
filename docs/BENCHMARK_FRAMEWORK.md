@@ -334,6 +334,8 @@ Tests are automatically categorized by:
 ```yaml
 # Example GitHub Actions integration
 - name: Run Benchmarks
+  env:
+    RUST_TEST_THREADS: 2  # Control threading for consistent results
   run: cargo xtask bench --save
 
 - name: Check Performance Gates
@@ -342,6 +344,49 @@ Tests are automatically categorized by:
       echo "Performance gates failed"
       exit 1
     fi
+```
+
+#### Threading Considerations for CI (v0.8.9+)
+
+**Thread Configuration for Benchmark Consistency**:
+
+Benchmark execution benefits from controlled threading to ensure consistent and reproducible results across CI environments:
+
+```bash
+# Recommended CI benchmarking with thread control
+RUST_TEST_THREADS=2 cargo xtask bench --save --output ci_benchmark.json
+
+# For LSP-specific benchmarks with controlled threading
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --release -- --test-threads=2
+
+# Combined with memory tracking
+RUST_TEST_THREADS=2 cargo xtask compare --report
+```
+
+**Benefits of Limited Threading in Benchmarks**:
+
+1. **Consistent Resource Usage**: Prevents CPU oversubscription in shared CI runners
+2. **Reproducible Results**: Reduces variability in timing measurements
+3. **Reliable Memory Measurements**: More accurate memory profiling with predictable concurrency
+4. **Performance Gate Stability**: Reduces false positives from resource contention
+
+**Threading Configuration Impact**:
+
+| Threads | Benchmark Impact | Recommended Use |
+|---------|------------------|----------------|
+| 1 | Most consistent timing, slower execution | Critical performance validation |
+| 2 | Good balance of consistency and speed | **Recommended for CI** |
+| 4+ | Faster but higher variability | Local development only |
+
+**Environment Variables for Benchmark Threading**:
+```bash
+# Standard benchmark with threading control
+export RUST_TEST_THREADS=2
+cargo xtask bench --save
+
+# High-precision benchmarking (single-threaded)
+export RUST_TEST_THREADS=1
+cargo xtask bench --save --output precision_benchmark.json
 ```
 
 ### Performance Monitoring

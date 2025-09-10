@@ -627,9 +627,12 @@ export LSP_TEST_FALLBACKS=1
 # Run all LSP tests in fast mode
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 
-# Run specific performance-sensitive tests
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_workspace_symbol_search
+# Combine threading control with fast mode for optimal CI reliability (v0.8.9+)
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+
+# Run specific performance-sensitive tests with controlled threading
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_workspace_symbol_search -- --test-threads=2
 
 # Validate workspace builds quickly
 LSP_TEST_FALLBACKS=1 cargo check --workspace

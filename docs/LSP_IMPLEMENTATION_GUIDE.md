@@ -2125,6 +2125,48 @@ let tokens = provider.extract(&ast); // Takes &self, safe for concurrent access
 5. **Memory Safety**: Local state prevents use-after-free and data races
 6. **Scalability**: Supports high-concurrency LSP server environments
 
+#### CI Test Configuration (**Diataxis: How-to** - Production testing practices)
+
+**Thread Limiting for CI Reliability (v0.8.9+)**:
+
+LSP tests benefit from controlled threading in CI environments to improve reliability and reduce resource contention. The GitHub Actions workflow now uses:
+
+```yaml
+env:
+  RUST_TEST_THREADS: 2
+```
+
+This configuration provides:
+
+1. **Improved Test Reliability**: Reduces timing-sensitive test failures in containerized CI environments
+2. **Resource Management**: Prevents oversubscription of CPU resources in shared CI runners  
+3. **Consistent Behavior**: More predictable test execution patterns across different CI platforms
+4. **LSP Protocol Stability**: Better isolation between concurrent LSP server instances during testing
+
+**Recommended CI Test Commands**:
+```bash
+# Standard CI testing with thread control
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+
+# Combined with fast fallbacks for optimal CI performance
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+
+# Individual test suites with controlled threading
+cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=2
+cargo test -p perl-lsp --test lsp_integration_tests -- --test-threads=2
+```
+
+**Thread Configuration Trade-offs**:
+
+| Threads | Benefits | Considerations |
+|---------|----------|----------------|
+| 1 | Maximum isolation, deterministic timing | Slower test execution |
+| 2 | Good balance of speed and reliability | **Recommended for CI** |
+| 4+ | Faster execution | Higher resource usage, potential timing issues |
+
+**Local Development**: Can use higher thread counts for faster feedback loops
+**CI Environments**: Should use `RUST_TEST_THREADS=2` for optimal reliability
+
 ### Code Actions with Commands
 
 ```rust

@@ -79,6 +79,10 @@ cargo install --path crates/perl-lsp     # From source
 cargo test                               # All tests (robust across environments)
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
+
+# CI-optimized LSP testing with controlled threading (v0.8.9+)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2  # Recommended for CI environments
+
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
 cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function parsing tests
 
