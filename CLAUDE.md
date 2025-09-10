@@ -2,20 +2,21 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9+ GA - Enhanced Builtin Function Parsing with Production-Stable AST Generation
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing with Deterministic AST Generation
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
 
 This repository contains **five published crates** forming a complete Perl parsing ecosystem with comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.8 GA)
+### Published Crates (v0.8.9 GA)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
    - 4-19x faster than legacy implementations (1-150 µs parsing)
    - Production-ready incremental parsing with <1ms LSP updates
    - Enterprise-grade workspace refactoring and cross-file analysis
+   - **Enhanced Builtin Function Parsing**: Deterministic parsing of map/grep/sort functions with {} blocks
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
@@ -131,7 +132,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and enhanced builtin function parsing (PR #119)
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases and deterministic builtin function parsing (map/grep/sort)
 - **Production-Ready LSP Server**: ~87% of LSP features functional with comprehensive workspace support
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
@@ -179,7 +180,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 ## Current Status (v0.8.9)
 
 ✅ **Production Ready**:
-- 100% test pass rate across all components (291+ tests passing)
+- 100% test pass rate across all components (295+ tests passing including 15/15 builtin function tests)
 - Zero clippy warnings, consistent formatting
 - Enterprise-grade LSP server with comprehensive features
 - Production-stable incremental parsing with statistical validation
