@@ -11,9 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lexer now recognizes single-quote delimiters for substitution operators (`s'foo'bar'`).
 - Fixed regex parser consuming the first pattern character when using non-slash delimiters.
 
-## [v0.8.9] - Performance Optimization and LSP Enhancement Release
+## [v0.8.9] - Enhanced Builtin Function Parsing Release - 2025-09-09
 
-### Added - **Comprehensive Performance Optimizations (v0.8.9)**
+### Fixed
+- **Enhanced Builtin Function Parsing (PR #119, Issue #110)** - Resolves core parser ambiguity for map/grep/sort functions:
+  - **Parser Accuracy Enhancement**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hash literals
+  - **Dedicated Parse Method**: Added `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
+  - **Complete Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
+  - **Zero Breaking Changes**: Enhanced parser maintains API compatibility while improving semantic accuracy
+  - **Comprehensive Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
+
+## [Unreleased] - Post-v0.8.9 Validation Enhancements
+
+### Added - **Post-Validation Enterprise Features**
 - **LSP Performance Breakthrough (99.5% Timeout Reduction)** - Revolutionary LSP performance optimizations eliminating workspace bottlenecks:
   - **test_completion_detail_formatting**: Performance improvement from >60 seconds to 0.26 seconds (99.5% reduction)
   - **Bounded Processing**: MAX_PROCESS limit (1000 symbols) prevents runaway symbol processing
