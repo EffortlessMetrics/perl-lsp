@@ -377,12 +377,12 @@ impl WorkspaceIndex {
     }
 
     /// Find all references to a symbol using dual indexing strategy
-    /// 
-    /// This function searches for both exact matches and bare name matches when 
+    ///
+    /// This function searches for both exact matches and bare name matches when
     /// the symbol is qualified. For example, when searching for "Utils::process_data":
     /// - First searches for exact "Utils::process_data" references
     /// - Then searches for bare "process_data" references that might refer to the same function
-    /// 
+    ///
     /// This dual approach handles cases where functions are called both as:
     /// - Qualified: `Utils::process_data()`
     /// - Unqualified: `process_data()` (when in the same package or imported)
