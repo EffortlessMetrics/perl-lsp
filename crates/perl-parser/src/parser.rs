@@ -3974,9 +3974,20 @@ impl<'a> Parser<'a> {
         };
 
         // Keep consuming :: and identifiers
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            name.push_str("::");
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon) 
+            || (self.peek_kind() == Some(TokenKind::Colon) && 
+                self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon)) {
+            
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                name.push_str("::");
+            } else {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                name.push_str("::");
+            }
 
             // In Perl, trailing :: is valid (e.g., Foo::Bar::)
             // Only consume identifier if there is one
