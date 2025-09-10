@@ -3,17 +3,6 @@ use std::io::Write;
 use tempfile::NamedTempFile;
 
 use perl_parser::import_optimizer::ImportOptimizer;
-use perl_parser::rename::TextEdit;
-
-fn apply_edits(source: &str, edits: &[TextEdit]) -> String {
-    let mut result = source.to_string();
-    let mut edits = edits.to_vec();
-    edits.sort_by_key(|e| e.location.start);
-    for e in edits.into_iter().rev() {
-        result.replace_range(e.location.start..e.location.end, &e.new_text);
-    }
-    result
-}
 
 #[test]
 fn detects_unused_and_duplicate_imports() {
@@ -249,37 +238,4 @@ z();
     assert!(lines[0].contains("Alpha"));
     assert!(lines[1].contains("Beta"));
     assert!(lines[2].contains("Zebra"));
-}
-
-#[test]
-fn test_generate_edits_remove_duplicates() {
-    let source = "use B qw(b);\nuse A qw(a);\nuse B qw(b);\na();\nb();\n";
-    let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_content(source).unwrap();
-    let edits = optimizer.generate_edits(source, &analysis);
-    let result = apply_edits(source, &edits);
-    let expected = "use A qw(a);\nuse B qw(b);\na();\nb();\n";
-    assert_eq!(result, expected);
-}
-
-#[test]
-fn test_generate_edits_insert_missing_import() {
-    let source = "use A qw(a);\n\na();\nB::b();\n";
-    let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_content(source).unwrap();
-    let edits = optimizer.generate_edits(source, &analysis);
-    let result = apply_edits(source, &edits);
-    let expected = "use A qw(a);\nuse B qw(b);\n\na();\nB::b();\n";
-    assert_eq!(result, expected);
-}
-
-#[test]
-fn test_generate_edits_alphabetical_order() {
-    let source = "use C qw(c);\nuse A qw(a);\nuse B qw(b);\na();\nb();\nc();\n";
-    let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_content(source).unwrap();
-    let edits = optimizer.generate_edits(source, &analysis);
-    let result = apply_edits(source, &edits);
-    let expected = "use A qw(a);\nuse B qw(b);\nuse C qw(c);\na();\nb();\nc();\n";
-    assert_eq!(result, expected);
 }

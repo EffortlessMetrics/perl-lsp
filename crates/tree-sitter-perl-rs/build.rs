@@ -10,19 +10,11 @@ fn main() {
     // Always build the C parser (required for tree-sitter)
     build_c_parser();
 
-    // Determine which scanner implementation to build based on enabled features.
-    // Cargo exposes enabled features to the build script via environment
-    // variables of the form `CARGO_FEATURE_<NAME>` where `<NAME>` is upper
-    // cased and hyphens are replaced with underscores.
-    let use_c_scanner = env::var("CARGO_FEATURE_C_SCANNER").is_ok();
-
-    if use_c_scanner {
+    // Conditionally build scanner based on features
+    if cfg!(feature = "c-scanner") {
         build_c_scanner();
-        println!("cargo:rustc-cfg=c_scanner");
     } else {
-        // No C scanner – emit cfg for rust scanner and provide a tiny stub so
-        // the linker finds the expected symbols.
-        println!("cargo:rustc-cfg=rust_scanner");
+        // Default to rust-scanner
         build_rust_scanner_stub();
     }
 
@@ -34,6 +26,14 @@ fn main() {
     println!("cargo:rerun-if-changed=src/scanner.c");
     println!("cargo:rerun-if-changed=src/tree_sitter/");
     println!("cargo:rerun-if-changed=grammar.js");
+
+    // Set feature flags for conditional compilation
+    if cfg!(feature = "rust-scanner") {
+        println!("cargo:rustc-cfg=rust_scanner");
+    }
+    if cfg!(feature = "c-scanner") {
+        println!("cargo:rustc-cfg=c_scanner");
+    }
 }
 
 fn build_c_parser() {

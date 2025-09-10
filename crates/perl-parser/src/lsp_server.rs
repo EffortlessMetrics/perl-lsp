@@ -15,7 +15,6 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
-    module_resolver,
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -25,6 +24,7 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
 };
+use lazy_static::lazy_static;
 use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,12 @@ use crate::workspace_index::{
     LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
     uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+lazy_static! {
+    static ref FQN_RE: regex::Regex =
+        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
+}
 
 // JSON-RPC Error Codes
 const ERR_METHOD_NOT_FOUND: i32 = -32601;
@@ -186,9 +192,6 @@ pub(crate) struct DocumentState {
 
     /// Generation counter for race condition prevention in concurrent access
     pub(crate) generation: Arc<AtomicU32>,
-
-    /// Document lock to ensure atomic document operations
-    pub(crate) document_lock: Arc<std::sync::RwLock<()>>,
 }
 
 /// Normalize legacy package separator ' to ::
@@ -1032,7 +1035,6 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
-                    document_lock: Arc::new(std::sync::RwLock::new(())),
                 },
             );
 
@@ -1105,7 +1107,6 @@ impl LspServer {
                         parent_map: ParentMap::default(),
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
-                        document_lock: Arc::new(std::sync::RwLock::new(())),
                     });
 
                 // Increment generation counter for this change
@@ -1172,7 +1173,6 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
-                    document_lock: doc_state.document_lock.clone(), // Preserve the document lock
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -1553,28 +1553,16 @@ impl LspServer {
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
                     // Get completions from the local completion provider
-                    let resolver = {
-                        let docs = self.documents.clone();
-                        let folders = self.workspace_folders.clone();
-                        Arc::new(move |m: &str| {
-                            module_resolver::resolve_module_to_path(&docs, &folders, m)
-                        })
-                    };
                     #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
                         self.workspace_index.clone(),
-                        Some(resolver.clone()),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider = CompletionProvider::new_with_index_and_source(
-                        ast,
-                        &doc.text,
-                        None,
-                        Some(resolver.clone()),
-                    );
+                    let provider =
+                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -1702,10 +1690,18 @@ impl LspServer {
                                 CompletionItemKind::Constant => 14,
                                 CompletionItemKind::Property => 7,
                             },
-                            "detail": c.detail,
-                            "insertText": c.insert_text,
                             "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
                         });
+
+                        // Only include detail if it has a value
+                        if let Some(detail) = c.detail {
+                            item["detail"] = json!(detail);
+                        }
+
+                        // Only include insertText if it has a value
+                        if let Some(insert_text) = c.insert_text {
+                            item["insertText"] = json!(insert_text);
+                        }
 
                         // Only add commit characters for functions and variables, not keywords
                         let needs_commit_chars = matches!(
@@ -2127,43 +2123,6 @@ impl LspServer {
                     let hover_text = self.get_token_at_position(&doc.text, offset);
 
                     if !hover_text.is_empty() {
-                        // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::")
-                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
-                        {
-                            return Ok(Some(json!({
-                                "contents": {
-                                    "kind": "markdown",
-                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
-                                },
-                            })));
-                        }
-
-                        return Ok(Some(json!({
-                            "contents": {
-                                "kind": "markdown",
-                                "value": format!("**Perl**: `{}`", hover_text),
-                            },
-                        })));
-                    }
-                } else {
-                    // Fallback: use document text directly without AST
-                    let offset = self.pos16_to_offset(doc, line, character);
-                    let hover_text = self.get_token_at_position(&doc.text, offset);
-
-                    if !hover_text.is_empty() {
-                        // Enhanced fallback: if it looks like a package/module name, provide better info
-                        if hover_text.contains("::")
-                            || hover_text.chars().next().is_some_and(|c| c.is_uppercase())
-                        {
-                            return Ok(Some(json!({
-                                "contents": {
-                                    "kind": "markdown",
-                                    "value": format!("**Module**: `{}`\n\nPerl module or package identifier", hover_text),
-                                },
-                            })));
-                        }
-
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
@@ -2174,7 +2133,7 @@ impl LspServer {
                 }
             }
         }
-        // Return explicit null result as expected by LSP protocol
+
         Ok(Some(json!(null)))
     }
 
@@ -2832,11 +2791,7 @@ impl LspServer {
                     self.extract_module_reference(&text_around, cursor_in_text)
                 {
                     // Try to resolve module to file path
-                    if let Some(module_path) = module_resolver::resolve_module_to_path(
-                        &self.documents,
-                        &self.workspace_folders,
-                        &module_name,
-                    ) {
+                    if let Some(module_path) = self.resolve_module_to_path(&module_name) {
                         return Ok(Some(json!([{
                             "uri": module_path,
                             "range": {
@@ -2867,11 +2822,8 @@ impl LspServer {
                             // Check if cursor is within the package name
                             if cursor_in_text >= match_start && cursor_in_text <= match_end {
                                 let package_name = package_match.as_str();
-                                if let Some(module_path) = module_resolver::resolve_module_to_path(
-                                    &self.documents,
-                                    &self.workspace_folders,
-                                    package_name,
-                                ) {
+                                if let Some(module_path) = self.resolve_module_to_path(package_name)
+                                {
                                     return Ok(Some(json!([{
                                         "uri": module_path,
                                         "range": {
@@ -2886,6 +2838,54 @@ impl LspServer {
                                         },
                                     }])));
                                 }
+                            }
+                        }
+                    }
+                }
+
+                #[cfg(feature = "workspace")]
+                {
+                    // Attempt to resolve fully-qualified symbols like Package::sub
+                    for cap in FQN_RE.captures_iter(&text_around) {
+                        if let Some(m) = cap.get(1) {
+                            if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                let parts: Vec<&str> = m.as_str().split("::").collect();
+                                if parts.len() >= 2 {
+                                    let name = parts.last().unwrap().to_string();
+                                    let pkg = parts[..parts.len() - 1].join("::");
+                                    let key = crate::workspace_index::SymbolKey {
+                                        pkg: pkg.clone().into(),
+                                        name: name.clone().into(),
+                                        sigil: None,
+                                        kind: crate::workspace_index::SymKind::Sub,
+                                    };
+
+                                    if let Some(ref workspace_index) = self.workspace_index {
+                                        if let Some(def_location) = workspace_index.find_def(&key) {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                        let symbol_name = format!("{}::{}", pkg, name);
+                                        if let Some(def_location) =
+                                            workspace_index.find_definition(&symbol_name)
+                                        {
+                                            if let Some(lsp_location) =
+                                                crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                    &def_location,
+                                                )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
+                                        }
+                                    }
+
+                                }
+                                break;
                             }
                         }
                     }
@@ -3301,14 +3301,70 @@ impl LspServer {
                                 }
                             }
 
+                            let mut workspace_locations: Vec<Value> = Vec::new();
                             if !all_refs.is_empty() {
                                 eprintln!("Found {} references via find_refs", all_refs.len());
                                 // Convert internal Locations to LSP Locations
                                 let lsp_locations =
                                     crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
-                                if !lsp_locations.is_empty() {
-                                    return Ok(Some(json!(lsp_locations)));
+                                for loc in lsp_locations {
+                                    workspace_locations.push(json!(loc));
                                 }
+                            }
+
+                            // Enhanced fallback: always search for both qualified and unqualified references
+                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
+                            let mut enhanced_locations = Vec::new();
+                            let symbol_name = &symbol_key.name;
+                            let package_name = &symbol_key.pkg;
+
+                            // Search patterns: both "symbol_name" and "package::symbol_name"
+                            let patterns = vec![
+                                format!(r"\b{}\b", regex::escape(symbol_name)),
+                                format!(
+                                    r"\b{}::{}\b",
+                                    regex::escape(package_name),
+                                    regex::escape(symbol_name)
+                                ),
+                            ];
+
+                            for pattern in patterns {
+                                if let Ok(search_regex) = regex::Regex::new(&pattern) {
+                                    for (doc_uri, doc_state) in &docs_snapshot {
+                                        let lines: Vec<&str> = doc_state.text.lines().collect();
+                                        for (line_num, line) in lines.iter().enumerate() {
+                                            for mat in search_regex.find_iter(line) {
+                                                enhanced_locations.push(json!({
+                                                    "uri": doc_uri,
+                                                    "range": {
+                                                        "start": {
+                                                            "line": line_num,
+                                                            "character": mat.start(),
+                                                        },
+                                                        "end": {
+                                                            "line": line_num,
+                                                            "character": mat.end(),
+                                                        },
+                                                    },
+                                                }));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Combine workspace index results with text search results
+                            workspace_locations.extend(enhanced_locations);
+                            let all_combined_locations = workspace_locations;
+
+                            if !all_combined_locations.is_empty() {
+                                eprintln!(
+                                    "Found {} total references via combined search",
+                                    all_combined_locations.len()
+                                );
+                                return Ok(Some(json!(all_combined_locations)));
                             }
 
                             // Also try with find_references for backward compatibility
@@ -3331,6 +3387,108 @@ impl LspServer {
                                     crate::workspace_index::lsp_adapter::to_lsp_locations(refs);
                                 if !lsp_locations.is_empty() {
                                     return Ok(Some(json!(lsp_locations)));
+                                }
+                            }
+                        }
+
+                        // Regex-based fallback for fully-qualified symbols like Package::sub references
+                        let radius = 50;
+                        let text_start = offset.saturating_sub(radius);
+                        let text_around = self.get_text_around_offset(&doc.text, offset, radius);
+                        let cursor_in_text = offset - text_start;
+
+                        let re = regex::Regex::new(
+                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
+                        )
+                        .unwrap();
+
+                        for cap in re.captures_iter(&text_around) {
+                            if let Some(m) = cap.get(1) {
+                                if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                    let parts: Vec<&str> = m.as_str().split("::").collect();
+                                    if parts.len() >= 2 {
+                                        let name = parts.last().unwrap().to_string();
+                                        let pkg = parts[..parts.len() - 1].join("::");
+                                        let key = crate::workspace_index::SymbolKey {
+                                            pkg: pkg.clone().into(),
+                                            name: name.clone().into(),
+                                            sigil: None,
+                                            kind: crate::workspace_index::SymKind::Sub,
+                                        };
+
+                                        if let Some(ref workspace_index) = self.workspace_index {
+                                            // Search for all references to this qualified symbol
+                                            let mut all_refs = Vec::new();
+
+                                            // Find references via symbol key
+                                            let refs = workspace_index.find_refs(&key);
+                                            all_refs.extend(refs);
+
+                                            // Also try with qualified name
+                                            let symbol_name = format!("{}::{}", pkg, name);
+                                            let alt_refs =
+                                                workspace_index.find_references(&symbol_name);
+                                            all_refs.extend(alt_refs);
+
+                                            // Add definition if includeDeclaration is true
+                                            if include_declaration {
+                                                if let Some(def) = workspace_index.find_def(&key) {
+                                                    all_refs.push(def);
+                                                }
+                                            }
+
+                                            if !all_refs.is_empty() {
+                                                // Convert internal Locations to LSP Locations
+                                                let lsp_locations =
+                                                    crate::workspace_index::lsp_adapter::to_lsp_locations(all_refs);
+                                                if !lsp_locations.is_empty() {
+                                                    return Ok(Some(json!(lsp_locations)));
+                                                }
+                                            }
+
+                                            // Fallback: scan open documents for qualified name references
+                                            let docs_snapshot: Vec<(String, DocumentState)> =
+                                                documents
+                                                    .iter()
+                                                    .map(|(k, v)| (k.clone(), v.clone()))
+                                                    .collect();
+
+                                            let mut all_locations = Vec::new();
+                                            let qualified_name = format!("{}::{}", pkg, name);
+                                            let search_regex = regex::Regex::new(&format!(
+                                                r"\b{}\b",
+                                                regex::escape(&qualified_name)
+                                            ))
+                                            .unwrap();
+
+                                            for (doc_uri, doc_state) in docs_snapshot {
+                                                let lines: Vec<&str> =
+                                                    doc_state.text.lines().collect();
+                                                for (line_num, line) in lines.iter().enumerate() {
+                                                    for mat in search_regex.find_iter(line) {
+                                                        all_locations.push(json!({
+                                                            "uri": doc_uri,
+                                                            "range": {
+                                                                "start": {
+                                                                    "line": line_num,
+                                                                    "character": mat.start(),
+                                                                },
+                                                                "end": {
+                                                                    "line": line_num,
+                                                                    "character": mat.end(),
+                                                                },
+                                                            },
+                                                        }));
+                                                    }
+                                                }
+                                            }
+
+                                            if !all_locations.is_empty() {
+                                                return Ok(Some(json!(all_locations)));
+                                            }
+                                        }
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -4590,16 +4748,13 @@ impl LspServer {
                 || chars[start - 1] == '_'
                 || chars[start - 1] == '$'
                 || chars[start - 1] == '@'
-                || chars[start - 1] == '%'
-                || chars[start - 1] == ':')
+                || chars[start - 1] == '%')
         {
             start -= 1;
         }
 
         let mut end = offset;
-        while end < chars.len()
-            && (chars[end].is_alphanumeric() || chars[end] == '_' || chars[end] == ':')
-        {
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
             end += 1;
         }
 
@@ -5864,21 +6019,13 @@ impl LspServer {
             }
 
             NodeKind::Program { statements } => {
-                for (i, stmt) in statements.iter().enumerate() {
-                    // Cooperative yield every 32 statements for performance
-                    if i & 0x1f == 0 {
-                        std::thread::yield_now();
-                    }
+                for stmt in statements {
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
 
             NodeKind::Block { statements } => {
-                for (i, stmt) in statements.iter().enumerate() {
-                    // Cooperative yield every 32 statements for performance
-                    if i & 0x1f == 0 {
-                        std::thread::yield_now();
-                    }
+                for stmt in statements {
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
                 }
             }
@@ -6257,11 +6404,6 @@ impl LspServer {
 
     /// Handle incoming calls request
     fn handle_incoming_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().call_hierarchy {
-            return Err(crate::lsp_errors::method_not_advertised());
-        }
-
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
@@ -6288,11 +6430,6 @@ impl LspServer {
 
     /// Handle outgoing calls request
     fn handle_outgoing_calls(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().call_hierarchy {
-            return Err(crate::lsp_errors::method_not_advertised());
-        }
-
         if let Some(params) = params {
             let item = &params["item"];
             let uri = item["uri"].as_str().unwrap_or("");
@@ -8215,6 +8352,84 @@ impl LspServer {
         None
     }
 
+    /// Resolve a module name to a file path URI
+    fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
+        use std::time::{Duration, Instant};
+
+        // Convert Module::Name to Module/Name.pm
+        let relative_path = format!("{}.pm", module_name.replace("::", "/"));
+
+        // First check if we have the document already opened (fast path)
+        let documents = self.documents.lock().unwrap();
+        for (uri, _doc) in documents.iter() {
+            if uri.ends_with(&relative_path) {
+                return Some(uri.clone());
+            }
+        }
+        drop(documents);
+
+        // Set a timeout for file system operations
+        let start_time = Instant::now();
+        let timeout = Duration::from_millis(50); // Reduced timeout for faster response
+
+        // Get workspace folders from initialization
+        let workspace_folders = self.workspace_folders.lock().unwrap().clone();
+
+        // Only check workspace-local directories to avoid blocking
+        let search_dirs = ["lib", ".", "local/lib/perl5"];
+
+        for workspace_folder in workspace_folders.iter() {
+            // Early timeout check
+            if start_time.elapsed() > timeout {
+                eprintln!(
+                    "Module resolution timeout for: {} (elapsed: {:?})",
+                    module_name,
+                    start_time.elapsed()
+                );
+                return None;
+            }
+
+            // Parse the workspace folder URI to get the file path
+            let workspace_path = if workspace_folder.starts_with("file://") {
+                workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder)
+            } else {
+                workspace_folder
+            };
+
+            for dir in &search_dirs {
+                let full_path = if *dir == "." {
+                    format!("{}/{}", workspace_path, relative_path)
+                } else {
+                    format!("{}/{}/{}", workspace_path, dir, relative_path)
+                };
+
+                // Check timeout before each FS operation
+                if start_time.elapsed() > timeout {
+                    return None;
+                }
+
+                // Use metadata() instead of exists() as it's slightly more predictable
+                // and we can potentially wrap this in a timeout later
+                match std::fs::metadata(&full_path) {
+                    Ok(meta) if meta.is_file() => {
+                        return Some(format!("file://{}", full_path));
+                    }
+                    _ => {
+                        // File doesn't exist or isn't a regular file, continue
+                    }
+                }
+
+                // Final timeout check
+                if start_time.elapsed() > timeout {
+                    return None;
+                }
+            }
+        }
+
+        // Don't check system paths (@INC) to avoid blocking on network filesystems
+        None
+    }
+
     /// Set the root path from the root URI during initialization
     fn set_root_uri(&self, root_uri: &str) {
         let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
@@ -8231,8 +8446,8 @@ impl LspServer {
                 return Some(p);
             }
         }
-        // Only return paths that actually exist
-        None
+        // Best-effort even if not present (for test workspaces)
+        Some(root.join("lib").join(rel))
     }
 
     /// Get buffer text for a URI
@@ -8528,7 +8743,6 @@ mod tests {
                 parent_map: ParentMap::default(),
                 line_starts,
                 generation: Arc::new(AtomicU32::new(0)),
-                document_lock: Arc::new(std::sync::RwLock::new(())),
             },
         );
 

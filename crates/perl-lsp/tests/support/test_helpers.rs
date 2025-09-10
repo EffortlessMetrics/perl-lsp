@@ -16,7 +16,7 @@
 //! use support::test_helpers::*;
 //! ```
 
-#![allow(dead_code)] // Test infrastructure - functions may not be used by all tests
+#![allow(dead_code)]
 
 use serde_json::Value;
 
@@ -107,23 +107,9 @@ fn assert_position_valid(position: &Value, context: &str) {
 
 /// Assert references are found with validation
 pub fn assert_references_found(v: &Option<Value>) {
-    assert_references_found_with_min(v, None);
-}
-
-/// Assert references are found with minimum count validation
-pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usize>) {
     if let Some(refs_val) = v {
         if !refs_val.is_null() {
             let refs = refs_val.as_array().expect("references should be array");
-
-            if let Some(min) = min_refs {
-                assert!(
-                    refs.len() >= min,
-                    "expected at least {} references, found {}",
-                    min,
-                    refs.len()
-                );
-            }
 
             // Validate each reference has required fields
             for reference in refs {

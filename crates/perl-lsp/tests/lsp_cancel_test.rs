@@ -13,18 +13,9 @@ use common::*;
 /// endpoint, it uses a slow operation; otherwise it uses hover which
 /// may or may not be cancelled in time.
 #[test]
-#[cfg_attr(ci, ignore = "flaky timing on CI; tracked in cancellation test deflaking")]
 fn test_cancel_request_handling() {
     let mut server = start_lsp_server();
-    let init_resp = initialize_lsp(&mut server);
-
-    // Check if initialization failed
-    if let Some(error) = init_resp.get("error") {
-        if error["code"].as_i64() == Some(-32000) {
-            eprintln!("Skipping test due to LSP initialization timeout");
-            return;
-        }
-    }
+    initialize_lsp(&mut server);
 
     // First, test if the slow operation endpoint exists
     let test_id = 8888;
@@ -134,18 +125,9 @@ fn test_cancel_request_handling() {
 
 /// Test that $/cancelRequest itself doesn't produce a response
 #[test]
-#[cfg_attr(ci, ignore = "flaky timing on CI; tracked in cancellation test deflaking")]
 fn test_cancel_request_no_response() {
     let mut server = start_lsp_server();
-    let init_resp = initialize_lsp(&mut server);
-
-    // Check if initialization failed
-    if let Some(error) = init_resp.get("error") {
-        if error["code"].as_i64() == Some(-32000) {
-            eprintln!("Skipping test due to LSP initialization timeout");
-            return;
-        }
-    }
+    initialize_lsp(&mut server);
 
     // Send a didOpen to keep server active
     send_notification(
@@ -194,18 +176,9 @@ fn test_cancel_request_no_response() {
 
 /// Test cancelling multiple requests
 #[test]
-#[cfg_attr(ci, ignore = "flaky timing on CI; tracked in cancellation test deflaking")]
 fn test_cancel_multiple_requests() {
     let mut server = start_lsp_server();
-    let init_resp = initialize_lsp(&mut server);
-
-    // Check if initialization failed
-    if let Some(error) = init_resp.get("error") {
-        if error["code"].as_i64() == Some(-32000) {
-            eprintln!("Skipping test due to LSP initialization timeout");
-            return;
-        }
-    }
+    initialize_lsp(&mut server);
 
     let uri = "file:///test.pl";
     send_notification(
