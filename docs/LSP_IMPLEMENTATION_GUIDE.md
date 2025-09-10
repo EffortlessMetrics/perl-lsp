@@ -1318,7 +1318,7 @@ impl LspServer {
 
 ### Overview (*Diataxis: Explanation* - Design decisions and concepts)
 
-The v0.8.8+ release introduces a sophisticated dual indexing strategy for function calls that significantly improves cross-file navigation and reference finding. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names.
+The v0.8.9+ release introduces a sophisticated dual indexing strategy for function calls that significantly improves cross-file navigation and reference finding with enhanced deduplication. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names.
 
 ### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
 
