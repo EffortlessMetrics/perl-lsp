@@ -312,6 +312,100 @@ sub foo {  # Not documentation
 }
 ```
 
+## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.9+)
+
+The v0.8.9+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
+
+### Enhanced Workspace Indexing
+
+The workspace indexing system now provides more accurate cross-file reference tracking:
+
+#### **Improved Reference Deduplication**
+```rust
+// Enhanced find_refs implementation in workspace_index.rs
+pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+    let qualified_name = format!("{}::{}", key.pkg, key.name);
+    let mut all_refs = self.find_references(&qualified_name);
+
+    // Critical improvement: Remove the definition from references
+    // The caller will include it separately if needed (e.g., for "Go to Definition")
+    if let Some(def) = self.find_def(key) {
+        all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+    }
+
+    // Enhanced deduplication using HashSet for O(n) performance
+    let mut seen = HashSet::new();
+    all_refs.retain(|loc| seen.insert((loc.uri.clone(), loc.range)));
+    
+    all_refs
+}
+```
+
+#### **Package-Qualified Identifier Support**
+The system now correctly handles package-qualified identifiers in cross-file scenarios:
+
+**Before v0.8.9:**
+- References could include function definitions
+- Duplicate entries from dual indexing
+- Inconsistent handling of package contexts
+
+**After v0.8.9:**
+- Clean separation of references vs definitions
+- Intelligent deduplication across qualified/unqualified names
+- Consistent package context resolution
+
+#### **LSP Feature Integration**
+
+These improvements directly enhance several LSP features:
+
+**Find All References** (`textDocument/references`):
+```rust
+// Clean reference lists without definitions
+let references = workspace_index.find_refs(&symbol_key);
+// References now exclude the definition automatically
+```
+
+**Go to Definition** (`textDocument/definition`):
+```rust
+// Definitions handled separately for accuracy
+if let Some(definition) = workspace_index.find_def(&symbol_key) {
+    // Definition logic separate from reference finding
+}
+```
+
+**Workspace Rename** (`workspace/willRename`):
+```rust
+// More accurate rename operations across qualified calls
+let all_occurrences = workspace_index.find_refs(&symbol_key);
+// Plus the definition if renaming the symbol itself
+if include_definition {
+    if let Some(def) = workspace_index.find_def(&symbol_key) {
+        all_occurrences.push(def);
+    }
+}
+```
+
+### Development Best Practices
+
+When working with cross-file references in LSP features:
+
+1. **Use Enhanced APIs**: Always use `find_refs()` for references and `find_def()` for definitions
+2. **Handle Package Context**: Consider both bare and qualified names when searching
+3. **Leverage Deduplication**: The system automatically handles duplicate removal
+4. **Separate Concerns**: Keep reference finding separate from definition resolution
+
+### Testing Cross-File Features
+
+```bash
+# Test cross-file reference improvements
+cargo test -p perl-parser workspace_index_enhanced_deduplication
+cargo test -p perl-parser workspace_rename_package_qualified_support
+
+# Integration tests for LSP features
+cargo test -p perl-lsp test_find_references_excludes_definitions
+cargo test -p perl-lsp test_package_qualified_navigation
+```
+
 ## Adding New LSP Features
 
 When implementing new LSP features, follow this structure:
