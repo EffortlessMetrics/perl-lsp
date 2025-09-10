@@ -3,27 +3,27 @@ use serde_json::json;
 mod common;
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
-// Import Unicode analysis function for testing
+// Local Unicode analysis function for testing (avoids adding test dependency)
 fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
     let mut char_count = 0;
     let mut emoji_count = 0;
     let mut complex_char_count = 0;
-    
+
     for ch in text.chars() {
         char_count += 1;
-        
+
         // Count emojis and complex Unicode
         let ch_u32 = ch as u32;
         if matches!(ch_u32, 0x1F300..=0x1F9FF | 0x2600..=0x27BF) {
             emoji_count += 1;
         }
-        
+
         // Count complex characters (surrogate pairs, combining marks, etc.)
         if ch_u32 > 0xFFFF || ch.len_utf8() > 2 {
             complex_char_count += 1;
         }
     }
-    
+
     (char_count, emoji_count, complex_char_count)
 }
 
@@ -184,19 +184,22 @@ fn test_unicode_normalization() {
 
 #[test]
 fn test_emoji_and_special_unicode() {
+    use common::read_response_timeout;
     use std::time::{Duration, Instant};
-    use common::{read_response_timeout};
-    
+
     let start_time = Instant::now();
     let mut server = start_lsp_server();
-    
+
     // Enhanced timeout handling for Unicode processing
     let unicode_timeout = Duration::from_secs(30); // Increased for complex Unicode
     let init_result = initialize_lsp(&mut server);
-    
+
     // Validate initialization succeeded before proceeding
-    assert!(init_result.get("error").is_none(), 
-            "LSP initialization failed: {:?}", init_result.get("error"));
+    assert!(
+        init_result.get("error").is_none(),
+        "LSP initialization failed: {:?}",
+        init_result.get("error")
+    );
 
     // Simplified Unicode test case focused on critical symbols
     let content = r#"
@@ -215,7 +218,7 @@ my $arabic = 'مرحبا';
 # Simple variable
 my $test = 'hello';
 "#;
-    
+
     // Analyze Unicode complexity for instrumentation
     let (char_count, emoji_count, complex_count) = analyze_unicode_complexity(content);
     eprintln!("Unicode content analysis:");
@@ -224,7 +227,7 @@ my $test = 'hello';
     eprintln!("  Complex characters: {}", complex_count);
 
     let uri = "file:///unicode.pl";
-    
+
     let doc_open_start = Instant::now();
     send_notification(
         &mut server,
@@ -283,11 +286,11 @@ my $test = 'hello';
 
     // Use explicit timeout and validate response structure
     let response = read_response_timeout(&mut server, unicode_timeout);
-    
+
     if response.is_none() {
         eprintln!("Document symbols request timed out after {:?}", unicode_timeout);
         eprintln!("Attempting graceful fallback...");
-        
+
         // Try a simpler request to see if server is still alive
         send_request(
             &mut server,
@@ -301,71 +304,90 @@ my $test = 'hello';
                 }
             }),
         );
-        
+
         let fallback = read_response_timeout(&mut server, Duration::from_secs(5));
         eprintln!("Fallback request succeeded: {}", fallback.is_some());
-        
+
         // Mark this as an expected performance limitation rather than a hard failure
-        eprintln!("WARNING: Unicode document symbols request exceeded timeout - may indicate performance regression");
+        eprintln!(
+            "WARNING: Unicode document symbols request exceeded timeout - may indicate performance regression"
+        );
         return; // Exit gracefully rather than panicking
     }
-    
+
     let response = response.expect("Response should exist after timeout check");
-    
+
     let symbol_response_time = symbol_request_start.elapsed();
     let total_test_time = start_time.elapsed();
-    
+
     // Performance instrumentation
     eprintln!("Unicode test performance metrics:");
     eprintln!("  Document open time: {:?}", doc_open_time);
     eprintln!("  Symbol response time: {:?}", symbol_response_time);
     eprintln!("  Total test time: {:?}", total_test_time);
-    
+
     // Strict validation - must succeed, not just "not fail"
-    assert!(response.get("error").is_none(), 
-            "Unicode parsing failed with error: {:?}", response.get("error"));
-    
-    let result = response.get("result")
-        .expect("Response missing 'result' field");
-    
-    assert!(result.is_array(), 
-            "Document symbols result must be an array, got: {:?}", result);
-    
+    assert!(
+        response.get("error").is_none(),
+        "Unicode parsing failed with error: {:?}",
+        response.get("error")
+    );
+
+    let result = response.get("result").expect("Response missing 'result' field");
+
+    assert!(result.is_array(), "Document symbols result must be an array, got: {:?}", result);
+
     let symbols = result.as_array().expect("Result should be array");
-    
+
     // Validate specific Unicode symbols are properly indexed
-    let symbol_names: Vec<String> = symbols.iter()
+    let symbol_names: Vec<String> = symbols
+        .iter()
         .filter_map(|s| s.get("name"))
         .filter_map(|n| n.as_str())
         .map(|s| s.to_string())
         .collect();
-    
+
     // Verify critical Unicode variables are found
     let expected_symbols = ["heart", "rocket", "pi", "sum", "infinity", "hebrew", "arabic"];
     let mut found_symbols = Vec::new();
-    
+
     for expected in &expected_symbols {
         if symbol_names.iter().any(|name| name.contains(expected)) {
             found_symbols.push(*expected);
         }
     }
-    
-    assert!(found_symbols.len() >= 5, 
-            "Expected at least 5 Unicode symbols to be indexed, found {} symbols: {:?}. All symbols: {:?}", 
-            found_symbols.len(), found_symbols, symbol_names);
-    
+
+    assert!(
+        found_symbols.len() >= 5,
+        "Expected at least 5 Unicode symbols to be indexed, found {} symbols: {:?}. All symbols: {:?}",
+        found_symbols.len(),
+        found_symbols,
+        symbol_names
+    );
+
     // Validate heart and rocket emojis specifically (mentioned in the issue)
-    assert!(symbols.iter().any(|s| 
-        s.get("name").and_then(|n| n.as_str()).map_or(false, |name| name.contains("heart"))
-    ), "Heart emoji variable should be indexed");
-    
-    assert!(symbols.iter().any(|s| 
-        s.get("name").and_then(|n| n.as_str()).map_or(false, |name| name.contains("rocket"))
-    ), "Rocket emoji variable should be indexed");
-    
+    assert!(
+        symbols.iter().any(|s| s
+            .get("name")
+            .and_then(|n| n.as_str())
+            .map_or(false, |name| name.contains("heart"))),
+        "Heart emoji variable should be indexed"
+    );
+
+    assert!(
+        symbols.iter().any(|s| s
+            .get("name")
+            .and_then(|n| n.as_str())
+            .map_or(false, |name| name.contains("rocket"))),
+        "Rocket emoji variable should be indexed"
+    );
+
     // Performance regression check
-    assert!(total_test_time < Duration::from_secs(30), 
-            "Unicode test took too long: {:?} - potential performance regression", total_test_time);
+    assert!(
+        total_test_time < Duration::from_secs(30),
+        "Unicode test took too long: {:?} - potential performance regression",
+        total_test_time
+    );
 }
 
 #[test]
