@@ -242,7 +242,7 @@ mod tests {
     fn test_extended_ast_normal() {
         let node = ExtendedAstNode::Normal(AstNode::Identifier(Arc::from("test")));
         assert!(!node.has_anti_patterns());
-        assert_eq!(node.to_sexp(), "test");
+        assert_eq!(node.to_sexp(), "(identifier test)");
     }
 
     #[test]
