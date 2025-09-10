@@ -206,5 +206,5 @@ fn test_incremental_feature_disabled() {
     let code = "my $x = 42;";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    assert!(ast.to_sexp().contains("(variable"));
+    assert!(format!("{:?}", ast).contains("Variable"));
 }
