@@ -74,14 +74,14 @@ jobs:
     
     - name: Run LSP tests (capped)
       run: |
-        cargo test -p perl-lsp --test lsp_user_story_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_builtin_functions_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_e2e_user_stories -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_builtins_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
         cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_multi_file_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_testing_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_refactoring_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_performance_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_formatting_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_integration_tests -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_code_actions_tests -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_performance_benchmarks -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo test -p perl-lsp --test lsp_formatting_e2e -- --test-threads=${{ env.RUST_TEST_THREADS }}
         cargo test -p perl-lsp --test lsp_master_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
     
     - name: Run LSP smoke test
