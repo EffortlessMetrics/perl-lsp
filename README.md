@@ -27,6 +27,15 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ## 📦 Latest Release: v0.8.9 GA (General Availability) - Enhanced Builtin Function Parsing Release ⚡
 
+### 🚀 v0.8.9 - Enhanced Builtin Function Parsing (PR #119) - Resolves Core Parser Ambiguity
+
+**Deterministic Block Parsing for Builtin Functions**:
+- 🎯 **Parser Accuracy**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hashes
+- 🔧 **Enhanced AST**: Added dedicated `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
+- ✅ **Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
+- 🚀 **API Compatibility**: Zero breaking changes while improving parser semantic accuracy
+- 📚 **Complete Documentation**: Comprehensive Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
+
 ### 🚀 v0.8.8 - Revolutionary LSP Performance Optimizations (99.5% Timeout Reduction)
 
 **Game-changing performance improvements that eliminate workspace bottlenecks**:
@@ -49,14 +58,6 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 
 ## 📦 Previous Release: v0.8.8 GA (General Availability) - Production-Ready Parser with Rope Integration ⚡
 
-### v0.8.9 - Enhanced Builtin Function Parsing (PR #119) - Resolves Core Parser Ambiguity
-
-**Deterministic Block Parsing for Builtin Functions**:
-- 🎯 **Parser Accuracy**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hashes
-- 🔧 **Enhanced AST**: Added dedicated `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
-- ✅ **Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
-- 🚀 **API Compatibility**: Zero breaking changes while improving parser semantic accuracy
-- 📚 **Complete Documentation**: Comprehensive Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 
 ### Recent Post-Validation Improvements - Enterprise-Ready Perl Development Environment
 - 🚀 **Comprehensive Security Validation**: Enterprise-grade security patterns with PBKDF2 authentication implementation (PR #44)
@@ -157,9 +158,10 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 ### v3: Native Rust Lexer+Parser (Recommended) ⭐ COMPLETE
 - **~100% Perl 5 Coverage**: Handles ALL real-world Perl code including edge cases
 - **Blazing Fast**: 4-19x faster than C implementation (1-150 µs per file)
-- **Context-Aware**: Properly handles `m!pattern!`, indirect object syntax, and more
+- **Context-Aware**: Properly handles `m!pattern!`, indirect object syntax, and enhanced builtin function parsing
+- **Enhanced Builtin Function Parsing**: Resolves ambiguity for map/grep/sort with `{}` blocks vs hash literals
 - **Zero Dependencies**: Clean, maintainable codebase
-- **100% Edge Case Coverage**: 141/141 edge case tests passing
+- **100% Edge Case Coverage**: 141/141 edge case tests passing including 15/15 builtin function tests
 - **All Notorious Edge Cases**: Underscore prototypes, defined-or, glob deref, pragmas, list interpolation, multi-var attributes
 - **Production Ready**: Feature-complete with comprehensive testing
 
@@ -1024,7 +1026,7 @@ cargo test -p perl-parser type_hierarchy -- --exact --nocapture
 **v2 Parser (Pest)**: ✅ 127/128 edge case tests passing (99.2% coverage, legacy support)  
 **v1 Parser (C)**: ⚠️ Limited edge case support (reference baseline)  
 **Quality Gates**: ✅ Zero clippy warnings, consistent formatting, enterprise-grade compliance
-**Builtin Function Parsing**: ✅ 15+ comprehensive tests passing (enhanced empty block parsing for map/grep/sort functions)
+**Builtin Function Parsing**: ✅ 15/15 comprehensive tests passing (enhanced empty block parsing for map/grep/sort functions with deterministic AST generation)
 **Overall Test Suite**: ✅ **295+ tests passing** with 100% reliability validation
 
 > **Note**: If you see "0 tests, N filtered out", a wrapper probably injected

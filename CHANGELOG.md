@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Post-v0.8.8 Validation Enhancements
+## [v0.8.9] - Enhanced Builtin Function Parsing Release - 2025-09-09
+
+### Fixed
+- **Enhanced Builtin Function Parsing (PR #119, Issue #110)** - Resolves core parser ambiguity for map/grep/sort functions:
+  - **Parser Accuracy Enhancement**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hash literals
+  - **Dedicated Parse Method**: Added `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
+  - **Complete Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
+  - **Zero Breaking Changes**: Enhanced parser maintains API compatibility while improving semantic accuracy
+  - **Comprehensive Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
+
+## [Unreleased] - Post-v0.8.9 Validation Enhancements
 
 ### Added - **Post-Validation Enterprise Features**
 - **Intelligent Subtree Cache with Symbol Priority Eviction (PR #112)** - Enhanced incremental parsing with LSP-aware cache management:
@@ -56,12 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Missing import detection for Module::symbol references (planned)
   - Optimized import generation with alphabetical sorting
   - Complete test coverage with 9 comprehensive test cases
-- **Enhanced Builtin Function Parsing (Issue #110)** - Comprehensive resolution of empty block parsing for map/grep/sort functions:
-  - **Deterministic Block Parsing**: Added dedicated `parse_builtin_block()` method ensuring {} is always parsed as Block nodes, never HashLiteral nodes
-  - **Complete AST Consistency**: All 15 builtin function tests now passing (15/15) with consistent AST generation
-  - **Maintained API Compatibility**: Enhancement preserves backward compatibility while improving parser accuracy
-  - **Comprehensive S-Expression Support**: Consistent output format "(call map ((block ) (variable @ array)))" for all empty block scenarios
-  - **Production Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 - **Architectural Quality Improvements** - Zero clippy warnings, consistent formatting across all crates
 
 ### Added - **Enhanced Reliability and Fallback Mechanisms (v0.8.8+)** - 99.9% Feature Availability

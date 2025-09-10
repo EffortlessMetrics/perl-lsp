@@ -8522,7 +8522,6 @@ mod tests {
                 parent_map: ParentMap::default(),
                 line_starts,
                 generation: Arc::new(AtomicU32::new(0)),
-                document_lock: Arc::new(std::sync::RwLock::new(())),
             },
         );
 
