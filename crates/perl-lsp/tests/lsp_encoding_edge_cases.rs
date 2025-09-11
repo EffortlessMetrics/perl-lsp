@@ -370,7 +370,7 @@ my $test = 'hello';
         symbols.iter().any(|s| s
             .get("name")
             .and_then(|n| n.as_str())
-            .map_or(false, |name| name.contains("heart"))),
+            .is_some_and(|name| name.contains("heart"))),
         "Heart emoji variable should be indexed"
     );
 
@@ -378,7 +378,7 @@ my $test = 'hello';
         symbols.iter().any(|s| s
             .get("name")
             .and_then(|n| n.as_str())
-            .map_or(false, |name| name.contains("rocket"))),
+            .is_some_and(|name| name.contains("rocket"))),
         "Rocket emoji variable should be indexed"
     );
 

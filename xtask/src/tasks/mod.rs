@@ -17,6 +17,7 @@ pub mod doc;
 pub mod edge_cases;
 pub mod features;
 pub mod fmt;
+#[cfg(feature = "parser-tasks")]
 pub mod highlight;
 pub mod parse_rust;
 pub mod publish;
