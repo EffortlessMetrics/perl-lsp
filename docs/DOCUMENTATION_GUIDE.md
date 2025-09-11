@@ -17,35 +17,38 @@ This guide helps you find the right documentation for your needs, organized usin
 2. **Getting Started Section** - First-time user orientation with perl-lsp installation
 3. **[LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)** - Step-by-step LSP server setup
 4. **Editor Integration Tutorials** - VSCode, Neovim, Emacs setup guides
+5. **[WORKSPACE_REFACTORING_TUTORIAL.md](WORKSPACE_REFACTORING_TUTORIAL.md)** - Cross-file refactoring walkthrough
 
 ### **How-to Guides** (Problem-oriented) 🔧
 
-5. **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Complete build/test command solutions
-6. **Editor Configuration Guides** - Specific editor setup instructions
-7. **[FILE_COMPLETION_GUIDE.md](FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
-8. **[IMPORT_OPTIMIZER_GUIDE.md](IMPORT_OPTIMIZER_GUIDE.md)** - Advanced code actions
+1. **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Complete build/test command solutions
+2. **Editor Configuration Guides** - Specific editor setup instructions
+3. **[FILE_COMPLETION_GUIDE.md](FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
+4. **[IMPORT_OPTIMIZER_GUIDE.md](IMPORT_OPTIMIZER_GUIDE.md)** - Advanced code actions
+5. **[WORKSPACE_REFACTORING_GUIDE.md](WORKSPACE_REFACTORING_GUIDE.md)** - Practical refactoring operations
 
 ### **Reference** (Information-oriented) 📊
 
-9. **[LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md)** - Comprehensive LSP feature status with validation results
-10. **[CLAUDE.md](../CLAUDE.md)** - Development commands, crate architecture, and performance targets
-11. **[STABILITY.md](STABILITY.md)** - API stability guarantees and versioning policy
-12. **[WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md)** - Current workspace configuration status and build reliability
-13. **[CHANGELOG.md](../CHANGELOG.md)** - Complete version history and feature tracking
-14. **[BENCHMARK_RESULTS.md](../BENCHMARK_RESULTS.md)** - Performance benchmark results.
+1. **[LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md)** - Comprehensive LSP feature status with validation results
+2. **[CLAUDE.md](../CLAUDE.md)** - Development commands, crate architecture, and performance targets
+3. **[STABILITY.md](STABILITY.md)** - API stability guarantees and versioning policy
+4. **[WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md)** - Current workspace configuration status and build reliability
+5. **[CHANGELOG.md](../CHANGELOG.md)** - Complete version history and feature tracking
+6. **[WORKSPACE_REFACTOR_API_REFERENCE.md](WORKSPACE_REFACTOR_API_REFERENCE.md)** - API-level refactoring details
 
 ### **Explanations** (Understanding-oriented) 🧠
 
-14. **[ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)** - System design and component relationships
-15. **[INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)** - Performance architecture and design decisions
-16. **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management system explained
-17. **[EDGE_CASES.md](EDGE_CASES.md)** - Why Perl parsing edge cases are challenging
+1. **[ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)** - System design and component relationships
+2. **[INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)** - Performance architecture and design decisions
+3. **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management system explained
+4. **[EDGE_CASES.md](EDGE_CASES.md)** - Why Perl parsing edge cases are challenging
+5. **[MODERN_ARCHITECTURE.md](MODERN_ARCHITECTURE.md)** - Contemporary design evolution
 
 ### For Contributors
 
-18. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines (How-to)
-19. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)
-20. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
+1. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines (How-to)
+2. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)
+3. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
 
 ## Specialized Documentation
 
